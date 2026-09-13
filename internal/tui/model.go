@@ -742,6 +742,19 @@ func (m Model) highlightSelection(frame string) string {
 	return strings.Join(lines, "\n")
 }
 
+// normalizePaste turns the carriage returns a terminal sends for pasted
+// line endings (CR or CRLF) into the line feeds the textarea splits lines
+// on; left alone they render into the line and overwrite it.
+func normalizePaste(msg tea.KeyMsg) tea.KeyMsg {
+	if msg.Type != tea.KeyRunes || !strings.ContainsRune(string(msg.Runes), '\r') {
+		return msg
+	}
+	text := strings.ReplaceAll(string(msg.Runes), "\r\n", "\n")
+	text = strings.ReplaceAll(text, "\r", "\n")
+	msg.Runes = []rune(text)
+	return msg
+}
+
 // fitInput sizes the input to its wrapped text: one line for an empty or
 // short message, more as it wraps or gains lines, up to inputMaxLines
 // (beyond that the textarea scrolls inside).
@@ -1227,7 +1240,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	}
 
 	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
+	m.input, cmd = m.input.Update(normalizePaste(msg))
 	if !paletteActive(m.input.Value()) {
 		m.palIdx = 0
 	} else if pm := paletteMatches(m.input.Value()); m.palIdx >= len(pm) {

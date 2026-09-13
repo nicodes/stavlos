@@ -1560,3 +1560,16 @@ func TestPastedMessageKeepsItsFirstLineInView(t *testing.T) {
 		t.Fatalf("the whole message should be visible from its first line:\n%s", v)
 	}
 }
+
+func TestPasteWithCarriageReturns(t *testing.T) {
+	m := sessionModel()
+	m.width, m.height = 80, 30
+	m.layout()
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("first line\r\nsecond line\rthird line"), Paste: true})
+	if m.input.Value() != "first line\nsecond line\nthird line" || m.input.Height() != 3 {
+		t.Fatalf("CR/CRLF should become line breaks: %q height %d", m.input.Value(), m.input.Height())
+	}
+	if strings.ContainsRune(m.input.View(), '\r') {
+		t.Fatal("no carriage return may reach the screen")
+	}
+}
