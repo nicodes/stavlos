@@ -98,7 +98,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look around"}))
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   ⤴ spawned scout (explorer) · m", "   task", "   ▹ look around"})
+	assertSubsequence(t, got, []string{"   ⑂ spawned scout (explorer) · m", "   task", "   ▹ look around"})
 }
 
 func TestUserMessageKinds(t *testing.T) {
