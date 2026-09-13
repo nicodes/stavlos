@@ -209,7 +209,7 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		if n > 0 {
 			b.WriteString("\n\n")
 		}
-		b.WriteString(o.Spinner + " " + styleDim.Render("working…"))
+		b.WriteString("   " + o.Spinner + " " + styleDim.Render("working…")) // gutter + leader, like every chat line
 	}
 	return b.String(), rows
 }
@@ -598,10 +598,10 @@ func inputBox(input, meta string) string {
 	return input + "\n" + meta
 }
 
-// metaLine is "Coder  ·  claude-opus-5 anthropic" (or the no-model nudge):
+// metaLine is "Coder · claude-opus-5 anthropic" (or the no-model nudge):
 // the role and the model separated by a dot.
 func metaLine(label, model string, queued int) string {
-	s := titleCase(label) + "  ·  "
+	s := titleCase(label) + " · "
 	if model == "" {
 		return s + styleWarn.Render("no model — /models")
 	}
@@ -611,7 +611,7 @@ func metaLine(label, model string, queued int) string {
 		s += " " + styleDim.Render(prov)
 	}
 	if queued > 0 {
-		s += styleDim.Render(fmt.Sprintf("  ·  %d queued", queued))
+		s += styleDim.Render(fmt.Sprintf(" · %d queued", queued))
 	}
 	return s
 }
@@ -646,7 +646,7 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
-	return fmtTokens(f.tokens) + " tokens  ·  $" + fmtCost(f.cost)
+	return fmtTokens(f.tokens) + " tokens · $" + fmtCost(f.cost)
 }
 
 // fmtCost prints a dollar amount with 2–4 decimals.
@@ -948,7 +948,7 @@ func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInf
 		tab(fmt.Sprintf("agents (%d)", len(kids)), m.focus == focusAgents),
 		tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
 	}
-	line := strings.Join(tabs, styleDim.Render("  ·  "))
+	line := strings.Join(tabs, styleDim.Render(" · "))
 	// The repo (cwd) sits at the right edge of the strip.
 	repo := styleDim.Render(shortHome(m.session.Dir))
 	if gap := width - lipgloss.Width(line) - lipgloss.Width(repo); gap >= 4 {
@@ -980,7 +980,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 	var lines []string
 	agent := ""
 	if p.Agent != "" {
-		agent = styleDim.Render("  ·  " + m.agentLabel(p.Agent))
+		agent = styleDim.Render(" · " + m.agentLabel(p.Agent))
 	}
 	switch p.Kind {
 	case "question":
