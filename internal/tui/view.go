@@ -751,6 +751,9 @@ func (m Model) homeView(width, height int) string {
 	if pb := m.promptView(boxW); pb != "" {
 		add(pb, boxW)
 	}
+	if pv := m.paletteViewFor(boxW); pv != "" {
+		add(pv, boxW)
+	}
 	add(m.inputBoxView(), boxW)
 
 	if m.showTips {
@@ -795,6 +798,9 @@ func (m Model) sessionView(width, height int) string {
 	}
 	if pb := m.promptView(cw); pb != "" {
 		parts = append(parts, pb)
+	}
+	if pv := m.paletteViewFor(cw); pv != "" {
+		parts = append(parts, pv)
 	}
 	parts = append(parts, m.inputBoxView())
 	left := padLines(strings.Join(parts, "\n"), cw)
@@ -1185,4 +1191,17 @@ func glyphStyle(l Line) lipgloss.Style {
 		return styleNotice
 	}
 	return styleDim
+}
+
+// paletteViewFor is the "/" command dropdown when the input is typing a
+// command name and has focus.
+func (m Model) paletteViewFor(width int) string {
+	if m.focus != focusInput {
+		return ""
+	}
+	pm := paletteMatches(m.input.Value())
+	if len(pm) == 0 {
+		return ""
+	}
+	return paletteView(pm, m.palIdx, width)
 }

@@ -63,24 +63,8 @@ var keys = keyMap{
 	OvOpen:   key.NewBinding(key.WithKeys("o", "O")),
 }
 
-// helpLines is the /help notice.
-var helpLines = []string{
-	"commands:",
-	"  <text>                           send to the selected agent (a busy agent takes it at its next step)",
-	"  /queue <text>                    send after the current turn ends instead",
-	"  /cancel                          cancel the selected agent's current turn",
-	"  /provider [openai|xai]           sign in with your ChatGPT or Grok subscription (alias /connect, /login)",
-	"  /providers                       show which providers are signed in",
-	"  /disconnect <openai|xai>         sign out of a provider",
-	"  /models                          pick a model (enter: selected agent · ctrl+s: set session default)",
-	"  /model <provider/id>             set the selected agent's model directly (no arg: same as /models)",
-	"  /session-model <provider/id>     set the session default model",
-	"  /presets                         list available archetypes",
-	"  /tree                            toggle the agent sidebar (also ctrl+b)",
-	"  /details                         expand or collapse all tool output",
-	"  /tips                            toggle the home-screen tips",
-	"  /help                            this list",
-	"  /quit                            exit",
+// helpKeyLines is the key reference appended to /help.
+var helpKeyLines = []string{
 	"focus: tab/shift+tab cycle the sections chat → permission → input → sidebar · esc returns to the input",
 	"input: enter send · ↑/↓ prompt history · esc clear · ctrl+n/ctrl+p cycle agents · pgup/pgdn scroll",
 	"chat: ↑/↓ or j/k move by item · enter expand/collapse a tool's output · pgup/pgdn page · home/end first/last",
