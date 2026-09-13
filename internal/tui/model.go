@@ -95,17 +95,22 @@ type Model struct {
 
 	confirmKill bool
 
-	// Focus: the sidebar takes ↑/↓/enter when focused; otherwise ↑/↓ in
-	// the input walk the prompt history.
-	sidebarFocus bool
-	sbCursor     int
-	history      []string // prompts sent from this client (and replayed human prompts)
-	histIdx      int      // == len(history) when editing a new line
-	histDraft    string   // unsent text saved while browsing history
-	loading      bool     // replaying events up to replayTo
-	replayTo     int64    // seq from reconcile
-	treeTimer    bool     // a debounced tree refresh is scheduled
-	reconciled   bool     // the first reconcile landed
+	// Keyboard focus (tab / shift+tab cycle the sections). The chat cursor
+	// walks transcript items; expanded holds per-item tool output overrides
+	// keyed by agent id; itemRows maps items to rendered viewport rows.
+	focus       focus
+	chatCursor  int
+	expanded    map[string]map[int]bool
+	itemRows    map[int]rowRange
+	promptInput textinput.Model // answer field of a question prompt
+	sbCursor    int
+	history     []string // prompts sent from this client (and replayed human prompts)
+	histIdx     int      // == len(history) when editing a new line
+	histDraft   string   // unsent text saved while browsing history
+	loading     bool     // replaying events up to replayTo
+	replayTo    int64    // seq from reconcile
+	treeTimer   bool     // a debounced tree refresh is scheduled
+	reconciled  bool     // the first reconcile landed
 
 	ov        *overlay                // open modal, or nil
 	providers []protocol.ProviderInfo // last provider.list result
@@ -113,6 +118,20 @@ type Model struct {
 
 	fatal error
 }
+
+// focus names the UI section that owns the keyboard. The zero value is
+// the input so a bare Model starts there.
+type focus int
+
+const (
+	focusInput      focus = iota // the text input (typing, enter sends)
+	focusChat                    // the transcript: a cursor walks its items
+	focusPermission              // the pending prompt box (y/n/a, question field)
+	focusSidebar                 // the agent tree (↑/↓ enter)
+)
+
+// chatPage is how many items pgup/pgdn move the chat cursor.
+const chatPage = 5
 
 // loginFlow tracks one device-code sign-in. cancel aborts the pending
 // provider.login.wait; id is the login the wait belongs to (results for any
@@ -148,14 +167,20 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(styleRunning))
 
+	pi := textinput.New()
+	pi.Prompt = "› "
+	pi.Placeholder = "answer"
+
 	return Model{
 		ctx:         ctx,
 		c:           c,
 		sessionID:   sessionID,
 		transcripts: map[string]*Transcript{},
 		claimedByUs: map[string]bool{},
+		expanded:    map[string]map[int]bool{},
 		vp:          vp,
 		input:       ti,
+		promptInput: pi,
 		sp:          sp,
 		showTips:    true,
 		follow:      true,
@@ -183,7 +208,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
-		m.follow = m.vp.AtBottom()
+		if m.focus != focusChat {
+			m.follow = m.vp.AtBottom()
+		}
 		cmds = append(cmds, cmd)
 
 	case spinner.TickMsg:
@@ -323,13 +350,145 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		cmds = append(cmds, cmd)
+		m.promptInput, cmd = m.promptInput.Update(msg)
+		cmds = append(cmds, cmd)
 		if m.ov != nil {
 			cmds = append(cmds, m.ov.update(msg))
 		}
 	}
 
+	cmds = append(cmds, m.ensureFocus())
 	m.layout()
 	return m, tea.Batch(cmds...)
+}
+
+// --- focus ---
+
+// focusOrder lists the sections tab cycles through, in order: the chat
+// (once there is one), the prompt box (while one is pending), the input,
+// and the sidebar (while visible).
+func (m *Model) focusOrder() []focus {
+	order := make([]focus, 0, 4)
+	if !m.isHome() {
+		order = append(order, focusChat)
+	}
+	if m.currentPrompt() != nil {
+		order = append(order, focusPermission)
+	}
+	order = append(order, focusInput)
+	if m.sidebarVisible() {
+		order = append(order, focusSidebar)
+	}
+	return order
+}
+
+// cycleFocus moves focus delta steps (+1 tab, -1 shift+tab) through
+// focusOrder, wrapping around.
+func (m *Model) cycleFocus(delta int) tea.Cmd {
+	order := m.focusOrder()
+	i := 0
+	for k, f := range order {
+		if f == m.focus {
+			i = k
+		}
+	}
+	n := len(order)
+	return m.setFocus(order[((i+delta)%n+n)%n])
+}
+
+// setFocus moves keyboard focus to f. Entering the chat suspends
+// auto-scroll and parks the cursor on the last item; leaving it resumes
+// following and scrolls to the bottom.
+func (m *Model) setFocus(f focus) tea.Cmd {
+	if f == m.focus {
+		return nil
+	}
+	prev := m.focus
+	m.focus = f
+	m.input.Blur()
+	m.promptInput.Blur()
+	if prev == focusChat {
+		m.follow = true
+		m.refreshViewport() // drops the cursor marker and scrolls to the bottom
+	}
+	switch f {
+	case focusInput:
+		return m.input.Focus()
+	case focusChat:
+		m.follow = false
+		m.chatCursor = m.chatItems() - 1
+		m.refreshViewport()
+		m.scrollToCursor()
+	case focusPermission:
+		if p := m.currentPrompt(); p != nil && p.Kind == "question" {
+			return m.promptInput.Focus()
+		}
+	case focusSidebar:
+		m.sbCursor = m.selected
+	}
+	return nil
+}
+
+// ensureFocus falls back to the input when the focused section is gone
+// (prompt answered, sidebar hidden, transcript empty).
+func (m *Model) ensureFocus() tea.Cmd {
+	for _, f := range m.focusOrder() {
+		if f == m.focus {
+			return m.syncPromptInput()
+		}
+	}
+	return m.setFocus(focusInput)
+}
+
+// syncPromptInput keeps the question field focused only while a question
+// is the prompt at the head of the queue and the box has focus (the queue
+// may advance onto a question while the box already has focus).
+func (m *Model) syncPromptInput() tea.Cmd {
+	p := m.currentPrompt()
+	want := m.focus == focusPermission && p != nil && p.Kind == "question"
+	switch {
+	case want && !m.promptInput.Focused():
+		return m.promptInput.Focus()
+	case !want && m.promptInput.Focused():
+		m.promptInput.Blur()
+	}
+	return nil
+}
+
+// selectionChanged re-renders after the selected agent changed: follow the
+// new transcript, or, while the chat has focus, park the cursor on its
+// last item.
+func (m *Model) selectionChanged() {
+	if m.focus == focusChat {
+		m.follow = false
+		m.chatCursor = m.chatItems() - 1
+		m.refreshViewport()
+		m.scrollToCursor()
+		return
+	}
+	m.follow = true
+	m.refreshViewport()
+}
+
+// chatItems is the item count of the selected transcript.
+func (m *Model) chatItems() int {
+	if t := m.transcripts[m.selectedID()]; t != nil {
+		return t.Items()
+	}
+	return 0
+}
+
+// agentExpanded is the per-item tool output override map of agent id.
+func (m *Model) agentExpanded(id string) map[int]bool {
+	if m.expanded == nil {
+		m.expanded = map[string]map[int]bool{}
+	}
+	e := m.expanded[id]
+	if e == nil {
+		e = map[int]bool{}
+		m.expanded[id] = e
+	}
+	return e
 }
 
 // --- keys ---
@@ -350,18 +509,30 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.setStatus("kill cancelled", false)
 	}
 
-	if m.sidebarFocus && m.sidebarVisible() {
-		return m.sidebarKey(msg)
-	}
-	m.sidebarFocus = false
-
+	// Section-independent keys.
 	switch {
+	case key.Matches(msg, keys.NextSection):
+		return m.cycleFocus(1)
+	case key.Matches(msg, keys.PrevSection):
+		return m.cycleFocus(-1)
 	case key.Matches(msg, keys.NextAgent):
 		return m.moveSelection(1)
 	case key.Matches(msg, keys.PrevAgent):
 		return m.moveSelection(-1)
 	case key.Matches(msg, keys.ToggleTree):
 		return m.toggleTree()
+	}
+
+	switch m.focus {
+	case focusSidebar:
+		return m.sidebarKey(msg)
+	case focusChat:
+		return m.chatKey(msg)
+	case focusPermission:
+		return m.permissionKey(msg)
+	}
+
+	switch {
 	case key.Matches(msg, keys.PageUp):
 		m.vp.PageUp()
 		m.follow = m.vp.AtBottom()
@@ -391,25 +562,126 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.submit()
 	}
 
-	// Prompt hotkeys apply only with an empty input so they cannot swallow
-	// the first letter of a message.
-	if p := m.currentPrompt(); p != nil && m.input.Value() == "" && p.Kind != "question" {
-		switch {
-		case key.Matches(msg, keys.Yes):
-			return m.answerPrompt(p, "allow")
-		case key.Matches(msg, keys.No):
-			return m.answerPrompt(p, "deny")
-		case key.Matches(msg, keys.Always) && p.Kind != "trust":
-			return m.answerPrompt(p, "allow_always")
-		}
-	}
-
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	return cmd
 }
 
-// submit handles Enter: a question answer, a /command, or a prompt envelope.
+// permissionKey handles keys while the prompt box has focus: y/n/a answer
+// a permission (y/n a trust prompt); a question takes typing into its own
+// field and enter submits it; esc returns to the input.
+func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
+	p := m.currentPrompt()
+	if p == nil {
+		return m.setFocus(focusInput)
+	}
+	if key.Matches(msg, keys.Clear) {
+		return m.setFocus(focusInput)
+	}
+	if p.Kind == "question" {
+		if key.Matches(msg, keys.Submit) {
+			text := strings.TrimSpace(m.promptInput.Value())
+			if text == "" {
+				return nil
+			}
+			m.promptInput.Reset()
+			if n, err := strconv.Atoi(text); err == nil && n >= 1 && n <= len(p.Options) {
+				text = p.Options[n-1]
+			}
+			return m.answerPrompt(p, text)
+		}
+		var cmd tea.Cmd
+		m.promptInput, cmd = m.promptInput.Update(msg)
+		return cmd
+	}
+	switch {
+	case key.Matches(msg, keys.Yes):
+		return m.answerPrompt(p, "allow")
+	case key.Matches(msg, keys.No):
+		return m.answerPrompt(p, "deny")
+	case key.Matches(msg, keys.Always) && p.Kind != "trust":
+		return m.answerPrompt(p, "allow_always")
+	}
+	return nil
+}
+
+// chatKey handles keys while the transcript has focus: ↑/↓ (j/k) move the
+// cursor one item, pgup/pgdn a page of items, home/end to the ends; enter
+// toggles a tool item's output; esc returns to the input.
+func (m *Model) chatKey(msg tea.KeyMsg) tea.Cmd {
+	switch {
+	case key.Matches(msg, keys.Clear):
+		return m.setFocus(focusInput)
+	case key.Matches(msg, keys.SelUp), msg.String() == "k":
+		m.moveCursor(-1)
+	case key.Matches(msg, keys.SelDown), msg.String() == "j":
+		m.moveCursor(1)
+	case key.Matches(msg, keys.PageUp):
+		m.moveCursor(-chatPage)
+	case key.Matches(msg, keys.PageDown):
+		m.moveCursor(chatPage)
+	case key.Matches(msg, keys.ChatTop):
+		m.moveCursor(-m.chatItems())
+	case key.Matches(msg, keys.ChatBottom):
+		m.moveCursor(m.chatItems())
+	case key.Matches(msg, keys.Submit):
+		m.toggleItem()
+	}
+	return nil
+}
+
+// moveCursor moves the chat cursor by delta items, clamped, and scrolls
+// the viewport so the item is visible.
+func (m *Model) moveCursor(delta int) {
+	n := m.chatItems()
+	if n == 0 {
+		return
+	}
+	m.chatCursor += delta
+	if m.chatCursor < 0 {
+		m.chatCursor = 0
+	}
+	if m.chatCursor >= n {
+		m.chatCursor = n - 1
+	}
+	m.refreshViewport()
+	m.scrollToCursor()
+}
+
+// scrollToCursor sets the viewport offset so the cursor item is fully
+// visible (its top when it is taller than the viewport).
+func (m *Model) scrollToCursor() {
+	r, ok := m.itemRows[m.chatCursor]
+	if !ok {
+		return
+	}
+	h := m.vp.Height
+	switch {
+	case r.last-r.first+1 > h || r.first < m.vp.YOffset:
+		m.vp.SetYOffset(r.first)
+	case r.last >= m.vp.YOffset+h:
+		m.vp.SetYOffset(r.last - h + 1)
+	}
+}
+
+// toggleItem flips the cursor item's tool output between expanded and
+// collapsed (a per-item override of /details). Other items are inert.
+func (m *Model) toggleItem() {
+	t := m.transcripts[m.selectedID()]
+	if t == nil || !itemIsTool(t.All(), m.chatCursor) {
+		return
+	}
+	e := m.agentExpanded(m.selectedID())
+	cur, ok := e[m.chatCursor]
+	if !ok {
+		cur = m.details
+	}
+	e[m.chatCursor] = !cur
+	m.refreshViewport()
+	m.scrollToCursor()
+}
+
+// submit handles Enter in the input: a /command or a prompt envelope.
 func (m *Model) submit() tea.Cmd {
 	text := strings.TrimSpace(m.input.Value())
 	m.input.Reset()
@@ -417,12 +689,6 @@ func (m *Model) submit() tea.Cmd {
 		return nil
 	}
 	m.pushHistory(text)
-	if p := m.currentPrompt(); p != nil && p.Kind == "question" && !strings.HasPrefix(text, "/") {
-		if n, err := strconv.Atoi(text); err == nil && n >= 1 && n <= len(p.Options) {
-			text = p.Options[n-1]
-		}
-		return m.answerPrompt(p, text)
-	}
 	if strings.HasPrefix(text, "/") {
 		return m.command(text)
 	}
@@ -456,6 +722,7 @@ func (m *Model) command(text string) tea.Cmd {
 		return m.toggleTree()
 	case "/details":
 		m.details = !m.details
+		m.expanded = map[string]map[int]bool{} // a global toggle resets per-item overrides
 		m.refreshViewport()
 		if m.details {
 			return m.setStatus("tool output expanded", false)
@@ -737,8 +1004,7 @@ func (m *Model) setAgents(agents []protocol.AgentInfo) {
 		m.selected = 0
 	}
 	if prev != m.selectedID() {
-		m.follow = true
-		m.refreshViewport()
+		m.selectionChanged()
 	}
 }
 
@@ -750,8 +1016,7 @@ func (m *Model) moveSelection(delta int) tea.Cmd {
 		return nil
 	}
 	m.selected = ((m.selected+delta)%n + n) % n
-	m.follow = true
-	m.refreshViewport()
+	m.selectionChanged()
 	if !m.sidebarVisible() {
 		return m.setStatusFor("→ "+m.agents[m.selected].Label, false, selectDuration)
 	}
@@ -767,37 +1032,20 @@ func (m *Model) toggleTree() tea.Cmd {
 	}
 	m.layout()
 	if m.showTree {
-		m.focusSidebar()
-	} else {
-		m.focusInput()
+		return m.setFocus(focusSidebar)
 	}
-	return nil
-}
-
-// focusSidebar moves keyboard focus to the agent list.
-func (m *Model) focusSidebar() {
-	m.sidebarFocus = true
-	m.sbCursor = m.selected
-	m.input.Blur()
-}
-
-// focusInput returns keyboard focus to the text input.
-func (m *Model) focusInput() {
-	m.sidebarFocus = false
-	m.input.Focus()
+	return m.setFocus(focusInput)
 }
 
 // sidebarKey handles keys while the sidebar has focus: ↑/↓ (or j/k) move
 // the cursor, enter selects that agent and returns to the input, esc
-// returns without changing the selection, ctrl+b closes the sidebar.
+// returns without changing the selection (ctrl+b, handled before, closes
+// the sidebar).
 func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 	n := len(m.agents)
 	switch {
-	case key.Matches(msg, keys.ToggleTree):
-		return m.toggleTree()
-	case key.Matches(msg, keys.OvClose), key.Matches(msg, keys.NextAgent):
-		m.focusInput()
-		return nil
+	case key.Matches(msg, keys.OvClose):
+		return m.setFocus(focusInput)
 	case key.Matches(msg, keys.SelUp), msg.String() == "k":
 		if n > 0 {
 			m.sbCursor = ((m.sbCursor-1)%n + n) % n
@@ -822,8 +1070,7 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 			m.follow = true
 			m.refreshViewport()
 		}
-		m.focusInput()
-		return nil
+		return m.setFocus(focusInput)
 	}
 	return nil
 }
@@ -912,6 +1159,7 @@ func (m *Model) layout() {
 	}
 	boxW := m.boxWidth()
 	m.input.Width = boxW - 3 - len([]rune(m.input.Prompt)) - 1 // border + padding + cursor
+	m.promptInput.Width = boxW - 4 - len([]rune(m.promptInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
 	bodyH := m.height - 1 - kb - 1 - inputBoxLines // footer, key bar, spacer, input box
@@ -934,13 +1182,29 @@ func (m *Model) layout() {
 	}
 }
 
-// refreshViewport re-renders the selected transcript into the viewport.
+// refreshViewport re-renders the selected transcript into the viewport,
+// marking the cursor item while the chat has focus.
 func (m *Model) refreshViewport() {
 	var lines []Line
 	if t := m.transcripts[m.selectedID()]; t != nil {
 		lines = t.All()
 	}
-	m.vp.SetContent(Render(lines, RenderOpts{Width: m.vp.Width, Details: m.details, Spinner: m.sp.View()}))
+	if n := itemCount(lines); m.chatCursor >= n {
+		m.chatCursor = n - 1
+	}
+	if m.chatCursor < 0 {
+		m.chatCursor = 0
+	}
+	content, rows := renderAll(lines, RenderOpts{
+		Width:    m.vp.Width,
+		Details:  m.details,
+		Spinner:  m.sp.View(),
+		Expanded: m.expanded[m.selectedID()],
+		Cursor:   m.chatCursor,
+		Focused:  m.focus == focusChat,
+	})
+	m.itemRows = rows
+	m.vp.SetContent(content)
 	if m.follow {
 		m.vp.GotoBottom()
 	}

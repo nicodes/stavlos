@@ -40,14 +40,18 @@ var (
 	styleLogoMuted  = lipgloss.NewStyle().Foreground(colMuted)
 	styleLogoBright = lipgloss.NewStyle().Bold(true)
 
-	styleStatusOK  = lipgloss.NewStyle().Foreground(colSuccess)
-	styleStatusErr = lipgloss.NewStyle().Foreground(colError).Bold(true)
-	styleSelected  = lipgloss.NewStyle().Bold(true)
-	styleSep       = lipgloss.NewStyle().Foreground(colBorder)
-	styleBox       = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colWarning).Padding(0, 1)
-	styleBoxTitle  = lipgloss.NewStyle().Foreground(colWarning).Bold(true)
+	styleStatusOK      = lipgloss.NewStyle().Foreground(colSuccess)
+	styleStatusErr     = lipgloss.NewStyle().Foreground(colError).Bold(true)
+	styleSelected      = lipgloss.NewStyle().Bold(true)
+	styleSep           = lipgloss.NewStyle().Foreground(colBorder)
+	styleBox           = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colMuted).Padding(0, 1)
+	styleBoxTitle      = lipgloss.NewStyle().Foreground(colMuted).Bold(true)
+	styleBoxFocus      = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
+	styleBoxTitleFocus = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
+	styleGutter        = lipgloss.NewStyle().Foreground(colAccent)
 
 	styleBorderUser     = lipgloss.NewStyle().Foreground(colAccent)
+	styleBorderMuted    = lipgloss.NewStyle().Foreground(colMuted)
 	styleBorderSteer    = lipgloss.NewStyle().Foreground(colWarning)
 	styleBorderChild    = lipgloss.NewStyle().Foreground(colBorder)
 	styleBorderError    = lipgloss.NewStyle().Foreground(colError)
@@ -100,37 +104,83 @@ func blockBorder(k BlockKind) string {
 // --- transcript rendering ---
 
 // RenderOpts controls Render. Spinner is the glyph drawn in front of
-// running tool calls (falls back to ↳ when empty).
+// running tool calls (falls back to ↳ when empty). Expanded overrides the
+// global Details toggle per item (the chat cursor's enter). With Focused
+// set, the lines of item Cursor carry the accent gutter marker.
 type RenderOpts struct {
-	Width   int
-	Details bool
-	Spinner string
+	Width    int
+	Details  bool
+	Spinner  string
+	Expanded map[int]bool
+	Cursor   int
+	Focused  bool
 }
+
+// gutterMark is the chat cursor marker drawn in the one-column gutter.
+const gutterMark = "▍"
+
+// rowRange is the first and last rendered row of an item (inclusive).
+type rowRange struct{ first, last int }
 
 // Render styles, indents and wraps transcript lines into viewport content.
 // Lines hidden by the details toggle are skipped.
 func Render(lines []Line, o RenderOpts) string {
+	s, _ := renderAll(lines, o)
+	return s
+}
+
+// renderAll is Render plus, for every item, the rendered rows it occupies
+// (so the model can scroll the cursor item into view).
+func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 	var b strings.Builder
+	rows := map[int]rowRange{}
+	row := 0
 	first := true
 	for _, l := range lines {
-		if (l.Vis == VisCollapsed && o.Details) || (l.Vis == VisExpanded && !o.Details) {
+		if !o.showLine(l) {
 			continue
 		}
 		if !first {
 			b.WriteByte('\n')
 		}
 		first = false
-		if l.Kind == LineBlank {
-			continue
+		cur := o.Focused && l.Item == o.Cursor
+		text := ""
+		if l.Kind != LineBlank {
+			text = renderLine(l, o, cur)
+		} else if cur {
+			text = styleGutter.Render(gutterMark)
 		}
-		b.WriteString(renderLine(l, o))
+		b.WriteString(text)
+		n := strings.Count(text, "\n") + 1
+		if r, ok := rows[l.Item]; ok {
+			r.last = row + n - 1
+			rows[l.Item] = r
+		} else {
+			rows[l.Item] = rowRange{row, row + n - 1}
+		}
+		row += n
 	}
-	return b.String()
+	return b.String(), rows
 }
 
-// renderLine draws one logical line: a leader (block border or indent), an
-// optional glyph, and the wrapped, styled text.
-func renderLine(l Line, o RenderOpts) string {
+// showLine applies the details toggle, honouring a per-item override.
+func (o RenderOpts) showLine(l Line) bool {
+	details := o.Details
+	if v, ok := o.Expanded[l.Item]; ok {
+		details = v
+	}
+	return !((l.Vis == VisCollapsed && details) || (l.Vis == VisExpanded && !details))
+}
+
+// renderLine draws one logical line: the gutter (cursor marker or space),
+// a leader (block border or indent), an optional glyph, and the wrapped,
+// styled text.
+func renderLine(l Line, o RenderOpts, cursor bool) string {
+	gutter := " "
+	if cursor {
+		gutter = styleGutter.Render(gutterMark)
+	}
 	leader := "  "
 	if l.Block != BlockNone {
 		leader = blockBorder(l.Block) + "  "
@@ -173,7 +223,7 @@ func renderLine(l Line, o RenderOpts) string {
 	case LineFinished:
 		style = styleFinished.Render
 	case LineRule:
-		return centerText(styleRule.Render(l.Text), o.Width)
+		return gutter + centerText(styleRule.Render(l.Text), o.Width-1)
 	case LineError:
 		style = styleError.Render
 	default:
@@ -181,18 +231,19 @@ func renderLine(l Line, o RenderOpts) string {
 	}
 
 	glyphW := ansi.StringWidth(glyph)
-	avail := o.Width - ansi.StringWidth(leader) - glyphW
+	avail := o.Width - 1 - ansi.StringWidth(leader) - glyphW
 	parts := []string{text}
 	if o.Width > 0 && avail >= 10 {
 		parts = strings.Split(ansi.Wrap(text, avail, ""), "\n")
 	}
-	cont := leader + strings.Repeat(" ", glyphW)
+	cont := gutter + leader + strings.Repeat(" ", glyphW)
 	var b strings.Builder
 	for i, p := range parts {
 		if i > 0 {
 			b.WriteByte('\n')
 			b.WriteString(cont)
 		} else {
+			b.WriteString(gutter)
 			b.WriteString(leader)
 			b.WriteString(glyph)
 		}
@@ -351,9 +402,13 @@ func promptBoxWidth(width int) int {
 	return w
 }
 
-// inputBox draws the left-bordered box around the input and its meta line.
-func inputBox(input, meta string) string {
-	border := styleBorderUser.Render("│")
+// inputBox draws the left-bordered box around the input and its meta line;
+// the border is accent while the input has focus, muted otherwise.
+func inputBox(input, meta string, focused bool) string {
+	border := styleBorderMuted.Render("│")
+	if focused {
+		border = styleBorderUser.Render("│")
+	}
 	return border + "  " + input + "\n" + border + "  " + meta
 }
 
@@ -482,7 +537,7 @@ func (m Model) inputBoxView() string {
 			model = a.Model
 		}
 	}
-	return inputBox(m.input.View(), metaLine(label, model, queued))
+	return inputBox(m.input.View(), metaLine(label, model, queued), m.focus == focusInput)
 }
 
 // homeView centers the logo, the prompt box and the tips vertically.
@@ -590,7 +645,7 @@ func (m Model) sidebarView(height int) string {
 
 func (m Model) treeRows(width int) []string {
 	rows := make([]string, 0, len(m.agents))
-	focused := m.sidebarFocus && m.sidebarVisible()
+	focused := m.focus == focusSidebar && m.sidebarVisible()
 	for i, a := range m.agents {
 		indent := strings.Repeat("  ", a.Depth)
 		marker := "  "
@@ -631,12 +686,14 @@ func (m Model) treeRows(width int) []string {
 }
 
 // promptView renders the permission/question/trust box for the head of the
-// queue at the given width, or "".
+// queue at the given width, or "". The box is accent while the permission
+// section has focus (its hotkeys apply only then), muted otherwise.
 func (m Model) promptView(width int) string {
 	p := m.currentPrompt()
 	if p == nil {
 		return ""
 	}
+	focused := m.focus == focusPermission
 	inner := width - 4
 	if inner < 20 {
 		inner = 20
@@ -648,7 +705,11 @@ func (m Model) promptView(width int) string {
 	if n := len(m.prompts); n > 1 {
 		title += fmt.Sprintf("  [1 of %d]", n)
 	}
-	lines := []string{styleBoxTitle.Render(title)}
+	box, titleStyle := styleBox, styleBoxTitle
+	if focused {
+		box, titleStyle = styleBoxFocus, styleBoxTitleFocus
+	}
+	lines := []string{titleStyle.Render(title)}
 	var hint string
 
 	switch p.Kind {
@@ -657,7 +718,8 @@ func (m Model) promptView(width int) string {
 		for i, o := range p.Options {
 			lines = append(lines, fmt.Sprintf("  %d) %s", i+1, o))
 		}
-		hint = "type an answer (or an option number) and press enter"
+		lines = append(lines, m.promptInput.View())
+		hint = "type an answer (or an option number) · enter answers"
 	case "trust":
 		var t struct {
 			Dir   string   `json:"dir"`
@@ -696,10 +758,12 @@ func (m Model) promptView(width int) string {
 		lines = append(lines, styleStatusErr.Render("claimed by another client"))
 	case m.promptBusy == p.ID:
 		lines = append(lines, styleDim.Render("answering…"))
+	case !focused:
+		lines = append(lines, styleDim.Render("tab to focus, then "+hint))
 	default:
 		lines = append(lines, styleDim.Render(hint))
 	}
-	return styleBox.Width(inner).Render(strings.Join(lines, "\n"))
+	return box.Width(inner).Render(strings.Join(lines, "\n"))
 }
 
 // footerView is the bottom line: dim cwd on the left, summary or a
@@ -827,7 +891,7 @@ func fmtElapsed(d time.Duration) string {
 
 // sidebarFocusHint marks the agent list as focused.
 func (m Model) sidebarFocusHint() string {
-	if m.sidebarFocus && m.sidebarVisible() {
+	if m.focus == focusSidebar && m.sidebarVisible() {
 		return styleDim.Render("  ↑/↓ enter")
 	}
 	return ""

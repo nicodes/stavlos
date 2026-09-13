@@ -2,13 +2,15 @@ package tui
 
 import (
 	"context"
-	tea "github.com/charmbracelet/bubbletea"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -113,10 +115,11 @@ func TestMetaLine(t *testing.T) {
 }
 
 func TestInputBoxAndPromptWidth(t *testing.T) {
-	box := stripANSI(inputBox("› hi", "Coder  ·  x"))
+	box := stripANSI(inputBox("› hi", "Coder  ·  x", true))
 	if box != "│  › hi\n│  Coder  ·  x" {
 		t.Fatalf("input box: %q", box)
 	}
+
 	if got := promptBoxWidth(80); got != 75 {
 		t.Fatalf("80 cols: got %d, want 75 (the floor; fits within width-4)", got)
 	}
@@ -235,8 +238,8 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 	m.width, m.height = 120, 40
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "coder"}, {ID: "b", Label: "scout", Depth: 1}, {ID: "c", Label: "tester", Depth: 1}}
 	m.toggleTree()
-	if !m.showTree || !m.sidebarFocus || m.input.Focused() {
-		t.Fatalf("open should focus the sidebar: show=%v focus=%v inputFocused=%v", m.showTree, m.sidebarFocus, m.input.Focused())
+	if !m.showTree || m.focus != focusSidebar || m.input.Focused() {
+		t.Fatalf("open should focus the sidebar: show=%v focus=%v inputFocused=%v", m.showTree, m.focus, m.input.Focused())
 	}
 	down := tea.KeyMsg{Type: tea.KeyDown}
 	m.handleKey(down)
@@ -249,8 +252,8 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 		t.Fatalf("markers: %q", rows)
 	}
 	m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
-	if m.selected != 2 || m.sidebarFocus || !m.input.Focused() {
-		t.Fatalf("enter: selected %d focus %v", m.selected, m.sidebarFocus)
+	if m.selected != 2 || m.focus != focusInput || !m.input.Focused() {
+		t.Fatalf("enter: selected %d focus %v", m.selected, m.focus)
 	}
 	// ↑ in the input now walks history, not agents
 	m.pushHistory("hello")
@@ -259,8 +262,288 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 		t.Fatalf("history: %q selected %d", m.input.Value(), m.selected)
 	}
 	m.toggleTree()
-	if m.showTree || m.sidebarFocus || !m.input.Focused() {
+	if m.showTree || m.focus != focusInput || !m.input.Focused() {
 		t.Fatal("close should return focus to the input")
+	}
+	// ctrl+b from the sidebar closes it; esc just returns to the input.
+	m.toggleTree()
+	m.handleKey(tea.KeyMsg{Type: tea.KeyEsc})
+	if !m.showTree || m.focus != focusInput {
+		t.Fatalf("esc: show=%v focus=%v", m.showTree, m.focus)
+	}
+	m.handleKey(tea.KeyMsg{Type: tea.KeyCtrlB})
+	if m.showTree || m.focus != focusInput {
+		t.Fatalf("ctrl+b: show=%v focus=%v", m.showTree, m.focus)
+	}
+}
+
+// sessionModel is a model in the session state (one transcript item) at a
+// size where the sidebar fits.
+func sessionModel() Model {
+	m := newModel(context.Background(), nil, "s")
+	m.width, m.height = 120, 40
+	m.reconciled, m.loading = true, false
+	m.agents = []protocol.AgentInfo{{ID: "a", Label: "coder"}, {ID: "b", Label: "scout", Depth: 1}}
+	m.transcript("a").Notice("hello")
+	m.layout()
+	return m
+}
+
+func press(m *Model, msgs ...tea.KeyMsg) tea.Cmd {
+	var cmd tea.Cmd
+	for _, k := range msgs {
+		cmd = m.handleKey(k)
+		m.ensureFocus()
+		m.layout()
+	}
+	return cmd
+}
+
+func TestTabCyclesFocus(t *testing.T) {
+	tab := tea.KeyMsg{Type: tea.KeyTab}
+	stab := tea.KeyMsg{Type: tea.KeyShiftTab}
+	m := sessionModel()
+	if m.focus != focusInput {
+		t.Fatalf("default focus %v", m.focus)
+	}
+	// No prompt, sidebar hidden: input → chat → input.
+	press(&m, tab)
+	if m.focus != focusChat || m.follow || m.input.Focused() {
+		t.Fatalf("tab: focus=%v follow=%v", m.focus, m.follow)
+	}
+	press(&m, tab)
+	if m.focus != focusInput || !m.follow || !m.input.Focused() {
+		t.Fatalf("tab tab: focus=%v follow=%v", m.focus, m.follow)
+	}
+	press(&m, stab)
+	if m.focus != focusChat {
+		t.Fatalf("shift+tab: focus=%v", m.focus)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.focus != focusInput {
+		t.Fatalf("esc: focus=%v", m.focus)
+	}
+
+	// Sidebar shown: input → sidebar → chat → input.
+	m.showTree = true
+	m.layout()
+	var seen []focus
+	for i := 0; i < 3; i++ {
+		press(&m, tab)
+		seen = append(seen, m.focus)
+	}
+	if want := []focus{focusSidebar, focusChat, focusInput}; !equalFocus(seen, want) {
+		t.Fatalf("with sidebar: %v, want %v", seen, want)
+	}
+	// Hiding the sidebar while it has focus falls back to the input.
+	press(&m, tab)
+	m.showTree = false
+	m.ensureFocus()
+	if m.focus != focusInput {
+		t.Fatalf("sidebar hidden: focus=%v", m.focus)
+	}
+
+	// Pending prompt: chat → permission → input → chat.
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
+	if m.focus != focusInput {
+		t.Fatal("a new prompt must not steal focus")
+	}
+	seen = nil
+	for i := 0; i < 3; i++ {
+		press(&m, tab)
+		seen = append(seen, m.focus)
+	}
+	if want := []focus{focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
+		t.Fatalf("with prompt: %v, want %v", seen, want)
+	}
+	press(&m, stab)
+	if m.focus != focusPermission {
+		t.Fatalf("shift+tab from input: %v", m.focus)
+	}
+	// Answering the prompt elsewhere returns focus to the input.
+	m.removePrompt("p")
+	m.ensureFocus()
+	if m.focus != focusInput {
+		t.Fatalf("prompt gone: focus=%v", m.focus)
+	}
+	// Tab never cycles agents any more; ctrl+n still does.
+	press(&m, tab, tab)
+	if m.selected != 0 {
+		t.Fatalf("tab changed the selection to %d", m.selected)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyCtrlN})
+	if m.selected != 1 {
+		t.Fatalf("ctrl+n: selected %d", m.selected)
+	}
+}
+
+func equalFocus(a, b []focus) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
+	y := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}
+	m := sessionModel()
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
+
+	// Input focus: y is typed, the prompt is untouched.
+	if cmd := press(&m, y); m.promptBusy != "" || m.claimedByUs["p"] || m.input.Value() != "y" {
+		t.Fatalf("input focus: busy=%q claimed=%v input=%q cmd=%v", m.promptBusy, m.claimedByUs["p"], m.input.Value(), cmd != nil)
+	}
+	m.input.Reset()
+
+	// Permission focus: y answers (claim + reply as one tea.Cmd).
+	press(&m, tea.KeyMsg{Type: tea.KeyShiftTab})
+	if m.focus != focusPermission {
+		t.Fatalf("focus %v", m.focus)
+	}
+	if cmd := press(&m, y); cmd == nil || m.promptBusy != "p" || !m.claimedByUs["p"] {
+		t.Fatalf("permission focus: busy=%q claimed=%v cmd=%v", m.promptBusy, m.claimedByUs["p"], cmd != nil)
+	}
+	if m.input.Value() != "" {
+		t.Fatalf("y leaked into the input: %q", m.input.Value())
+	}
+	// The box's hint line tells an unfocused user to tab in first.
+	m.promptBusy = ""
+	if strings.Contains(stripANSI(m.promptView(80)), "tab to focus") {
+		t.Fatal("focused box should show the hotkeys directly")
+	}
+	m.focus = focusInput
+	if !strings.Contains(stripANSI(m.promptView(80)), "tab to focus") {
+		t.Fatal("unfocused box should point at tab")
+	}
+	m.focus = focusPermission
+	hs := m.keyHints()
+	if hs[0].key != "y" || hs[1].key != "a" || hs[2].key != "n" {
+		t.Fatalf("permission hints: %+v", hs)
+	}
+
+	// Trust prompts: "a" does nothing.
+	m.prompts = []protocol.PromptInfo{{ID: "t", Kind: "trust", Input: []byte(`{"dir":"/x","hash":"h"}`)}}
+	m.promptBusy = ""
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}); cmd != nil || m.promptBusy != "" {
+		t.Fatal("a must not answer a trust prompt")
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}); cmd == nil || m.promptBusy != "t" {
+		t.Fatal("n should answer a trust prompt")
+	}
+
+	// Questions: typing goes to the box's own field, enter answers.
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Question: "which?", Options: []string{"red", "blue"}}}
+	m.promptBusy = ""
+	m.ensureFocus()
+	if !m.promptInput.Focused() {
+		t.Fatal("question field should take focus")
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+	if m.promptInput.Value() != "2" || m.input.Value() != "" {
+		t.Fatalf("typing: field=%q input=%q", m.promptInput.Value(), m.input.Value())
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q" || m.promptInput.Value() != "" {
+		t.Fatalf("enter: busy=%q field=%q", m.promptBusy, m.promptInput.Value())
+	}
+	// Enter in the input focus sends a prompt, it never answers a question.
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	m.promptBusy = ""
+	m.input.SetValue("hello agent")
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.promptBusy != "" || m.history[len(m.history)-1] != "hello agent" {
+		t.Fatalf("input enter answered the question: busy=%q", m.promptBusy)
+	}
+}
+
+func TestChatCursorMovesAndRenders(t *testing.T) {
+	m := sessionModel()
+	tr := m.transcript("a")
+	for i := 0; i < 8; i++ {
+		tr.Apply(mk(int64(i+1), "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "msg " + string(rune('A'+i))}))
+	}
+	tr.Apply(mk(9, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(10, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "bash", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
+	m.height = 20 // a viewport smaller than the transcript so the cursor has to scroll
+	m.layout()
+	m.refreshViewport()
+	items := tr.Items() // notice + 8 user + tool = 10
+
+	press(&m, tea.KeyMsg{Type: tea.KeyTab})
+	if m.focus != focusChat || m.chatCursor != items-1 || m.follow {
+		t.Fatalf("enter chat: focus=%v cursor=%d follow=%v", m.focus, m.chatCursor, m.follow)
+	}
+	// marked is the first non-blank line carrying the cursor marker.
+	marked := func() string {
+		for _, l := range strings.Split(stripANSI(m.vp.View()), "\n") {
+			if s := strings.TrimSpace(strings.TrimPrefix(l, gutterMark)); strings.HasPrefix(l, gutterMark) && s != "" {
+				return s
+			}
+		}
+		return ""
+	}
+	if got := marked(); !strings.HasPrefix(got, "↳ Bash") {
+		t.Fatalf("last item should be marked: %q", got)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.chatCursor != items-2 {
+		t.Fatalf("up: cursor %d", m.chatCursor)
+	}
+	if got := marked(); got != "│  msg H" {
+		t.Fatalf("cursor item not marked: %q\n%s", got, stripANSI(m.vp.View()))
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}, tea.KeyMsg{Type: tea.KeyPgUp})
+	if m.chatCursor != items-2-1-chatPage {
+		t.Fatalf("k + pgup: cursor %d", m.chatCursor)
+	}
+	// The cursor item is scrolled into view.
+	r := m.itemRows[m.chatCursor]
+	if r.first < m.vp.YOffset || r.last >= m.vp.YOffset+m.vp.Height {
+		t.Fatalf("cursor rows %+v not visible at offset %d height %d", r, m.vp.YOffset, m.vp.Height)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyHome})
+	if m.chatCursor != 0 || m.vp.YOffset != 0 {
+		t.Fatalf("home: cursor %d offset %d", m.chatCursor, m.vp.YOffset)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEnd})
+	if m.chatCursor != items-1 {
+		t.Fatalf("end: cursor %d", m.chatCursor)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	if m.chatCursor != items-1 {
+		t.Fatalf("down clamps: cursor %d", m.chatCursor)
+	}
+
+	// Enter on the tool item expands its output for this item only.
+	view := func() string { return stripANSI(m.vp.View()) }
+	if strings.Count(view(), "out") != maxOutputCollapsed {
+		t.Fatalf("collapsed before enter:\n%s", view())
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if !m.expanded["a"][items-1] || strings.Count(view(), "out") != 8 {
+		t.Fatalf("expanded after enter (%v):\n%s", m.expanded["a"], view())
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.expanded["a"][items-1] || strings.Count(view(), "out") != maxOutputCollapsed {
+		t.Fatalf("collapsed after second enter:\n%s", view())
+	}
+	// Enter on a non-tool item is inert.
+	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter})
+	if len(m.expanded["a"]) != 1 {
+		t.Fatalf("enter on a user item changed overrides: %v", m.expanded["a"])
+	}
+
+	// Leaving the chat resumes following and drops the marker.
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.focus != focusInput || !m.follow || !m.vp.AtBottom() || strings.Contains(stripANSI(m.vp.View()), gutterMark) {
+		t.Fatalf("leave chat: focus=%v follow=%v bottom=%v", m.focus, m.follow, m.vp.AtBottom())
+	}
+	if hs := m.keyHints(); hs[2].key != "tab" || hs[2].desc != "next section" {
+		t.Fatalf("input hints: %+v", hs)
 	}
 }
 
