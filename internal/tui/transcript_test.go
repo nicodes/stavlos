@@ -75,8 +75,8 @@ func TestBuildTranscript(t *testing.T) {
 	assertSubsequence(t, got, []string{
 		"› hello",
 		"  world",
-		"⚙  Bash  sleep 100 (cancelled)",
-		"   partial",
+		"$ Bash  sleep 100 (cancelled)",
+		"  partial",
 		"◌ thinking…",
 		"Done.",
 		"◦ turn cancelled",
@@ -198,7 +198,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	tr := NewTranscript()
 	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "read", Input: json.RawMessage(`{"path":"a.go"}`)}))
 	got := renderLines(tr.All())
-	if !contains(got, "⚙  Read  a.go") {
+	if !contains(got, "◆ Read  a.go") {
 		t.Fatalf("running tool shows its glyph (yellow):\n%s", strings.Join(got, "\n"))
 	}
 	if !tr.Running() {
@@ -214,8 +214,8 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"⚙  Read  a.go", "   line", "   line", "   line", "   … +17 lines", "⚙  Write  b.go (denied)"})
-	if n := count(got, "   line"); n != maxOutputCollapsed {
+	assertSubsequence(t, got, []string{"◆ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "◆ Write  b.go (denied)"})
+	if n := count(got, "  line"); n != maxOutputCollapsed {
 		t.Fatalf("collapsed: want %d output lines, got %d", maxOutputCollapsed, n)
 	}
 	var rule string
@@ -229,7 +229,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	expanded := renderWith(tr.All(), RenderOpts{Width: 80, Details: true})
-	if n := count(expanded, "   line"); n != 20 {
+	if n := count(expanded, "  line"); n != 20 {
 		t.Fatalf("expanded: want 20 output lines, got %d", n)
 	}
 	for _, g := range expanded {
@@ -243,10 +243,10 @@ func TestToolOutputExpandedCap(t *testing.T) {
 	lines := outputLines(strings.TrimRight(strings.Repeat("x\n", 50), "\n"))
 	collapsed := renderWith(lines, RenderOpts{Width: 80, NoFold: true})
 	expanded := renderWith(lines, RenderOpts{Width: 80, Details: true})
-	if count(collapsed, "   x") != maxOutputCollapsed || !contains(collapsed, "   … +47 lines") {
+	if count(collapsed, "  x") != maxOutputCollapsed || !contains(collapsed, "  … +47 lines") {
 		t.Fatalf("collapsed:\n%s", strings.Join(collapsed, "\n"))
 	}
-	if count(expanded, "   x") != maxOutputExpanded || !contains(expanded, "   … +10 lines") {
+	if count(expanded, "  x") != maxOutputExpanded || !contains(expanded, "  … +10 lines") {
 		t.Fatalf("expanded:\n%s", strings.Join(expanded, "\n"))
 	}
 }
@@ -294,7 +294,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"› hi", "◌ thinking…", "Hello", "⚙  Bash"})
+	assertSubsequence(t, got, []string{"› hi", "◌ thinking…", "Hello", "$ Bash"})
 	if !tr.Streaming() || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -309,7 +309,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	got = renderLines(tr.All())
 	assertSubsequence(t, got, []string{"◌ one", "Hello"})
 	for _, g := range got {
-		if g == "⚙  Bash" || g == "◌ thinking…" || g == "two" {
+		if g == "$ Bash" || g == "◌ thinking…" || g == "two" {
 			t.Fatalf("stale stream line %q", g)
 		}
 	}
@@ -322,14 +322,14 @@ func TestStreamingToolOutputCollapses(t *testing.T) {
 		tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash", Text: "out\n"})
 	}
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"⚙  Bash  make", "   out", "   … +2 lines"})
-	if count(got, "   out") != maxOutputCollapsed {
+	assertSubsequence(t, got, []string{"$ Bash  make", "  out", "  … +2 lines"})
+	if count(got, "  out") != maxOutputCollapsed {
 		t.Fatalf("live output should be collapsed:\n%s", strings.Join(got, "\n"))
 	}
 	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "final"}))
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"⚙  Bash  make", "   final"})
-	if count(got, "   out") != 0 {
+	assertSubsequence(t, got, []string{"$ Bash  make", "  final"})
+	if count(got, "  out") != 0 {
 		t.Fatal("live output should be replaced by the final output")
 	}
 }
@@ -421,7 +421,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 		}
 	}
 	got := renderWith(lines, RenderOpts{Width: 80, Cursor: 1, Focused: true})
-	if !contains(got, gutterMark+"⚙  Bash  ls") || !contains(got, gutterMark+"   x") || contains(got, gutterMark+"│  hi") {
+	if !contains(got, gutterMark+"$ Bash  ls") || !contains(got, gutterMark+"  x") || contains(got, gutterMark+"│  hi") {
 		t.Fatalf("cursor marks only item 1:\n%s", strings.Join(got, "\n"))
 	}
 	if !contains(got, "› hi") {
@@ -429,11 +429,11 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	}
 	// Per-item override expands item 1 while /details is off, and vice versa.
 	exp := renderWith(lines, RenderOpts{Width: 80, NoFold: true, Expanded: map[int]bool{1: true}})
-	if count(exp, "   x") != 6 || contains(exp, "    … +3 lines") {
+	if count(exp, "  x") != 6 || contains(exp, "    … +3 lines") {
 		t.Fatalf("expanded override:\n%s", strings.Join(exp, "\n"))
 	}
 	col := renderWith(lines, RenderOpts{Width: 80, Details: true, Expanded: map[int]bool{1: false}})
-	if count(col, "   x") != maxOutputCollapsed {
+	if count(col, "  x") != maxOutputCollapsed {
 		t.Fatalf("collapsed override:\n%s", strings.Join(col, "\n"))
 	}
 	_, rows := renderAll(lines, RenderOpts{Width: 80, NoFold: true})
@@ -491,7 +491,7 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 	rendered := renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem})
 	for _, r := range rendered {
 		if strings.Contains(r, "permission") || strings.Contains(r, "answered") {
-			if !strings.HasPrefix(strings.TrimLeft(r, "▍"), "   ") {
+			if !strings.HasPrefix(strings.TrimLeft(r, "▍"), "  ") {
 				t.Fatalf("notice not indented under the call: %q", r)
 			}
 		}
@@ -737,7 +737,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}
 	}
-	for _, leak := range []string{"⚙  go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
+	for _, leak := range []string{"$ go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
 		if strings.Contains(joined, leak) {
 			t.Fatalf("folded monitor item leaked %q:\n%s", leak, joined)
 		}
@@ -752,7 +752,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	// the first output line with a +N marker; expanded shows the collapsed
 	// output rule (3 lines + "… +N lines")
 	prev := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
-	for _, want := range []string{"⚙  job: go test", "⚙  go test exited 0", "ok  a", "+"} {
+	for _, want := range []string{"$ job: go test", "$ go test exited 0", "ok  a", "+"} {
 		if !strings.Contains(prev, want) {
 			t.Fatalf("cursor on monitor lacks %q:\n%s", want, prev)
 		}
@@ -761,7 +761,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		t.Fatalf("preview shows too much:\n%s", prev)
 	}
 	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item, Expanded: map[int]bool{cmdStart.Item: true}})), "\n")
-	for _, want := range []string{"⚙  go test exited 0", "ok  a", "ok  c", "ok  d", "ok  e"} {
+	for _, want := range []string{"$ go test exited 0", "ok  a", "ok  c", "ok  d", "ok  e"} {
 		if !strings.Contains(full, want) {
 			t.Fatalf("expanded monitor lacks %q:\n%s", want, full)
 		}
@@ -782,7 +782,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	tr2.Apply(mk(1, event.MonitorFired, event.MonitorFiredPayload{ID: "zz", Kind: "watch", Summary: "3 files changed", Output: "a.go"}))
 	tr2.Apply(mk(2, event.MonitorStopped, event.MonitorRefPayload{ID: "yy", Reason: "kill"}))
 	got := renderLines(tr2.All())
-	assertSubsequence(t, got, []string{"⚙  3 files changed", "   a.go", "⚙  job stopped (kill)"})
+	assertSubsequence(t, got, []string{"$ 3 files changed", "  a.go", "$ job stopped (kill)"})
 	if tr2.Items() != 2 {
 		t.Fatalf("items %d", tr2.Items())
 	}

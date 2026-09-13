@@ -245,7 +245,7 @@ func TestMonitorRows(t *testing.T) {
 		plain[i] = stripANSI(r)
 	}
 	// command: glyph, bold label, kind, progress, elapsed
-	if !strings.HasPrefix(plain[0], "  ⚙") || !strings.Contains(plain[0], "coder (coder)  go test") {
+	if !strings.HasPrefix(plain[0], "  $") || !strings.Contains(plain[0], "coder (coder)  go test") {
 		t.Fatalf("command row: %q", plain[0])
 	}
 	for _, want := range []string{"42 lines", "1m15s"} {
@@ -254,11 +254,11 @@ func TestMonitorRows(t *testing.T) {
 		}
 	}
 	// a second running job: no wake tag, elapsed
-	if !strings.HasPrefix(plain[1], "  ⚙  coder (coder)  src changes") || !strings.HasSuffix(strings.TrimRight(plain[1], " "), "coder (coder)  src changes  3s") {
+	if !strings.HasPrefix(plain[1], "  $ coder (coder)  src changes") || !strings.HasSuffix(strings.TrimRight(plain[1], " "), "coder (coder)  src changes  3s") {
 		t.Fatalf("second job row: %q", plain[1])
 	}
 	// progress and hours elapsed
-	if !strings.HasPrefix(plain[2], "  ⚙  coder (coder)  cooldown") || !strings.Contains(plain[2], "3m left · 2h00m") {
+	if !strings.HasPrefix(plain[2], "  $ coder (coder)  cooldown") || !strings.Contains(plain[2], "3m left · 2h00m") {
 		t.Fatalf("third job row: %q", plain[2])
 	}
 	// a bad Started stamp just drops the elapsed field
@@ -635,7 +635,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 		}
 		return ""
 	}
-	if got := marked(); !strings.HasPrefix(got, "⚙  Bash") {
+	if got := marked(); !strings.HasPrefix(got, "$ Bash") {
 		t.Fatalf("last item should be marked: %q", got)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
@@ -766,7 +766,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("order %v", order)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission (a prompt waits)
-	if pv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(pv, "\n") != 2 || !strings.Contains(pv, "⚙  Bash · coder\n       make test") || strings.Contains(pv, "{") {
+	if pv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(pv, "\n") != 2 || !strings.Contains(pv, "$ Bash · coder\n       make test") || strings.Contains(pv, "{") {
 		t.Fatalf("permission should open as a tool row over its command: focus=%v\n%s", m.focus, pv)
 	}
 	// the permission box is drawn under the strip, right above the input

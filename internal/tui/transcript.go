@@ -860,7 +860,7 @@ func EventLines(ev event.Event) []Line {
 		return monitorFiredLines(p)
 
 	case event.MonitorStopped:
-		// Without the transcript's id → kind memory the glyph defaults to ⚙;
+		// Without the transcript's id → kind memory the glyph defaults to ◆;
 		// Transcript.Apply looks it up.
 		var p event.MonitorRefPayload
 		if err := ev.Decode(&p); err != nil {

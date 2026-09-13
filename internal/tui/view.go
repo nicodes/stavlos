@@ -101,7 +101,7 @@ func blockStyle(k BlockKind) lipgloss.Style {
 // --- transcript rendering ---
 
 // RenderOpts controls Render. Spinner is the glyph drawn in front of
-// running tool calls (falls back to ⚙ when empty). Expanded overrides the
+// running tool calls (falls back to ◆ when empty). Expanded overrides the
 // global Details toggle per item (the chat cursor's enter). With Focused
 // set, the lines of item Cursor carry the accent gutter marker.
 type RenderOpts struct {
@@ -414,10 +414,10 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		}
 		style = renderToolText
 	case LineToolOut:
-		leader = "   " // under the tool name (after "⚙  ")
+		leader = "  " // under the tool name (after "◆ ")
 		style = styleToolOut.Render
 	case LineToolNote:
-		leader = "   "
+		leader = "  "
 		style = styleDim.Render
 	case LineFinished:
 		style = styleFinished.Render
@@ -439,9 +439,6 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	if l.Glyph != "" {
 		gs := glyphStyle(l)
 		gap := " "
-		if l.Glyph == glyphToolFiles {
-			gap = "  "
-		}
 		if l.Running && l.Kind != LineTool {
 			glyph = styleWorking.Render(l.Glyph) + gap
 		} else {
@@ -1244,7 +1241,7 @@ func lastSnippet(t *Transcript) string {
 // monitorRows is the pure part of monitorsView: one row per running
 // monitor with its kind glyph, bold label, a spinner for commands still
 // running, and dim meta (progress, elapsed).
-// Each row reads like an agent row, then the job: "⚙  coder (coder)  go
+// Each row reads like an agent row, then the job: "$ coder (coder)  go
 // test  42 lines · 1m15s" — the owning agent in bold with its role, the
 // job's label, and dim progress/elapsed.
 func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now time.Time, width int) []string {
@@ -1279,35 +1276,33 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 	return rows
 }
 
-// monitorGlyph is the single-width marker for a monitor kind: ⚙ command,
+// monitorGlyph is the single-width marker for a monitor kind: $ command,
 // (the gear is used for every kind; ⏱ draws two cells wide in many terminals).
 // Tool-call glyphs by group: the gear for files, shell and finish; the
 // clock for monitors; the fork for agent tools.
 const (
-	glyphToolFiles    = "⚙"
-	glyphToolMonitors = "⚙" // same gear as files/shell: async jobs are shell too
+	glyphToolFiles    = "◆" // file tools (read, apply_patch, skill)
+	glyphToolShell    = "$" // bash, bash_async, bash_async_kill: the shell prompt
+	glyphToolMonitors = "$" // async jobs are shell commands
 	glyphToolAgents   = "⑂"
 )
 
-// toolGlyph returns the glyph for a tool name and the gap after it (the
-// gear gets two spaces: many terminals draw it two cells wide).
+// toolGlyph returns the glyph for a tool name and the gap after it.
 func toolGlyph(tool string) (string, string) {
 	switch {
 	case strings.HasPrefix(tool, "agent_"):
 		return glyphToolAgents, " "
+	case tool == "bash" || tool == "bash_async" || tool == "bash_async_kill":
+		return glyphToolShell, " "
 	}
-	return glyphToolFiles, "  "
+	return glyphToolFiles, " "
 }
 
-// monitorGlyph is the gear for every monitor kind.
+// monitorGlyph is the shell prompt for every monitor kind.
 func monitorGlyph(kind string) string { return glyphToolMonitors }
 
-// monitorGlyphGap is the spacing after a kind glyph; the gear gets two
-// spaces because many terminals draw it two cells wide (as renderLine does).
+// monitorGlyphGap is the spacing after a kind glyph.
 func monitorGlyphGap(kind string) string {
-	if monitorGlyph(kind) == glyphToolFiles {
-		return "  "
-	}
 	return " "
 }
 
