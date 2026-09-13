@@ -835,7 +835,7 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
 	tr.Apply(mk(2, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "go"}))
 	out := render()
-	if !tr.InTurn() || !strings.HasSuffix(out, "\n\n⠋ working…") {
+	if !tr.InTurn() || !strings.HasSuffix(out, "\n\n   ⠋ working…") {
 		t.Fatalf("mid-turn should end with the indicator:\n%s", out)
 	}
 	// the indicator is not an item: the cursor/expand bookkeeping ignores it

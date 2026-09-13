@@ -85,7 +85,7 @@ func TestFooterRight(t *testing.T) {
 		t.Fatalf("connected home: %q", got)
 	}
 	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5", tokens: 12_345, cost: 0.0123}))
-	if got != "12k tokens  ·  $0.0123" {
+	if got != "12k tokens · $0.0123" {
 		t.Fatalf("session: %q", got)
 	}
 }
@@ -100,20 +100,20 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("coder", "anthropic/claude-opus-5", 0)); got != "Coder  ·  claude-opus-5 anthropic" {
+	if got := stripANSI(metaLine("coder", "anthropic/claude-opus-5", 0)); got != "Coder · claude-opus-5 anthropic" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("coder", "", 0)); got != "Coder  ·  no model — /models" {
+	if got := stripANSI(metaLine("coder", "", 0)); got != "Coder · no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "ollama/llama3", 2)); got != "Scout  ·  llama3 ollama  ·  2 queued" {
+	if got := stripANSI(metaLine("scout", "ollama/llama3", 2)); got != "Scout · llama3 ollama · 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
 }
 
 func TestInputBoxAndPromptWidth(t *testing.T) {
-	box := stripANSI(inputBox("› hi", "Coder  ·  x"))
-	if box != "› hi\nCoder  ·  x" {
+	box := stripANSI(inputBox("› hi", "Coder · x"))
+	if box != "› hi\nCoder · x" {
 		t.Fatalf("input box: %q", box)
 	}
 
@@ -736,7 +736,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("order %v", order)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission (a prompt waits)
-	if pv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(pv, "\n") != 2 || !strings.Contains(pv, "⚙  Bash  ·  coder\n       make test") || strings.Contains(pv, "{") {
+	if pv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(pv, "\n") != 2 || !strings.Contains(pv, "⚙  Bash · coder\n       make test") || strings.Contains(pv, "{") {
 		t.Fatalf("permission should open as a tool row over its command: focus=%v\n%s", m.focus, pv)
 	}
 	// the permission box is drawn under the strip, right above the input
@@ -782,7 +782,7 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: all three titles on one line, counts only
 	v := stripANSI(m.sectionsView(100))
-	if strings.Count(v, "\n") != 0 || !strings.Contains(v, "permission (1)  ·  agents (1)  ·  async (1)") ||
+	if strings.Count(v, "\n") != 0 || !strings.Contains(v, "permission (1) · agents (1) · async (1)") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
@@ -790,7 +790,7 @@ func TestSectionTabStrip(t *testing.T) {
 	m.focus = focusAgents
 	v = stripANSI(m.sectionsView(100))
 	lines := strings.Split(v, "\n")
-	if len(lines) != 2 || !strings.HasPrefix(lines[0], "permission (1)  ·  agents (1)  ·  async (1)") || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "scout") {
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "permission (1) · agents (1) · async (1)") || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "scout") {
 		t.Fatalf("agents focused:\n%s", v)
 	}
 	// async focused: the job row
@@ -874,7 +874,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	meta, strip := -1, -1
 	for i, l := range lines {
 		switch {
-		case strings.HasPrefix(l, "Coder  ·  "):
+		case strings.HasPrefix(l, "Coder · "):
 			meta = i
 		case strings.HasPrefix(l, "permission ("):
 			strip = i
@@ -884,7 +884,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 		t.Fatalf("no meta row or strip:\n%s", strings.Join(lines, "\n"))
 	}
 	// role and model on the left, tokens and cost on the right, no dots
-	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens  ·  $0.02") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
+	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens · $0.02") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
 		t.Fatalf("meta row: %q", row)
 	}
 	if !strings.HasPrefix(lines[meta+1], "─") {
