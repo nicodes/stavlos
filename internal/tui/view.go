@@ -962,7 +962,7 @@ func (m Model) sectionsView(width int) string {
 		if len(kids) == 0 {
 			return strip + "\n" + styleDim.Render("  no subagents running")
 		}
-		rows := agentRows(m.agents, m.selectedID(), m.spawned, time.Now(), width-2)
+		rows := agentRows(m.agents, m.selectedID(), m.spawned, m.lastLines(), time.Now(), width-2)
 		return strings.Join(append([]string{strip}, m.cursorRows(rows)...), "\n")
 	case focusAsync:
 		if len(jobs) == 0 {
@@ -1176,7 +1176,9 @@ func jobGlyph(j protocol.MonitorInfo) string {
 }
 
 // agentRows is the pure part of agentsView.
-func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, now time.Time, width int) []string {
+// last maps an agent id to a snippet of the latest line in its chat; it
+// sits between the name and the meta, like the job on an async row.
+func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, last map[string]string, now time.Time, width int) []string {
 	var rows []string
 	for _, a := range agents {
 		if a.Parent != parent || a.State == "finished" || a.State == "killed" {
@@ -1194,10 +1196,53 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 			meta = append(meta, fmtElapsed(now.Sub(t)))
 		}
 		text := fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
-		row := "  " + lead + " " + styleBold.Render(text) + "  " + styleDim.Render(strings.Join(meta, " · "))
+		row := "  " + lead + " " + styleBold.Render(text)
+		if s := last[a.ID]; s != "" {
+			row += "  " + truncRunes(s, snippetChars)
+		}
+		row += "  " + styleDim.Render(strings.Join(meta, " · "))
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows
+}
+
+// snippetChars caps the chat snippet on an agent row.
+const snippetChars = 40
+
+// lastLines is a snippet of the latest chat line of every agent that has
+// one: the last non-blank line, flattened, for the agents tab rows.
+func (m Model) lastLines() map[string]string {
+	out := map[string]string{}
+	for id, t := range m.transcripts {
+		if s := lastSnippet(t); s != "" {
+			out[id] = s
+		}
+	}
+	return out
+}
+
+// lastSnippet is the text of a transcript's last line worth showing.
+func lastSnippet(t *Transcript) string {
+	if t == nil {
+		return ""
+	}
+	lines := t.All()
+	for i := len(lines) - 1; i >= 0; i-- {
+		l := lines[i]
+		switch l.Kind {
+		case LineBlank, LineLabel, LineRule:
+			continue
+		}
+		s := strings.TrimSpace(strings.ReplaceAll(l.Text, "\n", " "))
+		if s == "" {
+			continue
+		}
+		if l.Kind == LineTool && l.Suffix != "" {
+			s += " " + l.Suffix
+		}
+		return s
+	}
+	return ""
 }
 
 // monitorRows is the pure part of monitorsView: one row per running
