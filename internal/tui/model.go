@@ -368,15 +368,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // --- focus ---
 
-// focusOrder lists the sections tab cycles through, top to bottom: the chat
-// (once there is one), the agents, async and permission tabs (always, even
-// when empty), the input, and the sidebar (while visible).
+// focusOrder lists the sections tab cycles through, top to bottom and left
+// to right: the chat (once there is one), the permission, agents and async
+// tabs (always, even when empty), the input, and the sidebar (while
+// visible).
 func (m *Model) focusOrder() []focus {
 	order := make([]focus, 0, 4)
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
-	order = append(order, focusAgents, focusAsync, focusPermission)
+	order = append(order, focusPermission, focusAgents, focusAsync)
 	order = append(order, focusInput)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
@@ -1297,7 +1298,7 @@ func (m *Model) layout() {
 	_, kb := m.keyBarView()
 	bodyH := m.height - 1 - kb - 1 - inputBoxLines // footer, key bar, chat rule, input box
 	if sv := m.sectionsView(m.contentWidth()); sv != "" {
-		bodyH -= strings.Count(sv, "\n") + 1 + 2 // plus the blank line above and below
+		bodyH -= strings.Count(sv, "\n") + 1 + 1 // plus the blank line below
 	}
 	if pv := m.paletteViewFor(m.contentWidth()); pv != "" {
 		bodyH -= strings.Count(pv, "\n") + 1

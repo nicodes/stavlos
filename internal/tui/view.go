@@ -782,7 +782,7 @@ func (m Model) sessionView(width, height int) string {
 	// strip (and the focused section's body) sit right above the input.
 	parts := []string{m.vp.View(), styleRule.Render(strings.Repeat("─", cw))}
 	if sv := m.sectionsView(cw); sv != "" {
-		parts = append(parts, "", sv, "") // a blank line above and below the strip
+		parts = append(parts, sv, "") // a blank line below the strip, before the input
 	}
 	if pv := m.paletteViewFor(cw); pv != "" {
 		parts = append(parts, pv)
@@ -867,7 +867,7 @@ func (m Model) treeRows(width int) []string {
 }
 
 // sectionsView is the block between the chat and the input: a tab strip
-// naming the agents, async and permission tabs with their counts (always
+// naming the permission, agents and async tabs with their counts (always
 // shown, "(0)" when empty), followed by the body of whichever one has focus.
 func (m Model) sectionsView(width int) string {
 	kids := m.liveChildren()
@@ -898,8 +898,7 @@ func (m Model) sectionsView(width int) string {
 
 // sectionTabs is the one-line strip: the three tabs with their counts, the
 // focused one in accent with a ▾ pointing at its contents below, the rest
-// dim, then a hint. Each tab carries its chat glyph, yellow while something
-// in it is live.
+// dim, then a hint.
 func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo, width int) string {
 	tab := func(label string, on bool) string {
 		if on {
@@ -907,28 +906,15 @@ func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInf
 		}
 		return styleDim.Render(label)
 	}
-	glyph := func(g string, live bool) string {
-		if live {
-			return styleWorking.Render(g)
-		}
-		return styleDim.Render(g)
-	}
-	working := false
-	for _, a := range kids {
-		if agentOutcome(a) == "working" {
-			working = true
-			break
-		}
-	}
-	tabs := []string{
-		glyph(glyphToolAgents, working) + " " + tab(fmt.Sprintf("agents (%d)", len(kids)), m.focus == focusAgents),
-		glyph(glyphToolMonitors, len(jobs) > 0) + "  " + tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
-	}
 	label := fmt.Sprintf("permission (%d)", len(m.prompts))
 	if p != nil && p.Kind != "permission" {
 		label = fmt.Sprintf("%s (%d)", p.Kind, len(m.prompts))
 	}
-	tabs = append(tabs, glyph("?", p != nil)+" "+tab(label, m.focus == focusPermission))
+	tabs := []string{
+		tab(label, m.focus == focusPermission),
+		tab(fmt.Sprintf("agents (%d)", len(kids)), m.focus == focusAgents),
+		tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
+	}
 	var hint string
 	switch m.focus {
 	case focusAgents:
