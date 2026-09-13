@@ -494,6 +494,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	m.promptInput.Blur()
 	if prev == focusChat {
 		m.follow = true
+		m.collapseAll()
 		m.refreshViewport() // drops the cursor marker and scrolls to the bottom
 	}
 	switch f {
@@ -604,6 +605,7 @@ func (m *Model) syncPromptInput() tea.Cmd {
 // new transcript, or, while the chat has focus, park the cursor on its
 // last item.
 func (m *Model) selectionChanged() {
+	m.collapseAll()
 	if m.focus == focusChat {
 		m.follow = false
 		m.chatCursor = m.chatItems() - 1
@@ -853,6 +855,7 @@ func (m *Model) moveCursor(delta int) {
 	if n == 0 {
 		return
 	}
+	was := m.chatCursor
 	m.chatCursor += delta
 	if m.chatCursor < 0 {
 		m.chatCursor = 0
@@ -860,9 +863,16 @@ func (m *Model) moveCursor(delta int) {
 	if m.chatCursor >= n {
 		m.chatCursor = n - 1
 	}
+	if m.chatCursor != was {
+		m.collapseAll() // expansion is per visit: leaving an item folds it
+	}
 	m.refreshViewport()
 	m.scrollToCursor()
 }
+
+// collapseAll drops every expand override so each item is back to its
+// one-line fold (or the preview under the cursor).
+func (m *Model) collapseAll() { m.expanded = nil }
 
 // scrollToCursor sets the viewport offset so the cursor item is fully
 // visible (its top when it is taller than the viewport).

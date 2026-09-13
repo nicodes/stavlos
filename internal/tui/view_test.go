@@ -673,10 +673,32 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if m.expanded["a"][items-1] || strings.Count(view(), "out") != previewLines-1 {
 		t.Fatalf("preview after second enter:\n%s", view())
 	}
+	// Expansion is per visit: expand, move away, come back → preview again.
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if strings.Count(view(), "out") != 8 {
+		t.Fatalf("expanded again:\n%s", view())
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyUp})
+	if len(m.expanded["a"]) != 0 {
+		t.Fatalf("moving away should drop the expansion: %v", m.expanded["a"])
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown})
+	if n := strings.Count(view(), "out"); n != previewLines-1 {
+		t.Fatalf("back on the item it should be the preview (%d):\n%s", n, view())
+	}
 	// Enter on a non-tool item is inert.
 	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter})
-	if len(m.expanded["a"]) != 1 {
+	if len(m.expanded["a"]) != 0 {
 		t.Fatalf("enter on a user item changed overrides: %v", m.expanded["a"])
+	}
+	// Leaving the chat with an item expanded folds it for next time.
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter})
+	if strings.Count(view(), "out") != 8 {
+		t.Fatalf("expanded before leaving:\n%s", view())
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab})
+	if m.focus != focusChat || len(m.expanded["a"]) != 0 || strings.Count(view(), "out") != previewLines-1 {
+		t.Fatalf("re-entering the chat should show the preview: focus=%v %v\n%s", m.focus, m.expanded["a"], view())
 	}
 
 	// Leaving the chat resumes following and drops the marker.
