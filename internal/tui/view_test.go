@@ -775,3 +775,27 @@ func TestSectionTabStrip(t *testing.T) {
 		t.Fatalf("empty permission tab:\n%s", v)
 	}
 }
+
+func TestSessionViewFillsHeight(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	for _, f := range []focus{focusInput, focusBackground, focusPermission} {
+		m.focus = f
+		m.width, m.height = 100, 30
+		m.layout()
+		v := m.View()
+		if got := strings.Count(v, "\n") + 1; got != m.height {
+			t.Fatalf("focus %v: view is %d lines, want %d:\n%s", f, got, m.height, stripANSI(v))
+		}
+		lines := strings.Split(stripANSI(v), "\n")
+		si := -1
+		for i, l := range lines {
+			if strings.HasPrefix(strings.TrimPrefix(l, "▾ "), "background (") {
+				si = i
+			}
+		}
+		if si < 1 || strings.TrimSpace(lines[si-1]) != "" {
+			t.Fatalf("focus %v: no blank line above the strip:\n%s", f, stripANSI(v))
+		}
+	}
+}
