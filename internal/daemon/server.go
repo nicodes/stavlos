@@ -294,6 +294,20 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		}
 		return map[string]bool{"ok": true}, nil
 
+	case protocol.MAgentSetRole:
+		var p protocol.AgentSetRoleParams
+		if e := decode(&p); e != nil {
+			return nil, e
+		}
+		_, a, err := d.agentSession(p.Agent)
+		if err != nil {
+			return nil, perr(protocol.ErrNotFound, err)
+		}
+		if err := a.SetRole(ctx, p.Role); err != nil {
+			return nil, perr(protocol.ErrInvalidParams, err)
+		}
+		return map[string]bool{"ok": true}, nil
+
 	case protocol.MPromptList:
 		var p protocol.PromptListParams
 		if e := decode(&p); e != nil {

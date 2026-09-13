@@ -39,6 +39,7 @@ const (
 	ovProviders overlayKind = iota // pick a provider
 	ovMethods                      // pick a login method (providers with more than one)
 	ovModels                       // pick a model
+	ovRoles                        // pick a role (preset) for the selected agent
 )
 
 // loginState is what the login mode shows. Before url is set the login is

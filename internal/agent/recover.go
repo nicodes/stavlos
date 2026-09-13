@@ -59,6 +59,18 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			}
 			s.agents[a.ID] = a
 			s.order = append(s.order, a.ID)
+		case event.AgentRoleChanged:
+			if a, ok := s.agents[e.Agent]; ok {
+				var p event.RoleChangedPayload
+				_ = e.Decode(&p)
+				if preset, ok := cfg.Presets[p.Role]; ok {
+					a.preset = preset
+				}
+				a.Archetype = p.Role
+				if p.Label != "" {
+					a.Label = p.Label
+				}
+			}
 		case event.AgentModelChanged:
 			if a, ok := s.agents[e.Agent]; ok {
 				var p event.ModelChangedPayload

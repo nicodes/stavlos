@@ -21,6 +21,7 @@ const (
 	AgentFinished     Type = "agent.finished"      // AgentFinishedPayload
 	AgentKilled       Type = "agent.killed"        // AgentRefPayload
 	AgentModelChanged Type = "agent.model_changed" // ModelChangedPayload
+	AgentRoleChanged  Type = "agent.role_changed"  // RoleChangedPayload: the agent's preset was switched
 
 	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: wake armed for these ids (children or monitors)
 	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
@@ -80,6 +81,13 @@ type SessionCreatedPayload struct {
 
 type ModelChangedPayload struct {
 	Model string `json:"model"`
+}
+
+// RoleChangedPayload records a preset switch; Label is the agent's label
+// afterwards (it follows the role when it was the old role's name).
+type RoleChangedPayload struct {
+	Role  string `json:"role"`
+	Label string `json:"label"`
 }
 
 type AgentSpawnedPayload struct {

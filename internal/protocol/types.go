@@ -31,6 +31,7 @@ const (
 	MAgentSend     = "agent.send" // Prompt / Steer / Cancel / Kill
 	MAgentSpawn    = "agent.spawn"
 	MAgentSetModel = "agent.set_model"
+	MAgentSetRole  = "agent.set_role" // switch an agent's preset in place
 
 	MPromptList  = "prompt.list"
 	MPromptClaim = "prompt.claim"
@@ -227,6 +228,11 @@ type AgentSetModelParams struct {
 	V     int    `json:"v"`
 	Agent string `json:"agent"`
 	Model string `json:"model"`
+}
+type AgentSetRoleParams struct {
+	V     int    `json:"v"`
+	Agent string `json:"agent"`
+	Role  string `json:"role"` // preset name
 }
 
 // PromptInfo is a pending permission/question/trust prompt.

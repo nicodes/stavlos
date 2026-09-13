@@ -255,6 +255,29 @@ func modelsCmd(ctx context.Context, c *client.Client) tea.Cmd {
 	}
 }
 
+// rolesCmd lists presets for the /role picker; pickRoleCmd applies one.
+type rolesMsg struct {
+	roles []protocol.PresetInfo
+	err   error
+}
+
+func rolesCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		rs, err := c.Presets(ctx, session)
+		return rolesMsg{rs, err}
+	}
+}
+
+func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		return resultMsg{"role set to " + role, c.SetAgentRole(ctx, agent, role)}
+	}
+}
+
 // pickAgentModelCmd / pickSessionModelCmd are the /models overlay actions.
 func pickAgentModelCmd(ctx context.Context, c *client.Client, agent, modelID string) tea.Cmd {
 	return func() tea.Msg {

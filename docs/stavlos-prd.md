@@ -268,7 +268,7 @@ Requirements:
 - Live turn output with tool-call rendering, including cancelled calls and compaction boundaries
 - Direct addressing of any agent in the tree with any envelope kind
 - Permission and question prompts
-- Model and preset switching mid-session; `/provider` to connect a provider and `/models` to pick from connected ones (§8.4)
+- Model and preset switching mid-session: `/models` picks a model, `/role` switches the selected agent's preset in place (system prompt, tools, spawn list change at its next turn; logged as `agent.role_changed` and replayed on restart); `/provider` connects a provider (§8.4)
 
 Implementation note: Bubble Tea's update loop is single-threaded. Daemon events arrive via `p.Send()` from a goroutine reading the event stream. Keep that boundary clean — TUIs that call business logic from `Update` become untestable.
 
