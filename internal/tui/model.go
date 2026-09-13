@@ -95,7 +95,6 @@ type Model struct {
 	hoverFrom     focus                  // where focus was before hover took it, restored when the mouse leaves the chat
 	sel           selection              // mouse text selection (drag to select, release to copy)
 	metaSel       metaPart               // the highlighted part of the meta row while it has focus
-	recent        []protocol.SessionInfo // this directory's earlier sessions, for the home screen
 	details       bool                   // expanded tool output (/details)
 	follow        bool                   // auto-scroll to bottom
 
@@ -389,10 +388,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case variantsMsg:
 		cmds = append(cmds, m.onVariants(msg))
 	case sessionsMsg:
-		if msg.err == nil {
-			m.recent = msg.sessions
-		}
-		if !msg.quiet {
+		if msg.quiet {
+			if msg.err == nil {
+				m.seedHistory(msg.sessions)
+			}
+		} else {
 			cmds = append(cmds, m.onSessions(msg))
 		}
 	case switchedMsg:
@@ -919,12 +919,7 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 		return nil
 	}
 	if m.isHome() {
-		// The logo screen: a click on a recent session resumes it; anywhere
-		// else focuses the input.
-		if idx, ok := m.homeRecentAt(x, y); ok {
-			return switchSessionCmd(m.ctx, m.c, m.sessionID, m.recentRows()[idx].ID)
-		}
-		return m.setFocus(focusInput)
+		return m.setFocus(focusInput) // the input is the only thing to click on the logo screen
 	}
 	if x < 0 || y < 0 {
 		return nil
@@ -1029,43 +1024,27 @@ func (m *Model) metaKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// recentRows is the home screen's history: this directory's earlier
-// sessions that were prompted (titled), newest first, excluding the current
-// one, at most homeRecentMax.
-func (m Model) recentRows() []protocol.SessionInfo {
-	var out []protocol.SessionInfo
-	for _, s := range m.recent {
-		if s.Title == "" || s.ID == m.sessionID {
+// seedHistory gives a fresh session's ↑/↓ history the first prompts of
+// this directory's earlier sessions (newest first under ↑), so the start
+// screen recalls what was asked last time. Only when nothing has been typed
+// here yet; the current and untitled sessions are skipped.
+func (m *Model) seedHistory(sessions []protocol.SessionInfo) {
+	if len(m.history) > 0 || !m.isHome() {
+		return
+	}
+	seen := map[string]bool{}
+	var titles []string
+	for _, s := range sessions { // newest first
+		if s.Title == "" || s.ID == m.sessionID || seen[s.Title] {
 			continue
 		}
-		out = append(out, s)
-		if len(out) == homeRecentMax {
-			break
-		}
+		seen[s.Title] = true
+		titles = append(titles, s.Title)
 	}
-	return out
-}
-
-// homeRecentAt maps a click on the logo screen to a recent-session row.
-func (m Model) homeRecentAt(x, y int) (int, bool) {
-	rows := m.recentRows()
-	if len(rows) == 0 {
-		return 0, false
+	for i := len(titles) - 1; i >= 0; i-- { // history is oldest → newest
+		m.history = append(m.history, titles[i])
 	}
-	lay := m.homeLines(m.width, m.bodyHeight())
-	if lay.recentStart < 0 {
-		return 0, false
-	}
-	i := y - lay.top - lay.recentStart
-	if i < 0 || i >= len(rows) {
-		return 0, false
-	}
-	boxW := promptBoxWidth(m.width)
-	x0 := (m.width - boxW) / 2
-	if x < x0 || x >= x0+boxW {
-		return 0, false
-	}
-	return i, true
+	m.histIdx = len(m.history)
 }
 
 // bodyHeight is the height of the main area a dialog is centred in (the
