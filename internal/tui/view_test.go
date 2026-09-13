@@ -247,22 +247,22 @@ func TestMonitorRows(t *testing.T) {
 	if !strings.HasPrefix(plain[0], "  ⚙") || !strings.Contains(plain[0], "go test") {
 		t.Fatalf("command row: %q", plain[0])
 	}
-	for _, want := range []string{"command", "42 lines", "1m15s"} {
+	for _, want := range []string{"42 lines", "1m15s"} {
 		if !strings.Contains(plain[0], want) {
 			t.Fatalf("command row lacks %q: %q", want, plain[0])
 		}
 	}
 	// a second running job: no wake tag, elapsed
-	if !strings.HasPrefix(plain[1], "  ⚙  src changes") || !strings.Contains(plain[1], "command · 3s") {
+	if !strings.HasPrefix(plain[1], "  ⚙  src changes") || !strings.HasSuffix(strings.TrimRight(plain[1], " "), "src changes  3s") {
 		t.Fatalf("second job row: %q", plain[1])
 	}
 	// progress and hours elapsed
-	if !strings.HasPrefix(plain[2], "  ⚙  cooldown") || !strings.Contains(plain[2], "command · 3m left · 2h00m") {
+	if !strings.HasPrefix(plain[2], "  ⚙  cooldown") || !strings.Contains(plain[2], "3m left · 2h00m") {
 		t.Fatalf("third job row: %q", plain[2])
 	}
 	// a bad Started stamp just drops the elapsed field
 	rows = monitorRows([]protocol.MonitorInfo{{ID: "x", Kind: "command", Label: "w", State: "running", Started: "nope"}}, now, 100)
-	if len(rows) != 1 || !strings.HasSuffix(strings.TrimRight(stripANSI(rows[0]), " "), "command") {
+	if len(rows) != 1 || strings.Contains(rows[0], "command") || !strings.HasSuffix(strings.TrimRight(stripANSI(rows[0]), " "), "w") {
 		t.Fatalf("bad stamp: %q", rows)
 	}
 	if monitorRows(nil, now, 100) != nil {

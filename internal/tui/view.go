@@ -1197,7 +1197,7 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 
 // monitorRows is the pure part of monitorsView: one row per running
 // monitor with its kind glyph, bold label, a spinner for commands still
-// running, and dim meta (kind, progress, elapsed).
+// running, and dim meta (progress, elapsed).
 func monitorRows(monitors []protocol.MonitorInfo, now time.Time, width int) []string {
 	var rows []string
 	for _, mo := range monitors {
@@ -1207,14 +1207,17 @@ func monitorRows(monitors []protocol.MonitorInfo, now time.Time, width int) []st
 		}
 		lead := jobGlyph(mo) + monitorGlyphGap(mo.Kind)
 		label := styleBold.Render(mo.Label)
-		meta := []string{mo.Kind}
+		var meta []string // the kind is always "command" now, so it is not shown
 		if mo.Progress != "" {
 			meta = append(meta, mo.Progress)
 		}
 		if t, err := time.Parse(time.RFC3339, mo.Started); err == nil && !t.IsZero() {
 			meta = append(meta, fmtElapsed(now.Sub(t)))
 		}
-		row := "  " + lead + label + "  " + styleDim.Render(strings.Join(meta, " · "))
+		row := "  " + lead + label
+		if len(meta) > 0 {
+			row += "  " + styleDim.Render(strings.Join(meta, " · "))
+		}
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows
