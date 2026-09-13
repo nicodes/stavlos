@@ -263,3 +263,26 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 		t.Fatal("close should return focus to the input")
 	}
 }
+
+func TestAgentOutcomeColours(t *testing.T) {
+	cases := []struct {
+		a    protocol.AgentInfo
+		want string
+	}{
+		{protocol.AgentInfo{State: "running"}, "working"},
+		{protocol.AgentInfo{State: "blocked"}, "working"},
+		{protocol.AgentInfo{State: "idle"}, "idle"},
+		{protocol.AgentInfo{State: "idle", LastError: "boom"}, "error"},
+		{protocol.AgentInfo{State: "finished", Status: "success"}, "complete"},
+		{protocol.AgentInfo{State: "finished", Status: "failure"}, "error"},
+		{protocol.AgentInfo{State: "killed"}, "complete"},
+	}
+	for _, c := range cases {
+		if got := agentOutcome(c.a); got != c.want {
+			t.Errorf("%+v: got %s want %s", c.a, got, c.want)
+		}
+	}
+	if agentDot(protocol.AgentInfo{State: "idle"}) == agentDot(protocol.AgentInfo{State: "finished"}) {
+		t.Error("idle and complete should use different glyphs")
+	}
+}

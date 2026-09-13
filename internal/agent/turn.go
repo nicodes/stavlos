@@ -30,6 +30,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	a.cancelTurn = cancel
 	a.finishFlag = false
 	a.yieldFlag = false
+	a.lastError = ""
 	a.mu.Unlock()
 	defer func() {
 		cancel()
@@ -55,6 +56,9 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	end := func(reason, errText string) {
 		a.mu.Lock()
 		a.cancelTurn = nil
+		if reason == "error" {
+			a.lastError = errText
+		}
 		if a.state == StateRunning || a.state == StateBlocked {
 			a.state = StateIdle
 		}
