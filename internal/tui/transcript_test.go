@@ -193,8 +193,8 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	tr := NewTranscript()
 	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "read", Input: json.RawMessage(`{"path":"a.go"}`)}))
 	got := renderLines(tr.All())
-	if !contains(got, "   ⠋ Read  a.go") {
-		t.Fatalf("running tool should show the spinner:\n%s", strings.Join(got, "\n"))
+	if !contains(got, "   ⚙  Read  a.go") {
+		t.Fatalf("running tool shows its glyph (yellow):\n%s", strings.Join(got, "\n"))
 	}
 	if !tr.Running() {
 		t.Fatal("Running() should be true while a call is open")
@@ -288,7 +288,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   › hi", "   ◌ thinking…", "   Hello", "   ⠋ Bash"})
+	assertSubsequence(t, got, []string{"   › hi", "   ◌ thinking…", "   Hello", "   ⚙  Bash"})
 	if !tr.Streaming() || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -303,7 +303,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	got = renderLines(tr.All())
 	assertSubsequence(t, got, []string{"   ◌ one", "   Hello"})
 	for _, g := range got {
-		if g == "   ⠋ Bash" || g == "   ◌ thinking…" || g == "   two" {
+		if g == "   ⚙  Bash" || g == "   ◌ thinking…" || g == "   two" {
 			t.Fatalf("stale stream line %q", g)
 		}
 	}
@@ -316,7 +316,7 @@ func TestStreamingToolOutputCollapses(t *testing.T) {
 		tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash", Text: "out\n"})
 	}
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   ⠋ Bash  make", "       out", "       … +2 lines"})
+	assertSubsequence(t, got, []string{"   ⚙  Bash  make", "       out", "       … +2 lines"})
 	if count(got, "       out") != maxOutputCollapsed {
 		t.Fatalf("live output should be collapsed:\n%s", strings.Join(got, "\n"))
 	}
