@@ -213,7 +213,7 @@ A turn ending and work being done are different events. A subagent may run six t
 
 The root agent does not get `finish`. It has no parent to report to; the session simply idles between turns. `finish` is added to the tool list only for spawned children.
 
-**Spawning is asynchronous, and there is no blocking wait.** `spawn` returns immediately with the child's ID. The child runs in the background. When it calls `finish`, a `ChildFinished` envelope is delivered to the parent's inbox and, if the parent is idle, starts a new turn; this is built in and cannot be switched off. A parent that has nothing else to do calls `monitor`, which ends its turn so it stays responsive to prompts and steers while it waits to be woken. A blocking wait was considered and rejected: it makes the parent deaf for the duration and buys nothing, since the history is intact when the result arrives.
+**Spawning is asynchronous, children never interrupt, and there is no blocking wait.** `spawn` returns immediately with the child's ID. When the child calls `finish`, its result lands in the parent's **mailbox**; that delivery is built in and cannot be switched off. What happens next is the parent's choice. By default nothing: the parent reads the mailbox on its own terms with `result` or `status`, and anything still unread is handed over as messages at the start of its next turn, whoever triggered that turn. A parent that wants to be told calls `monitor`, which ends its turn and **arms a wake** for the listed children; the first of them to finish starts a new turn carrying every result that has arrived, so several finishing together wake it once. `unmonitor` disarms without touching the child or its result. Arming is logged (`monitor.armed` / `monitor.disarmed`) so it survives a daemon restart. Nothing is ever injected into a running turn: a child finishing mid-turn waits for the boundary. A blocking wait was considered and rejected: it makes the parent deaf for the duration and buys nothing, since the history is intact when the result arrives.
 
 ### 6.4 Orchestration tools
 
@@ -226,7 +226,8 @@ Available to any agent whose preset permits them:
 | `steer(id, text)` | Deliver a `Steer` |
 | `cancel(id)` | Deliver a `Cancel` |
 | `kill(id)` | Deliver a `Kill` |
-| `monitor(ids?)` | Yield: end this turn now; each child's `finish` wakes the parent as a message (there is no blocking wait) |
+| `monitor(ids?)` | End this turn and arm a wake: a listed child's `finish` starts a new turn carrying its result |
+| `unmonitor(ids?)` | Disarm wakes; the children and their results are untouched |
 | `result(id)` | Retrieve a finished result without blocking |
 | `status(id?)` | State and usage (§4.4) of one or all children |
 
@@ -595,7 +596,7 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - Codex (ChatGPT) and Grok adapters, `go-plugin` model seam, `stavlos plugin install`, lockfile, models.dev metadata
 - MCP client
 - Three-layer configuration with trust gate; skills, presets, declarative policy
-- Built-in tools: `bash`, `read`, `write`, `edit`, `grep`, `glob`, `finish`, `skill`, and the orchestration set (`spawn`, `send`, `steer`, `cancel`, `kill`, `monitor`, `result`, `status`)
+- Built-in tools: `bash`, `read`, `write`, `edit`, `grep`, `glob`, `finish`, `skill`, and the orchestration set (`spawn`, `send`, `steer`, `cancel`, `kill`, `monitor`, `unmonitor`, `result`, `status`)
 - Usage accounting: per-call `Usage` events, per-agent and per-session aggregates
 - Subscription sign-in for ChatGPT and Grok (device-code flows, token refresh), credential store, `/provider` and `/models` in the TUI, `stavlos auth login|list|logout`
 - Depth and per-session fan-out limits

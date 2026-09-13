@@ -84,6 +84,18 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 					pendingSteers[e.Agent] = q[1:]
 				}
 			}
+		case event.MonitorArmed, event.MonitorDisarmed:
+			if a, ok := s.agents[e.Agent]; ok {
+				var p event.MonitorPayload
+				_ = e.Decode(&p)
+				for _, id := range p.IDs {
+					if e.Type == event.MonitorArmed {
+						a.armed[id] = true
+					} else {
+						delete(a.armed, id)
+					}
+				}
+			}
 		case event.TurnStarted:
 			var p event.TurnPayload
 			_ = e.Decode(&p)
