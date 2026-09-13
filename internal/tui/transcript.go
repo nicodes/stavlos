@@ -607,7 +607,7 @@ func EventLines(ev event.Event) []Line {
 		case "child_finished":
 			return blockWith(BlockChild, "child", p.Text, GlyphChild)
 		case "monitor_fired":
-			return blockWith(BlockChild, "job", p.Text, monitorGlyph("command"))
+			return blockWith(BlockChild, "bash async result", p.Text, monitorGlyph("command"))
 		default:
 			return block(BlockUser, p.Kind, p.Text)
 		}

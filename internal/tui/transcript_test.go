@@ -695,10 +695,10 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	if errFired.Item != timerStart.Item {
 		t.Fatalf("error fired: %+v (timer item %d)", errFired, timerStart.Item)
 	}
-	// the monitor_fired user message is a muted block labelled "job"
+	// the monitor_fired user message is a muted block labelled "bash async result"
 	var label Line
 	for _, l := range lines {
-		if l.Kind == LineLabel && l.Text == "job" {
+		if l.Kind == LineLabel && l.Text == "bash async result" {
 			label = l
 		}
 	}
@@ -735,7 +735,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	// the block label never becomes the folded line
 	for _, l := range plain {
-		if strings.TrimSpace(l) == "job" {
+		if strings.TrimSpace(l) == "bash async result" {
 			t.Fatalf("folded to the label line:\n%s", joined)
 		}
 	}
