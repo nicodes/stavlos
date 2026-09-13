@@ -119,6 +119,12 @@ type streamSeg struct {
 // Transcript accumulates rendered lines for one agent. Lines are grouped
 // into items, one per rendered event group (a user block, an assistant
 // message, a tool call with its output, …); the chat cursor walks items.
+// ShowThinking controls whether the model's thinking (summaries and
+// streaming deltas) appears in the chat as "◌ thinking…" items. It is
+// off: the events are still logged and the rendering path is kept, so it
+// can be switched back on later.
+var ShowThinking = false
+
 type Transcript struct {
 	Lines []Line
 
@@ -489,7 +495,7 @@ func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 			t.stream = append(t.stream, streamSeg{LineStream, n.Text, ""})
 		}
 	case n.Thinking != "":
-		if k == 0 || t.stream[k-1].kind != LineThink {
+		if ShowThinking && (k == 0 || t.stream[k-1].kind != LineThink) {
 			t.stream = append(t.stream, streamSeg{LineThink, "◌ thinking…", ""})
 		}
 	case n.ToolName != "":
@@ -678,7 +684,9 @@ func EventLines(ev event.Event) []Line {
 				hasText = true
 				lines = append(lines, markdownLines(text)...)
 			case model.BlockThinking:
-				lines = append(lines, thinkingLine(b.Text))
+				if ShowThinking {
+					lines = append(lines, thinkingLine(b.Text))
+				}
 			}
 		}
 		if hasText {

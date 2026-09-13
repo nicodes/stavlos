@@ -57,6 +57,7 @@ func contains(got []string, s string) bool {
 }
 
 func TestBuildTranscript(t *testing.T) {
+	showThinkingForTest(t)
 	evs := []event.Event{
 		mk(1, "a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Archetype: "coder", Label: "root", Model: "anthropic/claude-x"}),
 		mk(2, "a1", event.TurnStarted, event.TurnPayload{Turn: 1}),
@@ -280,6 +281,7 @@ func TestAssistantMarkdownAndErrors(t *testing.T) {
 }
 
 func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
+	showThinkingForTest(t)
 	tr := NewTranscript()
 	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "hi"}))
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Thinking: "hmm"})
@@ -498,6 +500,7 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 }
 
 func TestThinkingIsItsOwnItem(t *testing.T) {
+	showThinkingForTest(t)
 	tr := NewTranscript()
 	mk := func(seq int64, typ event.Type, p any) event.Event {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
@@ -540,6 +543,7 @@ func TestThinkingIsItsOwnItem(t *testing.T) {
 }
 
 func TestFoldingToOneLine(t *testing.T) {
+	showThinkingForTest(t)
 	tr := NewTranscript()
 	mk := func(seq int64, typ event.Type, p any) event.Event {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
@@ -877,5 +881,41 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	tr.Apply(mk(5, event.TurnAborted, event.TurnPayload{Turn: 2}))
 	if tr.InTurn() {
 		t.Fatal("aborted turn should clear the indicator")
+	}
+}
+
+// showThinkingForTest turns the (off by default) thinking display on for
+// one test.
+func showThinkingForTest(t *testing.T) {
+	t.Helper()
+	ShowThinking = true
+	t.Cleanup(func() { ShowThinking = false })
+}
+
+func TestThinkingHiddenByDefault(t *testing.T) {
+	if ShowThinking {
+		t.Fatal("thinking should be hidden by default")
+	}
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Thinking: "hmm"})
+	if !tr.Empty() {
+		t.Fatalf("a thinking delta should add nothing: %+v", tr.All())
+	}
+	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockThinking, Text: "let me see"}, {Type: model.BlockText, Text: "Hello"}}}))
+	sawText := false
+	for _, l := range tr.All() {
+		if l.Kind == LineThink || strings.Contains(l.Text, "let me see") {
+			t.Fatalf("thinking leaked into the chat: %+v", l)
+		}
+		if strings.Contains(l.Text, "Hello") {
+			sawText = true
+		}
+	}
+	if !sawText {
+		t.Fatalf("text should still show: %+v", tr.All())
 	}
 }
