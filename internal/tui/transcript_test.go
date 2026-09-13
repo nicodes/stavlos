@@ -79,8 +79,7 @@ func TestBuildTranscript(t *testing.T) {
 		"       partial",
 		"   ◌ thinking…",
 		"   Done.",
-		"   · claude-x",
-		"   ◦ turn cancelled",
+				"   ◦ turn cancelled",
 		"   ✓ finished · success",
 		"   all good",
 	})
@@ -366,8 +365,8 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 	if k := kinds(2); k[LineTool] != 1 || k[LineToolOut] != 6 {
 		t.Fatalf("tool item: %v", k)
 	}
-	if k := kinds(3); k[LineText] != 1 || k[LineModel] != 1 {
-		t.Fatalf("assistant item: %v", k)
+	if k := kinds(3); k[LineText] != 1 || k[LineModel] != 0 || k[LineBlank] != 1 {
+		t.Fatalf("assistant item (no model trailer): %v", k)
 	}
 	if k := kinds(4); k[LineFinished] != 1 || k[LineText] != 1 {
 		t.Fatalf("finished item: %v", k)
@@ -917,5 +916,24 @@ func TestThinkingHiddenByDefault(t *testing.T) {
 	}
 	if !sawText {
 		t.Fatalf("text should still show: %+v", tr.All())
+	}
+}
+
+func TestCursorMarkSkipsSpacingRows(t *testing.T) {
+	lines := []Line{
+		{Kind: LineText, Block: BlockUser, Lead: true, Text: "hi", Item: 0},
+		{Kind: LineText, Text: "Hello there", Item: 1},
+		{Kind: LineTool, Text: "Bash  ls", Item: 2, tool: "bash"},
+	}
+	for cursor := 0; cursor < 3; cursor++ {
+		out, _ := renderAll(lines, RenderOpts{Width: 60, NoFold: true, Focused: true, Cursor: cursor})
+		for _, row := range strings.Split(stripANSI(out), "\n") {
+			if strings.TrimSpace(row) == gutterMark {
+				t.Fatalf("cursor %d: the mark sits on a blank spacing row:\n%s", cursor, stripANSI(out))
+			}
+		}
+		if !strings.Contains(stripANSI(out), gutterMark) {
+			t.Fatalf("cursor %d: no mark at all:\n%s", cursor, stripANSI(out))
+		}
 	}
 }

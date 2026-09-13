@@ -179,11 +179,9 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		if n > 0 {
 			b.WriteByte('\n')
 		}
-		if r.blank && o.Focused && r.item == o.Cursor {
-			b.WriteString(styleGutter.Render(gutterMark))
-		} else {
-			b.WriteString(r.text)
-		}
+		// The cursor's gutter mark spans the item's own rows only, never
+		// the blank spacing rows above and below it.
+		b.WriteString(r.text)
 		if !r.blank {
 			if rr, ok := rows[r.item]; ok {
 				rr.last = n

@@ -690,10 +690,9 @@ func EventLines(ev event.Event) []Line {
 			}
 		}
 		if hasText {
-			if p.Model != "" && p.StopReason != string(model.StopToolUse) {
-				short, _ := splitModel(p.Model)
-				lines = append(lines, Line{Kind: LineModel, Text: short})
-			}
+			// The model that produced the response is not shown (it is on
+			// the meta row and in the sidebar); LineModel stays for /tips
+			// style notices that name a model.
 			lines = append(lines, Line{Kind: LineBlank})
 		}
 		return lines
