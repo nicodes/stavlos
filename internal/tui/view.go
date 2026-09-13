@@ -48,6 +48,7 @@ var (
 	styleSep           = lipgloss.NewStyle().Foreground(colBorder)
 	styleBoxTitleFocus = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
 	styleCursorRow     = lipgloss.NewStyle().Background(colSelBg) // chat cursor: the item's rows get this background
+	styleSelection     = lipgloss.NewStyle().Reverse(true)        // mouse text selection
 
 	styleBorderMuted = lipgloss.NewStyle().Foreground(colMuted)
 	styleBorderUser  = lipgloss.NewStyle().Foreground(colAccent) // the input prompt while it has focus
@@ -727,10 +728,11 @@ func (m Model) View() string {
 	if m.ov != nil {
 		main = composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
 	}
-	if kb == 0 {
-		return main
+	frame := main
+	if kb > 0 {
+		frame = main + "\n" + keybar
 	}
-	return main + "\n" + keybar
+	return m.highlightSelection(frame)
 }
 
 // isHome reports whether the selected agent has nothing to show yet.
