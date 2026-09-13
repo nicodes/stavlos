@@ -615,7 +615,6 @@ const (
 	promptBoxMin  = 75
 	sidebarWidth  = 32
 	sidebarMinW   = 100
-	tipsMaxWidth  = 75
 	inputBoxLines = 2
 )
 
@@ -668,11 +667,6 @@ func metaLine(label, role, model, variant string, queued int, yolo bool) string 
 	return s
 }
 
-var tipLines = []string{
-	"/provider   sign in with ChatGPT or Grok",
-	"/models     pick a model",
-	"/help       all commands",
-}
 
 // --- footer ---
 
@@ -831,20 +825,6 @@ func (m Model) homeView(width, height int) string {
 	}
 	add(m.inputBoxView(boxW), boxW)
 
-	if m.showTips {
-		tipsW := tipsMaxWidth
-		if tipsW > boxW {
-			tipsW = boxW
-		}
-		tips := make([]string, len(tipLines))
-		for i, t := range tipLines {
-			tips[i] = styleDim.Render(truncRunes(t, tipsW))
-		}
-		if len(lines)+1+len(tips) <= height {
-			lines = append(lines, "")
-			add(strings.Join(tips, "\n"), tipsW)
-		}
-	}
 
 	top := (height - len(lines)) / 2
 	if top < 0 {
