@@ -819,3 +819,37 @@ func TestAsyncJobJoinsItsCallLine(t *testing.T) {
 		t.Fatalf("assistant text leaked into the call item:\n%s", joined)
 	}
 }
+
+func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	render := func() string {
+		s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: tr.InTurn()})
+		return stripANSI(s)
+	}
+	if tr.InTurn() || strings.Contains(render(), "working…") {
+		t.Fatal("no turn yet")
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.Apply(mk(2, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "go"}))
+	out := render()
+	if !tr.InTurn() || !strings.HasSuffix(out, "\n\n⠋ working…") {
+		t.Fatalf("mid-turn should end with the indicator:\n%s", out)
+	}
+	// the indicator is not an item: the cursor/expand bookkeeping ignores it
+	if _, rows := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Working: true}); len(rows) != tr.Items() {
+		t.Fatalf("rows %d, items %d", len(rows), tr.Items())
+	}
+	tr.Apply(mk(3, event.TurnEnded, event.TurnEndedPayload{Turn: 1}))
+	if tr.InTurn() || strings.Contains(render(), "working…") {
+		t.Fatalf("after the turn the indicator must go:\n%s", render())
+	}
+	// an aborted turn (daemon restart) clears it too
+	tr.Apply(mk(4, event.TurnStarted, event.TurnPayload{Turn: 2}))
+	tr.Apply(mk(5, event.TurnAborted, event.TurnPayload{Turn: 2}))
+	if tr.InTurn() {
+		t.Fatal("aborted turn should clear the indicator")
+	}
+}

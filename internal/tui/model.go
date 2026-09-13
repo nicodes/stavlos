@@ -234,8 +234,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.sp, cmd = m.sp.Update(msg)
 		cmds = append(cmds, cmd)
-		// Running tool lines carry the spinner glyph, so they need redraws.
-		if t := m.transcripts[m.selectedID()]; t != nil && t.Running() {
+		// The "working…" indicator carries the spinner, so redraw mid-turn.
+		if t := m.transcripts[m.selectedID()]; t != nil && (t.InTurn() || t.Running()) {
 			m.refreshViewport()
 		}
 
@@ -1403,10 +1403,15 @@ func (m *Model) refreshViewport() {
 	if m.chatCursor < 0 {
 		m.chatCursor = 0
 	}
+	working := false
+	if t := m.transcripts[m.selectedID()]; t != nil {
+		working = t.InTurn()
+	}
 	content, rows := renderAll(lines, RenderOpts{
 		Width:    m.vp.Width,
 		Details:  m.details,
 		Spinner:  m.sp.View(),
+		Working:  working,
 		Expanded: m.expanded[m.selectedID()],
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,
