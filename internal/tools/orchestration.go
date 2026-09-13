@@ -33,7 +33,7 @@ func jsonOut(v any) Result {
 type spawnTool struct{}
 
 func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "spawn", Description: "Create a child agent that works on a task in the background. Returns its id immediately. The child's finish result arrives as a message when it completes; use wait to block for it, or result to fetch it later.",
+	return model.ToolDef{Name: "spawn", Description: "Create a child agent that works on a task in the background. Returns its id immediately. Then call monitor: your turn ends and the child's finish result wakes you as a new message, so you stay responsive meanwhile.",
 		Schema: schema(map[string]any{
 			"archetype": prop("string", "Preset name of the child (see the list in your instructions)"),
 			"label":     prop("string", "Short human-facing name for this child, e.g. 'auth-explorer' (required)"),
@@ -145,16 +145,18 @@ func (killTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	return Result{Output: "killed"}
 }
 
-// --- wait / result / status ---
+// --- monitor / result / status ---
 
-type waitTool struct{}
+// --- monitor ---
 
-func (waitTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "wait", Description: "Block until the given children finish, then return their results. Omit ids to wait for all live children.",
-		Schema: schema(map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Child ids"}})}
+type monitorTool struct{}
+
+func (monitorTool) Def() model.ToolDef {
+	return model.ToolDef{Name: "monitor", Description: "Hand control back now and be woken when your children finish. Your turn ends after this tool call (put anything else you need in the same batch); each child's result then arrives as a message that starts a new turn. Omit ids for all live children. There is no blocking wait: this is how subagents are awaited.",
+		Schema: schema(map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Child ids (default: all live children)"}})}
 }
-func (waitTool) PolicyArg(in json.RawMessage) string { return "" }
-func (waitTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
+func (monitorTool) PolicyArg(in json.RawMessage) string { return "" }
+func (monitorTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
 		return *r
 	}
@@ -162,11 +164,15 @@ func (waitTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
-	res, err := env.Orch.Wait(ctx, env.Agent, a.IDs)
+	st, err := env.Orch.Monitor(env.Agent, a.IDs)
 	if err != nil {
 		return errf("%v", err)
 	}
-	return jsonOut(res)
+	if len(st) == 0 {
+		return Result{Output: "no live children to monitor"}
+	}
+	b, _ := json.MarshalIndent(st, "", "  ")
+	return Result{Output: "monitoring; your turn ends after this batch and each result will arrive as a message:\n" + string(b)}
 }
 
 type resultTool struct{}

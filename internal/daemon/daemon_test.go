@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -118,6 +119,27 @@ func newHarness(t *testing.T, data string, fm *fakeModel) *harness {
 	return h
 }
 
+// recentEvents lists every session event for the dump on timeout.
+func (h *harness) recentEvents() []string {
+	rows, _ := h.d.Log.Sessions(context.Background())
+	var out []string
+	for _, r := range rows {
+		evs, _ := h.d.Log.Read(context.Background(), r.ID, 1, 0)
+		for _, e := range evs {
+			out = append(out, fmt.Sprintf("%3d %-22s %s %s", e.Seq, e.Type, e.Agent, short(e.Payload)))
+		}
+	}
+	return out
+}
+
+func short(b []byte) string {
+	s := string(b)
+	if len(s) > 100 {
+		s = s[:100] + "…"
+	}
+	return s
+}
+
 func (h *harness) close() {
 	h.c.Close()
 	h.cancel()
@@ -135,7 +157,7 @@ func (h *harness) waitFor(t event.Type, agent string) event.Event {
 				return e
 			}
 		case <-deadline:
-			h.t.Fatalf("timeout waiting for %s (%s)", t, agent)
+			h.t.Fatalf("timeout waiting for %s (%s)\nevents so far:\n%s", t, agent, strings.Join(h.recentEvents(), "\n"))
 		}
 	}
 }
@@ -172,12 +194,12 @@ func TestEndToEnd(t *testing.T) {
 		func(model.Request) model.Response {
 			return call("c3", "spawn", `{"archetype":"explorer","label":"scout","task":"look around"}`)
 		},
-		// parent continues after spawn result
-		func(model.Request) model.Response { return call("c4", "wait", `{}`) },
+		// parent yields with monitor, then is woken by the child's result
+		func(model.Request) model.Response { return call("c4", "monitor", `{}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1]
-			if !strings.Contains(last.Blocks[0].Content, "found it") {
-				t.Errorf("wait result missing: %+v", last)
+			if !strings.Contains(last.Blocks[len(last.Blocks)-1].Text, "found it") {
+				t.Errorf("child result missing: %+v", last)
 			}
 			return text("child done")
 		},
@@ -245,10 +267,10 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("spawned %+v", spp)
 	}
 	h.waitFor(event.AgentFinished, spp.ID)
-	e = h.waitFor(event.TurnEnded, root)
+	e = h.waitFor(event.TurnEnded, root) // turn 3: woken by ChildFinished
 	_ = e.Decode(&te)
-	if te.Reason != "end_turn" {
-		t.Fatalf("turn 2 ended %+v", te)
+	if te.Reason != "end_turn" || te.Turn != 3 {
+		t.Fatalf("turn 3 ended %+v", te)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
 	if len(agents) != 2 || agents[1].State != "finished" || agents[1].Summary != "found it" || agents[0].CostUSD != 0 {
@@ -262,7 +284,7 @@ func TestEndToEnd(t *testing.T) {
 			nUsage++
 		}
 	}
-	if nUsage != 7 {
+	if nUsage != 7 { // 3 (turn 1) + 1 (spawn) + 1 (monitor) + 1 (child) + 1 (turn 3)
 		t.Fatalf("usage events %d", nUsage)
 	}
 	// reconcile
@@ -381,5 +403,78 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	fa, err := h2.c.Tree(ctx, f.ID)
 	if err != nil || len(fa) != 1 || fa[0].ID == root || fa[0].Turn != 3 {
 		t.Fatalf("fork tree %+v %v", fa, err)
+	}
+}
+
+func TestMonitorKeepsParentResponsive(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	release := make(chan struct{})
+	fm.steps = []func(model.Request) model.Response{
+		// turn 1: spawn, then monitor → turn ends without waiting
+		func(model.Request) model.Response {
+			return call("c1", "spawn", `{"archetype":"explorer","label":"slow","task":"take your time"}`)
+		},
+		func(model.Request) model.Response { return call("c2", "monitor", `{}`) },
+		// turn 2: a human prompt answered while the child is still running
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks
+			if !strings.Contains(last[len(last)-1].Text, "still there") {
+				t.Errorf("turn 2 input: %+v", last)
+			}
+			return text("yes, still here")
+		},
+		// turn 3: woken by the child's result
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks
+			if !strings.Contains(last[len(last)-1].Text, "finished with status success") || !strings.Contains(last[len(last)-1].Text, "took a while") {
+				t.Errorf("turn 3 input: %+v", last)
+			}
+			return text("got the result")
+		},
+	}
+	fm.childSteps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			<-release
+			return call("k1", "finish", `{"summary":"took a while","status":"success"}`)
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, err := h.c.CreateSession(ctx, work, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
+	e := h.waitFor(event.TurnEnded, root)
+	var te event.TurnEndedPayload
+	_ = e.Decode(&te)
+	if te.Turn != 1 || te.Reason != "end_turn" {
+		t.Fatalf("turn 1: %+v", te)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].State != "idle" || len(agents) != 2 || agents[1].State == "finished" {
+		t.Fatalf("after monitor: %+v", agents)
+	}
+	// parent answers while the child is blocked
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "still there?")
+	e = h.waitFor(event.TurnEnded, root)
+	_ = e.Decode(&te)
+	if te.Turn != 2 {
+		t.Fatalf("turn 2: %+v", te)
+	}
+	// now the child finishes and wakes the parent
+	close(release)
+	h.waitFor(event.AgentFinished, agents[1].ID)
+	e = h.waitFor(event.TurnEnded, root)
+	_ = e.Decode(&te)
+	if te.Turn != 3 || te.Reason != "end_turn" {
+		t.Fatalf("turn 3: %+v", te)
 	}
 }

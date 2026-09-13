@@ -55,13 +55,6 @@ var keys = keyMap{
 	OvOpen:   key.NewBinding(key.WithKeys("o", "O")),
 }
 
-// overlayHint is the footer text while a list overlay is open; loginHint
-// while a sign-in is shown.
-const (
-	overlayHint = "↑/↓ or ctrl+p/ctrl+n move · enter select · esc close · type to filter · pgup/pgdn page"
-	loginHint   = "open the URL, enter the code · o open in browser · esc cancel"
-)
-
 // helpLines is the /help notice.
 var helpLines = []string{
 	"commands:",

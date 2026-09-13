@@ -793,7 +793,8 @@ func (m *Model) layout() {
 	boxW := m.boxWidth()
 	m.input.Width = boxW - 3 - len([]rune(m.input.Prompt)) - 1 // border + padding + cursor
 
-	bodyH := m.height - 1 - 1 - inputBoxLines // footer, spacer, input box
+	_, kb := m.keyBarView()
+	bodyH := m.height - 1 - kb - 1 - inputBoxLines // footer, key bar, spacer, input box
 	if pb := m.promptView(m.contentWidth()); pb != "" {
 		bodyH -= strings.Count(pb, "\n") + 1
 	}
