@@ -1270,7 +1270,7 @@ func (m *Model) layout() {
 	_, kb := m.keyBarView()
 	bodyH := m.height - 1 - kb - 1 - inputBoxLines // footer, key bar, chat rule, input box
 	if sv := m.sectionsView(m.contentWidth()); sv != "" {
-		bodyH -= strings.Count(sv, "\n") + 1
+		bodyH -= strings.Count(sv, "\n") + 1 + 2 // plus the blank line above and below
 	}
 	if pv := m.paletteViewFor(m.contentWidth()); pv != "" {
 		bodyH -= strings.Count(pv, "\n") + 1

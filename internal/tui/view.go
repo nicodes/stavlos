@@ -786,7 +786,7 @@ func (m Model) sessionView(width, height int) string {
 	// strip (and the focused section's body) sit right above the input.
 	parts := []string{m.vp.View(), styleRule.Render(strings.Repeat("─", cw))}
 	if sv := m.sectionsView(cw); sv != "" {
-		parts = append(parts, sv)
+		parts = append(parts, "", sv, "") // a blank line above and below the strip
 	}
 	if pv := m.paletteViewFor(cw); pv != "" {
 		parts = append(parts, pv)
