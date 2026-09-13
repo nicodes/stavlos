@@ -65,6 +65,7 @@ type Line struct {
 	Suffix  string // dim trailer, e.g. "(cancelled)"
 	Item    int    // index of the item (event group) this line belongs to
 	callID  string
+	tool    string // raw tool name on a LineTool line
 }
 
 const (
@@ -88,13 +89,16 @@ type Transcript struct {
 	Lines []Line
 
 	calls      map[string]int // tool call id → index of its LineTool
+	prompts    map[string]int // prompt id → item of the tool call it gates
 	items      int            // committed items so far
 	streamTurn int
 	stream     []streamSeg
 }
 
 // NewTranscript returns an empty transcript.
-func NewTranscript() *Transcript { return &Transcript{calls: map[string]int{}} }
+func NewTranscript() *Transcript {
+	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}}
+}
 
 // Apply appends the rendering of ev. An assistant.message (or the end of a
 // turn) replaces the in-progress streaming buffer; tool.call.finished updates
@@ -106,6 +110,28 @@ func (t *Transcript) Apply(ev event.Event) {
 		var p event.ToolStartedPayload
 		if ev.Decode(&p) == nil && p.CallID != "" {
 			t.calls[p.CallID] = len(t.Lines)
+		}
+	case event.PromptRequested:
+		// A permission prompt belongs to the call it gates: the open call
+		// with the same tool name (the latest one if several).
+		var p event.PromptRequestedPayload
+		if ev.Decode(&p) == nil && p.Kind == "permission" {
+			if item, ok := t.openCallItem(p.Tool); ok {
+				t.prompts[p.ID] = item
+				t.insertIntoItem(item, EventLines(ev))
+				return
+			}
+		}
+	case event.PromptClaimed, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted:
+		var p event.PromptRefPayload
+		if ev.Decode(&p) == nil {
+			if item, ok := t.prompts[p.ID]; ok {
+				if ev.Type != event.PromptClaimed {
+					delete(t.prompts, p.ID)
+				}
+				t.insertIntoItem(item, EventLines(ev))
+				return
+			}
 		}
 	case event.ToolCallFinished:
 		var p event.ToolFinishedPayload
@@ -146,6 +172,18 @@ func (t *Transcript) appendItem(item int, lines []Line) {
 	if item == t.items {
 		t.items++
 	}
+}
+
+// openCallItem returns the item of the most recently started, still-open
+// call of tool name.
+func (t *Transcript) openCallItem(name string) (int, bool) {
+	best, item := -1, 0
+	for _, idx := range t.calls {
+		if idx < len(t.Lines) && idx > best && strings.EqualFold(t.Lines[idx].tool, name) {
+			best, item = idx, t.Lines[idx].Item
+		}
+	}
+	return item, best >= 0
 }
 
 // insertIntoItem places lines immediately after the last line of item so
@@ -412,7 +450,7 @@ func EventLines(ev event.Event) []Line {
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		return []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID}}
+		return []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID, tool: p.Name}}
 
 	case event.ToolCallFinished:
 		var p event.ToolFinishedPayload

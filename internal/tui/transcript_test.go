@@ -464,20 +464,25 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 	}
 	toolItem := lines[toolIdx].Item
 	first, last := tr.ItemRange(toolItem)
-	// every line in the item's range belongs to the item: output was spliced
-	// in right after the call, ahead of the permission notices
+	// every line in the item's range belongs to the item, and the item holds,
+	// in order: the call, the permission notices it gated, then the output
 	for i := first; i <= last; i++ {
 		if lines[i].Item != toolItem {
 			t.Fatalf("line %d (%q) inside tool item range belongs to item %d", i, lines[i].Text, lines[i].Item)
 		}
 	}
-	if last-first < 2 || !strings.Contains(lines[last].Text, "all passed") {
-		t.Fatalf("output not under the call: range %d..%d, last %q", first, last, lines[last].Text)
+	joined := ""
+	for i := first; i <= last; i++ {
+		joined += lines[i].Text + "\n"
 	}
-	// and the notices come after the whole tool item
+	reqAt, ansAt, outAt := strings.Index(joined, "permission"), strings.Index(joined, "allow"), strings.Index(joined, "all passed")
+	if reqAt < 0 || ansAt < 0 || outAt < 0 || !(reqAt < ansAt && ansAt < outAt) {
+		t.Fatalf("order within tool item wrong (req %d, ans %d, out %d):\n%s", reqAt, ansAt, outAt, joined)
+	}
+	// nothing of the tool item, and no permission notice, lives outside it
 	for i := last + 1; i < len(lines); i++ {
-		if lines[i].Kind == LineTool || lines[i].Item == toolItem {
-			t.Fatalf("tool item content after its range at %d", i)
+		if lines[i].Item == toolItem || strings.Contains(lines[i].Text, "permission") {
+			t.Fatalf("tool item content after its range at %d: %q", i, lines[i].Text)
 		}
 	}
 }
