@@ -766,7 +766,7 @@ func (m Model) boxWidth() int {
 
 // inputBoxView is the input line over the meta row for the selected agent.
 func (m Model) inputBoxView(width int) string {
-	return inputBox(m.input.View(), m.metaRow(width))
+	return inputBox(m.inputView(), m.metaRow(width))
 }
 
 // metaRow is the line under the input: role and model on the left, tokens

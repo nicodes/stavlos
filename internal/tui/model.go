@@ -181,7 +181,7 @@ func (l *loginFlow) reset() {
 const inputMaxLines = 8
 
 // newInputArea builds the message input: a textarea that starts one line
-// tall and grows with the text (see fitInput), no line numbers, no cursor
+// tall and grows with the text (see inputRows), no line numbers, no cursor
 // line highlight, enter sends and ctrl+j (or alt+enter) breaks a line.
 func newInputArea() textarea.Model {
 	ta := textarea.New()
@@ -196,8 +196,11 @@ func newInputArea() textarea.Model {
 	})
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 0
+	// The textarea itself is always inputMaxLines tall so it never scrolls
+	// until a message really is that long; the view shows only the rows
+	// the text needs (see inputRows).
 	ta.MaxHeight = inputMaxLines
-	ta.SetHeight(1)
+	ta.SetHeight(inputMaxLines)
 	ta.EndOfBufferCharacter = ' '
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"))
 	// A subtle background makes the input stand out from the chat above
@@ -745,7 +748,7 @@ func (m Model) highlightSelection(frame string) string {
 
 // textareaWrap mirrors the soft-wrap the bubbles textarea uses to draw a
 // logical line (word wrap that keeps trailing spaces on the row and spills a
-// row that exactly fills the width), so fitInput counts the rows the
+// row that exactly fills the width), so inputRows counts the rows the
 // textarea will actually draw. A generic word wrap counts fewer rows and
 // leaves the textarea scrolling inside a too-short box.
 func textareaWrap(runes []rune, width int) [][]rune {
@@ -809,11 +812,12 @@ func normalizePaste(msg tea.KeyMsg) tea.KeyMsg {
 	return msg
 }
 
-// fitInput sizes the input to its wrapped text: one line for an empty or
-// short message, more as it wraps or gains lines, up to inputMaxLines
-// (beyond that the textarea scrolls inside).
-func (m *Model) fitInput() {
-	w := m.input.Width() // already the text width inside the prompt
+// inputRows is how many rows the message needs: the textarea's own wrap
+// of every logical line, at least one, at most inputMaxLines (past that the
+// textarea scrolls to keep the cursor in view). The textarea is always
+// inputMaxLines tall; inputView shows this many of its rows.
+func (m Model) inputRows() int {
+	w := m.input.Width()
 	if w < 1 {
 		w = 1
 	}
@@ -827,13 +831,16 @@ func (m *Model) fitInput() {
 	if rows > inputMaxLines {
 		rows = inputMaxLines
 	}
-	if rows != m.input.Height() {
-		m.input.SetHeight(rows)
-		// The textarea may have scrolled its own viewport while it was
-		// shorter (a paste lands before the resize); a no-op update runs its
-		// repositioning so the first line is back in view.
-		m.input, _ = m.input.Update(nil)
+	return rows
+}
+
+// inputView is the textarea trimmed to the rows the message needs.
+func (m Model) inputView() string {
+	lines := strings.Split(m.input.View(), "\n")
+	if n := m.inputRows(); len(lines) > n {
+		lines = lines[:n]
 	}
+	return strings.Join(lines, "\n")
 }
 
 // mouseHover is mouse movement: over a chat item it does what ↑/↓ do (the
@@ -1038,7 +1045,7 @@ func (m *Model) rows() rowLayout {
 		y += strings.Count(pv, "\n") + 1
 	}
 	lay.input = y
-	lay.meta = y + m.input.Height()
+	lay.meta = y + m.inputRows()
 	return lay
 }
 
@@ -1960,11 +1967,10 @@ func (m *Model) layout() {
 	}
 	boxW := m.boxWidth()
 	m.input.SetWidth(boxW)
-	m.fitInput()
 	m.promptInput.Width = boxW - 4 - len([]rune(m.promptInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
-	bodyH := m.height - kb - 2 - (m.input.Height() + 1) // key bar, blank + chat rule, input lines + meta row
+	bodyH := m.height - kb - 2 - (m.inputRows() + 1) // key bar, blank + chat rule, input rows + meta row
 	if sv := m.sectionsView(m.contentWidth()); sv != "" {
 		bodyH -= strings.Count(sv, "\n") + 1 + 1 // plus the blank line below
 	}

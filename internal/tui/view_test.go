@@ -1471,14 +1471,14 @@ func TestInputGrowsWithTheMessage(t *testing.T) {
 	m.width, m.height = 60, 30
 	m.layout()
 	one := m.vp.Height
-	if m.input.Height() != 1 {
-		t.Fatalf("empty input should be one line: %d", m.input.Height())
+	if m.inputRows() != 1 {
+		t.Fatalf("empty input should be one line: %d", m.inputRows())
 	}
 	// an explicit line break grows it
 	m.input.SetValue("first line\nsecond line")
 	m.layout()
-	if m.input.Height() != 2 || m.vp.Height != one-1 {
-		t.Fatalf("two lines: height %d, viewport %d (was %d)", m.input.Height(), m.vp.Height, one)
+	if m.inputRows() != 2 || m.vp.Height != one-1 {
+		t.Fatalf("two lines: height %d, viewport %d (was %d)", m.inputRows(), m.vp.Height, one)
 	}
 	if got := strings.Count(m.View(), "\n") + 1; got != m.height {
 		t.Fatalf("view should still fill the window: %d lines", got)
@@ -1486,20 +1486,20 @@ func TestInputGrowsWithTheMessage(t *testing.T) {
 	// a long line wraps and grows it too
 	m.input.SetValue(strings.Repeat("word ", 40))
 	m.layout()
-	if m.input.Height() < 3 {
-		t.Fatalf("200 columns of text in a 60-column box should wrap to several lines: %d", m.input.Height())
+	if m.inputRows() < 3 {
+		t.Fatalf("200 columns of text in a 60-column box should wrap to several lines: %d", m.inputRows())
 	}
 	// never past the cap
 	m.input.SetValue(strings.Repeat("line\n", 30))
 	m.layout()
-	if m.input.Height() != inputMaxLines {
-		t.Fatalf("cap: %d", m.input.Height())
+	if m.inputRows() != inputMaxLines {
+		t.Fatalf("cap: %d", m.inputRows())
 	}
 	// back to one line when cleared
 	m.input.Reset()
 	m.layout()
-	if m.input.Height() != 1 || m.vp.Height != one {
-		t.Fatalf("cleared: height %d viewport %d", m.input.Height(), m.vp.Height)
+	if m.inputRows() != 1 || m.vp.Height != one {
+		t.Fatalf("cleared: height %d viewport %d", m.inputRows(), m.vp.Height)
 	}
 }
 
@@ -1515,8 +1515,8 @@ func TestInputNewlineAndHistoryKeys(t *testing.T) {
 	type_("one")
 	press(&m, tea.KeyMsg{Type: tea.KeyCtrlJ}) // ctrl+j breaks the line
 	type_("two")
-	if m.input.Value() != "one\ntwo" || m.input.Height() != 2 {
-		t.Fatalf("ctrl+j should insert a newline: %q height %d", m.input.Value(), m.input.Height())
+	if m.input.Value() != "one\ntwo" || m.inputRows() != 2 {
+		t.Fatalf("ctrl+j should insert a newline: %q height %d", m.input.Value(), m.inputRows())
 	}
 	// on the second line ↑ moves within the draft, not into history
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
@@ -1535,7 +1535,7 @@ func TestInputShowsOneChevron(t *testing.T) {
 	m.width, m.height = 60, 30
 	m.input.SetValue("first line\nsecond line\nthird")
 	m.layout()
-	v := stripANSI(m.input.View())
+	v := stripANSI(m.inputView())
 	if strings.Count(v, "›") != 1 || !strings.HasPrefix(v, "› first line") {
 		t.Fatalf("one chevron on the first line only:\n%s", v)
 	}
@@ -1551,10 +1551,10 @@ func TestPastedMessageKeepsItsFirstLineInView(t *testing.T) {
 	m.width, m.height = 80, 30
 	m.layout()
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Use subagents to summarize the repo.\nThen compare all responses and\ngive me the highlights."), Paste: true})
-	if m.input.Height() != 3 {
-		t.Fatalf("three pasted lines should give a three-line input: %d", m.input.Height())
+	if m.inputRows() != 3 {
+		t.Fatalf("three pasted lines should give a three-line input: %d", m.inputRows())
 	}
-	v := stripANSI(m.input.View())
+	v := stripANSI(m.inputView())
 	lines := strings.Split(v, "\n")
 	if len(lines) != 3 || !strings.HasPrefix(lines[0], "› Use subagents") || !strings.HasPrefix(lines[2], "  give me the highlights.") {
 		t.Fatalf("the whole message should be visible from its first line:\n%s", v)
@@ -1566,10 +1566,10 @@ func TestPasteWithCarriageReturns(t *testing.T) {
 	m.width, m.height = 80, 30
 	m.layout()
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("first line\r\nsecond line\rthird line"), Paste: true})
-	if m.input.Value() != "first line\nsecond line\nthird line" || m.input.Height() != 3 {
-		t.Fatalf("CR/CRLF should become line breaks: %q height %d", m.input.Value(), m.input.Height())
+	if m.input.Value() != "first line\nsecond line\nthird line" || m.inputRows() != 3 {
+		t.Fatalf("CR/CRLF should become line breaks: %q height %d", m.input.Value(), m.inputRows())
 	}
-	if strings.ContainsRune(m.input.View(), '\r') {
+	if strings.ContainsRune(m.inputView(), '\r') {
 		t.Fatal("no carriage return may reach the screen")
 	}
 }
@@ -1592,7 +1592,7 @@ func TestInputNeverHidesRows(t *testing.T) {
 	for _, text := range cases {
 		m.input.SetValue(text)
 		m.layout()
-		view := stripANSI(m.input.View())
+		view := stripANSI(m.inputView())
 		rows := strings.Split(view, "\n")
 		first := strings.Split(text, "\n")[0]
 		head := first
@@ -1600,16 +1600,16 @@ func TestInputNeverHidesRows(t *testing.T) {
 			head = string([]rune(head)[:10])
 		}
 		if !strings.HasPrefix(rows[0], "› "+head) {
-			t.Fatalf("first row hidden for %q (height %d):\n%s", head, m.input.Height(), view)
+			t.Fatalf("first row hidden for %q (height %d):\n%s", head, m.inputRows(), view)
 		}
-		if m.input.Height() > inputMaxLines {
-			t.Fatalf("over the cap: %d", m.input.Height())
+		if m.inputRows() > inputMaxLines {
+			t.Fatalf("over the cap: %d", m.inputRows())
 		}
 		// the end of the message is on screen too (unless capped)
 		last := []rune(strings.TrimRight(text, " "))
 		tail := string(last[max(0, len(last)-5):])
-		if m.input.Height() < inputMaxLines && !strings.Contains(view, strings.TrimSpace(tail)) {
-			t.Fatalf("last row hidden for tail %q (height %d):\n%s", tail, m.input.Height(), view)
+		if m.inputRows() < inputMaxLines && !strings.Contains(view, strings.TrimSpace(tail)) {
+			t.Fatalf("last row hidden for tail %q (height %d):\n%s", tail, m.inputRows(), view)
 		}
 	}
 }
