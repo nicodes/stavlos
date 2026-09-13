@@ -898,3 +898,23 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 		t.Fatal("the repo should appear once")
 	}
 }
+
+func TestTurnIndicatorFollowsPrompts(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	m.transcript("a").Apply(event.Event{Seq: 1, Agent: "a", Type: event.TurnStarted, Time: time.Now(), Payload: event.MustPayload(event.TurnPayload{Turn: 1})})
+	m.refreshViewport()
+	if v := stripANSI(m.View()); !strings.Contains(v, "working…") || strings.Contains(v, "permission requested") {
+		t.Fatalf("mid-turn:\n%s", v)
+	}
+	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}})
+	if v := stripANSI(m.View()); !strings.Contains(v, "! permission requested") || strings.Contains(v, "working…") {
+		t.Fatalf("waiting on a permission:\n%s", v)
+	}
+	// a prompt for another agent does not change the selected agent's indicator
+	m.applyPromptNotification(protocol.PromptNotification{Action: "answered", Prompt: protocol.PromptInfo{ID: "p", Agent: "a"}})
+	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "q", Kind: "permission", Agent: "b", Tool: "bash"}})
+	if v := stripANSI(m.View()); !strings.Contains(v, "working…") || strings.Contains(v, "permission requested") {
+		t.Fatalf("after the answer:\n%s", v)
+	}
+}
