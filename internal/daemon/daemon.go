@@ -39,6 +39,8 @@ type Daemon struct {
 	loginMu sync.Mutex
 	logins  map[string]*pendingLogin
 
+	appendMu sync.Mutex // orders Append + broadcast across agents
+
 	mu           sync.RWMutex
 	sessions     map[string]*agent.Session
 	clients      map[string]*client
@@ -115,7 +117,13 @@ func (d *Daemon) recover(ctx context.Context) error {
 
 // --- agent.Host ---
 
+// Append logs an event and fans it out to subscribed clients. Append and
+// broadcast happen under one lock so clients see events in sequence order;
+// otherwise two agents finishing at once could deliver out of order and the
+// per-subscription dedupe would drop the earlier one as stale.
 func (d *Daemon) Append(ctx context.Context, e event.Event) (event.Event, error) {
+	d.appendMu.Lock()
+	defer d.appendMu.Unlock()
 	e, err := d.Log.Append(ctx, e)
 	if err != nil {
 		return e, err

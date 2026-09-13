@@ -97,9 +97,21 @@ func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus,
 	for _, id := range armed {
 		p.armed[id] = true
 	}
-	pending := len(p.childDone) > 0
+	// A listed child that already finished is delivered right away: yield
+	// and wake so the next turn starts with its result.
+	pending := false
+	for _, r := range p.childDone {
+		for _, id := range ids {
+			if r.ID == id {
+				pending = true
+			}
+		}
+	}
 	if len(out) > 0 || pending {
 		p.yieldFlag = true
+	}
+	if pending {
+		p.wakeFlag = true
 	}
 	p.mu.Unlock()
 	if len(armed) > 0 {

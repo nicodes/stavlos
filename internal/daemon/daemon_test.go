@@ -527,8 +527,19 @@ func TestUnmonitoredChildDoesNotWake(t *testing.T) {
 	if te.Turn != 1 {
 		t.Fatalf("%+v", te)
 	}
-	h.waitFor(event.AgentFinished, "")
-	h.waitFor(event.AgentFinished, "")
+	// Both children finish (possibly before the parent's turn 1 ended, so
+	// poll the tree rather than the event stream).
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		agents, _ = h.c.Tree(ctx, s.ID)
+		if len(agents) == 3 && agents[1].State == "finished" && agents[2].State == "finished" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("children did not finish: %+v", agents)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	// no wake: the parent stays idle at turn 1
 	time.Sleep(300 * time.Millisecond)
 	agents, _ = h.c.Tree(ctx, s.ID)

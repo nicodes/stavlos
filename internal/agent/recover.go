@@ -151,6 +151,11 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 		}
 		a.prompts = pendingPrompts[id]
 		a.steers = pendingSteers[id]
+		for cid := range a.armed {
+			if c, ok := s.agents[cid]; ok && !c.Alive() {
+				a.wakeFlag = true
+			}
+		}
 		if s.archived {
 			a.state = StateKilled
 			a.closeDone()

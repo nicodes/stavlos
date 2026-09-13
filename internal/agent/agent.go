@@ -54,6 +54,7 @@ type Agent struct {
 	finishFlag bool            // set by the finish tool during a turn
 	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
 	armed      map[string]bool // child ids whose finish wakes this agent (monitor)
+	wakeFlag   bool            // an armed child finished: start a turn even with no prompt
 	children   []string
 	results    map[string]tools.ChildResult // finished children not yet consumed by wait/result
 	done       chan struct{}                // closed on finish or kill
@@ -112,15 +113,21 @@ func (a *Agent) signal() {
 	}
 }
 
-// takeInputs drains the inbox into the user messages for one turn: every
-// queued prompt (coalesced), any steers received while idle, and any child
-// results not yet consumed (PRD §6.2 edge semantics).
+// takeInputs decides whether a turn starts and, if so, drains the inbox
+// into its user messages: every queued prompt (coalesced), any steers
+// received while idle, and every child result waiting in the mailbox. A
+// turn starts only for a prompt, a steer, or an armed wake; results alone
+// never start one (PRD §6.3).
 func (a *Agent) takeInputs() []event.UserMessagePayload {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.state == StateFinished || a.state == StateKilled {
 		return nil
 	}
+	if len(a.prompts) == 0 && len(a.steers) == 0 && !a.wakeFlag {
+		return nil
+	}
+	a.wakeFlag = false
 	var in []event.UserMessagePayload
 	for _, q := range a.prompts {
 		in = append(in, event.UserMessagePayload{Kind: "prompt", Text: q.text})
@@ -221,6 +228,9 @@ func (a *Agent) deliverChildFinished(r tools.ChildResult) {
 	a.childDone = append(a.childDone, r)
 	wake := a.armed[r.ID]
 	delete(a.armed, r.ID)
+	if wake {
+		a.wakeFlag = true
+	}
 	a.mu.Unlock()
 	if wake {
 		a.signal()
@@ -237,6 +247,9 @@ func (a *Agent) childGone(id string) {
 	}
 	wake := a.armed[id]
 	delete(a.armed, id)
+	if wake {
+		a.wakeFlag = true
+	}
 	a.mu.Unlock()
 	if wake {
 		a.signal()
