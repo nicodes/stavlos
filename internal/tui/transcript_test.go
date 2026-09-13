@@ -74,9 +74,9 @@ func TestBuildTranscript(t *testing.T) {
 	assertSubsequence(t, got, []string{
 		"   hello",
 		"   world",
-		"   ↳ Bash  sleep 100 (cancelled)",
+		"   ⚙ Bash  sleep 100 (cancelled)",
 		"       partial",
-		"   ∴ thinking…",
+		"   ⋯ thinking…",
 		"   Done.",
 		"   · claude-x",
 		"   · turn cancelled",
@@ -210,7 +210,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   ✗ Read  a.go", "       line", "       line", "       line", "       … +17 lines", "   ↳ Write  b.go (denied)"})
+	assertSubsequence(t, got, []string{"   ✗ Read  a.go", "       line", "       line", "       line", "       … +17 lines", "   ⚙ Write  b.go (denied)"})
 	if n := count(got, "       line"); n != maxOutputCollapsed {
 		t.Fatalf("collapsed: want %d output lines, got %d", maxOutputCollapsed, n)
 	}
@@ -289,7 +289,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   hi", "   ∴ thinking…", "   Hello", "   ⠋ Bash"})
+	assertSubsequence(t, got, []string{"   hi", "   ⋯ thinking…", "   Hello", "   ⠋ Bash"})
 	if !tr.Streaming() || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -302,9 +302,9 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 		t.Fatal("buffer should be cleared by assistant.message")
 	}
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   ∴ one", "   Hello"})
+	assertSubsequence(t, got, []string{"   ⋯ one", "   Hello"})
 	for _, g := range got {
-		if g == "   ⠋ Bash" || g == "   ∴ thinking…" || g == "   two" {
+		if g == "   ⠋ Bash" || g == "   ⋯ thinking…" || g == "   two" {
 			t.Fatalf("stale stream line %q", g)
 		}
 	}
@@ -323,7 +323,7 @@ func TestStreamingToolOutputCollapses(t *testing.T) {
 	}
 	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "final"}))
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   ↳ Bash  make", "       final"})
+	assertSubsequence(t, got, []string{"   ⚙ Bash  make", "       final"})
 	if count(got, "       out") != 0 {
 		t.Fatal("live output should be replaced by the final output")
 	}
@@ -415,7 +415,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 		}
 	}
 	got := renderWith(lines, RenderOpts{Width: 80, Cursor: 1, Focused: true})
-	if !contains(got, gutterMark+"  ↳ Bash  ls") || !contains(got, gutterMark+"      x") || contains(got, gutterMark+"│  hi") {
+	if !contains(got, gutterMark+"  ⚙ Bash  ls") || !contains(got, gutterMark+"      x") || contains(got, gutterMark+"│  hi") {
 		t.Fatalf("cursor marks only item 1:\n%s", strings.Join(got, "\n"))
 	}
 	if !contains(got, "   hi") {
