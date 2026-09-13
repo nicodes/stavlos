@@ -654,11 +654,11 @@ func EventLines(ev event.Event) []Line {
 				return block(BlockUser, "from "+p.From, p.Text)
 			}
 			return block(BlockUser, "", p.Text)
-		case "steer":
+		case "steer": // shown exactly like a prompt: blue ›, no title
 			if p.From != "" {
-				return block(BlockSteer, "steer from "+p.From, p.Text)
+				return block(BlockUser, "from "+p.From, p.Text)
 			}
-			return block(BlockSteer, "steer", p.Text)
+			return block(BlockUser, "", p.Text)
 		case "child_finished":
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case "monitor_fired":

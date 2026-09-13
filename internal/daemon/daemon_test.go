@@ -608,7 +608,7 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	}
 	h.waitFor(event.AgentRoleChanged, root)
 	agents, _ = h.c.Tree(ctx, s.ID)
-	if agents[0].Archetype != "explorer" || agents[0].Label != "explorer" {
+	if agents[0].Archetype != "explorer" || agents[0].Label != "main" { // the root keeps its "main" label
 		t.Fatalf("tree after role change: %+v", agents[0])
 	}
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "two")
@@ -682,7 +682,7 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if last.IsError || !strings.Contains(last.Content, `"label":"coder"`) || !strings.Contains(last.Content, `"you":true`) || !strings.Contains(last.Content, `"parent":"`+rootID+`"`) {
+			if last.IsError || !strings.Contains(last.Content, `"label":"main"`) || !strings.Contains(last.Content, `"you":true`) || !strings.Contains(last.Content, `"parent":"`+rootID+`"`) {
 				t.Errorf("agent_status should list the whole tree with the caller marked: %+v", last)
 			}
 			return call("k4", "agent_finish", `{"summary":"asked","status":"success"}`)
