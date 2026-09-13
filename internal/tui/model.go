@@ -696,7 +696,10 @@ func (m *Model) submit() tea.Cmd {
 	if agent == "" {
 		return m.setStatus("no agent selected", true)
 	}
-	return sendCmd(m.ctx, m.c, agent, protocol.KindPrompt, text, "")
+	// Plain text is a steer: it reaches a busy agent at its next model-call
+	// boundary, and simply starts a turn when the agent is idle. /queue is
+	// the way to wait for the current turn to end.
+	return sendCmd(m.ctx, m.c, agent, protocol.KindSteer, text, "")
 }
 
 func (m *Model) command(text string) tea.Cmd {
@@ -733,14 +736,14 @@ func (m *Model) command(text string) tea.Cmd {
 		return nil
 	case "/presets":
 		return presetsCmd(m.ctx, m.c, m.sessionID)
-	case "/steer":
+	case "/queue":
 		if c := needAgent(); c != nil {
 			return c
 		}
 		if rest == "" {
-			return m.setStatus("usage: /steer <text>", true)
+			return m.setStatus("usage: /queue <text>", true)
 		}
-		return sendCmd(m.ctx, m.c, agent, protocol.KindSteer, rest, "steer sent")
+		return sendCmd(m.ctx, m.c, agent, protocol.KindPrompt, rest, "queued for after the current turn")
 	case "/cancel":
 		if c := needAgent(); c != nil {
 			return c

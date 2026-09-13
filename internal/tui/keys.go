@@ -66,8 +66,8 @@ var keys = keyMap{
 // helpLines is the /help notice.
 var helpLines = []string{
 	"commands:",
-	"  <text>                           send a prompt to the selected agent",
-	"  /steer <text>                    steer the selected agent (preempts at next model call)",
+	"  <text>                           send to the selected agent (a busy agent takes it at its next step)",
+	"  /queue <text>                    send after the current turn ends instead",
 	"  /cancel                          cancel the selected agent's current turn",
 	"  /kill                            kill the selected agent and its subtree (asks y/n)",
 	"  /spawn <archetype> <label> <task> spawn a child of the selected agent",
