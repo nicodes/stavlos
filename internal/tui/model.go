@@ -4,6 +4,7 @@
 package tui
 
 import (
+	"unicode"
 	"context"
 	"encoding/json"
 	"errors"
@@ -742,6 +743,59 @@ func (m Model) highlightSelection(frame string) string {
 	return strings.Join(lines, "\n")
 }
 
+// textareaWrap mirrors the soft-wrap the bubbles textarea uses to draw a
+// logical line (word wrap that keeps trailing spaces on the row and spills a
+// row that exactly fills the width), so fitInput counts the rows the
+// textarea will actually draw. A generic word wrap counts fewer rows and
+// leaves the textarea scrolling inside a too-short box.
+func textareaWrap(runes []rune, width int) [][]rune {
+	var (
+		lines  = [][]rune{{}}
+		word   = []rune{}
+		row    int
+		spaces int
+	)
+	rw := func(rs []rune) int { return ansi.StringWidth(string(rs)) }
+	for _, r := range runes {
+		if unicode.IsSpace(r) {
+			spaces++
+		} else {
+			word = append(word, r)
+		}
+		if spaces > 0 {
+			if rw(lines[row])+rw(word)+spaces > width {
+				row++
+				lines = append(lines, []rune{})
+			}
+			lines[row] = append(lines[row], word...)
+			lines[row] = append(lines[row], []rune(strings.Repeat(" ", spaces))...)
+			spaces = 0
+			word = nil
+		} else {
+			last := ansi.StringWidth(string(word[len(word)-1]))
+			if rw(word)+last > width {
+				if len(lines[row]) > 0 {
+					row++
+					lines = append(lines, []rune{})
+				}
+				lines[row] = append(lines[row], word...)
+				word = nil
+			}
+		}
+	}
+	if rw(lines[row])+rw(word)+spaces >= width {
+		lines = append(lines, []rune{})
+		lines[row+1] = append(lines[row+1], word...)
+		spaces++
+		lines[row+1] = append(lines[row+1], []rune(strings.Repeat(" ", spaces))...)
+	} else {
+		lines[row] = append(lines[row], word...)
+		spaces++
+		lines[row] = append(lines[row], []rune(strings.Repeat(" ", spaces))...)
+	}
+	return lines
+}
+
 // normalizePaste turns the carriage returns a terminal sends for pasted
 // line endings (CR or CRLF) into the line feeds the textarea splits lines
 // on; left alone they render into the line and overwrite it.
@@ -765,11 +819,7 @@ func (m *Model) fitInput() {
 	}
 	rows := 0
 	for _, line := range strings.Split(m.input.Value(), "\n") {
-		if line == "" {
-			rows++
-			continue
-		}
-		rows += strings.Count(ansi.Wrap(line, w, ""), "\n") + 1
+		rows += len(textareaWrap([]rune(line), w))
 	}
 	if rows < 1 {
 		rows = 1
