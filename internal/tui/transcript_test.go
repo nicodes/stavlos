@@ -76,7 +76,7 @@ func TestBuildTranscript(t *testing.T) {
 		"   world",
 		"   ⚙ Bash  sleep 100 (cancelled)",
 		"       partial",
-		"   ⋯ thinking…",
+		"   ◌ thinking…",
 		"   Done.",
 		"   · claude-x",
 		"   · turn cancelled",
@@ -289,7 +289,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   hi", "   ⋯ thinking…", "   Hello", "   ⠋ Bash"})
+	assertSubsequence(t, got, []string{"   hi", "   ◌ thinking…", "   Hello", "   ⠋ Bash"})
 	if !tr.Streaming() || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -302,9 +302,9 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 		t.Fatal("buffer should be cleared by assistant.message")
 	}
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   ⋯ one", "   Hello"})
+	assertSubsequence(t, got, []string{"   ◌ one", "   Hello"})
 	for _, g := range got {
-		if g == "   ⠋ Bash" || g == "   ⋯ thinking…" || g == "   two" {
+		if g == "   ⠋ Bash" || g == "   ◌ thinking…" || g == "   two" {
 			t.Fatalf("stale stream line %q", g)
 		}
 	}

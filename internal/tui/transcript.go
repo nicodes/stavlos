@@ -18,7 +18,7 @@ const (
 	LineText     LineKind = iota // assistant prose, or text inside a block
 	LineHeading                  // markdown heading (bold)
 	LineCode                     // fenced code (dim, indented)
-	LineDim                      // secondary information ("⋯ thinking…", "· turn cancelled")
+	LineDim                      // secondary information ("◌ thinking…", "· turn cancelled")
 	LineTool                     // tool call: "Bash  git status" (glyph added by Render)
 	LineToolOut                  // tool output (indented, dim)
 	LineNotice                   // local notice such as /help output
@@ -28,7 +28,7 @@ const (
 	LineError                    // error text
 	LineStream                   // in-progress streaming text (rendered like LineText)
 	LineModel                    // "· <model>" trailer after the final assistant text
-	LineThink                    // thinking summary ("⋯ thinking…"); always its own item
+	LineThink                    // thinking summary ("◌ thinking…"); always its own item
 	LineToolNote                 // permission notice nested under its tool call (indented like output)
 	LineBlank                    // spacer
 )
@@ -296,7 +296,7 @@ func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 		}
 	case n.Thinking != "":
 		if k == 0 || t.stream[k-1].kind != LineThink {
-			t.stream = append(t.stream, streamSeg{LineThink, "⋯ thinking…"})
+			t.stream = append(t.stream, streamSeg{LineThink, "◌ thinking…"})
 		}
 	case n.ToolName != "":
 		t.stream = append(t.stream, streamSeg{LineTool, titleCase(n.ToolName)})
@@ -661,13 +661,13 @@ func headingLevel(s string) int {
 func thinkingLine(summary string) Line {
 	summary = strings.TrimSpace(summary)
 	if summary == "" {
-		return Line{Kind: LineThink, Text: "⋯ thinking…"}
+		return Line{Kind: LineThink, Text: "◌ thinking…"}
 	}
 	first := summary
 	if i := strings.IndexByte(first, '\n'); i >= 0 {
 		first = first[:i]
 	}
-	return Line{Kind: LineThink, Text: "⋯ " + truncRunes(first, maxThinkChars)}
+	return Line{Kind: LineThink, Text: "◌ " + truncRunes(first, maxThinkChars)}
 }
 
 // truncLines splits text into at most n lines of the given kind, appending
