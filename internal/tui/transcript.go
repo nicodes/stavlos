@@ -133,6 +133,25 @@ type Transcript struct {
 	turn       bool      // a turn is in progress (TurnStarted seen, not yet ended)
 	turnStart  time.Time // when the current turn began
 	turnTokens int       // input + output tokens used so far this turn
+	turnVerb   string    // the indicator's verb for this turn ("Galloping")
+}
+
+// turnVerbs are the horse-flavoured labels the turn indicator cycles
+// through, one per turn (stable within a turn so the line does not
+// flicker).
+var turnVerbs = []string{
+	"Galloping", "Trotting", "Cantering", "Loping", "Prancing",
+	"Champing at the bit", "Saddling up", "Hoofing it", "Bolting",
+	"Ambling", "Nickering", "Mucking out", "Grazing", "Rearing up",
+	"Whinnying", "Jumping the fence",
+}
+
+// TurnVerb is the indicator label for the current turn, "" when idle.
+func (t *Transcript) TurnVerb() string {
+	if !t.turn {
+		return ""
+	}
+	return t.turnVerb
 }
 
 // InTurn reports whether the agent is mid-turn: the chat shows an
@@ -271,6 +290,9 @@ func (t *Transcript) Apply(ev event.Event) {
 	switch ev.Type {
 	case event.TurnStarted:
 		t.turn, t.turnStart, t.turnTokens = true, ev.Time, 0
+		var p event.TurnPayload
+		_ = ev.Decode(&p)
+		t.turnVerb = turnVerbs[((p.Turn-1)%len(turnVerbs)+len(turnVerbs))%len(turnVerbs)]
 	case event.Usage:
 		var p event.UsagePayload
 		if ev.Decode(&p) == nil {
