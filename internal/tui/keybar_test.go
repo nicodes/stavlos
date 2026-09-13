@@ -46,9 +46,18 @@ func TestKeyHintsByContext(t *testing.T) {
 	}
 	m.confirmKill = false
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission"}}
-	if hs := m.keyHints(); !has(hs, "a") || !has(hs, "n") {
+	if hs := m.keyHints(); has(hs, "a") || !has(hs, "tab") {
+		t.Fatalf("input focus with a prompt: %+v", hs)
+	}
+	m.focus = focusPermission
+	if hs := m.keyHints(); !has(hs, "a") || !has(hs, "n") || has(hs, "enter") {
 		t.Fatalf("permission: %+v", hs)
 	}
+	m.focus = focusChat
+	if hs := m.keyHints(); !has(hs, "↑/↓") || !has(hs, "esc") || has(hs, "/steer") {
+		t.Fatalf("chat: %+v", hs)
+	}
+	m.focus = focusInput
 	m.prompts = nil
 	m.ov = newOverlay(ovModels, overlayList, "", "")
 	if hs := m.keyHints(); !has(hs, "ctrl+s") {

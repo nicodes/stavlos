@@ -25,31 +25,47 @@ func (m Model) keyHints() []keyHint {
 	case m.ov != nil:
 		return []keyHint{{"enter", "select"}, {"↑/↓", "move"}, {"type", "filter"}, {"pgup/pgdn", "page"}, {"esc", "close"}}
 	}
-	if m.sidebarFocus && m.sidebarVisible() {
-		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
-	}
-	if p := m.currentPrompt(); p != nil {
-		switch p.Kind {
-		case "trust":
-			return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"tab", "agents"}, {"ctrl+c", "quit"}}
-		case "question":
-			return []keyHint{{"type + enter", "answer"}, {"1-9", "pick an option"}, {"tab", "agents"}, {"ctrl+c", "quit"}}
-		default:
-			return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"tab", "agents"}, {"ctrl+c", "quit"}}
+	switch m.focus {
+	case focusSidebar:
+		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
+	case focusChat:
+		return []keyHint{{"↑/↓", "item"}, {"enter", "expand/collapse tool"}, {"pgup/pgdn", "page"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
+	case focusPermission:
+		if p := m.currentPrompt(); p != nil {
+			switch p.Kind {
+			case "trust":
+				return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
+			case "question":
+				return []keyHint{{"type + enter", "answer"}, {"1-9", "pick an option"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
+			default:
+				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
+			}
 		}
+	}
+	// Input focus. The tab hint appears only when there is somewhere to go.
+	var tab []keyHint
+	switch {
+	case m.currentPrompt() != nil:
+		tab = []keyHint{{"tab", "permission"}}
+	case len(m.focusOrder()) > 1:
+		tab = []keyHint{{"tab", "next section"}}
 	}
 	tree := "show sidebar"
 	if m.showTree {
 		tree = "hide sidebar"
 	}
 	if m.isHome() {
-		return []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/provider", "sign in"}, {"/models", "pick model"}, {"/spawn", "delegate"}, {"tab", "agents"}, {"ctrl+b", tree}, {"/help", "all commands"}, {"ctrl+c", "quit"}}
+		hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/provider", "sign in"}, {"/models", "pick model"}, {"/spawn", "delegate"}}
+		hs = append(hs, tab...)
+		return append(hs, keyHint{"ctrl+n/p", "agents"}, keyHint{"ctrl+b", tree}, keyHint{"/help", "all commands"}, keyHint{"ctrl+c", "quit"})
 	}
 	details := "expand tool output"
 	if m.details {
 		details = "collapse tool output"
 	}
-	return []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/steer", "redirect mid-turn"}, {"/cancel", "stop turn"}, {"/spawn", "delegate"}, {"/kill", "kill agent"}, {"tab", "agents"}, {"pgup/pgdn", "scroll"}, {"ctrl+b", tree}, {"/details", details}, {"/models", "model"}, {"/help", "all commands"}, {"ctrl+c", "quit"}}
+	hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}}
+	hs = append(hs, tab...)
+	return append(hs, keyHint{"/steer", "redirect mid-turn"}, keyHint{"/cancel", "stop turn"}, keyHint{"/spawn", "delegate"}, keyHint{"/kill", "kill agent"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"/details", details}, keyHint{"/models", "model"}, keyHint{"/help", "all commands"}, keyHint{"ctrl+c", "quit"})
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at

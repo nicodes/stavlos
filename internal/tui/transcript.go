@@ -63,6 +63,7 @@ type Line struct {
 	Running bool   // tool call still in progress (spinner glyph)
 	Err     bool   // tool call failed (✗ glyph)
 	Suffix  string // dim trailer, e.g. "(cancelled)"
+	Item    int    // index of the item (event group) this line belongs to
 	callID  string
 }
 
@@ -80,11 +81,14 @@ type streamSeg struct {
 	text string
 }
 
-// Transcript accumulates rendered lines for one agent.
+// Transcript accumulates rendered lines for one agent. Lines are grouped
+// into items, one per rendered event group (a user block, an assistant
+// message, a tool call with its output, …); the chat cursor walks items.
 type Transcript struct {
 	Lines []Line
 
 	calls      map[string]int // tool call id → index of its LineTool
+	items      int            // committed items so far
 	streamTurn int
 	stream     []streamSeg
 }
@@ -96,6 +100,7 @@ func NewTranscript() *Transcript { return &Transcript{calls: map[string]int{}} }
 // turn) replaces the in-progress streaming buffer; tool.call.finished updates
 // the matching tool line in place.
 func (t *Transcript) Apply(ev event.Event) {
+	item := t.items // a new item, unless the lines extend an earlier one
 	switch ev.Type {
 	case event.ToolCallStarted:
 		var p event.ToolStartedPayload
@@ -105,17 +110,34 @@ func (t *Transcript) Apply(ev event.Event) {
 	case event.ToolCallFinished:
 		var p event.ToolFinishedPayload
 		if ev.Decode(&p) == nil {
+			if i, ok := t.calls[p.CallID]; ok && i < len(t.Lines) {
+				item = t.Lines[i].Item // output joins the call's item
+			}
 			t.finishCall(p)
 		}
 		t.stream = nil
 	}
-	t.Lines = append(t.Lines, EventLines(ev)...)
+	t.appendItem(item, EventLines(ev))
 	switch ev.Type {
 	case event.AssistantMessage:
 		t.stream = nil
 	case event.TurnEnded, event.TurnAborted, event.AgentFinished, event.AgentKilled:
 		t.stream = nil
 		t.stopRunning()
+	}
+}
+
+// appendItem commits lines under item; a fresh item index bumps the count.
+func (t *Transcript) appendItem(item int, lines []Line) {
+	if len(lines) == 0 {
+		return
+	}
+	for i := range lines {
+		lines[i].Item = item
+	}
+	t.Lines = append(t.Lines, lines...)
+	if item == t.items {
+		t.items++
 	}
 }
 
@@ -174,20 +196,29 @@ func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 	}
 }
 
-// Notice appends a local (non-event) notice, e.g. /help output.
+// Notice appends a local (non-event) notice, e.g. /help output, as one item.
 func (t *Transcript) Notice(lines ...string) {
+	ls := make([]Line, 0, len(lines))
 	for _, l := range lines {
-		t.Lines = append(t.Lines, Line{Kind: LineNotice, Text: l})
+		ls = append(ls, Line{Kind: LineNotice, Text: l})
 	}
+	t.appendItem(t.items, ls)
 }
 
 // All returns the committed lines followed by the live streaming buffer.
+// Buffer lines belong to the in-progress item: the running tool call when
+// the buffer continues one, otherwise a new item after the committed ones.
 func (t *Transcript) All() []Line {
 	if len(t.stream) == 0 {
 		return t.Lines
 	}
+	item := t.items
+	if n := len(t.Lines); n > 0 && t.Lines[n-1].Kind == LineTool && t.Lines[n-1].Running {
+		item = t.Lines[n-1].Item
+	}
 	out := make([]Line, 0, len(t.Lines)+8)
 	out = append(out, t.Lines...)
+	start := len(out)
 	for _, s := range t.stream {
 		switch s.kind {
 		case LineStream:
@@ -202,7 +233,54 @@ func (t *Transcript) All() []Line {
 			out = append(out, Line{Kind: s.kind, Text: s.text})
 		}
 	}
+	for i := start; i < len(out); i++ {
+		out[i].Item = item
+	}
 	return out
+}
+
+// Items is the number of items All() spans (committed plus the in-progress
+// one when the streaming buffer starts a new item).
+func (t *Transcript) Items() int { return itemCount(t.All()) }
+
+// ItemRange returns the first and last index into All() of item i, or
+// (-1, -1) when there is no such item. Output appended to a tool call after
+// other events keeps the call's item, so the range may contain other items'
+// lines in between.
+func (t *Transcript) ItemRange(i int) (first, last int) { return itemRange(t.All(), i) }
+
+func itemCount(lines []Line) int {
+	n := 0
+	for _, l := range lines {
+		if l.Item+1 > n {
+			n = l.Item + 1
+		}
+	}
+	return n
+}
+
+func itemRange(lines []Line, item int) (first, last int) {
+	first, last = -1, -1
+	for i, l := range lines {
+		if l.Item != item {
+			continue
+		}
+		if first < 0 {
+			first = i
+		}
+		last = i
+	}
+	return first, last
+}
+
+// itemIsTool reports whether item is a tool call (has output to expand).
+func itemIsTool(lines []Line, item int) bool {
+	for _, l := range lines {
+		if l.Item == item && l.Kind == LineTool {
+			return true
+		}
+	}
+	return false
 }
 
 // Streaming reports whether a live buffer is being shown.
