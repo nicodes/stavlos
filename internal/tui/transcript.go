@@ -67,9 +67,38 @@ type Line struct {
 	Suffix  string // dim trailer, e.g. "(cancelled)"
 	Item    int    // index of the item (event group) this line belongs to
 	Lead    bool   // first text line of a user/steer block: carries the "›" glyph
+	Glyph   string // leader glyph for this line (Render styles it by Tone)
+	Tone    Tone   // in progress / error; zero means "as is"
 	callID  string
 	tool    string // raw tool name on a LineTool line
 }
+
+// Tone colours a line's glyph by lifecycle: yellow while in progress, red
+// when it errored or was terminated, the glyph's own colour otherwise.
+type Tone int
+
+const (
+	ToneNone    Tone = iota
+	ToneWorking      // in progress (yellow)
+	ToneError        // error or terminated (red)
+)
+
+// Leader glyphs for chat items (see the glyph table in docs).
+const (
+	GlyphChild     = "↰" // a child agent reported back
+	GlyphSpawn     = "⤴" // a child agent was spawned
+	GlyphTask      = "▹" // the task handed to a child
+	GlyphFinished  = "✓" // an agent finished
+	GlyphError     = "!" // a turn error
+	GlyphKilled    = "⊘" // an agent was killed
+	GlyphTurn      = "◦" // a turn notice (cancelled, stopped, aborted)
+	GlyphModel     = "⇄" // model changed
+	GlyphNotice    = "»" // a local notice (/help, lists)
+	GlyphPrompt    = "?" // a question for the user
+	GlyphAnswer    = "→" // the user's answer
+	GlyphFailed    = "✗" // a failed tool call or monitor
+	GlyphCompacted = "┄┄ compacted ┄┄"
+)
 
 const (
 	maxArgChars        = 100
@@ -93,6 +122,7 @@ type Transcript struct {
 
 	calls      map[string]int    // tool call id → index of its LineTool
 	prompts    map[string]int    // prompt id → item of the tool call it gates
+	promptLine map[string]int    // prompt id → index of its "?" line (tone flips on answer)
 	monitors   map[string]int    // monitor id → index of its "started" line
 	monKinds   map[string]string // monitor id → kind, for the glyph on later events
 	items      int               // committed items so far
@@ -102,7 +132,7 @@ type Transcript struct {
 
 // NewTranscript returns an empty transcript.
 func NewTranscript() *Transcript {
-	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}, monitors: map[string]int{}, monKinds: map[string]string{}}
+	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}, promptLine: map[string]int{}, monitors: map[string]int{}, monKinds: map[string]string{}}
 }
 
 // Apply appends the rendering of ev. An assistant.message (or the end of a
@@ -120,16 +150,24 @@ func (t *Transcript) Apply(ev event.Event) {
 		// A permission prompt belongs to the call it gates: the open call
 		// with the same tool name (the latest one if several).
 		var p event.PromptRequestedPayload
-		if ev.Decode(&p) == nil && p.Kind == "permission" {
-			if item, ok := t.openCallItem(p.Tool); ok {
-				t.prompts[p.ID] = item
-				t.insertIntoItem(item, nested(EventLines(ev)))
-				return
+		if ev.Decode(&p) == nil {
+			if p.Kind == "permission" {
+				if item, ok := t.openCallItem(p.Tool); ok {
+					t.prompts[p.ID] = item
+					_, last := itemRange(t.Lines, item)
+					t.promptLine[p.ID] = last + 1 // where insertIntoItem puts it
+					t.insertIntoItem(item, nested(EventLines(ev)))
+					return
+				}
 			}
+			t.promptLine[p.ID] = len(t.Lines)
 		}
 	case event.PromptClaimed, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted:
 		var p event.PromptRefPayload
 		if ev.Decode(&p) == nil {
+			if ev.Type != event.PromptClaimed {
+				t.settlePrompt(p.ID, ev.Type != event.PromptAnswered)
+			}
 			if item, ok := t.prompts[p.ID]; ok {
 				if ev.Type != event.PromptClaimed {
 					delete(t.prompts, p.ID)
@@ -154,6 +192,10 @@ func (t *Transcript) Apply(ev event.Event) {
 			}
 			lines := monitorFiredLines(p)
 			if i, ok := t.monitors[p.ID]; ok && i < len(t.Lines) {
+				t.Lines[i].Tone = ToneNone
+				if p.IsError {
+					t.Lines[i].Tone = ToneError
+				}
 				delete(t.monitors, p.ID)
 				t.insertIntoItem(t.Lines[i].Item, lines)
 				return
@@ -167,6 +209,7 @@ func (t *Transcript) Apply(ev event.Event) {
 		if ev.Decode(&p) == nil {
 			lines := monitorStoppedLines(t.monKinds[p.ID], p.Reason)
 			if i, ok := t.monitors[p.ID]; ok && i < len(t.Lines) {
+				t.Lines[i].Tone = ToneError
 				delete(t.monitors, p.ID)
 				t.insertIntoItem(t.Lines[i].Item, lines)
 				return
@@ -249,6 +292,31 @@ func nested(lines []Line) []Line {
 	return lines
 }
 
+// settlePrompt ends the "in progress" tone on a prompt's "?" line: as-is
+// when answered, red when denied by default or withdrawn.
+func (t *Transcript) settlePrompt(id string, terminated bool) {
+	i, ok := t.promptLine[id]
+	delete(t.promptLine, id)
+	if !ok || i >= len(t.Lines) || t.Lines[i].Glyph != GlyphPrompt {
+		return
+	}
+	t.Lines[i].Tone = ToneNone
+	if terminated {
+		t.Lines[i].Tone = ToneError
+	}
+}
+
+// monitorKindFromText recovers the kind from a monitor wake message
+// ("Monitor "x" (command, m…): …").
+func monitorKindFromText(text string) string {
+	for _, k := range []string{"command", "watch", "timer"} {
+		if strings.Contains(text, "("+k+", ") {
+			return k
+		}
+	}
+	return "command"
+}
+
 // openCallItem returns the item of the most recently started, still-open
 // call of tool name.
 func (t *Transcript) openCallItem(name string) (int, bool) {
@@ -285,6 +353,11 @@ func (t *Transcript) insertIntoItem(item int, lines []Line) {
 	for id, idx := range t.calls {
 		if idx >= at {
 			t.calls[id] = idx + len(lines)
+		}
+	}
+	for id, idx := range t.promptLine {
+		if idx >= at {
+			t.promptLine[id] = idx + len(lines)
 		}
 	}
 	for id, idx := range t.monitors {
@@ -352,8 +425,12 @@ func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 // Notice appends a local (non-event) notice, e.g. /help output, as one item.
 func (t *Transcript) Notice(lines ...string) {
 	ls := make([]Line, 0, len(lines))
-	for _, l := range lines {
-		ls = append(ls, Line{Kind: LineNotice, Text: l})
+	for i, l := range lines {
+		ln := Line{Kind: LineNotice, Text: l}
+		if i == 0 {
+			ln.Glyph = GlyphNotice
+		}
+		ls = append(ls, ln)
 	}
 	t.appendItem(t.items, ls)
 }
@@ -479,9 +556,9 @@ func EventLines(ev event.Event) []Line {
 		if p.Parent == "" {
 			return nil // the root's own spawn is not a message; keeps the home state empty
 		}
-		lines := []Line{{Kind: LineDim, Text: fmt.Sprintf("spawned %s (%s) · %s", p.Label, p.Archetype, p.Model)}}
+		lines := []Line{{Kind: LineDim, Glyph: GlyphSpawn, Text: fmt.Sprintf("spawned %s (%s) · %s", p.Label, p.Archetype, p.Model)}}
 		if p.Task != "" {
-			lines = append(lines, block(BlockChild, "task", p.Task)...)
+			lines = append(lines, blockWith(BlockChild, "task", p.Task, GlyphTask)...)
 		}
 		return lines
 
@@ -496,9 +573,9 @@ func EventLines(ev event.Event) []Line {
 		case "steer":
 			return block(BlockSteer, "steer", p.Text)
 		case "child_finished":
-			return block(BlockChild, "child", p.Text)
+			return blockWith(BlockChild, "child", p.Text, GlyphChild)
 		case "monitor_fired":
-			return block(BlockChild, "monitor", p.Text)
+			return blockWith(BlockChild, "monitor", p.Text, monitorGlyph(monitorKindFromText(p.Text)))
 		default:
 			return block(BlockUser, p.Kind, p.Text)
 		}
@@ -553,7 +630,7 @@ func EventLines(ev event.Event) []Line {
 		}
 		switch p.Reason {
 		case "cancelled":
-			return []Line{{Kind: LineDim, Text: "· turn cancelled"}, {Kind: LineBlank}}
+			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn cancelled"}, {Kind: LineBlank}}
 		case "error":
 			msg := p.Error
 			if msg == "" {
@@ -561,19 +638,26 @@ func EventLines(ev event.Event) []Line {
 			}
 			return errorBlock(msg)
 		case "max_tokens":
-			return []Line{{Kind: LineDim, Text: "· turn stopped: max_tokens"}, {Kind: LineBlank}}
+			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn stopped: max_tokens"}, {Kind: LineBlank}}
 		}
 		return nil
 
 	case event.TurnAborted:
-		return []Line{{Kind: LineDim, Text: "· turn aborted (daemon restart)"}, {Kind: LineBlank}}
+		return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn aborted (daemon restart)"}, {Kind: LineBlank}}
 
 	case event.AgentFinished:
 		var p event.AgentFinishedPayload
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		lines := []Line{{Kind: LineBlank}, {Kind: LineFinished, Text: "finished · " + p.Status, Block: BlockFinished}}
+		head := Line{Kind: LineFinished, Text: "finished · " + p.Status, Block: BlockFinished, Glyph: GlyphFinished}
+		switch p.Status {
+		case "failure":
+			head.Glyph, head.Tone = GlyphFailed, ToneError
+		case "partial":
+			head.Tone = ToneWorking
+		}
+		lines := []Line{{Kind: LineBlank}, head}
 		if s := strings.TrimRight(p.Summary, "\n"); s != "" {
 			for _, l := range strings.Split(s, "\n") {
 				lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockFinished})
@@ -589,21 +673,21 @@ func EventLines(ev event.Event) []Line {
 		return append(lines, Line{Kind: LineBlank})
 
 	case event.AgentKilled:
-		return errorBlock("killed")
+		return errorBlockWith("killed", GlyphKilled)
 
 	case event.AgentModelChanged:
 		var p event.ModelChangedPayload
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		return []Line{{Kind: LineDim, Text: "· model → " + p.Model}}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "model → " + p.Model}}
 
 	case event.MonitorStarted:
 		var p event.MonitorStartedPayload
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		return []Line{{Kind: LineDim, Text: monitorGlyph(p.Kind) + " " + monitorKindWord(p.Kind) + ": " + p.Label}}
+		return []Line{{Kind: LineDim, Glyph: monitorGlyph(p.Kind), Tone: ToneWorking, Text: monitorKindWord(p.Kind) + ": " + p.Label}}
 
 	case event.MonitorFired:
 		var p event.MonitorFiredPayload
@@ -626,7 +710,7 @@ func EventLines(ev event.Event) []Line {
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		lines := []Line{{Kind: LineBlank}, {Kind: LineRule, Text: "── compacted ──"}}
+		lines := []Line{{Kind: LineBlank}, {Kind: LineRule, Text: GlyphCompacted}}
 		if s := strings.TrimSpace(p.Summary); s != "" {
 			lines = append(lines, truncLines(s, maxSummaryLine, LineDim)...)
 		}
@@ -639,11 +723,11 @@ func EventLines(ev event.Event) []Line {
 		}
 		switch p.Kind {
 		case "question":
-			return []Line{{Kind: LineNotice, Text: "? question: " + firstLine(p.Question)}}
+			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "question: " + firstLine(p.Question)}}
 		case "trust":
-			return []Line{{Kind: LineNotice, Text: "? trust requested"}}
+			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "trust requested"}}
 		default:
-			return []Line{{Kind: LineNotice, Text: "? permission: " + p.Tool}}
+			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "permission: " + p.Tool}}
 		}
 
 	case event.PromptAnswered:
@@ -651,17 +735,21 @@ func EventLines(ev event.Event) []Line {
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		return []Line{{Kind: LineNotice, Text: "→ answered: " + firstLine(p.Answer)}}
+		ln := Line{Kind: LineNotice, Glyph: GlyphAnswer, Text: "answered: " + firstLine(p.Answer)}
+		if strings.HasPrefix(strings.ToLower(p.Answer), "deny") {
+			ln.Tone = ToneError
+		}
+		return []Line{ln}
 
 	case event.PromptDefaulted:
 		var p event.PromptAnsweredPayload
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		return []Line{{Kind: LineNotice, Text: "→ defaulted: " + firstLine(p.Answer)}}
+		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: "defaulted: " + firstLine(p.Answer)}}
 
 	case event.PromptWithdrawn:
-		return []Line{{Kind: LineNotice, Text: "→ prompt withdrawn"}}
+		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: "prompt withdrawn"}}
 	}
 	return nil
 }
@@ -684,45 +772,63 @@ func monitorKindWord(kind string) string {
 // monitorFiredLines renders "<glyph> <summary>" (✗ on error) followed by
 // the output collapsed like tool output.
 func monitorFiredLines(p event.MonitorFiredPayload) []Line {
-	glyph := monitorGlyph(p.Kind)
+	head := Line{Kind: LineDim, Glyph: monitorGlyph(p.Kind)}
 	if p.IsError {
-		glyph = "✗"
+		head.Glyph, head.Tone = GlyphFailed, ToneError
 	}
 	summary := strings.TrimSpace(p.Summary)
 	if summary == "" {
 		summary = "monitor fired"
 	}
-	lines := []Line{{Kind: LineDim, Text: glyph + " " + summary}}
+	head.Text = summary
+	lines := []Line{head}
 	return append(lines, outputLines(strings.TrimRight(p.Output, "\n"))...)
 }
 
 // monitorStoppedLines renders "<glyph> monitor stopped (<reason>)".
 func monitorStoppedLines(kind, reason string) []Line {
-	text := monitorGlyph(kind) + " monitor stopped"
+	text := "monitor stopped"
 	if reason = strings.TrimSpace(reason); reason != "" {
 		text += " (" + reason + ")"
 	}
-	return []Line{{Kind: LineDim, Text: text}}
+	return []Line{{Kind: LineDim, Glyph: monitorGlyph(kind), Tone: ToneError, Text: text}}
 }
 
 // block renders text as a left-bordered block (blank line before and after)
 // with an optional dim label as its first line.
 func block(kind BlockKind, label, text string) []Line {
+	return blockWith(kind, label, text, "")
+}
+
+// blockWith is block with a leader glyph on the first text line (user and
+// steer blocks always use the shell prompt "›").
+func blockWith(kind BlockKind, label, text, glyph string) []Line {
 	lines := []Line{{Kind: LineBlank}}
 	if label != "" {
 		lines = append(lines, Line{Kind: LineLabel, Text: label, Block: kind})
 	}
 	for i, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
 		lead := i == 0 && (kind == BlockUser || kind == BlockSteer)
-		lines = append(lines, Line{Kind: LineText, Text: l, Block: kind, Lead: lead})
+		ln := Line{Kind: LineText, Text: l, Block: kind, Lead: lead}
+		if i == 0 && glyph != "" {
+			ln.Glyph = glyph
+		}
+		lines = append(lines, ln)
 	}
 	return append(lines, Line{Kind: LineBlank})
 }
 
-func errorBlock(text string) []Line {
+func errorBlock(text string) []Line { return errorBlockWith(text, GlyphError) }
+
+// errorBlockWith is errorBlock with a specific leader glyph (red).
+func errorBlockWith(text, glyph string) []Line {
 	lines := []Line{{Kind: LineBlank}}
-	for _, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
-		lines = append(lines, Line{Kind: LineError, Text: l, Block: BlockError})
+	for i, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		ln := Line{Kind: LineError, Text: l, Block: BlockError, Tone: ToneError}
+		if i == 0 {
+			ln.Glyph = glyph
+		}
+		lines = append(lines, ln)
 	}
 	return append(lines, Line{Kind: LineBlank})
 }

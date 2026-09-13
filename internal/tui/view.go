@@ -25,6 +25,7 @@ var (
 
 	styleDim      = lipgloss.NewStyle().Foreground(colMuted)
 	styleKey      = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
+	styleWorking  = lipgloss.NewStyle().Foreground(colWarning)
 	styleBold     = lipgloss.NewStyle().Bold(true)
 	styleAccent   = lipgloss.NewStyle().Foreground(colAccent)
 	styleNotice   = lipgloss.NewStyle().Foreground(colMuted).Italic(true)
@@ -327,9 +328,9 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	case LineTool:
 		switch {
 		case l.Running && o.Spinner != "":
-			glyph = o.Spinner + " "
+			glyph = styleWorking.Render(o.Spinner) + " "
 		case l.Err:
-			glyph = styleError.Render("✗") + " "
+			glyph = styleError.Render(GlyphFailed) + " "
 		default:
 			glyph = styleTool.Render("⚙") + "  " // two spaces: many terminals draw the gear two cells wide
 		}
@@ -345,12 +346,29 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		style = styleDim.Render
 	case LineFinished:
 		style = styleFinished.Render
+		if l.Tone == ToneError {
+			style = styleError.Render
+		}
 	case LineRule:
 		return gutter + centerText(styleRule.Render(l.Text), o.Width-1)
 	case LineError:
 		style = styleError.Render
 	default:
 		style = func(s ...string) string { return strings.Join(s, "") }
+	}
+	// A line's own glyph, coloured by lifecycle: yellow in progress, red on
+	// error or termination, otherwise the glyph's natural colour.
+	if l.Glyph != "" {
+		gs := glyphStyle(l)
+		gap := " "
+		if l.Glyph == "⚙" {
+			gap = "  "
+		}
+		if l.Running && o.Spinner != "" && l.Kind != LineTool {
+			glyph = styleWorking.Render(o.Spinner) + gap
+		} else {
+			glyph = gs.Render(l.Glyph) + gap
+		}
 	}
 	if l.Block != BlockNone && (l.Kind == LineText || l.Kind == LineLabel) {
 		bs := blockStyle(l.Block)
@@ -1106,4 +1124,25 @@ func (m Model) sidebarFocusHint() string {
 		return styleDim.Render("  ↑/↓ enter")
 	}
 	return ""
+}
+
+// glyphStyle picks a glyph's colour from its tone, then its kind.
+func glyphStyle(l Line) lipgloss.Style {
+	switch l.Tone {
+	case ToneWorking:
+		return styleWorking
+	case ToneError:
+		return styleError
+	}
+	switch {
+	case l.Kind == LineFinished:
+		return styleFinished
+	case l.Kind == LineError:
+		return styleError
+	case l.Block != BlockNone:
+		return blockStyle(l.Block)
+	case l.Kind == LineNotice:
+		return styleNotice
+	}
+	return styleDim
 }
