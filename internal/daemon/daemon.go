@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -345,9 +346,36 @@ func (d *Daemon) SessionList(ctx context.Context, dir string, archived bool) ([]
 			info = protocol.SessionInfo{ID: r.ID, Dir: r.Dir, Created: r.Created.Format(time.RFC3339), Archived: r.Archived}
 		}
 		info.Seq, _ = d.Log.LastSeq(ctx, r.ID)
+		info.Title = d.sessionTitle(ctx, r.ID)
 		out = append(out, info)
 	}
 	return out, nil
+}
+
+// sessionTitle is the first human prompt of a session (its opening line,
+// trimmed), or "" for a session nobody has spoken to yet.
+func (d *Daemon) sessionTitle(ctx context.Context, id string) string {
+	evs, err := d.Log.Read(ctx, id, 1, 400)
+	if err != nil {
+		return ""
+	}
+	for _, e := range evs {
+		if e.Type != event.PromptQueued && e.Type != event.SteerReceived {
+			continue
+		}
+		var p event.TextPayload
+		if e.Decode(&p) != nil || !strings.HasPrefix(p.Source, "human:") {
+			continue
+		}
+		t := strings.TrimSpace(p.Text)
+		if i := strings.IndexByte(t, '\n'); i >= 0 {
+			t = t[:i]
+		}
+		if t != "" {
+			return t
+		}
+	}
+	return ""
 }
 
 // --- trust (PRD §10.6) ---
