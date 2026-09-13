@@ -589,10 +589,10 @@ func inputBox(input, meta string) string {
 	return input + "\n" + meta
 }
 
-// metaLine is "Coder    claude-opus-5 anthropic" (or the no-model nudge):
-// the role and the model separated by a tab-sized gap.
+// metaLine is "Coder  ·  claude-opus-5 anthropic" (or the no-model nudge):
+// the role and the model separated by a dot.
 func metaLine(label, model string, queued int) string {
-	s := titleCase(label) + "    "
+	s := titleCase(label) + "  ·  "
 	if model == "" {
 		return s + styleWarn.Render("no model — /models")
 	}
@@ -602,7 +602,7 @@ func metaLine(label, model string, queued int) string {
 		s += " " + styleDim.Render(prov)
 	}
 	if queued > 0 {
-		s += styleDim.Render(fmt.Sprintf("    %d queued", queued))
+		s += styleDim.Render(fmt.Sprintf("  ·  %d queued", queued))
 	}
 	return s
 }
@@ -626,7 +626,7 @@ type footerInfo struct {
 
 // footerRight builds the right side of the meta row: a sign-in nudge,
 // nothing on the home view (the left side already names the role and
-// model), or the tokens and cost with a tab-sized gap and no dots. The
+// model), or the tokens and cost separated by a dot. The
 // repo sits on the tab strip; waiting permissions and /help are not
 // repeated here either (the strip shows the former, the "/" palette lists
 // every command).
@@ -637,7 +637,7 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
-	return fmtTokens(f.tokens) + " tokens    $" + fmtCost(f.cost)
+	return fmtTokens(f.tokens) + " tokens  ·  $" + fmtCost(f.cost)
 }
 
 // fmtCost prints a dollar amount with 2–4 decimals.
@@ -709,8 +709,8 @@ func (m Model) inputBoxView(width int) string {
 }
 
 // metaRow is the line under the input: role and model on the left, tokens
-// and cost (or a transient status) on the right, tab-sized gaps
-// throughout. The left side is truncated first when they collide.
+// and cost (or a transient status) on the right, dot separators within
+// each side. The left side is truncated first when they collide.
 func (m Model) metaRow(width int) string {
 	label, model, queued := "agent", m.session.Model, 0
 	if a := m.selectedAgent(); a != nil {
@@ -939,7 +939,7 @@ func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInf
 		tab(fmt.Sprintf("agents (%d)", len(kids)), m.focus == focusAgents),
 		tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
 	}
-	line := strings.Join(tabs, styleDim.Render("  │  "))
+	line := strings.Join(tabs, styleDim.Render("  ·  "))
 	// The repo (cwd) sits at the right edge of the strip.
 	repo := styleDim.Render(shortHome(m.session.Dir))
 	if gap := width - lipgloss.Width(line) - lipgloss.Width(repo); gap >= 4 {
