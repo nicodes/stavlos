@@ -777,6 +777,17 @@ func EventLines(ev event.Event) []Line {
 		}
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "model → " + p.Model}}
 
+	case event.SessionYoloChanged:
+		var p event.YoloPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		state := "off · permissions are asked"
+		if p.On {
+			state = "on · every permission is approved"
+		}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "yolo → " + state}}
+
 	case event.AgentVariantChanged:
 		var p event.VariantChangedPayload
 		if err := ev.Decode(&p); err != nil {

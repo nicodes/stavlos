@@ -16,6 +16,7 @@ const (
 	SessionCreated      Type = "session.created"       // SessionCreatedPayload
 	SessionArchived     Type = "session.archived"      // (none)
 	SessionModelChanged Type = "session.model_changed" // ModelChangedPayload
+	SessionYoloChanged  Type = "session.yolo_changed"  // YoloPayload: permission prompts auto-approved (on) or asked (off)
 
 	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
 	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload
@@ -89,6 +90,12 @@ type ModelChangedPayload struct {
 type RoleChangedPayload struct {
 	Role  string `json:"role"`
 	Label string `json:"label"`
+}
+
+// YoloPayload records the session's yolo switch: while on, every tool
+// call a policy would ask about is allowed without a prompt.
+type YoloPayload struct {
+	On bool `json:"on"`
 }
 
 // VariantChangedPayload records a model-variant switch; "" is the

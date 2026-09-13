@@ -26,6 +26,7 @@ const (
 	MSessionFork     = "session.fork"
 	MSessionArchive  = "session.archive"
 	MSessionSetModel = "session.set_model"
+	MSessionSetYolo  = "session.set_yolo" // auto-approve permission prompts session-wide
 
 	MAgentTree       = "agent.tree"
 	MAgentSend       = "agent.send" // Prompt / Steer / Cancel / Kill
@@ -149,6 +150,7 @@ type SessionInfo struct {
 	Live         int     `json:"live_agents"`
 	CostUSD      float64 `json:"cost_usd"`
 	TrustPending bool    `json:"trust_pending"`
+	Yolo         bool    `json:"yolo,omitempty"` // permission prompts are auto-approved session-wide
 }
 
 type SessionListParams struct {
@@ -179,6 +181,11 @@ type SessionSetModelParams struct {
 	V     int    `json:"v"`
 	ID    string `json:"id"`
 	Model string `json:"model"`
+}
+type SessionSetYoloParams struct {
+	V  int    `json:"v"`
+	ID string `json:"id"`
+	On bool   `json:"on"`
 }
 
 type AgentInfo struct {

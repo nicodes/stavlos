@@ -43,6 +43,10 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			var p event.ModelChangedPayload
 			_ = e.Decode(&p)
 			s.model = p.Model
+		case event.SessionYoloChanged:
+			var p event.YoloPayload
+			_ = e.Decode(&p)
+			s.yolo = p.On
 		case event.AgentSpawned:
 			var p event.AgentSpawnedPayload
 			_ = e.Decode(&p)

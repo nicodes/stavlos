@@ -278,6 +278,18 @@ func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.
 	}
 }
 
+func setYoloCmd(ctx context.Context, c *client.Client, session string, on bool) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		what := "yolo off: permissions are asked again"
+		if on {
+			what = "yolo on: every permission is approved for this session"
+		}
+		return resultMsg{what, c.SetSessionYolo(ctx, session, on)}
+	}
+}
+
 // variantsMsg carries the variant names a model offers, for the /variants
 // picker.
 type variantsMsg struct {

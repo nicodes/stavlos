@@ -31,6 +31,7 @@ var commands = []Command{
 	{Name: "/role", Args: "[name]", Desc: "change the selected agent's role (preset); no arg opens a picker", Direct: true},
 	{Name: "/variants", Args: "[name|default]", Desc: "pick a model variant (reasoning effort) for the selected agent; no arg opens a picker", Aliases: []string{"/variant"}, Direct: true},
 	{Name: "/roles", Desc: "list available roles", Aliases: []string{"/presets"}, Direct: true},
+	{Name: "/yolo", Args: "[on|off]", Desc: "session-wide: auto-approve every permission prompt (no arg toggles)", Direct: true},
 	{Name: "/tree", Desc: "toggle the agent sidebar (also ctrl+b)", Direct: true},
 	{Name: "/details", Desc: "expand or collapse all tool output", Direct: true},
 	{Name: "/tips", Desc: "toggle the home-screen tips", Direct: true},

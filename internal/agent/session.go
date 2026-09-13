@@ -49,6 +49,29 @@ type Session struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	allowAlways map[string]bool // "tool\x00arg" remembered allows (session-scoped)
+	yolo        bool            // session-wide: policy "ask" outcomes are allowed without a prompt
+}
+
+// Yolo reports whether the session auto-approves permission prompts.
+func (s *Session) Yolo() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.yolo
+}
+
+// SetYolo switches the session-wide auto-approval and logs it. Explicit
+// deny rules and model questions are unaffected; only outcomes a policy
+// would ask about are allowed.
+func (s *Session) SetYolo(ctx context.Context, on bool) error {
+	s.mu.Lock()
+	changed := s.yolo != on
+	s.yolo = on
+	s.mu.Unlock()
+	if !changed {
+		return nil
+	}
+	_, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.SessionYoloChanged, Payload: event.MustPayload(event.YoloPayload{On: on})})
+	return err
 }
 
 // ErrNoModel is the turn error when an agent has no model to call.
@@ -219,7 +242,7 @@ func (s *Session) Info() protocol.SessionInfo {
 	return protocol.SessionInfo{
 		ID: s.ID, Dir: s.Dir, Model: s.Model(), RootAgent: s.rootArch,
 		Created: s.Created.Format(time.RFC3339), Archived: s.Archived(),
-		Live: s.Live(), CostUSD: s.Cost(), TrustPending: cfg.TrustPending,
+		Live: s.Live(), CostUSD: s.Cost(), TrustPending: cfg.TrustPending, Yolo: s.Yolo(),
 	}
 }
 
