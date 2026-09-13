@@ -644,6 +644,9 @@ type selection struct {
 // selection or, when nothing was dragged, counts as a click. Plain motion
 // is hover.
 func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
+	// Hover and clicks work in main-column coordinates; the sidebar, when
+	// shown, occupies the left edge of the screen.
+	cx, inMain := m.mainX(msg.X)
 	switch {
 	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
 		m.sel = selection{pressed: true, ax: msg.X, ay: msg.Y, bx: msg.X, by: msg.Y}
@@ -657,7 +660,10 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 	case msg.Action == tea.MouseActionRelease && m.sel.pressed:
 		m.sel.pressed = false
 		if !m.sel.active {
-			return m.mouseClick(msg.X, msg.Y)
+			if !inMain {
+				return m.setFocus(focusSidebar)
+			}
+			return m.mouseClick(cx, msg.Y)
 		}
 		text := m.selectedText()
 		if text == "" {
@@ -666,9 +672,26 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		}
 		return tea.Batch(copyCmd(text), m.setStatus(fmt.Sprintf("copied %d characters", len([]rune(text))), false))
 	case msg.Action == tea.MouseActionMotion:
-		return m.mouseHover(msg.X, msg.Y)
+		if !inMain {
+			return m.mouseHover(-1, msg.Y) // outside the chat: hover releases, nothing else
+		}
+		return m.mouseHover(cx, msg.Y)
 	}
 	return nil
+}
+
+// mainX maps a screen column to the main column: with the sidebar shown
+// the main column starts after it and its separator. inMain is false over
+// the sidebar.
+func (m *Model) mainX(x int) (int, bool) {
+	if !m.sidebarVisible() {
+		return x, true
+	}
+	off := sidebarWidth + 1
+	if x < off {
+		return x, false
+	}
+	return x - off, true
 }
 
 // selRange is the selection in reading order: (y0,x0) before (y1,x1),
@@ -924,9 +947,6 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 	}
 	if x < 0 || y < 0 {
 		return nil
-	}
-	if m.sidebarVisible() && x >= m.contentWidth() {
-		return m.setFocus(focusSidebar)
 	}
 	if x >= m.contentWidth() {
 		return nil

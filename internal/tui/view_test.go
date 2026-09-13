@@ -1704,3 +1704,45 @@ func TestStatusShowsAboveTheDivider(t *testing.T) {
 		t.Fatalf("no status → blank line: %q", lines[rule-1])
 	}
 }
+
+func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
+	m := sessionModel()
+	m.showTree = true
+	m.width, m.height = 120, 40
+	m.layout()
+	m.refreshViewport()
+	lines := strings.Split(stripANSI(m.View()), "\n")
+	// the sidebar's session header is at the left edge, the chat to its right
+	found := false
+	for _, l := range lines {
+		if strings.HasPrefix(strings.TrimLeft(l, " "), "session") && strings.Index(l, "session") < sidebarWidth {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("sidebar should be on the left:\n%s", strings.Join(lines, "\n"))
+	}
+	ev := func(msg tea.MouseMsg) tea.Cmd {
+		nm, cmd := m.Update(msg)
+		m = nm.(Model)
+		return cmd
+	}
+	// a click in the sidebar focuses it
+	ev(tea.MouseMsg{X: 2, Y: 3, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	ev(tea.MouseMsg{X: 2, Y: 3, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	if m.focus != focusSidebar {
+		t.Fatalf("click in the sidebar: focus=%v", m.focus)
+	}
+	// hovering the chat, right of the sidebar, still selects an item
+	m.setFocus(focusInput)
+	r := m.itemRows[0]
+	ev(tea.MouseMsg{X: sidebarWidth + 1 + 3, Y: r.first - m.vp.YOffset, Action: tea.MouseActionMotion})
+	if m.focus != focusChat || m.chatCursor != 0 {
+		t.Fatalf("hover over the chat with the sidebar open: focus=%v cursor=%d", m.focus, m.chatCursor)
+	}
+	// hovering over the sidebar hands focus back
+	ev(tea.MouseMsg{X: 2, Y: r.first - m.vp.YOffset, Action: tea.MouseActionMotion})
+	if m.focus != focusInput {
+		t.Fatalf("hover over the sidebar should release the chat: %v", m.focus)
+	}
+}
