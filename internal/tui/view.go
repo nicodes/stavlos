@@ -815,8 +815,8 @@ const tagline = "Saddle up."
 // homeLayout is the logo screen's stack of lines and where things sit in
 // it, shared by the renderer and the mouse.
 type homeLayout struct {
-	lines       []string
-	top         int // rows of padding above the stack (vertical centring)
+	lines []string
+	top   int // rows of padding above the stack (vertical centring)
 }
 
 // homeLines builds the logo screen: logo, tagline, the strip when it has
