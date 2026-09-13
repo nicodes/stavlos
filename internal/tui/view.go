@@ -22,6 +22,7 @@ var (
 	colError   = lipgloss.AdaptiveColor{Light: "#C0392B", Dark: "#F26D6D"}
 	colBlocked = lipgloss.AdaptiveColor{Light: "#9333EA", Dark: "#C084FC"}
 	colBorder  = colMuted
+	colSelBg   = lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#2A2F3A"} // chat cursor row background
 
 	styleDim      = lipgloss.NewStyle().Foreground(colMuted)
 	styleKey      = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
@@ -46,7 +47,7 @@ var (
 	styleSelected      = lipgloss.NewStyle().Bold(true)
 	styleSep           = lipgloss.NewStyle().Foreground(colBorder)
 	styleBoxTitleFocus = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
-	styleGutter        = lipgloss.NewStyle().Foreground(colAccent)
+	styleCursorRow     = lipgloss.NewStyle().Background(colSelBg) // chat cursor: the item's rows get this background
 
 	styleBorderMuted = lipgloss.NewStyle().Foreground(colMuted)
 	styleBorderUser  = lipgloss.NewStyle().Foreground(colAccent) // the input prompt while it has focus
@@ -118,6 +119,8 @@ type RenderOpts struct {
 }
 
 // gutterMark is the chat cursor marker drawn in the one-column gutter.
+// gutterMark is the cursor marker tests swap in for highlightRow (the real
+// cursor is a background colour, invisible without a colour profile).
 const gutterMark = "▍"
 
 // rowRange is the first and last rendered row of an item (inclusive).
@@ -162,6 +165,9 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		}
 		text := renderLine(l, o, cur)
 		for _, part := range strings.Split(text, "\n") {
+			if cur {
+				part = highlightRow(part, o.Width)
+			}
 			out = append(out, row{item: l.Item, text: part})
 		}
 	}
@@ -212,19 +218,42 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		}
 		// Gutter + leader, like every chat line.
 		if o.Waiting {
-			b.WriteString("   " + styleWarn.Render("!") + " " + styleWarn.Render("permission requested"))
+			b.WriteString(" " + styleWarn.Render("!") + " " + styleWarn.Render("permission requested"))
 		} else {
 			verb := o.Verb
 			if verb == "" {
 				verb = "working"
 			}
-			b.WriteString("   " + o.Spinner + " " + styleDim.Render(verb+"…"))
+			b.WriteString(" " + o.Spinner + " " + styleDim.Render(verb+"…"))
 		}
 		if o.Stats != "" {
 			b.WriteString(" " + styleDim.Render(o.Stats))
 		}
 	}
 	return b.String(), rows
+}
+
+// highlightRow paints one row of the item under the chat cursor: a
+// background across the full width, keeping the row's own colours (the
+// background is re-asserted after every reset inside the row). It is a
+// variable so tests can swap in a visible marker.
+var highlightRow = func(s string, width int) string {
+	pad := width - ansi.StringWidth(s)
+	if pad < 0 {
+		pad = 0
+	}
+	bg := sgrPrefix(styleCursorRow)
+	if bg == "" { // no colour profile
+		return s + strings.Repeat(" ", pad)
+	}
+	return bg + strings.ReplaceAll(s, "\x1b[0m", "\x1b[0m"+bg) + strings.Repeat(" ", pad) + "\x1b[0m"
+}
+
+// sgrPrefix extracts the escape sequence a style opens with ("" when the
+// renderer has no colour profile).
+func sgrPrefix(st lipgloss.Style) string {
+	r := strings.TrimSuffix(st.Render(" "), "\x1b[0m")
+	return strings.TrimSuffix(r, " ")
 }
 
 // spacedItems marks the items that get breathing room: user inputs,
@@ -349,11 +378,10 @@ func (o RenderOpts) showLine(l Line) bool {
 // a leader (block border or indent), an optional glyph, and the wrapped,
 // styled text.
 func renderLine(l Line, o RenderOpts, cursor bool) string {
-	gutter := " "
-	if cursor {
-		gutter = styleGutter.Render(gutterMark)
-	}
-	leader := "  "
+	// No gutter column: the chat cursor is a background highlight applied
+	// by renderAll, so every row starts with the one-space leader.
+	gutter := ""
+	leader := " "
 	glyph := ""
 	text := l.Text
 	var style func(...string) string
@@ -364,7 +392,7 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	case LineHeading:
 		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), styleBold) }
 	case LineCode:
-		leader = "    "
+		leader = "  "
 		style = styleDim.Render
 	case LineDim, LineLabel, LineThink:
 		style = styleDim.Render
@@ -385,10 +413,10 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		}
 		style = renderToolText
 	case LineToolOut:
-		leader = "      "
+		leader = "    " // under the tool name (leader + "⚙  ")
 		style = styleToolOut.Render
 	case LineToolNote:
-		leader = "      "
+		leader = "    "
 		style = styleDim.Render
 	case LineFinished:
 		style = styleFinished.Render
@@ -396,7 +424,7 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 			style = styleError.Render
 		}
 	case LineRule:
-		return gutter + centerText(styleRule.Render(l.Text), o.Width-1)
+		return gutter + centerText(styleRule.Render(l.Text), o.Width)
 	case LineError:
 		style = styleError.Render
 	default:
