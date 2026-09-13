@@ -267,9 +267,13 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("spawned %+v", spp)
 	}
 	h.waitFor(event.AgentFinished, spp.ID)
-	e = h.waitFor(event.TurnEnded, root) // turn 3: woken by ChildFinished
-	_ = e.Decode(&te)
-	if te.Reason != "end_turn" || te.Turn != 3 {
+	// turn 2 may end before or after the child finishes; wait for turn 3,
+	// the one started by the ChildFinished envelope.
+	for te.Turn != 3 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	if te.Reason != "end_turn" {
 		t.Fatalf("turn 3 ended %+v", te)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
