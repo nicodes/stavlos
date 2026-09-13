@@ -55,7 +55,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if e.TrustPending {
 		t.Fatal("still pending")
 	}
-	if e.Model != "anthropic/claude-sonnet-5" || e.RootAgent != "coder" {
+	if e.Model != "anthropic/claude-sonnet-5" || e.RootAgent != "general" {
 		t.Fatalf("model %q root %q", e.Model, e.RootAgent)
 	}
 	p, ok := e.Presets["reviewer"]
@@ -71,7 +71,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if e.Policy.Decide("bash", "curl x") != policy.Deny {
 		t.Fatal("project tighten lost")
 	}
-	if _, ok := e.Presets["coder"]; !ok {
+	if _, ok := e.Presets["general"]; !ok {
 		t.Fatal("builtin missing")
 	}
 }

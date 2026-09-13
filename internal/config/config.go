@@ -122,7 +122,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 
 	// defaults
 	e.Model = ""
-	e.RootAgent = "coder"
+	e.RootAgent = "general"
 	e.Limits = Limits{MaxDepth: 3, MaxAgents: 6}
 	e.Escalation.ClaimTimeout = 30 * time.Second
 	e.Escalation.AnswerTimeout = 3 * time.Minute
@@ -539,35 +539,22 @@ func (p Preset) PresetPolicy() *policy.Set {
 // ParsePolicy expects (already map[string]any in yaml.v3).
 func normalizeYAML(m map[string]any) map[string]any { return m }
 
+// builtinPresets is the one preset every install starts with. It can do
+// everything and can delegate to copies of itself; users add specialised
+// presets as <config>/agents/<name>.md or <project>/.stavlos/agents/<name>.md.
 func builtinPresets() []Preset {
 	return []Preset{
 		{
-			Name: "coder", Layer: "builtin",
-			Description: "Implements features and fixes bugs in this repository",
+			Name: "general", Layer: "builtin",
+			Description: "General-purpose engineer: reads, edits, runs, and delegates",
 			Tools:       []string{"bash", "read", "apply_patch", "skill"},
-			Spawn:       []string{"explorer", "tester"},
+			Spawn:       []string{"general"},
 			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
 Work carefully: read before you edit, prefer small targeted changes, and run the project's tests or build after changing code.
-Delegate reading unfamiliar or large areas of code to an explorer subagent when it would save your own context; delegate running test suites to a tester subagent when the suite is slow.
-When you spawn subagents, give each a specific task and a short label, then keep working or end your turn; each child's result comes back to you as a message when it finishes. Run slow commands such as test suites with bash_async.
+Search and read with bash (grep -rn, rg, find, ls) and read; edit with apply_patch. Run slow commands such as test suites with bash_async.
+Delegate independent pieces of work to subagents when that saves your own context or lets things run in parallel: give each a specific task and a short label, then keep working or end your turn; each child's result comes back to you as a message when it finishes. Subagents can delegate too.
 Report what you changed and what you verified.`,
-		},
-		{
-			Name: "explorer", Layer: "builtin",
-			Description: "Read-only investigation of a codebase; reports findings",
-			Tools:       []string{"read", "bash", "skill"},
-			Loop:        "default",
-			Body: `You are a read-only code explorer. Answer the question you were given by reading files and searching with bash (grep -rn, rg, find, ls). Do not modify anything.
-When you have the answer, call agent_finish with a concise summary that includes exact file paths and line numbers.`,
-		},
-		{
-			Name: "tester", Layer: "builtin",
-			Description: "Runs tests and builds; reports results",
-			Tools:       []string{"bash", "read", "skill"},
-			Loop:        "default",
-			Body: `You run the project's tests, builds, or linters as instructed and report the results faithfully. Do not edit source files.
-Call agent_finish with the outcome: what you ran, whether it passed, and the relevant failing output if not.`,
 		},
 	}
 }
