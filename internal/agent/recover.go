@@ -50,11 +50,20 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 		case event.AgentSpawned:
 			var p event.AgentSpawnedPayload
 			_ = e.Decode(&p)
-			preset, ok := cfg.Presets[p.Archetype]
+			arch := p.Archetype
+			preset, ok := cfg.Presets[arch]
 			if !ok {
-				preset = config.Preset{Name: p.Archetype, Description: "(preset no longer exists)", Tools: []string{"read", "bash"}, Loop: "default"}
+				// The preset this agent was created with is gone (removed,
+				// renamed, or a former built-in): it carries on as the
+				// configured root preset rather than a crippled read-only one.
+				arch = cfg.RootAgent
+				preset, ok = cfg.Presets[arch]
+				if !ok {
+					preset = config.Preset{Name: p.Archetype, Description: "(preset no longer exists)", Tools: []string{"read", "bash"}, Loop: "default"}
+					arch = p.Archetype
+				}
 			}
-			a := newAgent(s, p.ID, p.Parent, p.Archetype, p.Label, p.Model, p.Depth, preset)
+			a := newAgent(s, p.ID, p.Parent, arch, p.Label, p.Model, p.Depth, preset)
 			if par, ok := s.agents[p.Parent]; ok {
 				a.ctx, a.kill = context.WithCancel(par.ctx)
 				par.children = append(par.children, a.ID)
@@ -69,8 +78,11 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				_ = e.Decode(&p)
 				if preset, ok := cfg.Presets[p.Role]; ok {
 					a.preset = preset
+					a.Archetype = p.Role
+				} else if preset, ok := cfg.Presets[cfg.RootAgent]; ok {
+					a.preset = preset // the role it switched to is gone: same fallback as above
+					a.Archetype = cfg.RootAgent
 				}
-				a.Archetype = p.Role
 				if p.Label != "" {
 					a.Label = p.Label
 				}

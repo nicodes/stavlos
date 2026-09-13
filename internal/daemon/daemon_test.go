@@ -935,3 +935,56 @@ func TestSessionListTitles(t *testing.T) {
 		t.Fatalf("newest first with titles: %+v", list)
 	}
 }
+
+// TestRecoveredAgentWithMissingPresetFallsBack: a session whose root was
+// created under a preset that no longer exists resumes as the configured
+// root preset, with its full tool set.
+func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
+	setupConfig(t)
+	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
+	_ = os.MkdirAll(agentsDir, 0o755)
+	presetFile := filepath.Join(agentsDir, "coder.md")
+	os.WriteFile(presetFile, []byte("---\ndescription: Old coder\ntools: [read, bash]\n---\nYou are the old coder.\n"), 0o644)
+	work := t.TempDir()
+	data := t.TempDir()
+	fm := &fakeModel{}
+	h := newHarness(t, data, fm)
+	ctx := context.Background()
+	s, err := h.c.CreateSession(ctx, work, "", "coder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents, _ := h.c.Tree(ctx, s.ID)
+	if agents[0].Archetype != "coder" {
+		t.Fatalf("root should start as coder: %+v", agents[0])
+	}
+	h.close()
+	os.Remove(presetFile) // the preset disappears (as coder did when general replaced it)
+
+	fm2 := &fakeModel{}
+	var offered []string
+	fm2.steps = []func(model.Request) model.Response{func(req model.Request) model.Response {
+		for _, d := range req.Tools {
+			offered = append(offered, d.Name)
+		}
+		if !strings.Contains(req.System, "senior software engineer") {
+			t.Errorf("system prompt should be the general preset's: %.80q", req.System)
+		}
+		return text("ok")
+	}}
+	h2 := newHarness(t, data, fm2)
+	defer h2.close()
+	if _, err := h2.c.ResumeSession(ctx, s.ID); err != nil {
+		t.Fatal(err)
+	}
+	agents, _ = h2.c.Tree(ctx, s.ID)
+	if agents[0].Archetype != "general" {
+		t.Fatalf("root should fall back to general: %+v", agents[0])
+	}
+	_ = h2.c.Subscribe(ctx, s.ID, 0)
+	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "hello")
+	h2.waitFor(event.TurnEnded, agents[0].ID)
+	if !strings.Contains(strings.Join(offered, " "), "agent_create") || !strings.Contains(strings.Join(offered, " "), "apply_patch") {
+		t.Fatalf("the fallback should carry general's tools, got %v", offered)
+	}
+}
