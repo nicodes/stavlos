@@ -711,11 +711,17 @@ func EventLines(ev event.Event) []Line {
 			}
 			return block(BlockUser, "", p.Text)
 		case "agent_response":
-			label := "agent response"
+			// Reads like a tool line so it is obvious what it is:
+			// "⑂ Agent response · scout (a1b2c3d4)" over the answer's text.
+			head := "**Agent response**"
 			if p.From != "" {
-				label = "response from " + p.From
+				head += " · " + p.From
 			}
-			return blockWith(BlockChild, label, p.Text, GlyphChild)
+			lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: head, Block: BlockChild, Glyph: GlyphChild}}
+			for _, l := range strings.Split(strings.TrimRight(p.Text, "\n"), "\n") {
+				lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild})
+			}
+			return append(lines, Line{Kind: LineBlank})
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case "monitor_fired":
