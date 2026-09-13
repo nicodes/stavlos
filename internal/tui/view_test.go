@@ -1242,6 +1242,7 @@ func TestMouseClickTogglesItem(t *testing.T) {
 	r := m.itemRows[item]
 	click := func(y int) {
 		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
 	}
 	view := func() string { return stripANSI(m.vp.View()) }
@@ -1274,6 +1275,7 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	m.refreshViewport()
 	click := func(x, y int) {
 		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
 	}
 	move := func(x, y int) {
@@ -1374,6 +1376,7 @@ func TestDialogRowsTakeTheMouse(t *testing.T) {
 		t.Fatalf("hover should move the dialog cursor: %+v", m.ov)
 	}
 	nm, _ = m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
 	if m.ov != nil {
 		t.Fatal("clicking a row should pick it and close the dialog")
@@ -1397,5 +1400,67 @@ func TestYoloToggleShowsInEveryChat(t *testing.T) {
 	}
 	if !m.session.Yolo {
 		t.Fatal("session flag should follow the event")
+	}
+}
+
+func TestDragSelectsAndCopies(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	tr := m.transcript("a")
+	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "first line here"}))
+	tr.Apply(mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "second line"}))
+	m.width, m.height = 60, 30
+	m.layout()
+	m.refreshViewport()
+	frame := strings.Split(stripANSI(m.View()), "\n")
+	y0, y1 := -1, -1
+	for i, l := range frame {
+		if strings.Contains(l, "first line here") {
+			y0 = i
+		}
+		if strings.Contains(l, "second line") {
+			y1 = i
+		}
+	}
+	if y0 < 0 || y1 <= y0 {
+		t.Fatalf("rows %d %d:\n%s", y0, y1, strings.Join(frame, "\n"))
+	}
+	col := func(line, sub string) int { return ansi.StringWidth(line[:strings.Index(line, sub)]) } // columns, not bytes
+	x0 := col(frame[y0], "first")
+	x1 := col(frame[y1], "second") + len("second") - 1
+	ev := func(msg tea.MouseMsg) {
+		nm, _ := m.Update(msg)
+		m = nm.(Model)
+	}
+	ev(tea.MouseMsg{X: x0, Y: y0, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	if m.sel.active {
+		t.Fatal("a press alone is not a selection")
+	}
+	ev(tea.MouseMsg{X: x1, Y: y1, Action: tea.MouseActionMotion, Button: tea.MouseButtonLeft})
+	if !m.sel.active {
+		t.Fatal("dragging should start a selection")
+	}
+	got := m.selectedText()
+	if !strings.HasPrefix(got, "first line here") || !strings.HasSuffix(got, "second") || strings.Count(got, "\n") != y1-y0 {
+		t.Fatalf("selected text: %q", got)
+	}
+	// the highlighted frame still has the same plain text
+	if stripANSI(m.View()) != strings.Join(frame, "\n") {
+		t.Fatal("the highlight must not change the frame's text")
+	}
+	// releasing copies (a command) and keeps the highlight; the status says so
+	nm, cmd := m.Update(tea.MouseMsg{X: x1, Y: y1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	m = nm.(Model)
+	if cmd == nil || !m.sel.active || !strings.HasPrefix(m.status, "copied ") {
+		t.Fatalf("release: cmd=%v active=%v status=%q", cmd != nil, m.sel.active, m.status)
+	}
+	// a drag never counts as a click on the item under it
+	if m.focus == focusChat && len(m.expanded["a"]) != 0 {
+		t.Fatal("drag should not toggle items")
+	}
+	// the next press clears it
+	ev(tea.MouseMsg{X: 1, Y: 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	if m.sel.active {
+		t.Fatal("a new press should drop the old selection")
 	}
 }

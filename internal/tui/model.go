@@ -90,6 +90,7 @@ type Model struct {
 	cancelArmed   time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
 	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
 	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
+	sel           selection // mouse text selection (drag to select, release to copy)
 	details       bool      // expanded tool output (/details)
 	follow        bool      // auto-scroll to bottom
 
@@ -234,12 +235,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.follow = m.vp.AtBottom()
 		}
 		cmds = append(cmds, cmd)
-		switch {
-		case msg.Action == tea.MouseActionMotion:
-			cmds = append(cmds, m.mouseHover(msg.X, msg.Y))
-		case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
-			cmds = append(cmds, m.mouseClick(msg.X, msg.Y))
-		}
+		cmds = append(cmds, m.mouse(msg))
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -579,6 +575,134 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// selection is a mouse text selection: pressed while the button is down,
+// active once the pointer has moved (a drag), kept highlighted after the
+// release until the next press.
+type selection struct {
+	pressed, active bool
+	ax, ay, bx, by  int // anchor (press) and pointer (latest drag) positions
+}
+
+// mouse routes mouse events: a left press anchors a possible selection, a
+// drag extends and highlights it, and the release either copies the
+// selection or, when nothing was dragged, counts as a click. Plain motion
+// is hover.
+func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
+	switch {
+	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
+		m.sel = selection{pressed: true, ax: msg.X, ay: msg.Y, bx: msg.X, by: msg.Y}
+		return nil
+	case msg.Action == tea.MouseActionMotion && m.sel.pressed:
+		if msg.X != m.sel.ax || msg.Y != m.sel.ay || m.sel.active {
+			m.sel.active = true
+			m.sel.bx, m.sel.by = msg.X, msg.Y
+		}
+		return nil
+	case msg.Action == tea.MouseActionRelease && m.sel.pressed:
+		m.sel.pressed = false
+		if !m.sel.active {
+			return m.mouseClick(msg.X, msg.Y)
+		}
+		text := m.selectedText()
+		if text == "" {
+			m.sel.active = false
+			return nil
+		}
+		return tea.Batch(copyCmd(text), m.setStatus(fmt.Sprintf("copied %d characters", len([]rune(text))), false))
+	case msg.Action == tea.MouseActionMotion:
+		return m.mouseHover(msg.X, msg.Y)
+	}
+	return nil
+}
+
+// selRange is the selection in reading order: (y0,x0) before (y1,x1),
+// columns inclusive.
+func (s selection) selRange() (x0, y0, x1, y1 int) {
+	x0, y0, x1, y1 = s.ax, s.ay, s.bx, s.by
+	if y1 < y0 || (y1 == y0 && x1 < x0) {
+		x0, y0, x1, y1 = x1, y1, x0, y0
+	}
+	return
+}
+
+// selectedText is the plain text under the selection, in terminal order:
+// the first row from the anchor column, whole rows in between, the last
+// row up to the pointer column. Trailing spaces are trimmed per row.
+func (m Model) selectedText() string {
+	if !m.sel.active {
+		return ""
+	}
+	saved := m.sel
+	m.sel = selection{} // render the frame without the highlight
+	lines := strings.Split(m.View(), "\n")
+	m.sel = saved
+	x0, y0, x1, y1 := m.sel.selRange()
+	var out []string
+	for y := y0; y <= y1 && y < len(lines); y++ {
+		if y < 0 {
+			continue
+		}
+		plain := ansi.Strip(lines[y])
+		from, to := 0, ansi.StringWidth(plain)
+		if y == y0 {
+			from = x0
+		}
+		if y == y1 {
+			to = x1 + 1
+		}
+		if from < 0 {
+			from = 0
+		}
+		if to > ansi.StringWidth(plain) {
+			to = ansi.StringWidth(plain)
+		}
+		if to <= from {
+			out = append(out, "")
+			continue
+		}
+		out = append(out, strings.TrimRight(ansi.Cut(plain, from, to), " "))
+	}
+	return strings.TrimRight(strings.Join(out, "\n"), "\n")
+}
+
+// highlightSelection paints the selection onto a rendered frame: the
+// selected span of each row is shown in reverse video.
+func (m Model) highlightSelection(frame string) string {
+	if !m.sel.active {
+		return frame
+	}
+	x0, y0, x1, y1 := m.sel.selRange()
+	lines := strings.Split(frame, "\n")
+	for y := y0; y <= y1 && y < len(lines); y++ {
+		if y < 0 {
+			continue
+		}
+		line := lines[y]
+		w := ansi.StringWidth(line)
+		from, to := 0, w
+		if y == y0 {
+			from = x0
+		}
+		if y == y1 {
+			to = x1 + 1
+		}
+		if from >= w || to <= from {
+			continue
+		}
+		if to > w {
+			to = w
+		}
+		left := ansi.Cut(line, 0, from)
+		mid := ansi.Strip(ansi.Cut(line, from, to))
+		right := ""
+		if to < w {
+			right = ansi.Cut(line, to, w)
+		}
+		lines[y] = left + styleSelection.Render(mid) + right
+	}
+	return strings.Join(lines, "\n")
 }
 
 // mouseHover is mouse movement: over a chat item it does what ↑/↓ do (the

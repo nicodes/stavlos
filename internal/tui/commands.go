@@ -5,9 +5,12 @@ package tui
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
+	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -266,6 +269,32 @@ func setYoloCmd(ctx context.Context, c *client.Client, session string, on bool) 
 			what = "yolo on: every permission is approved for this session"
 		}
 		return resultMsg{what, c.SetSessionYolo(ctx, session, on)}
+	}
+}
+
+// copyCmd puts text on the clipboard: an OSC 52 sequence to the terminal
+// (what the TUI can always reach), plus wl-copy, xclip or pbcopy when one
+// is installed, so terminals that ignore OSC 52 still get it.
+func copyCmd(text string) tea.Cmd {
+	return func() tea.Msg {
+		seq := "\x1b]52;c;" + base64.StdEncoding.EncodeToString([]byte(text)) + "\a"
+		if tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0); err == nil {
+			_, _ = tty.WriteString(seq)
+			_ = tty.Close()
+		} else {
+			_, _ = os.Stdout.WriteString(seq)
+		}
+		for _, tool := range [][]string{{"wl-copy"}, {"xclip", "-selection", "clipboard"}, {"pbcopy"}} {
+			if _, err := exec.LookPath(tool[0]); err != nil {
+				continue
+			}
+			cmd := exec.Command(tool[0], tool[1:]...)
+			cmd.Stdin = strings.NewReader(text)
+			if cmd.Run() == nil {
+				break
+			}
+		}
+		return nil
 	}
 }
 
