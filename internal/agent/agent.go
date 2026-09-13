@@ -54,7 +54,7 @@ type Agent struct {
 	prompts    []queued       // Prompt inbox
 	steers     []queued       // Steer inbox
 	responses  []response     // answers from other agents (agent_response), not yet delivered
-	awaiting   map[string]int // agent id → questions asked of it (agent_prompt, a child\'s task) not yet answered
+	awaiting   map[string]int // agent id → questions asked of it (agent_message, a child's task); cleared by its next answer
 	events     []event.Event  // this agent's events (projection cache)
 	cancelTurn context.CancelFunc
 	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
