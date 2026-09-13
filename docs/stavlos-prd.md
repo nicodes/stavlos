@@ -196,7 +196,7 @@ Separating `Prompt` from `Steer` is the whole point. Other harnesses only offer 
 
 Edge semantics, which protocol clients depend on:
 
-- **Steer to an idle agent** behaves as a `Prompt`: it starts a turn. Steer is "Prompt, but preempting if busy."
+- **Steer to an idle agent** behaves as a `Prompt`: it starts a turn and is logged as a prompt. Steer is "Prompt, but preempting if busy", and it is what the TUI sends for plain text.
 - **Multiple queued `Prompt`s** are coalesced: when the turn ends, the inbox is drained and every queued prompt is delivered as a separate user message in one next turn.
 - **`Cancel` with a pending permission or question prompt** withdraws it. The daemon emits a withdrawal event, every client removes the prompt, and a late `Reply` is rejected with an explanation (§7.4).
 - **`ChildFinished` to a busy parent** waits in the inbox and is delivered with the next turn's input.
@@ -280,7 +280,7 @@ Implementation note: Bubble Tea's update loop is single-threaded. Daemon events 
 
 **Inbound addressing.** Mentionable roles, one per *archetype* (`@coder`, `@explorer`, `@tester`). Roles need no members to be mentionable. Discord resolves them client-side and delivers `mention_roles` in the message payload, so there is no text parsing.
 
-**Verbs.** A plain message is a `Prompt`. The other envelopes are slash commands: `/steer <text>`, `/cancel`, `/kill`. Role mentions and thread context choose the *target*; the slash command chooses the *verb*. A slash command with no target in a channel addresses the root; in a thread it addresses that thread's agent.
+**Verbs.** A plain message is a `Steer`: it reaches a busy agent at its next model-call boundary and simply starts a turn when the agent is idle, which is what people mean when they type at a working agent. `/queue <text>` sends a `Prompt` instead (after the current turn). `/cancel` and `/kill` are slash commands too. Role mentions and thread context choose the *target*; the slash command chooses the *verb*. A slash command with no target in a channel addresses the root; in a thread it addresses that thread's agent.
 
 **Scoping.** Roles are guild-scoped; there is no channel-scoped role. Resolution is therefore on the pair `(channelID, roleID)` — `@coder` in one channel and `@coder` in another reach different agents via the same role. Inside a subagent thread, a plain message with no mention targets that thread's agent; role mentions still work there for addressing siblings or the root. Disambiguation (below) is therefore only needed for mentions in the channel itself.
 

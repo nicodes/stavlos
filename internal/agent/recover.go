@@ -78,7 +78,13 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			_ = e.Decode(&p)
 			switch p.Kind {
 			case "prompt":
-				if q := pendingPrompts[e.Agent]; len(q) > 0 {
+				// A consumed prompt came from the prompt queue, or from a
+				// steer that arrived while idle (logged as a prompt).
+				if q := pendingPrompts[e.Agent]; len(q) > 0 && q[0].text == p.Text {
+					pendingPrompts[e.Agent] = q[1:]
+				} else if q := pendingSteers[e.Agent]; len(q) > 0 && q[0].text == p.Text {
+					pendingSteers[e.Agent] = q[1:]
+				} else if q := pendingPrompts[e.Agent]; len(q) > 0 {
 					pendingPrompts[e.Agent] = q[1:]
 				}
 			case "steer":
