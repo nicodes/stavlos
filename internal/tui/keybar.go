@@ -12,8 +12,6 @@ type keyHint struct{ key, desc string }
 // keyHints returns the legend for the current state, most useful first.
 func (m Model) keyHints() []keyHint {
 	switch {
-	case m.confirmKill:
-		return []keyHint{{"y", "kill agent and subtree"}, {"n", "keep it"}}
 	case m.ov != nil && m.ov.mode == overlayLogin:
 		h := []keyHint{{"o", "open in browser"}, {"esc", "cancel sign-in"}}
 		if m.ov.login.err != "" {
@@ -55,7 +53,7 @@ func (m Model) keyHints() []keyHint {
 		tree = "hide sidebar"
 	}
 	if m.isHome() {
-		hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/provider", "sign in"}, {"/models", "pick model"}, {"/spawn", "delegate"}}
+		hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/provider", "sign in"}, {"/models", "pick model"}}
 		hs = append(hs, tab...)
 		return append(hs, keyHint{"ctrl+n/p", "agents"}, keyHint{"ctrl+b", tree}, keyHint{"/help", "all commands"}, keyHint{"ctrl+c", "quit"})
 	}
@@ -65,7 +63,7 @@ func (m Model) keyHints() []keyHint {
 	}
 	hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}}
 	hs = append(hs, tab...)
-	return append(hs, keyHint{"/queue", "send after turn"}, keyHint{"/cancel", "stop turn"}, keyHint{"/spawn", "delegate"}, keyHint{"/kill", "kill agent"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"/details", details}, keyHint{"/models", "model"}, keyHint{"/help", "all commands"}, keyHint{"ctrl+c", "quit"})
+	return append(hs, keyHint{"/queue", "send after turn"}, keyHint{"/cancel", "stop turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"/details", details}, keyHint{"/models", "model"}, keyHint{"/help", "all commands"}, keyHint{"ctrl+c", "quit"})
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at

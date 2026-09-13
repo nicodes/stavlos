@@ -616,7 +616,6 @@ func metaLine(label, model string, queued int) string {
 var tipLines = []string{
 	"/provider   sign in with ChatGPT or Grok",
 	"/models     pick a model",
-	"/spawn      delegate to a child agent",
 	"/help       all commands",
 }
 
@@ -979,8 +978,6 @@ func (m Model) footerView() string {
 
 func (m Model) footerRightView() string {
 	switch {
-	case m.confirmKill:
-		return styleStatusErr.Render(fmt.Sprintf("kill %s and its subtree? y/n", m.agentLabel(m.selectedID())))
 	case m.status != "" && m.statusErr:
 		return styleStatusErr.Render(m.status)
 	case m.status != "":

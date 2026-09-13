@@ -93,8 +93,6 @@ type Model struct {
 	statusErr   bool
 	statusToken int
 
-	confirmKill bool
-
 	// Keyboard focus (tab / shift+tab cycle the sections). The chat cursor
 	// walks transcript items; expanded holds per-item tool output overrides
 	// keyed by agent id; itemRows maps items to rendered viewport rows.
@@ -501,14 +499,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.overlayKey(msg)
 	}
 
-	if m.confirmKill {
-		m.confirmKill = false
-		if key.Matches(msg, keys.Yes) {
-			return m.killSelected()
-		}
-		return m.setStatus("kill cancelled", false)
-	}
-
 	// Section-independent keys.
 	switch {
 	case key.Matches(msg, keys.NextSection):
@@ -749,26 +739,6 @@ func (m *Model) command(text string) tea.Cmd {
 			return c
 		}
 		return sendCmd(m.ctx, m.c, agent, protocol.KindCancel, "", "cancel sent")
-	case "/kill":
-		if c := needAgent(); c != nil {
-			return c
-		}
-		m.confirmKill = true
-		return nil
-	case "/spawn":
-		if c := needAgent(); c != nil {
-			return c
-		}
-		parts := strings.Fields(rest)
-		if len(parts) < 3 {
-			return m.setStatus("usage: /spawn <archetype> <label> <task…>", true)
-		}
-		return spawnCmd(m.ctx, m.c, protocol.AgentSpawnParams{
-			Parent:    agent,
-			Archetype: parts[0],
-			Label:     parts[1],
-			Task:      strings.Join(parts[2:], " "),
-		})
 	case "/model":
 		if c := needAgent(); c != nil {
 			return c
@@ -798,14 +768,6 @@ func (m *Model) command(text string) tea.Cmd {
 		return setSessionModelCmd(m.ctx, m.c, m.sessionID, rest)
 	}
 	return m.setStatus("unknown command "+name+" (try /help)", true)
-}
-
-func (m *Model) killSelected() tea.Cmd {
-	agent := m.selectedID()
-	if agent == "" {
-		return m.setStatus("no agent selected", true)
-	}
-	return sendCmd(m.ctx, m.c, agent, protocol.KindKill, "", "kill sent")
 }
 
 // --- events ---
