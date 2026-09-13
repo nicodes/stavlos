@@ -10,9 +10,9 @@ import (
 )
 
 // orchestrator implements tools.Orchestrator on top of a session (PRD §6.4).
-// Prompt and status reach any agent in the session: a child, a sibling, or
-// the caller's parent. Steer is the main agent's alone. Lifecycle (cancel,
-// kill, result) stays with the parent that created the agent.
+// Messages, responses and status reach any agent in the session: a child, a
+// sibling, or the caller's parent. Lifecycle (cancel, kill) stays with the
+// parent that created the agent.
 type orchestrator struct{ s *Session }
 
 // senderLabel turns an envelope source into the From shown to the
@@ -66,31 +66,21 @@ func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task,
 	return a.ID, nil
 }
 
-func (o orchestrator) Send(caller, id, text string) error {
+// Message delivers text to another agent in the session at its next step:
+// mid-turn if it is busy (a steer), as a new turn if it is idle. Every agent
+// may message every agent; the caller then waits on the answer.
+func (o orchestrator) Message(caller, id, text string) error {
 	c, err := o.peer(caller, id)
 	if err != nil {
 		return err
 	}
-	if err := c.Prompt(context.Background(), text, "agent:"+caller); err != nil {
+	if err := c.Steer(context.Background(), text, "agent:"+caller); err != nil {
 		return err
 	}
 	if from, ok := o.s.Agent(caller); ok {
 		from.expect(id)
 	}
 	return nil
-}
-
-// Steer is the main agent's alone: a steer cuts into a running turn, which
-// is too invasive for a subagent to do to a peer.
-func (o orchestrator) Steer(caller, id, text string) error {
-	if a, ok := o.s.Agent(caller); !ok || a.Parent != "" {
-		return fmt.Errorf("only the main agent can steer; use agent_prompt")
-	}
-	c, err := o.peer(caller, id)
-	if err != nil {
-		return err
-	}
-	return c.Steer(context.Background(), text, "agent:"+caller)
 }
 
 func (o orchestrator) Cancel(parent, id string) error {

@@ -213,7 +213,7 @@ agent_response(to AgentID, text string)
 
 Because humans can steer any agent, the runtime never guesses who a closing message is for: an agent answers another agent with `agent_response` and answers the human in its normal reply. That rule is in every agent's system prompt.
 
-**Waiting is a state of its own.** An agent that has ended its turn but has a question outstanding — an `agent_prompt` not yet answered, a child's task — or a `bash_async` job still running reports `waiting` rather than `idle` (§4.4): it expects to be woken. The expectation is recorded when the prompt or spawn is delivered, cleared by the answer or by the target's kill, and rebuilt on recovery. Waiting agents cost nothing and do not count as busy.
+**Waiting is a state of its own.** An agent that has ended its turn but has a question outstanding — an `agent_message` not yet answered, a child's task — or a `bash_async` job still running reports `waiting` rather than `idle` (§4.4): it expects to be woken. The expectation is recorded when the prompt or spawn is delivered, cleared by the answer or by the target's kill, and rebuilt on recovery. Waiting agents cost nothing and do not count as busy.
 
 **The caller owns the lifecycle.** The parent reads the answer when it is woken, prompts the same child again if it needs more (the child keeps everything it learned), and calls `agent_kill` when it is done with it. This replaced an earlier `agent_finish`/`agent_result` pair, under which a child ended itself after one task and a follow-up meant a fresh agent rediscovering everything.
 
@@ -228,9 +228,8 @@ Available to any agent whose preset permits them:
 | Tool | Effect |
 |---|---|
 | `agent_create(archetype, label, task, model?)` | Create a child agent; returns its ID immediately; the task is its first prompt |
-| `agent_prompt(id, text)` | Queue a `Prompt` for any agent in the session |
-| `agent_response(to, text)` | Answer an agent that prompted you; wakes it between turns |
-| `agent_steer(id, text)` | Deliver a `Steer` to any agent in the session (main agent only) |
+| `agent_message(id, text)` | Deliver a `Steer` to any agent in the session: at its next step, mid-turn if busy, a new turn if idle |
+| `agent_response(to, text)` | Answer an agent that messaged you; wakes it between turns |
 | `agent_cancel(id)` | Deliver a `Cancel` to one of your children |
 | `agent_kill(id)` | Deliver a `Kill` to one of your children when you are done with it |
 
@@ -239,7 +238,7 @@ There is no wait tool. A parent that has nothing to do until a child answers sim
 **Background jobs** use the same mailbox and wake: `bash_async(command)` starts a job and returns its id at once; when it exits the agent is woken with the exit code and output, and `bash_async_kill(id)` stops it. Every agent with `bash` has these. Nothing is armed by hand: a job's exit always wakes its owner, as an agent's response always wakes the agent it answers. Jobs are logged (`monitor.started`, `monitor.fired`, `monitor.stopped`); a job whose process died with the daemon is reported to its owner as lost on restart. File watches and timers were tried and removed: models rarely used them well, and `bash_async` of `sleep` or `inotifywait` covers the need. In the TUI, the permission queue, live children ("agents") and jobs ("async") are three permanent tabs on one strip under the rule that closes the chat, each showing only its count (down to "(0)") until opened; the strip is one stop in the tab cycle (it opens on the first non-empty tab, permission when all are empty) and ←/→ move between tabs.
 | `agent_status(id?)` | State and usage (§4.4) of one agent, or the whole session tree |
 
-**Prompting and answering are session-wide, steering is the main agent's, lifecycle is parent-only.** Every agent has `agent_prompt`, `agent_response` and `agent_status`: a prompt may address any agent in the same session — a child, a sibling, or the caller's parent — and the recipient sees who sent it (`from` on the logged message, `[message from agent …]` in the model's history). `agent_steer` is offered only to the main agent, since a steer cuts into a running turn; subagents that need to redirect someone prompt them instead. `agent_cancel` and `agent_kill` work only on the caller's own children: killing an agent someone else created would fire its parent's wake with a surprise. "Same tree" means same session; agents never reach across sessions.
+**Messaging and answering are session-wide, lifecycle is parent-only.** Every agent has `agent_message`, `agent_response` and `agent_status`: a message may address any agent in the same session — a child, a sibling, or the caller's parent — and the recipient sees who sent it (`from` on the logged message, `[message from agent …]` in the model's history). `agent_cancel` and `agent_kill` work only on the caller's own children: killing an agent someone else created would fire its parent's wake with a surprise. "Same tree" means same session; agents never reach across sessions.
 
 `label` is **required** on spawn. It is the human-facing name in thread titles, pickers, and webhook identities. Optional labels produce unusable UI.
 
@@ -491,7 +490,7 @@ You are a Go engineer working in this repository. Prefer small commits.
 Delegate reading unfamiliar code to an explorer before editing it.
 ```
 
-Only one preset ships built in: `general`, a general-purpose engineer with bash, read, apply_patch and skill that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised presets — explorers, testers, reviewers — are the user's to add, one file each. The lifecycle tools (`agent_create`, `agent_cancel`, `agent_kill`) are implied by a non-empty `spawn` list; `agent_prompt`, `agent_response` and `agent_status` every agent has. Presets are the hub — skills, MCP servers, and policy are referenced *by* presets, not parallel to them. Preset creation must be as frictionless as skill creation, or users will reach for skills when a preset is correct.
+Only one preset ships built in: `general`, a general-purpose engineer with bash, read, apply_patch and skill that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised presets — explorers, testers, reviewers — are the user's to add, one file each. The lifecycle tools (`agent_create`, `agent_cancel`, `agent_kill`) are implied by a non-empty `spawn` list; `agent_message`, `agent_response` and `agent_status` every agent has. Presets are the hub — skills, MCP servers, and policy are referenced *by* presets, not parallel to them. Preset creation must be as frictionless as skill creation, or users will reach for skills when a preset is correct.
 
 ### 10.4 Skills — `skills/<name>/SKILL.md`
 
@@ -605,7 +604,7 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - Codex (ChatGPT) and Grok adapters, `go-plugin` model seam, `stavlos plugin install`, lockfile, models.dev metadata
 - MCP client
 - Three-layer configuration with trust gate; skills, presets, declarative policy
-- Built-in tools: `bash` (also the search tool: read-only commands such as `grep`, `rg`, `find`, `ls`, and `git status`/`log`/`diff` are allowed by default), `bash_async` and `bash_async_kill` (background jobs), `read`, `apply_patch` (the Codex patch grammar: add, update with context-anchored hunks, delete, move; several files per patch, applied atomically), `skill`, the conversation set every agent has (`agent_prompt`, `agent_response`, `agent_status`; `agent_steer` for the main agent), and the lifecycle set for presets that spawn (`agent_create`, `agent_cancel`, `agent_kill`)
+- Built-in tools: `bash` (also the search tool: read-only commands such as `grep`, `rg`, `find`, `ls`, and `git status`/`log`/`diff` are allowed by default), `bash_async` and `bash_async_kill` (background jobs), `read`, `apply_patch` (the Codex patch grammar: add, update with context-anchored hunks, delete, move; several files per patch, applied atomically), `skill`, the conversation set every agent has (`agent_message`, `agent_response`, `agent_status`), and the lifecycle set for presets that spawn (`agent_create`, `agent_cancel`, `agent_kill`)
 - Usage accounting: per-call `Usage` events, per-agent and per-session aggregates
 - Subscription sign-in for ChatGPT and Grok (device-code flows, token refresh), credential store, `/providers` and `/models` in the TUI, `stavlos auth login|list|logout`
 - Depth and per-session fan-out limits

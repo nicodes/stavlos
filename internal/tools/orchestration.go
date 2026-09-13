@@ -67,16 +67,16 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	return Result{Output: fmt.Sprintf("spawned %s (%s) as %s", a.Label, a.Archetype, id)}
 }
 
-// --- send / steer / cancel / kill ---
+// --- message / cancel / kill ---
 
-type sendTool struct{}
+type messageTool struct{}
 
-func (sendTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_prompt", Description: "Send a message to any other agent in this session (a child, a sibling, or your parent); it runs after that agent's current turn ends. The recipient sees it as coming from you and answers with agent_response, which wakes you between turns. agent_status lists every agent and its id.",
+func (messageTool) Def() model.ToolDef {
+	return model.ToolDef{Name: "agent_message", Description: "Send a message to any other agent in this session (a child, a sibling, or your parent). It reaches the agent at its next step: mid-turn if it is busy, as a new turn if it is idle. The recipient sees it as coming from you and answers with agent_response, which wakes you between turns. agent_status lists every agent and its id.",
 		Schema: schema(map[string]any{"id": prop("string", "Target agent id (any agent in the session)"), "text": prop("string", "Message")}, "id", "text")}
 }
-func (sendTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
-func (sendTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
+func (messageTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
+func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
 		return *r
 	}
@@ -84,31 +84,10 @@ func (sendTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
-	if err := env.Orch.Send(env.Agent, a.ID, a.Text); err != nil {
+	if err := env.Orch.Message(env.Agent, a.ID, a.Text); err != nil {
 		return errf("%v", err)
 	}
-	return Result{Output: "queued"}
-}
-
-type steerTool struct{}
-
-func (steerTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_steer", Description: "Main agent only: redirect any other agent in this session at its next model-call boundary without discarding its work. If the agent is idle this behaves like agent_prompt.",
-		Schema: schema(map[string]any{"id": prop("string", "Target agent id (any agent in the session)"), "text": prop("string", "Instruction")}, "id", "text")}
-}
-func (steerTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
-func (steerTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	if r := needOrch(env); r != nil {
-		return *r
-	}
-	var a struct{ ID, Text string }
-	if err := decode(in, &a); err != nil {
-		return errf("bad input: %v", err)
-	}
-	if err := env.Orch.Steer(env.Agent, a.ID, a.Text); err != nil {
-		return errf("%v", err)
-	}
-	return Result{Output: "steered"}
+	return Result{Output: "delivered"}
 }
 
 type cancelTool struct{}

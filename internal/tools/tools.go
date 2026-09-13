@@ -67,8 +67,9 @@ type Tool interface {
 // Orchestrator is implemented by the agent runtime (PRD §6.4).
 type Orchestrator interface {
 	Spawn(ctx context.Context, parent, archetype, label, task, modelID string) (string, error)
-	Send(parent, id, text string) error
-	Steer(parent, id, text string) error
+	// Message delivers text to any agent in the session at its next step:
+	// mid-turn if it is busy, as a new turn if it is idle.
+	Message(caller, id, text string) error
 	Cancel(parent, id string) error
 	Kill(parent, id string) error
 	Status(parent, id string) ([]ChildStatus, error)
@@ -106,7 +107,7 @@ func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
 		bashTool{}, readTool{}, patchTool{}, skillTool{}, responseTool{},
-		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, statusTool{},
+		spawnTool{}, messageTool{}, cancelTool{}, killTool{}, statusTool{},
 		bashAsyncTool{}, bashKillTool{},
 	} {
 		s[t.Def().Name] = t
@@ -121,7 +122,7 @@ var OrchestrationNames = []string{"agent_create", "agent_cancel", "agent_kill"}
 // other in its session and see the tree. Steering is the main agent's
 // alone (it is offered separately), and lifecycle tools stay with the
 // parent (see OrchestrationNames).
-var MessagingNames = []string{"agent_prompt", "agent_response", "agent_status"}
+var MessagingNames = []string{"agent_message", "agent_response", "agent_status"}
 
 // AsyncNames are offered to every agent that has bash.
 var AsyncNames = []string{"bash_async", "bash_async_kill"}
