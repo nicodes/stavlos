@@ -644,8 +644,14 @@ func EventLines(ev event.Event) []Line {
 		}
 		switch p.Kind {
 		case "prompt", "":
+			if p.From != "" {
+				return block(BlockUser, "from "+p.From, p.Text)
+			}
 			return block(BlockUser, "", p.Text)
 		case "steer":
+			if p.From != "" {
+				return block(BlockSteer, "steer from "+p.From, p.Text)
+			}
 			return block(BlockSteer, "steer", p.Text)
 		case "child_finished":
 			return blockWith(BlockChild, "child", p.Text, GlyphChild)

@@ -620,3 +620,97 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 		t.Fatalf("%+v", te)
 	}
 }
+
+// TestAgentsMessageAcrossTheSession: a child prompts its parent (not a
+// child of the caller), the parent sees who sent it, agent_status shows
+// the whole tree, and steer/lifecycle tools are not a subagent's to use.
+func TestAgentsMessageAcrossTheSession(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	var rootID string
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			return call("c1", "agent_create", `{"archetype":"explorer","label":"scout","task":"ask me something"}`)
+		},
+		func(model.Request) model.Response { return text("delegated") },
+		// woken by the child's prompt: the model sees the sender
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0].Text
+			if !strings.HasPrefix(last, "[message from agent scout (") || !strings.Contains(last, "which branch?") {
+				t.Errorf("parent saw: %q", last)
+			}
+			return text("main")
+		},
+	}
+	fm.childSteps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			// the system prompt names the parent; message it
+			i := strings.Index(req.System, "parent agent (id ")
+			if i < 0 {
+				t.Errorf("child system prompt lacks the parent id: %q", req.System)
+				return text("no parent")
+			}
+			pid := req.System[i+len("parent agent (id "):]
+			pid = pid[:strings.Index(pid, ")")]
+			if pid != rootID {
+				t.Errorf("parent id %q, want %q", pid, rootID)
+			}
+			return call("k1", "agent_prompt", `{"id":"`+pid+`","text":"which branch?"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || !strings.Contains(last.Content, "queued") {
+				t.Errorf("agent_prompt to the parent: %+v", last)
+			}
+			// a subagent is not offered steer, kill, cancel or result at all
+			for _, d := range req.Tools {
+				switch d.Name {
+				case "agent_steer", "agent_kill", "agent_cancel", "agent_result":
+					t.Errorf("subagent should not be offered %s", d.Name)
+				}
+			}
+			return call("k2", "agent_steer", `{"id":"`+rootID+`","text":"stop"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !last.IsError {
+				t.Errorf("agent_steer from a subagent should be refused: %+v", last)
+			}
+			return call("k3", "agent_status", `{}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || !strings.Contains(last.Content, `"label":"coder"`) || !strings.Contains(last.Content, `"you":true`) || !strings.Contains(last.Content, `"parent":"`+rootID+`"`) {
+				t.Errorf("agent_status should list the whole tree with the caller marked: %+v", last)
+			}
+			return call("k4", "finish", `{"summary":"asked","status":"success"}`)
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	rootID = agents[0].ID
+	_ = h.c.Send(ctx, rootID, protocol.KindPrompt, "delegate")
+
+	// the parent's logged message carries the sender
+	var um event.UserMessagePayload
+	for um.From == "" {
+		e := h.waitFor(event.UserMessage, rootID)
+		_ = e.Decode(&um)
+	}
+	if !strings.HasPrefix(um.From, "scout (") || um.Text != "which branch?" || um.Kind != "prompt" {
+		t.Fatalf("parent's message: %+v", um)
+	}
+	var te event.TurnEndedPayload
+	for te.Turn != 2 {
+		e := h.waitFor(event.TurnEnded, rootID)
+		_ = e.Decode(&te)
+	}
+	if te.Reason != "end_turn" {
+		t.Fatalf("turn 2: %+v", te)
+	}
+}

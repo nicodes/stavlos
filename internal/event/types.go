@@ -163,6 +163,9 @@ type UserMessagePayload struct {
 	Turn int    `json:"turn"`
 	Kind string `json:"kind"`
 	Text string `json:"text"`
+	// From names the sending agent ("scout (a1b2c3d4)") when a prompt or
+	// steer came from another agent in the session; empty for humans.
+	From string `json:"from,omitempty"`
 }
 
 type AssistantMessagePayload struct {

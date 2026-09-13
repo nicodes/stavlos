@@ -92,6 +92,8 @@ type ChildResult struct {
 
 type ChildStatus struct {
 	ID        string  `json:"id"`
+	Parent    string  `json:"parent,omitempty"`
+	You       bool    `json:"you,omitempty"` // this row is the caller
 	Label     string  `json:"label"`
 	Archetype string  `json:"archetype"`
 	State     string  `json:"state"`
@@ -124,6 +126,12 @@ func Builtin() Set {
 
 // OrchestrationNames are the tools implied by a non-empty spawn list.
 var OrchestrationNames = []string{"agent_create", "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status"}
+
+// MessagingNames are offered to every agent: any agent may prompt any
+// other in its session and see the tree. Steering is the main agent's
+// alone (it is offered separately), and lifecycle tools stay with the
+// parent (see OrchestrationNames).
+var MessagingNames = []string{"agent_prompt", "agent_status"}
 
 // AsyncNames are offered to every agent that has bash.
 var AsyncNames = []string{"bash_async", "bash_kill"}
