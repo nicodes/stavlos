@@ -19,7 +19,8 @@ const (
 	SessionYoloChanged  Type = "session.yolo_changed"  // YoloPayload: permission prompts auto-approved (on) or asked (off)
 
 	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
-	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload
+	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload (legacy: agents no longer finish; kept for old logs)
+	ResponseReceived    Type = "agent.response"        // ResponsePayload: an answer from another agent, logged on the recipient
 	AgentKilled         Type = "agent.killed"          // AgentRefPayload
 	AgentModelChanged   Type = "agent.model_changed"   // ModelChangedPayload
 	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
@@ -112,6 +113,15 @@ type AgentSpawnedPayload struct {
 	Model     string `json:"model"` // resolved provider/model-id
 	Task      string `json:"task,omitempty"`
 	Depth     int    `json:"depth"`
+}
+
+// ResponsePayload is an agent_response delivered to this agent: who sent
+// it and what it said. It is consumed by the recipient's next turn as a
+// user message of kind "agent_response".
+type ResponsePayload struct {
+	From      string `json:"from"`
+	FromLabel string `json:"from_label,omitempty"`
+	Text      string `json:"text"`
 }
 
 type AgentFinishedPayload struct {

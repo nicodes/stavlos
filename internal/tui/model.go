@@ -460,7 +460,7 @@ func (m *Model) liveChildren() []protocol.AgentInfo {
 	}
 	var out []protocol.AgentInfo
 	for _, a := range m.agents {
-		if a.Parent == sel && a.State != "finished" && a.State != "killed" {
+		if a.Parent == sel && a.State != "killed" {
 			out = append(out, a)
 		}
 	}
@@ -1694,16 +1694,9 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 				}
 			}
 		}
-	case event.AgentFinished, event.AgentKilled:
-		status := "killed"
-		if ev.Type == event.AgentFinished {
-			var p event.AgentFinishedPayload
-			if ev.Decode(&p) == nil {
-				status = p.Status
-			}
-		}
+	case event.AgentKilled:
 		if parent := m.parentOf[ev.Agent]; parent != "" {
-			m.transcript(parent).ChildDone(ev.Agent, status)
+			m.transcript(parent).ChildState(ev.Agent, "killed")
 			if !m.loading && parent == m.selectedID() {
 				m.refreshViewport()
 			}
@@ -1742,6 +1735,16 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		}
 	}
 
+	// The parent's agent_create line follows the child's turns: yellow while
+	// a turn runs, grey between turns.
+	if parent := m.parentOf[ev.Agent]; parent != "" {
+		switch ev.Type {
+		case event.TurnStarted:
+			m.transcript(parent).ChildState(ev.Agent, "running")
+		case event.TurnEnded, event.TurnAborted:
+			m.transcript(parent).ChildState(ev.Agent, "idle")
+		}
+	}
 	if target != "" {
 		m.transcript(target).Apply(ev)
 		if !m.loading && target == m.selectedID() {

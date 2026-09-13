@@ -33,7 +33,7 @@ func jsonOut(v any) Result {
 type spawnTool struct{}
 
 func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_create", Description: "Create a child agent that works on a task in the background. Returns its id immediately. When it finishes you are woken with its result as a new message, never mid-turn: a result that arrives while you are working is delivered when your current turn ends. If you have nothing else to do until then, simply end your turn. agent_status and agent_result let you check in early.",
+	return model.ToolDef{Name: "agent_create", Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its agent_response comes back to you as a new message between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive afterwards: agent_prompt it again for follow-ups (it keeps its context), and agent_kill it when you are done with it.",
 		Schema: schema(map[string]any{
 			"archetype": prop("string", "Preset name of the child (see the list in your instructions)"),
 			"label":     prop("string", "Short human-facing name for this child, e.g. 'auth-explorer' (required)"),
@@ -72,7 +72,7 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type sendTool struct{}
 
 func (sendTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_prompt", Description: "Send a message to any other agent in this session (a child, a sibling, or your parent); it runs after that agent's current turn ends. The recipient sees it as coming from you. agent_status lists every agent and its id.",
+	return model.ToolDef{Name: "agent_prompt", Description: "Send a message to any other agent in this session (a child, a sibling, or your parent); it runs after that agent's current turn ends. The recipient sees it as coming from you and answers with agent_response, which wakes you between turns. agent_status lists every agent and its id.",
 		Schema: schema(map[string]any{"id": prop("string", "Target agent id (any agent in the session)"), "text": prop("string", "Message")}, "id", "text")}
 }
 func (sendTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
@@ -131,7 +131,7 @@ func (cancelTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 type killTool struct{}
 
 func (killTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_kill", Description: "Tear down a child agent and its subtree. Its history is preserved but it cannot be resumed.",
+	return model.ToolDef{Name: "agent_kill", Description: "Tear down a child agent and its subtree when you no longer need it. Its history is preserved but it cannot be prompted again.",
 		Schema: schema(map[string]any{"id": prop("string", "Child agent id")}, "id")}
 }
 func (killTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
@@ -146,27 +146,6 @@ func (killTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 }
 
 // --- monitor / result / status ---
-
-type resultTool struct{}
-
-func (resultTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_result", Description: "Fetch a finished child's result without blocking.",
-		Schema: schema(map[string]any{"id": prop("string", "Child agent id")}, "id")}
-}
-func (resultTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
-func (resultTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	if r := needOrch(env); r != nil {
-		return *r
-	}
-	res, done, err := env.Orch.Result(env.Agent, idArg(in))
-	if err != nil {
-		return errf("%v", err)
-	}
-	if !done {
-		return Result{Output: "not finished yet"}
-	}
-	return jsonOut(res)
-}
 
 type statusTool struct{}
 

@@ -61,9 +61,9 @@ func agentOutcome(a protocol.AgentInfo) string {
 	switch {
 	case a.State == "running" || a.State == "blocked":
 		return "working"
-	case a.LastError != "" || (a.State == "finished" && a.Status == "failure"):
+	case a.LastError != "":
 		return "error"
-	case a.State == "finished" || a.State == "killed":
+	case a.State == "killed":
 		return "complete"
 	}
 	return "idle"
@@ -1203,7 +1203,7 @@ func jobGlyph(j protocol.MonitorInfo) string {
 func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, last map[string]string, now time.Time, width int) []string {
 	var rows []string
 	for _, a := range agents {
-		if a.Parent != parent || a.State == "finished" || a.State == "killed" {
+		if a.Parent != parent || a.State == "killed" {
 			continue
 		}
 		lead := agentGlyph(a)

@@ -464,18 +464,23 @@ func (t *Transcript) ChildSpawned(childID string) {
 	}
 }
 
-// ChildDone settles the agent_create line of a child that finished or was
-// killed: grey on success or partial, red on failure or kill.
-func (t *Transcript) ChildDone(childID, status string) {
+// ChildState colours the agent_create line of a child by its current
+// state: working (yellow) while it runs or is blocked, red once killed,
+// grey when it idles. Children no longer finish; they answer and wait.
+func (t *Transcript) ChildState(childID, state string) {
 	i, ok := t.children[childID]
 	if !ok || i >= len(t.Lines) {
 		return
 	}
-	t.Lines[i].Tone = ToneNone
-	if status == "failure" || status == "killed" {
+	switch state {
+	case "running", "blocked":
+		t.Lines[i].Tone = ToneWorking
+	case "killed":
 		t.Lines[i].Tone = ToneError
+		delete(t.children, childID)
+	default:
+		t.Lines[i].Tone = ToneNone
 	}
-	delete(t.children, childID)
 }
 
 // lastAgentCreateCall returns the index of the most recent agent_create
@@ -705,7 +710,13 @@ func EventLines(ev event.Event) []Line {
 				return block(BlockUser, "from "+p.From, p.Text)
 			}
 			return block(BlockUser, "", p.Text)
-		case "child_finished":
+		case "agent_response":
+			label := "agent response"
+			if p.From != "" {
+				label = "response from " + p.From
+			}
+			return blockWith(BlockChild, label, p.Text, GlyphChild)
+		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case "monitor_fired":
 			return blockWith(BlockChild, "bash async result", p.Text, monitorGlyph("command"))
@@ -1124,8 +1135,10 @@ func toolArg(name string, raw json.RawMessage) string {
 		return str("id")
 	case "skill":
 		return str("name")
-	case "agent_finish":
+	case "agent_finish": // legacy
 		return str("status")
+	case "agent_response":
+		return str("to")
 	}
 	return compactArgs(raw)
 }

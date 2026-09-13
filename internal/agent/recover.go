@@ -7,7 +7,6 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
-	"github.com/nicodes/stavlos/internal/tools"
 )
 
 // Recover rebuilds a session from its log (PRD §4.3, §5). Any turn that was
@@ -25,6 +24,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 	openMonitors := map[string]event.MonitorStartedPayload{} // id → spec, still running at shutdown
 	monitorOwner := map[string]string{}
 	pendingPrompts := map[string][]queued{}
+	pendingResponses := map[string][]response{}
 	pendingSteers := map[string][]queued{}
 	finished := map[string]bool{}
 
@@ -125,6 +125,10 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				if q := pendingSteers[e.Agent]; len(q) > 0 {
 					pendingSteers[e.Agent] = q[1:]
 				}
+			case "agent_response":
+				if q := pendingResponses[e.Agent]; len(q) > 0 {
+					pendingResponses[e.Agent] = q[1:]
+				}
 			}
 		case event.MonitorStarted:
 			var p event.MonitorStartedPayload
@@ -173,17 +177,10 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				a.usage.tokens += p.Usage.InputTokens + p.Usage.OutputTokens
 				a.usage.cost += p.CostUSD
 			}
-		case event.AgentFinished:
-			if a, ok := s.agents[e.Agent]; ok {
-				var p event.AgentFinishedPayload
-				_ = e.Decode(&p)
-				a.state = StateFinished
-				a.finished = &tools.ChildResult{ID: a.ID, Label: a.Label, Status: p.Status, Summary: p.Summary}
-				finished[a.ID] = true
-				if par, ok := s.agents[a.Parent]; ok {
-					par.results[a.ID] = *a.finished
-				}
-			}
+		case event.ResponseReceived:
+			var p event.ResponsePayload
+			_ = e.Decode(&p)
+			pendingResponses[e.Agent] = append(pendingResponses[e.Agent], response{p.From, p.FromLabel, p.Text})
 		case event.AgentKilled:
 			if a, ok := s.agents[e.Agent]; ok {
 				a.state = StateKilled
@@ -233,6 +230,10 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 		}
 		a.prompts = pendingPrompts[id]
 		a.steers = pendingSteers[id]
+		a.responses = pendingResponses[id]
+		for _, r := range a.responses {
+			a.wakes["response:"+r.from] = true
+		}
 		for cid := range a.armed {
 			if c, ok := s.agents[cid]; ok && !c.Alive() {
 				a.wakes[cid] = true

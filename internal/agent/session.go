@@ -225,6 +225,23 @@ func (s *Session) Live() int {
 	return n
 }
 
+// Busy counts agents that are working or have work queued; idle children
+// waiting for a follow-up cost nothing and do not count against the
+// fan-out limit.
+func (s *Session) Busy() int {
+	n := 0
+	for _, a := range s.Agents() {
+		st := a.StateOf()
+		a.mu.Lock()
+		queued := len(a.prompts) + len(a.steers) + len(a.responses) + len(a.wakes)
+		a.mu.Unlock()
+		if st == StateRunning || st == StateBlocked || (st == StateIdle && queued > 0) {
+			n++
+		}
+	}
+	return n
+}
+
 // Cost sums usage across agents.
 func (s *Session) Cost() float64 {
 	c := 0.0
@@ -325,14 +342,6 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 			return nil, err
 		}
 	}
-	if parent != nil {
-		// A child wakes its parent when it finishes unless the parent
-		// unmonitors it: arming is the default, not an opt-in (PRD §6.3).
-		parent.mu.Lock()
-		parent.armed[a.ID] = true
-		parent.mu.Unlock()
-		_, _ = parent.record(ctx, event.MonitorArmed, event.MonitorPayload{IDs: []string{a.ID}})
-	}
 	a.start()
 	if task != "" {
 		if err := a.Prompt(ctx, task, "agent:"+parentID); err != nil {
@@ -421,8 +430,8 @@ func (s *Session) canSpawn(p *Agent) (bool, string) {
 	if p.Depth+1 >= cfg.Limits.MaxDepth {
 		return false, fmt.Sprintf("max depth %d reached", cfg.Limits.MaxDepth)
 	}
-	if s.Live() >= cfg.Limits.MaxAgents {
-		return false, fmt.Sprintf("max live agents %d reached", cfg.Limits.MaxAgents)
+	if s.Busy() >= cfg.Limits.MaxAgents {
+		return false, fmt.Sprintf("max busy agents %d reached (idle children do not count; kill ones you no longer need)", cfg.Limits.MaxAgents)
 	}
 	if len(p.preset.Spawn) == 0 {
 		return false, "this archetype cannot spawn"

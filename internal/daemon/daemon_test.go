@@ -195,12 +195,13 @@ func TestEndToEnd(t *testing.T) {
 		func(model.Request) model.Response {
 			return call("c3", "agent_create", `{"archetype":"general","label":"scout","task":"look around"}`)
 		},
-		// parent has nothing else to do; it stops and is woken by the child's result
+		// parent has nothing else to do; it stops and is woken by the child's answer
 		func(model.Request) model.Response { return text("delegated; waiting") },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1]
-			if !strings.Contains(last.Blocks[len(last.Blocks)-1].Text, "found it") {
-				t.Errorf("child result missing: %+v", last)
+			txt := last.Blocks[len(last.Blocks)-1].Text
+			if !strings.Contains(txt, "found it") || !strings.Contains(txt, "scout") {
+				t.Errorf("child answer missing or unattributed: %+v", last)
 			}
 			return text("child done")
 		},
@@ -210,7 +211,7 @@ func TestEndToEnd(t *testing.T) {
 			if !strings.Contains(req.Messages[0].Blocks[0].Text, "look around") {
 				t.Errorf("child task missing: %+v", req.Messages[0])
 			}
-			return call("k1", "agent_finish", `{"summary":"found it","status":"success"}`)
+			return call("k1", "agent_response", `{"to":"`+parentIDFromSystem(req.System)+`","text":"found it"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -267,9 +268,9 @@ func TestEndToEnd(t *testing.T) {
 	if spp.Parent != root || spp.Label != "scout" || spp.Model != "fake/m1" || spp.Depth != 1 {
 		t.Fatalf("spawned %+v", spp)
 	}
-	h.waitFor(event.AgentFinished, spp.ID)
-	// turn 2 may end before or after the child finishes; wait for turn 3,
-	// the one started by the ChildFinished envelope.
+	h.waitFor(event.ResponseReceived, root)
+	// turn 2 may end before or after the child answers; wait for turn 3,
+	// the one started by the response.
 	for te.Turn != 3 {
 		e = h.waitFor(event.TurnEnded, root)
 		_ = e.Decode(&te)
@@ -278,8 +279,8 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("turn 3 ended %+v", te)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
-	if len(agents) != 2 || agents[1].State != "finished" || agents[1].Summary != "found it" || agents[0].CostUSD != 0 {
-		t.Fatalf("tree after: %+v", agents)
+	if len(agents) != 2 || agents[1].State != "idle" || agents[0].CostUSD != 0 {
+		t.Fatalf("tree after (the child stays alive, idle): %+v", agents)
 	}
 	// usage was logged
 	evs, _ := h.d.Log.Read(ctx, s.ID, 1, 0)
@@ -289,7 +290,7 @@ func TestEndToEnd(t *testing.T) {
 			nUsage++
 		}
 	}
-	if nUsage != 7 { // 3 (turn 1) + 1 (spawn) + 1 (stop) + 1 (child) + 1 (turn 3)
+	if nUsage != 8 { // 3 (turn 1) + 1 (spawn) + 1 (stop) + 2 (child: answer, then its turn ends) + 1 (turn 3)
 		t.Fatalf("usage events %d", nUsage)
 	}
 	// reconcile
@@ -411,30 +412,30 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	}
 }
 
-func TestSpawnArmsWakeByDefault(t *testing.T) {
+func TestChildResponseWakesParent(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	release := make(chan struct{})
 	fm.steps = []func(model.Request) model.Response{
-		// turn 1: spawn and stop, without calling monitor
+		// turn 1: spawn and stop
 		func(model.Request) model.Response {
 			return call("c1", "agent_create", `{"archetype":"general","label":"slow","task":"a"}`)
 		},
 		func(model.Request) model.Response { return text("spawned, done for now") },
-		// turn 2: woken by the child's finish
+		// turn 2: woken by the child's answer
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks
-			if !strings.Contains(last[len(last)-1].Text, "finished with status success") {
+			if !strings.Contains(last[len(last)-1].Text, "late") || !strings.Contains(last[len(last)-1].Text, "slow") {
 				t.Errorf("wake input: %+v", last)
 			}
 			return text("thanks")
 		},
 	}
 	fm.childSteps = []func(model.Request) model.Response{
-		func(model.Request) model.Response {
+		func(req model.Request) model.Response {
 			<-release
-			return call("k", "agent_finish", `{"summary":"late","status":"success"}`)
+			return call("k", "agent_response", `{"to":"`+parentIDFromSystem(req.System)+`","text":"late"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -445,7 +446,6 @@ func TestSpawnArmsWakeByDefault(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
-	h.waitFor(event.MonitorArmed, root)
 	e := h.waitFor(event.TurnEnded, root)
 	var te event.TurnEndedPayload
 	_ = e.Decode(&te)
@@ -454,13 +454,18 @@ func TestSpawnArmsWakeByDefault(t *testing.T) {
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
 	if len(agents) != 2 {
-		t.Fatalf("child should be armed by spawn: %+v", agents)
+		t.Fatalf("child should exist: %+v", agents)
 	}
 	close(release)
 	e = h.waitFor(event.TurnEnded, root)
 	_ = e.Decode(&te)
 	if te.Turn != 2 || te.Reason != "end_turn" {
-		t.Fatalf("parent was not woken: %+v", te)
+		t.Fatalf("parent was not woken by the response: %+v", te)
+	}
+	// the child is still there, idle, ready for a follow-up
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents) != 2 || agents[1].State != "idle" {
+		t.Fatalf("child after answering: %+v", agents)
 	}
 }
 
@@ -689,7 +694,7 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 			if last.IsError || !strings.Contains(last.Content, `"label":"main"`) || !strings.Contains(last.Content, `"you":true`) || !strings.Contains(last.Content, `"parent":"`+rootID+`"`) {
 				t.Errorf("agent_status should list the whole tree with the caller marked: %+v", last)
 			}
-			return call("k4", "agent_finish", `{"summary":"asked","status":"success"}`)
+			return call("k4", "agent_response", `{"to":"`+rootID+`","text":"asked"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -741,7 +746,7 @@ func TestVariants(t *testing.T) {
 			mu.Lock()
 			seen = append(seen, "child:"+req.Variant)
 			mu.Unlock()
-			return call("k1", "agent_finish", `{"summary":"ok","status":"success"}`)
+			return call("k1", "agent_response", `{"to":"`+parentIDFromSystem(req.System)+`","text":"ok"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -776,7 +781,7 @@ func TestVariants(t *testing.T) {
 	sp := h.waitFor(event.AgentSpawned, "")
 	var spp event.AgentSpawnedPayload
 	_ = sp.Decode(&spp)
-	h.waitFor(event.AgentFinished, spp.ID)
+	h.waitFor(event.ResponseReceived, root)
 	var te event.TurnEndedPayload
 	for te.Turn != 2 {
 		e = h.waitFor(event.TurnEnded, root)
@@ -987,4 +992,17 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	if !strings.Contains(strings.Join(offered, " "), "agent_create") || !strings.Contains(strings.Join(offered, " "), "apply_patch") {
 		t.Fatalf("the fallback should carry general's tools, got %v", offered)
 	}
+}
+
+// parentIDFromSystem reads "parent agent (id X)" out of a child's system prompt.
+func parentIDFromSystem(system string) string {
+	i := strings.Index(system, "parent agent (id ")
+	if i < 0 {
+		return ""
+	}
+	rest := system[i+len("parent agent (id "):]
+	if j := strings.IndexByte(rest, ')'); j >= 0 {
+		return rest[:j]
+	}
+	return ""
 }
