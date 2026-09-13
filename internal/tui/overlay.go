@@ -222,13 +222,7 @@ func (o *overlay) handleNav(msg tea.KeyMsg) bool {
 // view renders the box at min(overlayWidth, bodyWidth-4). spinner is the
 // current spinner glyph (login mode).
 func (o *overlay) view(bodyWidth int, spinner string) string {
-	w := overlayWidth
-	if w > bodyWidth-4 {
-		w = bodyWidth - 4
-	}
-	if w < 24 {
-		w = 24
-	}
+	w := dialogWidth(bodyWidth)
 	inner := w - 4 // border + padding
 
 	lines := []string{styleOvTitle.Render(truncRunes(o.title, inner))}

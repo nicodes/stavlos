@@ -235,9 +235,12 @@ func TestAgentRows(t *testing.T) {
 		t.Fatalf("collapsed agents tab should only count:\n%s", view)
 	}
 	m.focus = focusAgents
-	view = stripANSI(m.sectionsView(100))
-	if !strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
-		t.Fatalf("agents tab:\n%s", view)
+	if view = stripANSI(m.sectionsView(100)); strings.Contains(view, "scout") {
+		t.Fatalf("the strip never lists agents:\n%s", view)
+	}
+	view = stripANSI(m.tabDialog(100))
+	if !strings.Contains(view, "scout") || strings.Contains(view, "grandchild") || !strings.HasPrefix(view, "╭") {
+		t.Fatalf("agents dialog:\n%s", view)
 	}
 }
 
@@ -293,11 +296,15 @@ func TestMonitorRows(t *testing.T) {
 		t.Fatalf("collapsed async tab:\n%s", view)
 	}
 	m.focus = focusAsync
-	if view := stripANSI(m.sectionsView(100)); strings.Count(view, "\n") != 3 {
-		t.Fatalf("expanded async tab:\n%s", view)
+	if view := stripANSI(m.sectionsView(100)); strings.Count(view, "\n") != 0 {
+		t.Fatalf("the strip stays one line with a tab open:\n%s", view)
+	}
+	// the dialog: title, rule, one row per job, inside the border
+	if view := stripANSI(m.tabDialog(100)); strings.Count(view, "\n") != 6 || !strings.Contains(view, "go test") || !strings.Contains(view, "cooldown") {
+		t.Fatalf("async dialog:\n%s", view)
 	}
 	m.focus = focusInput
-	// Both blocks are budgeted out of the transcript height.
+	// The strip is budgeted out of the transcript height; the dialog is not.
 	m.width, m.height = 120, 40
 	m.showTree = false
 	m.layout()
@@ -306,9 +313,8 @@ func TestMonitorRows(t *testing.T) {
 	m.focus = focusAsync
 	m.layout()
 	_, kbOpen := m.keyBarView()
-	// open, the section costs one line per job on top of the strip (the key
-	// bar legend may also change height with the focus)
-	if want := collapsed - 3 - (kbOpen - kbCollapsed); m.vp.Height != want {
+	// open, only the key bar legend may change height with the focus
+	if want := collapsed - (kbOpen - kbCollapsed); m.vp.Height != want {
 		t.Fatalf("layout: viewport %d collapsed, %d open with 3 jobs, want %d", collapsed, m.vp.Height, want)
 	}
 	// the strip stays (with "(0)") once the jobs are gone
@@ -445,8 +451,8 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatal("enter on a meta part should open its dialog")
 	}
 	press(&m, tab)
-	if m.focus != focusPermission || !strings.Contains(stripANSI(m.sectionsView(100)), "no prompts waiting") {
-		t.Fatalf("tab x3: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+	if m.focus != focusPermission || !strings.Contains(stripANSI(m.tabDialog(100)), "no prompts waiting") {
+		t.Fatalf("tab x3: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}) // nothing to answer: ignored
 	if m.focus != focusPermission {
@@ -457,12 +463,12 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("left at the edge: focus=%v", m.focus)
 	}
 	press(&m, right)
-	if m.focus != focusAgents || !strings.Contains(stripANSI(m.sectionsView(100)), "no subagents running") {
-		t.Fatalf("right: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+	if m.focus != focusAgents || !strings.Contains(stripANSI(m.tabDialog(100)), "no subagents running") {
+		t.Fatalf("right: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
 	}
 	press(&m, right)
-	if m.focus != focusAsync || !strings.Contains(stripANSI(m.sectionsView(100)), "no async jobs running") {
-		t.Fatalf("right right: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+	if m.focus != focusAsync || !strings.Contains(stripANSI(m.tabDialog(100)), "no async jobs running") {
+		t.Fatalf("right right: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
 	}
 	press(&m, right) // already rightmost: stays
 	if m.focus != focusAsync {
@@ -796,25 +802,31 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("order %v", order)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → permission (a prompt waits)
-	if pv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(pv, "\n") != 2 || !strings.Contains(pv, "$ Bash · coder\n       make test") || strings.Contains(pv, "{") {
-		t.Fatalf("permission should open as a tool row over its command: focus=%v\n%s", m.focus, pv)
+	if sv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(sv, "\n") != 0 || strings.Contains(sv, "make test") {
+		t.Fatalf("the strip should stay one line with the permission open: focus=%v\n%s", m.focus, sv)
 	}
-	// the permission box is drawn under the strip, right above the input
-	full := stripANSI(m.View())
-	if bi, pi := strings.Index(full, "agents ("), strings.Index(full, "make test"); bi < 0 || pi < 0 || bi > pi {
-		t.Fatalf("permission box should render below the strip:\n%s", full)
+	// the dialog: the tab labels as its title, then the tool row over its command
+	if body := strings.Join(m.tabBodyLines(60), "\n"); !strings.Contains(stripANSI(body), "$ Bash · coder\n       make test") || strings.Contains(body, "{") {
+		t.Fatalf("permission should open as a tool row over its command:\n%s", stripANSI(body))
+	}
+	dv := stripANSI(m.tabDialog(100))
+	if !strings.HasPrefix(dv, "╭") || !strings.Contains(dv, "permission (1) · agents (2) · async (0)") || !strings.Contains(dv, "make test") {
+		t.Fatalf("permission dialog:\n%s", dv)
+	}
+	// the dialog is composited into the full view (here over the home screen)
+	if full := stripANSI(m.View()); !strings.Contains(full, "make test") || !strings.Contains(full, "╭") {
+		t.Fatalf("the dialog should render in the view:\n%s", full)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRight}) // permission → agents
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}
-	sv = stripANSI(m.sectionsView(100))
-	if strings.Count(sv, "\n") != 2 || !strings.Contains(sv, "▶") || !strings.Contains(sv, "scout") {
-		t.Fatalf("expanded agents:\n%s", sv)
+	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
+		t.Fatalf("agents dialog:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRight}) // agents → async
-	if m.focus != focusAsync || !strings.Contains(stripANSI(m.sectionsView(100)), "no async jobs running") {
-		t.Fatalf("async: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+	if m.focus != focusAsync || !strings.Contains(stripANSI(m.tabDialog(100)), "no async jobs running") {
+		t.Fatalf("async: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyLeft}) // async → agents for the selection test
 	if m.focus != focusAgents {
@@ -846,26 +858,31 @@ func TestSectionTabStrip(t *testing.T) {
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
-	// agents focused: same strip, then its rows
+	// agents focused: the strip is unchanged; the dialog titles itself with
+	// the same labels, then its rows
 	m.focus = focusAgents
-	v = stripANSI(m.sectionsView(100))
+	if sv := stripANSI(m.sectionsView(100)); strings.Count(sv, "\n") != 0 || strings.Contains(sv, "scout") {
+		t.Fatalf("strip with agents focused:\n%s", sv)
+	}
+	v = stripANSI(m.tabDialog(100))
 	lines := strings.Split(v, "\n")
-	if len(lines) != 2 || !strings.HasPrefix(lines[0], "permission (1) · agents (1) · async (1)") || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "scout") {
-		t.Fatalf("agents focused:\n%s", v)
+	// border, title, rule, one row, border
+	if len(lines) != 5 || !strings.Contains(lines[1], "permission (1) · agents (1) · async (1)") || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "scout") {
+		t.Fatalf("agents dialog:\n%s", v)
 	}
 	// async focused: the job row
 	m.focus = focusAsync
-	v = stripANSI(m.sectionsView(100))
+	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 2 || !strings.Contains(lines[0], "async (1)") || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "go test") || strings.Contains(v, "scout") {
-		t.Fatalf("async focused:\n%s", v)
+	if len(lines) != 5 || !strings.Contains(lines[1], "async (1)") || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "go test") || strings.Contains(v, "scout") {
+		t.Fatalf("async dialog:\n%s", v)
 	}
-	// permission focused: same strip, then the box
+	// permission focused: the tool row over its command
 	m.focus = focusPermission
-	v = stripANSI(m.sectionsView(100))
+	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 3 || !strings.Contains(lines[0], "permission (1)") || strings.Contains(lines[0], "▾") || !strings.Contains(lines[1], "Bash") || lines[2] != "       make test" || strings.Contains(v, "scout") {
-		t.Fatalf("permission focused:\n%s", v)
+	if len(lines) != 6 || !strings.Contains(lines[1], "permission (1)") || !strings.Contains(lines[3], "Bash") || !strings.Contains(lines[4], "       make test") || strings.Contains(v, "scout") {
+		t.Fatalf("permission dialog:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
 	m.prompts = nil
@@ -904,10 +921,10 @@ func TestPermissionShowsWholeCommand(t *testing.T) {
 	long := "for f in $(ls /very/long/path/to/somewhere/deep/in/the/tree); do echo processing \"$f\" && sleep 1 && rm -f \"$f\".bak; done"
 	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":` + strconv.Quote(long+"\necho second line") + `}`)}}
 	m.focus = focusPermission
-	v := stripANSI(m.sectionsView(60))
+	v := stripANSI(strings.Join(m.tabBodyLines(52), "\n"))
 	// every line fits the width, nothing is elided, and the newline is kept
 	for _, l := range strings.Split(v, "\n") {
-		if ansi.StringWidth(l) > 60 || strings.Contains(l, "…") {
+		if ansi.StringWidth(l) > 52 || strings.Contains(l, "…") {
 			t.Fatalf("line %q too wide or elided:\n%s", l, v)
 		}
 	}
@@ -1271,16 +1288,12 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 	if m.focus != focusChat {
 		t.Fatalf("keyboard chat focus should survive mouse movement: %v", m.focus)
 	}
-	// hover takes focus from a tab too, and hands it back on leaving
+	// a tab dialog owns hover: the chat behind it is left alone
 	m.setFocus(focusInput)
 	m.setFocus(focusPermission)
 	move(5, r.first-m.vp.YOffset)
-	if m.focus != focusChat || m.hoverFrom != focusPermission {
-		t.Fatalf("hover should take focus from the permission tab: %v (from %v)", m.focus, m.hoverFrom)
-	}
-	move(5, m.vp.Height+2)
-	if m.focus != focusPermission {
-		t.Fatalf("leaving should give focus back to the permission tab: %v", m.focus)
+	if m.focus != focusPermission || m.hoverFocus {
+		t.Fatalf("hover must not take focus from an open tab dialog: %v", m.focus)
 	}
 }
 
@@ -1344,32 +1357,49 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	if m.focus != focusAgents {
 		t.Fatalf("clicking the agents label should open the agents tab: %v", m.focus)
 	}
-	// a row inside the open tab moves its cursor
-	lay = m.rows()
-	click(5, lay.strip+2)
-	if m.agCursor != 1 {
-		t.Fatalf("clicking the second agent row should select it: %d", m.agCursor)
+	// the dialog's rows: hovering one moves the cursor, clicking selects
+	// that agent like enter and closes the dialog
+	rowAt := func(text string) (int, int) {
+		for y, l := range strings.Split(stripANSI(m.View()), "\n") {
+			if i := strings.Index(l, text); i >= 0 {
+				return i, y
+			}
+		}
+		t.Fatalf("%q not on screen:\n%s", text, stripANSI(m.View()))
+		return 0, 0
 	}
-	// clicking the input focuses it
+	x, y := rowAt("checks")
+	move(x, y)
+	if m.agCursor != 1 || m.focus != focusAgents {
+		t.Fatalf("hovering the second agent row should move the cursor: %d focus=%v", m.agCursor, m.focus)
+	}
+	click(x, y)
+	if m.selectedID() != "c2" || m.focus != focusInput {
+		t.Fatalf("clicking an agent row should select it: %s focus=%v", m.selectedID(), m.focus)
+	}
+	m.selected = 0
+	// a tab label on the dialog's title switches tabs
+	click(agentsX, lay.strip)
+	x, y = rowAt("async (0)")
+	click(x, y)
+	if m.focus != focusAsync {
+		t.Fatalf("clicking a label on the dialog title should switch tabs: %v", m.focus)
+	}
+	// clicking the input focuses it (and closes the dialog)
 	lay = m.rows()
 	click(5, lay.input)
 	if m.focus != focusInput || !m.input.Focused() {
 		t.Fatalf("clicking the input should focus it: %v", m.focus)
 	}
-	// hover over the chat takes focus from a tab, and gives it back on leaving
-	lay = m.rows()      // the viewport regrew when the tab body closed
+	// hover over the chat while a tab dialog is open leaves the focus alone
 	click(2, lay.strip) // permission tab
 	if m.focus != focusPermission {
 		t.Fatalf("permission tab: %v", m.focus)
 	}
 	r := m.itemRows[0]
 	move(3, r.first-m.vp.YOffset)
-	if m.focus != focusChat || !m.hoverFocus || m.hoverFrom != focusPermission {
-		t.Fatalf("hover should take focus from the tab: focus=%v hover=%v from=%v", m.focus, m.hoverFocus, m.hoverFrom)
-	}
-	move(3, m.vp.Height+1)
-	if m.focus != focusPermission {
-		t.Fatalf("leaving the chat should return focus to the tab: %v", m.focus)
+	if m.focus != focusPermission || m.hoverFocus {
+		t.Fatalf("hover must not take focus from the dialog: focus=%v hover=%v", m.focus, m.hoverFocus)
 	}
 }
 
