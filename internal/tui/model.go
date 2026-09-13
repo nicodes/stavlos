@@ -368,20 +368,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // --- focus ---
 
 // focusOrder lists the sections tab cycles through, top to bottom: the chat
-// (once there is one), the background section (while anything is live), the
-// prompt box (while one is pending), the input, and the sidebar (while
-// visible).
+// (once there is one), the background and permission tabs (always, even
+// when empty), the input, and the sidebar (while visible).
 func (m *Model) focusOrder() []focus {
 	order := make([]focus, 0, 4)
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
-	if len(m.liveChildren())+len(m.runningJobs()) > 0 {
-		order = append(order, focusBackground)
-	}
-	if m.currentPrompt() != nil {
-		order = append(order, focusPermission)
-	}
+	order = append(order, focusBackground, focusPermission)
 	order = append(order, focusInput)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
@@ -696,12 +690,12 @@ func isAlias(c Command, typed string) bool {
 // a permission (y/n a trust prompt); a question takes typing into its own
 // field and enter submits it; esc returns to the input.
 func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
-	p := m.currentPrompt()
-	if p == nil {
-		return m.setFocus(focusInput)
-	}
 	if key.Matches(msg, keys.Clear) {
 		return m.setFocus(focusInput)
+	}
+	p := m.currentPrompt()
+	if p == nil { // empty tab: nothing to answer
+		return nil
 	}
 	if p.Kind == "question" {
 		if key.Matches(msg, keys.Submit) {
@@ -1039,6 +1033,9 @@ func (m *Model) upsertPrompt(p protocol.PromptInfo) {
 func (m *Model) removePrompt(id string) {
 	if i := m.findPrompt(id); i >= 0 {
 		m.prompts = append(m.prompts[:i], m.prompts[i+1:]...)
+	}
+	if len(m.prompts) == 0 && m.focus == focusPermission {
+		m.setFocus(focusInput) // the last prompt was answered: back to typing
 	}
 	delete(m.claimedByUs, id)
 	if m.promptBusy == id {
