@@ -1573,3 +1573,43 @@ func TestPasteWithCarriageReturns(t *testing.T) {
 		t.Fatal("no carriage return may reach the screen")
 	}
 }
+
+// TestInputNeverHidesRows: for messages of many shapes the input is tall
+// enough that every wrapped row is drawn (the textarea never scrolls).
+func TestInputNeverHidesRows(t *testing.T) {
+	m := sessionModel()
+	m.width, m.height = 80, 40
+	m.layout()
+	w := m.input.Width()
+	cases := []string{
+		strings.Repeat("a", w),        // exactly fills the row: the textarea spills to a second
+		strings.Repeat("a", w-1),      // one short
+		strings.Repeat("word ", 60),   // long, word-wrapped
+		strings.Repeat("x", 3*w+5),    // one unbroken token
+		"Use subagents that in turn call other subagents to summarize the repo. Then compare all responses and give me the highlights.",
+		"short\n" + strings.Repeat("longer second line ", 12) + "\nend",
+	}
+	for _, text := range cases {
+		m.input.SetValue(text)
+		m.layout()
+		view := stripANSI(m.input.View())
+		rows := strings.Split(view, "\n")
+		first := strings.Split(text, "\n")[0]
+		head := first
+		if len([]rune(head)) > 10 {
+			head = string([]rune(head)[:10])
+		}
+		if !strings.HasPrefix(rows[0], "› "+head) {
+			t.Fatalf("first row hidden for %q (height %d):\n%s", head, m.input.Height(), view)
+		}
+		if m.input.Height() > inputMaxLines {
+			t.Fatalf("over the cap: %d", m.input.Height())
+		}
+		// the end of the message is on screen too (unless capped)
+		last := []rune(strings.TrimRight(text, " "))
+		tail := string(last[max(0, len(last)-5):])
+		if m.input.Height() < inputMaxLines && !strings.Contains(view, strings.TrimSpace(tail)) {
+			t.Fatalf("last row hidden for tail %q (height %d):\n%s", tail, m.input.Height(), view)
+		}
+	}
+}
