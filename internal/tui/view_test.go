@@ -605,6 +605,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 }
 
 func TestChatCursorMovesAndRenders(t *testing.T) {
+	markCursorForTest(t)
 	m := sessionModel()
 	tr := m.transcript("a")
 	for i := 0; i < 8; i++ {
