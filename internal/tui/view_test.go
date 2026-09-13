@@ -865,3 +865,29 @@ func TestPermissionShowsWholeCommand(t *testing.T) {
 		t.Fatalf("newline in the command should start a new row:\n%s", v)
 	}
 }
+
+func TestFooterSitsUnderInputAboveKeyBar(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	m.session.Dir = "/repo/project"
+	m.width, m.height = 100, 30
+	m.layout()
+	lines := strings.Split(stripANSI(m.View()), "\n")
+	meta, footer, rule := -1, -1, -1
+	for i, l := range lines {
+		switch {
+		case strings.HasPrefix(l, "Coder  ·  "):
+			meta = i
+		case strings.HasPrefix(l, "/repo/project"):
+			footer = i
+		case strings.HasPrefix(l, "─") && i > meta && meta >= 0 && rule < 0:
+			rule = i
+		}
+	}
+	if meta < 0 || footer != meta+1 || rule != footer+1 {
+		t.Fatalf("want meta, footer, key-bar rule on consecutive lines (got %d %d %d):\n%s", meta, footer, rule, strings.Join(lines, "\n"))
+	}
+	if strings.HasPrefix(lines[len(lines)-1], "/repo/project") {
+		t.Fatal("the footer should no longer be the last line")
+	}
+}
