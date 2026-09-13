@@ -206,6 +206,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	if always {
 		verb = policy.Allow
 	}
+	if verb == policy.Ask && a.s.Yolo() {
+		verb = policy.Allow // yolo: the session answers every ask with allow
+	}
 	switch verb {
 	case policy.Deny:
 		finish("Denied by policy: "+c.Name+" "+arg, true, false, true)

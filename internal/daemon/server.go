@@ -221,6 +221,24 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		d.rememberModel(s, p.Model)
 		return map[string]bool{"ok": true}, nil
 
+	case protocol.MSessionSetYolo:
+		var p protocol.SessionSetYoloParams
+		if e := decode(&p); e != nil {
+			return nil, e
+		}
+		s, err := d.session(p.ID)
+		if err != nil {
+			return nil, perr(protocol.ErrNotFound, err)
+		}
+		if err := s.SetYolo(ctx, p.On); err != nil {
+			return nil, perr(protocol.ErrInternal, err)
+		}
+		if p.On {
+			// Anything already waiting is allowed too, so the agents move.
+			d.esc.AnswerAll(s.ID, "permission", "allow", "yolo")
+		}
+		return map[string]bool{"ok": true}, nil
+
 	case protocol.MAgentTree:
 		var p protocol.AgentTreeParams
 		if e := decode(&p); e != nil {

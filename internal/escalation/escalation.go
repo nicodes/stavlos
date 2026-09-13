@@ -213,6 +213,39 @@ func (m *Manager) Reply(id, client, answer string) error {
 	return nil
 }
 
+// AnswerAll answers every open prompt of one kind in a session, ignoring
+// claims (used when a session switches to yolo: waiting permissions are
+// allowed on the spot). Returns how many were answered.
+func (m *Manager) AnswerAll(session, kind, answer, client string) int {
+	m.mu.Lock()
+	var ids []string
+	for id, p := range m.pend {
+		if !p.done && p.info.Session == session && p.info.Kind == kind {
+			ids = append(ids, id)
+		}
+	}
+	m.mu.Unlock()
+	n := 0
+	for _, id := range ids {
+		m.mu.Lock()
+		p, ok := m.pend[id]
+		if !ok || p.done {
+			m.mu.Unlock()
+			continue
+		}
+		p.info.ClaimedBy = client
+		info := p.info
+		m.mu.Unlock()
+		if !m.finish(id, Answer{Value: answer, Client: client}) {
+			continue
+		}
+		m.record("answered", info, answer, client)
+		m.sink.Notify(protocol.PromptNotification{Action: "answered", Prompt: info}, m.tiersFor(info))
+		n++
+	}
+	return n
+}
+
 // Pending lists open prompts, optionally filtered by session.
 func (m *Manager) Pending(session string) []protocol.PromptInfo {
 	m.mu.Lock()

@@ -641,9 +641,14 @@ func inputBox(input, meta string) string {
 }
 
 // metaLine is "Coder · claude-opus-5 anthropic · high" (or the no-model
-// nudge): the role, the model and its variant ("default" when none is set).
-func metaLine(label, model, variant string, queued int) string {
-	s := titleCase(label) + " · "
+// nudge): the role, the model and its variant ("default" when none is
+// set), led by a warning-coloured YOLO tag while the session auto-approves.
+func metaLine(label, model, variant string, queued int, yolo bool) string {
+	s := ""
+	if yolo {
+		s = styleWarn.Render("YOLO") + " · "
+	}
+	s += titleCase(label) + " · "
 	if model == "" {
 		return s + styleWarn.Render("no model — /models")
 	}
@@ -779,7 +784,7 @@ func (m Model) metaRow(width int) string {
 			model = a.Model
 		}
 	}
-	left := metaLine(label, model, variant, queued)
+	left := metaLine(label, model, variant, queued, m.session.Yolo)
 	right := m.footerRightView()
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {

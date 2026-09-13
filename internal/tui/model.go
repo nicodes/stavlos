@@ -972,6 +972,18 @@ func (m *Model) command(text string) tea.Cmd {
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
 	case "/roles", "/presets":
 		return presetsCmd(m.ctx, m.c, m.sessionID)
+	case "/yolo":
+		on := !m.session.Yolo
+		switch strings.ToLower(rest) {
+		case "on", "true", "1":
+			on = true
+		case "off", "false", "0":
+			on = false
+		case "":
+		default:
+			return m.setStatus("usage: /yolo [on|off]", true)
+		}
+		return setYoloCmd(m.ctx, m.c, m.sessionID, on)
 	case "/variants", "/variant":
 		if c := needAgent(); c != nil {
 			return c
@@ -1082,6 +1094,11 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		var p event.ModelChangedPayload
 		if ev.Decode(&p) == nil {
 			m.session.Model = p.Model
+		}
+	case event.SessionYoloChanged:
+		var p event.YoloPayload
+		if ev.Decode(&p) == nil {
+			m.session.Yolo = p.On
 		}
 	case event.TurnEnded:
 		var p event.TurnEndedPayload

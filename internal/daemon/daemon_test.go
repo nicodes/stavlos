@@ -797,3 +797,108 @@ func TestVariants(t *testing.T) {
 		t.Fatalf("reset: %+v", agents[0])
 	}
 }
+
+// TestYolo: with the session in yolo, ask-gated calls run without a prompt,
+// a prompt already waiting is approved when yolo turns on, and a deny rule
+// still denies.
+func TestYolo(t *testing.T) {
+	g := t.TempDir()
+	t.Setenv("STAVLOS_CONFIG_DIR", g)
+	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"bash":{"echo*":"allow","rm*":"deny","*":"ask"}}}`), 0o644)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		// turn 1: an ask-gated command waits for a prompt
+		func(model.Request) model.Response { return call("c1", "bash", `{"command":"touch first"}`) },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError {
+				t.Errorf("first call should have been allowed by yolo: %+v", last)
+			}
+			return text("one")
+		},
+		// turn 2: yolo is on, no prompt; a denied command stays denied
+		func(model.Request) model.Response { return call("c2", "bash", `{"command":"touch second"}`) },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError {
+				t.Errorf("second call should run without a prompt: %+v", last)
+			}
+			return call("c3", "bash", `{"command":"rm -rf nothing"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !last.IsError || !strings.Contains(last.Content, "Denied by policy") {
+				t.Errorf("deny rule should still deny under yolo: %+v", last)
+			}
+			return text("two")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	h.waitFor(event.PromptRequested, root)
+	if ps, _ := h.c.Prompts(ctx, s.ID); len(ps) != 1 {
+		t.Fatalf("one prompt should be waiting: %+v", ps)
+	}
+	// yolo on: the waiting prompt is approved and logged
+	if err := h.c.SetSessionYolo(ctx, s.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	e := h.waitFor(event.SessionYoloChanged, "")
+	var yp event.YoloPayload
+	_ = e.Decode(&yp)
+	if !yp.On {
+		t.Fatalf("%+v", yp)
+	}
+	var te event.TurnEndedPayload
+	for te.Turn != 1 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	if _, err := os.Stat(filepath.Join(work, "first")); err != nil {
+		t.Fatal("the waiting command should have run once yolo turned on")
+	}
+	if ps, _ := h.c.Prompts(ctx, s.ID); len(ps) != 0 {
+		t.Fatalf("prompt queue should be drained: %+v", ps)
+	}
+	rc, _ := h.c.Reconcile(ctx, s.ID)
+	if !rc.Session.Yolo {
+		t.Fatalf("session info should show yolo: %+v", rc.Session)
+	}
+
+	// turn 2 runs with no prompt at all
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "again")
+	for te.Turn != 2 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	if _, err := os.Stat(filepath.Join(work, "second")); err != nil {
+		t.Fatal("second command should have run")
+	}
+	evs, _ := h.d.Log.Read(ctx, s.ID, 1, 0)
+	for _, ev := range evs {
+		if ev.Type == event.PromptRequested {
+			var p event.PromptRequestedPayload
+			_ = ev.Decode(&p)
+			if p.Tool == "bash" && strings.Contains(string(p.Input), "second") {
+				t.Fatal("no prompt should be raised in yolo")
+			}
+		}
+	}
+	// off again
+	if err := h.c.SetSessionYolo(ctx, s.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	rc, _ = h.c.Reconcile(ctx, s.ID)
+	if rc.Session.Yolo {
+		t.Fatalf("yolo should be off: %+v", rc.Session)
+	}
+}
