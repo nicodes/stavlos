@@ -81,11 +81,11 @@ func TestFooterRight(t *testing.T) {
 		t.Fatalf("not connected: %q", got)
 	}
 	got = stripANSI(footerRight(footerInfo{home: true, connected: true, label: "coder", model: "anthropic/claude-opus-5"}))
-	if got != "● coder · anthropic/claude-opus-5" {
+	if got != "" {
 		t.Fatalf("connected home: %q", got)
 	}
 	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5", tokens: 12_345, cost: 0.0123}))
-	if got != "12k tokens · $0.0123" {
+	if got != "12k tokens    $0.0123" {
 		t.Fatalf("session: %q", got)
 	}
 }
@@ -106,7 +106,7 @@ func TestMetaLine(t *testing.T) {
 	if got := stripANSI(metaLine("coder", "", 0)); got != "Coder    no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "ollama/llama3", 2)); got != "Scout    llama3 ollama  ·  2 queued" {
+	if got := stripANSI(metaLine("scout", "ollama/llama3", 2)); got != "Scout    llama3 ollama    2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
 }
@@ -790,7 +790,7 @@ func TestSectionTabStrip(t *testing.T) {
 	m.focus = focusAgents
 	v = stripANSI(m.sectionsView(100))
 	lines := strings.Split(v, "\n")
-	if len(lines) != 2 || lines[0] != "permission (1)  │  agents (1)  │  async (1)" || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "scout") {
+	if len(lines) != 2 || !strings.HasPrefix(lines[0], "permission (1)  │  agents (1)  │  async (1)") || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "scout") {
 		t.Fatalf("agents focused:\n%s", v)
 	}
 	// async focused: the job row
@@ -862,28 +862,39 @@ func TestPermissionShowsWholeCommand(t *testing.T) {
 	}
 }
 
-func TestFooterSitsUnderInputAboveKeyBar(t *testing.T) {
+func TestMetaRowAndStripRepo(t *testing.T) {
 	m := sessionModel()
 	m.showTree = false
 	m.session.Dir = "/repo/project"
+	m.session.Model, m.agents[0].Model = "chatgpt/gpt-5", "chatgpt/gpt-5"
+	m.agents[0].Tokens, m.agents[0].CostUSD = 1500, 0.02
 	m.width, m.height = 100, 30
 	m.layout()
 	lines := strings.Split(stripANSI(m.View()), "\n")
-	meta, footer, rule := -1, -1, -1
+	meta, strip := -1, -1
 	for i, l := range lines {
 		switch {
 		case strings.HasPrefix(l, "Coder    "):
 			meta = i
-		case strings.HasPrefix(l, "/repo/project"):
-			footer = i
-		case strings.HasPrefix(l, "─") && i > meta && meta >= 0 && rule < 0:
-			rule = i
+		case strings.HasPrefix(l, "permission ("):
+			strip = i
 		}
 	}
-	if meta < 0 || footer != meta+1 || rule != footer+1 {
-		t.Fatalf("want meta, footer, key-bar rule on consecutive lines (got %d %d %d):\n%s", meta, footer, rule, strings.Join(lines, "\n"))
+	if meta < 0 || strip < 0 {
+		t.Fatalf("no meta row or strip:\n%s", strings.Join(lines, "\n"))
 	}
-	if strings.HasPrefix(lines[len(lines)-1], "/repo/project") {
-		t.Fatal("the footer should no longer be the last line")
+	// role and model on the left, tokens and cost on the right, no dots
+	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens    $0.02") || strings.Contains(row, "·") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
+		t.Fatalf("meta row: %q", row)
+	}
+	if !strings.HasPrefix(lines[meta+1], "─") {
+		t.Fatalf("the key bar rule should follow the meta row:\n%s", strings.Join(lines, "\n"))
+	}
+	// the repo sits at the right edge of the tab strip
+	if row := lines[strip]; !strings.HasSuffix(row, "/repo/project") || ansi.StringWidth(row) != 100 {
+		t.Fatalf("strip: %q", row)
+	}
+	if strings.Count(strings.Join(lines, "\n"), "/repo/project") != 1 {
+		t.Fatal("the repo should appear once")
 	}
 }
