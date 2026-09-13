@@ -102,6 +102,7 @@ type Model struct {
 	itemRows    map[int]rowRange
 	promptInput textinput.Model // answer field of a question prompt
 	sbCursor    int
+	palIdx      int      // highlighted row in the "/" command palette
 	history     []string // prompts sent from this client (and replayed human prompts)
 	histIdx     int      // == len(history) when editing a new line
 	histDraft   string   // unsent text saved while browsing history
@@ -499,9 +500,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.overlayKey(msg)
 	}
 
+	// While the "/" palette is open in the input, tab completes the command
+	// (handled below) instead of cycling focus.
+	paletteOpen := m.focus == focusInput && len(paletteMatches(m.input.Value())) > 0
+
 	// Section-independent keys.
 	switch {
-	case key.Matches(msg, keys.NextSection):
+	case key.Matches(msg, keys.NextSection) && !paletteOpen:
 		return m.cycleFocus(1)
 	case key.Matches(msg, keys.PrevSection):
 		return m.cycleFocus(-1)
@@ -540,21 +545,86 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.follow = true
 		return nil
 	case key.Matches(msg, keys.SelUp):
+		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
+			m.palIdx = (m.palIdx - 1 + len(pm)) % len(pm)
+			return nil
+		}
 		m.historyMove(-1)
 		return nil
 	case key.Matches(msg, keys.SelDown):
+		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
+			m.palIdx = (m.palIdx + 1) % len(pm)
+			return nil
+		}
 		m.historyMove(1)
 		return nil
 	case key.Matches(msg, keys.Clear):
 		m.input.Reset()
+		m.palIdx = 0
+		return nil
+	case msg.Type == tea.KeyTab:
+		// only reached when the palette is open (tab otherwise cycles focus)
+		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
+			m.completeCommand(pm[m.clampPal(len(pm))])
+		}
 		return nil
 	case key.Matches(msg, keys.Submit):
+		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
+			c := pm[m.clampPal(len(pm))]
+			typed := strings.ToLower(m.input.Value())
+			if c.Direct && (typed == c.Name || typed != c.Name && c.Args == "" || isAlias(c, typed)) {
+				m.input.Reset()
+				m.palIdx = 0
+				m.pushHistory(c.Name)
+				return m.command(c.Name)
+			}
+			if typed != c.Name && !isAlias(c, typed) {
+				m.completeCommand(c) // enter on a partial name completes it first
+				return nil
+			}
+		}
 		return m.submit()
 	}
 
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
+	if !paletteActive(m.input.Value()) {
+		m.palIdx = 0
+	} else if pm := paletteMatches(m.input.Value()); m.palIdx >= len(pm) {
+		m.palIdx = 0
+	}
 	return cmd
+}
+
+func (m *Model) clampPal(n int) int {
+	if n == 0 {
+		return 0
+	}
+	if m.palIdx < 0 || m.palIdx >= n {
+		m.palIdx = 0
+	}
+	return m.palIdx
+}
+
+// completeCommand fills the input with the command name (plus a space when
+// it takes arguments) so the user can keep typing.
+func (m *Model) completeCommand(c Command) {
+	v := c.Name
+	if c.Args != "" {
+		v += " "
+	}
+	m.input.SetValue(v)
+	m.input.CursorEnd()
+	m.palIdx = 0
+}
+
+func isAlias(c Command, typed string) bool {
+	for _, a := range c.Aliases {
+		if a == typed {
+			return true
+		}
+	}
+	return false
 }
 
 // permissionKey handles keys while the prompt box has focus: y/n/a answer
@@ -709,7 +779,7 @@ func (m *Model) command(text string) tea.Cmd {
 	case "/quit", "/q", "/exit":
 		return tea.Quit
 	case "/help", "/h", "/?":
-		m.notice(helpLines...)
+		m.notice(helpLines()...)
 		return nil
 	case "/tree":
 		return m.toggleTree()
@@ -1137,6 +1207,9 @@ func (m *Model) layout() {
 	}
 	if pb := m.promptView(m.contentWidth()); pb != "" {
 		bodyH -= strings.Count(pb, "\n") + 1
+	}
+	if pv := m.paletteViewFor(m.contentWidth()); pv != "" {
+		bodyH -= strings.Count(pv, "\n") + 1
 	}
 	if bodyH < 1 {
 		bodyH = 1
