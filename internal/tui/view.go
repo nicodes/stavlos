@@ -1058,7 +1058,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 		}
 	default:
 		g, gap := toolGlyph(p.Tool)
-		lines = append(lines, styleWorking.Render(g)+gap+styleBold.Render(titleCase(p.Tool))+agent)
+		lines = append(lines, styleWorking.Render(g)+gap+styleBold.Render(toolTitle(p.Tool))+agent)
 		// The argument is shown whole: a shell command is what the user is
 		// approving, so it is never cut. Long lines wrap under the tool name.
 		if arg := fullToolArg(p.Tool, p.Input); arg != "" {

@@ -499,7 +499,7 @@ func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 			t.stream = append(t.stream, streamSeg{LineThink, "◌ thinking…", ""})
 		}
 	case n.ToolName != "":
-		t.stream = append(t.stream, streamSeg{LineTool, titleCase(n.ToolName), n.ToolName})
+		t.stream = append(t.stream, streamSeg{LineTool, toolTitle(n.ToolName), n.ToolName})
 	}
 }
 
@@ -1009,7 +1009,7 @@ func truncLines(text string, n int, kind LineKind) []Line {
 // toolLine renders "Bash  git status": the tool name title-cased and its
 // most relevant argument.
 func toolLine(name string, input json.RawMessage) string {
-	title := titleCase(name)
+	title := toolTitle(name)
 	arg := toolArg(name, input)
 	if arg == "" {
 		return title
@@ -1073,7 +1073,16 @@ func toolArg(name string, raw json.RawMessage) string {
 	return compactArgs(raw)
 }
 
-// titleCase upper-cases the first letter: "bash" → "Bash".
+// toolTitle is the display name of a tool on its chat line: titleCase of
+// the name, except agent_finish, which reads "Agent complete" (the call
+// marks the agent's work complete).
+func toolTitle(name string) string {
+	if name == "agent_finish" {
+		return "Agent complete"
+	}
+	return titleCase(name)
+}
+
 // titleCase capitalises a tool name for display; underscores read as
 // spaces, so agent_create shows as "Agent create".
 func titleCase(s string) string {
