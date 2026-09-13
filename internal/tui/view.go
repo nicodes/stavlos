@@ -602,7 +602,7 @@ func metaLine(label, model string, queued int) string {
 		s += " " + styleDim.Render(prov)
 	}
 	if queued > 0 {
-		s += styleDim.Render(fmt.Sprintf("  ·  %d queued", queued))
+		s += styleDim.Render(fmt.Sprintf("    %d queued", queued))
 	}
 	return s
 }
@@ -624,17 +624,20 @@ type footerInfo struct {
 	cost      float64
 }
 
-// footerRight builds the right side of the footer.
-// Waiting permissions and /help are not repeated here: the tab strip
-// shows the former and the "/" palette lists every command.
+// footerRight builds the right side of the meta row: a sign-in nudge,
+// nothing on the home view (the left side already names the role and
+// model), or the tokens and cost with a tab-sized gap and no dots. The
+// repo sits on the tab strip; waiting permissions and /help are not
+// repeated here either (the strip shows the former, the "/" palette lists
+// every command).
 func footerRight(f footerInfo) string {
 	switch {
 	case !f.connected:
 		return styleBold.Render("Get started") + " " + styleDim.Render("/provider")
 	case f.home:
-		return styleAccent.Render("●") + " " + f.label + " · " + f.model
+		return ""
 	}
-	return fmt.Sprintf("%s tokens · $%s", fmtTokens(f.tokens), fmtCost(f.cost))
+	return fmtTokens(f.tokens) + " tokens    $" + fmtCost(f.cost)
 }
 
 // fmtCost prints a dollar amount with 2–4 decimals.
@@ -700,8 +703,15 @@ func (m Model) boxWidth() int {
 	return m.contentWidth()
 }
 
-// inputBoxView is the input box for the selected agent.
-func (m Model) inputBoxView() string {
+// inputBoxView is the input line over the meta row for the selected agent.
+func (m Model) inputBoxView(width int) string {
+	return inputBox(m.input.View(), m.metaRow(width))
+}
+
+// metaRow is the line under the input: role and model on the left, tokens
+// and cost (or a transient status) on the right, tab-sized gaps
+// throughout. The left side is truncated first when they collide.
+func (m Model) metaRow(width int) string {
 	label, model, queued := "agent", m.session.Model, 0
 	if a := m.selectedAgent(); a != nil {
 		label, queued = a.Label, a.Queued
@@ -709,7 +719,21 @@ func (m Model) inputBoxView() string {
 			model = a.Model
 		}
 	}
-	return inputBox(m.input.View(), metaLine(label, model, queued))
+	left := metaLine(label, model, queued)
+	right := m.footerRightView()
+	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
+	if gap < 4 {
+		avail := width - lipgloss.Width(right) - 4
+		if avail < 0 {
+			avail = 0
+		}
+		left = ansi.Truncate(left, avail, "…")
+		gap = width - lipgloss.Width(left) - lipgloss.Width(right)
+		if gap < 1 {
+			gap = 1
+		}
+	}
+	return ansi.Truncate(left+strings.Repeat(" ", gap)+right, width, "")
 }
 
 // homeView centers the logo, the prompt box and the tips vertically.
@@ -736,8 +760,7 @@ func (m Model) homeView(width, height int) string {
 	if pv := m.paletteViewFor(boxW); pv != "" {
 		add(pv, boxW)
 	}
-	add(m.inputBoxView(), boxW)
-	add(m.footerView(boxW), boxW)
+	add(m.inputBoxView(boxW), boxW)
 
 	if m.showTips {
 		tipsW := tipsMaxWidth
@@ -781,7 +804,7 @@ func (m Model) sessionView(width, height int) string {
 	if pv := m.paletteViewFor(cw); pv != "" {
 		parts = append(parts, pv)
 	}
-	parts = append(parts, m.inputBoxView(), m.footerView(cw))
+	parts = append(parts, m.inputBoxView(cw))
 	left := padLines(strings.Join(parts, "\n"), cw)
 	if !m.sidebarVisible() {
 		return left
@@ -892,7 +915,8 @@ func (m Model) sectionsView(width int) string {
 
 // sectionTabs is the one-line strip: the three tabs with their counts, the
 // open one in accent, the rest dim (except a permission tab with prompts
-// waiting, which is warning orange). Key hints live in the key bar.
+// waiting, which is warning orange), and the repo at the right edge. Key
+// hints live in the key bar.
 func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo, width int) string {
 	tab := func(label string, on bool) string {
 		if on {
@@ -916,6 +940,11 @@ func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInf
 		tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
 	}
 	line := strings.Join(tabs, styleDim.Render("  │  "))
+	// The repo (cwd) sits at the right edge of the strip.
+	repo := styleDim.Render(shortHome(m.session.Dir))
+	if gap := width - lipgloss.Width(line) - lipgloss.Width(repo); gap >= 4 {
+		line += strings.Repeat(" ", gap) + repo
+	}
 	return ansi.Truncate(line, width, "…")
 }
 
@@ -1010,27 +1039,6 @@ func fullToolArg(tool string, raw json.RawMessage) string {
 		}
 	}
 	return toolArg(tool, raw)
-}
-
-// footerView is the line under the input's meta line: dim cwd on the
-// left, the usage summary (tokens, cost) or a transient status on the
-// right. It sits above the key bar's rule.
-func (m Model) footerView(width int) string {
-	left := styleDim.Render(shortHome(m.session.Dir))
-	right := m.footerRightView()
-	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
-	if gap < 1 {
-		avail := width - lipgloss.Width(right) - 1
-		if avail < 0 {
-			avail = 0
-		}
-		left = styleDim.Render(ansi.Truncate(shortHome(m.session.Dir), avail, "…"))
-		gap = width - lipgloss.Width(left) - lipgloss.Width(right)
-		if gap < 1 {
-			gap = 1
-		}
-	}
-	return ansi.Truncate(left+strings.Repeat(" ", gap)+right, width, "")
 }
 
 func (m Model) footerRightView() string {
