@@ -728,7 +728,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}
 	}
-	for _, leak := range []string{"◷ go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
+	for _, leak := range []string{"⚙  go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
 		if strings.Contains(joined, leak) {
 			t.Fatalf("folded monitor item leaked %q:\n%s", leak, joined)
 		}
@@ -743,7 +743,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	// the first output line with a +N marker; expanded shows the collapsed
 	// output rule (3 lines + "… +N lines")
 	prev := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
-	for _, want := range []string{"◷ job: go test", "◷ go test exited 0", "ok  a", "+"} {
+	for _, want := range []string{"⚙  job: go test", "⚙  go test exited 0", "ok  a", "+"} {
 		if !strings.Contains(prev, want) {
 			t.Fatalf("cursor on monitor lacks %q:\n%s", want, prev)
 		}
@@ -752,7 +752,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		t.Fatalf("preview shows too much:\n%s", prev)
 	}
 	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item, Expanded: map[int]bool{cmdStart.Item: true}})), "\n")
-	for _, want := range []string{"◷ go test exited 0", "ok  a", "ok  c", "ok  d", "ok  e"} {
+	for _, want := range []string{"⚙  go test exited 0", "ok  a", "ok  c", "ok  d", "ok  e"} {
 		if !strings.Contains(full, want) {
 			t.Fatalf("expanded monitor lacks %q:\n%s", want, full)
 		}
@@ -773,7 +773,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	tr2.Apply(mk(1, event.MonitorFired, event.MonitorFiredPayload{ID: "zz", Kind: "watch", Summary: "3 files changed", Output: "a.go"}))
 	tr2.Apply(mk(2, event.MonitorStopped, event.MonitorRefPayload{ID: "yy", Reason: "kill"}))
 	got := renderLines(tr2.All())
-	assertSubsequence(t, got, []string{"   ◷ 3 files changed", "       a.go", "   ◷ job stopped (kill)"})
+	assertSubsequence(t, got, []string{"   ⚙  3 files changed", "       a.go", "   ⚙  job stopped (kill)"})
 	if tr2.Items() != 2 {
 		t.Fatalf("items %d", tr2.Items())
 	}

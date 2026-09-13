@@ -1077,7 +1077,7 @@ func (m Model) backgroundView(width int) string {
 }
 
 // backgroundSummary is the one-line form shown while the section is not
-// focused: "background (3)  ⑂ scout running · ⑂ checks idle · ◷ go test".
+// focused: "background (3)  ⑂ scout running · ⑂ checks idle · ⚙  go test".
 func backgroundSummary(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, width int) string {
 	parts := make([]string, 0, len(kids)+len(jobs))
 	for _, a := range kids {
@@ -1185,7 +1185,7 @@ func monitorRows(monitors []protocol.MonitorInfo, now time.Time, width int) []st
 // clock for monitors; the fork for agent tools.
 const (
 	glyphToolFiles    = "⚙"
-	glyphToolMonitors = "◷"
+	glyphToolMonitors = "⚙" // same gear as files/shell: async jobs are shell too
 	glyphToolAgents   = "⑂"
 )
 
@@ -1195,13 +1195,11 @@ func toolGlyph(tool string) (string, string) {
 	switch {
 	case strings.HasPrefix(tool, "agent_"):
 		return glyphToolAgents, " "
-	case tool == "bash_async" || tool == "bash_kill":
-		return glyphToolMonitors, " "
 	}
 	return glyphToolFiles, "  "
 }
 
-// monitorGlyph is the clock for every monitor kind.
+// monitorGlyph is the gear for every monitor kind.
 func monitorGlyph(kind string) string { return glyphToolMonitors }
 
 // monitorGlyphGap is the spacing after a kind glyph; the gear gets two
