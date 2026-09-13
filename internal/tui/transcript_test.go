@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
@@ -435,5 +436,48 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	}
 	if r := rows[0]; r.first != 0 || r.last != 2 {
 		t.Fatalf("user rows: %+v (want 0..2, blank padding included)", r)
+	}
+}
+
+func TestToolOutputStaysWithItsCall(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.Apply(mk(2, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "run it"}))
+	tr.Apply(mk(3, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"make test"}`)}))
+	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "bash"}))
+	tr.Apply(mk(5, event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
+	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "ok\nall passed"}))
+	tr.Apply(mk(7, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "done"}}}))
+
+	lines := tr.All()
+	toolIdx := -1
+	for i, l := range lines {
+		if l.Kind == LineTool {
+			toolIdx = i
+		}
+	}
+	if toolIdx < 0 {
+		t.Fatal("no tool line")
+	}
+	toolItem := lines[toolIdx].Item
+	first, last := tr.ItemRange(toolItem)
+	// every line in the item's range belongs to the item: output was spliced
+	// in right after the call, ahead of the permission notices
+	for i := first; i <= last; i++ {
+		if lines[i].Item != toolItem {
+			t.Fatalf("line %d (%q) inside tool item range belongs to item %d", i, lines[i].Text, lines[i].Item)
+		}
+	}
+	if last-first < 2 || !strings.Contains(lines[last].Text, "all passed") {
+		t.Fatalf("output not under the call: range %d..%d, last %q", first, last, lines[last].Text)
+	}
+	// and the notices come after the whole tool item
+	for i := last + 1; i < len(lines); i++ {
+		if lines[i].Kind == LineTool || lines[i].Item == toolItem {
+			t.Fatalf("tool item content after its range at %d", i)
+		}
 	}
 }
