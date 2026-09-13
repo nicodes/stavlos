@@ -41,7 +41,7 @@ func (skillTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type finishTool struct{}
 
 func (finishTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "finish", Description: "Declare your task complete and report the result to your parent. Call this exactly once, when the work is done or cannot be done.",
+	return model.ToolDef{Name: "agent_finish", Description: "Declare your task complete and report the result to your parent. Call this exactly once, when the work is done or cannot be done.",
 		Schema: schema(map[string]any{
 			"summary": prop("string", "What you did and found; include exact paths and results"),
 			"status":  map[string]any{"type": "string", "enum": []string{"success", "failure", "partial"}, "description": "Outcome"},
@@ -61,7 +61,7 @@ func (finishTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 		return errf("bad input: %v", err)
 	}
 	if env.Orch == nil {
-		return errf("finish is not available to this agent")
+		return errf("agent_finish is not available to this agent")
 	}
 	if a.Status == "" {
 		a.Status = "success"

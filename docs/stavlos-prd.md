@@ -160,7 +160,7 @@ flowchart TD
     end
 ```
 
-Humans and orchestrating agents write the same envelope kinds into the same inboxes. Spawning is asynchronous: `spawn` returns immediately, and the child's `finish` comes back as a `ChildFinished` envelope. Two sessions on the same directory would be two of these boxes side by side, each with its own budget and its own Discord channel.
+Humans and orchestrating agents write the same envelope kinds into the same inboxes. Spawning is asynchronous: `spawn` returns immediately, and the child's `agent_finish` comes back as a `ChildFinished` envelope. Two sessions on the same directory would be two of these boxes side by side, each with its own budget and its own Discord channel.
 
 ### 6.1 The actor
 
@@ -203,7 +203,7 @@ Edge semantics, which protocol clients depend on:
 
 ### 6.3 Completion
 
-Subagents get a `finish` tool:
+Subagents get an `agent_finish` tool:
 
 ```go
 finish(summary string, artifacts []Artifact, status Status)
@@ -211,9 +211,9 @@ finish(summary string, artifacts []Artifact, status Status)
 
 A turn ending and work being done are different events. A subagent may run six turns before declaring completion, and the parent receives a typed payload rather than "whatever the last message said."
 
-The root agent does not get `finish`. It has no parent to report to; the session simply idles between turns. `finish` is added to the tool list only for spawned children.
+The root agent does not get `agent_finish`. It has no parent to report to; the session simply idles between turns. `agent_finish` is added to the tool list only for spawned children.
 
-**Spawning is asynchronous, children never interrupt, and there is no blocking wait.** `spawn` returns immediately with the child's ID. When the child calls `finish`, its result lands in the parent's **mailbox**; that delivery is built in and cannot be switched off. The finish also **wakes** the parent: the first child to finish starts a new turn carrying every result that has arrived, so several finishing together wake the parent once. `agent_status` and `agent_result` let a parent check in early. An opt-out (`unmonitor`) existed briefly and was removed along with the explicit `monitor` wait; a wake the parent cannot lose is the whole point. Arming is logged (`monitor.armed` / `monitor.disarmed`) so it survives a daemon restart. Nothing is ever injected into a running turn: a child finishing mid-turn waits for the boundary. A blocking wait was considered and rejected: it makes the parent deaf for the duration and buys nothing, since the history is intact when the result arrives.
+**Spawning is asynchronous, children never interrupt, and there is no blocking wait.** `spawn` returns immediately with the child's ID. When the child calls `agent_finish`, its result lands in the parent's **mailbox**; that delivery is built in and cannot be switched off. The finish also **wakes** the parent: the first child to finish starts a new turn carrying every result that has arrived, so several finishing together wake the parent once. `agent_status` and `agent_result` let a parent check in early. An opt-out (`unmonitor`) existed briefly and was removed along with the explicit `monitor` wait; a wake the parent cannot lose is the whole point. Arming is logged (`monitor.armed` / `monitor.disarmed`) so it survives a daemon restart. Nothing is ever injected into a running turn: a child finishing mid-turn waits for the boundary. A blocking wait was considered and rejected: it makes the parent deaf for the duration and buys nothing, since the history is intact when the result arrives.
 
 ### 6.4 Orchestration tools
 
@@ -227,9 +227,9 @@ Available to any agent whose preset permits them:
 | `agent_cancel(id)` | Deliver a `Cancel` |
 | `agent_kill(id)` | Deliver a `Kill` |
 
-There is no wait tool. A parent that has nothing to do until a child reports simply ends its turn; the child's `finish` wakes it. Models were unreliable with an explicit "wait" tool (calling it at odd moments), and the turn ending naturally is the same thing.
+There is no wait tool. A parent that has nothing to do until a child reports simply ends its turn; the child's `agent_finish` wakes it. Models were unreliable with an explicit "wait" tool (calling it at odd moments), and the turn ending naturally is the same thing.
 
-**Background jobs** use the same mailbox and wake: `bash_async(command)` starts a job and returns its id at once; when it exits the agent is woken with the exit code and output, and `bash_kill(id)` stops it. Every agent with `bash` has these. Nothing is armed by hand: a job's exit always wakes its owner, as a child's finish always wakes its parent. Jobs are logged (`monitor.started`, `monitor.fired`, `monitor.stopped`); a job whose process died with the daemon is reported to its owner as lost on restart. File watches and timers were tried and removed: models rarely used them well, and `bash_async` of `sleep` or `inotifywait` covers the need. In the TUI, the permission queue, live children ("agents") and jobs ("async") are three permanent tabs on one strip under the rule that closes the chat, each showing only its count (down to "(0)") until opened; the strip is one stop in the tab cycle (it opens on the first non-empty tab, permission when all are empty) and ←/→ move between tabs.
+**Background jobs** use the same mailbox and wake: `bash_async(command)` starts a job and returns its id at once; when it exits the agent is woken with the exit code and output, and `bash_async_kill(id)` stops it. Every agent with `bash` has these. Nothing is armed by hand: a job's exit always wakes its owner, as a child's finish always wakes its parent. Jobs are logged (`monitor.started`, `monitor.fired`, `monitor.stopped`); a job whose process died with the daemon is reported to its owner as lost on restart. File watches and timers were tried and removed: models rarely used them well, and `bash_async` of `sleep` or `inotifywait` covers the need. In the TUI, the permission queue, live children ("agents") and jobs ("async") are three permanent tabs on one strip under the rule that closes the chat, each showing only its count (down to "(0)") until opened; the strip is one stop in the tab cycle (it opens on the first non-empty tab, permission when all are empty) and ←/→ move between tabs.
 | `agent_result(id)` | Retrieve a finished result without blocking |
 | `agent_status(id?)` | State and usage (§4.4) of one agent, or the whole session tree |
 
@@ -599,7 +599,7 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - Codex (ChatGPT) and Grok adapters, `go-plugin` model seam, `stavlos plugin install`, lockfile, models.dev metadata
 - MCP client
 - Three-layer configuration with trust gate; skills, presets, declarative policy
-- Built-in tools: `bash` (also the search tool: read-only commands such as `grep`, `rg`, `find`, `ls`, and `git status`/`log`/`diff` are allowed by default), `bash_async` and `bash_kill` (background jobs), `read`, `apply_patch` (the Codex patch grammar: add, update with context-anchored hunks, delete, move; several files per patch, applied atomically), `finish`, `skill`, and the orchestration set (`agent_create`, `agent_prompt`, `agent_steer`, `agent_cancel`, `agent_kill`, `agent_result`, `agent_status`)
+- Built-in tools: `bash` (also the search tool: read-only commands such as `grep`, `rg`, `find`, `ls`, and `git status`/`log`/`diff` are allowed by default), `bash_async` and `bash_async_kill` (background jobs), `read`, `apply_patch` (the Codex patch grammar: add, update with context-anchored hunks, delete, move; several files per patch, applied atomically), `agent_finish`, `skill`, and the orchestration set (`agent_create`, `agent_prompt`, `agent_steer`, `agent_cancel`, `agent_kill`, `agent_result`, `agent_status`)
 - Usage accounting: per-call `Usage` events, per-agent and per-session aggregates
 - Subscription sign-in for ChatGPT and Grok (device-code flows, token refresh), credential store, `/provider` and `/models` in the TUI, `stavlos auth login|list|logout`
 - Depth and per-session fan-out limits

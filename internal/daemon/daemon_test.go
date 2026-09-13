@@ -209,7 +209,7 @@ func TestEndToEnd(t *testing.T) {
 			if !strings.Contains(req.Messages[0].Blocks[0].Text, "look around") {
 				t.Errorf("child task missing: %+v", req.Messages[0])
 			}
-			return call("k1", "finish", `{"summary":"found it","status":"success"}`)
+			return call("k1", "agent_finish", `{"summary":"found it","status":"success"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -433,7 +433,7 @@ func TestSpawnArmsWakeByDefault(t *testing.T) {
 	fm.childSteps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
 			<-release
-			return call("k", "finish", `{"summary":"late","status":"success"}`)
+			return call("k", "agent_finish", `{"summary":"late","status":"success"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -537,12 +537,12 @@ func TestBashKillStopsJob(t *testing.T) {
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			id := strings.TrimSpace(strings.TrimPrefix(strings.Split(last.Content, ";")[0], "started job "))
-			return call("c2", "bash_kill", `{"id":"`+id+`"}`)
+			return call("c2", "bash_async_kill", `{"id":"`+id+`"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if !strings.Contains(last.Content, "stopped job m") {
-				t.Errorf("bash_kill result: %+v", last)
+				t.Errorf("bash_async_kill result: %+v", last)
 			}
 			return text("killed it")
 		},
@@ -684,7 +684,7 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 			if last.IsError || !strings.Contains(last.Content, `"label":"coder"`) || !strings.Contains(last.Content, `"you":true`) || !strings.Contains(last.Content, `"parent":"`+rootID+`"`) {
 				t.Errorf("agent_status should list the whole tree with the caller marked: %+v", last)
 			}
-			return call("k4", "finish", `{"summary":"asked","status":"success"}`)
+			return call("k4", "agent_finish", `{"summary":"asked","status":"success"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)

@@ -105,7 +105,7 @@ func (bashTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	return Result{Output: text}
 }
 
-// --- bash_async / bash_kill: background jobs ---
+// --- bash_async / bash_async_kill: background jobs ---
 
 type bashAsyncTool struct{}
 
@@ -143,13 +143,13 @@ func (bashAsyncTool) Run(ctx context.Context, in json.RawMessage, env *Env) Resu
 	if err != nil {
 		return errf("%v", err)
 	}
-	return Result{Output: fmt.Sprintf("started job %s; you will be woken with its output when it exits (bash_kill %s to stop it)", id, id)}
+	return Result{Output: fmt.Sprintf("started job %s; you will be woken with its output when it exits (bash_async_kill %s to stop it)", id, id)}
 }
 
 type bashKillTool struct{}
 
 func (bashKillTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "bash_kill", Description: "Stop a background job started with bash_async. Use it for servers and watchers you no longer need.",
+	return model.ToolDef{Name: "bash_async_kill", Description: "Stop a background job started with bash_async. Use it for servers and watchers you no longer need.",
 		Schema: schema(map[string]any{"id": prop("string", "The job id returned by bash_async")}, "id")}
 }
 
