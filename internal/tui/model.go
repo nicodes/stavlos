@@ -126,11 +126,26 @@ type focus int
 const (
 	focusInput      focus = iota // the text input (typing, enter sends)
 	focusChat                    // the transcript: a cursor walks its items
-	focusPermission              // the pending prompt box (y/n/a, question field)
-	focusAgents                  // the agents tab above the input: live children
-	focusAsync                   // the async tab above the input: running bash_async jobs
+	focusPermission              // the permission tab: pending prompt box (y/n/a, question field)
+	focusAgents                  // the agents tab: live children
+	focusAsync                   // the async tab: running bash_async jobs
 	focusSidebar                 // the agent tree (↑/↓ enter)
+	focusTabs                    // placeholder in focusOrder for the tab strip as a whole
 )
+
+// tabFocuses are the tabs of the strip under the chat, left to right. They
+// are one stop in the tab cycle; ←/→ move between them.
+var tabFocuses = []focus{focusPermission, focusAgents, focusAsync}
+
+// isTab reports whether f is one of the strip's tabs.
+func isTab(f focus) bool {
+	for _, t := range tabFocuses {
+		if t == f {
+			return true
+		}
+	}
+	return false
+}
 
 // chatPage is how many items pgup/pgdn move the chat cursor.
 const chatPage = 5
@@ -368,17 +383,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // --- focus ---
 
-// focusOrder lists the sections tab cycles through, top to bottom and left
-// to right: the chat (once there is one), the permission, agents and async
-// tabs (always, even when empty), the input, and the sidebar (while
-// visible).
+// focusOrder lists the sections tab cycles through, top to bottom: the chat
+// (once there is one), the tab strip (as one stop, see defaultTab), the
+// input, and the sidebar (while visible).
 func (m *Model) focusOrder() []focus {
 	order := make([]focus, 0, 4)
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
-	order = append(order, focusPermission, focusAgents, focusAsync)
-	order = append(order, focusInput)
+	order = append(order, focusTabs, focusInput)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
 	}
@@ -409,17 +422,63 @@ func (m *Model) runningJobs() []protocol.MonitorInfo {
 }
 
 // cycleFocus moves focus delta steps (+1 tab, -1 shift+tab) through
-// focusOrder, wrapping around.
+// focusOrder, wrapping around. Landing on the strip opens defaultTab.
 func (m *Model) cycleFocus(delta int) tea.Cmd {
 	order := m.focusOrder()
+	cur := m.focus
+	if isTab(cur) {
+		cur = focusTabs
+	}
 	i := 0
 	for k, f := range order {
-		if f == m.focus {
+		if f == cur {
 			i = k
 		}
 	}
 	n := len(order)
-	return m.setFocus(order[((i+delta)%n+n)%n])
+	next := order[((i+delta)%n+n)%n]
+	if next == focusTabs {
+		next = m.defaultTab()
+	}
+	return m.setFocus(next)
+}
+
+// defaultTab is the tab that opens when the strip gains focus: the first,
+// left to right, with anything in it, or permission when all are empty.
+func (m *Model) defaultTab() focus {
+	switch {
+	case m.currentPrompt() != nil:
+		return focusPermission
+	case len(m.liveChildren()) > 0:
+		return focusAgents
+	case len(m.runningJobs()) > 0:
+		return focusAsync
+	}
+	return focusPermission
+}
+
+// tabArrow handles ←/→ while a tab has focus: move to the neighbouring
+// tab (no wrap). Reports whether the key was consumed.
+func (m *Model) tabArrow(msg tea.KeyMsg) (tea.Cmd, bool) {
+	delta := 0
+	switch {
+	case key.Matches(msg, keys.TabLeft):
+		delta = -1
+	case key.Matches(msg, keys.TabRight):
+		delta = 1
+	default:
+		return nil, false
+	}
+	for i, t := range tabFocuses {
+		if t == m.focus {
+			j := i + delta
+			if j >= 0 && j < len(tabFocuses) {
+				return m.setFocus(tabFocuses[j]), true
+			}
+			return nil, true
+		}
+	}
+	return nil, false
 }
 
 // setFocus moves keyboard focus to f. Entering the chat suspends
@@ -461,6 +520,9 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 // over the live children, enter selects the child under the cursor and
 // returns to the input, esc returns without changing the selection.
 func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
+	if cmd, ok := m.tabArrow(msg); ok {
+		return cmd
+	}
 	kids := m.liveChildren()
 	n := len(kids)
 	switch {
@@ -490,6 +552,9 @@ func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
 // asyncKey handles keys while the async tab has focus: ↑/↓ (or j/k) move
 // over the running jobs (informational only), esc returns to the input.
 func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
+	if cmd, ok := m.tabArrow(msg); ok {
+		return cmd
+	}
 	n := len(m.runningJobs())
 	switch {
 	case key.Matches(msg, keys.OvClose):
@@ -509,6 +574,9 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 // ensureFocus falls back to the input when the focused section is gone
 // (prompt answered, sidebar hidden, transcript empty).
 func (m *Model) ensureFocus() tea.Cmd {
+	if isTab(m.focus) {
+		return m.syncPromptInput() // the strip is always in the order
+	}
 	for _, f := range m.focusOrder() {
 		if f == m.focus {
 			return m.syncPromptInput()
@@ -717,6 +785,12 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 		return m.setFocus(focusInput)
 	}
 	p := m.currentPrompt()
+	// ←/→ switch tabs, except while typing an answer (the field owns them).
+	if p == nil || p.Kind != "question" {
+		if cmd, ok := m.tabArrow(msg); ok {
+			return cmd
+		}
+	}
 	if p == nil { // empty tab: nothing to answer
 		return nil
 	}

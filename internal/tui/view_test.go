@@ -401,8 +401,10 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.focus != focusInput {
 		t.Fatalf("default focus %v", m.focus)
 	}
-	// No prompt, sidebar hidden: input → chat → permission → agents → async → input.
-	// The three tabs are always in the cycle, even while empty.
+	// No prompt, sidebar hidden: input → chat → tabs → input. The strip is
+	// one stop; all empty, it opens on permission, and ←/→ walk the tabs.
+	right := tea.KeyMsg{Type: tea.KeyRight}
+	left := tea.KeyMsg{Type: tea.KeyLeft}
 	press(&m, tab)
 	if m.focus != focusChat || m.follow || m.input.Focused() {
 		t.Fatalf("tab: focus=%v follow=%v", m.focus, m.follow)
@@ -415,20 +417,32 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.focus != focusPermission {
 		t.Fatalf("y on an empty permission tab: focus=%v", m.focus)
 	}
-	press(&m, tab)
+	press(&m, left) // already leftmost: stays
+	if m.focus != focusPermission {
+		t.Fatalf("left at the edge: focus=%v", m.focus)
+	}
+	press(&m, right)
 	if m.focus != focusAgents || !strings.Contains(stripANSI(m.sectionsView(100)), "no subagents running") {
-		t.Fatalf("tab x3: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+		t.Fatalf("right: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
 	}
-	press(&m, tab)
+	press(&m, right)
 	if m.focus != focusAsync || !strings.Contains(stripANSI(m.sectionsView(100)), "no async jobs running") {
-		t.Fatalf("tab x4: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+		t.Fatalf("right right: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
 	}
-	press(&m, tab)
+	press(&m, right) // already rightmost: stays
+	if m.focus != focusAsync {
+		t.Fatalf("right at the edge: focus=%v", m.focus)
+	}
+	press(&m, left)
+	if m.focus != focusAgents {
+		t.Fatalf("left: focus=%v", m.focus)
+	}
+	press(&m, tab) // any tab → input
 	if m.focus != focusInput || !m.follow || !m.input.Focused() {
-		t.Fatalf("tab x5: focus=%v follow=%v", m.focus, m.follow)
+		t.Fatalf("tab from a tab: focus=%v follow=%v", m.focus, m.follow)
 	}
 	press(&m, stab)
-	if m.focus != focusAsync {
+	if m.focus != focusPermission {
 		t.Fatalf("shift+tab: focus=%v", m.focus)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
@@ -436,15 +450,15 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("esc: focus=%v", m.focus)
 	}
 
-	// Sidebar shown: input → sidebar → chat → permission → agents → async → input.
+	// Sidebar shown: input → sidebar → chat → tabs → input.
 	m.showTree = true
 	m.layout()
 	var seen []focus
-	for i := 0; i < 6; i++ {
+	for i := 0; i < 4; i++ {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusSidebar, focusChat, focusPermission, focusAgents, focusAsync, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusSidebar, focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with sidebar: %v, want %v", seen, want)
 	}
 	// Hiding the sidebar while it has focus falls back to the input.
@@ -455,22 +469,40 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("sidebar hidden: focus=%v", m.focus)
 	}
 
-	// Pending prompt: chat → permission → agents → async → input.
+	// Pending prompt: chat → permission (the first non-empty tab) → input.
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
 	if m.focus != focusInput {
 		t.Fatal("a new prompt must not steal focus")
 	}
 	seen = nil
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 3; i++ {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusChat, focusPermission, focusAgents, focusAsync, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with prompt: %v, want %v", seen, want)
 	}
-	press(&m, stab, stab, stab) // input → async → agents → permission
+	// With a child but no prompt, the strip opens on agents; with only a
+	// job, on async.
+	m.prompts = nil
+	m.agents = append(m.agents, protocol.AgentInfo{ID: "c", Parent: "a", Label: "kid", State: "working"})
+	press(&m, stab)
+	if m.focus != focusAgents {
+		t.Fatalf("first non-empty tab should be agents: %v", m.focus)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	m.agents = m.agents[:len(m.agents)-1]
+	m.agents[0].Monitors = []protocol.MonitorInfo{{ID: "j", Kind: "command", Label: "sleep", State: "running"}}
+	press(&m, stab)
+	if m.focus != focusAsync {
+		t.Fatalf("first non-empty tab should be async: %v", m.focus)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	m.agents[0].Monitors = nil
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
+	press(&m, stab) // input → permission
 	if m.focus != focusPermission {
-		t.Fatalf("shift+tab x3 from input: %v", m.focus)
+		t.Fatalf("shift+tab from input: %v", m.focus)
 	}
 	// Answering the prompt elsewhere returns focus to the input.
 	m.removePrompt("p")
@@ -513,7 +545,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	m.input.Reset()
 
 	// Permission focus: y answers (claim + reply as one tea.Cmd).
-	press(&m, tea.KeyMsg{Type: tea.KeyShiftTab}, tea.KeyMsg{Type: tea.KeyShiftTab}, tea.KeyMsg{Type: tea.KeyShiftTab})
+	press(&m, tea.KeyMsg{Type: tea.KeyShiftTab}) // the strip opens on permission: a prompt waits
 	if m.focus != focusPermission {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -701,12 +733,12 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("collapsed strip should only count:\n%s", sv)
 	}
 
-	// tab order: chat is skipped on the home view; permission, agents, async, input
+	// tab order: chat is skipped on the home view; the strip, then input
 	order := m.focusOrder()
-	if len(order) != 4 || order[0] != focusPermission || order[1] != focusAgents || order[2] != focusAsync || order[3] != focusInput {
+	if len(order) != 2 || order[0] != focusTabs || order[1] != focusInput {
 		t.Fatalf("order %v", order)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission (a prompt waits)
 	if m.focus != focusPermission || strings.Count(stripANSI(m.sectionsView(100)), "\n") < 2 {
 		t.Fatalf("permission should expand when focused: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
 	}
@@ -715,7 +747,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if bi, pi := strings.Index(full, "agents ("), strings.Index(full, "allow ·"); bi < 0 || pi < 0 || bi > pi {
 		t.Fatalf("permission box should render below the strip:\n%s", full)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // permission → agents
+	press(&m, tea.KeyMsg{Type: tea.KeyRight}) // permission → agents
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -723,11 +755,11 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if strings.Count(sv, "\n") != 2 || !strings.Contains(sv, "▶") || !strings.Contains(sv, "scout") {
 		t.Fatalf("expanded agents:\n%s", sv)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // agents → async
+	press(&m, tea.KeyMsg{Type: tea.KeyRight}) // agents → async
 	if m.focus != focusAsync || !strings.Contains(stripANSI(m.sectionsView(100)), "no async jobs running") {
 		t.Fatalf("async: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyShiftTab}) // async → agents for the selection test
+	press(&m, tea.KeyMsg{Type: tea.KeyLeft}) // async → agents for the selection test
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}

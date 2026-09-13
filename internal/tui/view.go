@@ -925,11 +925,11 @@ func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInf
 	var hint string
 	switch m.focus {
 	case focusAgents:
-		hint = "↑/↓ move · enter select agent · esc back"
+		hint = "←/→ tab · ↑/↓ move · enter select agent · esc back"
 	case focusAsync:
-		hint = "↑/↓ move · esc back"
+		hint = "←/→ tab · ↑/↓ move · esc back"
 	case focusPermission:
-		hint = ""
+		hint = "←/→ tab"
 	default:
 		hint = "tab to open"
 		if p != nil {
