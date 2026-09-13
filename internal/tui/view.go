@@ -908,7 +908,7 @@ func (m Model) sidebarView(height int) string {
 	if model == "" {
 		model = "—"
 	}
-	inner := sidebarWidth - 2
+	inner := sidebarWidth - 1 // rows carry their own leading space; one column of right padding
 	rows := []string{
 		" " + styleDim.Render("session") + "  " + id,
 		" " + styleDim.Render("model") + "    " + truncRunes(model, inner-9),
