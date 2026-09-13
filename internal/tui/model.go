@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -88,6 +89,7 @@ type Model struct {
 	hideKeys      bool      // the key bar (divider + legend) at the bottom is hidden; /help shows it
 	cancelArmed   time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
 	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
+	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
 	details       bool      // expanded tool output (/details)
 	follow        bool      // auto-scroll to bottom
 
@@ -590,12 +592,17 @@ func (m *Model) mouseHover(x, y int) tea.Cmd {
 	inChat := x >= 0 && x < m.contentWidth() && y >= 0 && y < m.vp.Height
 	if !inChat {
 		if m.hoverFocus && m.focus == focusChat {
+			// Give focus back to wherever hover took it from, without
+			// scrolling the chat.
 			m.hoverFocus = false
-			m.focus = focusInput
+			m.focus = m.hoverFrom
 			m.collapseAll()
 			m.refreshViewport()
 			m.follow = m.vp.AtBottom()
-			return m.input.Focus()
+			if m.focus == focusInput {
+				return m.input.Focus()
+			}
+			return m.syncPromptInput()
 		}
 		return nil
 	}
@@ -607,12 +614,10 @@ func (m *Model) mouseHover(x, y int) tea.Cmd {
 		return nil
 	}
 	if m.focus != focusChat {
-		if m.focus != focusInput {
-			return nil // hovering does not pull focus out of a tab, the sidebar or the permission box
-		}
-		m.hoverFocus = true
+		m.hoverFocus, m.hoverFrom = true, m.focus
 		m.focus = focusChat
 		m.input.Blur()
+		m.promptInput.Blur()
 		m.follow = false
 	}
 	if m.chatCursor != item {
@@ -626,22 +631,94 @@ func (m *Model) mouseHover(x, y int) tea.Cmd {
 // mouseClick is a left click: on a chat item it does what enter does on
 // the hovered item (the click first moves the cursor there, like hover).
 func (m *Model) mouseClick(x, y int) tea.Cmd {
-	if m.ov != nil || m.isHome() {
+	if m.ov != nil {
 		return nil
 	}
-	if x < 0 || x >= m.contentWidth() || y < 0 || y >= m.vp.Height {
+	if m.isHome() {
+		return m.setFocus(focusInput) // the input is the only thing to click on the logo screen
+	}
+	if x < 0 || y < 0 {
 		return nil
 	}
-	item, ok := m.itemAtRow(m.vp.YOffset + y)
-	if !ok {
+	if m.sidebarVisible() && x >= m.contentWidth() {
+		return m.setFocus(focusSidebar)
+	}
+	if x >= m.contentWidth() {
 		return nil
 	}
-	cmd := m.mouseHover(x, y) // cursor onto the item, chat focused
-	if m.focus != focusChat || m.chatCursor != item {
+	lay := m.rows()
+	switch {
+	case y < m.vp.Height: // the chat: select, and toggle like enter
+		item, ok := m.itemAtRow(m.vp.YOffset + y)
+		if !ok {
+			return nil
+		}
+		cmd := m.mouseHover(x, y)
+		if m.focus == focusChat && m.chatCursor == item {
+			m.toggleItem()
+		}
 		return cmd
+	case y == lay.strip: // a tab label opens that tab
+		if f, ok := m.tabAt(x); ok {
+			return m.setFocus(f)
+		}
+	case y > lay.strip && y <= lay.stripEnd: // a row inside the open tab
+		if isTab(m.focus) && m.focus != focusPermission {
+			m.agCursor = y - lay.strip - 1
+		}
+	case y >= lay.input && y <= lay.input+1: // the input and its meta row
+		return m.setFocus(focusInput)
 	}
-	m.toggleItem()
-	return cmd
+	return nil
+}
+
+// rowLayout is where the session view's pieces sit, in screen rows.
+type rowLayout struct {
+	strip    int // the tab strip line
+	stripEnd int // last row of the strip block (its body when a tab is open)
+	input    int // the input line (the meta row follows)
+}
+
+// rows derives the row layout the same way sessionView stacks its parts.
+func (m *Model) rows() rowLayout {
+	y := m.vp.Height + 2 // blank line, then the rule, then the strip
+	lay := rowLayout{strip: y, stripEnd: y}
+	if sv := m.sectionsView(m.contentWidth()); sv != "" {
+		lay.stripEnd = y + strings.Count(sv, "\n")
+		y = lay.stripEnd + 2 // blank line after the strip block
+	}
+	if pv := m.paletteViewFor(m.contentWidth()); pv != "" {
+		y += strings.Count(pv, "\n") + 1
+	}
+	lay.input = y
+	return lay
+}
+
+// tabAt maps an x position on the strip to the tab label under it. The
+// labels are laid out as sectionTabs draws them: permission, agents, async,
+// separated by " · ".
+func (m *Model) tabAt(x int) (focus, bool) {
+	perm := fmt.Sprintf("permission (%d)", len(m.prompts))
+	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
+		perm = fmt.Sprintf("%s (%d)", p.Kind, len(m.prompts))
+	}
+	labels := []struct {
+		text string
+		f    focus
+	}{
+		{perm, focusPermission},
+		{fmt.Sprintf("agents (%d)", len(m.liveChildren())), focusAgents},
+		{fmt.Sprintf("async (%d)", len(m.runningJobs())), focusAsync},
+	}
+	x0 := 0
+	for _, l := range labels {
+		w := ansi.StringWidth(l.text)
+		if x >= x0 && x < x0+w {
+			return l.f, true
+		}
+		x0 += w + 3 // " · "
+	}
+	return 0, false
 }
 
 // itemAtRow maps a viewport content row to the chat item drawn there.
