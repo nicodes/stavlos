@@ -107,8 +107,9 @@ type RenderOpts struct {
 	Width    int
 	Details  bool
 	Spinner  string
-	Working  bool   // a turn is in progress: append the ephemeral "working…" line
+	Working  bool   // a turn is in progress: append the ephemeral indicator line
 	Waiting  bool   // …and it is blocked on a permission: "! permission requested" instead
+	Verb     string // the indicator's label ("Galloping"); "working" when empty
 	Stats    string // "(12s · 1.2k tokens)" shown after the indicator, or ""
 	Expanded map[int]bool
 	Cursor   int
@@ -215,7 +216,11 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		if o.Waiting {
 			b.WriteString("   " + styleWarn.Render("!") + " " + styleWarn.Render("permission requested"))
 		} else {
-			b.WriteString("   " + o.Spinner + " " + styleDim.Render("working…"))
+			verb := o.Verb
+			if verb == "" {
+				verb = "working"
+			}
+			b.WriteString("   " + o.Spinner + " " + styleDim.Render(verb+"…"))
 		}
 		if o.Stats != "" {
 			b.WriteString(" " + styleDim.Render(o.Stats))

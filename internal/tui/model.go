@@ -1408,9 +1408,9 @@ func (m *Model) refreshViewport() {
 	if m.chatCursor < 0 {
 		m.chatCursor = 0
 	}
-	working, waiting, stats := false, false, ""
+	working, waiting, verb, stats := false, false, "", ""
 	if t := m.transcripts[m.selectedID()]; t != nil && t.InTurn() {
-		working = true
+		working, verb = true, t.TurnVerb()
 		stats = turnStats(t.TurnStats(time.Now()))
 	}
 	for _, p := range m.prompts {
@@ -1425,6 +1425,7 @@ func (m *Model) refreshViewport() {
 		Spinner:  m.sp.View(),
 		Working:  working,
 		Waiting:  waiting,
+		Verb:     verb,
 		Stats:    stats,
 		Expanded: m.expanded[m.selectedID()],
 		Cursor:   m.chatCursor,
