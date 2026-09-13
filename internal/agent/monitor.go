@@ -4,10 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/fs"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -15,19 +12,14 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
-	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// General monitors (PRD §6.3): sources other than children whose completion
-// lands in the agent's mailbox and, when armed (the default), wakes it.
-//
-//   - command: a shell command run in the background; fires on exit
-//   - watch:   a path (file or directory, optional glob); fires once on change
-//   - timer:   a duration; fires when it elapses
-//
-// Children are not monitors: they are agents, in the subagent flow.
+// Background jobs (PRD §6.3): shell commands started with bash_async whose
+// exit lands in the agent's mailbox and wakes it, exactly like a child's
+// finish. Internally they are "monitors" of kind "command"; the kind field
+// is kept so the log stays readable if other sources return later.
 
 // Monitor is one general monitor owned by an agent.
 type Monitor struct {
@@ -70,12 +62,6 @@ type monitorsAPI struct{ a *Agent }
 func (m monitorsAPI) StartCommand(command string, timeout time.Duration) (string, error) {
 	return m.a.startMonitor("command", command, "", 0, timeout)
 }
-func (m monitorsAPI) StartWatch(path, glob string) (string, error) {
-	return m.a.startMonitor("watch", path, glob, 0, 0)
-}
-func (m monitorsAPI) StartTimer(d time.Duration, note string) (string, error) {
-	return m.a.startMonitor("timer", note, "", d.Seconds(), 0)
-}
 func (m monitorsAPI) List() []tools.MonitorStatus {
 	var out []tools.MonitorStatus
 	for _, mon := range m.a.monitorList() {
@@ -108,16 +94,6 @@ func (a *Agent) startMonitor(kind, spec, glob string, seconds float64, timeout t
 	if !a.Alive() {
 		return "", fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
 	}
-	if kind == "watch" {
-		abs := spec
-		if !filepath.IsAbs(abs) {
-			abs = filepath.Join(a.s.Dir, abs)
-		}
-		if _, err := os.Stat(abs); err != nil {
-			return "", fmt.Errorf("watch: %v", err)
-		}
-		spec = abs
-	}
 	m := &Monitor{ID: NewID("m"), Kind: kind, Spec: spec, Glob: glob, Seconds: seconds, Started: time.Now(), state: "running"}
 	m.Label = monitorLabel(kind, spec, glob, seconds)
 	ctx, cancel := context.WithCancel(a.ctx)
@@ -133,27 +109,11 @@ func (a *Agent) startMonitor(kind, spec, glob string, seconds float64, timeout t
 }
 
 func monitorLabel(kind, spec, glob string, seconds float64) string {
-	switch kind {
-	case "command":
-		s := spec
-		if len(s) > 40 {
-			s = s[:40] + "…"
-		}
-		return s
-	case "watch":
-		l := filepath.Base(spec)
-		if glob != "" {
-			l += "/" + glob
-		}
-		return l
-	case "timer":
-		l := fmtDuration(time.Duration(seconds * float64(time.Second)))
-		if spec != "" {
-			l += " · " + spec
-		}
-		return l
+	s := spec
+	if len(s) > 40 {
+		s = s[:40] + "…"
 	}
-	return spec
+	return s
 }
 
 func fmtDuration(d time.Duration) string {
@@ -167,42 +127,11 @@ func fmtDuration(d time.Duration) string {
 	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
 }
 
-// runMonitor executes the source and delivers its result.
+// runMonitor executes the job and delivers its result.
 func (a *Agent) runMonitor(ctx context.Context, m *Monitor, timeout time.Duration) {
 	var res event.MonitorFiredPayload
 	res.ID, res.Kind, res.Label = m.ID, m.Kind, m.Label
-	switch m.Kind {
-	case "command":
-		res = a.runCommandMonitor(ctx, m, timeout, res)
-	case "watch":
-		res = runWatchMonitor(ctx, m, res)
-	case "timer":
-		d := time.Duration(m.Seconds * float64(time.Second))
-		remaining := time.Until(m.Started.Add(d))
-		if remaining < 0 {
-			remaining = 0
-		}
-		t := time.NewTimer(remaining)
-		for {
-			select {
-			case <-t.C:
-				res.Summary = "timer elapsed (" + fmtDuration(d) + ")"
-				if m.Spec != "" {
-					res.Summary += ": " + m.Spec
-				}
-				a.fireMonitor(m, res)
-				return
-			case <-ctx.Done():
-				t.Stop()
-				a.finishMonitor(m, "stopped")
-				return
-			case <-time.After(5 * time.Second):
-				m.mu.Lock()
-				m.progress = fmtDuration(time.Until(m.Started.Add(d))) + " left"
-				m.mu.Unlock()
-			}
-		}
-	}
+	res = a.runCommandMonitor(ctx, m, timeout, res)
 	if ctx.Err() != nil {
 		a.finishMonitor(m, "stopped")
 		return
@@ -267,84 +196,6 @@ func (w *monitorWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// --- watch ---
-
-type fileStamp struct {
-	size int64
-	mod  int64
-}
-
-func snapshot(root, glob string) map[string]fileStamp {
-	out := map[string]fileStamp{}
-	st, err := os.Stat(root)
-	if err != nil {
-		return out
-	}
-	if !st.IsDir() {
-		out[root] = fileStamp{st.Size(), st.ModTime().UnixNano()}
-		return out
-	}
-	_ = filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if p != root && (d.Name() == ".git" || d.Name() == "node_modules") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if glob != "" {
-			rel, _ := filepath.Rel(root, p)
-			if !policy.Match(glob, rel) && !policy.Match(glob, d.Name()) {
-				return nil
-			}
-		}
-		if info, err := d.Info(); err == nil {
-			out[p] = fileStamp{info.Size(), info.ModTime().UnixNano()}
-		}
-		return nil
-	})
-	return out
-}
-
-func runWatchMonitor(ctx context.Context, m *Monitor, res event.MonitorFiredPayload) event.MonitorFiredPayload {
-	base := snapshot(m.Spec, m.Glob)
-	t := time.NewTicker(watchInterval)
-	defer t.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return res
-		case <-t.C:
-		}
-		now := snapshot(m.Spec, m.Glob)
-		var changed []string
-		for p, st := range now {
-			if b, ok := base[p]; !ok {
-				changed = append(changed, "added "+p)
-			} else if b != st {
-				changed = append(changed, "modified "+p)
-			}
-		}
-		for p := range base {
-			if _, ok := now[p]; !ok {
-				changed = append(changed, "removed "+p)
-			}
-		}
-		if len(changed) == 0 {
-			continue
-		}
-		sort.Strings(changed)
-		if len(changed) > 20 {
-			changed = append(changed[:20], fmt.Sprintf("… and %d more", len(changed)-20))
-		}
-		res.Summary = fmt.Sprintf("%d change(s) under %s", len(changed), m.Label)
-		res.Output = strings.Join(changed, "\n")
-		return res
-	}
-}
-
 // --- completion ---
 
 // fireMonitor records the result, puts it in the mailbox, and wakes the
@@ -405,7 +256,7 @@ func (a *Agent) stopMonitor(id, reason string) error {
 // monitorText renders a fired monitor as the mailbox message the model sees.
 func monitorText(r event.MonitorFiredPayload) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Monitor %q (%s, %s): %s", r.Label, r.Kind, r.ID, r.Summary)
+	fmt.Fprintf(&sb, "Job %q (%s): %s", r.Label, r.ID, r.Summary)
 	if r.Output != "" {
 		out := r.Output
 		if len(out) > 32*1024 {

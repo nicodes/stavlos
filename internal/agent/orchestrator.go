@@ -3,9 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
-	"sort"
 
-	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -64,108 +62,6 @@ func (o orchestrator) Kill(parent, id string) error {
 	}
 	o.s.killTree(c)
 	return nil
-}
-
-// Monitor arms a wake for the listed (or all live) children and marks the
-// parent's turn to end after the current tool batch. A child that already
-// finished still gets delivered: the yield starts a turn that drains it.
-func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus, error) {
-	p, ok := o.s.Agent(parent)
-	if !ok {
-		return nil, fmt.Errorf("unknown agent %q", parent)
-	}
-	if len(ids) == 0 {
-		// All live children, plus any whose result is still unread: the
-		// caller asked to be told about everything outstanding.
-		for _, cid := range p.Children() {
-			if c, ok := o.s.Agent(cid); ok && c.Alive() {
-				ids = append(ids, cid)
-			}
-		}
-		p.mu.Lock()
-		for _, r := range p.childDone {
-			ids = append(ids, r.ID)
-		}
-		p.mu.Unlock()
-	}
-	var out []tools.ChildStatus
-	var armed []string
-	for _, id := range ids {
-		if p.hasMonitor(id) { // a general monitor: arm it, no child status row
-			armed = append(armed, id)
-			continue
-		}
-		c, err := o.child(parent, id)
-		if err != nil {
-			return nil, err
-		}
-		in := c.Info()
-		out = append(out, tools.ChildStatus{ID: c.ID, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Monitored: true})
-		if c.Alive() {
-			armed = append(armed, id)
-		}
-	}
-	p.mu.Lock()
-	for _, id := range armed {
-		p.armed[id] = true
-	}
-	// A listed child that already finished is delivered right away: yield
-	// and wake so the next turn starts with its result.
-	pending := false
-	for _, r := range p.childDone {
-		for _, id := range ids {
-			if r.ID == id {
-				pending = true
-			}
-		}
-	}
-	if len(out) > 0 || pending || len(armed) > 0 {
-		p.yieldFlag = true
-	}
-	if pending {
-		for _, r := range p.childDone {
-			p.wakes[r.ID] = true
-		}
-	}
-	p.mu.Unlock()
-	if len(armed) > 0 {
-		_, _ = p.record(context.Background(), event.MonitorArmed, event.MonitorPayload{IDs: armed})
-	}
-	return out, nil
-}
-
-// Unmonitor disarms wakes; children and results are untouched.
-func (o orchestrator) Unmonitor(parent string, ids []string) ([]string, error) {
-	p, ok := o.s.Agent(parent)
-	if !ok {
-		return nil, fmt.Errorf("unknown agent %q", parent)
-	}
-	p.mu.Lock()
-	if len(ids) == 0 {
-		for id := range p.armed {
-			ids = append(ids, id)
-		}
-		for id := range p.wakes {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-	}
-	var disarmed []string
-	for _, id := range ids {
-		if p.armed[id] {
-			delete(p.armed, id)
-			disarmed = append(disarmed, id)
-		}
-		if p.wakes[id] { // finished before the disarm: cancel the pending wake too
-			delete(p.wakes, id)
-			disarmed = append(disarmed, id)
-		}
-	}
-	p.mu.Unlock()
-	if len(disarmed) > 0 {
-		_, _ = p.record(context.Background(), event.MonitorDisarmed, event.MonitorPayload{IDs: disarmed})
-	}
-	return disarmed, nil
 }
 
 // Result returns a finished child's result and marks it consumed so the

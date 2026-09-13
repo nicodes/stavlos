@@ -155,23 +155,15 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 		}
 	}
 
-	// Monitors that were running at shutdown: timers and watches resume
-	// (a timer keeps its original deadline); a background command's process
-	// is gone, so its owner is told it was lost.
+	// Background jobs that were running at shutdown: the process died with
+	// the daemon, so the owner is told the job was lost.
 	for id, p := range openMonitors {
 		a, ok := s.agents[monitorOwner[id]]
 		if !ok || finished[a.ID] || s.archived {
 			continue
 		}
-		switch p.Kind {
-		case "timer", "watch":
-			m := &Monitor{ID: id, Kind: p.Kind, Label: p.Label, Spec: p.Spec, Glob: p.Glob, Seconds: p.Seconds, Started: startedAt(events, id), state: "running"}
-			mctx, cancel := context.WithCancel(a.ctx)
-			m.cancel = cancel
-			a.monitors[id] = m
-			go a.runMonitor(mctx, m, 0)
-		case "command":
-			res := event.MonitorFiredPayload{ID: id, Kind: p.Kind, Label: p.Label, Summary: "background command lost in a daemon restart; rerun it if you still need the result", IsError: true, ExitCode: -1}
+		{
+			res := event.MonitorFiredPayload{ID: id, Kind: p.Kind, Label: p.Label, Summary: "background job lost in a daemon restart; rerun it if you still need the result", IsError: true, ExitCode: -1}
 			e, err := host.Append(ctx, event.Event{Session: s.ID, Agent: a.ID, Type: event.MonitorFired, Payload: event.MustPayload(res)})
 			if err == nil {
 				a.events = append(a.events, e)
@@ -221,17 +213,4 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 		s.cancel()
 	}
 	return s, nil
-}
-
-// startedAt finds when a monitor started, from its monitor.started event.
-func startedAt(events []event.Event, id string) time.Time {
-	for _, e := range events {
-		if e.Type == event.MonitorStarted {
-			var p event.MonitorStartedPayload
-			if e.Decode(&p) == nil && p.ID == id {
-				return e.Time
-			}
-		}
-	}
-	return time.Now()
 }

@@ -138,14 +138,11 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "agent_steer", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_cancel", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_kill", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "monitor", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "unmonitor", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "watch", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "timer", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "monitors", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_result", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_status", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "bash", Pattern: "*", Verb: policy.Ask},
+		policy.Rule{Tool: "bash_async", Pattern: "*", Verb: policy.Ask},
+		policy.Rule{Tool: "bash_kill", Pattern: "*", Verb: policy.Allow},
 		// Read-only shell commands are allowed by default so searching and
 		// looking around never prompts; anything that writes still asks.
 		policy.Rule{Tool: "bash", Pattern: "grep *", Verb: policy.Allow},
@@ -553,7 +550,7 @@ func builtinPresets() []Preset {
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
 Work carefully: read before you edit, prefer small targeted changes, and run the project's tests or build after changing code.
 Delegate reading unfamiliar or large areas of code to an explorer subagent when it would save your own context; delegate running test suites to a tester subagent when the suite is slow.
-When you spawn subagents, give each a specific task and a short label, then keep working or call monitor to wait; each child's result comes back to you as a message when it finishes.
+When you spawn subagents, give each a specific task and a short label, then keep working or end your turn; each child's result comes back to you as a message when it finishes. Run slow commands such as test suites with bash_async.
 Report what you changed and what you verified.`,
 		},
 		{

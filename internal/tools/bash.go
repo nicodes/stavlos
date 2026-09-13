@@ -17,11 +17,10 @@ import (
 type bashTool struct{}
 
 func (bashTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "bash", Description: "Run a shell command in the working directory and return its combined output. Use it for searching too (grep -rn, rg, find, ls); read-only commands like these are allowed by default. Long-running commands are killed at the timeout. With background=true the command becomes a monitor: this returns its id immediately, you keep working, and when it exits you are woken with the exit code and output (see monitors/unmonitor).",
+	return model.ToolDef{Name: "bash", Description: "Run a shell command in the working directory and return its combined output. Use it for searching too (grep -rn, rg, find, ls); read-only commands like these are allowed by default. Long-running commands are killed at the timeout; for anything slow or long-lived use bash_async instead.",
 		Schema: schema(map[string]any{
-			"command":    prop("string", "The command line to run with bash -c"),
-			"timeout":    prop("integer", "Seconds before the command is killed (default 300 foreground / 3600 background, max 7200)"),
-			"background": prop("boolean", "Run as a monitor instead of blocking (default false)"),
+			"command": prop("string", "The command line to run with bash -c"),
+			"timeout": prop("integer", "Seconds before the command is killed (default 300, max 1800)"),
 		}, "command")}
 }
 
@@ -58,31 +57,14 @@ func (w *partialWriter) String() string {
 
 func (bashTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	var a struct {
-		Command    string `json:"command"`
-		Timeout    int    `json:"timeout"`
-		Background bool   `json:"background"`
+		Command string `json:"command"`
+		Timeout int    `json:"timeout"`
 	}
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
 	if strings.TrimSpace(a.Command) == "" {
 		return errf("empty command")
-	}
-	if a.Background {
-		if env.Mon == nil {
-			return errf("background commands are not available to this agent")
-		}
-		if a.Timeout <= 0 {
-			a.Timeout = 3600
-		}
-		if a.Timeout > 7200 {
-			a.Timeout = 7200
-		}
-		id, err := env.Mon.StartCommand(a.Command, time.Duration(a.Timeout)*time.Second)
-		if err != nil {
-			return errf("%v", err)
-		}
-		return Result{Output: fmt.Sprintf("started in the background as monitor %s; you will be woken with its output when it exits (unmonitor %s to opt out, or with stop=true to kill it)", id, id)}
 	}
 	if a.Timeout <= 0 {
 		a.Timeout = 300
@@ -121,4 +103,68 @@ func (bashTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		text = "(no output)"
 	}
 	return Result{Output: text}
+}
+
+// --- bash_async / bash_kill: background jobs ---
+
+type bashAsyncTool struct{}
+
+func (bashAsyncTool) Def() model.ToolDef {
+	return model.ToolDef{Name: "bash_async", Description: "Start a shell command as a background job and return its id immediately. Keep working; when the job exits you are woken with its exit code and output as a new message (between turns, never mid-turn). Use it for test suites, builds, servers, and anything slow. If you have nothing to do until it finishes, just end your turn.",
+		Schema: schema(map[string]any{
+			"command": prop("string", "The command line to run with bash -c"),
+			"timeout": prop("integer", "Seconds before the job is killed (default 3600, max 7200)"),
+		}, "command")}
+}
+
+func (bashAsyncTool) PolicyArg(in json.RawMessage) string { return bashTool{}.PolicyArg(in) }
+
+func (bashAsyncTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
+	var a struct {
+		Command string `json:"command"`
+		Timeout int    `json:"timeout"`
+	}
+	if err := decode(in, &a); err != nil {
+		return errf("bad input: %v", err)
+	}
+	if strings.TrimSpace(a.Command) == "" {
+		return errf("empty command")
+	}
+	if env.Mon == nil {
+		return errf("background jobs are not available to this agent")
+	}
+	if a.Timeout <= 0 {
+		a.Timeout = 3600
+	}
+	if a.Timeout > 7200 {
+		a.Timeout = 7200
+	}
+	id, err := env.Mon.StartCommand(a.Command, time.Duration(a.Timeout)*time.Second)
+	if err != nil {
+		return errf("%v", err)
+	}
+	return Result{Output: fmt.Sprintf("started job %s; you will be woken with its output when it exits (bash_kill %s to stop it)", id, id)}
+}
+
+type bashKillTool struct{}
+
+func (bashKillTool) Def() model.ToolDef {
+	return model.ToolDef{Name: "bash_kill", Description: "Stop a background job started with bash_async. Use it for servers and watchers you no longer need.",
+		Schema: schema(map[string]any{"id": prop("string", "The job id returned by bash_async")}, "id")}
+}
+
+func (bashKillTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
+
+func (bashKillTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
+	if env.Mon == nil {
+		return errf("background jobs are not available to this agent")
+	}
+	id := idArg(in)
+	if !env.Mon.Has(id) {
+		return errf("no running job %q", id)
+	}
+	if err := env.Mon.Stop(id); err != nil {
+		return errf("%v", err)
+	}
+	return Result{Output: "stopped job " + id}
 }

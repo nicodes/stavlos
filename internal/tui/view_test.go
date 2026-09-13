@@ -225,8 +225,8 @@ func TestMonitorRows(t *testing.T) {
 	now := time.Now().Truncate(time.Second) // Started is RFC3339: whole seconds
 	monitors := []protocol.MonitorInfo{
 		{ID: "m1", Agent: "root", Kind: "command", Label: "go test", Spec: "go test ./...", State: "running", Started: now.Add(-75 * time.Second).Format(time.RFC3339), Progress: "42 lines", Monitored: true},
-		{ID: "m2", Agent: "root", Kind: "watch", Label: "src changes", Spec: "./src", State: "running", Started: now.Add(-3 * time.Second).Format(time.RFC3339)},
-		{ID: "m3", Agent: "root", Kind: "timer", Label: "cooldown", Spec: "300s", State: "running", Started: now.Add(-2 * time.Hour).Format(time.RFC3339), Progress: "3m left"},
+		{ID: "m2", Agent: "root", Kind: "command", Label: "src changes", Spec: "./watch.sh", State: "running", Started: now.Add(-3 * time.Second).Format(time.RFC3339)},
+		{ID: "m3", Agent: "root", Kind: "command", Label: "cooldown", Spec: "sleep 300", State: "running", Started: now.Add(-2 * time.Hour).Format(time.RFC3339), Progress: "3m left"},
 		{ID: "m4", Agent: "root", Kind: "command", Label: "old", State: "fired", Started: now.Format(time.RFC3339)},
 	}
 	rows := monitorRows(monitors, now, "⠋", 100)
@@ -246,17 +246,17 @@ func TestMonitorRows(t *testing.T) {
 			t.Fatalf("command row lacks %q: %q", want, plain[0])
 		}
 	}
-	// watch: no spinner, no progress, no wake tag
-	if !strings.HasPrefix(plain[1], "  ◷ src changes") || strings.Contains(plain[1], "⠋") || strings.Contains(plain[1], "wakes parent") || !strings.Contains(plain[1], "watch · 3s") {
-		t.Fatalf("watch row: %q", plain[1])
+	// a second running job: spinner, no wake tag, elapsed
+	if !strings.HasPrefix(plain[1], "  ◷ src changes") || !strings.Contains(plain[1], "⠋") || strings.Contains(plain[1], "wakes parent") || !strings.Contains(plain[1], "command · 3s") {
+		t.Fatalf("second job row: %q", plain[1])
 	}
-	// timer: single-width glyph, progress, hours elapsed
-	if !strings.HasPrefix(plain[2], "  ◷ cooldown") || !strings.Contains(plain[2], "timer · 3m left · 2h00m") || strings.Contains(plain[2], "⠋") {
-		t.Fatalf("timer row: %q", plain[2])
+	// progress and hours elapsed
+	if !strings.HasPrefix(plain[2], "  ◷ cooldown") || !strings.Contains(plain[2], "command · 3m left · 2h00m") {
+		t.Fatalf("third job row: %q", plain[2])
 	}
 	// a bad Started stamp just drops the elapsed field
-	rows = monitorRows([]protocol.MonitorInfo{{ID: "x", Kind: "watch", Label: "w", State: "running", Started: "nope"}}, now, "", 100)
-	if len(rows) != 1 || !strings.HasSuffix(strings.TrimRight(stripANSI(rows[0]), " "), "watch") {
+	rows = monitorRows([]protocol.MonitorInfo{{ID: "x", Kind: "command", Label: "w", State: "running", Started: "nope"}}, now, "", 100)
+	if len(rows) != 1 || !strings.HasSuffix(strings.TrimRight(stripANSI(rows[0]), " "), "command") {
 		t.Fatalf("bad stamp: %q", rows)
 	}
 	if monitorRows(nil, now, "", 100) != nil {

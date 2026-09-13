@@ -237,7 +237,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	}
 
 	cfg := a.s.Config()
-	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Waiter: orchestrator{s: a.s}, Mon: a.monitorsAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
+	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Mon: a.monitorsAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
 		Partial: func(s string) {
 			a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
 		}}
@@ -319,12 +319,16 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	}
 
 	names := append([]string(nil), a.preset.Tools...)
-	names = append(names, tools.MonitorNames...)
+	if contains(names, "bash") {
+		names = append(names, tools.AsyncNames...)
+	}
 	if a.Parent != "" {
 		names = append(names, "finish")
 	}
 	can, why := a.s.canSpawn(a)
-	sb.WriteString("\n# Monitors\nYou can run a command in the background (bash with background=true), watch a path for changes, or set a timer. Each returns a monitor id at once, and when it completes you are woken with the result as a new message, between turns, never mid-turn. monitors lists them; unmonitor stops one from waking you (stop=true kills or cancels it).\n")
+	if contains(names, "bash") {
+		sb.WriteString("\n# Background jobs\nbash_async starts a command as a job and returns its id at once; when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. Use it for anything slow. bash_kill stops a job. There is no wait tool: when nothing more can be done until a result arrives, end your turn and you will be woken.\n")
+	}
 	if a.canOrchestrate() {
 		sb.WriteString("\n# Delegation\n")
 		if can {
@@ -334,7 +338,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 					fmt.Fprintf(&sb, "- %s: %s\n", arch, p.Description)
 				}
 			}
-			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents live in this session. Children run in the background. A child that finishes wakes you with its result as a new message, never mid-turn (a result that lands while you are working arrives when your current turn ends). Call monitor to end your turn and wait for children; call unmonitor if you would rather not be woken and will check with agent_result or agent_status instead. There is no blocking wait. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Live(), cfg.Limits.MaxAgents)
+			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents live in this session. Children run in the background. A child that finishes wakes you with its result as a new message, never mid-turn (a result that lands while you are working arrives when your current turn ends). There is no wait tool: when nothing more can be done until a child reports, end your turn. agent_status and agent_result let you check in early. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Live(), cfg.Limits.MaxAgents)
 			names = append(names, tools.OrchestrationNames...)
 		} else {
 			fmt.Fprintf(&sb, "You cannot spawn right now (%s). Do the work yourself.\n", why)

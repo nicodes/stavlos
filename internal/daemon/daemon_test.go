@@ -166,7 +166,7 @@ func setupConfig(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
 	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"bash":{"echo*":"allow","*":"ask"},"write":"allow"}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"bash":{"echo*":"allow","*":"ask"},"bash_async":{"echo*":"allow"},"write":"allow"}}`), 0o644)
 }
 
 func TestEndToEnd(t *testing.T) {
@@ -194,8 +194,8 @@ func TestEndToEnd(t *testing.T) {
 		func(model.Request) model.Response {
 			return call("c3", "agent_create", `{"archetype":"explorer","label":"scout","task":"look around"}`)
 		},
-		// parent yields with monitor, then is woken by the child's result
-		func(model.Request) model.Response { return call("c4", "monitor", `{}`) },
+		// parent has nothing else to do; it stops and is woken by the child's result
+		func(model.Request) model.Response { return text("delegated; waiting") },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1]
 			if !strings.Contains(last.Blocks[len(last.Blocks)-1].Text, "found it") {
@@ -288,7 +288,7 @@ func TestEndToEnd(t *testing.T) {
 			nUsage++
 		}
 	}
-	if nUsage != 7 { // 3 (turn 1) + 1 (spawn) + 1 (monitor) + 1 (child) + 1 (turn 3)
+	if nUsage != 7 { // 3 (turn 1) + 1 (spawn) + 1 (stop) + 1 (child) + 1 (turn 3)
 		t.Fatalf("usage events %d", nUsage)
 	}
 	// reconcile
@@ -410,217 +410,6 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	}
 }
 
-func TestMonitorKeepsParentResponsive(t *testing.T) {
-	setupConfig(t)
-	work := t.TempDir()
-	fm := &fakeModel{}
-	release := make(chan struct{})
-	fm.steps = []func(model.Request) model.Response{
-		// turn 1: spawn, then monitor → turn ends without waiting
-		func(model.Request) model.Response {
-			return call("c1", "agent_create", `{"archetype":"explorer","label":"slow","task":"take your time"}`)
-		},
-		func(model.Request) model.Response { return call("c2", "monitor", `{}`) },
-		// turn 2: a human prompt answered while the child is still running
-		func(req model.Request) model.Response {
-			last := req.Messages[len(req.Messages)-1].Blocks
-			if !strings.Contains(last[len(last)-1].Text, "still there") {
-				t.Errorf("turn 2 input: %+v", last)
-			}
-			return text("yes, still here")
-		},
-		// turn 3: woken by the child's result
-		func(req model.Request) model.Response {
-			last := req.Messages[len(req.Messages)-1].Blocks
-			if !strings.Contains(last[len(last)-1].Text, "finished with status success") || !strings.Contains(last[len(last)-1].Text, "took a while") {
-				t.Errorf("turn 3 input: %+v", last)
-			}
-			return text("got the result")
-		},
-	}
-	fm.childSteps = []func(model.Request) model.Response{
-		func(model.Request) model.Response {
-			<-release
-			return call("k1", "finish", `{"summary":"took a while","status":"success"}`)
-		},
-	}
-	h := newHarness(t, t.TempDir(), fm)
-	defer h.close()
-	ctx := context.Background()
-	s, err := h.c.CreateSession(ctx, work, "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
-	root := agents[0].ID
-
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
-	e := h.waitFor(event.TurnEnded, root)
-	var te event.TurnEndedPayload
-	_ = e.Decode(&te)
-	if te.Turn != 1 || te.Reason != "end_turn" {
-		t.Fatalf("turn 1: %+v", te)
-	}
-	agents, _ = h.c.Tree(ctx, s.ID)
-	if agents[0].State != "idle" || len(agents) != 2 || agents[1].State == "finished" {
-		t.Fatalf("after monitor: %+v", agents)
-	}
-	// parent answers while the child is blocked
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "still there?")
-	e = h.waitFor(event.TurnEnded, root)
-	_ = e.Decode(&te)
-	if te.Turn != 2 {
-		t.Fatalf("turn 2: %+v", te)
-	}
-	// now the child finishes and wakes the parent
-	close(release)
-	h.waitFor(event.AgentFinished, agents[1].ID)
-	e = h.waitFor(event.TurnEnded, root)
-	_ = e.Decode(&te)
-	if te.Turn != 3 || te.Reason != "end_turn" {
-		t.Fatalf("turn 3: %+v", te)
-	}
-}
-
-func TestUnmonitoredChildDoesNotWake(t *testing.T) {
-	// Children wake their parent by default; this parent opts out with
-	// unmonitor and must then not be woken.
-	setupConfig(t)
-	work := t.TempDir()
-	fm := &fakeModel{}
-	fm.steps = []func(model.Request) model.Response{
-		// turn 1: spawn two children, opt out of their wakes, and stop
-		func(model.Request) model.Response {
-			return model.Response{Blocks: []model.Block{
-				{Type: model.BlockToolUse, ID: "c1", Name: "agent_create", Input: json.RawMessage(`{"archetype":"explorer","label":"one","task":"a"}`)},
-				{Type: model.BlockToolUse, ID: "c2", Name: "agent_create", Input: json.RawMessage(`{"archetype":"explorer","label":"two","task":"b"}`)},
-				{Type: model.BlockToolUse, ID: "c3", Name: "unmonitor", Input: json.RawMessage(`{}`)},
-			}, StopReason: model.StopToolUse}
-		},
-		func(model.Request) model.Response { return text("spawned, carrying on") },
-		// turn 2 (user prompted): both results are handed over at turn start
-		func(req model.Request) model.Response {
-			last := req.Messages[len(req.Messages)-1]
-			joined := ""
-			for _, b := range last.Blocks {
-				joined += b.Text + "\n"
-			}
-			if !strings.Contains(joined, `"one"`) || !strings.Contains(joined, `"two"`) || !strings.Contains(joined, "anything new?") {
-				t.Errorf("turn 2 input missing results or prompt: %q", joined)
-			}
-			return text("both done")
-		},
-	}
-	fm.childSteps = []func(model.Request) model.Response{
-		func(model.Request) model.Response { return call("k", "finish", `{"summary":"x","status":"success"}`) },
-		func(model.Request) model.Response { return call("k", "finish", `{"summary":"y","status":"success"}`) },
-	}
-	h := newHarness(t, t.TempDir(), fm)
-	defer h.close()
-	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
-	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
-	e := h.waitFor(event.TurnEnded, root)
-	var te event.TurnEndedPayload
-	_ = e.Decode(&te)
-	if te.Turn != 1 {
-		t.Fatalf("%+v", te)
-	}
-	// Both children finish (possibly before the parent's turn 1 ended, so
-	// poll the tree rather than the event stream).
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		agents, _ = h.c.Tree(ctx, s.ID)
-		if len(agents) == 3 && agents[1].State == "finished" && agents[2].State == "finished" {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("children did not finish: %+v", agents)
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	// no wake: the parent stays idle at turn 1
-	time.Sleep(300 * time.Millisecond)
-	agents, _ = h.c.Tree(ctx, s.ID)
-	if agents[0].Turn != 1 || agents[0].State != "idle" {
-		t.Fatalf("parent was woken without monitor: %+v", agents[0])
-	}
-	if agents[1].Monitored || agents[2].Monitored {
-		t.Fatalf("children should not be armed after unmonitor: %+v", agents[1:])
-	}
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "anything new?")
-	e = h.waitFor(event.TurnEnded, root)
-	_ = e.Decode(&te)
-	if te.Turn != 2 || te.Reason != "end_turn" {
-		t.Fatalf("%+v", te)
-	}
-}
-
-func TestUnmonitorDisarms(t *testing.T) {
-	setupConfig(t)
-	work := t.TempDir()
-	fm := &fakeModel{}
-	release := make(chan struct{})
-	fm.steps = []func(model.Request) model.Response{
-		func(model.Request) model.Response {
-			return call("c1", "agent_create", `{"archetype":"explorer","label":"slow","task":"a"}`)
-		},
-		func(model.Request) model.Response { return call("c2", "monitor", `{}`) },
-		// turn 2 (user prompted while armed): disarm, then stop
-		func(model.Request) model.Response { return call("c3", "unmonitor", `{}`) },
-		func(req model.Request) model.Response {
-			last := req.Messages[len(req.Messages)-1]
-			if !strings.Contains(last.Blocks[0].Content, "disarmed") {
-				t.Errorf("unmonitor result: %+v", last)
-			}
-			return text("ok, not waiting")
-		},
-	}
-	fm.childSteps = []func(model.Request) model.Response{
-		func(model.Request) model.Response {
-			<-release
-			return call("k", "finish", `{"summary":"late","status":"success"}`)
-		},
-	}
-	h := newHarness(t, t.TempDir(), fm)
-	defer h.close()
-	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
-	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
-	h.waitFor(event.MonitorArmed, root)
-	h.waitFor(event.TurnEnded, root)
-	agents, _ = h.c.Tree(ctx, s.ID)
-	if !agents[1].Monitored {
-		t.Fatalf("child should be armed: %+v", agents[1])
-	}
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "never mind")
-	h.waitFor(event.MonitorDisarmed, root)
-	e := h.waitFor(event.TurnEnded, root)
-	var te event.TurnEndedPayload
-	_ = e.Decode(&te)
-	if te.Turn != 2 {
-		t.Fatalf("%+v", te)
-	}
-	agents, _ = h.c.Tree(ctx, s.ID)
-	if agents[1].Monitored {
-		t.Fatalf("child still armed: %+v", agents[1])
-	}
-	close(release)
-	h.waitFor(event.AgentFinished, "")
-	time.Sleep(300 * time.Millisecond)
-	agents, _ = h.c.Tree(ctx, s.ID)
-	if agents[0].Turn != 2 || agents[0].State != "idle" {
-		t.Fatalf("parent woken after unmonitor: %+v", agents[0])
-	}
-}
-
 func TestSpawnArmsWakeByDefault(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
@@ -674,18 +463,18 @@ func TestSpawnArmsWakeByDefault(t *testing.T) {
 	}
 }
 
-func TestBackgroundCommandMonitorWakes(t *testing.T) {
+func TestBashAsyncWakes(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return call("c1", "bash", `{"command":"echo one; sleep 0.3; echo two; exit 3","background":true}`)
+			return call("c1", "bash_async", `{"command":"echo one; sleep 0.3; echo two; exit 3"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if !strings.Contains(last.Content, "monitor m") {
-				t.Errorf("bash background result: %+v", last)
+			if !strings.Contains(last.Content, "started job m") {
+				t.Errorf("bash_async result: %+v", last)
 			}
 			return text("started, carrying on")
 		},
@@ -737,78 +526,23 @@ func TestBackgroundCommandMonitorWakes(t *testing.T) {
 	}
 }
 
-func TestWatchAndTimerMonitors(t *testing.T) {
+func TestBashKillStopsJob(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return model.Response{Blocks: []model.Block{
-				{Type: model.BlockToolUse, ID: "c1", Name: "watch", Input: json.RawMessage(`{"path":".","glob":"*.txt"}`)},
-				{Type: model.BlockToolUse, ID: "c2", Name: "timer", Input: json.RawMessage(`{"seconds":1,"note":"check again"}`)},
-			}, StopReason: model.StopToolUse}
+			return call("c1", "bash_async", `{"command":"echo start; sleep 30"}`)
 		},
-		func(model.Request) model.Response { return text("waiting") },
-		func(req model.Request) model.Response {
-			// woken once or twice depending on timing; both texts must show up across wakes
-			return text("ok")
-		},
-		func(req model.Request) model.Response { return text("ok") },
-	}
-	h := newHarness(t, t.TempDir(), fm)
-	defer h.close()
-	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
-	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "watch and wait")
-	h.waitFor(event.MonitorStarted, root)
-	h.waitFor(event.MonitorStarted, root)
-	h.waitFor(event.TurnEnded, root)
-	agents, _ = h.c.Tree(ctx, s.ID)
-	if len(agents[0].Monitors) != 2 {
-		t.Fatalf("%+v", agents[0].Monitors)
-	}
-	// change a matching file → the watch fires
-	time.Sleep(200 * time.Millisecond)
-	os.WriteFile(filepath.Join(work, "note.txt"), []byte("hi"), 0o644)
-	kinds := map[string]event.MonitorFiredPayload{}
-	for len(kinds) < 2 {
-		e := h.waitFor(event.MonitorFired, root)
-		var p event.MonitorFiredPayload
-		_ = e.Decode(&p)
-		kinds[p.Kind] = p
-	}
-	if !strings.Contains(kinds["watch"].Output, "note.txt") || !strings.Contains(kinds["timer"].Summary, "check again") {
-		t.Fatalf("%+v", kinds)
-	}
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		agents, _ = h.c.Tree(ctx, s.ID)
-		if len(agents[0].Monitors) == 0 && agents[0].State == "idle" && agents[0].Turn >= 2 {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("monitors not cleared / parent not woken: %+v", agents[0])
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-}
-
-func TestUnmonitorStopKillsCommand(t *testing.T) {
-	setupConfig(t)
-	work := t.TempDir()
-	fm := &fakeModel{}
-	fm.steps = []func(model.Request) model.Response{
-		func(model.Request) model.Response {
-			return call("c1", "bash", `{"command":"echo start; sleep 30","background":true}`)
-		},
-		func(model.Request) model.Response { return call("c2", "unmonitor", `{"stop":true}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if !strings.Contains(last.Content, "stopped m") {
-				t.Errorf("unmonitor stop result: %+v", last)
+			id := strings.TrimSpace(strings.TrimPrefix(strings.Split(last.Content, ";")[0], "started job "))
+			return call("c2", "bash_kill", `{"id":"`+id+`"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !strings.Contains(last.Content, "stopped job m") {
+				t.Errorf("bash_kill result: %+v", last)
 			}
 			return text("killed it")
 		},

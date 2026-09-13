@@ -576,7 +576,7 @@ func EventLines(ev event.Event) []Line {
 		case "child_finished":
 			return blockWith(BlockChild, "child", p.Text, GlyphChild)
 		case "monitor_fired":
-			return blockWith(BlockChild, "monitor", p.Text, monitorGlyph(monitorKindFromText(p.Text)))
+			return blockWith(BlockChild, "job", p.Text, monitorGlyph("command"))
 		default:
 			return block(BlockUser, p.Kind, p.Text)
 		}
@@ -688,7 +688,7 @@ func EventLines(ev event.Event) []Line {
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		return []Line{{Kind: LineDim, Glyph: monitorGlyph(p.Kind), Tone: ToneWorking, Text: monitorKindWord(p.Kind) + ": " + p.Label}}
+		return []Line{{Kind: LineDim, Glyph: monitorGlyph(p.Kind), Tone: ToneWorking, Text: "job: " + p.Label}}
 
 	case event.MonitorFired:
 		var p event.MonitorFiredPayload
@@ -788,7 +788,7 @@ func monitorFiredLines(p event.MonitorFiredPayload) []Line {
 
 // monitorStoppedLines renders "<glyph> monitor stopped (<reason>)".
 func monitorStoppedLines(kind, reason string) []Line {
-	text := "monitor stopped"
+	text := "job stopped"
 	if reason = strings.TrimSpace(reason); reason != "" {
 		text += " (" + reason + ")"
 	}
@@ -926,8 +926,10 @@ func toolArg(name string, raw json.RawMessage) string {
 		return strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
 	}
 	switch name {
-	case "bash":
+	case "bash", "bash_async":
 		return str("command")
+	case "bash_kill":
+		return str("id")
 	case "read", "write", "edit":
 		return str("path")
 	case "apply_patch":
@@ -935,8 +937,6 @@ func toolArg(name string, raw json.RawMessage) string {
 			return patchFiles(patch)
 		}
 		return ""
-	case "watch":
-		return str("path")
 	case "agent_create", "spawn":
 		label, arch := str("label"), str("archetype")
 		switch {
