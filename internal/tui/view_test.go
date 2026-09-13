@@ -895,6 +895,7 @@ func TestPermissionShowsWholeCommand(t *testing.T) {
 func TestMetaRowAndStripRepo(t *testing.T) {
 	m := sessionModel()
 	m.showTree = false
+	m.hideKeys = false // the key bar is off by default; this test checks the row above it
 	m.session.Dir = "/repo/project"
 	m.session.Model, m.agents[0].Model = "chatgpt/gpt-5", "chatgpt/gpt-5"
 	m.agents[0].Tokens, m.agents[0].CostUSD = 1500, 0.02
@@ -1049,19 +1050,19 @@ func TestHelpTogglesKeyBar(t *testing.T) {
 	m.width, m.height = 100, 30
 	m.layout()
 	before := m.vp.Height
-	if _, kb := m.keyBarView(); kb == 0 || !strings.Contains(stripANSI(m.View()), "enter") {
-		t.Fatal("the key bar should show by default")
+	if _, kb := m.keyBarView(); kb != 0 || strings.Contains(stripANSI(m.View()), "history") {
+		t.Fatal("the key bar should be hidden by default")
 	}
 	m.command("/help")
 	v := stripANSI(m.View())
-	if _, kb := m.keyBarView(); kb != 0 || strings.Contains(v, "history") || strings.Count(v, "\n")+1 != m.height {
-		t.Fatalf("after /help the key bar should be gone and the view still fill the window (kb=%d):\n%s", kb, v)
+	if _, kb := m.keyBarView(); kb == 0 || !strings.Contains(v, "enter") || strings.Count(v, "\n")+1 != m.height {
+		t.Fatalf("after /help the key bar should show and the view still fill the window (kb=%d):\n%s", kb, v)
 	}
-	if m.vp.Height <= before {
-		t.Fatalf("the chat should grow into the freed rows: %d → %d", before, m.vp.Height)
+	if m.vp.Height >= before {
+		t.Fatalf("the chat should shrink to make room: %d → %d", before, m.vp.Height)
 	}
 	m.command("/help")
-	if _, kb := m.keyBarView(); kb == 0 {
-		t.Fatal("/help again should bring the key bar back")
+	if _, kb := m.keyBarView(); kb != 0 {
+		t.Fatal("/help again should hide the key bar")
 	}
 }
