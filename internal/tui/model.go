@@ -644,9 +644,10 @@ type selection struct {
 // selection or, when nothing was dragged, counts as a click. Plain motion
 // is hover.
 func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
-	// Hover and clicks work in main-column coordinates; the sidebar, when
-	// shown, occupies the left edge of the screen.
-	cx, inMain := m.mainX(msg.X)
+	// Hover and clicks work in chat-column coordinates on the chat rows; the
+	// sidebar, when shown, occupies the left edge beside the chat only. The
+	// rows from the rule down span the window.
+	cx, inMain := m.mainX(msg.X, msg.Y)
 	switch {
 	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
 		m.sel = selection{pressed: true, ax: msg.X, ay: msg.Y, bx: msg.X, by: msg.Y}
@@ -680,11 +681,12 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 	return nil
 }
 
-// mainX maps a screen column to the main column: with the sidebar shown
-// the main column starts after it and its separator. inMain is false over
-// the sidebar.
-func (m *Model) mainX(x int) (int, bool) {
-	if !m.sidebarVisible() {
+// mainX maps a screen column to the chat column for the rows the sidebar
+// shares (the chat and the status line): with the sidebar shown the chat
+// starts after it and its separator. inMain is false over the sidebar.
+// Lower rows span the window and are returned as they are.
+func (m *Model) mainX(x, y int) (int, bool) {
+	if !m.sidebarVisible() || y > m.vp.Height {
 		return x, true
 	}
 	off := sidebarWidth + 1
@@ -948,8 +950,8 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 	if x < 0 || y < 0 {
 		return nil
 	}
-	if x >= m.contentWidth() {
-		return nil
+	if y < m.vp.Height && x >= m.contentWidth() {
+		return nil // right of the chat column
 	}
 	lay := m.rows()
 	switch {
@@ -1151,11 +1153,11 @@ func (m *Model) rows() rowLayout {
 	meta := m.vp.Height + 2 // blank line, then the rule, then the meta row
 	y := meta + 1           // the strip
 	lay := rowLayout{meta: meta, strip: y, stripEnd: y}
-	if sv := m.sectionsView(m.contentWidth()); sv != "" {
+	if sv := m.sectionsView(m.width); sv != "" {
 		lay.stripEnd = y + strings.Count(sv, "\n")
 		y = lay.stripEnd + 2 // blank line after the strip block
 	}
-	if pv := m.paletteViewFor(m.contentWidth()); pv != "" {
+	if pv := m.paletteViewFor(m.width); pv != "" {
 		y += strings.Count(pv, "\n") + 1
 	}
 	lay.input = y
@@ -2092,10 +2094,10 @@ func (m *Model) layout() {
 
 	_, kb := m.keyBarView()
 	bodyH := m.height - kb - 2 - (m.inputRows() + 1) // key bar, blank + chat rule, input rows + meta row
-	if sv := m.sectionsView(m.contentWidth()); sv != "" {
+	if sv := m.sectionsView(m.width); sv != "" {
 		bodyH -= strings.Count(sv, "\n") + 1 + 1 // plus the blank line below
 	}
-	if pv := m.paletteViewFor(m.contentWidth()); pv != "" {
+	if pv := m.paletteViewFor(m.width); pv != "" {
 		bodyH -= strings.Count(pv, "\n") + 1
 	}
 	if bodyH < 1 {
