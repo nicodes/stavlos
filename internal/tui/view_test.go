@@ -759,6 +759,7 @@ func TestAgentOutcomeColours(t *testing.T) {
 		{protocol.AgentInfo{State: "blocked"}, "working"},
 		{protocol.AgentInfo{State: "idle"}, "idle"},
 		{protocol.AgentInfo{State: "idle", LastError: "boom"}, "error"},
+		{protocol.AgentInfo{State: "waiting"}, "waiting"},
 		{protocol.AgentInfo{State: "killed"}, "complete"},
 	}
 	for _, c := range cases {

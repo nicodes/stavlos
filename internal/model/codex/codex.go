@@ -44,8 +44,8 @@ func NewWithEndpoint(src model.TokenSource, endpoint string) model.Provider {
 	return &provider{
 		src:      src,
 		endpoint: endpoint,
-		// No overall timeout: streams are long and ctx bounds them. Do
-		// bound how long the backend may take to start answering.
+		// No overall timeout: streams are long and ctx bounds them. Allow up
+		// to three minutes for the backend to start answering.
 		http: &http.Client{Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
 			ResponseHeaderTimeout: 3 * time.Minute,

@@ -453,8 +453,8 @@ func TestChildResponseWakesParent(t *testing.T) {
 		t.Fatalf("%+v", te)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
-	if len(agents) != 2 {
-		t.Fatalf("child should exist: %+v", agents)
+	if len(agents) != 2 || agents[0].State != "waiting" {
+		t.Fatalf("parent idle with a question out should read waiting: %+v", agents)
 	}
 	close(release)
 	e = h.waitFor(event.TurnEnded, root)
@@ -462,10 +462,11 @@ func TestChildResponseWakesParent(t *testing.T) {
 	if te.Turn != 2 || te.Reason != "end_turn" {
 		t.Fatalf("parent was not woken by the response: %+v", te)
 	}
-	// the child is still there, idle, ready for a follow-up
+	// the child is still there, idle, ready for a follow-up; the parent is
+	// plainly idle again now that the answer landed
 	agents, _ = h.c.Tree(ctx, s.ID)
-	if len(agents) != 2 || agents[1].State != "idle" {
-		t.Fatalf("child after answering: %+v", agents)
+	if len(agents) != 2 || agents[1].State != "idle" || agents[0].State != "idle" {
+		t.Fatalf("after answering: %+v", agents)
 	}
 }
 
