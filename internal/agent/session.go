@@ -292,6 +292,14 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		Payload: event.MustPayload(event.AgentSpawnedPayload{ID: a.ID, Parent: parentID, Archetype: archetype, Label: label, Model: modelID, Task: task, Depth: depth})}); err != nil {
 		return nil, err
 	}
+	if parent != nil {
+		// A child wakes its parent when it finishes unless the parent
+		// unmonitors it: arming is the default, not an opt-in (PRD §6.3).
+		parent.mu.Lock()
+		parent.armed[a.ID] = true
+		parent.mu.Unlock()
+		_, _ = parent.record(ctx, event.MonitorArmed, event.MonitorPayload{IDs: []string{a.ID}})
+	}
 	a.start()
 	if task != "" {
 		if err := a.Prompt(ctx, task, "agent:"+parentID); err != nil {

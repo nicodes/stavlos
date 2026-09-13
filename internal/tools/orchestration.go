@@ -33,7 +33,7 @@ func jsonOut(v any) Result {
 type spawnTool struct{}
 
 func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "spawn", Description: "Create a child agent that works on a task in the background. Returns its id immediately. Its finish result goes to your mailbox and never interrupts you: read it whenever you like with result or status, or call monitor to be woken when it is done. Results still in the mailbox are also handed to you at the start of your next turn.",
+	return model.ToolDef{Name: "spawn", Description: "Create a child agent that works on a task in the background. Returns its id immediately. When it finishes you are woken with its result as a new message (never mid-turn: a result that arrives while you are working is delivered when your current turn ends). Call monitor to end your turn and wait for it; call unmonitor if you would rather check on it yourself with result or status.",
 		Schema: schema(map[string]any{
 			"archetype": prop("string", "Preset name of the child (see the list in your instructions)"),
 			"label":     prop("string", "Short human-facing name for this child, e.g. 'auth-explorer' (required)"),
@@ -152,7 +152,7 @@ func (killTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type monitorTool struct{}
 
 func (monitorTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "monitor", Description: "Arm a wake and hand control back: your turn ends after this tool call (put anything else you need in the same batch), and when a listed child finishes you are woken with its result as a new message; several finishing together wake you once. Omit ids for all live children. Without monitor a child's finish never wakes you. There is no blocking wait.",
+	return model.ToolDef{Name: "monitor", Description: "End your turn and wait to be woken: put anything else you need in the same batch, then when a listed child finishes you get its result as a new message (several finishing together wake you once). Children wake you by default, so this is mainly how you wait; it also re-arms any child you had unmonitored. Omit ids for all live children. There is no blocking wait.",
 		Schema: schema(map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Child ids (default: all live children)"}})}
 }
 func (monitorTool) PolicyArg(in json.RawMessage) string { return "" }
@@ -180,7 +180,7 @@ func (monitorTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 type unmonitorTool struct{}
 
 func (unmonitorTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "unmonitor", Description: "Disarm the wake for the given children (all if omitted). They keep running and their results stay in your mailbox for result/status or your next turn; you just will not be woken by them.",
+	return model.ToolDef{Name: "unmonitor", Description: "Stop the given children (all if omitted) from waking you when they finish. They keep running and their results stay in your mailbox for result/status or your next turn; you just will not be woken by them.",
 		Schema: schema(map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Child ids (default: all)"}})}
 }
 func (unmonitorTool) PolicyArg(in json.RawMessage) string { return "" }

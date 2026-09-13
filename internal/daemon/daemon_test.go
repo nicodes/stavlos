@@ -484,15 +484,18 @@ func TestMonitorKeepsParentResponsive(t *testing.T) {
 }
 
 func TestUnmonitoredChildDoesNotWake(t *testing.T) {
+	// Children wake their parent by default; this parent opts out with
+	// unmonitor and must then not be woken.
 	setupConfig(t)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
-		// turn 1: spawn two children and just stop (no monitor)
+		// turn 1: spawn two children, opt out of their wakes, and stop
 		func(model.Request) model.Response {
 			return model.Response{Blocks: []model.Block{
 				{Type: model.BlockToolUse, ID: "c1", Name: "spawn", Input: json.RawMessage(`{"archetype":"explorer","label":"one","task":"a"}`)},
 				{Type: model.BlockToolUse, ID: "c2", Name: "spawn", Input: json.RawMessage(`{"archetype":"explorer","label":"two","task":"b"}`)},
+				{Type: model.BlockToolUse, ID: "c3", Name: "unmonitor", Input: json.RawMessage(`{}`)},
 			}, StopReason: model.StopToolUse}
 		},
 		func(model.Request) model.Response { return text("spawned, carrying on") },
@@ -547,7 +550,7 @@ func TestUnmonitoredChildDoesNotWake(t *testing.T) {
 		t.Fatalf("parent was woken without monitor: %+v", agents[0])
 	}
 	if agents[1].Monitored || agents[2].Monitored {
-		t.Fatalf("children should not be armed: %+v", agents[1:])
+		t.Fatalf("children should not be armed after unmonitor: %+v", agents[1:])
 	}
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "anything new?")
 	e = h.waitFor(event.TurnEnded, root)
@@ -615,5 +618,58 @@ func TestUnmonitorDisarms(t *testing.T) {
 	agents, _ = h.c.Tree(ctx, s.ID)
 	if agents[0].Turn != 2 || agents[0].State != "idle" {
 		t.Fatalf("parent woken after unmonitor: %+v", agents[0])
+	}
+}
+
+func TestSpawnArmsWakeByDefault(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	release := make(chan struct{})
+	fm.steps = []func(model.Request) model.Response{
+		// turn 1: spawn and stop, without calling monitor
+		func(model.Request) model.Response {
+			return call("c1", "spawn", `{"archetype":"explorer","label":"slow","task":"a"}`)
+		},
+		func(model.Request) model.Response { return text("spawned, done for now") },
+		// turn 2: woken by the child's finish
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks
+			if !strings.Contains(last[len(last)-1].Text, "finished with status success") {
+				t.Errorf("wake input: %+v", last)
+			}
+			return text("thanks")
+		},
+	}
+	fm.childSteps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			<-release
+			return call("k", "finish", `{"summary":"late","status":"success"}`)
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
+	h.waitFor(event.MonitorArmed, root)
+	e := h.waitFor(event.TurnEnded, root)
+	var te event.TurnEndedPayload
+	_ = e.Decode(&te)
+	if te.Turn != 1 {
+		t.Fatalf("%+v", te)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents) != 2 || !agents[1].Monitored {
+		t.Fatalf("child should be armed by spawn: %+v", agents)
+	}
+	close(release)
+	e = h.waitFor(event.TurnEnded, root)
+	_ = e.Decode(&te)
+	if te.Turn != 2 || te.Reason != "end_turn" {
+		t.Fatalf("parent was not woken: %+v", te)
 	}
 }
