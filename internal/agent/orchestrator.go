@@ -87,11 +87,14 @@ func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus,
 		in := c.Info()
 		out = append(out, tools.ChildStatus{ID: c.ID, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD})
 	}
-	if len(out) > 0 {
-		p.mu.Lock()
+	// Yield if anything is live or a result is already waiting in the inbox;
+	// a child that finished before monitor was called must still be delivered.
+	p.mu.Lock()
+	pending := len(p.childDone) > 0
+	if len(out) > 0 || pending {
 		p.yieldFlag = true
-		p.mu.Unlock()
 	}
+	p.mu.Unlock()
 	return out, nil
 }
 

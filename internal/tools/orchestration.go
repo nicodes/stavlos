@@ -169,7 +169,7 @@ func (monitorTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 		return errf("%v", err)
 	}
 	if len(st) == 0 {
-		return Result{Output: "no live children to monitor"}
+		return Result{Output: "no live children; any finished results arrive as your next message"}
 	}
 	b, _ := json.MarshalIndent(st, "", "  ")
 	return Result{Output: "monitoring; your turn ends after this batch and each result will arrive as a message:\n" + string(b)}
