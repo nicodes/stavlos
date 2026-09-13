@@ -1286,7 +1286,12 @@ func (m *Model) layout() {
 		return
 	}
 	boxW := m.boxWidth()
-	m.input.Width = boxW - 3 - len([]rune(m.input.Prompt)) - 1 // border + padding + cursor
+	m.input.Width = boxW - len([]rune(m.input.Prompt)) - 1 // prompt + cursor
+	// The prompt chevron carries the focus colour (there is no box border).
+	m.input.PromptStyle = styleBorderMuted
+	if m.focus == focusInput {
+		m.input.PromptStyle = styleBorderUser
+	}
 	m.promptInput.Width = boxW - 4 - len([]rune(m.promptInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
