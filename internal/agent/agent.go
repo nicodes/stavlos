@@ -55,6 +55,7 @@ type Agent struct {
 	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
 	armed      map[string]bool // child ids whose finish wakes this agent (monitor)
 	wakeFlag   bool            // an armed child finished: start a turn even with no prompt
+	lastError  string          // error that ended the most recent turn; cleared when a turn starts
 	children   []string
 	results    map[string]tools.ChildResult // finished children not yet consumed by wait/result
 	done       chan struct{}                // closed on finish or kill
@@ -335,6 +336,7 @@ func (a *Agent) Info() protocol.AgentInfo {
 		info.Summary = a.finished.Summary
 		info.Status = a.finished.Status
 	}
+	info.LastError = a.lastError
 	a.mu.Unlock()
 	if p, ok := a.s.Agent(a.Parent); ok {
 		info.Monitored = p.IsArmed(a.ID)

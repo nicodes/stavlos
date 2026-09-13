@@ -102,9 +102,17 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			openTurns[e.Agent] = &open{turn: p.Turn}
 			if a, ok := s.agents[e.Agent]; ok {
 				a.turn = p.Turn
+				a.lastError = ""
 			}
 		case event.TurnEnded, event.TurnAborted:
 			delete(openTurns, e.Agent)
+			if a, ok := s.agents[e.Agent]; ok && e.Type == event.TurnEnded {
+				var p event.TurnEndedPayload
+				_ = e.Decode(&p)
+				if p.Reason == "error" {
+					a.lastError = p.Error
+				}
+			}
 		case event.Usage:
 			if a, ok := s.agents[e.Agent]; ok {
 				var p event.UsagePayload

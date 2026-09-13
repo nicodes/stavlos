@@ -54,20 +54,31 @@ var (
 	styleBorderFinished = lipgloss.NewStyle().Foreground(colSuccess)
 )
 
-func stateColor(state string) lipgloss.TerminalColor {
-	switch state {
-	case "running":
-		return colSuccess
-	case "waiting":
-		return colWarning
-	case "blocked":
-		return colBlocked
-	case "finished":
-		return colAccent
-	case "killed":
-		return colError
+// agentOutcome collapses an agent's fields into the state the sidebar
+// colours: "working", "error", "complete", or "idle".
+func agentOutcome(a protocol.AgentInfo) string {
+	switch {
+	case a.State == "running" || a.State == "blocked":
+		return "working"
+	case a.LastError != "" || (a.State == "finished" && a.Status == "failure"):
+		return "error"
+	case a.State == "finished" || a.State == "killed":
+		return "complete"
 	}
-	return colMuted
+	return "idle"
+}
+
+// agentDot is the coloured marker for an agent row.
+func agentDot(a protocol.AgentInfo) string {
+	switch agentOutcome(a) {
+	case "working":
+		return lipgloss.NewStyle().Foreground(colWarning).Render("●")
+	case "error":
+		return lipgloss.NewStyle().Foreground(colError).Render("●")
+	case "complete":
+		return lipgloss.NewStyle().Foreground(colMuted).Render("●")
+	}
+	return lipgloss.NewStyle().Foreground(colMuted).Render("○")
 }
 
 func blockBorder(k BlockKind) string {
@@ -589,12 +600,16 @@ func (m Model) treeRows(width int) []string {
 		case i == m.selected:
 			marker = styleAccent.Render("▸") + " "
 		}
-		dot := lipgloss.NewStyle().Foreground(stateColor(a.State)).Render("●")
+		dot := agentDot(a)
 		avail := width - len([]rune(indent)) - 7
 		if avail < 4 {
 			avail = 4
 		}
-		text := truncRunes(fmt.Sprintf("%s (%s) · %s", a.Label, a.Archetype, a.State), avail)
+		label := a.State
+		if agentOutcome(a) == "error" {
+			label = "error"
+		}
+		text := truncRunes(fmt.Sprintf("%s (%s) · %s", a.Label, a.Archetype, label), avail)
 		switch {
 		case focused && i == m.sbCursor:
 			text = styleBold.Render(text)
@@ -771,11 +786,14 @@ func monitorRows(agents []protocol.AgentInfo, parent string, spawned map[string]
 		if a.Parent != parent || a.State == "finished" || a.State == "killed" {
 			continue
 		}
-		lead := lipgloss.NewStyle().Foreground(stateColor(a.State)).Render("●")
+		lead := agentDot(a)
 		if a.State == "running" || a.State == "blocked" {
-			lead = styleRunning.Render(spinner)
+			lead = lipgloss.NewStyle().Foreground(colWarning).Render(spinner)
 		}
 		meta := []string{a.State}
+		if agentOutcome(a) == "error" {
+			meta = []string{styleStatusErr.Render("error")}
+		}
 		if a.Monitored {
 			meta = append(meta, styleAccent.Render("wakes parent"))
 		}
