@@ -173,7 +173,7 @@ func TestToolLine(t *testing.T) {
 		{"agent_steer", `{"id":"ag_1","text":"go"}`, "Agent steer  ag_1"},
 		{"agent_cancel", `{"id":"ag_1"}`, "Agent cancel  ag_1"},
 		{"agent_kill", `{"id":"ag_1"}`, "Agent kill  ag_1"},
-		{"agent_response", `{"to":"ag_2","text":"found it"}`, "Agent response  ag_2"},
+		{"agent_response", `{"to":"ag_2","text":"found it"}`, "Agent response  → ag_2"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
 		{"agent_finish", `{"status":"success","summary":"x"}`, "Agent complete  success"},
 		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
@@ -1011,7 +1011,7 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "delegate"}))
 	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "agent_response", From: "scout (a1b2c3d4)", Text: "Repository survey complete.\nNo edits were needed."}))
 	folded := renderWith(tr.All(), RenderOpts{Width: 80})
-	if !contains(folded, "⑂ Agent response · scout (a1b2c3d4) +2") {
+	if !contains(folded, "⑂ Response from scout (a1b2c3d4) +2") {
 		t.Fatalf("folded response should name itself and its sender:\n%s", strings.Join(folded, "\n"))
 	}
 	for _, l := range folded {
@@ -1020,7 +1020,7 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 		}
 	}
 	full := renderWith(tr.All(), RenderOpts{Width: 80, NoFold: true})
-	assertSubsequence(t, full, []string{"⑂ Agent response · scout (a1b2c3d4)", "Repository survey complete.", "No edits were needed."})
+	assertSubsequence(t, full, []string{"⑂ Response from scout (a1b2c3d4)", "Repository survey complete.", "No edits were needed."})
 }
 
 func TestAgentPromptLineWaitsForTheAnswer(t *testing.T) {
