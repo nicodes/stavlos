@@ -63,6 +63,8 @@ type (
 		notice  bool
 		refresh bool
 		jump    string
+
+		status string // shown after the dialog refreshes (e.g. after a sign-out)
 	}
 	// loginStartMsg reports provider.login.start for provider.
 	loginStartMsg struct {
@@ -237,11 +239,17 @@ func openBrowserCmd(url string) tea.Cmd {
 	}
 }
 
+// disconnectProviderCmd signs out of a provider and re-lists providers so
+// the open dialog refreshes.
 func disconnectProviderCmd(ctx context.Context, c *client.Client, id string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)
 		defer cancel()
-		return resultMsg{"disconnected " + id, c.DisconnectProvider(ctx, id)}
+		if err := c.DisconnectProvider(ctx, id); err != nil {
+			return resultMsg{"", err}
+		}
+		res, err := c.Providers(ctx)
+		return providersMsg{res: res, err: err, status: "signed out of " + id}
 	}
 }
 

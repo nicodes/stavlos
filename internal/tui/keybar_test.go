@@ -37,7 +37,7 @@ func TestKeyHintsByContext(t *testing.T) {
 		}
 		return false
 	}
-	if hs := m.keyHints(); !has(hs, "/provider") || !has(hs, "ctrl+c") || has(hs, "/steer") {
+	if hs := m.keyHints(); !has(hs, "/providers") || !has(hs, "ctrl+c") || has(hs, "/steer") {
 		t.Fatalf("home: %+v", hs)
 	}
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission"}}

@@ -75,7 +75,7 @@ func (s *Session) SetYolo(ctx context.Context, on bool) error {
 }
 
 // ErrNoModel is the turn error when an agent has no model to call.
-const ErrNoModel = "no model selected: run /models to pick one, or /provider first to connect a provider"
+const ErrNoModel = "no model selected: run /models to pick one, or /providers first to connect a provider"
 
 // NewID returns a random id with a prefix.
 func NewID(prefix string) string {

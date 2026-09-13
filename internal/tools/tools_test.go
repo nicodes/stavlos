@@ -57,3 +57,12 @@ func TestFileToolsAndBash(t *testing.T) {
 	}
 	_ = os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
 }
+
+func TestBashDefaultTimeout(t *testing.T) {
+	if defaultBashTimeoutSeconds != 3*60 {
+		t.Fatalf("default bash timeout = %ds, want 180s", defaultBashTimeoutSeconds)
+	}
+	if !strings.Contains(string(bashTool{}.Def().Schema), "default 180, max 1800") {
+		t.Fatalf("bash schema does not advertise the default: %s", bashTool{}.Def().Schema)
+	}
+}
