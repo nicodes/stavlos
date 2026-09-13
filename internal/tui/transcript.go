@@ -140,10 +140,7 @@ type Transcript struct {
 // through, one per turn (stable within a turn so the line does not
 // flicker).
 var turnVerbs = []string{
-	"Galloping", "Trotting", "Cantering", "Loping", "Prancing",
-	"Champing at the bit", "Saddling up", "Hoofing it", "Bolting",
-	"Ambling", "Nickering", "Mucking out", "Grazing", "Rearing up",
-	"Whinnying", "Jumping the fence",
+	"Galloping", "Trotting", "Prancing", "Hoofing it", "Grazing", "Horsing around",
 }
 
 // TurnVerb is the indicator label for the current turn, "" when idle.
