@@ -908,17 +908,17 @@ func (m Model) sidebarView(height int) string {
 	if model == "" {
 		model = "—"
 	}
-	inner := sidebarWidth - 1 // rows carry their own leading space; one column of right padding
+	inner := sidebarWidth - 1 // rows start at the left edge; one column of right padding
 	rows := []string{
-		" " + styleDim.Render("session") + "  " + id,
-		" " + styleDim.Render("model") + "    " + truncRunes(model, inner-9),
-		" " + styleDim.Render("cost") + "     $" + fmtCost(m.totalCost()),
+		styleDim.Render("session") + "  " + id,
+		styleDim.Render("model") + "    " + truncRunes(model, inner-9),
+		styleDim.Render("cost") + "     $" + fmtCost(m.totalCost()),
 		"",
-		" " + styleBold.Render("agents") + m.sidebarFocusHint(),
+		styleBold.Render("agents") + m.sidebarFocusHint(),
 	}
 	rows = append(rows, m.treeRows(inner)...)
 	if n := len(m.prompts); n > 0 {
-		rows = append(rows, "", " "+styleWarn.Render(fmt.Sprintf("△ %d pending", n)))
+		rows = append(rows, "", styleWarn.Render(fmt.Sprintf("△ %d pending", n)))
 	}
 	if len(rows) > height {
 		rows = rows[:height]
@@ -939,11 +939,11 @@ func (m Model) treeRows(width int) []string {
 			marker = styleAccent.Render("▸") + " "
 		}
 		dot := agentDot(a)
-		// The prefix " " + indent + marker + dot + " " is five columns plus
-		// the indent, and truncRunes adds its ellipsis on top of the budget;
-		// the text gets the rest so a truncated row reaches the panel's edge
+		// The prefix indent + marker + dot + " " is four columns plus the
+		// indent, and truncRunes adds its ellipsis on top of the budget; the
+		// text gets the rest so a truncated row reaches the panel's edge
 		// (the caller leaves one column before the separator).
-		avail := width - len([]rune(indent)) - 6
+		avail := width - len([]rune(indent)) - 5
 		if avail < 4 {
 			avail = 4
 		}
@@ -960,11 +960,11 @@ func (m Model) treeRows(width int) []string {
 		default:
 			text = styleDim.Render(text)
 		}
-		row := " " + indent + marker + dot + " " + text
+		row := indent + marker + dot + " " + text
 		rows = append(rows, row)
 	}
 	if len(rows) == 0 {
-		rows = append(rows, styleDim.Render("   (no agents)"))
+		rows = append(rows, styleDim.Render("  (no agents)"))
 	}
 	return rows
 }
