@@ -35,7 +35,7 @@ var commands = []Command{
 	{Name: "/tree", Desc: "toggle the agent sidebar (also ctrl+b)", Direct: true},
 	{Name: "/details", Desc: "expand or collapse all tool output", Direct: true},
 	{Name: "/tips", Desc: "toggle the home-screen tips", Direct: true},
-	{Name: "/help", Desc: "list commands and keys", Aliases: []string{"/h", "/?"}, Direct: true},
+	{Name: "/help", Desc: "show or hide the key bar at the bottom", Aliases: []string{"/h", "/?"}, Direct: true},
 	{Name: "/quit", Desc: "exit", Aliases: []string{"/q", "/exit"}, Direct: true},
 }
 

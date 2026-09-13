@@ -737,6 +737,9 @@ func (m Model) View() string {
 	if m.ov != nil {
 		main = composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
 	}
+	if kb == 0 {
+		return main
+	}
 	return main + "\n" + keybar
 }
 

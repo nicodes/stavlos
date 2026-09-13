@@ -1042,3 +1042,26 @@ func TestLastSnippet(t *testing.T) {
 		t.Fatalf("tool item should start with the call: %q", got)
 	}
 }
+
+func TestHelpTogglesKeyBar(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	m.width, m.height = 100, 30
+	m.layout()
+	before := m.vp.Height
+	if _, kb := m.keyBarView(); kb == 0 || !strings.Contains(stripANSI(m.View()), "enter") {
+		t.Fatal("the key bar should show by default")
+	}
+	m.command("/help")
+	v := stripANSI(m.View())
+	if _, kb := m.keyBarView(); kb != 0 || strings.Contains(v, "history") || strings.Count(v, "\n")+1 != m.height {
+		t.Fatalf("after /help the key bar should be gone and the view still fill the window (kb=%d):\n%s", kb, v)
+	}
+	if m.vp.Height <= before {
+		t.Fatalf("the chat should grow into the freed rows: %d → %d", before, m.vp.Height)
+	}
+	m.command("/help")
+	if _, kb := m.keyBarView(); kb == 0 {
+		t.Fatal("/help again should bring the key bar back")
+	}
+}
