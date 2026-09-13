@@ -6,8 +6,10 @@ import "github.com/charmbracelet/bubbles/key"
 // textinput (editing) are not listed.
 type keyMap struct {
 	Quit        key.Binding
-	NextSection key.Binding // tab: cycle focus chat → permission → agents → async → input → sidebar
+	NextSection key.Binding // tab: cycle focus chat → tab strip → input → sidebar
 	PrevSection key.Binding
+	TabLeft     key.Binding // ←/→: move between the strip's tabs
+	TabRight    key.Binding
 	NextAgent   key.Binding
 	PrevAgent   key.Binding
 	SelUp       key.Binding
@@ -38,6 +40,8 @@ var keys = keyMap{
 	Quit:        key.NewBinding(key.WithKeys("ctrl+c")),
 	NextSection: key.NewBinding(key.WithKeys("tab")),
 	PrevSection: key.NewBinding(key.WithKeys("shift+tab")),
+	TabLeft:     key.NewBinding(key.WithKeys("left")),
+	TabRight:    key.NewBinding(key.WithKeys("right")),
 	NextAgent:   key.NewBinding(key.WithKeys("ctrl+n")),
 	PrevAgent:   key.NewBinding(key.WithKeys("ctrl+p")),
 	SelUp:       key.NewBinding(key.WithKeys("up")),
@@ -65,13 +69,13 @@ var keys = keyMap{
 
 // helpKeyLines is the key reference appended to /help.
 var helpKeyLines = []string{
-	"focus: tab/shift+tab cycle the sections chat → permission → agents → async → input → sidebar · esc returns to the input",
+	"focus: tab/shift+tab cycle the sections chat → tabs → input → sidebar · esc returns to the input",
 	"input: enter send · ↑/↓ prompt history · esc clear · ctrl+n/ctrl+p cycle agents · pgup/pgdn scroll",
 	"chat: ↑/↓ or j/k move by item · enter expand/collapse a tool's output · pgup/pgdn page · home/end first/last",
 	"permission: y allow once · a allow for session · n deny · questions: type in the box, enter answers",
 	"sidebar: ctrl+b open/close · ↑/↓ move · enter pick an agent",
-	"sections: the strip under the chat always shows three tabs, permission, agents (live children) and async (running bash_async jobs), each with its count; the focused tab shows its contents",
-	"agents: tab to it, ↑/↓ move, enter selects an agent · async: ↑/↓ move",
+	"tabs: the strip under the chat always shows permission, agents (live children) and async (running bash_async jobs) with their counts; tab opens the first non-empty one (permission when all are empty), ←/→ move between them, the open tab shows its contents",
+	"agents: ↑/↓ move, enter selects an agent · async: ↑/↓ move",
 	"overlays: ↑/↓ or ctrl+p/ctrl+n move · enter select · esc close · type to filter · pgup/pgdn page",
 	"sign-in: open the URL on any device and enter the code · o open in browser · esc cancel",
 }

@@ -25,9 +25,9 @@ func (m Model) keyHints() []keyHint {
 	}
 	switch m.focus {
 	case focusAgents:
-		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"←/→", "switch tab"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusAsync:
-		return []keyHint{{"↑/↓", "move"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"←/→", "switch tab"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusSidebar:
 		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
 	case focusChat:
@@ -36,13 +36,14 @@ func (m Model) keyHints() []keyHint {
 		if p := m.currentPrompt(); p != nil {
 			switch p.Kind {
 			case "trust":
-				return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
+				return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"←/→", "switch tab"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
 			case "question":
 				return []keyHint{{"type + enter", "answer"}, {"1-9", "pick an option"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
 			default:
-				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
+				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"←/→", "switch tab"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
 			}
 		}
+		return []keyHint{{"←/→", "switch tab"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	}
 	// Input focus. The tab hint appears only when there is somewhere to go.
 	var tab []keyHint
