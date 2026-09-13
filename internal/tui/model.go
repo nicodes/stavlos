@@ -431,10 +431,11 @@ func (m *Model) focusOrder() []focus {
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
+	order = append(order, focusMeta) // top to bottom: the meta row sits under the rule
 	if m.stripShown() {
 		order = append(order, focusTabs)
 	}
-	order = append(order, focusInput, focusMeta)
+	order = append(order, focusInput)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
 	}
@@ -950,7 +951,7 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 		if isTab(m.focus) && m.focus != focusPermission {
 			m.agCursor = y - lay.strip - 1
 		}
-	case y >= lay.input && y < lay.meta: // the input lines
+	case y >= lay.input && y < lay.input+m.inputRows(): // the input lines
 		return m.setFocus(focusInput)
 	case y == lay.meta: // the meta row: its parts are buttons
 		if part := m.metaHit(x); part != metaNone {
@@ -1121,13 +1122,14 @@ type rowLayout struct {
 	strip    int // the tab strip line
 	stripEnd int // last row of the strip block (its body when a tab is open)
 	input    int // first row of the input (it may span several)
-	meta     int // the meta row under the input
+	meta     int // the meta row (right under the rule)
 }
 
 // rows derives the row layout the same way sessionView stacks its parts.
 func (m *Model) rows() rowLayout {
-	y := m.vp.Height + 2 // blank line, then the rule, then the strip
-	lay := rowLayout{strip: y, stripEnd: y}
+	meta := m.vp.Height + 2 // blank line, then the rule, then the meta row
+	y := meta + 1           // the strip
+	lay := rowLayout{meta: meta, strip: y, stripEnd: y}
 	if sv := m.sectionsView(m.contentWidth()); sv != "" {
 		lay.stripEnd = y + strings.Count(sv, "\n")
 		y = lay.stripEnd + 2 // blank line after the strip block
@@ -1136,7 +1138,6 @@ func (m *Model) rows() rowLayout {
 		y += strings.Count(pv, "\n") + 1
 	}
 	lay.input = y
-	lay.meta = y + m.inputRows()
 	return lay
 }
 

@@ -120,11 +120,6 @@ func TestMetaLine(t *testing.T) {
 }
 
 func TestInputBoxAndPromptWidth(t *testing.T) {
-	box := stripANSI(inputBox("› hi", "Coder · x"))
-	if box != "› hi\nCoder · x" {
-		t.Fatalf("input box: %q", box)
-	}
-
 	if got := promptBoxWidth(80); got != 75 {
 		t.Fatalf("80 cols: got %d, want 75 (the floor; fits within width-4)", got)
 	}
@@ -423,14 +418,18 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.focus != focusInput {
 		t.Fatalf("default focus %v", m.focus)
 	}
-	// No prompt, sidebar hidden: input → meta row → chat → tabs → input. The
+	// No prompt, sidebar hidden: input → chat → meta row → tabs → input. The
 	// strip is one stop; all empty, it opens on permission, and ←/→ walk the
 	// tabs. The meta row is a stop too: ←/→ pick role, model, variant.
 	right := tea.KeyMsg{Type: tea.KeyRight}
 	left := tea.KeyMsg{Type: tea.KeyLeft}
 	press(&m, tab)
+	if m.focus != focusChat || m.follow || m.input.Focused() {
+		t.Fatalf("tab: focus=%v follow=%v", m.focus, m.follow)
+	}
+	press(&m, tab)
 	if m.focus != focusMeta || m.metaSel != metaRole || m.input.Focused() {
-		t.Fatalf("tab: focus=%v sel=%v", m.focus, m.metaSel)
+		t.Fatalf("tab tab: focus=%v sel=%v", m.focus, m.metaSel)
 	}
 	press(&m, left) // leftmost already (no YOLO): stays
 	press(&m, right)
@@ -446,12 +445,8 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatal("enter on a meta part should open its dialog")
 	}
 	press(&m, tab)
-	if m.focus != focusChat || m.follow || m.input.Focused() {
-		t.Fatalf("tab: focus=%v follow=%v", m.focus, m.follow)
-	}
-	press(&m, tab)
 	if m.focus != focusPermission || !strings.Contains(stripANSI(m.sectionsView(100)), "no prompts waiting") {
-		t.Fatalf("tab tab: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+		t.Fatalf("tab x3: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}) // nothing to answer: ignored
 	if m.focus != focusPermission {
@@ -490,7 +485,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("esc: focus=%v", m.focus)
 	}
 
-	// Sidebar shown: input → sidebar → chat → tabs → input.
+	// Sidebar shown: input → sidebar → chat → meta row → tabs → input.
 	m.showTree = true
 	m.layout()
 	var seen []focus
@@ -498,11 +493,11 @@ func TestTabCyclesFocus(t *testing.T) {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusMeta, focusSidebar, focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusSidebar, focusChat, focusMeta, focusPermission, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with sidebar: %v, want %v", seen, want)
 	}
 	// Hiding the sidebar while it has focus falls back to the input.
-	press(&m, tab, tab) // input → meta row → sidebar
+	press(&m, tab) // input → sidebar
 	m.showTree = false
 	m.ensureFocus()
 	if m.focus != focusInput {
@@ -519,7 +514,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusMeta, focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusChat, focusMeta, focusPermission, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with prompt: %v, want %v", seen, want)
 	}
 	// With a child but no prompt, the strip opens on agents; with only a
@@ -658,7 +653,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	m.refreshViewport()
 	items := tr.Items() // notice + 8 user + tool = 10
 
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → chat
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → chat (the cycle wraps: chat is first)
 	if m.focus != focusChat || m.chatCursor != items-1 || m.follow {
 		t.Fatalf("enter chat: focus=%v cursor=%d follow=%v", m.focus, m.chatCursor, m.follow)
 	}
@@ -740,7 +735,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if strings.Count(view(), "out") != 8 {
 		t.Fatalf("expanded before leaving:\n%s", view())
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // esc → input; tab → meta row; tab → chat
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab}) // esc → input; tab wraps to the chat
 	if m.focus != focusChat || len(m.expanded["a"]) != 0 || strings.Count(view(), "out") != previewLines-1 {
 		t.Fatalf("re-entering the chat should show the preview: focus=%v %v\n%s", m.focus, m.expanded["a"], view())
 	}
@@ -798,7 +793,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 
 	// tab order: chat is skipped on the home view; the strip, input, meta row
 	order := m.focusOrder()
-	if len(order) != 3 || order[0] != focusTabs || order[1] != focusInput || order[2] != focusMeta {
+	if len(order) != 3 || order[0] != focusMeta || order[1] != focusTabs || order[2] != focusInput {
 		t.Fatalf("order %v", order)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → permission (a prompt waits)
@@ -899,8 +894,8 @@ func TestSessionViewFillsHeight(t *testing.T) {
 				si = i
 			}
 		}
-		if si < 1 || !strings.HasPrefix(lines[si-1], "─") {
-			t.Fatalf("focus %v: the strip should sit right under the chat rule:\n%s", f, stripANSI(v))
+		if si < 2 || !strings.HasPrefix(lines[si-2], "─") || !strings.HasPrefix(lines[si-1], "coder ·") {
+			t.Fatalf("focus %v: under the rule come the meta row, then the strip:\n%s", f, stripANSI(v))
 		}
 	}
 }
@@ -954,8 +949,8 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens · $0.02") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
 		t.Fatalf("meta row: %q", row)
 	}
-	if !strings.HasPrefix(lines[meta+1], "─") {
-		t.Fatalf("the key bar rule should follow the meta row:\n%s", strings.Join(lines, "\n"))
+	if meta < 1 || !strings.HasPrefix(lines[meta-1], "─") || strip != meta+1 {
+		t.Fatalf("the meta row should sit under the rule with the strip below it:\n%s", strings.Join(lines, "\n"))
 	}
 	// the repo sits at the right edge of the tab strip
 	if row := lines[strip]; !strings.HasSuffix(row, "/repo/project") || ansi.StringWidth(row) != 100 {
@@ -1229,7 +1224,7 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 		t.Fatalf("leaving should restore the input: focus=%v hover=%v", m.focus, m.hoverFocus)
 	}
 	// keyboard focus is not dropped by the mouse leaving
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → chat
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → chat
 	move(5, m.vp.Height+2)
 	if m.focus != focusChat {
 		t.Fatalf("keyboard chat focus should survive mouse movement: %v", m.focus)
