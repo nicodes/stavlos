@@ -1408,9 +1408,10 @@ func (m *Model) refreshViewport() {
 	if m.chatCursor < 0 {
 		m.chatCursor = 0
 	}
-	working, waiting := false, false
-	if t := m.transcripts[m.selectedID()]; t != nil {
-		working = t.InTurn()
+	working, waiting, stats := false, false, ""
+	if t := m.transcripts[m.selectedID()]; t != nil && t.InTurn() {
+		working = true
+		stats = turnStats(t.TurnStats(time.Now()))
 	}
 	for _, p := range m.prompts {
 		if p.Agent == m.selectedID() {
@@ -1424,6 +1425,7 @@ func (m *Model) refreshViewport() {
 		Spinner:  m.sp.View(),
 		Working:  working,
 		Waiting:  waiting,
+		Stats:    stats,
 		Expanded: m.expanded[m.selectedID()],
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,

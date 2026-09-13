@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
@@ -129,12 +130,22 @@ type Transcript struct {
 	items      int               // committed items so far
 	streamTurn int
 	stream     []streamSeg
-	turn       bool // a turn is in progress (TurnStarted seen, not yet ended)
+	turn       bool      // a turn is in progress (TurnStarted seen, not yet ended)
+	turnStart  time.Time // when the current turn began
+	turnTokens int       // input + output tokens used so far this turn
 }
 
 // InTurn reports whether the agent is mid-turn: the chat shows an
 // ephemeral "working…" line with a spinner while this is true.
 func (t *Transcript) InTurn() bool { return t.turn }
+
+// TurnStats is the current turn's elapsed time (as of now) and tokens.
+func (t *Transcript) TurnStats(now time.Time) (time.Duration, int) {
+	if !t.turn {
+		return 0, 0
+	}
+	return now.Sub(t.turnStart), t.turnTokens
+}
 
 // NewTranscript returns an empty transcript.
 func NewTranscript() *Transcript {
@@ -259,7 +270,12 @@ func (t *Transcript) Apply(ev event.Event) {
 	t.appendItem(item, EventLines(ev))
 	switch ev.Type {
 	case event.TurnStarted:
-		t.turn = true
+		t.turn, t.turnStart, t.turnTokens = true, ev.Time, 0
+	case event.Usage:
+		var p event.UsagePayload
+		if ev.Decode(&p) == nil {
+			t.turnTokens += p.Usage.InputTokens + p.Usage.OutputTokens
+		}
 	case event.AssistantMessage:
 		t.stream = nil
 	case event.TurnEnded, event.TurnAborted, event.AgentFinished, event.AgentKilled:

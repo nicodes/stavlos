@@ -107,8 +107,9 @@ type RenderOpts struct {
 	Width    int
 	Details  bool
 	Spinner  string
-	Working  bool // a turn is in progress: append the ephemeral "working…" line
-	Waiting  bool // …and it is blocked on a permission: "! permission requested" instead
+	Working  bool   // a turn is in progress: append the ephemeral "working…" line
+	Waiting  bool   // …and it is blocked on a permission: "! permission requested" instead
+	Stats    string // "(12s · 1.2k tokens)" shown after the indicator, or ""
 	Expanded map[int]bool
 	Cursor   int
 	Focused  bool
@@ -215,6 +216,9 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 			b.WriteString("   " + styleWarn.Render("!") + " " + styleWarn.Render("permission requested"))
 		} else {
 			b.WriteString("   " + o.Spinner + " " + styleDim.Render("working…"))
+		}
+		if o.Stats != "" {
+			b.WriteString(" " + styleDim.Render(o.Stats))
 		}
 	}
 	return b.String(), rows
@@ -653,6 +657,11 @@ func footerRight(f footerInfo) string {
 		return ""
 	}
 	return fmtTokens(f.tokens) + " tokens · $" + fmtCost(f.cost)
+}
+
+// turnStats formats the indicator's suffix: "(12s · 1.2k tokens)".
+func turnStats(elapsed time.Duration, tokens int) string {
+	return fmt.Sprintf("(%s · %s tokens)", fmtElapsed(elapsed), fmtTokens(tokens))
 }
 
 // fmtCost prints a dollar amount with 2–4 decimals.
