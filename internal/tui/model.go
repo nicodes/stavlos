@@ -746,7 +746,7 @@ func (m Model) highlightSelection(frame string) string {
 // short message, more as it wraps or gains lines, up to inputMaxLines
 // (beyond that the textarea scrolls inside).
 func (m *Model) fitInput() {
-	w := m.input.Width() - len([]rune(m.input.Prompt))
+	w := m.input.Width() // already the text width inside the prompt
 	if w < 1 {
 		w = 1
 	}
@@ -766,6 +766,10 @@ func (m *Model) fitInput() {
 	}
 	if rows != m.input.Height() {
 		m.input.SetHeight(rows)
+		// The textarea may have scrolled its own viewport while it was
+		// shorter (a paste lands before the resize); a no-op update runs its
+		// repositioning so the first line is back in view.
+		m.input, _ = m.input.Update(nil)
 	}
 }
 

@@ -1545,3 +1545,18 @@ func TestInputShowsOneChevron(t *testing.T) {
 		}
 	}
 }
+
+func TestPastedMessageKeepsItsFirstLineInView(t *testing.T) {
+	m := sessionModel()
+	m.width, m.height = 80, 30
+	m.layout()
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Use subagents to summarize the repo.\nThen compare all responses and\ngive me the highlights."), Paste: true})
+	if m.input.Height() != 3 {
+		t.Fatalf("three pasted lines should give a three-line input: %d", m.input.Height())
+	}
+	v := stripANSI(m.input.View())
+	lines := strings.Split(v, "\n")
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "› Use subagents") || !strings.HasPrefix(lines[2], "  give me the highlights.") {
+		t.Fatalf("the whole message should be visible from its first line:\n%s", v)
+	}
+}
