@@ -667,7 +667,6 @@ func metaLine(label, role, model, variant string, queued int, yolo bool) string 
 	return s
 }
 
-
 // --- footer ---
 
 type footerInfo struct {
@@ -824,7 +823,6 @@ func (m Model) homeView(width, height int) string {
 		add(pv, boxW)
 	}
 	add(m.inputBoxView(boxW), boxW)
-
 
 	top := (height - len(lines)) / 2
 	if top < 0 {
