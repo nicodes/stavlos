@@ -102,16 +102,16 @@ type Model struct {
 	itemRows    map[int]rowRange
 	promptInput textinput.Model // answer field of a question prompt
 	sbCursor    int
-	palIdx      int      // highlighted row in the "/" command palette
-	agCursor    int      // highlighted row in the agents/async tab while it has focus
-	history     []string // prompts sent from this client (and replayed human prompts)
+	palIdx      int               // highlighted row in the "/" command palette
+	agCursor    int               // highlighted row in the agents/async tab while it has focus
+	history     []string          // prompts sent from this client (and replayed human prompts)
 	parentOf    map[string]string // child agent id → parent id, for the parent's agent_create line
-	histIdx     int      // == len(history) when editing a new line
-	histDraft   string   // unsent text saved while browsing history
-	loading     bool     // replaying events up to replayTo
-	replayTo    int64    // seq from reconcile
-	treeTimer   bool     // a debounced tree refresh is scheduled
-	reconciled  bool     // the first reconcile landed
+	histIdx     int               // == len(history) when editing a new line
+	histDraft   string            // unsent text saved while browsing history
+	loading     bool              // replaying events up to replayTo
+	replayTo    int64             // seq from reconcile
+	treeTimer   bool              // a debounced tree refresh is scheduled
+	reconciled  bool              // the first reconcile landed
 
 	ov        *overlay                // open modal, or nil
 	providers []protocol.ProviderInfo // last provider.list result
