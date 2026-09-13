@@ -17,7 +17,7 @@ import (
 type bashTool struct{}
 
 func (bashTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "bash", Description: "Run a shell command in the working directory and return its combined output. Long-running commands are killed at the timeout. With background=true the command becomes a monitor: this returns its id immediately, you keep working, and when it exits you are woken with the exit code and output (see monitors/unmonitor).",
+	return model.ToolDef{Name: "bash", Description: "Run a shell command in the working directory and return its combined output. Use it for searching too (grep -rn, rg, find, ls); read-only commands like these are allowed by default. Long-running commands are killed at the timeout. With background=true the command becomes a monitor: this returns its id immediately, you keep working, and when it exits you are woken with the exit code and output (see monitors/unmonitor).",
 		Schema: schema(map[string]any{
 			"command":    prop("string", "The command line to run with bash -c"),
 			"timeout":    prop("integer", "Seconds before the command is killed (default 300 foreground / 3600 background, max 7200)"),

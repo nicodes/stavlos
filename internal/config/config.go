@@ -131,8 +131,6 @@ func Load(dir string, trust Trust) (*Effective, error) {
 	e.Compaction.MaxToolOutput = 32 * 1024
 	e.Policy = policy.New(
 		policy.Rule{Tool: "read", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "grep", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "glob", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "skill", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_create", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "finish", Pattern: "*", Verb: policy.Allow},
@@ -148,6 +146,23 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "agent_result", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_status", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "bash", Pattern: "*", Verb: policy.Ask},
+		// Read-only shell commands are allowed by default so searching and
+		// looking around never prompts; anything that writes still asks.
+		policy.Rule{Tool: "bash", Pattern: "grep *", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "rg *", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "find *", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "ls*", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "cat *", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "head *", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "tail *", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "wc *", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "pwd", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "tree*", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "git status*", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "git log*", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "git diff*", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "git show*", Verb: policy.Allow},
+		policy.Rule{Tool: "bash", Pattern: "git blame*", Verb: policy.Allow},
 		policy.Rule{Tool: "write", Pattern: "*", Verb: policy.Ask},
 		policy.Rule{Tool: "edit", Pattern: "*", Verb: policy.Ask},
 	)
@@ -361,7 +376,7 @@ func ReadPreset(path string) (Preset, error) {
 		p.Loop = "default"
 	}
 	if len(p.Tools) == 0 {
-		p.Tools = []string{"bash", "read", "write", "edit", "grep", "glob", "skill"}
+		p.Tools = []string{"bash", "read", "write", "edit", "skill"}
 	}
 	return p, nil
 }
@@ -533,7 +548,7 @@ func builtinPresets() []Preset {
 		{
 			Name: "coder", Layer: "builtin",
 			Description: "Implements features and fixes bugs in this repository",
-			Tools:       []string{"bash", "read", "write", "edit", "grep", "glob", "skill"},
+			Tools:       []string{"bash", "read", "write", "edit", "skill"},
 			Spawn:       []string{"explorer", "tester"},
 			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
@@ -545,15 +560,15 @@ Report what you changed and what you verified.`,
 		{
 			Name: "explorer", Layer: "builtin",
 			Description: "Read-only investigation of a codebase; reports findings",
-			Tools:       []string{"read", "grep", "glob", "bash", "skill"},
+			Tools:       []string{"read", "bash", "skill"},
 			Loop:        "default",
-			Body: `You are a read-only code explorer. Answer the question you were given by reading files and searching. Do not modify anything.
+			Body: `You are a read-only code explorer. Answer the question you were given by reading files and searching with bash (grep -rn, rg, find, ls). Do not modify anything.
 When you have the answer, call finish with a concise summary that includes exact file paths and line numbers.`,
 		},
 		{
 			Name: "tester", Layer: "builtin",
 			Description: "Runs tests and builds; reports results",
-			Tools:       []string{"bash", "read", "grep", "glob", "skill"},
+			Tools:       []string{"bash", "read", "skill"},
 			Loop:        "default",
 			Body: `You run the project's tests, builds, or linters as instructed and report the results faithfully. Do not edit source files.
 Call finish with the outcome: what you ran, whether it passed, and the relevant failing output if not.`,

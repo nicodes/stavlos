@@ -27,13 +27,11 @@ func TestFileToolsAndBash(t *testing.T) {
 	if !strings.Contains(r.Output, "2\tthere") {
 		t.Fatal(r.Output)
 	}
-	r = ts["grep"].Run(ctx, json.RawMessage(`{"pattern":"the.e"}`), env)
-	if !strings.HasPrefix(r.Output, "a/b.txt:2:there") {
-		t.Fatal(r.Output)
+	if _, ok := ts["grep"]; ok {
+		t.Fatal("grep should be gone: bash covers it")
 	}
-	r = ts["glob"].Run(ctx, json.RawMessage(`{"pattern":"**/*.txt"}`), env)
-	if strings.TrimSpace(r.Output) != "a/b.txt" {
-		t.Fatal(r.Output)
+	if _, ok := ts["glob"]; ok {
+		t.Fatal("glob should be gone: bash covers it")
 	}
 	var partial strings.Builder
 	env.Partial = func(s string) { partial.WriteString(s) }
