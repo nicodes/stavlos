@@ -65,7 +65,7 @@ type Model struct {
 	ctx       context.Context
 	c         *client.Client
 	sessionID string
-	spawned   map[string]time.Time // agent id → spawn time, for the monitors block
+	spawned   map[string]time.Time // agent id → spawn time, for the agents block
 
 	session     protocol.SessionInfo
 	agents      []protocol.AgentInfo // pre-order, root first
@@ -867,7 +867,8 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	switch ev.Type {
 	case event.AgentSpawned, event.AgentFinished, event.AgentKilled,
 		event.TurnStarted, event.TurnEnded, event.Usage,
-		event.AgentModelChanged, event.SessionModelChanged:
+		event.AgentModelChanged, event.SessionModelChanged,
+		event.MonitorStarted, event.MonitorFired, event.MonitorStopped:
 		if !m.loading {
 			cmds = append(cmds, m.markTreeDirty())
 		}
@@ -1163,6 +1164,9 @@ func (m *Model) layout() {
 
 	_, kb := m.keyBarView()
 	bodyH := m.height - 1 - kb - 1 - inputBoxLines // footer, key bar, spacer, input box
+	if av := m.agentsView(m.contentWidth()); av != "" {
+		bodyH -= strings.Count(av, "\n") + 1
+	}
 	if mv := m.monitorsView(m.contentWidth()); mv != "" {
 		bodyH -= strings.Count(mv, "\n") + 1
 	}

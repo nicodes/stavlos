@@ -229,7 +229,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	}
 
 	cfg := a.s.Config()
-	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), MaxOutput: cfg.Compaction.MaxToolOutput,
+	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Mon: a.monitorsAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
 		Partial: func(s string) {
 			a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
 		}}
@@ -311,10 +311,12 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	}
 
 	names := append([]string(nil), a.preset.Tools...)
+	names = append(names, tools.MonitorNames...)
 	if a.Parent != "" {
 		names = append(names, "finish")
 	}
 	can, why := a.s.canSpawn(a)
+	sb.WriteString("\n# Monitors\nYou can run a command in the background (bash with background=true), watch a path for changes, or set a timer. Each returns a monitor id at once, and when it completes you are woken with the result as a new message, between turns, never mid-turn. monitors lists them; unmonitor stops one from waking you (stop=true kills or cancels it).\n")
 	if a.canOrchestrate() {
 		sb.WriteString("\n# Delegation\n")
 		if can {

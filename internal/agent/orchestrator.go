@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/tools"
@@ -90,6 +91,10 @@ func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus,
 	var out []tools.ChildStatus
 	var armed []string
 	for _, id := range ids {
+		if p.hasMonitor(id) { // a general monitor: arm it, no child status row
+			armed = append(armed, id)
+			continue
+		}
 		c, err := o.child(parent, id)
 		if err != nil {
 			return nil, err
@@ -114,7 +119,7 @@ func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus,
 			}
 		}
 	}
-	if len(out) > 0 || pending {
+	if len(out) > 0 || pending || len(armed) > 0 {
 		p.yieldFlag = true
 	}
 	if pending {
@@ -138,6 +143,7 @@ func (o orchestrator) Unmonitor(parent string, ids []string) ([]string, error) {
 		for id := range p.armed {
 			ids = append(ids, id)
 		}
+		sort.Strings(ids)
 	}
 	var disarmed []string
 	for _, id := range ids {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/model"
@@ -25,6 +26,30 @@ type Env struct {
 	Orch      Orchestrator            // nil if the agent cannot orchestrate
 	Partial   func(string)            // receives streamed partial output (bash); may be nil
 	MaxOutput int                     // truncate tool output beyond this many bytes (0 = 32k)
+	Mon       Monitors                // general monitors (background commands, watches, timers); nil if unavailable
+}
+
+// Monitors is implemented by the agent runtime: sources other than children
+// that land a result in the agent's mailbox and wake it when armed.
+type Monitors interface {
+	StartCommand(command string, timeout time.Duration) (string, error)
+	StartWatch(path, glob string) (string, error)
+	StartTimer(d time.Duration, note string) (string, error)
+	List() []MonitorStatus
+	Stop(id string) error
+	Has(id string) bool
+}
+
+// MonitorStatus is a running general monitor.
+type MonitorStatus struct {
+	ID        string    `json:"id"`
+	Kind      string    `json:"kind"`
+	Label     string    `json:"label"`
+	Spec      string    `json:"spec"`
+	State     string    `json:"state"`
+	Progress  string    `json:"progress,omitempty"`
+	Monitored bool      `json:"wakes_you"`
+	Started   time.Time `json:"started"`
 }
 
 // Tool is one callable tool.
@@ -93,6 +118,7 @@ func Builtin() Set {
 	for _, t := range []Tool{
 		bashTool{}, readTool{}, writeTool{}, editTool{}, grepTool{}, globTool{}, skillTool{}, finishTool{},
 		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, monitorTool{}, unmonitorTool{}, resultTool{}, statusTool{},
+		watchTool{}, timerTool{}, monitorsTool{},
 	} {
 		s[t.Def().Name] = t
 	}
@@ -101,6 +127,9 @@ func Builtin() Set {
 
 // OrchestrationNames are the tools implied by a non-empty spawn list.
 var OrchestrationNames = []string{"spawn", "send", "steer", "cancel", "kill", "monitor", "unmonitor", "result", "status"}
+
+// MonitorNames are the general-monitor tools every agent gets.
+var MonitorNames = []string{"watch", "timer", "monitors", "unmonitor"}
 
 func schema(props map[string]any, required ...string) json.RawMessage {
 	m := map[string]any{"type": "object", "properties": props}

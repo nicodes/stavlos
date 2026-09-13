@@ -88,6 +88,7 @@ var helpLines = []string{
 	"chat: ↑/↓ or j/k move by item · enter expand/collapse a tool's output · pgup/pgdn page · home/end first/last",
 	"permission: y allow once · a allow for session · n deny · questions: type in the box, enter answers",
 	"sidebar: ctrl+b open/close · ↑/↓ move · enter pick an agent",
+	"monitors: the block above the input lists what the selected agent waits on — ⚙ background commands, ◉ file watches, ◔ timers · \"wakes parent\" marks the ones armed to wake it",
 	"overlays: ↑/↓ or ctrl+p/ctrl+n move · enter select · esc close · type to filter · pgup/pgdn page",
 	"sign-in: open the URL on any device and enter the code · o open in browser · esc cancel",
 }

@@ -693,6 +693,10 @@ func (m Model) homeView(width, height int) string {
 	logo := logoLines(width)
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lines = append(lines, "")
+	if av := m.agentsView(boxW); av != "" {
+		add(av, boxW)
+		lines = append(lines, "")
+	}
 	if mv := m.monitorsView(boxW); mv != "" {
 		add(mv, boxW)
 		lines = append(lines, "")
@@ -736,6 +740,9 @@ func (m Model) homeView(width, height int) string {
 func (m Model) sessionView(width, height int) string {
 	cw := m.contentWidth()
 	parts := []string{m.vp.View(), ""}
+	if av := m.agentsView(cw); av != "" {
+		parts = append(parts, av)
+	}
 	if mv := m.monitorsView(cw); mv != "" {
 		parts = append(parts, mv)
 	}
@@ -962,25 +969,25 @@ func (m Model) connected() bool {
 	return true
 }
 
-// monitorsView lists the selected agent's live children. "wakes parent"
+// agentsView lists the selected agent's live children. "wakes parent"
 // marks the ones it armed with monitor; the rest report silently to its
 // mailbox. A child that finishes leaves this block and its result shows up
 // in the transcript when the parent next takes a turn.
-func (m Model) monitorsView(width int) string {
+func (m Model) agentsView(width int) string {
 	sel := m.selectedID()
 	if sel == "" {
 		return ""
 	}
-	rows := monitorRows(m.agents, sel, m.spawned, time.Now(), m.sp.View(), width)
+	rows := agentRows(m.agents, sel, m.spawned, time.Now(), m.sp.View(), width)
 	if len(rows) == 0 {
 		return ""
 	}
-	head := styleDim.Render("monitors") + " " + styleDim.Render(fmt.Sprintf("(%d)", len(rows)))
+	head := styleDim.Render("agents") + " " + styleDim.Render(fmt.Sprintf("(%d)", len(rows)))
 	return strings.Join(append([]string{head}, rows...), "\n")
 }
 
-// monitorRows is the pure part of monitorsView.
-func monitorRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, now time.Time, spinner string, width int) []string {
+// agentRows is the pure part of agentsView.
+func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, now time.Time, spinner string, width int) []string {
 	var rows []string
 	for _, a := range agents {
 		if a.Parent != parent || a.State == "finished" || a.State == "killed" {
@@ -1011,6 +1018,74 @@ func monitorRows(agents []protocol.AgentInfo, parent string, spawned map[string]
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows
+}
+
+// monitorsView lists the general monitors the selected agent waits on: a
+// background command, a file watch or a timer. Children are not monitors;
+// they have their own block (agentsView).
+func (m Model) monitorsView(width int) string {
+	a := m.selectedAgent()
+	if a == nil {
+		return ""
+	}
+	rows := monitorRows(a.Monitors, time.Now(), m.sp.View(), width)
+	if len(rows) == 0 {
+		return ""
+	}
+	head := styleDim.Render("monitors") + " " + styleDim.Render(fmt.Sprintf("(%d)", len(rows)))
+	return strings.Join(append([]string{head}, rows...), "\n")
+}
+
+// monitorRows is the pure part of monitorsView: one row per running
+// monitor with its kind glyph, bold label, a spinner for commands still
+// running, and dim meta (kind, progress, elapsed, "wakes parent").
+func monitorRows(monitors []protocol.MonitorInfo, now time.Time, spinner string, width int) []string {
+	var rows []string
+	for _, mo := range monitors {
+		switch mo.State {
+		case "fired", "stopped", "lost":
+			continue
+		}
+		lead := styleTool.Render(monitorGlyph(mo.Kind)) + monitorGlyphGap(mo.Kind)
+		label := styleBold.Render(mo.Label)
+		if mo.Kind == "command" && (mo.State == "running" || mo.State == "") && spinner != "" {
+			label += " " + lipgloss.NewStyle().Foreground(colWarning).Render(spinner)
+		}
+		meta := []string{mo.Kind}
+		if mo.Progress != "" {
+			meta = append(meta, mo.Progress)
+		}
+		if t, err := time.Parse(time.RFC3339, mo.Started); err == nil && !t.IsZero() {
+			meta = append(meta, fmtElapsed(now.Sub(t)))
+		}
+		if mo.Monitored {
+			meta = append(meta, styleAccent.Render("wakes parent"))
+		}
+		row := "  " + lead + label + "  " + styleDim.Render(strings.Join(meta, " · "))
+		rows = append(rows, ansi.Truncate(row, width, "…"))
+	}
+	return rows
+}
+
+// monitorGlyph is the single-width marker for a monitor kind: ⚙ command,
+// ◉ watch, ◔ timer (⏱ draws two cells wide in many terminals).
+func monitorGlyph(kind string) string {
+	switch kind {
+	case "watch":
+		return "◉"
+	case "timer":
+		return "◔"
+	}
+	return "⚙"
+}
+
+// monitorGlyphGap is the spacing after a kind glyph; the gear gets two
+// spaces because many terminals draw it two cells wide (as renderLine does).
+func monitorGlyphGap(kind string) string {
+	if monitorGlyph(kind) == "⚙" {
+		return "  "
+	}
+	return " "
 }
 
 // fmtElapsed renders a duration as 12s, 1m05s, 1h02m.

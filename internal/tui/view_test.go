@@ -177,7 +177,7 @@ func TestHomeAndSessionViews(t *testing.T) {
 	}
 }
 
-func TestMonitorRows(t *testing.T) {
+func TestAgentRows(t *testing.T) {
 	now := time.Now()
 	spawned := map[string]time.Time{"c1": now.Add(-75 * time.Second), "c2": now.Add(-3 * time.Second)}
 	agents := []protocol.AgentInfo{
@@ -187,7 +187,7 @@ func TestMonitorRows(t *testing.T) {
 		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "finished"},
 		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running"},
 	}
-	rows := monitorRows(agents, "root", spawned, now, "⠋", 100)
+	rows := agentRows(agents, "root", spawned, now, "⠋", 100)
 	if len(rows) != 2 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
@@ -200,11 +200,89 @@ func TestMonitorRows(t *testing.T) {
 	if !strings.Contains(rows[1], "tester") || !strings.Contains(rows[1], "3s") || strings.Contains(rows[1], "turn") {
 		t.Fatalf("%q", rows[1])
 	}
-	if rows := monitorRows(agents, "c2", spawned, now, "", 100); len(rows) != 0 {
+	if rows := agentRows(agents, "c2", spawned, now, "", 100); len(rows) != 0 {
 		t.Fatalf("no children expected: %q", rows)
 	}
 	if got := fmtElapsed(3725 * time.Second); got != "1h02m" {
 		t.Fatalf("%s", got)
+	}
+
+	// The block is titled "agents" and lists only the selected agent's children.
+	m := sessionModel()
+	m.spawned = spawned
+	m.agents = agents
+	m.selected = 0
+	view := stripANSI(m.agentsView(100))
+	if !strings.HasPrefix(view, "agents (2)") || !strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
+		t.Fatalf("agents block:\n%s", view)
+	}
+	if strings.Contains(view, "monitors") {
+		t.Fatalf("agents block must not be titled monitors:\n%s", view)
+	}
+}
+
+func TestMonitorRows(t *testing.T) {
+	now := time.Now().Truncate(time.Second) // Started is RFC3339: whole seconds
+	monitors := []protocol.MonitorInfo{
+		{ID: "m1", Agent: "root", Kind: "command", Label: "go test", Spec: "go test ./...", State: "running", Started: now.Add(-75 * time.Second).Format(time.RFC3339), Progress: "42 lines", Monitored: true},
+		{ID: "m2", Agent: "root", Kind: "watch", Label: "src changes", Spec: "./src", State: "running", Started: now.Add(-3 * time.Second).Format(time.RFC3339)},
+		{ID: "m3", Agent: "root", Kind: "timer", Label: "cooldown", Spec: "300s", State: "running", Started: now.Add(-2 * time.Hour).Format(time.RFC3339), Progress: "3m left"},
+		{ID: "m4", Agent: "root", Kind: "command", Label: "old", State: "fired", Started: now.Format(time.RFC3339)},
+	}
+	rows := monitorRows(monitors, now, "⠋", 100)
+	if len(rows) != 3 {
+		t.Fatalf("rows %d: %q", len(rows), rows)
+	}
+	plain := make([]string, len(rows))
+	for i, r := range rows {
+		plain[i] = stripANSI(r)
+	}
+	// command: gear glyph, bold label, spinner, kind, progress, elapsed, wakes parent
+	if !strings.HasPrefix(plain[0], "  ⚙") || !strings.Contains(plain[0], "go test ⠋") {
+		t.Fatalf("command row: %q", plain[0])
+	}
+	for _, want := range []string{"command", "42 lines", "1m15s", "wakes parent"} {
+		if !strings.Contains(plain[0], want) {
+			t.Fatalf("command row lacks %q: %q", want, plain[0])
+		}
+	}
+	// watch: no spinner, no progress, no wake tag
+	if !strings.HasPrefix(plain[1], "  ◉ src changes") || strings.Contains(plain[1], "⠋") || strings.Contains(plain[1], "wakes parent") || !strings.Contains(plain[1], "watch · 3s") {
+		t.Fatalf("watch row: %q", plain[1])
+	}
+	// timer: single-width glyph, progress, hours elapsed
+	if !strings.HasPrefix(plain[2], "  ◔ cooldown") || !strings.Contains(plain[2], "timer · 3m left · 2h00m") || strings.Contains(plain[2], "⠋") {
+		t.Fatalf("timer row: %q", plain[2])
+	}
+	// a bad Started stamp just drops the elapsed field
+	rows = monitorRows([]protocol.MonitorInfo{{ID: "x", Kind: "watch", Label: "w", State: "running", Started: "nope"}}, now, "", 100)
+	if len(rows) != 1 || !strings.HasSuffix(strings.TrimRight(stripANSI(rows[0]), " "), "watch") {
+		t.Fatalf("bad stamp: %q", rows)
+	}
+	if monitorRows(nil, now, "", 100) != nil {
+		t.Fatal("no monitors should give no rows")
+	}
+
+	// The block reads the selected agent's Monitors and is titled "monitors".
+	m := sessionModel()
+	m.agents = []protocol.AgentInfo{{ID: "root", Label: "coder", Archetype: "coder", State: "idle", Monitors: monitors[:3]}}
+	m.selected = 0
+	view := stripANSI(m.monitorsView(100))
+	if !strings.HasPrefix(view, "monitors (3)") || strings.Count(view, "\n") != 3 {
+		t.Fatalf("monitors block:\n%s", view)
+	}
+	if m.agentsView(100) != "" {
+		t.Fatal("no children: agents block should be empty")
+	}
+	// Both blocks are budgeted out of the transcript height.
+	m.width, m.height = 120, 40
+	m.showTree = false
+	m.layout()
+	withBlock := m.vp.Height
+	m.agents[0].Monitors = nil
+	m.layout()
+	if m.vp.Height != withBlock+4 {
+		t.Fatalf("layout: viewport %d with monitors, %d without", withBlock, m.vp.Height)
 	}
 }
 

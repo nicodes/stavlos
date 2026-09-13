@@ -17,10 +17,11 @@ import (
 type bashTool struct{}
 
 func (bashTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "bash", Description: "Run a shell command in the working directory and return its combined output. Long-running commands are killed at the timeout.",
+	return model.ToolDef{Name: "bash", Description: "Run a shell command in the working directory and return its combined output. Long-running commands are killed at the timeout. With background=true the command becomes a monitor: this returns its id immediately, you keep working, and when it exits you are woken with the exit code and output (see monitors/unmonitor).",
 		Schema: schema(map[string]any{
-			"command": prop("string", "The command line to run with bash -c"),
-			"timeout": prop("integer", "Seconds before the command is killed (default 300, max 1800)"),
+			"command":    prop("string", "The command line to run with bash -c"),
+			"timeout":    prop("integer", "Seconds before the command is killed (default 300 foreground / 3600 background, max 7200)"),
+			"background": prop("boolean", "Run as a monitor instead of blocking (default false)"),
 		}, "command")}
 }
 
@@ -57,14 +58,31 @@ func (w *partialWriter) String() string {
 
 func (bashTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	var a struct {
-		Command string `json:"command"`
-		Timeout int    `json:"timeout"`
+		Command    string `json:"command"`
+		Timeout    int    `json:"timeout"`
+		Background bool   `json:"background"`
 	}
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
 	if strings.TrimSpace(a.Command) == "" {
 		return errf("empty command")
+	}
+	if a.Background {
+		if env.Mon == nil {
+			return errf("background commands are not available to this agent")
+		}
+		if a.Timeout <= 0 {
+			a.Timeout = 3600
+		}
+		if a.Timeout > 7200 {
+			a.Timeout = 7200
+		}
+		id, err := env.Mon.StartCommand(a.Command, time.Duration(a.Timeout)*time.Second)
+		if err != nil {
+			return errf("%v", err)
+		}
+		return Result{Output: fmt.Sprintf("started in the background as monitor %s; you will be woken with its output when it exits (unmonitor %s to opt out, or with stop=true to kill it)", id, id)}
 	}
 	if a.Timeout <= 0 {
 		a.Timeout = 300
