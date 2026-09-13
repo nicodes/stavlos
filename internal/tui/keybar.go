@@ -59,13 +59,13 @@ func (m Model) keyHints() []keyHint {
 		tree = "hide sidebar"
 	}
 	if m.isHome() {
-		hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/providers", "sign in"}, {"/models", "pick model"}}
+		hs := []keyHint{{"enter", "send"}, {"ctrl+j", "newline"}, {"↑/↓", "history"}, {"/", "commands"}}
 		hs = append(hs, tab...)
 		return append(hs, keyHint{"ctrl+n/p", "agents"}, keyHint{"ctrl+b", tree}, keyHint{"ctrl+c", "quit"})
 	}
-	hs := []keyHint{{"enter", "send"}, {"ctrl+j", "newline"}, {"↑/↓", "history"}}
+	hs := []keyHint{{"enter", "send"}, {"ctrl+j", "newline"}, {"↑/↓", "history"}, {"/", "commands"}}
 	hs = append(hs, tab...)
-	return append(hs, keyHint{"/queue", "send after turn"}, keyHint{"esc esc", "cancel turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"/models", "model"}, keyHint{"ctrl+c", "quit"})
+	return append(hs, keyHint{"esc esc", "cancel turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"ctrl+c", "quit"})
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at

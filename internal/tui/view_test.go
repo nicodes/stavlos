@@ -745,7 +745,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if m.focus != focusInput || !m.follow || !m.vp.AtBottom() || strings.Contains(stripANSI(m.vp.View()), gutterMark) {
 		t.Fatalf("leave chat: focus=%v follow=%v bottom=%v", m.focus, m.follow, m.vp.AtBottom())
 	}
-	if hs := m.keyHints(); hs[3].key != "tab" || hs[3].desc != "next section" {
+	if hs := m.keyHints(); hs[4].key != "tab" || hs[4].desc != "next section" {
 		t.Fatalf("input hints: %+v", hs)
 	}
 }
