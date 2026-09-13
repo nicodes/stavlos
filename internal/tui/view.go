@@ -633,9 +633,6 @@ func promptBoxWidth(width int) int {
 
 // inputBox is the input line over its meta line. Focus shows on the prompt
 // chevron (set in layout), so there is no border.
-func inputBox(input, meta string) string {
-	return input + "\n" + meta
-}
 
 // metaLine is "main (coder) · anthropic/claude-opus-5 · high" (or the
 // no-model nudge): the agent as "label (role)" like the tab rows, the
@@ -774,10 +771,10 @@ func (m Model) boxWidth() int {
 
 // inputBoxView is the input line over the meta row for the selected agent.
 func (m Model) inputBoxView(width int) string {
-	return inputBox(m.inputView(), m.metaRow(width))
+	return m.inputView()
 }
 
-// metaRow is the line under the input: role and model on the left, tokens
+// metaRow is the line under the divider: role and model on the left, tokens
 // and cost (or a transient status) on the right, dot separators within
 // each side. The left side is truncated first when they collide.
 func (m Model) metaRow(width int) string {
@@ -839,12 +836,13 @@ func (m Model) homeLines(width, height int) homeLayout {
 	lay.lines = append(lay.lines, "")
 	add(styleDim.Render(tagline), lipgloss.Width(tagline))
 	lay.lines = append(lay.lines, "")
+	add(m.metaRow(boxW), boxW)
 	if m.stripShown() {
 		if sv := m.sectionsView(boxW); sv != "" {
 			add(sv, boxW)
-			lay.lines = append(lay.lines, "")
 		}
 	}
+	lay.lines = append(lay.lines, "")
 	if pv := m.paletteViewFor(boxW); pv != "" {
 		add(pv, boxW)
 	}
@@ -875,7 +873,9 @@ func (m Model) sessionView(width, height int) string {
 	cw := m.contentWidth()
 	// A rule closes the chat area; below it the background/permission tab
 	// strip (and the focused section's body) sit right above the input.
-	parts := []string{m.vp.View(), "", styleRule.Render(strings.Repeat("─", cw))} // breathing room above the rule
+	// Under the rule: the meta row (YOLO, role, model, variant, usage), then
+	// the tab strip, a blank line, and the input.
+	parts := []string{m.vp.View(), "", styleRule.Render(strings.Repeat("─", cw)), m.metaRow(cw)} // breathing room above the rule
 	if sv := m.sectionsView(cw); sv != "" {
 		parts = append(parts, sv, "") // a blank line below the strip, before the input
 	}
