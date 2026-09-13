@@ -737,6 +737,8 @@ func (m Model) View() string {
 	}
 	if m.ov != nil {
 		main = composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
+	} else if isTab(m.focus) {
+		main = composite(main, m.width, mainH, m.tabDialog(m.width))
 	}
 	frame := main
 	if kb > 0 {
@@ -966,38 +968,69 @@ func (m Model) treeRows(width int) []string {
 	return rows
 }
 
-// sectionsView is the block between the chat and the input: a tab strip
-// naming the permission, agents and async tabs with their counts (always
-// shown, "(0)" when empty), followed by the body of whichever one has focus.
+// sectionsView is the one-line strip between the chat and the input: the
+// permission, agents and async tabs with their counts (always shown, "(0)"
+// when empty) and the repo at the right edge. The body of whichever tab has
+// focus is a dialog (tabDialog), not an inline block.
 func (m Model) sectionsView(width int) string {
-	kids := m.liveChildren()
-	jobs := m.runningJobs()
-	p := m.currentPrompt()
-	strip := m.sectionTabs(kids, jobs, p, width)
+	return m.sectionTabs(m.liveChildren(), m.runningJobs(), m.currentPrompt(), width)
+}
+
+// tabDialog is the box drawn over the chat while a tab has focus: the tab
+// labels as its title (the open one in accent), a rule, then the tab's rows
+// (the pending prompt, the live children, the running jobs) or a note that
+// it is empty. Same width rules as the other dialogs.
+func (m Model) tabDialog(bodyWidth int) string {
+	w := dialogWidth(bodyWidth)
+	inner := w - 4 // border + padding
+	lines := []string{ansi.Truncate(m.tabLabels(m.liveChildren(), m.runningJobs(), m.currentPrompt()), inner, "…")}
+	lines = append(lines, styleRule.Render(strings.Repeat("─", inner)))
+	for _, l := range m.tabBodyLines(inner) {
+		lines = append(lines, ansi.Truncate(l, inner, "…"))
+	}
+	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
+}
+
+// dialogWidth is the box width every dialog uses: overlayWidth, narrowed to
+// fit the body with a margin, never under 24.
+func dialogWidth(bodyWidth int) int {
+	w := overlayWidth
+	if w > bodyWidth-4 {
+		w = bodyWidth - 4
+	}
+	if w < 24 {
+		w = 24
+	}
+	return w
+}
+
+// tabBodyLines is the focused tab's rows, laid out for width columns.
+func (m Model) tabBodyLines(width int) []string {
 	switch m.focus {
 	case focusAgents:
+		kids := m.liveChildren()
 		if len(kids) == 0 {
-			return strip + "\n" + styleDim.Render("  no subagents running")
+			return []string{styleDim.Render("  no subagents running")}
 		}
-		rows := agentRows(m.agents, m.selectedID(), m.spawned, m.lastLines(), time.Now(), width-2)
-		return strings.Join(append([]string{strip}, m.cursorRows(rows)...), "\n")
+		return m.cursorRows(agentRows(m.agents, m.selectedID(), m.spawned, m.lastLines(), time.Now(), width-2))
 	case focusAsync:
+		jobs := m.runningJobs()
 		if len(jobs) == 0 {
-			return strip + "\n" + styleDim.Render("  no async jobs running")
+			return []string{styleDim.Render("  no async jobs running")}
 		}
 		owner, role := "", ""
 		if a := m.selectedAgent(); a != nil {
 			owner, role = a.Label, a.Archetype
 		}
-		rows := monitorRows(jobs, owner, role, time.Now(), width-2)
-		return strings.Join(append([]string{strip}, m.cursorRows(rows)...), "\n")
+		return m.cursorRows(monitorRows(jobs, owner, role, time.Now(), width-2))
 	case focusPermission:
+		p := m.currentPrompt()
 		if p == nil {
-			return strip + "\n" + styleDim.Render("  no prompts waiting")
+			return []string{styleDim.Render("  no prompts waiting")}
 		}
-		return strip + "\n" + m.promptBox(p, width)
+		return strings.Split(m.promptBox(p, width), "\n")
 	}
-	return strip
+	return nil
 }
 
 // sectionTabs is the one-line strip: the three tabs with their counts, the
@@ -1005,6 +1038,18 @@ func (m Model) sectionsView(width int) string {
 // waiting, which is warning orange), and the repo at the right edge. Key
 // hints live in the key bar.
 func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo, width int) string {
+	line := m.tabLabels(kids, jobs, p)
+	// The repo (cwd) sits at the right edge of the strip.
+	repo := styleDim.Render(shortHome(m.session.Dir))
+	if gap := width - lipgloss.Width(line) - lipgloss.Width(repo); gap >= 4 {
+		line += strings.Repeat(" ", gap) + repo
+	}
+	return ansi.Truncate(line, width, "…")
+}
+
+// tabLabels is "permission (n) · agents (n) · async (n)", the focused tab in
+// accent, the rest dim; it heads both the strip and the tab dialog.
+func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo) string {
 	tab := func(label string, on bool) string {
 		if on {
 			return styleBoxTitleFocus.Render(label)
@@ -1026,22 +1071,16 @@ func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInf
 		tab(fmt.Sprintf("agents (%d)", len(kids)), m.focus == focusAgents),
 		tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
 	}
-	line := strings.Join(tabs, styleDim.Render(" · "))
-	// The repo (cwd) sits at the right edge of the strip.
-	repo := styleDim.Render(shortHome(m.session.Dir))
-	if gap := width - lipgloss.Width(line) - lipgloss.Width(repo); gap >= 4 {
-		line += strings.Repeat(" ", gap) + repo
-	}
-	return ansi.Truncate(line, width, "…")
+	return strings.Join(tabs, styleDim.Render(" · "))
 }
 
-// cursorRows puts the ▶ marker on the row under agCursor and indents the
-// rest to match.
+// cursorRows puts the ▸ marker (as in every dialog) on the row under
+// agCursor and indents the rest to match.
 func (m Model) cursorRows(rows []string) []string {
 	for i := range rows {
 		marker := "  "
 		if i == m.agCursor%len(rows) {
-			marker = styleAccent.Render("▶") + " "
+			marker = styleOvMarker.Render("▸") + " "
 		}
 		rows[i] = marker + strings.TrimPrefix(rows[i], "  ")
 	}

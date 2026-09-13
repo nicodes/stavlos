@@ -662,6 +662,12 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 	case msg.Action == tea.MouseActionRelease && m.sel.pressed:
 		m.sel.pressed = false
 		if !m.sel.active {
+			// A dialog (an overlay or the tab dialog) is hit-tested in
+			// screen coordinates first; the tab dialog lets a miss fall
+			// through to whatever is under the pointer, an overlay does not.
+			if cmd, hit := m.dialogClick(msg.X, msg.Y); hit || m.ov != nil {
+				return cmd
+			}
 			if !inMain {
 				return m.setFocus(focusSidebar)
 			}
@@ -674,12 +680,110 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		}
 		return tea.Batch(copyCmd(text), m.setStatus(fmt.Sprintf("copied %d characters", len([]rune(text))), false))
 	case msg.Action == tea.MouseActionMotion:
+		if m.ov != nil || isTab(m.focus) {
+			m.dialogHover(msg.X, msg.Y) // a dialog owns hover; the chat behind it is left alone
+			return nil
+		}
 		if !inMain {
 			return m.mouseHover(-1, msg.Y) // outside the chat: hover releases, nothing else
 		}
 		return m.mouseHover(cx, msg.Y)
 	}
 	return nil
+}
+
+// dialogClick is a click while a dialog is open, in screen coordinates: on
+// an overlay row it selects and submits; on the tab dialog a title label
+// switches tabs and a body row moves the cursor (and, for agents, selects
+// the agent like enter). hit reports whether the click landed on something.
+func (m *Model) dialogClick(x, y int) (tea.Cmd, bool) {
+	if m.ov != nil {
+		if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), m.sp.View()); ok {
+			m.ov.cursor = idx
+			return m.overlaySubmit(false), true
+		}
+		return nil, false
+	}
+	if !isTab(m.focus) {
+		return nil, false
+	}
+	h := m.tabDialogHit(x, y)
+	switch {
+	case h.tabOK:
+		return m.setFocus(h.tab), true
+	case h.rowOK:
+		m.agCursor = h.row
+		if m.focus == focusAgents {
+			return m.agentsKey(tea.KeyMsg{Type: tea.KeyEnter}), true
+		}
+		return nil, true
+	}
+	return nil, false
+}
+
+// dialogHover moves a dialog's cursor to the row under the pointer.
+func (m *Model) dialogHover(x, y int) {
+	if m.ov != nil {
+		if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), m.sp.View()); ok {
+			m.ov.cursor = idx
+		}
+		return
+	}
+	if h := m.tabDialogHit(x, y); h.rowOK {
+		m.agCursor = h.row
+	}
+}
+
+// tabHit is what a screen position lands on inside the tab dialog: a tab
+// label on its title line, or one of its body rows.
+type tabHit struct {
+	tab          focus
+	row          int
+	tabOK, rowOK bool
+}
+
+// tabDialogHit maps a screen position to the tab dialog, using the same
+// geometry as View and composite: the box is centred in the body; inside
+// the border and padding come the title (the tab labels), the rule, then
+// the rows.
+func (m *Model) tabDialogHit(x, y int) tabHit {
+	var h tabHit
+	box := m.tabDialog(m.width)
+	boxLines := strings.Split(box, "\n")
+	bw := lipgloss.Width(box)
+	x0 := (m.width - bw) / 2
+	if x0 < 0 {
+		x0 = 0
+	}
+	y0 := (m.bodyHeight() - len(boxLines)) / 2
+	if y0 < 0 {
+		y0 = 0
+	}
+	if x < x0 || x >= x0+bw || y <= y0 || y >= y0+len(boxLines)-1 {
+		return h // outside, or on the border
+	}
+	switch row := y - y0 - 1; {
+	case row == 0:
+		if f, ok := m.tabAt(x - x0 - 2); ok { // border + padding
+			h.tab, h.tabOK = f, true
+		}
+	case row >= 2:
+		if i := row - 2; i < m.tabRowCount() {
+			h.row, h.rowOK = i, true
+		}
+	}
+	return h
+}
+
+// tabRowCount is how many selectable rows the focused tab shows.
+func (m *Model) tabRowCount() int {
+	switch m.focus {
+	case focusAgents:
+		return len(m.liveChildren())
+	case focusAsync:
+		return len(m.runningJobs())
+	}
+	return 0
 }
 
 // mainX maps a screen column to the chat column for the rows the sidebar
@@ -887,12 +991,6 @@ func (m Model) inputView() string {
 // the chat area gives focus back to the input, without scrolling. Focus the
 // keyboard took is left alone.
 func (m *Model) mouseHover(x, y int) tea.Cmd {
-	if m.ov != nil {
-		if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), m.sp.View()); ok {
-			m.ov.cursor = idx
-		}
-		return nil
-	}
 	if m.isHome() {
 		return nil
 	}
@@ -938,13 +1036,6 @@ func (m *Model) mouseHover(x, y int) tea.Cmd {
 // mouseClick is a left click: on a chat item it does what enter does on
 // the hovered item (the click first moves the cursor there, like hover).
 func (m *Model) mouseClick(x, y int) tea.Cmd {
-	if m.ov != nil {
-		if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), m.sp.View()); ok {
-			m.ov.cursor = idx
-			return m.overlaySubmit(false)
-		}
-		return nil
-	}
 	if m.isHome() {
 		return m.setFocus(focusInput) // the input is the only thing to click on the logo screen
 	}
@@ -966,13 +1057,9 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 			m.toggleItem()
 		}
 		return cmd
-	case y == lay.strip: // a tab label opens that tab
+	case y == lay.strip: // a tab label opens that tab's dialog
 		if f, ok := m.tabAt(x); ok {
 			return m.setFocus(f)
-		}
-	case y > lay.strip && y <= lay.stripEnd: // a row inside the open tab
-		if isTab(m.focus) && m.focus != focusPermission {
-			m.agCursor = y - lay.strip - 1
 		}
 	case y >= lay.input && y < lay.input+m.inputRows(): // the input lines
 		return m.setFocus(focusInput)
@@ -1143,20 +1230,18 @@ func (m *Model) metaHit(x int) metaPart {
 
 // rowLayout is where the session view's pieces sit, in screen rows.
 type rowLayout struct {
-	strip    int // the tab strip line
-	stripEnd int // last row of the strip block (its body when a tab is open)
-	input    int // first row of the input (it may span several)
-	meta     int // the meta row (right under the rule)
+	strip int // the tab strip line
+	input int // first row of the input (it may span several)
+	meta  int // the meta row (right under the rule)
 }
 
 // rows derives the row layout the same way sessionView stacks its parts.
 func (m *Model) rows() rowLayout {
 	meta := m.vp.Height + 2 // blank line, then the rule, then the meta row
 	y := meta + 1           // the strip
-	lay := rowLayout{meta: meta, strip: y, stripEnd: y}
-	if sv := m.sectionsView(m.width); sv != "" {
-		lay.stripEnd = y + strings.Count(sv, "\n")
-		y = lay.stripEnd + 2 // blank line after the strip block
+	lay := rowLayout{meta: meta, strip: y}
+	if m.sectionsView(m.width) != "" {
+		y += 2 // the strip, then the blank line after it
 	}
 	if pv := m.paletteViewFor(m.width); pv != "" {
 		y += strings.Count(pv, "\n") + 1
@@ -2105,7 +2190,7 @@ func (m *Model) layout() {
 	}
 	boxW := m.boxWidth()
 	m.input.SetWidth(boxW)
-	m.promptInput.Width = boxW - 4 - len([]rune(m.promptInput.Prompt)) - 1
+	m.promptInput.Width = dialogWidth(m.width) - 4 - 2 - len([]rune(m.promptInput.Prompt)) - 1 // inside the tab dialog, under promptBox's indent
 
 	_, kb := m.keyBarView()
 	bodyH := m.height - kb - 2 - (m.inputRows() + 1) // key bar, blank + chat rule, input rows + meta row
