@@ -1185,10 +1185,7 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 			continue
 		}
 		lead := agentGlyph(a)
-		meta := []string{a.State}
-		if agentOutcome(a) == "error" {
-			meta = []string{styleStatusErr.Render("error")}
-		}
+		var meta []string // the state shows in the glyph's colour (orange working, red error, plain idle)
 		if a.CostUSD > 0 {
 			meta = append(meta, "$"+fmtCost(a.CostUSD))
 		}
@@ -1200,7 +1197,9 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 		if s := last[a.ID]; s != "" {
 			row += "  " + truncRunes(s, snippetChars)
 		}
-		row += "  " + styleDim.Render(strings.Join(meta, " · "))
+		if len(meta) > 0 {
+			row += "  " + styleDim.Render(strings.Join(meta, " · "))
+		}
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows
