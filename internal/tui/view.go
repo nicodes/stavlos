@@ -897,13 +897,12 @@ func (m Model) sectionsView(width int) string {
 }
 
 // sectionTabs is the one-line strip: the three tabs with their counts, the
-// focused one in accent with a ▾ pointing at its contents below, the rest
-// dim (except a permission tab with prompts waiting, which is warning
-// orange), then a hint.
+// open one in accent, the rest dim (except a permission tab with prompts
+// waiting, which is warning orange). Key hints live in the key bar.
 func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo, width int) string {
 	tab := func(label string, on bool) string {
 		if on {
-			return styleBoxTitleFocus.Render("▾ " + label)
+			return styleBoxTitleFocus.Render(label)
 		}
 		return styleDim.Render(label)
 	}
@@ -922,24 +921,7 @@ func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInf
 		tab(fmt.Sprintf("agents (%d)", len(kids)), m.focus == focusAgents),
 		tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
 	}
-	var hint string
-	switch m.focus {
-	case focusAgents:
-		hint = "←/→ tab · ↑/↓ move · enter select agent · esc back"
-	case focusAsync:
-		hint = "←/→ tab · ↑/↓ move · esc back"
-	case focusPermission:
-		hint = "←/→ tab"
-	default:
-		hint = "tab to open"
-		if p != nil {
-			hint = "tab to answer"
-		}
-	}
 	line := strings.Join(tabs, styleDim.Render("  │  "))
-	if hint != "" {
-		line += styleDim.Render("  " + hint)
-	}
 	return ansi.Truncate(line, width, "…")
 }
 
