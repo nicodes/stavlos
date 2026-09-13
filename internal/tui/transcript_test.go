@@ -1005,3 +1005,20 @@ func TestAgentCreateLineTracksChild(t *testing.T) {
 		t.Fatalf("tones %v", tones)
 	}
 }
+
+func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
+	tr := NewTranscript()
+	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "delegate"}))
+	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "agent_response", From: "scout (a1b2c3d4)", Text: "Repository survey complete.\nNo edits were needed."}))
+	folded := renderWith(tr.All(), RenderOpts{Width: 80})
+	if !contains(folded, "⑂ Agent response · scout (a1b2c3d4) +2") {
+		t.Fatalf("folded response should name itself and its sender:\n%s", strings.Join(folded, "\n"))
+	}
+	for _, l := range folded {
+		if strings.Contains(l, "Repository survey") {
+			t.Fatalf("folded response should not lead with the answer text:\n%s", strings.Join(folded, "\n"))
+		}
+	}
+	full := renderWith(tr.All(), RenderOpts{Width: 80, NoFold: true})
+	assertSubsequence(t, full, []string{"⑂ Agent response · scout (a1b2c3d4)", "Repository survey complete.", "No edits were needed."})
+}
