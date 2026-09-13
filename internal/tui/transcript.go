@@ -111,7 +111,14 @@ func (t *Transcript) Apply(ev event.Event) {
 		var p event.ToolFinishedPayload
 		if ev.Decode(&p) == nil {
 			if i, ok := t.calls[p.CallID]; ok && i < len(t.Lines) {
-				item = t.Lines[i].Item // output joins the call's item
+				// Output joins the call's item and is placed right under the
+				// call, even when other items (a permission notice, say)
+				// were committed while the call ran.
+				item = t.Lines[i].Item
+				t.finishCall(p)
+				t.stream = nil
+				t.insertIntoItem(item, EventLines(ev))
+				return
 			}
 			t.finishCall(p)
 		}
@@ -138,6 +145,33 @@ func (t *Transcript) appendItem(item int, lines []Line) {
 	t.Lines = append(t.Lines, lines...)
 	if item == t.items {
 		t.items++
+	}
+}
+
+// insertIntoItem places lines immediately after the last line of item so
+// the item stays contiguous. Tracked call indices past the splice shift.
+func (t *Transcript) insertIntoItem(item int, lines []Line) {
+	if len(lines) == 0 {
+		return
+	}
+	for i := range lines {
+		lines[i].Item = item
+	}
+	_, last := itemRange(t.Lines, item)
+	if last < 0 || last == len(t.Lines)-1 {
+		t.Lines = append(t.Lines, lines...)
+		return
+	}
+	at := last + 1
+	out := make([]Line, 0, len(t.Lines)+len(lines))
+	out = append(out, t.Lines[:at]...)
+	out = append(out, lines...)
+	out = append(out, t.Lines[at:]...)
+	t.Lines = out
+	for id, idx := range t.calls {
+		if idx >= at {
+			t.calls[id] = idx + len(lines)
+		}
 	}
 }
 
@@ -244,9 +278,8 @@ func (t *Transcript) All() []Line {
 func (t *Transcript) Items() int { return itemCount(t.All()) }
 
 // ItemRange returns the first and last index into All() of item i, or
-// (-1, -1) when there is no such item. Output appended to a tool call after
-// other events keeps the call's item, so the range may contain other items'
-// lines in between.
+// (-1, -1) when there is no such item. Items are contiguous: tool output is
+// spliced in under its call even when other events landed in between.
 func (t *Transcript) ItemRange(i int) (first, last int) { return itemRange(t.All(), i) }
 
 func itemCount(lines []Line) int {
