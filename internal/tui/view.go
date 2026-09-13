@@ -883,7 +883,7 @@ func (m Model) sessionView(width, height int) string {
 	if m.sidebarVisible() {
 		h := m.vp.Height + 1
 		sep := styleSep.Render(strings.TrimSuffix(strings.Repeat("│ \n", h), "\n")) // a space keeps the chat off the line
-		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top)                // the sidebar sits on the left
+		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top)     // the sidebar sits on the left
 	}
 	// Under the rule: the meta row (YOLO, role, model, variant, usage), then
 	// the tab strip, a blank line, the palette, and the input.
