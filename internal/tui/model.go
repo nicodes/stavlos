@@ -1697,9 +1697,12 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	case event.AgentKilled:
 		if parent := m.parentOf[ev.Agent]; parent != "" {
 			m.transcript(parent).ChildState(ev.Agent, "killed")
-			if !m.loading && parent == m.selectedID() {
-				m.refreshViewport()
-			}
+		}
+		for _, t := range m.transcripts { // questions to it will never be answered
+			t.AskerGone(ev.Agent)
+		}
+		if !m.loading {
+			m.refreshViewport()
 		}
 	case event.PromptQueued:
 		var p event.TextPayload

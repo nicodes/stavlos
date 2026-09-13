@@ -1022,3 +1022,46 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 	full := renderWith(tr.All(), RenderOpts{Width: 80, NoFold: true})
 	assertSubsequence(t, full, []string{"⑂ Agent response · scout (a1b2c3d4)", "Repository survey complete.", "No edits were needed."})
 }
+
+func TestAgentPromptLineWaitsForTheAnswer(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tone := func(callID string) Tone {
+		for _, l := range tr.All() {
+			if l.Kind == LineTool && l.tool == "agent_prompt" && strings.Contains(l.Text, callID) {
+				return l.Tone
+			}
+		}
+		t.Fatalf("no agent_prompt line for %s", callID)
+		return ToneNone
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "p1", Name: "agent_prompt", Input: json.RawMessage(`{"id":"a1b2c3d4e5f6","text":"which branch?"}`)}))
+	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "p1", Name: "agent_prompt", Output: "queued"}))
+	if tone("a1b2c3d4e5f6") != ToneWorking {
+		t.Fatalf("a delivered prompt waits for its answer: %v", tone("a1b2c3d4e5f6"))
+	}
+	// a second question to a different agent
+	tr.Apply(mk(4, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "p2", Name: "agent_prompt", Input: json.RawMessage(`{"id":"ffff00001111","text":"and you?"}`)}))
+	tr.Apply(mk(5, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "p2", Name: "agent_prompt", Output: "queued"}))
+	tr.Apply(mk(6, event.TurnEnded, event.TurnEndedPayload{Turn: 1}))
+	// the first agent answers: only its line settles
+	tr.Apply(mk(7, event.TurnStarted, event.TurnPayload{Turn: 2}))
+	tr.Apply(mk(8, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "agent_response", From: "scout (a1b2c3d4)", Text: "main"}))
+	if tone("a1b2c3d4e5f6") != ToneNone || tone("ffff00001111") != ToneWorking {
+		t.Fatalf("answered → grey, unanswered → still yellow: %v %v", tone("a1b2c3d4e5f6"), tone("ffff00001111"))
+	}
+	// the second agent is killed before answering: red
+	tr.AskerGone("ffff00001111")
+	if tone("ffff00001111") != ToneError {
+		t.Fatalf("killed before answering → red: %v", tone("ffff00001111"))
+	}
+	// a failed prompt never waits
+	tr.Apply(mk(9, event.ToolCallStarted, event.ToolStartedPayload{Turn: 2, CallID: "p3", Name: "agent_prompt", Input: json.RawMessage(`{"id":"deadbeef0000","text":"?"}`)}))
+	tr.Apply(mk(10, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 2, CallID: "p3", Name: "agent_prompt", Output: "unknown agent", IsError: true}))
+	if tone("deadbeef0000") == ToneWorking {
+		t.Fatal("a refused prompt has nothing to wait for")
+	}
+}
