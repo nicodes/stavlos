@@ -732,7 +732,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if m.focus != focusInput || !m.follow || !m.vp.AtBottom() || strings.Contains(stripANSI(m.vp.View()), gutterMark) {
 		t.Fatalf("leave chat: focus=%v follow=%v bottom=%v", m.focus, m.follow, m.vp.AtBottom())
 	}
-	if hs := m.keyHints(); hs[2].key != "tab" || hs[2].desc != "next section" {
+	if hs := m.keyHints(); hs[3].key != "tab" || hs[3].desc != "next section" {
 		t.Fatalf("input hints: %+v", hs)
 	}
 }
@@ -1462,5 +1462,70 @@ func TestDragSelectsAndCopies(t *testing.T) {
 	ev(tea.MouseMsg{X: 1, Y: 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 	if m.sel.active {
 		t.Fatal("a new press should drop the old selection")
+	}
+}
+
+func TestInputGrowsWithTheMessage(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	m.width, m.height = 60, 30
+	m.layout()
+	one := m.vp.Height
+	if m.input.Height() != 1 {
+		t.Fatalf("empty input should be one line: %d", m.input.Height())
+	}
+	// an explicit line break grows it
+	m.input.SetValue("first line\nsecond line")
+	m.layout()
+	if m.input.Height() != 2 || m.vp.Height != one-1 {
+		t.Fatalf("two lines: height %d, viewport %d (was %d)", m.input.Height(), m.vp.Height, one)
+	}
+	if got := strings.Count(m.View(), "\n") + 1; got != m.height {
+		t.Fatalf("view should still fill the window: %d lines", got)
+	}
+	// a long line wraps and grows it too
+	m.input.SetValue(strings.Repeat("word ", 40))
+	m.layout()
+	if m.input.Height() < 3 {
+		t.Fatalf("200 columns of text in a 60-column box should wrap to several lines: %d", m.input.Height())
+	}
+	// never past the cap
+	m.input.SetValue(strings.Repeat("line\n", 30))
+	m.layout()
+	if m.input.Height() != inputMaxLines {
+		t.Fatalf("cap: %d", m.input.Height())
+	}
+	// back to one line when cleared
+	m.input.Reset()
+	m.layout()
+	if m.input.Height() != 1 || m.vp.Height != one {
+		t.Fatalf("cleared: height %d viewport %d", m.input.Height(), m.vp.Height)
+	}
+}
+
+func TestInputNewlineAndHistoryKeys(t *testing.T) {
+	m := sessionModel()
+	m.history = []string{"older prompt"}
+	m.histIdx = len(m.history)
+	type_ := func(s string) {
+		for _, r := range s {
+			press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		}
+	}
+	type_("one")
+	press(&m, tea.KeyMsg{Type: tea.KeyCtrlJ}) // ctrl+j breaks the line
+	type_("two")
+	if m.input.Value() != "one\ntwo" || m.input.Height() != 2 {
+		t.Fatalf("ctrl+j should insert a newline: %q height %d", m.input.Value(), m.input.Height())
+	}
+	// on the second line ↑ moves within the draft, not into history
+	press(&m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.input.Value() != "one\ntwo" || m.input.Line() != 0 {
+		t.Fatalf("↑ inside a draft should move up a line: %q line %d", m.input.Value(), m.input.Line())
+	}
+	// on the first line ↑ walks history
+	press(&m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.input.Value() != "older prompt" {
+		t.Fatalf("↑ on the first line should recall history: %q", m.input.Value())
 	}
 }
