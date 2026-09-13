@@ -86,7 +86,7 @@ type Model struct {
 	width, height int
 	showTree      bool // right sidebar toggle (/tree, ctrl+b)
 	showTips      bool // home-state tips block (/tips)
-	hideKeys      bool // /help hides the key bar (divider + legend) at the bottom; shown by default
+	hideKeys      bool // the key bar (divider + legend) at the bottom is hidden; /help shows it
 	details       bool // expanded tool output (/details)
 	follow        bool // auto-scroll to bottom
 
@@ -202,6 +202,7 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 		promptInput: pi,
 		sp:          sp,
 		showTips:    true,
+		hideKeys:    true, // the key bar is off until /help
 		follow:      true,
 		loading:     true,
 	}
