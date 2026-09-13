@@ -94,6 +94,7 @@ type Model struct {
 	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
 	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
 	sel           selection // mouse text selection (drag to select, release to copy)
+	metaSel       metaPart  // the highlighted part of the meta row while it has focus
 	details       bool      // expanded tool output (/details)
 	follow        bool      // auto-scroll to bottom
 
@@ -140,6 +141,7 @@ const (
 	focusAsync                   // the async tab: running bash_async jobs
 	focusSidebar                 // the agent tree (↑/↓ enter)
 	focusTabs                    // placeholder in focusOrder for the tab strip as a whole
+	focusMeta                    // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
 )
 
 // tabFocuses are the tabs of the strip under the chat, left to right. They
@@ -426,7 +428,7 @@ func (m *Model) focusOrder() []focus {
 	if m.stripShown() {
 		order = append(order, focusTabs)
 	}
-	order = append(order, focusInput)
+	order = append(order, focusInput, focusMeta)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
 	}
@@ -559,6 +561,10 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		m.sbCursor = m.selected
 	case focusAgents, focusAsync:
 		m.agCursor = 0
+	case focusMeta:
+		if !m.metaHas(m.metaSel) {
+			m.metaSel = metaRole
+		}
 	}
 	return nil
 }
@@ -941,17 +947,73 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 	case y >= lay.input && y < lay.meta: // the input lines
 		return m.setFocus(focusInput)
 	case y == lay.meta: // the meta row: its parts are buttons
-		switch m.metaHit(x) {
-		case metaYolo:
-			return setYoloCmd(m.ctx, m.c, m.sessionID, false)
-		case metaRole:
-			return rolesCmd(m.ctx, m.c, m.sessionID)
-		case metaModel:
-			return modelsCmd(m.ctx, m.c)
-		case metaVariant:
-			return m.openVariants("")
+		if part := m.metaHit(x); part != metaNone {
+			return m.metaAction(part)
 		}
 		return m.setFocus(focusInput)
+	}
+	return nil
+}
+
+// metaParts lists the meta row's parts in order, YOLO only while it is on.
+func (m *Model) metaParts() []metaPart {
+	parts := []metaPart{}
+	if m.session.Yolo {
+		parts = append(parts, metaYolo)
+	}
+	return append(parts, metaRole, metaModel, metaVariant)
+}
+
+func (m *Model) metaHas(p metaPart) bool {
+	for _, q := range m.metaParts() {
+		if q == p {
+			return true
+		}
+	}
+	return false
+}
+
+// metaAction is what a part of the meta row does when picked, by click or
+// enter: YOLO turns yolo off; the role, model and variant open their
+// dialogs.
+func (m *Model) metaAction(part metaPart) tea.Cmd {
+	switch part {
+	case metaYolo:
+		return setYoloCmd(m.ctx, m.c, m.sessionID, false)
+	case metaRole:
+		return rolesCmd(m.ctx, m.c, m.sessionID)
+	case metaModel:
+		return modelsCmd(m.ctx, m.c)
+	case metaVariant:
+		return m.openVariants("")
+	}
+	return nil
+}
+
+// metaKey handles keys while the meta row has focus: ←/→ move between its
+// parts (like the tabs on the strip), enter picks the highlighted one, esc
+// returns to the input.
+func (m *Model) metaKey(msg tea.KeyMsg) tea.Cmd {
+	parts := m.metaParts()
+	i := 0
+	for k, p := range parts {
+		if p == m.metaSel {
+			i = k
+		}
+	}
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.setFocus(focusInput)
+	case key.Matches(msg, keys.TabLeft):
+		if i > 0 {
+			m.metaSel = parts[i-1]
+		}
+	case key.Matches(msg, keys.TabRight):
+		if i < len(parts)-1 {
+			m.metaSel = parts[i+1]
+		}
+	case key.Matches(msg, keys.Submit):
+		return m.metaAction(m.metaSel)
 	}
 	return nil
 }
@@ -1221,6 +1283,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.asyncKey(msg)
 	case focusSidebar:
 		return m.sidebarKey(msg)
+	case focusMeta:
+		return m.metaKey(msg)
 	case focusChat:
 		return m.chatKey(msg)
 	case focusPermission:

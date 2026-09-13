@@ -641,24 +641,32 @@ func inputBox(input, meta string) string {
 // no-model nudge): the agent as "label (role)" like the tab rows, the
 // model and its variant ("default" when none is set), led by a
 // warning-coloured YOLO tag while the session auto-approves.
-func metaLine(label, role, model, variant string, queued int, yolo bool) string {
+// sel is the part highlighted while the row has keyboard focus (metaNone
+// otherwise).
+func metaLine(label, role, model, variant string, queued int, yolo bool, sel metaPart) string {
+	pick := func(part metaPart, text string, st lipgloss.Style) string {
+		if part == sel {
+			return styleBoxTitleFocus.Render(text)
+		}
+		return st.Render(text)
+	}
 	s := ""
 	if yolo {
-		s = styleWarn.Render("YOLO") + " · "
+		s = pick(metaYolo, "YOLO", styleWarn) + " · "
 	}
+	name := label
 	if role != "" {
-		s += fmt.Sprintf("%s (%s) · ", label, role)
-	} else {
-		s += label + " · "
+		name = fmt.Sprintf("%s (%s)", label, role)
 	}
+	s += pick(metaRole, name, lipgloss.NewStyle()) + " · "
 	if model == "" {
-		return s + styleWarn.Render("no model — /models")
+		return s + pick(metaModel, "no model — /models", styleWarn)
 	}
-	s += model // "provider/model", the same form /model and the config use
+	s += pick(metaModel, model, lipgloss.NewStyle()) // "provider/model", the same form /model and the config use
 	if variant == "" {
 		variant = "default"
 	}
-	s += " · " + variant
+	s += " · " + pick(metaVariant, variant, lipgloss.NewStyle())
 	if queued > 0 {
 		s += styleDim.Render(fmt.Sprintf(" · %d queued", queued))
 	}
@@ -780,7 +788,11 @@ func (m Model) metaRow(width int) string {
 			model = a.Model
 		}
 	}
-	left := metaLine(label, role, model, variant, queued, m.session.Yolo)
+	sel := metaNone
+	if m.focus == focusMeta {
+		sel = m.metaSel
+	}
+	left := metaLine(label, role, model, variant, queued, m.session.Yolo, sel)
 	right := m.footerRightView()
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {

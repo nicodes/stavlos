@@ -102,19 +102,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, false)); got != "main (coder) · anthropic/claude-opus-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, false, metaNone)); got != "main (coder) · anthropic/claude-opus-5 · default" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "", "", 0, false)); got != "main (coder) · no model — /models" {
+	if got := stripANSI(metaLine("main", "coder", "", "", 0, false, metaNone)); got != "main (coder) · no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, false)); got != "scout (explorer) · ollama/llama3 · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, false, metaNone)); got != "scout (explorer) · ollama/llama3 · default · 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, false)); got != "main (coder) · openai/gpt-5 · high" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, false, metaNone)); got != "main (coder) · openai/gpt-5 · high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, true)); got != "YOLO · main (coder) · openai/gpt-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, true, metaNone)); got != "YOLO · main (coder) · openai/gpt-5 · default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
@@ -423,10 +423,28 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.focus != focusInput {
 		t.Fatalf("default focus %v", m.focus)
 	}
-	// No prompt, sidebar hidden: input → chat → tabs → input. The strip is
-	// one stop; all empty, it opens on permission, and ←/→ walk the tabs.
+	// No prompt, sidebar hidden: input → meta row → chat → tabs → input. The
+	// strip is one stop; all empty, it opens on permission, and ←/→ walk the
+	// tabs. The meta row is a stop too: ←/→ pick role, model, variant.
 	right := tea.KeyMsg{Type: tea.KeyRight}
 	left := tea.KeyMsg{Type: tea.KeyLeft}
+	press(&m, tab)
+	if m.focus != focusMeta || m.metaSel != metaRole || m.input.Focused() {
+		t.Fatalf("tab: focus=%v sel=%v", m.focus, m.metaSel)
+	}
+	press(&m, left) // leftmost already (no YOLO): stays
+	press(&m, right)
+	if m.metaSel != metaModel {
+		t.Fatalf("→ should move to the model: %v", m.metaSel)
+	}
+	press(&m, right)
+	press(&m, right) // rightmost: stays on the variant
+	if m.metaSel != metaVariant {
+		t.Fatalf("→→ should stop on the variant: %v", m.metaSel)
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil {
+		t.Fatal("enter on a meta part should open its dialog")
+	}
 	press(&m, tab)
 	if m.focus != focusChat || m.follow || m.input.Focused() {
 		t.Fatalf("tab: focus=%v follow=%v", m.focus, m.follow)
@@ -476,15 +494,15 @@ func TestTabCyclesFocus(t *testing.T) {
 	m.showTree = true
 	m.layout()
 	var seen []focus
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusSidebar, focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusMeta, focusSidebar, focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with sidebar: %v, want %v", seen, want)
 	}
 	// Hiding the sidebar while it has focus falls back to the input.
-	press(&m, tab)
+	press(&m, tab, tab) // input → meta row → sidebar
 	m.showTree = false
 	m.ensureFocus()
 	if m.focus != focusInput {
@@ -497,11 +515,11 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatal("a new prompt must not steal focus")
 	}
 	seen = nil
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusMeta, focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with prompt: %v, want %v", seen, want)
 	}
 	// With a child but no prompt, the strip opens on agents; with only a
@@ -640,7 +658,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	m.refreshViewport()
 	items := tr.Items() // notice + 8 user + tool = 10
 
-	press(&m, tea.KeyMsg{Type: tea.KeyTab})
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → chat
 	if m.focus != focusChat || m.chatCursor != items-1 || m.follow {
 		t.Fatalf("enter chat: focus=%v cursor=%d follow=%v", m.focus, m.chatCursor, m.follow)
 	}
@@ -722,7 +740,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if strings.Count(view(), "out") != 8 {
 		t.Fatalf("expanded before leaving:\n%s", view())
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab})
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // esc → input; tab → meta row; tab → chat
 	if m.focus != focusChat || len(m.expanded["a"]) != 0 || strings.Count(view(), "out") != previewLines-1 {
 		t.Fatalf("re-entering the chat should show the preview: focus=%v %v\n%s", m.focus, m.expanded["a"], view())
 	}
@@ -778,12 +796,12 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("collapsed strip should only count:\n%s", sv)
 	}
 
-	// tab order: chat is skipped on the home view; the strip, then input
+	// tab order: chat is skipped on the home view; the strip, input, meta row
 	order := m.focusOrder()
-	if len(order) != 2 || order[0] != focusTabs || order[1] != focusInput {
+	if len(order) != 3 || order[0] != focusTabs || order[1] != focusInput || order[2] != focusMeta {
 		t.Fatalf("order %v", order)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission (a prompt waits)
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → permission (a prompt waits)
 	if pv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(pv, "\n") != 2 || !strings.Contains(pv, "$ Bash · coder\n       make test") || strings.Contains(pv, "{") {
 		t.Fatalf("permission should open as a tool row over its command: focus=%v\n%s", m.focus, pv)
 	}
@@ -1211,7 +1229,7 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 		t.Fatalf("leaving should restore the input: focus=%v hover=%v", m.focus, m.hoverFocus)
 	}
 	// keyboard focus is not dropped by the mouse leaving
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → chat
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → chat
 	move(5, m.vp.Height+2)
 	if m.focus != focusChat {
 		t.Fatalf("keyboard chat focus should survive mouse movement: %v", m.focus)
@@ -1324,7 +1342,7 @@ func TestMetaRowHits(t *testing.T) {
 	m.selected = 0
 	m.session.Yolo = true
 	// "YOLO · main (coder) · openai/gpt-5 · high"
-	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, true))
+	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, true, metaNone))
 	at := func(sub string) int { return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1 } // a column, not a byte offset
 	for _, c := range []struct {
 		x    int
@@ -1340,7 +1358,7 @@ func TestMetaRowHits(t *testing.T) {
 	// without yolo the row starts at the name; a missing variant reads "default"
 	m.session.Yolo = false
 	m.agents[0].Variant = ""
-	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, false))
+	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, false, metaNone))
 	if m.metaHit(0) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
 		t.Fatalf("no-yolo row: %q", row)
 	}
