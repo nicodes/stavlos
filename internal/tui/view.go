@@ -218,13 +218,13 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		}
 		// Gutter + leader, like every chat line.
 		if o.Waiting {
-			b.WriteString(" " + styleWarn.Render("!") + " " + styleWarn.Render("permission requested"))
+			b.WriteString(styleWarn.Render("!") + " " + styleWarn.Render("permission requested"))
 		} else {
 			verb := o.Verb
 			if verb == "" {
 				verb = "working"
 			}
-			b.WriteString(" " + o.Spinner + " " + styleDim.Render(verb+"…"))
+			b.WriteString(o.Spinner + " " + styleDim.Render(verb+"…"))
 		}
 		if o.Stats != "" {
 			b.WriteString(" " + styleDim.Render(o.Stats))
@@ -378,10 +378,11 @@ func (o RenderOpts) showLine(l Line) bool {
 // a leader (block border or indent), an optional glyph, and the wrapped,
 // styled text.
 func renderLine(l Line, o RenderOpts, cursor bool) string {
-	// No gutter column: the chat cursor is a background highlight applied
-	// by renderAll, so every row starts with the one-space leader.
+	// No gutter column and no margin: chat rows start at the same column as
+	// the strip and the input below; the cursor is a background highlight
+	// applied by renderAll.
 	gutter := ""
-	leader := " "
+	leader := ""
 	glyph := ""
 	text := l.Text
 	var style func(...string) string
@@ -392,7 +393,7 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	case LineHeading:
 		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), styleBold) }
 	case LineCode:
-		leader = "  "
+		leader = " "
 		style = styleDim.Render
 	case LineDim, LineLabel, LineThink:
 		style = styleDim.Render
@@ -413,10 +414,10 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		}
 		style = renderToolText
 	case LineToolOut:
-		leader = "    " // under the tool name (leader + "⚙  ")
+		leader = "   " // under the tool name (after "⚙  ")
 		style = styleToolOut.Render
 	case LineToolNote:
-		leader = "    "
+		leader = "   "
 		style = styleDim.Render
 	case LineFinished:
 		style = styleFinished.Render

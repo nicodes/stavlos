@@ -73,15 +73,15 @@ func TestBuildTranscript(t *testing.T) {
 	}
 	got := renderLines(Build(evs))
 	assertSubsequence(t, got, []string{
-		" › hello",
-		"   world",
-		" ⚙  Bash  sleep 100 (cancelled)",
-		"    partial",
-		" ◌ thinking…",
-		" Done.",
-		" ◦ turn cancelled",
-		" ✓ finished · success",
-		" all good",
+		"› hello",
+		"  world",
+		"⚙  Bash  sleep 100 (cancelled)",
+		"   partial",
+		"◌ thinking…",
+		"Done.",
+		"◦ turn cancelled",
+		"✓ finished · success",
+		"all good",
 	})
 	for _, g := range got {
 		if strings.Contains(g, "usage") || strings.Contains(g, "turn.started") || strings.Contains(g, "spawned") {
@@ -98,7 +98,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look around"}))
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{" ⑂ spawned scout (explorer) · m", " task", " ▹ look around"})
+	assertSubsequence(t, got, []string{"⑂ spawned scout (explorer) · m", "task", "▹ look around"})
 }
 
 func TestUserMessageKinds(t *testing.T) {
@@ -108,7 +108,7 @@ func TestUserMessageKinds(t *testing.T) {
 		mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}),
 	})
 	got := renderLines(lines)
-	assertSubsequence(t, got, []string{" steer", " › focus", " agent response", " ⑂ child done", " › hi"})
+	assertSubsequence(t, got, []string{"steer", "› focus", "agent response", "⑂ child done", "› hi"})
 
 	// Blocks carry their kind so Render can pick the border color.
 	var blocks []BlockKind
@@ -131,7 +131,7 @@ func TestUserBlockBorderAndWrap(t *testing.T) {
 	got := renderWith(Build([]event.Event{
 		mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi\n" + text}),
 	}), RenderOpts{Width: 30, NoFold: true})
-	if got[0] != " › hi" {
+	if got[0] != "› hi" {
 		t.Fatalf("prompt glyph + padding: %q", got[0])
 	}
 	// Long lines wrap inside the border; every continuation keeps it.
@@ -143,7 +143,7 @@ func TestUserBlockBorderAndWrap(t *testing.T) {
 		t.Fatalf("expected wrapped lines:\n%s", strings.Join(got, "\n"))
 	}
 	for _, l := range body {
-		if !strings.HasPrefix(l, "   ") || len([]rune(l)) > 30 {
+		if !strings.HasPrefix(l, "  ") || len([]rune(l)) > 30 {
 			t.Fatalf("bad wrapped line %q", l)
 		}
 	}
@@ -193,7 +193,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	tr := NewTranscript()
 	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "read", Input: json.RawMessage(`{"path":"a.go"}`)}))
 	got := renderLines(tr.All())
-	if !contains(got, " ⚙  Read  a.go") {
+	if !contains(got, "⚙  Read  a.go") {
 		t.Fatalf("running tool shows its glyph (yellow):\n%s", strings.Join(got, "\n"))
 	}
 	if !tr.Running() {
@@ -209,8 +209,8 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{" ⚙  Read  a.go", "    line", "    line", "    line", "    … +17 lines", " ⚙  Write  b.go (denied)"})
-	if n := count(got, "    line"); n != maxOutputCollapsed {
+	assertSubsequence(t, got, []string{"⚙  Read  a.go", "   line", "   line", "   line", "   … +17 lines", "⚙  Write  b.go (denied)"})
+	if n := count(got, "   line"); n != maxOutputCollapsed {
 		t.Fatalf("collapsed: want %d output lines, got %d", maxOutputCollapsed, n)
 	}
 	var rule string
@@ -224,7 +224,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	expanded := renderWith(tr.All(), RenderOpts{Width: 80, Details: true})
-	if n := count(expanded, "    line"); n != 20 {
+	if n := count(expanded, "   line"); n != 20 {
 		t.Fatalf("expanded: want 20 output lines, got %d", n)
 	}
 	for _, g := range expanded {
@@ -238,10 +238,10 @@ func TestToolOutputExpandedCap(t *testing.T) {
 	lines := outputLines(strings.TrimRight(strings.Repeat("x\n", 50), "\n"))
 	collapsed := renderWith(lines, RenderOpts{Width: 80, NoFold: true})
 	expanded := renderWith(lines, RenderOpts{Width: 80, Details: true})
-	if count(collapsed, "    x") != maxOutputCollapsed || !contains(collapsed, "    … +47 lines") {
+	if count(collapsed, "   x") != maxOutputCollapsed || !contains(collapsed, "   … +47 lines") {
 		t.Fatalf("collapsed:\n%s", strings.Join(collapsed, "\n"))
 	}
-	if count(expanded, "    x") != maxOutputExpanded || !contains(expanded, "    … +10 lines") {
+	if count(expanded, "   x") != maxOutputExpanded || !contains(expanded, "   … +10 lines") {
 		t.Fatalf("expanded:\n%s", strings.Join(expanded, "\n"))
 	}
 }
@@ -264,7 +264,7 @@ func TestAssistantMarkdownAndErrors(t *testing.T) {
 		mk(2, "a", event.TurnEnded, event.TurnEndedPayload{Reason: "error", Error: "boom"}),
 		mk(3, "a", event.AgentKilled, nil),
 	}))
-	assertSubsequence(t, got, []string{" Plan", " Some bold text", "  fmt.Println()", " - item", " ! boom", " ⊘ killed"})
+	assertSubsequence(t, got, []string{"Plan", "Some bold text", " fmt.Println()", "- item", "! boom", "⊘ killed"})
 	for _, g := range got {
 		if strings.Contains(g, "```") || strings.Contains(g, "· gpt-x") {
 			t.Fatalf("unexpected line %q (fences dropped; no model trailer on tool_use)", g)
@@ -289,7 +289,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{" › hi", " ◌ thinking…", " Hello", " ⚙  Bash"})
+	assertSubsequence(t, got, []string{"› hi", "◌ thinking…", "Hello", "⚙  Bash"})
 	if !tr.Streaming() || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -302,9 +302,9 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 		t.Fatal("buffer should be cleared by assistant.message")
 	}
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{" ◌ one", " Hello"})
+	assertSubsequence(t, got, []string{"◌ one", "Hello"})
 	for _, g := range got {
-		if g == " ⚙  Bash" || g == " ◌ thinking…" || g == " two" {
+		if g == "⚙  Bash" || g == "◌ thinking…" || g == "two" {
 			t.Fatalf("stale stream line %q", g)
 		}
 	}
@@ -317,14 +317,14 @@ func TestStreamingToolOutputCollapses(t *testing.T) {
 		tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash", Text: "out\n"})
 	}
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{" ⚙  Bash  make", "    out", "    … +2 lines"})
-	if count(got, "    out") != maxOutputCollapsed {
+	assertSubsequence(t, got, []string{"⚙  Bash  make", "   out", "   … +2 lines"})
+	if count(got, "   out") != maxOutputCollapsed {
 		t.Fatalf("live output should be collapsed:\n%s", strings.Join(got, "\n"))
 	}
 	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "final"}))
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{" ⚙  Bash  make", "    final"})
-	if count(got, "    out") != 0 {
+	assertSubsequence(t, got, []string{"⚙  Bash  make", "   final"})
+	if count(got, "   out") != 0 {
 		t.Fatal("live output should be replaced by the final output")
 	}
 }
@@ -416,19 +416,19 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 		}
 	}
 	got := renderWith(lines, RenderOpts{Width: 80, Cursor: 1, Focused: true})
-	if !contains(got, gutterMark+" ⚙  Bash  ls") || !contains(got, gutterMark+"    x") || contains(got, gutterMark+"│  hi") {
+	if !contains(got, gutterMark+"⚙  Bash  ls") || !contains(got, gutterMark+"   x") || contains(got, gutterMark+"│  hi") {
 		t.Fatalf("cursor marks only item 1:\n%s", strings.Join(got, "\n"))
 	}
-	if !contains(got, " › hi") {
+	if !contains(got, "› hi") {
 		t.Fatalf("non-cursor lines keep the gutter space:\n%s", strings.Join(got, "\n"))
 	}
 	// Per-item override expands item 1 while /details is off, and vice versa.
 	exp := renderWith(lines, RenderOpts{Width: 80, NoFold: true, Expanded: map[int]bool{1: true}})
-	if count(exp, "    x") != 6 || contains(exp, "     … +3 lines") {
+	if count(exp, "   x") != 6 || contains(exp, "    … +3 lines") {
 		t.Fatalf("expanded override:\n%s", strings.Join(exp, "\n"))
 	}
 	col := renderWith(lines, RenderOpts{Width: 80, Details: true, Expanded: map[int]bool{1: false}})
-	if count(col, "    x") != maxOutputCollapsed {
+	if count(col, "   x") != maxOutputCollapsed {
 		t.Fatalf("collapsed override:\n%s", strings.Join(col, "\n"))
 	}
 	_, rows := renderAll(lines, RenderOpts{Width: 80, NoFold: true})
@@ -486,7 +486,7 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 	rendered := renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem})
 	for _, r := range rendered {
 		if strings.Contains(r, "permission") || strings.Contains(r, "answered") {
-			if !strings.HasPrefix(strings.TrimLeft(r, "▍"), "    ") {
+			if !strings.HasPrefix(strings.TrimLeft(r, "▍"), "   ") {
 				t.Fatalf("notice not indented under the call: %q", r)
 			}
 		}
@@ -554,7 +554,7 @@ func TestFoldingToOneLine(t *testing.T) {
 	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "bash"}))
 	tr.Apply(mk(5, event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
 	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "a\nb\nc\nd\ne"}))
-	tr.Apply(mk(7, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "child_finished", Text: "Child agent \"scout\" finished.\n\nfound it"}))
+	tr.Apply(mk(7, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "child_finished", Text: "Child agent \"scout\"finished.\n\nfound it"}))
 	tr.Apply(mk(8, event.AssistantMessage, event.AssistantMessagePayload{Turn: 2, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "final answer\nwith two lines"}}}))
 	lines := tr.All()
 	toolItem, childItem := -1, -1
@@ -777,7 +777,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	tr2.Apply(mk(1, event.MonitorFired, event.MonitorFiredPayload{ID: "zz", Kind: "watch", Summary: "3 files changed", Output: "a.go"}))
 	tr2.Apply(mk(2, event.MonitorStopped, event.MonitorRefPayload{ID: "yy", Reason: "kill"}))
 	got := renderLines(tr2.All())
-	assertSubsequence(t, got, []string{" ⚙  3 files changed", "    a.go", " ⚙  job stopped (kill)"})
+	assertSubsequence(t, got, []string{"⚙  3 files changed", "   a.go", "⚙  job stopped (kill)"})
 	if tr2.Items() != 2 {
 		t.Fatalf("items %d", tr2.Items())
 	}
@@ -839,11 +839,11 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
 	tr.Apply(mk(2, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "go"}))
 	out := render()
-	if !tr.InTurn() || !strings.HasSuffix(out, "\n\n ⠋ working…") {
+	if !tr.InTurn() || !strings.HasSuffix(out, "\n\n⠋ working…") {
 		t.Fatalf("mid-turn should end with the indicator:\n%s", out)
 	}
 	// blocked on a permission: an exclamation mark and a different label
-	if s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Waiting: true}); !strings.HasSuffix(stripANSI(s), "\n\n ! permission requested") || strings.Contains(s, "working") {
+	if s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Waiting: true}); !strings.HasSuffix(stripANSI(s), "\n\n! permission requested") || strings.Contains(s, "working") {
 		t.Fatalf("waiting indicator:\n%s", stripANSI(s))
 	}
 	// the indicator is not an item: the cursor/expand bookkeeping ignores it
