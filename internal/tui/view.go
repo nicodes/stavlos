@@ -939,7 +939,11 @@ func (m Model) treeRows(width int) []string {
 			marker = styleAccent.Render("▸") + " "
 		}
 		dot := agentDot(a)
-		avail := width - len([]rune(indent)) - 7
+		// The prefix " " + indent + marker + dot + " " is five columns plus
+		// the indent, and truncRunes adds its ellipsis on top of the budget;
+		// the text gets the rest so a truncated row reaches the panel's edge
+		// (the caller leaves one column before the separator).
+		avail := width - len([]rune(indent)) - 6
 		if avail < 4 {
 			avail = 4
 		}
