@@ -26,6 +26,7 @@ var commands = []Command{
 	{Name: "/variants", Args: "[name|default]", Desc: "pick a model variant (reasoning effort) for the selected agent; no arg opens a picker", Aliases: []string{"/variant"}, Direct: true},
 	{Name: "/roles", Args: "[name]", Desc: "pick the selected agent's role (preset); a name sets it directly", Aliases: []string{"/role", "/presets"}, Direct: true},
 	{Name: "/yolo", Args: "[on|off]", Desc: "session-wide: auto-approve every permission prompt (no arg toggles)", Direct: true},
+	{Name: "/sessions", Desc: "pick a session of this directory to resume where it left off", Aliases: []string{"/resume", "/session"}, Direct: true},
 	{Name: "/tree", Desc: "toggle the agent sidebar (also ctrl+b)", Direct: true},
 	{Name: "/help", Desc: "show or hide the key bar at the bottom (off by default)", Aliases: []string{"/h", "/?"}, Direct: true},
 }

@@ -150,7 +150,8 @@ type SessionInfo struct {
 	Live         int     `json:"live_agents"`
 	CostUSD      float64 `json:"cost_usd"`
 	TrustPending bool    `json:"trust_pending"`
-	Yolo         bool    `json:"yolo,omitempty"` // permission prompts are auto-approved session-wide
+	Yolo         bool    `json:"yolo,omitempty"`  // permission prompts are auto-approved session-wide
+	Title        string  `json:"title,omitempty"` // the first human prompt, for pickers
 }
 
 type SessionListParams struct {

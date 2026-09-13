@@ -902,3 +902,32 @@ func TestYolo(t *testing.T) {
 		t.Fatalf("yolo should be off: %+v", rc.Session)
 	}
 }
+
+func TestSessionListTitles(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{func(model.Request) model.Response { return text("hi") }}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	list, err := h.c.Sessions(ctx, work, false)
+	if err != nil || len(list) != 1 || list[0].Title != "" {
+		t.Fatalf("fresh session should have no title: %+v %v", list, err)
+	}
+	agents, _ := h.c.Tree(ctx, s.ID)
+	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "fix the login bug\nand add tests")
+	h.waitFor(event.TurnEnded, agents[0].ID)
+	list, _ = h.c.Sessions(ctx, work, false)
+	if len(list) != 1 || list[0].Title != "fix the login bug" {
+		t.Fatalf("title should be the first prompt's first line: %+v", list)
+	}
+	// a second session in the same directory lists first (newest)
+	s2, _ := h.c.CreateSession(ctx, work, "", "")
+	list, _ = h.c.Sessions(ctx, work, false)
+	if len(list) != 2 || list[0].ID != s2.ID || list[1].Title != "fix the login bug" {
+		t.Fatalf("newest first with titles: %+v", list)
+	}
+}

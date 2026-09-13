@@ -339,6 +339,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.onRoles(msg))
 	case variantsMsg:
 		cmds = append(cmds, m.onVariants(msg))
+	case sessionsMsg:
+		cmds = append(cmds, m.onSessions(msg))
+	case switchedMsg:
+		if msg.err != nil {
+			cmds = append(cmds, m.setStatus("resume: "+msg.err.Error(), true))
+		} else {
+			cmds = append(cmds, m.bindSession(msg.info))
+		}
 	case modelsMsg:
 		cmds = append(cmds, m.onModels(msg))
 
@@ -990,6 +998,8 @@ func (m *Model) command(text string) tea.Cmd {
 			return rolesCmd(m.ctx, m.c, m.sessionID)
 		}
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
+	case "/sessions", "/resume", "/session":
+		return sessionsCmd(m.ctx, m.c, m.session.Dir)
 	case "/yolo":
 		on := !m.session.Yolo
 		switch strings.ToLower(rest) {
@@ -1626,6 +1636,15 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 			return m.setStatus("no agent selected", true)
 		}
 		return tea.Batch(m.closeOverlay(), pickRoleCmd(m.ctx, m.c, agent, it.id))
+	case ovSessions:
+		it := o.selected()
+		if it == nil {
+			return nil
+		}
+		if it.id == m.sessionID {
+			return tea.Batch(m.closeOverlay(), m.setStatus("already in this session", false))
+		}
+		return tea.Batch(m.closeOverlay(), switchSessionCmd(m.ctx, m.c, m.sessionID, it.id))
 	case ovVariants:
 		it := o.selected()
 		if it == nil {
@@ -1817,6 +1836,86 @@ func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
 	}
 	o.setItems(items)
 	return m.openOverlay(o)
+}
+
+// onSessions opens the /sessions picker: this directory's sessions, newest
+// first, each titled by its first prompt.
+func (m *Model) onSessions(msg sessionsMsg) tea.Cmd {
+	if msg.err != nil {
+		return m.setStatus("sessions: "+msg.err.Error(), true)
+	}
+	o := newOverlay(ovSessions, overlayList, "Sessions in "+shortHome(m.session.Dir), "enter: resume where it left off · esc: close")
+	items := make([]overlayItem, 0, len(msg.sessions))
+	for _, s := range msg.sessions {
+		items = append(items, sessionItem(s, s.ID == m.sessionID))
+	}
+	if len(items) == 0 {
+		o.setInfo("no sessions here yet", false)
+	}
+	o.setItems(items)
+	return m.openOverlay(o)
+}
+
+// sessionItem is one row of the /sessions picker: the first prompt (or
+// "(empty session)") with when it started, its model, cost and live agents.
+func sessionItem(s protocol.SessionInfo, current bool) overlayItem {
+	label := s.Title
+	if label == "" {
+		label = "(empty session)"
+	}
+	var meta []string
+	if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
+		meta = append(meta, fmtElapsed(time.Since(t))+" ago")
+	}
+	if s.Model != "" {
+		meta = append(meta, s.Model)
+	}
+	if s.CostUSD > 0 {
+		meta = append(meta, "$"+fmtCost(s.CostUSD))
+	}
+	if s.Live > 0 {
+		meta = append(meta, fmt.Sprintf("%d live", s.Live))
+	}
+	if current {
+		meta = append(meta, "current")
+	}
+	return overlayItem{id: s.ID, label: truncRunes(label, 60), hint: strings.Join(meta, " · "), good: current}
+}
+
+// bindSession rebinds the TUI to another session: every per-session
+// piece of state starts over and a fresh reconcile replays its history.
+func (m *Model) bindSession(info protocol.SessionInfo) tea.Cmd {
+	m.sessionID = info.ID
+	m.session = info
+	m.agents = nil
+	m.selected = 0
+	m.transcripts = map[string]*Transcript{}
+	m.seq = 0
+	m.prompts = nil
+	m.claimedByUs = map[string]bool{}
+	m.promptBusy = ""
+	m.spawned = map[string]time.Time{}
+	m.parentOf = map[string]string{}
+	m.expanded = nil
+	m.itemRows = nil
+	m.chatCursor = 0
+	m.agCursor = 0
+	m.cancelArmed = time.Time{}
+	m.reconciled = false
+	m.loading = false
+	m.replayTo = 0
+	m.follow = true
+	m.input.Reset()
+	m.refreshViewport()
+	m.layout()
+	return tea.Batch(m.setFocus(focusInput), reconcileCmd(m.ctx, m.c, m.sessionID), m.setStatus("resumed "+shortID(info.ID), false))
+}
+
+func shortID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
 }
 
 // onVariants opens the /variants picker: the provider default plus every

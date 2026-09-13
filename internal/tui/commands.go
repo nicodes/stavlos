@@ -269,6 +269,38 @@ func setYoloCmd(ctx context.Context, c *client.Client, session string, on bool) 
 	}
 }
 
+// sessionsMsg carries session.list for the /sessions picker.
+type sessionsMsg struct {
+	sessions []protocol.SessionInfo
+	err      error
+}
+
+func sessionsCmd(ctx context.Context, c *client.Client, dir string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		ss, err := c.Sessions(ctx, dir, false)
+		return sessionsMsg{ss, err}
+	}
+}
+
+// switchedMsg reports a session resume for the /sessions picker: the TUI
+// rebinds to info.ID and reconciles from scratch.
+type switchedMsg struct {
+	info protocol.SessionInfo
+	err  error
+}
+
+func switchSessionCmd(ctx context.Context, c *client.Client, from, to string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		_ = c.Unsubscribe(ctx, from)
+		info, err := c.ResumeSession(ctx, to)
+		return switchedMsg{info, err}
+	}
+}
+
 // variantsMsg carries the variant names a model offers, for the /variants
 // picker.
 type variantsMsg struct {

@@ -1118,3 +1118,29 @@ func TestEscTwiceCancelsTheTurn(t *testing.T) {
 		t.Fatal("esc on an idle agent should be inert")
 	}
 }
+
+func TestSessionItemAndBind(t *testing.T) {
+	created := time.Now().Add(-90 * time.Second).Format(time.RFC3339)
+	it := sessionItem(protocol.SessionInfo{ID: "s1", Title: "fix the login bug", Created: created, Model: "openai/gpt-5", CostUSD: 0.12, Live: 2}, false)
+	if it.label != "fix the login bug" || !strings.HasPrefix(it.hint, "1m30s ago · openai/gpt-5 · $0.12 · 2 live") || it.good {
+		t.Fatalf("item: %+v", it)
+	}
+	it = sessionItem(protocol.SessionInfo{ID: "s2", Created: created}, true)
+	if it.label != "(empty session)" || !strings.HasSuffix(it.hint, "current") || !it.good {
+		t.Fatalf("current empty item: %+v", it)
+	}
+
+	// binding another session starts every per-session piece of state over
+	m := sessionModel()
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a"}}
+	m.chatCursor = 3
+	m.seq = 42
+	m.reconciled = true
+	m.bindSession(protocol.SessionInfo{ID: "other", Dir: "/x"})
+	if m.sessionID != "other" || m.session.Dir != "/x" || len(m.agents) != 0 || len(m.transcripts) != 0 || m.seq != 0 || len(m.prompts) != 0 || m.chatCursor != 0 || m.reconciled || m.focus != focusInput {
+		t.Fatalf("state after bind: id=%s agents=%d transcripts=%d seq=%d prompts=%d cursor=%d reconciled=%v focus=%v", m.sessionID, len(m.agents), len(m.transcripts), m.seq, len(m.prompts), m.chatCursor, m.reconciled, m.focus)
+	}
+	if !m.isHome() {
+		t.Fatal("a freshly bound session shows the home screen until its history replays")
+	}
+}
