@@ -739,12 +739,12 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("order %v", order)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission (a prompt waits)
-	if m.focus != focusPermission || strings.Count(stripANSI(m.sectionsView(100)), "\n") < 2 {
-		t.Fatalf("permission should expand when focused: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+	if pv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(pv, "\n") != 1 || !strings.Contains(pv, "⚙  Bash  make test  ·  coder") || strings.Contains(pv, "{") {
+		t.Fatalf("permission should open as one tool row: focus=%v\n%s", m.focus, pv)
 	}
 	// the permission box is drawn under the strip, right above the input
 	full := stripANSI(m.View())
-	if bi, pi := strings.Index(full, "agents ("), strings.Index(full, "allow ·"); bi < 0 || pi < 0 || bi > pi {
+	if bi, pi := strings.Index(full, "agents ("), strings.Index(full, "Bash  make test"); bi < 0 || pi < 0 || bi > pi {
 		t.Fatalf("permission box should render below the strip:\n%s", full)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRight}) // permission → agents
@@ -807,7 +807,7 @@ func TestSectionTabStrip(t *testing.T) {
 	m.focus = focusPermission
 	v = stripANSI(m.sectionsView(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) < 3 || !strings.Contains(lines[0], "permission (1)") || strings.Contains(lines[0], "▾") || !strings.Contains(v, "make test") || strings.Contains(v, "scout") {
+	if len(lines) != 2 || !strings.Contains(lines[0], "permission (1)") || strings.Contains(lines[0], "▾") || !strings.Contains(lines[1], "Bash  make test") || strings.Contains(v, "╭") || strings.Contains(v, "scout") {
 		t.Fatalf("permission focused:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
