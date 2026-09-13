@@ -193,7 +193,7 @@ func TestEndToEnd(t *testing.T) {
 		},
 		// turn 2: spawn a child, wait for it
 		func(model.Request) model.Response {
-			return call("c3", "agent_create", `{"archetype":"explorer","label":"scout","task":"look around"}`)
+			return call("c3", "agent_create", `{"archetype":"general","label":"scout","task":"look around"}`)
 		},
 		// parent has nothing else to do; it stops and is woken by the child's result
 		func(model.Request) model.Response { return text("delegated; waiting") },
@@ -225,7 +225,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	agents, err := h.c.Tree(ctx, s.ID)
-	if err != nil || len(agents) != 1 || agents[0].Archetype != "coder" || agents[0].Model != "fake/m1" {
+	if err != nil || len(agents) != 1 || agents[0].Archetype != "general" || agents[0].Model != "fake/m1" {
 		t.Fatalf("tree %v %v", agents, err)
 	}
 	root := agents[0].ID
@@ -419,7 +419,7 @@ func TestSpawnArmsWakeByDefault(t *testing.T) {
 	fm.steps = []func(model.Request) model.Response{
 		// turn 1: spawn and stop, without calling monitor
 		func(model.Request) model.Response {
-			return call("c1", "agent_create", `{"archetype":"explorer","label":"slow","task":"a"}`)
+			return call("c1", "agent_create", `{"archetype":"general","label":"slow","task":"a"}`)
 		},
 		func(model.Request) model.Response { return text("spawned, done for now") },
 		// turn 2: woken by the child's finish
@@ -570,6 +570,10 @@ func TestBashKillStopsJob(t *testing.T) {
 
 func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	setupConfig(t)
+	// Only "general" ships built in; a user preset comes from agents/<name>.md.
+	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
+	_ = os.MkdirAll(agentsDir, 0o755)
+	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools: [read, bash]\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
@@ -632,7 +636,7 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 	var rootID string
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return call("c1", "agent_create", `{"archetype":"explorer","label":"scout","task":"ask me something"}`)
+			return call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"ask me something"}`)
 		},
 		func(model.Request) model.Response { return text("delegated") },
 		// woken by the child's prompt: the model sees the sender
@@ -664,10 +668,10 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 			if last.IsError || !strings.Contains(last.Content, "queued") {
 				t.Errorf("agent_prompt to the parent: %+v", last)
 			}
-			// a subagent is not offered steer, kill, cancel or result at all
+			// a subagent is never offered steer (it may orchestrate its own
+			// children, since the general preset spawns)
 			for _, d := range req.Tools {
-				switch d.Name {
-				case "agent_steer", "agent_kill", "agent_cancel", "agent_result":
+				if d.Name == "agent_steer" {
 					t.Errorf("subagent should not be offered %s", d.Name)
 				}
 			}
@@ -727,7 +731,7 @@ func TestVariants(t *testing.T) {
 			mu.Lock()
 			seen = append(seen, req.Variant)
 			mu.Unlock()
-			return call("c1", "agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`)
+			return call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)
 		},
 		func(model.Request) model.Response { return text("delegated") },
 		func(model.Request) model.Response { return text("noted") },

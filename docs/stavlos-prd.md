@@ -148,9 +148,9 @@ flowchart TD
     ENV --> ROOT
 
     subgraph SESSION["Session · bound to a directory"]
-        ROOT["coder (root)<br/><i>inbox · context · turn loop</i>"]
-        EXPL["explorer<br/><i>own inbox · own context</i>"]
-        TEST["tester<br/><i>inherits parent model</i>"]
+        ROOT["general (root)<br/><i>inbox · context · turn loop</i>"]
+        EXPL["general<br/><i>own inbox · own context</i>"]
+        TEST["general<br/><i>inherits parent model</i>"]
         LIMITS["Limits · max depth 3 · max 6 live agents"]
 
         ROOT -- spawn --> EXPL
@@ -412,8 +412,8 @@ Three layers with one layout. Global is yours and trusted. Project is the team's
     stavlos.json              # committed
     stavlos.local.json        # gitignored
     agents/
-      coder.md                # one preset per file; filename = archetype
-      explorer.md
+      reviewer.md             # one preset per file; filename = archetype
+      tester.md
     skills/
       go-conventions/
         SKILL.md              # required; anything else in the dir is bundled, not discovered
@@ -431,7 +431,7 @@ JSONC with a `$schema` for editor validation. Every key is optional; anything om
   "$schema": "https://stavlos.dev/schema/v1/stavlos.json",
 
   "model": "anthropic/claude-sonnet-5",   // default for root sessions here
-  "rootAgent": "coder",                   // preset a new session's root uses
+  "rootAgent": "general",                 // preset a new session's root uses
 
   "limits":     { "maxDepth": 3, "maxAgents": 6 },
   "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
@@ -472,10 +472,10 @@ A preset defines an archetype. The filename is the archetype name and becomes th
 description: Implements features and fixes bugs in this repo
 model: anthropic/claude-sonnet-5      # optional; omitted → inherits parent's active model
 loop: default                          # optional; only 'default' ships in v1
-tools: [bash, read, apply_patch, finish]
+tools: [bash, read, apply_patch]
 skills: [go-conventions]               # skill descriptions this agent carries in context
 mcp: [github]                          # servers from stavlos.json this agent may reach
-spawn: [explorer, tester]              # archetypes it may spawn; omit → cannot spawn
+spawn: [general, explorer]             # archetypes it may spawn; omit → cannot spawn
 policy:                                # preset-level tightening only
   bash:
     "git push*": deny
@@ -485,7 +485,7 @@ You are a Go engineer working in this repository. Prefer small commits.
 Delegate reading unfamiliar code to an explorer before editing it.
 ```
 
-The orchestration tools (`agent_*`) are implied by a non-empty `spawn` list. Presets are the hub — skills, MCP servers, and policy are referenced *by* presets, not parallel to them. Preset creation must be as frictionless as skill creation, or users will reach for skills when a preset is correct.
+Only one preset ships built in: `general`, a general-purpose engineer with bash, read, apply_patch and skill that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised presets — explorers, testers, reviewers — are the user's to add, one file each. The orchestration tools (`agent_create`, `agent_cancel`, `agent_kill`, `agent_result`) are implied by a non-empty `spawn` list; `agent_prompt` and `agent_status` every agent has. Presets are the hub — skills, MCP servers, and policy are referenced *by* presets, not parallel to them. Preset creation must be as frictionless as skill creation, or users will reach for skills when a preset is correct.
 
 ### 10.4 Skills — `skills/<name>/SKILL.md`
 
