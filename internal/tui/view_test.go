@@ -235,7 +235,7 @@ func TestMonitorRows(t *testing.T) {
 		{ID: "m3", Agent: "root", Kind: "command", Label: "cooldown", Spec: "sleep 300", State: "running", Started: now.Add(-2 * time.Hour).Format(time.RFC3339), Progress: "3m left"},
 		{ID: "m4", Agent: "root", Kind: "command", Label: "old", State: "fired", Started: now.Format(time.RFC3339)},
 	}
-	rows := monitorRows(monitors, "coder", now, 100)
+	rows := monitorRows(monitors, "coder", "coder", now, 100)
 	if len(rows) != 3 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
@@ -244,7 +244,7 @@ func TestMonitorRows(t *testing.T) {
 		plain[i] = stripANSI(r)
 	}
 	// command: glyph, bold label, kind, progress, elapsed
-	if !strings.HasPrefix(plain[0], "  ⚙") || !strings.Contains(plain[0], "go test (coder)") {
+	if !strings.HasPrefix(plain[0], "  ⚙") || !strings.Contains(plain[0], "coder (coder)  go test") {
 		t.Fatalf("command row: %q", plain[0])
 	}
 	for _, want := range []string{"42 lines", "1m15s"} {
@@ -253,19 +253,19 @@ func TestMonitorRows(t *testing.T) {
 		}
 	}
 	// a second running job: no wake tag, elapsed
-	if !strings.HasPrefix(plain[1], "  ⚙  src changes") || !strings.HasSuffix(strings.TrimRight(plain[1], " "), "src changes (coder)  3s") {
+	if !strings.HasPrefix(plain[1], "  ⚙  coder (coder)  src changes") || !strings.HasSuffix(strings.TrimRight(plain[1], " "), "coder (coder)  src changes  3s") {
 		t.Fatalf("second job row: %q", plain[1])
 	}
 	// progress and hours elapsed
-	if !strings.HasPrefix(plain[2], "  ⚙  cooldown") || !strings.Contains(plain[2], "3m left · 2h00m") {
+	if !strings.HasPrefix(plain[2], "  ⚙  coder (coder)  cooldown") || !strings.Contains(plain[2], "3m left · 2h00m") {
 		t.Fatalf("third job row: %q", plain[2])
 	}
 	// a bad Started stamp just drops the elapsed field
-	rows = monitorRows([]protocol.MonitorInfo{{ID: "x", Kind: "command", Label: "w", State: "running", Started: "nope"}}, "", now, 100)
+	rows = monitorRows([]protocol.MonitorInfo{{ID: "x", Kind: "command", Label: "w", State: "running", Started: "nope"}}, "", "", now, 100)
 	if len(rows) != 1 || strings.Contains(rows[0], "command") || !strings.HasSuffix(strings.TrimRight(stripANSI(rows[0]), " "), "w") {
 		t.Fatalf("bad stamp: %q", rows)
 	}
-	if monitorRows(nil, "coder", now, 100) != nil {
+	if monitorRows(nil, "coder", "coder", now, 100) != nil {
 		t.Fatal("no monitors should give no rows")
 	}
 

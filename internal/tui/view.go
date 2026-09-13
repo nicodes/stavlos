@@ -967,7 +967,11 @@ func (m Model) sectionsView(width int) string {
 		if len(jobs) == 0 {
 			return strip + "\n" + styleDim.Render("  no async jobs running")
 		}
-		rows := monitorRows(jobs, m.agentLabel(m.selectedID()), time.Now(), width-2)
+		owner, role := "", ""
+		if a := m.selectedAgent(); a != nil {
+			owner, role = a.Label, a.Archetype
+		}
+		rows := monitorRows(jobs, owner, role, time.Now(), width-2)
 		return strings.Join(append([]string{strip}, m.cursorRows(rows)...), "\n")
 	case focusPermission:
 		if p == nil {
@@ -1198,9 +1202,10 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 // monitorRows is the pure part of monitorsView: one row per running
 // monitor with its kind glyph, bold label, a spinner for commands still
 // running, and dim meta (progress, elapsed).
-// owner is the label of the agent that started the jobs; it follows the
-// job label in parentheses, the way agent rows show "label (archetype)".
-func monitorRows(monitors []protocol.MonitorInfo, owner string, now time.Time, width int) []string {
+// Each row reads like an agent row, then the job: "⚙  coder (coder)  go
+// test  42 lines · 1m15s" — the owning agent in bold with its role, the
+// job's label, and dim progress/elapsed.
+func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now time.Time, width int) []string {
 	var rows []string
 	for _, mo := range monitors {
 		switch mo.State {
@@ -1208,11 +1213,14 @@ func monitorRows(monitors []protocol.MonitorInfo, owner string, now time.Time, w
 			continue
 		}
 		lead := jobGlyph(mo) + monitorGlyphGap(mo.Kind)
-		text := mo.Label
-		if owner != "" {
-			text = fmt.Sprintf("%s (%s)", mo.Label, owner)
+		who := owner
+		if ownerRole != "" {
+			who = fmt.Sprintf("%s (%s)", owner, ownerRole)
 		}
-		label := styleBold.Render(text)
+		label := mo.Label
+		if who != "" {
+			label = styleBold.Render(who) + "  " + mo.Label
+		}
 		var meta []string // the kind is always "command" now, so it is not shown
 		if mo.Progress != "" {
 			meta = append(meta, mo.Progress)
