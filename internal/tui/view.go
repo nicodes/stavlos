@@ -197,7 +197,7 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	case LineCode:
 		leader = "    "
 		style = styleDim.Render
-	case LineDim, LineLabel:
+	case LineDim, LineLabel, LineThink:
 		style = styleDim.Render
 	case LineModel:
 		glyph = styleDim.Render("· ")
