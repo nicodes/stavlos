@@ -51,10 +51,11 @@ type Agent struct {
 	modelID    string
 	state      State
 	turn       int
-	prompts    []queued      // Prompt inbox
-	steers     []queued      // Steer inbox
-	responses  []response    // answers from other agents (agent_response), not yet delivered
-	events     []event.Event // this agent's events (projection cache)
+	prompts    []queued       // Prompt inbox
+	steers     []queued       // Steer inbox
+	responses  []response     // answers from other agents (agent_response), not yet delivered
+	awaiting   map[string]int // agent id → questions asked of it (agent_prompt, a child\'s task) not yet answered
+	events     []event.Event  // this agent's events (projection cache)
 	cancelTurn context.CancelFunc
 	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
 	armed      map[string]bool // ids (children, monitors) whose completion wakes this agent
@@ -75,7 +76,7 @@ func newAgent(s *Session, id, parent, archetype, label, modelID string, depth in
 	return &Agent{
 		ID: id, Parent: parent, Archetype: archetype, Label: label, Depth: depth,
 		s: s, preset: preset, modelID: modelID, state: StateIdle,
-		wake: make(chan struct{}, 1), armed: map[string]bool{}, wakes: map[string]bool{}, monitors: map[string]*Monitor{}, done: make(chan struct{}),
+		wake: make(chan struct{}, 1), armed: map[string]bool{}, wakes: map[string]bool{}, monitors: map[string]*Monitor{}, awaiting: map[string]int{}, done: make(chan struct{}),
 	}
 }
 
@@ -211,6 +212,9 @@ func (a *Agent) killNow() {
 	a.closeDone()
 	_, _ = a.s.host.Append(context.Background(), event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentKilled,
 		Payload: event.MustPayload(event.AgentRefPayload{ID: a.ID})})
+	for _, o := range a.s.Agents() { // nobody will hear back from it now
+		o.forget(a.ID)
+	}
 }
 
 func (a *Agent) closeDone() {
@@ -228,8 +232,43 @@ func (a *Agent) deliverResponse(from, label, text string) {
 	a.mu.Lock()
 	a.responses = append(a.responses, response{from, label, text})
 	a.wakes["response:"+from] = true
+	if a.awaiting[from] > 1 {
+		a.awaiting[from]--
+	} else {
+		delete(a.awaiting, from)
+	}
 	a.mu.Unlock()
 	a.signal()
+}
+
+// expect records a question put to agent id (an agent_prompt, or a child's
+// task): until its answer lands the agent reads as "waiting" when idle.
+func (a *Agent) expect(id string) {
+	a.mu.Lock()
+	a.awaiting[id]++
+	a.mu.Unlock()
+}
+
+// forget drops every expectation of agent id (it was killed: no answer is
+// coming).
+func (a *Agent) forget(id string) {
+	a.mu.Lock()
+	delete(a.awaiting, id)
+	a.mu.Unlock()
+}
+
+// waitingOn reports whether the agent has outstanding questions or running
+// jobs: idle, but expecting to be woken. Callers hold a.mu.
+func (a *Agent) waitingOn() bool {
+	if len(a.awaiting) > 0 {
+		return true
+	}
+	for _, m := range a.monitors {
+		if m.state == "running" {
+			return true
+		}
+	}
+	return false
 }
 
 // hasMonitor reports whether id is one of this agent's running monitors.
@@ -360,9 +399,13 @@ func (a *Agent) Done() <-chan struct{} { return a.done }
 func (a *Agent) Info() protocol.AgentInfo {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	state := string(a.state)
+	if a.state == StateIdle && a.waitingOn() {
+		state = "waiting" // idle, but a question or a job is outstanding
+	}
 	info := protocol.AgentInfo{
 		ID: a.ID, Session: a.s.ID, Parent: a.Parent, Archetype: a.Archetype, Label: a.Label,
-		Model: a.modelID, Variant: a.variant, Depth: a.Depth, State: string(a.state), Turn: a.turn,
+		Model: a.modelID, Variant: a.variant, Depth: a.Depth, State: state, Turn: a.turn,
 		Queued:  len(a.prompts) + len(a.steers) + len(a.responses),
 		CostUSD: a.usage.cost, Tokens: a.usage.tokens,
 	}

@@ -63,6 +63,8 @@ func agentOutcome(a protocol.AgentInfo) string {
 		return "working"
 	case a.LastError != "":
 		return "error"
+	case a.State == "waiting":
+		return "waiting"
 	case a.State == "killed":
 		return "complete"
 	}
@@ -76,6 +78,8 @@ func agentDot(a protocol.AgentInfo) string {
 		return lipgloss.NewStyle().Foreground(colWarning).Render("●")
 	case "error":
 		return lipgloss.NewStyle().Foreground(colError).Render("●")
+	case "waiting":
+		return lipgloss.NewStyle().Foreground(colAccent).Render("◐")
 	case "complete":
 		return lipgloss.NewStyle().Foreground(colMuted).Render("●")
 	}
@@ -1179,6 +1183,8 @@ func agentGlyph(a protocol.AgentInfo) string {
 		return styleWorking.Render(glyphToolAgents)
 	case "error":
 		return styleError.Render(glyphToolAgents)
+	case "waiting":
+		return styleAccent.Render(glyphToolAgents) // idle, but a question or job is outstanding
 	case "complete":
 		return styleDim.Render(glyphToolAgents)
 	}

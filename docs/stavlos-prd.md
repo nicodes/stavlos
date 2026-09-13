@@ -213,6 +213,8 @@ agent_response(to AgentID, text string)
 
 Because humans can steer any agent, the runtime never guesses who a closing message is for: an agent answers another agent with `agent_response` and answers the human in its normal reply. That rule is in every agent's system prompt.
 
+**Waiting is a state of its own.** An agent that has ended its turn but has a question outstanding — an `agent_prompt` not yet answered, a child's task — or a `bash_async` job still running reports `waiting` rather than `idle` (§4.4): it expects to be woken. The expectation is recorded when the prompt or spawn is delivered, cleared by the answer or by the target's kill, and rebuilt on recovery. Waiting agents cost nothing and do not count as busy.
+
 **The caller owns the lifecycle.** The parent reads the answer when it is woken, prompts the same child again if it needs more (the child keeps everything it learned), and calls `agent_kill` when it is done with it. This replaced an earlier `agent_finish`/`agent_result` pair, under which a child ended itself after one task and a follow-up meant a fresh agent rediscovering everything.
 
 **Spawning is asynchronous, children never interrupt, and there is no blocking wait.** `agent_create` returns immediately with the child's ID and the child's first prompt is the task. A parent with nothing to do until a child answers ends its turn; the answer wakes it. A blocking wait was considered and rejected: it makes the parent deaf for the duration and buys nothing, since the history is intact when the answer arrives. Models were also unreliable with an explicit "wait" tool, calling it at odd moments.

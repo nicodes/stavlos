@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -25,6 +26,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 	monitorOwner := map[string]string{}
 	pendingPrompts := map[string][]queued{}
 	pendingResponses := map[string][]response{}
+	askTargets := map[string]string{} // agent_prompt call id → asked agent, while the call is open
 	pendingSteers := map[string][]queued{}
 	finished := map[string]bool{}
 
@@ -67,6 +69,9 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			if par, ok := s.agents[p.Parent]; ok {
 				a.ctx, a.kill = context.WithCancel(par.ctx)
 				par.children = append(par.children, a.ID)
+				if p.Task != "" {
+					par.awaiting[a.ID]++
+				}
 			} else {
 				a.ctx, a.kill = context.WithCancel(s.ctx)
 			}
@@ -181,10 +186,37 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			var p event.ResponsePayload
 			_ = e.Decode(&p)
 			pendingResponses[e.Agent] = append(pendingResponses[e.Agent], response{p.From, p.FromLabel, p.Text})
+			if a, ok := s.agents[e.Agent]; ok {
+				if a.awaiting[p.From] > 1 {
+					a.awaiting[p.From]--
+				} else {
+					delete(a.awaiting, p.From)
+				}
+			}
+		case event.ToolCallStarted:
+			var p event.ToolStartedPayload
+			if _ = e.Decode(&p); p.Name == "agent_prompt" {
+				var in struct{ ID string }
+				if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
+					askTargets[p.CallID] = in.ID
+				}
+			}
+		case event.ToolCallFinished:
+			var p event.ToolFinishedPayload
+			_ = e.Decode(&p)
+			if target, ok := askTargets[p.CallID]; ok {
+				delete(askTargets, p.CallID)
+				if a, ok := s.agents[e.Agent]; ok && !p.IsError && !p.Cancelled && !p.Denied {
+					a.awaiting[target]++
+				}
+			}
 		case event.AgentKilled:
 			if a, ok := s.agents[e.Agent]; ok {
 				a.state = StateKilled
 				finished[a.ID] = true
+			}
+			for _, o := range s.agents {
+				delete(o.awaiting, e.Agent)
 			}
 		}
 		if a, ok := s.agents[e.Agent]; ok && e.Agent != "" {

@@ -71,7 +71,13 @@ func (o orchestrator) Send(caller, id, text string) error {
 	if err != nil {
 		return err
 	}
-	return c.Prompt(context.Background(), text, "agent:"+caller)
+	if err := c.Prompt(context.Background(), text, "agent:"+caller); err != nil {
+		return err
+	}
+	if from, ok := o.s.Agent(caller); ok {
+		from.expect(id)
+	}
+	return nil
 }
 
 // Steer is the main agent's alone: a steer cuts into a running turn, which

@@ -347,6 +347,9 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		if err := a.Prompt(ctx, task, "agent:"+parentID); err != nil {
 			return nil, err
 		}
+		if parent != nil {
+			parent.expect(a.ID) // the task is a question: the parent waits for the answer
+		}
 	}
 	return a, nil
 }
