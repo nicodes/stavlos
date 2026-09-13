@@ -45,9 +45,6 @@ var (
 	styleStatusErr     = lipgloss.NewStyle().Foreground(colError).Bold(true)
 	styleSelected      = lipgloss.NewStyle().Bold(true)
 	styleSep           = lipgloss.NewStyle().Foreground(colBorder)
-	styleBox           = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colMuted).Padding(0, 1)
-	styleBoxTitle      = lipgloss.NewStyle().Foreground(colMuted).Bold(true)
-	styleBoxFocus      = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
 	styleBoxTitleFocus = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
 	styleGutter        = lipgloss.NewStyle().Foreground(colAccent)
 
@@ -938,25 +935,18 @@ func (m Model) cursorRows(rows []string) []string {
 	return rows
 }
 
-// promptBox renders the permission/question/trust box for the head of the
-// queue at the given width. It is only drawn while the section has focus
-// (its hotkeys apply only then).
+// promptBox renders the head of the prompt queue under the strip, without a
+// border: a permission is one row naming the tool and its argument (the
+// command, path or files), like the chat's tool line; a question shows its
+// text, options and answer field; trust shows the directory and files. Key
+// hints live in the key bar, so only a status line (claimed, answering) is
+// added.
 func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
-	inner := width - 4
-	if inner < 20 {
-		inner = 20
+	var lines []string
+	agent := ""
+	if p.Agent != "" {
+		agent = styleDim.Render("  ·  " + m.agentLabel(p.Agent))
 	}
-	title := fmt.Sprintf("%s · %s", p.Kind, m.agentLabel(p.Agent))
-	if p.Agent == "" {
-		title = p.Kind
-	}
-	if n := len(m.prompts); n > 1 {
-		title += fmt.Sprintf("  [1 of %d]", n)
-	}
-	box, titleStyle := styleBoxFocus, styleBoxTitleFocus
-	lines := []string{titleStyle.Render(title)}
-	var hint string
-
 	switch p.Kind {
 	case "question":
 		lines = append(lines, strings.Split(strings.TrimRight(p.Question, "\n"), "\n")...)
@@ -964,7 +954,6 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 			lines = append(lines, fmt.Sprintf("  %d) %s", i+1, o))
 		}
 		lines = append(lines, m.promptInput.View())
-		hint = "type an answer (or an option number) · enter answers"
 	case "trust":
 		var t struct {
 			Dir   string   `json:"dir"`
@@ -983,30 +972,24 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 				lines = append(lines, "  "+f)
 			}
 		}
-		hint = "y trust · n do not trust"
 	default:
-		lines = append(lines, "tool: "+p.Tool)
-		in := strings.Split(strings.TrimRight(prettyJSON(p.Input), "\n"), "\n")
-		const maxIn = 8
-		for i, l := range in {
-			if i == maxIn {
-				lines = append(lines, styleDim.Render(fmt.Sprintf("  (+%d lines)", len(in)-maxIn)))
-				break
-			}
-			lines = append(lines, "  "+truncRunes(l, inner-4))
+		g, gap := toolGlyph(p.Tool)
+		row := styleWorking.Render(g) + gap + styleBold.Render(titleCase(p.Tool))
+		if arg := toolArg(p.Tool, p.Input); arg != "" {
+			row += "  " + arg
 		}
-		hint = "y allow · n deny · a allow always"
+		lines = append(lines, row+agent)
 	}
-
 	switch {
 	case p.ClaimedBy != "" && !m.claimedByUs[p.ID]:
 		lines = append(lines, styleStatusErr.Render("claimed by another client"))
 	case m.promptBusy == p.ID:
 		lines = append(lines, styleDim.Render("answering…"))
-	default:
-		lines = append(lines, styleDim.Render(hint))
 	}
-	return box.Width(inner).Render(strings.Join(lines, "\n"))
+	for i := range lines {
+		lines[i] = ansi.Truncate("  "+lines[i], width, "…")
+	}
+	return strings.Join(lines, "\n")
 }
 
 // footerView is the bottom line: dim cwd on the left, summary or a
