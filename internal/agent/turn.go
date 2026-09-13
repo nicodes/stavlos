@@ -293,7 +293,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	fmt.Fprintf(&sb, "Working directory: %s\n", a.s.Dir)
 	fmt.Fprintf(&sb, "Your agent id is %s.\n", a.ID)
 	if a.Parent != "" {
-		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) created by a parent agent (id %s). Your task arrives as the first message. When it is done, or cannot be done, answer with agent_response to the agent that asked (its id is in the message); it only sees what you put there. You stay alive afterwards: the parent or another agent may prompt you again, and you keep your context. Other agents in this session can message you, and agent_prompt lets you message any of them, including your parent, by id.\n", a.Archetype, a.Label, a.Parent)
+		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) created by a parent agent (id %s). Your task arrives as the first message. When it is done, or cannot be done, answer with agent_response to the agent that asked (its id is in the message); it only sees what you put there. You stay alive afterwards: the parent or another agent may message you again, and you keep your context. Other agents in this session can message you, and agent_message lets you message any of them, including your parent, by id.\n", a.Archetype, a.Label, a.Parent)
 	}
 	if cfg.AgentsMD != "" {
 		sb.WriteString("\n# Project instructions (AGENTS.md)\n\n" + cfg.AgentsMD + "\n")
@@ -315,14 +315,10 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	if contains(names, "bash") {
 		names = append(names, tools.AsyncNames...)
 	}
-	// Every agent can message every other agent in its session; only the
-	// main agent can steer (a steer cuts into a running turn).
+	// Every agent can message every other agent in its session; a message
+	// reaches its recipient at the next step, even mid-turn.
 	names = append(names, tools.MessagingNames...)
-	sb.WriteString("\n# Messaging\nagent_prompt sends a message to any other agent in this session (a child, a sibling, or your parent) by id; it is delivered between that agent's turns, and a message you receive names its sender. A message from an agent is answered with agent_response addressed to that agent's id (one call per asker; it wakes them between turns, and you stay alive). A message from the human is answered in your normal reply, never with agent_response. agent_status lists every agent in the session with its id and state.\n")
-	if a.Parent == "" {
-		names = append(names, "agent_steer")
-		sb.WriteString("As the main agent you can also agent_steer any agent: the instruction reaches it at its next step, mid-turn, without discarding its work.\n")
-	}
+	sb.WriteString("\n# Messaging\nagent_message sends a message to any other agent in this session (a child, a sibling, or your parent) by id. It reaches them at their next step, mid-turn if they are busy, so use it for anything they need to know now. A message you receive names its sender and arrives the same way: fold it into what you are doing, and when you have what it asked for answer with agent_response addressed to that agent's id (one call per asker; it wakes them between turns, and you stay alive). Do not re-send a message that is still unanswered. A message from the human is answered in your normal reply, never with agent_response. agent_status lists every agent in the session with its id and state.\n")
 	can, why := a.s.canSpawn(a)
 	if contains(names, "bash") {
 		sb.WriteString("\n# Background jobs\nbash_async starts a command as a job and returns its id at once; when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. Use it for anything slow. bash_async_kill stops a job. There is no wait tool: when nothing more can be done until a result arrives, end your turn and you will be woken.\n")
@@ -336,12 +332,12 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 					fmt.Fprintf(&sb, "- %s: %s\n", arch, p.Description)
 				}
 			}
-			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents busy in this session (idle children do not count). Children run in the background. A child's agent_response wakes you with its answer as a new message, never mid-turn (an answer that lands while you are working arrives when your current turn ends). There is no wait tool: when nothing more can be done until a child answers, end your turn. Children stay alive after answering: agent_prompt one again for a follow-up (it keeps its context) and agent_kill children you no longer need. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Busy(), cfg.Limits.MaxAgents)
+			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents busy in this session (idle children do not count). Children run in the background. A child's agent_response wakes you with its answer as a new message, never mid-turn (an answer that lands while you are working arrives when your current turn ends). There is no wait tool: when nothing more can be done until a child answers, end your turn. Children stay alive after answering: agent_message one again for a follow-up (it keeps its context) and agent_kill children you no longer need. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Busy(), cfg.Limits.MaxAgents)
 			names = append(names, tools.OrchestrationNames...)
 		} else {
 			fmt.Fprintf(&sb, "You cannot spawn right now (%s). Do the work yourself.\n", why)
 			for _, n := range tools.OrchestrationNames {
-				if n != "agent_create" && n != "agent_steer" {
+				if n != "agent_create" {
 					names = append(names, n)
 				}
 			}
@@ -350,9 +346,6 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	seen := map[string]bool{}
 	var defs []model.ToolDef
 	for _, n := range names {
-		if n == "agent_steer" && a.Parent != "" {
-			continue // steering is the main agent's alone
-		}
 		if seen[n] {
 			continue
 		}

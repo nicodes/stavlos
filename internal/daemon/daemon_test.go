@@ -632,9 +632,9 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	}
 }
 
-// TestAgentsMessageAcrossTheSession: a child prompts its parent (not a
+// TestAgentsMessageAcrossTheSession: a child messages its parent (not a
 // child of the caller), the parent sees who sent it, agent_status shows
-// the whole tree, and steer/lifecycle tools are not a subagent's to use.
+// the whole tree, and lifecycle tools are not a subagent's to use.
 func TestAgentsMessageAcrossTheSession(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
@@ -667,26 +667,18 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 			if pid != rootID {
 				t.Errorf("parent id %q, want %q", pid, rootID)
 			}
-			return call("k1", "agent_prompt", `{"id":"`+pid+`","text":"which branch?"}`)
+			return call("k1", "agent_message", `{"id":"`+pid+`","text":"which branch?"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if last.IsError || !strings.Contains(last.Content, "queued") {
-				t.Errorf("agent_prompt to the parent: %+v", last)
+			if last.IsError || !strings.Contains(last.Content, "delivered") {
+				t.Errorf("agent_message to the parent: %+v", last)
 			}
-			// a subagent is never offered steer (it may orchestrate its own
-			// children, since the general preset spawns)
+			// one messaging tool for everyone: the old prompt/steer pair is gone
 			for _, d := range req.Tools {
-				if d.Name == "agent_steer" {
+				if d.Name == "agent_steer" || d.Name == "agent_prompt" {
 					t.Errorf("subagent should not be offered %s", d.Name)
 				}
-			}
-			return call("k2", "agent_steer", `{"id":"`+rootID+`","text":"stop"}`)
-		},
-		func(req model.Request) model.Response {
-			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if !last.IsError {
-				t.Errorf("agent_steer from a subagent should be refused: %+v", last)
 			}
 			return call("k3", "agent_status", `{}`)
 		},
@@ -1023,7 +1015,7 @@ func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
 			// impatient: prompt the same child again before it answered
 			out := req.Messages[len(req.Messages)-1].Blocks[0].Content // "spawned kid (general) as <id>"
 			id := strings.TrimSpace(out[strings.LastIndex(out, " ")+1:])
-			return call("c2", "agent_prompt", `{"id":"`+id+`","text":"send it now"}`)
+			return call("c2", "agent_message", `{"id":"`+id+`","text":"send it now"}`)
 		},
 		func(model.Request) model.Response { return text("waiting") },
 		func(model.Request) model.Response { return text("got it") },

@@ -133,8 +133,8 @@ type Transcript struct {
 	promptLine map[string]int    // prompt id → index of its "?" line (tone flips on answer)
 	monitors   map[string]int    // monitor id → index of its "started" line
 	children   map[string]int    // child agent id → index of the agent_create line that spawned it
-	askTarget  map[string]string // agent_prompt call id → the agent it asked (until the call finishes)
-	asks       map[string][]int  // agent id → indices of agent_prompt lines still waiting for its answer
+	askTarget  map[string]string // agent_message call id → the agent it asked (until the call finishes)
+	asks       map[string][]int  // agent id → indices of agent_message lines still waiting for its answer
 	monKinds   map[string]string // monitor id → kind, for the glyph on later events
 	items      int               // committed items so far
 	streamTurn int
@@ -187,7 +187,7 @@ func (t *Transcript) Apply(ev event.Event) {
 		var p event.ToolStartedPayload
 		if ev.Decode(&p) == nil && p.CallID != "" {
 			t.calls[p.CallID] = len(t.Lines)
-			if p.Name == "agent_prompt" {
+			if p.Name == "agent_message" || p.Name == "agent_prompt" { // (agent_prompt: old logs)
 				var in struct{ ID string }
 				if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
 					t.askTarget[p.CallID] = in.ID
@@ -533,7 +533,7 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	case p.Denied:
 		l.Suffix = "(denied)"
 	}
-	// A delivered agent_prompt waits for that agent's answer: yellow until
+	// A delivered agent_message waits for that agent's answer: yellow until
 	// its agent_response lands (see answered), like bash_async and its job.
 	if target, ok := t.askTarget[p.CallID]; ok {
 		delete(t.askTarget, p.CallID)
@@ -545,7 +545,7 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	delete(t.calls, p.CallID)
 }
 
-// answered settles every outstanding agent_prompt to the agent named in a
+// answered settles every outstanding agent_message to the agent named in a
 // response's From ("label (shortid)" or a bare id): one answer covers all
 // the questions asked of it so far.
 func (t *Transcript) answered(from string) {
@@ -562,7 +562,7 @@ func (t *Transcript) answered(from string) {
 	}
 }
 
-// AskerGone marks every outstanding agent_prompt to a killed agent red:
+// AskerGone marks every outstanding agent_message to a killed agent red:
 // no answer is coming.
 func (t *Transcript) AskerGone(id string) {
 	for _, i := range t.asks[id] {
@@ -1196,7 +1196,7 @@ func toolArg(name string, raw json.RawMessage) string {
 		default:
 			return arch
 		}
-	case "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status", "send", "steer", "cancel", "kill", "result", "status":
+	case "agent_message", "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status", "send", "steer", "cancel", "kill", "result", "status":
 		return str("id")
 	case "monitor":
 		if ids, ok := in["ids"].([]any); ok && len(ids) > 0 {

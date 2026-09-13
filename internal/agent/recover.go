@@ -26,7 +26,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 	monitorOwner := map[string]string{}
 	pendingPrompts := map[string][]queued{}
 	pendingResponses := map[string][]response{}
-	askTargets := map[string]string{} // agent_prompt call id → asked agent, while the call is open
+	askTargets := map[string]string{} // agent_message call id → asked agent, while the call is open
 	pendingSteers := map[string][]queued{}
 	finished := map[string]bool{}
 
@@ -191,7 +191,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			}
 		case event.ToolCallStarted:
 			var p event.ToolStartedPayload
-			if _ = e.Decode(&p); p.Name == "agent_prompt" {
+			if _ = e.Decode(&p); p.Name == "agent_message" || p.Name == "agent_prompt" {
 				var in struct{ ID string }
 				if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
 					askTargets[p.CallID] = in.ID

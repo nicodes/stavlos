@@ -240,7 +240,7 @@ func (a *Agent) deliverResponse(from, label, text string) {
 	a.signal()
 }
 
-// expect records a question put to agent id (an agent_prompt, or a child's
+// expect records a question put to agent id (an agent_message, or a child's
 // task): until its answer lands the agent reads as "waiting" when idle.
 func (a *Agent) expect(id string) {
 	a.mu.Lock()
