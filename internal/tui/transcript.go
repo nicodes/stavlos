@@ -23,7 +23,7 @@ const (
 	LineTool                     // tool call: "Bash  git status" (glyph added by Render)
 	LineToolOut                  // tool output (indented, dim)
 	LineNotice                   // local notice such as /help output
-	LineLabel                    // dim label inside a block ("steer", "child", "task")
+	LineLabel                    // dim label inside a block ("steer", "agent response", "task")
 	LineFinished                 // "finished · success" (green, bold)
 	LineRule                     // centered rule ("── compacted ──")
 	LineError                    // error text
@@ -660,7 +660,7 @@ func EventLines(ev event.Event) []Line {
 			}
 			return block(BlockSteer, "steer", p.Text)
 		case "child_finished":
-			return blockWith(BlockChild, "child", p.Text, GlyphChild)
+			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case "monitor_fired":
 			return blockWith(BlockChild, "bash async result", p.Text, monitorGlyph("command"))
 		default:
