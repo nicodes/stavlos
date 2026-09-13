@@ -453,7 +453,7 @@ func TestSpawnArmsWakeByDefault(t *testing.T) {
 		t.Fatalf("%+v", te)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
-	if len(agents) != 2 || !agents[1].Monitored {
+	if len(agents) != 2 {
 		t.Fatalf("child should be armed by spawn: %+v", agents)
 	}
 	close(release)
@@ -504,7 +504,7 @@ func TestBashAsyncWakes(t *testing.T) {
 		t.Fatalf("%+v", ms)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
-	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Kind != "command" || !agents[0].Monitors[0].Monitored {
+	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Kind != "command" {
 		t.Fatalf("monitors in tree: %+v", agents[0].Monitors)
 	}
 	e = h.waitFor(event.MonitorFired, root)

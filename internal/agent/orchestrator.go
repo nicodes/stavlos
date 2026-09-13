@@ -151,7 +151,7 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 	var out []tools.ChildStatus
 	for _, c := range agents {
 		in := c.Info()
-		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, Monitored: in.Monitored, You: c.ID == caller})
+		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller})
 	}
 	return out, nil
 }
