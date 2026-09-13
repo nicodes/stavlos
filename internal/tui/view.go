@@ -1220,14 +1220,30 @@ func (m Model) lastLines() map[string]string {
 	return out
 }
 
-// lastSnippet is the text of a transcript's last line worth showing.
+// lastSnippet is the latest chat item (message, tool call, notice) read
+// from its beginning: its lines flattened into one, for the caller to cut
+// at the end.
 func lastSnippet(t *Transcript) string {
 	if t == nil {
 		return ""
 	}
 	lines := t.All()
+	last := -1
 	for i := len(lines) - 1; i >= 0; i-- {
-		l := lines[i]
+		if strings.TrimSpace(lines[i].Text) != "" && lines[i].Kind != LineLabel && lines[i].Kind != LineRule {
+			last = i
+			break
+		}
+	}
+	if last < 0 {
+		return ""
+	}
+	item := lines[last].Item
+	var parts []string
+	for _, l := range lines {
+		if l.Item != item {
+			continue
+		}
 		switch l.Kind {
 		case LineBlank, LineLabel, LineRule:
 			continue
@@ -1239,9 +1255,9 @@ func lastSnippet(t *Transcript) string {
 		if l.Kind == LineTool && l.Suffix != "" {
 			s += " " + l.Suffix
 		}
-		return s
+		parts = append(parts, s)
 	}
-	return ""
+	return strings.Join(parts, " ")
 }
 
 // monitorRows is the pure part of monitorsView: one row per running
