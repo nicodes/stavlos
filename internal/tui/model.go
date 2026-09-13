@@ -232,8 +232,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.follow = m.vp.AtBottom()
 		}
 		cmds = append(cmds, cmd)
-		if msg.Action == tea.MouseActionMotion {
+		switch {
+		case msg.Action == tea.MouseActionMotion:
 			cmds = append(cmds, m.mouseHover(msg.X, msg.Y))
+		case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft:
+			cmds = append(cmds, m.mouseClick(msg.X, msg.Y))
 		}
 
 	case spinner.TickMsg:
@@ -618,6 +621,27 @@ func (m *Model) mouseHover(x, y int) tea.Cmd {
 	m.chatCursor = item
 	m.refreshViewport()
 	return nil
+}
+
+// mouseClick is a left click: on a chat item it does what enter does on
+// the hovered item (the click first moves the cursor there, like hover).
+func (m *Model) mouseClick(x, y int) tea.Cmd {
+	if m.ov != nil || m.isHome() {
+		return nil
+	}
+	if x < 0 || x >= m.contentWidth() || y < 0 || y >= m.vp.Height {
+		return nil
+	}
+	item, ok := m.itemAtRow(m.vp.YOffset + y)
+	if !ok {
+		return nil
+	}
+	cmd := m.mouseHover(x, y) // cursor onto the item, chat focused
+	if m.focus != focusChat || m.chatCursor != item {
+		return cmd
+	}
+	m.toggleItem()
+	return cmd
 }
 
 // itemAtRow maps a viewport content row to the chat item drawn there.
