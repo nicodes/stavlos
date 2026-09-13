@@ -45,12 +45,11 @@ func (m Model) keyHints() []keyHint {
 		}
 		return []keyHint{{"←/→", "switch tab"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	}
-	// Input focus. The tab hint appears only when there is somewhere to go.
+	// Input focus. The tab hint appears only when there is somewhere to go;
+	// a waiting permission already shows in the tab strip, so it is not
+	// repeated here.
 	var tab []keyHint
-	switch {
-	case m.currentPrompt() != nil:
-		tab = []keyHint{{"tab", "permission"}}
-	case len(m.focusOrder()) > 1:
+	if len(m.focusOrder()) > 1 {
 		tab = []keyHint{{"tab", "next section"}}
 	}
 	tree := "show sidebar"
@@ -60,7 +59,7 @@ func (m Model) keyHints() []keyHint {
 	if m.isHome() {
 		hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/provider", "sign in"}, {"/models", "pick model"}}
 		hs = append(hs, tab...)
-		return append(hs, keyHint{"ctrl+n/p", "agents"}, keyHint{"ctrl+b", tree}, keyHint{"/help", "all commands"}, keyHint{"ctrl+c", "quit"})
+		return append(hs, keyHint{"ctrl+n/p", "agents"}, keyHint{"ctrl+b", tree}, keyHint{"ctrl+c", "quit"})
 	}
 	details := "expand tool output"
 	if m.details {
@@ -68,7 +67,7 @@ func (m Model) keyHints() []keyHint {
 	}
 	hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}}
 	hs = append(hs, tab...)
-	return append(hs, keyHint{"/queue", "send after turn"}, keyHint{"/cancel", "stop turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"/details", details}, keyHint{"/models", "model"}, keyHint{"/help", "all commands"}, keyHint{"ctrl+c", "quit"})
+	return append(hs, keyHint{"/queue", "send after turn"}, keyHint{"/cancel", "stop turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"/details", details}, keyHint{"/models", "model"}, keyHint{"ctrl+c", "quit"})
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at
