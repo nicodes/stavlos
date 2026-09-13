@@ -72,16 +72,16 @@ func TestBuildTranscript(t *testing.T) {
 	}
 	got := renderLines(Build(evs))
 	assertSubsequence(t, got, []string{
-		" │  hello",
-		" │  world",
+		"   hello",
+		"   world",
 		"   ↳ Bash  sleep 100 (cancelled)",
 		"       partial",
 		"   ∴ thinking…",
 		"   Done.",
 		"   · claude-x",
 		"   · turn cancelled",
-		" │  finished · success",
-		" │  all good",
+		"   finished · success",
+		"   all good",
 	})
 	for _, g := range got {
 		if strings.Contains(g, "usage") || strings.Contains(g, "turn.started") || strings.Contains(g, "spawned") {
@@ -98,7 +98,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look around"}))
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   spawned scout (explorer) · m", " │  task", " │  look around"})
+	assertSubsequence(t, got, []string{"   spawned scout (explorer) · m", "   task", "   look around"})
 }
 
 func TestUserMessageKinds(t *testing.T) {
@@ -108,7 +108,7 @@ func TestUserMessageKinds(t *testing.T) {
 		mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}),
 	})
 	got := renderLines(lines)
-	assertSubsequence(t, got, []string{" │  steer", " │  focus", " │  child", " │  child done", " │  hi"})
+	assertSubsequence(t, got, []string{"   steer", "   focus", "   child", "   child done", "   hi"})
 
 	// Blocks carry their kind so Render can pick the border color.
 	var blocks []BlockKind
@@ -131,7 +131,7 @@ func TestUserBlockBorderAndWrap(t *testing.T) {
 	got := renderWith(Build([]event.Event{
 		mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi\n" + text}),
 	}), RenderOpts{Width: 30, NoFold: true})
-	if got[0] != " │  hi" {
+	if got[0] != "   hi" {
 		t.Fatalf("border + 2-space padding: %q", got[0])
 	}
 	// Long lines wrap inside the border; every continuation keeps it.
@@ -143,7 +143,7 @@ func TestUserBlockBorderAndWrap(t *testing.T) {
 		t.Fatalf("expected wrapped lines:\n%s", strings.Join(got, "\n"))
 	}
 	for _, l := range body {
-		if !strings.HasPrefix(l, " │  ") || len([]rune(l)) > 30 {
+		if !strings.HasPrefix(l, "   ") || len([]rune(l)) > 30 {
 			t.Fatalf("bad wrapped line %q", l)
 		}
 	}
@@ -265,7 +265,7 @@ func TestAssistantMarkdownAndErrors(t *testing.T) {
 		mk(2, "a", event.TurnEnded, event.TurnEndedPayload{Reason: "error", Error: "boom"}),
 		mk(3, "a", event.AgentKilled, nil),
 	}))
-	assertSubsequence(t, got, []string{"   Plan", "   Some bold text", "     fmt.Println()", "   - item", " │  boom", " │  killed"})
+	assertSubsequence(t, got, []string{"   Plan", "   Some bold text", "     fmt.Println()", "   - item", "   boom", "   killed"})
 	for _, g := range got {
 		if strings.Contains(g, "```") || strings.Contains(g, "· gpt-x") {
 			t.Fatalf("unexpected line %q (fences dropped; no model trailer on tool_use)", g)
@@ -289,7 +289,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{" │  hi", "   ∴ thinking…", "   Hello", "   ⠋ Bash"})
+	assertSubsequence(t, got, []string{"   hi", "   ∴ thinking…", "   Hello", "   ⠋ Bash"})
 	if !tr.Streaming() || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -418,7 +418,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	if !contains(got, gutterMark+"  ↳ Bash  ls") || !contains(got, gutterMark+"      x") || contains(got, gutterMark+"│  hi") {
 		t.Fatalf("cursor marks only item 1:\n%s", strings.Join(got, "\n"))
 	}
-	if !contains(got, " │  hi") {
+	if !contains(got, "   hi") {
 		t.Fatalf("non-cursor lines keep the gutter space:\n%s", strings.Join(got, "\n"))
 	}
 	// Per-item override expands item 1 while /details is off, and vice versa.
