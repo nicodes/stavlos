@@ -114,6 +114,7 @@ type RenderOpts struct {
 	Expanded map[int]bool
 	Cursor   int
 	Focused  bool
+	NoFold   bool // render every item in full (exports, line-level tests)
 }
 
 // gutterMark is the chat cursor marker drawn in the one-column gutter.
@@ -136,8 +137,13 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 	rows := map[int]rowRange{}
 	row := 0
 	first := true
-	for _, l := range lines {
+	folds := o.folds(lines)
+	for i, l := range lines {
 		if !o.showLine(l) {
+			continue
+		}
+		f, folded := folds[l.Item]
+		if folded && i != f.show {
 			continue
 		}
 		if !first {
@@ -147,6 +153,9 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		cur := o.Focused && l.Item == o.Cursor
 		text := ""
 		if l.Kind != LineBlank {
+			if folded && f.hidden > 0 {
+				l.Suffix = strings.TrimSpace(l.Suffix + fmt.Sprintf(" +%d", f.hidden))
+			}
 			text = renderLine(l, o, cur)
 		} else if cur {
 			text = styleGutter.Render(gutterMark)
@@ -162,6 +171,69 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		row += n
 	}
 	return b.String(), rows
+}
+
+// fold describes a collapsed item: the one line index to show and how many
+// other non-blank lines are hidden behind it.
+type fold struct{ show, hidden int }
+
+// folds decides which items collapse to a single line. User inputs and
+// assistant responses always show in full; everything else (tool calls with
+// their output and permission notices, thinking, child results, spawns,
+// errors, finish blocks, notices) folds unless the chat cursor is on it, it
+// was expanded with enter, or /details is on.
+func (o RenderOpts) folds(lines []Line) map[int]fold {
+	out := map[int]fold{}
+	if o.Details || o.NoFold {
+		return out
+	}
+	type info struct {
+		full     bool
+		show     int
+		nonblank int
+		seen     bool
+	}
+	byItem := map[int]*info{}
+	order := []int{}
+	for i, l := range lines {
+		in := byItem[l.Item]
+		if in == nil {
+			in = &info{show: -1}
+			byItem[l.Item] = in
+			order = append(order, l.Item)
+		}
+		switch {
+		case l.Block == BlockUser || l.Block == BlockSteer:
+			in.full = true
+		case l.Kind == LineText || l.Kind == LineHeading || l.Kind == LineCode || l.Kind == LineStream || l.Kind == LineModel:
+			if l.Block == BlockNone {
+				in.full = true
+			}
+		}
+		if l.Kind == LineBlank || !o.showLine(l) {
+			continue
+		}
+		in.nonblank++
+		// prefer the first content line over a block label ("child", "task")
+		if in.show < 0 || (lines[in.show].Kind == LineLabel && l.Kind != LineLabel && !in.seen) {
+			in.show = i
+			in.seen = l.Kind != LineLabel
+		}
+	}
+	for _, item := range order {
+		in := byItem[item]
+		if in.full || in.show < 0 {
+			continue
+		}
+		if o.Focused && item == o.Cursor {
+			continue
+		}
+		if v, ok := o.Expanded[item]; ok && v {
+			continue
+		}
+		out[item] = fold{show: in.show, hidden: in.nonblank - 1}
+	}
+	return out
 }
 
 // showLine applies the details toggle, honouring a per-item override.

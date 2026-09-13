@@ -22,7 +22,7 @@ func mk(seq int64, agent string, typ event.Type, payload any) event.Event {
 
 // renderLines renders (collapsed) and returns trimmed, ANSI-free lines.
 func renderLines(lines []Line) []string {
-	return renderWith(lines, RenderOpts{Width: 80, Spinner: "⠋"})
+	return renderWith(lines, RenderOpts{Width: 80, Spinner: "⠋", NoFold: true})
 }
 
 func renderWith(lines []Line, o RenderOpts) []string {
@@ -130,7 +130,7 @@ func TestUserBlockBorderAndWrap(t *testing.T) {
 	text := "one two three four five six seven eight nine ten"
 	got := renderWith(Build([]event.Event{
 		mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi\n" + text}),
-	}), RenderOpts{Width: 30})
+	}), RenderOpts{Width: 30, NoFold: true})
 	if got[1] != " │  hi" {
 		t.Fatalf("border + 2-space padding: %q", got[1])
 	}
@@ -237,7 +237,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 
 func TestToolOutputExpandedCap(t *testing.T) {
 	lines := outputLines(strings.TrimRight(strings.Repeat("x\n", 50), "\n"))
-	collapsed := renderWith(lines, RenderOpts{Width: 80})
+	collapsed := renderWith(lines, RenderOpts{Width: 80, NoFold: true})
 	expanded := renderWith(lines, RenderOpts{Width: 80, Details: true})
 	if count(collapsed, "       x") != maxOutputCollapsed || !contains(collapsed, "       … +47 lines") {
 		t.Fatalf("collapsed:\n%s", strings.Join(collapsed, "\n"))
@@ -408,7 +408,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "bash", Output: strings.TrimRight(strings.Repeat("x\n", 6), "\n")}))
 	lines := tr.All()
 
-	plain := renderWith(lines, RenderOpts{Width: 80})
+	plain := renderWith(lines, RenderOpts{Width: 80, NoFold: true})
 	for _, l := range plain {
 		if strings.Contains(l, gutterMark) {
 			t.Fatalf("no cursor without focus: %q", l)
@@ -422,7 +422,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 		t.Fatalf("non-cursor lines keep the gutter space:\n%s", strings.Join(got, "\n"))
 	}
 	// Per-item override expands item 1 while /details is off, and vice versa.
-	exp := renderWith(lines, RenderOpts{Width: 80, Expanded: map[int]bool{1: true}})
+	exp := renderWith(lines, RenderOpts{Width: 80, NoFold: true, Expanded: map[int]bool{1: true}})
 	if count(exp, "       x") != 6 || contains(exp, "       … +3 lines") {
 		t.Fatalf("expanded override:\n%s", strings.Join(exp, "\n"))
 	}
@@ -430,7 +430,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	if count(col, "       x") != maxOutputCollapsed {
 		t.Fatalf("collapsed override:\n%s", strings.Join(col, "\n"))
 	}
-	_, rows := renderAll(lines, RenderOpts{Width: 80})
+	_, rows := renderAll(lines, RenderOpts{Width: 80, NoFold: true})
 	if r := rows[1]; r.first != 3 || r.last != 7 {
 		t.Fatalf("tool rows: %+v (want 3..7: tool line, 3 output lines, trailer)", r)
 	}
@@ -526,5 +526,77 @@ func TestThinkingIsItsOwnItem(t *testing.T) {
 	prev := all[len(all)-2]
 	if prev.Kind != LineThink || last.Kind != LineStream || prev.Item == last.Item {
 		t.Fatalf("stream items: prev=%+v last=%+v", prev, last)
+	}
+}
+
+func TestFoldingToOneLine(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "line one\nline two"}))
+	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockThinking, Text: "first thought\nsecond thought"}}}))
+	tr.Apply(mk(3, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "bash"}))
+	tr.Apply(mk(5, event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
+	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "a\nb\nc\nd\ne"}))
+	tr.Apply(mk(7, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "child_finished", Text: "Child agent \"scout\" finished.\n\nfound it"}))
+	tr.Apply(mk(8, event.AssistantMessage, event.AssistantMessagePayload{Turn: 2, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "final answer\nwith two lines"}}}))
+	lines := tr.All()
+	toolItem, childItem := -1, -1
+	for _, l := range lines {
+		if l.Kind == LineTool {
+			toolItem = l.Item
+		}
+		if l.Block == BlockChild && childItem < 0 {
+			childItem = l.Item
+		}
+	}
+	nonblank := func(out []string) []string {
+		var r []string
+		for _, l := range out {
+			if strings.TrimSpace(l) != "" {
+				r = append(r, l)
+			}
+		}
+		return r
+	}
+	plain := nonblank(renderWith(lines, RenderOpts{Width: 80}))
+	joined := strings.Join(plain, "\n")
+	// user input and final response in full
+	for _, want := range []string{"line one", "line two", "final answer", "with two lines"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q in\n%s", want, joined)
+		}
+	}
+	// thinking, tool (with its notices and output) and child result fold to one line each
+	if strings.Contains(joined, "second thought") || strings.Contains(joined, "permission") || strings.Contains(joined, "found it") {
+		t.Fatalf("folded items leaked lines:\n%s", joined)
+	}
+	toolRows := 0
+	for _, l := range plain {
+		if strings.Contains(l, "Bash") {
+			toolRows++
+			if !strings.Contains(l, "+") {
+				t.Fatalf("folded tool row lacks +N: %q", l)
+			}
+		}
+	}
+	if toolRows != 1 {
+		t.Fatalf("tool rows %d:\n%s", toolRows, joined)
+	}
+	// cursor on the tool item shows it in full; cursor on the child shows the result
+	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem})), "\n")
+	if !strings.Contains(full, "permission") || !strings.Contains(full, "allow") || strings.Contains(full, "found it") {
+		t.Fatalf("cursor on tool:\n%s", full)
+	}
+	child := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: childItem})), "\n")
+	if !strings.Contains(child, "found it") || strings.Contains(child, "permission") {
+		t.Fatalf("cursor on child:\n%s", child)
+	}
+	// /details shows everything
+	all := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Details: true})), "\n")
+	if !strings.Contains(all, "found it") || !strings.Contains(all, "permission") || !strings.Contains(all, "e\n") && !strings.HasSuffix(all, "e") {
+		t.Fatalf("details:\n%s", all)
 	}
 }
