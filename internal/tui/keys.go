@@ -6,7 +6,7 @@ import "github.com/charmbracelet/bubbles/key"
 // textinput (editing) are not listed.
 type keyMap struct {
 	Quit        key.Binding
-	NextSection key.Binding // tab: cycle focus chat → agents → async → permission → input → sidebar
+	NextSection key.Binding // tab: cycle focus chat → permission → agents → async → input → sidebar
 	PrevSection key.Binding
 	NextAgent   key.Binding
 	PrevAgent   key.Binding
@@ -65,12 +65,12 @@ var keys = keyMap{
 
 // helpKeyLines is the key reference appended to /help.
 var helpKeyLines = []string{
-	"focus: tab/shift+tab cycle the sections chat → agents → async → permission → input → sidebar · esc returns to the input",
+	"focus: tab/shift+tab cycle the sections chat → permission → agents → async → input → sidebar · esc returns to the input",
 	"input: enter send · ↑/↓ prompt history · esc clear · ctrl+n/ctrl+p cycle agents · pgup/pgdn scroll",
 	"chat: ↑/↓ or j/k move by item · enter expand/collapse a tool's output · pgup/pgdn page · home/end first/last",
 	"permission: y allow once · a allow for session · n deny · questions: type in the box, enter answers",
 	"sidebar: ctrl+b open/close · ↑/↓ move · enter pick an agent",
-	"sections: the strip above the input always shows three tabs, agents (⑂ live children), async (⚙ running bash_async jobs) and permission (?), each with its count; the focused tab shows its contents",
+	"sections: the strip under the chat always shows three tabs, permission, agents (live children) and async (running bash_async jobs), each with its count; the focused tab shows its contents",
 	"agents: tab to it, ↑/↓ move, enter selects an agent · async: ↑/↓ move",
 	"overlays: ↑/↓ or ctrl+p/ctrl+n move · enter select · esc close · type to filter · pgup/pgdn page",
 	"sign-in: open the URL on any device and enter the code · o open in browser · esc cancel",
