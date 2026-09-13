@@ -232,11 +232,10 @@ func (a *Agent) deliverResponse(from, label, text string) {
 	a.mu.Lock()
 	a.responses = append(a.responses, response{from, label, text})
 	a.wakes["response:"+from] = true
-	if a.awaiting[from] > 1 {
-		a.awaiting[from]--
-	} else {
-		delete(a.awaiting, from)
-	}
+	// One answer settles everything asked of that agent so far: a re-prompt
+	// ("send it now") is usually covered by the same reply, and a second
+	// answer never arrives for it.
+	delete(a.awaiting, from)
 	a.mu.Unlock()
 	a.signal()
 }

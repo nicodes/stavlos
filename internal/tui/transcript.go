@@ -545,18 +545,20 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	delete(t.calls, p.CallID)
 }
 
-// answered settles the oldest outstanding agent_prompt to the agent named
-// in a response's From ("label (shortid)" or a bare id).
+// answered settles every outstanding agent_prompt to the agent named in a
+// response's From ("label (shortid)" or a bare id): one answer covers all
+// the questions asked of it so far.
 func (t *Transcript) answered(from string) {
 	for target, idxs := range t.asks {
 		if len(idxs) == 0 || (from != target && !strings.Contains(from, "("+shortID(target)+")")) {
 			continue
 		}
-		if i := idxs[0]; i < len(t.Lines) {
-			t.Lines[i].Tone = ToneNone
+		for _, i := range idxs {
+			if i < len(t.Lines) {
+				t.Lines[i].Tone = ToneNone
+			}
 		}
-		t.asks[target] = idxs[1:]
-		return
+		delete(t.asks, target)
 	}
 }
 

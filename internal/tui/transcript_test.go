@@ -1058,6 +1058,18 @@ func TestAgentPromptLineWaitsForTheAnswer(t *testing.T) {
 	if tone("ffff00001111") != ToneError {
 		t.Fatalf("killed before answering → red: %v", tone("ffff00001111"))
 	}
+	// two prompts to one agent, one answer: both settle (a re-prompt is
+	// covered by the same reply)
+	tr.Apply(mk(11, event.ToolCallStarted, event.ToolStartedPayload{Turn: 2, CallID: "p4", Name: "agent_prompt", Input: json.RawMessage(`{"id":"cafe00000001","text":"report"}`)}))
+	tr.Apply(mk(12, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 2, CallID: "p4", Name: "agent_prompt", Output: "queued"}))
+	tr.Apply(mk(13, event.ToolCallStarted, event.ToolStartedPayload{Turn: 2, CallID: "p5", Name: "agent_prompt", Input: json.RawMessage(`{"id":"cafe00000001","text":"send it now"}`)}))
+	tr.Apply(mk(14, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 2, CallID: "p5", Name: "agent_prompt", Output: "queued"}))
+	tr.Apply(mk(15, event.UserMessage, event.UserMessagePayload{Turn: 3, Kind: "agent_response", From: "inspector (cafe0000)", Text: "here"}))
+	for _, l := range tr.All() {
+		if l.Kind == LineTool && l.tool == "agent_prompt" && strings.Contains(l.Text, "cafe00000001") && l.Tone != ToneNone {
+			t.Fatalf("one answer should settle both prompts to that agent: %q tone %v", l.Text, l.Tone)
+		}
+	}
 	// a failed prompt never waits
 	tr.Apply(mk(9, event.ToolCallStarted, event.ToolStartedPayload{Turn: 2, CallID: "p3", Name: "agent_prompt", Input: json.RawMessage(`{"id":"deadbeef0000","text":"?"}`)}))
 	tr.Apply(mk(10, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 2, CallID: "p3", Name: "agent_prompt", Output: "unknown agent", IsError: true}))

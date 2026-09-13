@@ -1007,3 +1007,57 @@ func parentIDFromSystem(system string) string {
 	}
 	return ""
 }
+
+// TestOneAnswerSettlesRepeatedPrompts: a parent that prompts a child twice
+// and gets one answer is not left "waiting" for a second.
+func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	release := make(chan struct{})
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			return call("c1", "agent_create", `{"archetype":"general","label":"kid","task":"look"}`)
+		},
+		func(req model.Request) model.Response {
+			// impatient: prompt the same child again before it answered
+			out := req.Messages[len(req.Messages)-1].Blocks[0].Content // "spawned kid (general) as <id>"
+			id := strings.TrimSpace(out[strings.LastIndex(out, " ")+1:])
+			return call("c2", "agent_prompt", `{"id":"`+id+`","text":"send it now"}`)
+		},
+		func(model.Request) model.Response { return text("waiting") },
+		func(model.Request) model.Response { return text("got it") },
+	}
+	fm.childSteps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			<-release
+			return call("k", "agent_response", `{"to":"`+parentIDFromSystem(req.System)+`","text":"one answer for both"}`)
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
+	var te event.TurnEndedPayload
+	for te.Turn != 1 {
+		e := h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].State != "waiting" {
+		t.Fatalf("two questions out: %+v", agents[0])
+	}
+	close(release)
+	for te.Turn != 2 {
+		e := h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].State != "idle" {
+		t.Fatalf("one answer should settle both prompts; parent still %s", agents[0].State)
+	}
+}
