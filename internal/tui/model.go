@@ -1046,28 +1046,13 @@ func (m *Model) command(text string) tea.Cmd {
 			return m.setStatus("usage: /queue <text>", true)
 		}
 		return sendCmd(m.ctx, m.c, agent, protocol.KindPrompt, rest, "queued for after the current turn")
-	case "/model":
-		if c := needAgent(); c != nil {
-			return c
-		}
-		if rest == "" {
-			return modelsCmd(m.ctx, m.c)
-		}
-		if !strings.Contains(rest, "/") {
-			return m.setStatus("usage: /model <provider/id> (or /models to pick)", true)
-		}
-		return setAgentModelCmd(m.ctx, m.c, agent, rest)
-	case "/models":
+	case "/models", "/model":
+		// The one model dialog: enter sets the selected agent's model, ctrl+s the session default.
 		return modelsCmd(m.ctx, m.c)
 	case "/providers", "/provider", "/connect", "/login":
 		// The one provider dialog: sign in, re-sign in, sign out. A name
 		// argument jumps straight to that provider's sign-in.
 		return providersCmd(m.ctx, m.c, false, strings.ToLower(rest))
-	case "/session-model":
-		if rest == "" || !strings.Contains(rest, "/") {
-			return m.setStatus("usage: /session-model <provider/id>", true)
-		}
-		return setSessionModelCmd(m.ctx, m.c, m.sessionID, rest)
 	}
 	return m.setStatus("unknown command "+name+" (try /help)", true)
 }

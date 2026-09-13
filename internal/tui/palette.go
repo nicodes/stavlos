@@ -22,9 +22,7 @@ type Command struct {
 var commands = []Command{
 	{Name: "/queue", Args: "<text>", Desc: "send after the current turn ends (plain enter reaches a busy agent at its next step)"},
 	{Name: "/providers", Args: "[openai|xai]", Desc: "manage providers: sign in with ChatGPT or Grok (enter) or sign out (ctrl+d); a name jumps to its sign-in", Aliases: []string{"/provider", "/connect", "/login"}, Direct: true},
-	{Name: "/models", Desc: "pick a model (enter: selected agent · ctrl+s: session default)", Direct: true},
-	{Name: "/model", Args: "<provider/id>", Desc: "set the selected agent's model directly (no arg: same as /models)"},
-	{Name: "/session-model", Args: "<provider/id>", Desc: "set the session default model"},
+	{Name: "/models", Desc: "pick a model: enter sets the selected agent's, ctrl+s the session default", Aliases: []string{"/model"}, Direct: true},
 	{Name: "/role", Args: "[name]", Desc: "change the selected agent's role (preset); no arg opens a picker", Direct: true},
 	{Name: "/variants", Args: "[name|default]", Desc: "pick a model variant (reasoning effort) for the selected agent; no arg opens a picker", Aliases: []string{"/variant"}, Direct: true},
 	{Name: "/roles", Desc: "list available roles", Aliases: []string{"/presets"}, Direct: true},
