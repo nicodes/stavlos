@@ -871,21 +871,26 @@ func (m Model) treeRows(width int) []string {
 }
 
 // sectionsView is the block between the chat and the input: a tab strip
-// naming the background section and the permission queue with their counts
-// (always shown, "(0)" when empty), followed by the body of whichever one
-// has focus.
+// naming the agents, async and permission tabs with their counts (always
+// shown, "(0)" when empty), followed by the body of whichever one has focus.
 func (m Model) sectionsView(width int) string {
 	kids := m.liveChildren()
 	jobs := m.runningJobs()
-	nBack := len(kids) + len(jobs)
 	p := m.currentPrompt()
-	strip := m.sectionTabs(nBack, p, width)
+	strip := m.sectionTabs(kids, jobs, p, width)
 	switch m.focus {
-	case focusBackground:
-		if nBack == 0 {
-			return strip + "\n" + styleDim.Render("  nothing running here")
+	case focusAgents:
+		if len(kids) == 0 {
+			return strip + "\n" + styleDim.Render("  no subagents running")
 		}
-		return strings.Join(append([]string{strip}, m.backgroundRows(jobs, width)...), "\n")
+		rows := agentRows(m.agents, m.selectedID(), m.spawned, time.Now(), width-2)
+		return strings.Join(append([]string{strip}, m.cursorRows(rows)...), "\n")
+	case focusAsync:
+		if len(jobs) == 0 {
+			return strip + "\n" + styleDim.Render("  no async jobs running")
+		}
+		rows := monitorRows(jobs, time.Now(), width-2)
+		return strings.Join(append([]string{strip}, m.cursorRows(rows)...), "\n")
 	case focusPermission:
 		if p == nil {
 			return strip + "\n" + styleDim.Render("  no prompts waiting")
@@ -895,31 +900,45 @@ func (m Model) sectionsView(width int) string {
 	return strip
 }
 
-// sectionTabs is the one-line strip: each present section as a tab with its
-// count, the focused one in accent, the rest dim, then a hint.
-func (m Model) sectionTabs(nBack int, p *protocol.PromptInfo, width int) string {
-	// The open tab is accent with a ▾ pointing at its contents below; the
-	// rest are dim.
+// sectionTabs is the one-line strip: the three tabs with their counts, the
+// focused one in accent with a ▾ pointing at its contents below, the rest
+// dim, then a hint. Each tab carries its chat glyph, yellow while something
+// in it is live.
+func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo, width int) string {
 	tab := func(label string, on bool) string {
 		if on {
 			return styleBoxTitleFocus.Render("▾ " + label)
 		}
 		return styleDim.Render(label)
 	}
-	tabs := []string{tab(fmt.Sprintf("background (%d)", nBack), m.focus == focusBackground)}
+	glyph := func(g string, live bool) string {
+		if live {
+			return styleWorking.Render(g)
+		}
+		return styleDim.Render(g)
+	}
+	working := false
+	for _, a := range kids {
+		if agentOutcome(a) == "working" {
+			working = true
+			break
+		}
+	}
+	tabs := []string{
+		glyph(glyphToolAgents, working) + " " + tab(fmt.Sprintf("agents (%d)", len(kids)), m.focus == focusAgents),
+		glyph(glyphToolMonitors, len(jobs) > 0) + "  " + tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
+	}
 	label := fmt.Sprintf("permission (%d)", len(m.prompts))
 	if p != nil && p.Kind != "permission" {
 		label = fmt.Sprintf("%s (%d)", p.Kind, len(m.prompts))
 	}
-	q := styleDim.Render("?")
-	if p != nil {
-		q = styleWorking.Render("?")
-	}
-	tabs = append(tabs, q+" "+tab(label, m.focus == focusPermission))
+	tabs = append(tabs, glyph("?", p != nil)+" "+tab(label, m.focus == focusPermission))
 	var hint string
 	switch m.focus {
-	case focusBackground:
+	case focusAgents:
 		hint = "↑/↓ move · enter select agent · esc back"
+	case focusAsync:
+		hint = "↑/↓ move · esc back"
 	case focusPermission:
 		hint = ""
 	default:
@@ -935,9 +954,18 @@ func (m Model) sectionTabs(nBack int, p *protocol.PromptInfo, width int) string 
 	return ansi.Truncate(line, width, "…")
 }
 
-// promptView is the tab strip plus the permission box when the permission
-// section has focus; kept as the entry point tests use.
-func (m Model) promptView(width int) string { return m.sectionsView(width) }
+// cursorRows puts the ▶ marker on the row under agCursor and indents the
+// rest to match.
+func (m Model) cursorRows(rows []string) []string {
+	for i := range rows {
+		marker := "  "
+		if i == m.agCursor%len(rows) {
+			marker = styleAccent.Render("▶") + " "
+		}
+		rows[i] = marker + strings.TrimPrefix(rows[i], "  ")
+	}
+	return rows
+}
 
 // promptBox renders the permission/question/trust box for the head of the
 // queue at the given width. It is only drawn while the section has focus
@@ -1066,25 +1094,6 @@ func (m Model) connected() bool {
 		return false
 	}
 	return true
-}
-
-// backgroundView is the tab strip plus the background rows when the
-// section has focus; kept as the entry point tests use.
-func (m Model) backgroundView(width int) string { return m.sectionsView(width) }
-
-// backgroundRows lists the selected agent's live children (⑂) and running
-// async jobs (⚙), one per line, with a cursor marker on the current row.
-func (m Model) backgroundRows(jobs []protocol.MonitorInfo, width int) []string {
-	rows := agentRows(m.agents, m.selectedID(), m.spawned, time.Now(), width-2)
-	rows = append(rows, monitorRows(jobs, time.Now(), width-2)...)
-	for i := range rows {
-		marker := "  "
-		if i == m.agCursor%len(rows) {
-			marker = styleAccent.Render("▶") + " "
-		}
-		rows[i] = marker + strings.TrimPrefix(rows[i], "  ")
-	}
-	return rows
 }
 
 // agentGlyph is the fork, coloured by the agent's lifecycle like the chat:
