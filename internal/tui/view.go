@@ -812,10 +812,23 @@ func (m Model) metaRow(width int) string {
 // tagline sits under the logo on the home screen.
 const tagline = "Saddle up."
 
-// homeView centers the logo, the tagline and the prompt box vertically.
-func (m Model) homeView(width, height int) string {
+// homeRecentMax caps the history list on the logo screen.
+const homeRecentMax = 8
+
+// homeLayout is the logo screen's stack of lines and where things sit in
+// it, shared by the renderer and the mouse.
+type homeLayout struct {
+	lines       []string
+	top         int // rows of padding above the stack (vertical centring)
+	recentStart int // index in lines of the first recent-session row, -1 when none
+}
+
+// homeLines builds the logo screen: logo, tagline, the strip when it has
+// something, the palette, the input, and under it the history of this
+// directory's earlier sessions (their first prompts), newest first.
+func (m Model) homeLines(width, height int) homeLayout {
 	boxW := promptBoxWidth(width)
-	var lines []string
+	lay := homeLayout{recentStart: -1}
 	add := func(block string, w int) {
 		x := (width - w) / 2
 		if x < 0 {
@@ -823,34 +836,69 @@ func (m Model) homeView(width, height int) string {
 		}
 		pad := strings.Repeat(" ", x)
 		for _, l := range strings.Split(block, "\n") {
-			lines = append(lines, pad+l)
+			lay.lines = append(lay.lines, pad+l)
 		}
 	}
 	logo := logoLines(width)
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
-	lines = append(lines, "")
+	lay.lines = append(lay.lines, "")
 	add(styleDim.Render(tagline), lipgloss.Width(tagline))
-	lines = append(lines, "")
+	lay.lines = append(lay.lines, "")
 	if m.stripShown() {
 		if sv := m.sectionsView(boxW); sv != "" {
 			add(sv, boxW)
-			lines = append(lines, "")
+			lay.lines = append(lay.lines, "")
 		}
 	}
 	if pv := m.paletteViewFor(boxW); pv != "" {
 		add(pv, boxW)
 	}
 	add(m.inputBoxView(boxW), boxW)
-
-	top := (height - len(lines)) / 2
-	if top < 0 {
-		top = 0
+	if rows := m.recentRows(); len(rows) > 0 {
+		lay.lines = append(lay.lines, "")
+		add(styleDim.Render("recent · click or /sessions to resume"), boxW)
+		lay.recentStart = len(lay.lines)
+		add(strings.Join(recentLines(rows, boxW), "\n"), boxW)
 	}
+	lay.top = (height - len(lay.lines)) / 2
+	if lay.top < 0 {
+		lay.top = 0
+	}
+	return lay
+}
+
+// recentLines renders the home screen's history rows: "› first prompt"
+// with when the session started on the right.
+func recentLines(rows []protocol.SessionInfo, width int) []string {
+	out := make([]string, 0, len(rows))
+	for _, s := range rows {
+		when := ""
+		if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
+			when = fmtElapsed(time.Since(t)) + " ago"
+		}
+		avail := width - 2 - ansi.StringWidth(when) - 2
+		if avail < 10 {
+			avail = 10
+		}
+		title := truncRunes(s.Title, avail)
+		gap := width - 2 - ansi.StringWidth(title) - ansi.StringWidth(when)
+		if gap < 2 {
+			gap = 2
+		}
+		out = append(out, styleDim.Render("› ")+title+strings.Repeat(" ", gap)+styleDim.Render(when))
+	}
+	return out
+}
+
+// homeView centers the logo, the tagline, the prompt box and the recent
+// sessions vertically.
+func (m Model) homeView(width, height int) string {
+	lay := m.homeLines(width, height)
 	out := make([]string, 0, height)
-	for i := 0; i < top; i++ {
+	for i := 0; i < lay.top; i++ {
 		out = append(out, "")
 	}
-	out = append(out, lines...)
+	out = append(out, lay.lines...)
 	for len(out) < height {
 		out = append(out, "")
 	}

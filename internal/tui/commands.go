@@ -298,18 +298,20 @@ func copyCmd(text string) tea.Cmd {
 	}
 }
 
-// sessionsMsg carries session.list for the /sessions picker.
+// sessionsMsg carries session.list: for the /sessions picker, or (quiet)
+// for the recent list on the home screen.
 type sessionsMsg struct {
 	sessions []protocol.SessionInfo
 	err      error
+	quiet    bool
 }
 
-func sessionsCmd(ctx context.Context, c *client.Client, dir string) tea.Cmd {
+func sessionsCmd(ctx context.Context, c *client.Client, dir string, quiet bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)
 		defer cancel()
 		ss, err := c.Sessions(ctx, dir, false)
-		return sessionsMsg{ss, err}
+		return sessionsMsg{ss, err, quiet}
 	}
 }
 

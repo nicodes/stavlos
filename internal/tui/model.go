@@ -88,15 +88,16 @@ type Model struct {
 	sp    spinner.Model
 
 	width, height int
-	showTree      bool      // right sidebar toggle (/tree, ctrl+b)
-	hideKeys      bool      // the key bar (divider + legend) at the bottom is hidden; /help shows it
-	cancelArmed   time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
-	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
-	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
-	sel           selection // mouse text selection (drag to select, release to copy)
-	metaSel       metaPart  // the highlighted part of the meta row while it has focus
-	details       bool      // expanded tool output (/details)
-	follow        bool      // auto-scroll to bottom
+	showTree      bool                   // right sidebar toggle (/tree, ctrl+b)
+	hideKeys      bool                   // the key bar (divider + legend) at the bottom is hidden; /help shows it
+	cancelArmed   time.Time              // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
+	hoverFocus    bool                   // the chat has focus because the mouse is over it (released when the mouse leaves)
+	hoverFrom     focus                  // where focus was before hover took it, restored when the mouse leaves the chat
+	sel           selection              // mouse text selection (drag to select, release to copy)
+	metaSel       metaPart               // the highlighted part of the meta row while it has focus
+	recent        []protocol.SessionInfo // this directory's earlier sessions, for the home screen
+	details       bool                   // expanded tool output (/details)
+	follow        bool                   // auto-scroll to bottom
 
 	status      string
 	statusErr   bool
@@ -306,7 +307,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.replayTo = msg.res.Seq
 		m.loading = msg.res.Seq > 0
-		cmds = append(cmds, subscribeCmd(m.ctx, m.c, m.sessionID, 0))
+		cmds = append(cmds, subscribeCmd(m.ctx, m.c, m.sessionID, 0), sessionsCmd(m.ctx, m.c, m.session.Dir, true))
 
 	case subscribedMsg:
 		if msg.err != nil {
@@ -388,7 +389,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case variantsMsg:
 		cmds = append(cmds, m.onVariants(msg))
 	case sessionsMsg:
-		cmds = append(cmds, m.onSessions(msg))
+		if msg.err == nil {
+			m.recent = msg.sessions
+		}
+		if !msg.quiet {
+			cmds = append(cmds, m.onSessions(msg))
+		}
 	case switchedMsg:
 		if msg.err != nil {
 			cmds = append(cmds, m.setStatus("resume: "+msg.err.Error(), true))
@@ -913,7 +919,12 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 		return nil
 	}
 	if m.isHome() {
-		return m.setFocus(focusInput) // the input is the only thing to click on the logo screen
+		// The logo screen: a click on a recent session resumes it; anywhere
+		// else focuses the input.
+		if idx, ok := m.homeRecentAt(x, y); ok {
+			return switchSessionCmd(m.ctx, m.c, m.sessionID, m.recentRows()[idx].ID)
+		}
+		return m.setFocus(focusInput)
 	}
 	if x < 0 || y < 0 {
 		return nil
@@ -1016,6 +1027,45 @@ func (m *Model) metaKey(msg tea.KeyMsg) tea.Cmd {
 		return m.metaAction(m.metaSel)
 	}
 	return nil
+}
+
+// recentRows is the home screen's history: this directory's earlier
+// sessions that were prompted (titled), newest first, excluding the current
+// one, at most homeRecentMax.
+func (m Model) recentRows() []protocol.SessionInfo {
+	var out []protocol.SessionInfo
+	for _, s := range m.recent {
+		if s.Title == "" || s.ID == m.sessionID {
+			continue
+		}
+		out = append(out, s)
+		if len(out) == homeRecentMax {
+			break
+		}
+	}
+	return out
+}
+
+// homeRecentAt maps a click on the logo screen to a recent-session row.
+func (m Model) homeRecentAt(x, y int) (int, bool) {
+	rows := m.recentRows()
+	if len(rows) == 0 {
+		return 0, false
+	}
+	lay := m.homeLines(m.width, m.bodyHeight())
+	if lay.recentStart < 0 {
+		return 0, false
+	}
+	i := y - lay.top - lay.recentStart
+	if i < 0 || i >= len(rows) {
+		return 0, false
+	}
+	boxW := promptBoxWidth(m.width)
+	x0 := (m.width - boxW) / 2
+	if x < x0 || x >= x0+boxW {
+		return 0, false
+	}
+	return i, true
 }
 
 // bodyHeight is the height of the main area a dialog is centred in (the
@@ -1584,7 +1634,7 @@ func (m *Model) command(text string) tea.Cmd {
 		}
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
 	case "/sessions", "/resume", "/session":
-		return sessionsCmd(m.ctx, m.c, m.session.Dir)
+		return sessionsCmd(m.ctx, m.c, m.session.Dir, false)
 	case "/yolo":
 		on := !m.session.Yolo
 		switch strings.ToLower(rest) {
