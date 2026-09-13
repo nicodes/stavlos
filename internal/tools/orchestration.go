@@ -33,7 +33,7 @@ func jsonOut(v any) Result {
 type spawnTool struct{}
 
 func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_create", Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its agent_response comes back to you as a new message between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive afterwards: agent_prompt it again for follow-ups (it keeps its context), and agent_kill it when you are done with it.",
+	return model.ToolDef{Name: "agent_create", Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its agent_response comes back to you as a new message between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive afterwards: agent_message it again for follow-ups (it keeps its context), and agent_kill it when you are done with it.",
 		Schema: schema(map[string]any{
 			"archetype": prop("string", "Preset name of the child (see the list in your instructions)"),
 			"label":     prop("string", "Short human-facing name for this child, e.g. 'auth-explorer' (required)"),
