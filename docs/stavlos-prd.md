@@ -155,8 +155,8 @@ flowchart TD
 
         ROOT -- spawn --> EXPL
         ROOT -- spawn --> TEST
-        EXPL -. ChildFinished .-> ROOT
-        TEST -. ChildFinished .-> ROOT
+        EXPL -. agent_response .-> ROOT
+        TEST -. agent_response .-> ROOT
     end
 ```
 
@@ -173,7 +173,7 @@ type Prompt        struct{ Text string }                 // queued; runs after t
 type Steer         struct{ Text string }                 // preempts at the next model-call boundary
 type Cancel        struct{}                              // ends the current turn; agent survives
 type Kill          struct{}                              // tears down the agent and its subtree
-type ChildFinished struct{ ID AgentID; Result Result }   // a child called finish
+type Response struct{ From AgentID; Text string }        // another agent called agent_response
 type Reply         struct{ RequestID string; Answer any } // answer to a permission or question request
 ```
 
@@ -199,21 +199,25 @@ Edge semantics, which protocol clients depend on:
 - **Steer to an idle agent** behaves as a `Prompt`: it starts a turn and is logged as a prompt. Steer is "Prompt, but preempting if busy", and it is what the TUI sends for plain text.
 - **Multiple queued `Prompt`s** are coalesced: when the turn ends, the inbox is drained and every queued prompt is delivered as a separate user message in one next turn.
 - **`Cancel` with a pending permission or question prompt** withdraws it. The daemon emits a withdrawal event, every client removes the prompt, and a late `Reply` is rejected with an explanation (§7.4).
-- **`ChildFinished` to a busy parent** waits in the inbox and is delivered with the next turn's input.
+- **A `Response` to a busy agent** waits in the inbox and is delivered with the next turn's input.
 
-### 6.3 Completion
+### 6.3 Responses
 
-Subagents get an `agent_finish` tool:
+Agents do not finish. A child is a persistent peer: its task is its first prompt, it answers with `agent_response`, and it idles with its context intact until someone prompts it again or its creator kills it.
 
 ```go
-finish(summary string, artifacts []Artifact, status Status)
+agent_response(to AgentID, text string)
 ```
 
-A turn ending and work being done are different events. A subagent may run six turns before declaring completion, and the parent receives a typed payload rather than "whatever the last message said."
+`agent_response` delivers the caller's answer to the agent that prompted it. The answer is logged on the recipient (`agent.response`, so a daemon restart cannot lose an undelivered one), lands in the recipient's mailbox, and **wakes** it between turns: the first answer to arrive starts a new turn carrying every answer that has landed, so several answering together wake the asker once. Nothing is ever injected into a running turn; an answer that lands mid-turn waits for the boundary. Any agent can answer any agent in the session, so a sibling's question gets a reply on the same terms as a parent's task. The caller stays alive after answering.
 
-The root agent does not get `agent_finish`. It has no parent to report to; the session simply idles between turns. `agent_finish` is added to the tool list only for spawned children.
+Because humans can steer any agent, the runtime never guesses who a closing message is for: an agent answers another agent with `agent_response` and answers the human in its normal reply. That rule is in every agent's system prompt.
 
-**Spawning is asynchronous, children never interrupt, and there is no blocking wait.** `spawn` returns immediately with the child's ID. When the child calls `agent_finish`, its result lands in the parent's **mailbox**; that delivery is built in and cannot be switched off. The finish also **wakes** the parent: the first child to finish starts a new turn carrying every result that has arrived, so several finishing together wake the parent once. `agent_status` and `agent_result` let a parent check in early. An opt-out (`unmonitor`) existed briefly and was removed along with the explicit `monitor` wait; a wake the parent cannot lose is the whole point. Arming is logged (`monitor.armed` / `monitor.disarmed`) so it survives a daemon restart. Nothing is ever injected into a running turn: a child finishing mid-turn waits for the boundary. A blocking wait was considered and rejected: it makes the parent deaf for the duration and buys nothing, since the history is intact when the result arrives.
+**The caller owns the lifecycle.** The parent reads the answer when it is woken, prompts the same child again if it needs more (the child keeps everything it learned), and calls `agent_kill` when it is done with it. This replaced an earlier `agent_finish`/`agent_result` pair, under which a child ended itself after one task and a follow-up meant a fresh agent rediscovering everything.
+
+**Spawning is asynchronous, children never interrupt, and there is no blocking wait.** `agent_create` returns immediately with the child's ID and the child's first prompt is the task. A parent with nothing to do until a child answers ends its turn; the answer wakes it. A blocking wait was considered and rejected: it makes the parent deaf for the duration and buys nothing, since the history is intact when the answer arrives. Models were also unreliable with an explicit "wait" tool, calling it at odd moments.
+
+**Limits count busy agents.** The fan-out limit (§6.5) counts agents that are working or have work queued; an idle child waiting for a follow-up costs nothing and does not block new spawns. Kill children you no longer need anyway: the system prompt says so.
 
 ### 6.4 Orchestration tools
 
@@ -221,19 +225,19 @@ Available to any agent whose preset permits them:
 
 | Tool | Effect |
 |---|---|
-| `agent_create(archetype, label, task, model?)` | Create a child agent; returns its ID immediately |
+| `agent_create(archetype, label, task, model?)` | Create a child agent; returns its ID immediately; the task is its first prompt |
 | `agent_prompt(id, text)` | Queue a `Prompt` for any agent in the session |
+| `agent_response(to, text)` | Answer an agent that prompted you; wakes it between turns |
 | `agent_steer(id, text)` | Deliver a `Steer` to any agent in the session (main agent only) |
-| `agent_cancel(id)` | Deliver a `Cancel` |
-| `agent_kill(id)` | Deliver a `Kill` |
+| `agent_cancel(id)` | Deliver a `Cancel` to one of your children |
+| `agent_kill(id)` | Deliver a `Kill` to one of your children when you are done with it |
 
-There is no wait tool. A parent that has nothing to do until a child reports simply ends its turn; the child's `agent_finish` wakes it. Models were unreliable with an explicit "wait" tool (calling it at odd moments), and the turn ending naturally is the same thing.
+There is no wait tool. A parent that has nothing to do until a child answers simply ends its turn; the child's `agent_response` wakes it. Models were unreliable with an explicit "wait" tool (calling it at odd moments), and the turn ending naturally is the same thing.
 
-**Background jobs** use the same mailbox and wake: `bash_async(command)` starts a job and returns its id at once; when it exits the agent is woken with the exit code and output, and `bash_async_kill(id)` stops it. Every agent with `bash` has these. Nothing is armed by hand: a job's exit always wakes its owner, as a child's finish always wakes its parent. Jobs are logged (`monitor.started`, `monitor.fired`, `monitor.stopped`); a job whose process died with the daemon is reported to its owner as lost on restart. File watches and timers were tried and removed: models rarely used them well, and `bash_async` of `sleep` or `inotifywait` covers the need. In the TUI, the permission queue, live children ("agents") and jobs ("async") are three permanent tabs on one strip under the rule that closes the chat, each showing only its count (down to "(0)") until opened; the strip is one stop in the tab cycle (it opens on the first non-empty tab, permission when all are empty) and ←/→ move between tabs.
-| `agent_result(id)` | Retrieve a finished result without blocking |
+**Background jobs** use the same mailbox and wake: `bash_async(command)` starts a job and returns its id at once; when it exits the agent is woken with the exit code and output, and `bash_async_kill(id)` stops it. Every agent with `bash` has these. Nothing is armed by hand: a job's exit always wakes its owner, as an agent's response always wakes the agent it answers. Jobs are logged (`monitor.started`, `monitor.fired`, `monitor.stopped`); a job whose process died with the daemon is reported to its owner as lost on restart. File watches and timers were tried and removed: models rarely used them well, and `bash_async` of `sleep` or `inotifywait` covers the need. In the TUI, the permission queue, live children ("agents") and jobs ("async") are three permanent tabs on one strip under the rule that closes the chat, each showing only its count (down to "(0)") until opened; the strip is one stop in the tab cycle (it opens on the first non-empty tab, permission when all are empty) and ←/→ move between tabs.
 | `agent_status(id?)` | State and usage (§4.4) of one agent, or the whole session tree |
 
-**Prompting is session-wide, steering is the main agent's, lifecycle is parent-only.** Every agent has `agent_prompt` and `agent_status`: a prompt may address any agent in the same session — a child, a sibling, or the caller's parent — and the recipient sees who sent it (`from` on the logged message, `[message from agent …]` in the model's history). `agent_steer` is offered only to the main agent, since a steer cuts into a running turn; subagents that need to redirect someone prompt them instead. `agent_cancel`, `agent_kill` and `agent_result` still work only on the caller's own children: killing an agent someone else created would fire its parent's wake with a surprise. "Same tree" means same session; agents never reach across sessions.
+**Prompting and answering are session-wide, steering is the main agent's, lifecycle is parent-only.** Every agent has `agent_prompt`, `agent_response` and `agent_status`: a prompt may address any agent in the same session — a child, a sibling, or the caller's parent — and the recipient sees who sent it (`from` on the logged message, `[message from agent …]` in the model's history). `agent_steer` is offered only to the main agent, since a steer cuts into a running turn; subagents that need to redirect someone prompt them instead. `agent_cancel` and `agent_kill` work only on the caller's own children: killing an agent someone else created would fire its parent's wake with a surprise. "Same tree" means same session; agents never reach across sessions.
 
 `label` is **required** on spawn. It is the human-facing name in thread titles, pickers, and webhook identities. Optional labels produce unusable UI.
 
@@ -485,7 +489,7 @@ You are a Go engineer working in this repository. Prefer small commits.
 Delegate reading unfamiliar code to an explorer before editing it.
 ```
 
-Only one preset ships built in: `general`, a general-purpose engineer with bash, read, apply_patch and skill that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised presets — explorers, testers, reviewers — are the user's to add, one file each. The orchestration tools (`agent_create`, `agent_cancel`, `agent_kill`, `agent_result`) are implied by a non-empty `spawn` list; `agent_prompt` and `agent_status` every agent has. Presets are the hub — skills, MCP servers, and policy are referenced *by* presets, not parallel to them. Preset creation must be as frictionless as skill creation, or users will reach for skills when a preset is correct.
+Only one preset ships built in: `general`, a general-purpose engineer with bash, read, apply_patch and skill that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised presets — explorers, testers, reviewers — are the user's to add, one file each. The lifecycle tools (`agent_create`, `agent_cancel`, `agent_kill`) are implied by a non-empty `spawn` list; `agent_prompt`, `agent_response` and `agent_status` every agent has. Presets are the hub — skills, MCP servers, and policy are referenced *by* presets, not parallel to them. Preset creation must be as frictionless as skill creation, or users will reach for skills when a preset is correct.
 
 ### 10.4 Skills — `skills/<name>/SKILL.md`
 
@@ -599,7 +603,7 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - Codex (ChatGPT) and Grok adapters, `go-plugin` model seam, `stavlos plugin install`, lockfile, models.dev metadata
 - MCP client
 - Three-layer configuration with trust gate; skills, presets, declarative policy
-- Built-in tools: `bash` (also the search tool: read-only commands such as `grep`, `rg`, `find`, `ls`, and `git status`/`log`/`diff` are allowed by default), `bash_async` and `bash_async_kill` (background jobs), `read`, `apply_patch` (the Codex patch grammar: add, update with context-anchored hunks, delete, move; several files per patch, applied atomically), `agent_finish`, `skill`, and the orchestration set (`agent_create`, `agent_prompt`, `agent_steer`, `agent_cancel`, `agent_kill`, `agent_result`, `agent_status`)
+- Built-in tools: `bash` (also the search tool: read-only commands such as `grep`, `rg`, `find`, `ls`, and `git status`/`log`/`diff` are allowed by default), `bash_async` and `bash_async_kill` (background jobs), `read`, `apply_patch` (the Codex patch grammar: add, update with context-anchored hunks, delete, move; several files per patch, applied atomically), `skill`, the conversation set every agent has (`agent_prompt`, `agent_response`, `agent_status`; `agent_steer` for the main agent), and the lifecycle set for presets that spawn (`agent_create`, `agent_cancel`, `agent_kill`)
 - Usage accounting: per-call `Usage` events, per-agent and per-session aggregates
 - Subscription sign-in for ChatGPT and Grok (device-code flows, token refresh), credential store, `/providers` and `/models` in the TUI, `stavlos auth login|list|logout`
 - Depth and per-session fan-out limits

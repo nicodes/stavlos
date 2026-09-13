@@ -28,7 +28,6 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	turn := a.turn
 	a.state = StateRunning
 	a.cancelTurn = cancel
-	a.finishFlag = false
 	a.yieldFlag = false
 	a.lastError = ""
 	a.mu.Unlock()
@@ -149,14 +148,6 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 				break
 			}
 			a.runTool(turnCtx, turn, c, defs)
-			a.mu.Lock()
-			fin := a.finishFlag
-			a.mu.Unlock()
-			if fin {
-				end("finished", "")
-				a.completeFinish()
-				return
-			}
 		}
 		// monitor: hand control back; ChildFinished envelopes wake the agent.
 		a.mu.Lock()
@@ -263,7 +254,7 @@ func hasDef(defs []model.ToolDef, name string) bool {
 
 func (a *Agent) setState(st State) {
 	a.mu.Lock()
-	if a.state != StateKilled && a.state != StateFinished {
+	if a.state != StateKilled {
 		a.state = st
 	}
 	a.mu.Unlock()
@@ -302,7 +293,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	fmt.Fprintf(&sb, "Working directory: %s\n", a.s.Dir)
 	fmt.Fprintf(&sb, "Your agent id is %s.\n", a.ID)
 	if a.Parent != "" {
-		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) working for a parent agent (id %s). The task you were given arrives as the first message. When it is complete, or cannot be completed, call the agent_finish tool exactly once with a summary; your parent only sees what you put there. Do not call it until the work is actually done. Other agents in this session can message you, and agent_prompt lets you message any of them, including your parent, by id.\n", a.Archetype, a.Label, a.Parent)
+		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) created by a parent agent (id %s). Your task arrives as the first message. When it is done, or cannot be done, answer with agent_response to the agent that asked (its id is in the message); it only sees what you put there. You stay alive afterwards: the parent or another agent may prompt you again, and you keep your context. Other agents in this session can message you, and agent_prompt lets you message any of them, including your parent, by id.\n", a.Archetype, a.Label, a.Parent)
 	}
 	if cfg.AgentsMD != "" {
 		sb.WriteString("\n# Project instructions (AGENTS.md)\n\n" + cfg.AgentsMD + "\n")
@@ -324,13 +315,10 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	if contains(names, "bash") {
 		names = append(names, tools.AsyncNames...)
 	}
-	if a.Parent != "" {
-		names = append(names, "agent_finish")
-	}
 	// Every agent can message every other agent in its session; only the
 	// main agent can steer (a steer cuts into a running turn).
 	names = append(names, tools.MessagingNames...)
-	sb.WriteString("\n# Messaging\nagent_prompt sends a message to any other agent in this session (a child, a sibling, or your parent) by id; it is delivered between that agent's turns, and a message you receive names its sender. agent_status lists every agent in the session with its id and state.\n")
+	sb.WriteString("\n# Messaging\nagent_prompt sends a message to any other agent in this session (a child, a sibling, or your parent) by id; it is delivered between that agent's turns, and a message you receive names its sender. A message from an agent is answered with agent_response addressed to that agent's id (one call per asker; it wakes them between turns, and you stay alive). A message from the human is answered in your normal reply, never with agent_response. agent_status lists every agent in the session with its id and state.\n")
 	if a.Parent == "" {
 		names = append(names, "agent_steer")
 		sb.WriteString("As the main agent you can also agent_steer any agent: the instruction reaches it at its next step, mid-turn, without discarding its work.\n")
@@ -348,7 +336,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 					fmt.Fprintf(&sb, "- %s: %s\n", arch, p.Description)
 				}
 			}
-			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents live in this session. Children run in the background. A child that finishes wakes you with its result as a new message, never mid-turn (a result that lands while you are working arrives when your current turn ends). There is no wait tool: when nothing more can be done until a child reports, end your turn. agent_status and agent_result let you check in early. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Live(), cfg.Limits.MaxAgents)
+			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents busy in this session (idle children do not count). Children run in the background. A child's agent_response wakes you with its answer as a new message, never mid-turn (an answer that lands while you are working arrives when your current turn ends). There is no wait tool: when nothing more can be done until a child answers, end your turn. Children stay alive after answering: agent_prompt one again for a follow-up (it keeps its context) and agent_kill children you no longer need. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Busy(), cfg.Limits.MaxAgents)
 			names = append(names, tools.OrchestrationNames...)
 		} else {
 			fmt.Fprintf(&sb, "You cannot spawn right now (%s). Do the work yourself.\n", why)
@@ -374,28 +362,6 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 		}
 	}
 	return sb.String(), defs
-}
-
-// completeFinish runs after the finish tool: logs AgentFinished, closes
-// done, and delivers ChildFinished to the parent.
-func (a *Agent) completeFinish() {
-	a.mu.Lock()
-	r := a.finished
-	a.state = StateFinished
-	a.mu.Unlock()
-	if r == nil {
-		return
-	}
-	var arts []event.Artifact
-	for _, x := range r.Artifacts {
-		arts = append(arts, event.Artifact{Path: x.Path, Description: x.Description})
-	}
-	_, _ = a.record(context.Background(), event.AgentFinished, event.AgentFinishedPayload{Summary: r.Summary, Status: r.Status, Artifacts: arts})
-	a.closeDone()
-	if p, ok := a.s.Agent(a.Parent); ok {
-		p.deliverChildFinished(*r)
-	}
-	a.kill() // release the goroutine and any children
 }
 
 // compact summarises older turns (PRD §4.3). It picks the turn boundary
@@ -440,21 +406,6 @@ func (a *Agent) compact(ctx context.Context, m model.Model, system string) error
 	}
 	_, err = a.record(context.Background(), event.Compacted, event.CompactedPayload{FromSeq: evs[0].Seq, ToSeq: evs[cut].Seq, Summary: sb.String()})
 	return err
-}
-
-// Finish is called by the finish tool (via the orchestrator).
-func (a *Agent) setFinished(summary, status string, arts []tools.Artifact) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.finished != nil {
-		return errors.New("agent_finish already called")
-	}
-	if a.Parent == "" {
-		return errors.New("the root agent does not call agent_finish; just stop")
-	}
-	a.finished = &tools.ChildResult{ID: a.ID, Label: a.Label, Status: status, Summary: summary, Artifacts: arts}
-	a.finishFlag = true
-	return nil
 }
 
 var _ = json.Marshal

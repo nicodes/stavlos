@@ -9,22 +9,26 @@ import (
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
-	"github.com/nicodes/stavlos/internal/tools"
 )
 
 // State of an agent.
 type State string
 
 const (
-	StateIdle     State = "idle"
-	StateRunning  State = "running"
-	StateBlocked  State = "blocked" // awaiting a permission/question answer
-	StateFinished State = "finished"
-	StateKilled   State = "killed"
+	StateIdle    State = "idle"
+	StateRunning State = "running"
+	StateBlocked State = "blocked" // awaiting a permission/question answer
+	StateKilled  State = "killed"
 )
 
 type queued struct {
 	text, source string
+}
+
+// response is an agent_response waiting in the mailbox: who answered (id
+// and label) and the answer.
+type response struct {
+	from, label, text string
 }
 
 // Agent is one actor: a goroutine with a typed inbox (PRD §6.1).
@@ -47,13 +51,11 @@ type Agent struct {
 	modelID    string
 	state      State
 	turn       int
-	prompts    []queued            // Prompt inbox
-	steers     []queued            // Steer inbox
-	childDone  []tools.ChildResult // ChildFinished inbox
-	events     []event.Event       // this agent's events (projection cache)
+	prompts    []queued      // Prompt inbox
+	steers     []queued      // Steer inbox
+	responses  []response    // answers from other agents (agent_response), not yet delivered
+	events     []event.Event // this agent's events (projection cache)
 	cancelTurn context.CancelFunc
-	finished   *tools.ChildResult
-	finishFlag bool            // set by the finish tool during a turn
 	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
 	armed      map[string]bool // ids (children, monitors) whose completion wakes this agent
 	monitors   map[string]*Monitor
@@ -61,8 +63,7 @@ type Agent struct {
 	wakes      map[string]bool             // ids whose completion is waiting to wake this agent (unmonitor cancels)
 	lastError  string                      // error that ended the most recent turn; cleared when a turn starts
 	children   []string
-	results    map[string]tools.ChildResult // finished children not yet consumed by wait/result
-	done       chan struct{}                // closed on finish or kill
+	done       chan struct{} // closed on kill
 	usage      struct {
 		tokens int
 		cost   float64
@@ -74,7 +75,7 @@ func newAgent(s *Session, id, parent, archetype, label, modelID string, depth in
 	return &Agent{
 		ID: id, Parent: parent, Archetype: archetype, Label: label, Depth: depth,
 		s: s, preset: preset, modelID: modelID, state: StateIdle,
-		wake: make(chan struct{}, 1), results: map[string]tools.ChildResult{}, armed: map[string]bool{}, wakes: map[string]bool{}, monitors: map[string]*Monitor{}, done: make(chan struct{}),
+		wake: make(chan struct{}, 1), armed: map[string]bool{}, wakes: map[string]bool{}, monitors: map[string]*Monitor{}, done: make(chan struct{}),
 	}
 }
 
@@ -126,7 +127,7 @@ func (a *Agent) signal() {
 func (a *Agent) takeInputs() []event.UserMessagePayload {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.state == StateFinished || a.state == StateKilled {
+	if a.state == StateKilled {
 		return nil
 	}
 	if len(a.prompts) == 0 && len(a.steers) == 0 && len(a.wakes) == 0 {
@@ -142,19 +143,15 @@ func (a *Agent) takeInputs() []event.UserMessagePayload {
 		in = append(in, event.UserMessagePayload{Kind: "prompt", Text: q.text, From: a.s.senderLabel(q.source)})
 	}
 	a.steers = nil
-	for _, r := range a.childDone {
-		in = append(in, event.UserMessagePayload{Kind: "child_finished", Text: childText(r)})
+	for _, r := range a.responses {
+		in = append(in, event.UserMessagePayload{Kind: "agent_response", Text: r.text, From: r.label})
 	}
-	a.childDone = nil
+	a.responses = nil
 	for _, r := range a.monDone {
 		in = append(in, event.UserMessagePayload{Kind: "monitor_fired", Text: monitorText(r)})
 	}
 	a.monDone = nil
 	return in
-}
-
-func childText(r tools.ChildResult) string {
-	return fmt.Sprintf("Agent %q (%s) finished with status %s.\n\n%s", r.Label, r.ID, r.Status, r.Summary)
 }
 
 // --- envelope delivery ---
@@ -204,7 +201,7 @@ func (a *Agent) Cancel() {
 // killNow tears the agent down (children are handled by Session.killTree).
 func (a *Agent) killNow() {
 	a.mu.Lock()
-	if a.state == StateKilled || a.state == StateFinished {
+	if a.state == StateKilled {
 		a.mu.Unlock()
 		return
 	}
@@ -214,9 +211,6 @@ func (a *Agent) killNow() {
 	a.closeDone()
 	_, _ = a.s.host.Append(context.Background(), event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentKilled,
 		Payload: event.MustPayload(event.AgentRefPayload{ID: a.ID})})
-	if p, ok := a.s.Agent(a.Parent); ok {
-		p.childGone(a.ID)
-	}
 }
 
 func (a *Agent) closeDone() {
@@ -227,42 +221,15 @@ func (a *Agent) closeDone() {
 	}
 }
 
-// deliverChildFinished is the ChildFinished envelope (PRD §6.3). The result
-// goes to the mailbox; the agent is woken only if it armed a wake for this
-// child with monitor. Otherwise the result waits for result/status or the
-// start of the next turn.
-func (a *Agent) deliverChildFinished(r tools.ChildResult) {
+// deliverResponse is an agent_response addressed to this agent (PRD §6.3):
+// it goes to the mailbox and always wakes the agent between turns, the way
+// a job's exit does. Nothing is injected into a running turn.
+func (a *Agent) deliverResponse(from, label, text string) {
 	a.mu.Lock()
-	a.results[r.ID] = r
-	a.childDone = append(a.childDone, r)
-	wake := a.armed[r.ID]
-	delete(a.armed, r.ID)
-	if wake {
-		a.wakes[r.ID] = true
-	}
+	a.responses = append(a.responses, response{from, label, text})
+	a.wakes["response:"+from] = true
 	a.mu.Unlock()
-	if wake {
-		a.signal()
-	}
-}
-
-func (a *Agent) childGone(id string) {
-	a.mu.Lock()
-	r, ok := a.results[id]
-	if !ok {
-		r = tools.ChildResult{ID: id, Status: "killed", Summary: "The agent was killed before finishing."}
-		a.results[id] = r
-		a.childDone = append(a.childDone, r)
-	}
-	wake := a.armed[id]
-	delete(a.armed, id)
-	if wake {
-		a.wakes[id] = true
-	}
-	a.mu.Unlock()
-	if wake {
-		a.signal()
-	}
+	a.signal()
 }
 
 // hasMonitor reports whether id is one of this agent's running monitors.
@@ -290,8 +257,7 @@ func (a *Agent) addChild(id string) {
 
 // Alive reports whether the agent can still receive work.
 func (a *Agent) Alive() bool {
-	st := a.StateOf()
-	return st != StateFinished && st != StateKilled
+	return a.StateOf() != StateKilled
 }
 
 // StateOf returns the current state.
@@ -387,7 +353,7 @@ func (a *Agent) Cost() float64 {
 	return a.usage.cost
 }
 
-// Done is closed when the agent finishes or is killed.
+// Done is closed when the agent is killed.
 func (a *Agent) Done() <-chan struct{} { return a.done }
 
 // Info builds the protocol view.
@@ -397,12 +363,8 @@ func (a *Agent) Info() protocol.AgentInfo {
 	info := protocol.AgentInfo{
 		ID: a.ID, Session: a.s.ID, Parent: a.Parent, Archetype: a.Archetype, Label: a.Label,
 		Model: a.modelID, Variant: a.variant, Depth: a.Depth, State: string(a.state), Turn: a.turn,
-		Queued:  len(a.prompts) + len(a.steers) + len(a.childDone),
+		Queued:  len(a.prompts) + len(a.steers) + len(a.responses),
 		CostUSD: a.usage.cost, Tokens: a.usage.tokens,
-	}
-	if a.finished != nil {
-		info.Summary = a.finished.Summary
-		info.Status = a.finished.Status
 	}
 	info.LastError = a.lastError
 	mons := make([]*Monitor, 0, len(a.monitors))

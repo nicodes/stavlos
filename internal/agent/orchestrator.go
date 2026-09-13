@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -104,32 +105,27 @@ func (o orchestrator) Kill(parent, id string) error {
 	return nil
 }
 
-// Result returns a finished child's result and marks it consumed so the
-// ChildFinished envelope is not delivered twice.
-func (o orchestrator) Result(parent, id string) (tools.ChildResult, bool, error) {
-	c, err := o.child(parent, id)
+// Respond delivers the caller's answer to another agent in the session; the
+// recipient is woken between turns. The caller stays alive.
+func (o orchestrator) Respond(caller, to, text string) error {
+	c, err := o.peer(caller, to)
 	if err != nil {
-		return tools.ChildResult{}, false, err
+		return err
 	}
-	p, _ := o.s.Agent(parent)
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	r, ok := p.results[id]
-	if !ok {
-		if !c.Alive() {
-			return tools.ChildResult{ID: id, Label: c.Label, Status: string(c.StateOf()), Summary: "(no result)"}, true, nil
-		}
-		return tools.ChildResult{}, false, nil
+	if !c.Alive() {
+		return fmt.Errorf("agent %q is %s", to, c.StateOf())
 	}
-	delete(p.results, id)
-	kept := p.childDone[:0]
-	for _, x := range p.childDone {
-		if x.ID != id {
-			kept = append(kept, x)
-		}
+	from, _ := o.s.Agent(caller)
+	label := caller
+	if from != nil {
+		label = fmt.Sprintf("%s (%s)", from.Label, shortID(caller))
 	}
-	p.childDone = kept
-	return r, true, nil
+	if _, err := o.s.host.Append(context.Background(), event.Event{Session: o.s.ID, Agent: to, Type: event.ResponseReceived,
+		Payload: event.MustPayload(event.ResponsePayload{From: caller, FromLabel: label, Text: text})}); err != nil {
+		return err
+	}
+	c.deliverResponse(caller, label, text)
+	return nil
 }
 
 // Status describes one agent (any in the session) or, with no id, the
@@ -154,14 +150,6 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller})
 	}
 	return out, nil
-}
-
-func (o orchestrator) Finish(agent, summary, status string, artifacts []tools.Artifact) error {
-	a, ok := o.s.Agent(agent)
-	if !ok {
-		return fmt.Errorf("unknown agent %q", agent)
-	}
-	return a.setFinished(summary, status, artifacts)
 }
 
 func (o orchestrator) CanSpawn(agent string) (bool, string) {

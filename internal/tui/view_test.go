@@ -201,7 +201,7 @@ func TestAgentRows(t *testing.T) {
 		{ID: "root", Label: "coder", Archetype: "coder", State: "idle"},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running", Turn: 2, CostUSD: 0.0012},
 		{ID: "c2", Parent: "root", Label: "tester", Archetype: "tester", State: "idle"},
-		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "finished"},
+		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "killed"},
 		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running"},
 	}
 	rows := agentRows(agents, "root", spawned, map[string]string{"c1": "Running the tests now, hold on while I look through all of it"}, now, 100)
@@ -759,8 +759,6 @@ func TestAgentOutcomeColours(t *testing.T) {
 		{protocol.AgentInfo{State: "blocked"}, "working"},
 		{protocol.AgentInfo{State: "idle"}, "idle"},
 		{protocol.AgentInfo{State: "idle", LastError: "boom"}, "error"},
-		{protocol.AgentInfo{State: "finished", Status: "success"}, "complete"},
-		{protocol.AgentInfo{State: "finished", Status: "failure"}, "error"},
 		{protocol.AgentInfo{State: "killed"}, "complete"},
 	}
 	for _, c := range cases {
@@ -768,7 +766,7 @@ func TestAgentOutcomeColours(t *testing.T) {
 			t.Errorf("%+v: got %s want %s", c.a, got, c.want)
 		}
 	}
-	if agentDot(protocol.AgentInfo{State: "idle"}) == agentDot(protocol.AgentInfo{State: "finished"}) {
+	if agentDot(protocol.AgentInfo{State: "idle"}) == agentDot(protocol.AgentInfo{State: "killed"}) {
 		t.Error("idle and complete should use different glyphs")
 	}
 }
@@ -1036,9 +1034,17 @@ func TestParentAgentCreateLineFollowsChildEvents(t *testing.T) {
 	if tone() != ToneWorking {
 		t.Fatalf("child running: tone %v", tone())
 	}
-	m.applyEvent(ev(5, "c1", event.AgentFinished, event.AgentFinishedPayload{Summary: "done", Status: "success"}))
+	m.applyEvent(ev(5, "c1", event.TurnStarted, event.TurnPayload{Turn: 1}))
+	if tone() != ToneWorking {
+		t.Fatalf("child mid-turn: tone %v", tone())
+	}
+	m.applyEvent(ev(6, "c1", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}))
 	if tone() != ToneNone {
-		t.Fatalf("child finished: tone %v", tone())
+		t.Fatalf("child idle after answering: tone %v", tone())
+	}
+	m.applyEvent(ev(7, "c1", event.AgentKilled, event.AgentRefPayload{ID: "c1"}))
+	if tone() != ToneError {
+		t.Fatalf("child killed: tone %v", tone())
 	}
 }
 

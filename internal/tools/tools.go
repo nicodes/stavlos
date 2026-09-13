@@ -71,22 +71,14 @@ type Orchestrator interface {
 	Steer(parent, id, text string) error
 	Cancel(parent, id string) error
 	Kill(parent, id string) error
-	Result(parent, id string) (ChildResult, bool, error)
 	Status(parent, id string) ([]ChildStatus, error)
-	// Finish records the caller's completion; the loop ends the turn after it.
-	Finish(agent, summary, status string, artifacts []Artifact) error
+	// Respond delivers the caller's answer to an agent that prompted it; the
+	// recipient is woken between turns. The caller stays alive.
+	Respond(caller, to, text string) error
 	// CanSpawn reports whether depth/fan-out limits currently permit a spawn.
 	CanSpawn(agent string) (bool, string)
 	// Archetypes the caller may spawn.
 	Archetypes(agent string) []string
-}
-
-type ChildResult struct {
-	ID        string     `json:"id"`
-	Label     string     `json:"label"`
-	Status    string     `json:"status"`
-	Summary   string     `json:"summary"`
-	Artifacts []Artifact `json:"artifacts,omitempty"`
 }
 
 type ChildStatus struct {
@@ -113,8 +105,8 @@ type Set map[string]Tool
 func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
-		bashTool{}, readTool{}, patchTool{}, skillTool{}, finishTool{},
-		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, resultTool{}, statusTool{},
+		bashTool{}, readTool{}, patchTool{}, skillTool{}, responseTool{},
+		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, statusTool{},
 		bashAsyncTool{}, bashKillTool{},
 	} {
 		s[t.Def().Name] = t
@@ -123,13 +115,13 @@ func Builtin() Set {
 }
 
 // OrchestrationNames are the tools implied by a non-empty spawn list.
-var OrchestrationNames = []string{"agent_create", "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status"}
+var OrchestrationNames = []string{"agent_create", "agent_cancel", "agent_kill"}
 
 // MessagingNames are offered to every agent: any agent may prompt any
 // other in its session and see the tree. Steering is the main agent's
 // alone (it is offered separately), and lifecycle tools stay with the
 // parent (see OrchestrationNames).
-var MessagingNames = []string{"agent_prompt", "agent_status"}
+var MessagingNames = []string{"agent_prompt", "agent_response", "agent_status"}
 
 // AsyncNames are offered to every agent that has bash.
 var AsyncNames = []string{"bash_async", "bash_async_kill"}

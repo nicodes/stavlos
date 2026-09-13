@@ -173,7 +173,7 @@ func TestToolLine(t *testing.T) {
 		{"agent_steer", `{"id":"ag_1","text":"go"}`, "Agent steer  ag_1"},
 		{"agent_cancel", `{"id":"ag_1"}`, "Agent cancel  ag_1"},
 		{"agent_kill", `{"id":"ag_1"}`, "Agent kill  ag_1"},
-		{"agent_result", `{"id":"ag_2"}`, "Agent result  ag_2"},
+		{"agent_response", `{"to":"ag_2","text":"found it"}`, "Agent response  ag_2"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
 		{"agent_finish", `{"status":"success","summary":"x"}`, "Agent complete  success"},
 		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
@@ -981,15 +981,20 @@ func TestAgentCreateLineTracksChild(t *testing.T) {
 	// more lines after it do not lose the tie
 	tr.Apply(mk(4, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c2", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
 	tr.Apply(mk(5, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c2", Name: "bash", Output: "ok"}))
-	tr.ChildDone("x1", "success")
+	tr.ChildState("x1", "idle")
 	if line().Tone != ToneNone {
-		t.Fatalf("after success the line should be grey: %v", line().Tone)
+		t.Fatalf("once the child idles the line should be grey: %v", line().Tone)
 	}
-	// a second child that fails turns its own line red; the first stays grey
+	tr.ChildState("x1", "running")
+	if line().Tone != ToneWorking {
+		t.Fatalf("a follow-up turn makes it yellow again: %v", line().Tone)
+	}
+	tr.ChildState("x1", "idle")
+	// a second child that is killed turns its own line red; the first stays grey
 	tr.Apply(mk(6, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c3", Name: "agent_create", Input: json.RawMessage(`{"archetype":"tester","label":"checks","task":"test"}`)}))
 	tr.Apply(mk(7, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c3", Name: "agent_create", Output: "spawned checks (tester) as x2"}))
 	tr.ChildSpawned("x2")
-	tr.ChildDone("x2", "failure")
+	tr.ChildState("x2", "killed")
 	var tones []Tone
 	for _, l := range tr.All() {
 		if l.Kind == LineTool && l.tool == "agent_create" {
