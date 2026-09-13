@@ -104,20 +104,20 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("coder", "anthropic/claude-opus-5", 0)); got != "Coder  ·  claude-opus-5 anthropic" {
+	if got := stripANSI(metaLine("coder", "anthropic/claude-opus-5", 0)); got != "Coder    claude-opus-5 anthropic" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("coder", "", 0)); got != "Coder  ·  no model — /models" {
+	if got := stripANSI(metaLine("coder", "", 0)); got != "Coder    no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "ollama/llama3", 2)); got != "Scout  ·  llama3 ollama  ·  2 queued" {
+	if got := stripANSI(metaLine("scout", "ollama/llama3", 2)); got != "Scout    llama3 ollama  ·  2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
 }
 
 func TestInputBoxAndPromptWidth(t *testing.T) {
-	box := stripANSI(inputBox("› hi", "Coder  ·  x"))
-	if box != "› hi\nCoder  ·  x" {
+	box := stripANSI(inputBox("› hi", "Coder    x"))
+	if box != "› hi\nCoder    x" {
 		t.Fatalf("input box: %q", box)
 	}
 
@@ -876,7 +876,7 @@ func TestFooterSitsUnderInputAboveKeyBar(t *testing.T) {
 	meta, footer, rule := -1, -1, -1
 	for i, l := range lines {
 		switch {
-		case strings.HasPrefix(l, "Coder  ·  "):
+		case strings.HasPrefix(l, "Coder    "):
 			meta = i
 		case strings.HasPrefix(l, "/repo/project"):
 			footer = i
