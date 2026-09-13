@@ -69,7 +69,15 @@ func run(args []string) error {
 		}
 		defer c.Close()
 		d := cwd(*dir)
-		s, err := c.CreateSession(ctx, d, *modelID, *root)
+		// A session only counts once someone has prompted it: if the
+		// directory's newest session is still untouched, reuse it instead
+		// of leaving another empty one behind.
+		var s protocol.SessionInfo
+		if list, lerr := c.Sessions(ctx, d, false); lerr == nil && len(list) > 0 && list[0].Title == "" && *modelID == "" && *root == "" {
+			s, err = c.ResumeSession(ctx, list[0].ID)
+		} else {
+			s, err = c.CreateSession(ctx, d, *modelID, *root)
+		}
 		if err != nil {
 			return err
 		}
@@ -394,7 +402,7 @@ func initConfig(args []string) error {
   "model": %q,
   "rootAgent": "coder",
   "limits": { "maxDepth": 3, "maxAgents": 6 },
-  "escalation": { "claimTimeout": "30s", "answerTimeout": "5m", "default": "deny" },
+  "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
   "policy": {
     // read-only commands (grep, rg, find, ls, git status/log/diff, …) are allowed by the built-in defaults
     "bash":  { "git push*": "ask", "rm -rf*": "deny" },
