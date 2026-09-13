@@ -187,11 +187,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			_ = e.Decode(&p)
 			pendingResponses[e.Agent] = append(pendingResponses[e.Agent], response{p.From, p.FromLabel, p.Text})
 			if a, ok := s.agents[e.Agent]; ok {
-				if a.awaiting[p.From] > 1 {
-					a.awaiting[p.From]--
-				} else {
-					delete(a.awaiting, p.From)
-				}
+				delete(a.awaiting, p.From) // an answer settles every question asked of that agent
 			}
 		case event.ToolCallStarted:
 			var p event.ToolStartedPayload
