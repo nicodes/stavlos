@@ -740,6 +740,10 @@ func (m Model) homeView(width, height int) string {
 	logo := logoLines(width)
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lines = append(lines, "")
+	if pb := m.promptView(boxW); pb != "" {
+		add(pb, boxW)
+		lines = append(lines, "")
+	}
 	if av := m.agentsView(boxW); av != "" {
 		add(av, boxW)
 		lines = append(lines, "")
@@ -747,9 +751,6 @@ func (m Model) homeView(width, height int) string {
 	if mv := m.monitorsView(boxW); mv != "" {
 		add(mv, boxW)
 		lines = append(lines, "")
-	}
-	if pb := m.promptView(boxW); pb != "" {
-		add(pb, boxW)
 	}
 	if pv := m.paletteViewFor(boxW); pv != "" {
 		add(pv, boxW)
@@ -790,14 +791,15 @@ func (m Model) homeView(width, height int) string {
 func (m Model) sessionView(width, height int) string {
 	cw := m.contentWidth()
 	parts := []string{m.vp.View(), ""}
+	// Section order matches the tab cycle: permission, agents, monitors.
+	if pb := m.promptView(cw); pb != "" {
+		parts = append(parts, pb)
+	}
 	if av := m.agentsView(cw); av != "" {
 		parts = append(parts, av)
 	}
 	if mv := m.monitorsView(cw); mv != "" {
 		parts = append(parts, mv)
-	}
-	if pb := m.promptView(cw); pb != "" {
-		parts = append(parts, pb)
 	}
 	if pv := m.paletteViewFor(cw); pv != "" {
 		parts = append(parts, pv)
