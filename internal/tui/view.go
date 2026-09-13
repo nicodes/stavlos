@@ -893,10 +893,10 @@ func (m Model) sessionView(width, height int) string {
 		return left
 	}
 	sep := styleSep.Render(strings.TrimSuffix(strings.Repeat("│\n", height), "\n"))
-	return lipgloss.JoinHorizontal(lipgloss.Top, left, sep, m.sidebarView(height))
+	return lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(height), sep, left) // the sidebar sits on the left
 }
 
-// sidebarView is the right panel: session summary, agent tree, prompts.
+// sidebarView is the left panel: session summary, agent tree, prompts.
 func (m Model) sidebarView(height int) string {
 	id := m.sessionID
 	if len(id) > 8 {
