@@ -103,7 +103,7 @@ type Model struct {
 	promptInput textinput.Model // answer field of a question prompt
 	sbCursor    int
 	palIdx      int      // highlighted row in the "/" command palette
-	agCursor    int      // highlighted row in the background section while it has focus
+	agCursor    int      // highlighted row in the agents/async tab while it has focus
 	history     []string // prompts sent from this client (and replayed human prompts)
 	histIdx     int      // == len(history) when editing a new line
 	histDraft   string   // unsent text saved while browsing history
@@ -127,7 +127,8 @@ const (
 	focusInput      focus = iota // the text input (typing, enter sends)
 	focusChat                    // the transcript: a cursor walks its items
 	focusPermission              // the pending prompt box (y/n/a, question field)
-	focusBackground              // the background section above the input: live children + async jobs
+	focusAgents                  // the agents tab above the input: live children
+	focusAsync                   // the async tab above the input: running bash_async jobs
 	focusSidebar                 // the agent tree (↑/↓ enter)
 )
 
@@ -368,14 +369,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // --- focus ---
 
 // focusOrder lists the sections tab cycles through, top to bottom: the chat
-// (once there is one), the background and permission tabs (always, even
+// (once there is one), the agents, async and permission tabs (always, even
 // when empty), the input, and the sidebar (while visible).
 func (m *Model) focusOrder() []focus {
 	order := make([]focus, 0, 4)
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
-	order = append(order, focusBackground, focusPermission)
+	order = append(order, focusAgents, focusAsync, focusPermission)
 	order = append(order, focusInput)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
@@ -449,18 +450,18 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		}
 	case focusSidebar:
 		m.sbCursor = m.selected
-	case focusBackground:
+	case focusAgents, focusAsync:
 		m.agCursor = 0
 	}
 	return nil
 }
 
-// backgroundKey handles keys while the background section has focus: ↑/↓
-// (or j/k) move over the rows, enter on an agent row selects that agent
-// and returns to the input, esc returns without changing the selection.
-func (m *Model) backgroundKey(msg tea.KeyMsg) tea.Cmd {
+// agentsKey handles keys while the agents tab has focus: ↑/↓ (or j/k) move
+// over the live children, enter selects the child under the cursor and
+// returns to the input, esc returns without changing the selection.
+func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
 	kids := m.liveChildren()
-	n := len(kids) + len(m.runningJobs())
+	n := len(kids)
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.setFocus(focusInput)
@@ -473,7 +474,7 @@ func (m *Model) backgroundKey(msg tea.KeyMsg) tea.Cmd {
 			m.agCursor = (m.agCursor + 1) % n
 		}
 	case key.Matches(msg, keys.Submit):
-		if n > 0 && m.agCursor%n < len(kids) { // agent rows come first; job rows are informational
+		if n > 0 {
 			if i := m.findAgent(kids[m.agCursor%n].ID); i >= 0 && i != m.selected {
 				m.selected = i
 				m.follow = true
@@ -481,6 +482,25 @@ func (m *Model) backgroundKey(msg tea.KeyMsg) tea.Cmd {
 			}
 		}
 		return m.setFocus(focusInput)
+	}
+	return nil
+}
+
+// asyncKey handles keys while the async tab has focus: ↑/↓ (or j/k) move
+// over the running jobs (informational only), esc returns to the input.
+func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
+	n := len(m.runningJobs())
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.setFocus(focusInput)
+	case key.Matches(msg, keys.SelUp), msg.String() == "k":
+		if n > 0 {
+			m.agCursor = ((m.agCursor-1)%n + n) % n
+		}
+	case key.Matches(msg, keys.SelDown), msg.String() == "j":
+		if n > 0 {
+			m.agCursor = (m.agCursor + 1) % n
+		}
 	}
 	return nil
 }
@@ -576,8 +596,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	}
 
 	switch m.focus {
-	case focusBackground:
-		return m.backgroundKey(msg)
+	case focusAgents:
+		return m.agentsKey(msg)
+	case focusAsync:
+		return m.asyncKey(msg)
 	case focusSidebar:
 		return m.sidebarKey(msg)
 	case focusChat:
