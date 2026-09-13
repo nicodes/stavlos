@@ -91,6 +91,7 @@ type Model struct {
 	showTree      bool      // right sidebar toggle (/tree, ctrl+b)
 	hideKeys      bool      // the key bar (divider + legend) at the bottom is hidden; /help shows it
 	cancelArmed   time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
+	quitArmed     time.Time // when ctrl+c was last pressed; a second within cancelWindow quits
 	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
 	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
 	sel           selection // mouse text selection (drag to select, release to copy)
@@ -1204,6 +1205,19 @@ func (m *Model) itemAtRow(row int) (int, bool) {
 // cancelWindow is how long a first esc stays armed for the second.
 const cancelWindow = 3 * time.Second
 
+// ctrlC is the two-step quit: the first press clears the input, closes any
+// dialog, focuses the input and warns; a second within cancelWindow quits.
+func (m *Model) ctrlC() tea.Cmd {
+	if !m.quitArmed.IsZero() && time.Since(m.quitArmed) <= cancelWindow {
+		return tea.Quit
+	}
+	m.quitArmed = time.Now()
+	m.cancelArmed = time.Time{}
+	m.ov = nil
+	m.input.Reset()
+	return tea.Batch(m.setFocus(focusInput), m.input.Focus(), m.setStatusFor("press ctrl+c again to quit", true, cancelWindow))
+}
+
 // escCancel is esc on an empty input: while the selected agent is busy, the
 // first press warns and arms, the second within cancelWindow cancels the
 // turn. Idle agents ignore it.
@@ -1302,8 +1316,9 @@ func (m *Model) agentExpanded(id string) map[int]bool {
 
 func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if key.Matches(msg, keys.Quit) {
-		return tea.Quit
+		return m.ctrlC()
 	}
+	m.quitArmed = time.Time{} // any other key disarms the two-step quit
 	if m.ov != nil {
 		return m.overlayKey(msg)
 	}
@@ -2534,6 +2549,7 @@ func (m *Model) bindSession(info protocol.SessionInfo) tea.Cmd {
 	m.chatCursor = 0
 	m.agCursor = 0
 	m.cancelArmed = time.Time{}
+	m.quitArmed = time.Time{}
 	m.reconciled = false
 	m.loading = false
 	m.replayTo = 0

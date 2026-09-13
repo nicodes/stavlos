@@ -1143,6 +1143,41 @@ func TestEscTwiceCancelsTheTurn(t *testing.T) {
 	}
 }
 
+func TestCtrlCTwiceQuits(t *testing.T) {
+	m := sessionModel()
+	m.input.SetValue("draft")
+	m.setFocus(focusChat)
+	c := tea.KeyMsg{Type: tea.KeyCtrlC}
+	cmd := press(&m, c)
+	if cmd == nil || m.input.Value() != "" || m.focus != focusInput || m.quitArmed.IsZero() || !strings.Contains(m.status, "ctrl+c again") {
+		t.Fatalf("first ctrl+c should clear, focus the input and warn: value=%q focus=%v status=%q", m.input.Value(), m.focus, m.status)
+	}
+	if msg := cmd(); msg != nil {
+		if _, quit := msg.(tea.QuitMsg); quit {
+			t.Fatal("first ctrl+c must not quit")
+		}
+	}
+	// typing in between disarms
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	if !m.quitArmed.IsZero() {
+		t.Fatal("typing should disarm the quit")
+	}
+	press(&m, c)
+	cmd = press(&m, c)
+	if cmd == nil {
+		t.Fatal("second ctrl+c should quit")
+	}
+	if _, quit := cmd().(tea.QuitMsg); !quit {
+		t.Fatalf("second ctrl+c should quit, got %T", cmd())
+	}
+	// an expired arm starts over
+	m.quitArmed = time.Now().Add(-2 * cancelWindow)
+	cmd = press(&m, c)
+	if _, quit := cmd().(tea.QuitMsg); quit {
+		t.Fatal("after the window a fresh ctrl+c should re-arm rather than quit")
+	}
+}
+
 func TestSessionItemAndBind(t *testing.T) {
 	created := time.Now().Add(-3 * time.Hour).Format(time.RFC3339)
 	it := sessionItem(protocol.SessionInfo{ID: "s1", Title: "fix the login bug", Created: created, Model: "openai/gpt-5", CostUSD: 0.12, Live: 2}, false)
