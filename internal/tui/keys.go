@@ -6,7 +6,7 @@ import "github.com/charmbracelet/bubbles/key"
 // textinput (editing) are not listed.
 type keyMap struct {
 	Quit        key.Binding
-	NextSection key.Binding // tab: cycle focus chat → permission → input → sidebar
+	NextSection key.Binding // tab: cycle focus chat → background → permission → input → sidebar
 	PrevSection key.Binding
 	NextAgent   key.Binding
 	PrevAgent   key.Binding
@@ -65,7 +65,7 @@ var keys = keyMap{
 
 // helpKeyLines is the key reference appended to /help.
 var helpKeyLines = []string{
-	"focus: tab/shift+tab cycle the sections chat → permission → input → sidebar · esc returns to the input",
+	"focus: tab/shift+tab cycle the sections chat → background → permission → input → sidebar · esc returns to the input",
 	"input: enter send · ↑/↓ prompt history · esc clear · ctrl+n/ctrl+p cycle agents · pgup/pgdn scroll",
 	"chat: ↑/↓ or j/k move by item · enter expand/collapse a tool's output · pgup/pgdn page · home/end first/last",
 	"permission: y allow once · a allow for session · n deny · questions: type in the box, enter answers",

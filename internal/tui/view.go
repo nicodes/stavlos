@@ -740,12 +740,12 @@ func (m Model) homeView(width, height int) string {
 	logo := logoLines(width)
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lines = append(lines, "")
-	if pb := m.promptView(boxW); pb != "" {
-		add(pb, boxW)
-		lines = append(lines, "")
-	}
 	if bv := m.backgroundView(boxW); bv != "" {
 		add(bv, boxW)
+		lines = append(lines, "")
+	}
+	if pb := m.promptView(boxW); pb != "" {
+		add(pb, boxW)
 		lines = append(lines, "")
 	}
 	if pv := m.paletteViewFor(boxW); pv != "" {
@@ -786,13 +786,14 @@ func (m Model) homeView(width, height int) string {
 // sessionView is the transcript over the input box, plus the sidebar.
 func (m Model) sessionView(width, height int) string {
 	cw := m.contentWidth()
-	parts := []string{m.vp.View(), ""}
-	// Section order matches the tab cycle: permission, background.
-	if pb := m.promptView(cw); pb != "" {
-		parts = append(parts, pb)
-	}
+	// A rule closes the chat area; the sections below it follow the tab
+	// cycle: background, then the permission box right above the input.
+	parts := []string{m.vp.View(), styleRule.Render(strings.Repeat("─", cw))}
 	if bv := m.backgroundView(cw); bv != "" {
 		parts = append(parts, bv)
+	}
+	if pb := m.promptView(cw); pb != "" {
+		parts = append(parts, pb)
 	}
 	if pv := m.paletteViewFor(cw); pv != "" {
 		parts = append(parts, pv)

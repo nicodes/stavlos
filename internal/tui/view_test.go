@@ -671,22 +671,31 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("collapsed prompt:\n%s", pv)
 	}
 
-	// tab order: chat is skipped on the home view; permission, agents, input
+	// tab order: chat is skipped on the home view; background, permission, input
 	order := m.focusOrder()
-	if len(order) != 3 || order[0] != focusPermission || order[1] != focusBackground || order[2] != focusInput {
+	if len(order) != 3 || order[0] != focusBackground || order[1] != focusPermission || order[2] != focusInput {
 		t.Fatalf("order %v", order)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission
-	if m.focus != focusPermission || strings.Count(stripANSI(m.promptView(100)), "\n") < 2 {
-		t.Fatalf("permission should expand when focused: focus=%v\n%s", m.focus, stripANSI(m.promptView(100)))
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // permission → agents
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → background
 	if m.focus != focusBackground {
 		t.Fatalf("focus %v", m.focus)
 	}
 	av = stripANSI(m.backgroundView(100))
 	if strings.Count(av, "\n") != 2 || !strings.Contains(av, "▶") {
 		t.Fatalf("expanded agents:\n%s", av)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // background → permission
+	if m.focus != focusPermission || strings.Count(stripANSI(m.promptView(100)), "\n") < 2 {
+		t.Fatalf("permission should expand when focused: focus=%v\n%s", m.focus, stripANSI(m.promptView(100)))
+	}
+	// the permission box is drawn below the background section, right above the input
+	full := stripANSI(m.View())
+	if bi, pi := strings.Index(full, "background"), strings.Index(full, "allow ·"); bi < 0 || pi < 0 || bi > pi {
+		t.Fatalf("permission should render below background:\n%s", full)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyShiftTab}) // back to background for the selection test
+	if m.focus != focusBackground {
+		t.Fatalf("focus %v", m.focus)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
