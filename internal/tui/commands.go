@@ -127,22 +127,6 @@ func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.
 	}
 }
 
-func setAgentModelCmd(ctx context.Context, c *client.Client, agent, modelID string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return resultMsg{"agent model → " + modelID, c.SetAgentModel(ctx, agent, modelID)}
-	}
-}
-
-func setSessionModelCmd(ctx context.Context, c *client.Client, session, modelID string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return resultMsg{"session model → " + modelID, c.SetSessionModel(ctx, session, modelID)}
-	}
-}
-
 func presetsCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)

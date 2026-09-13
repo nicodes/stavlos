@@ -17,7 +17,7 @@ func TestPaletteMatches(t *testing.T) {
 		t.Fatalf("bare slash lists everything: %d", len(all))
 	}
 	pm := paletteMatches("/mo")
-	if len(pm) != 2 || pm[0].Name != "/models" || pm[1].Name != "/model" {
+	if len(pm) != 1 || pm[0].Name != "/models" {
 		t.Fatalf("prefix filter: %+v", pm)
 	}
 	if pm := paletteMatches("/conn"); len(pm) != 1 || pm[0].Name != "/providers" {
@@ -31,7 +31,7 @@ func TestPaletteMatches(t *testing.T) {
 		t.Fatalf("view:\n%s", view)
 	}
 	help := helpLines()
-	if !strings.Contains(strings.Join(help, "\n"), "/session-model <provider/id>") {
+	if !strings.Contains(strings.Join(help, "\n"), "/models") {
 		t.Fatalf("help generated from the registry:\n%s", strings.Join(help, "\n"))
 	}
 }
@@ -45,17 +45,19 @@ func TestPaletteKeys(t *testing.T) {
 			press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 		}
 	}
-	type_("/mo")
+	type_("/")
 	if pv := m.paletteViewFor(80); !strings.Contains(stripANSI(pv), "/models") {
 		t.Fatalf("palette not shown:\n%s", pv)
 	}
-	// ↓ moves the highlight instead of walking history; tab completes
+	// ↓ moves the highlight instead of walking history; tab completes the
+	// highlighted command (the second in the list takes an argument, so a
+	// space follows and the palette closes)
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
 	if m.palIdx != 1 {
 		t.Fatalf("palIdx %d", m.palIdx)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab})
-	if m.input.Value() != "/model " || m.focus != focusInput {
+	if m.input.Value() != commands[1].Name+" " || m.focus != focusInput {
 		t.Fatalf("tab completion: %q focus %v", m.input.Value(), m.focus)
 	}
 	if pv := m.paletteViewFor(80); pv != "" {
