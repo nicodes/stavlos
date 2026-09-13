@@ -123,7 +123,6 @@ func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.
 	}
 }
 
-
 // answerPromptCmd claims then replies in one step. Claiming happens only
 // here, i.e. only once the user pressed a key (PRD §7.4).
 func answerPromptCmd(ctx context.Context, c *client.Client, id, answer string) tea.Cmd {
