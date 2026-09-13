@@ -448,8 +448,7 @@ JSONC with a `$schema` for editor validation. Every key is optional; anything om
   // Keyed by tool, then by argument pattern. Most specific match wins.
   "policy": {
     "bash":  { "git push*": "ask", "rm -rf*": "deny", "*": "allow" },
-    "edit":  { "src/**": "allow", "**": "ask" },
-    "write": { "src/**": "allow", "**": "ask" },
+    "apply_patch": { "src/**": "allow", "**": "ask" },   // every path a patch touches is checked; the strictest wins
     "read":  "allow",
     "agent_create": "allow",
     "skill": "allow",
@@ -471,7 +470,7 @@ A preset defines an archetype. The filename is the archetype name and becomes th
 description: Implements features and fixes bugs in this repo
 model: anthropic/claude-sonnet-5      # optional; omitted → inherits parent's active model
 loop: default                          # optional; only 'default' ships in v1
-tools: [bash, read, write, edit, finish]
+tools: [bash, read, apply_patch, finish]
 skills: [go-conventions]               # skill descriptions this agent carries in context
 mcp: [github]                          # servers from stavlos.json this agent may reach
 spawn: [explorer, tester]              # archetypes it may spawn; omit → cannot spawn
@@ -598,7 +597,7 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - Codex (ChatGPT) and Grok adapters, `go-plugin` model seam, `stavlos plugin install`, lockfile, models.dev metadata
 - MCP client
 - Three-layer configuration with trust gate; skills, presets, declarative policy
-- Built-in tools: `bash` (with background monitors; also the search tool: read-only commands such as `grep`, `rg`, `find`, `ls`, and `git status`/`log`/`diff` are allowed by default), `read`, `write`, `edit`, `finish`, `skill`, `watch`, `timer`, `monitors`, and the orchestration set (`agent_create`, `agent_prompt`, `agent_steer`, `agent_cancel`, `agent_kill`, `agent_result`, `agent_status`), plus `monitor` and `unmonitor` for every agent
+- Built-in tools: `bash` (with background monitors; also the search tool: read-only commands such as `grep`, `rg`, `find`, `ls`, and `git status`/`log`/`diff` are allowed by default), `read`, `apply_patch` (the Codex patch grammar: add, update with context-anchored hunks, delete, move; several files per patch, applied atomically), `finish`, `skill`, `watch`, `timer`, `monitors`, and the orchestration set (`agent_create`, `agent_prompt`, `agent_steer`, `agent_cancel`, `agent_kill`, `agent_result`, `agent_status`), plus `monitor` and `unmonitor` for every agent
 - Usage accounting: per-call `Usage` events, per-agent and per-session aggregates
 - Subscription sign-in for ChatGPT and Grok (device-code flows, token refresh), credential store, `/provider` and `/models` in the TUI, `stavlos auth login|list|logout`
 - Depth and per-session fan-out limits

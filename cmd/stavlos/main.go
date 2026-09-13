@@ -398,8 +398,7 @@ func initConfig(args []string) error {
   "policy": {
     // read-only commands (grep, rg, find, ls, git status/log/diff, …) are allowed by the built-in defaults
     "bash":  { "git push*": "ask", "rm -rf*": "deny" },
-    "edit":  { "**": "ask" },
-    "write": { "**": "ask" },
+    "apply_patch": { "**": "ask" },
     "read":  "allow"
   }
 }

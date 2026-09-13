@@ -190,7 +190,15 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		return
 	}
 	arg := t.PolicyArg(c.Input)
-	verb := a.policy().Decide(c.Name, arg)
+	pol := a.policy()
+	verb := pol.Decide(c.Name, arg)
+	if ma, ok := t.(tools.MultiArg); ok { // apply_patch: every path it touches
+		for _, x := range ma.PolicyArgs(c.Input) {
+			if v := pol.Decide(c.Name, x); v.Rank() > verb.Rank() {
+				verb, arg = v, x
+			}
+		}
+	}
 	key := c.Name + "\x00" + arg
 	a.s.mu.RLock()
 	always := a.s.allowAlways[key]
