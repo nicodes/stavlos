@@ -1101,6 +1101,11 @@ func (m *Model) applyPromptNotification(n protocol.PromptNotification) {
 	case "answered", "withdrawn", "defaulted":
 		m.removePrompt(n.Prompt.ID)
 	}
+	// The turn indicator switches between "working…" and "permission
+	// requested" on prompt changes, which arrive outside the event stream.
+	if n.Prompt.Agent == m.selectedID() {
+		m.refreshViewport()
+	}
 }
 
 func (m *Model) currentPrompt() *protocol.PromptInfo {
@@ -1403,15 +1408,22 @@ func (m *Model) refreshViewport() {
 	if m.chatCursor < 0 {
 		m.chatCursor = 0
 	}
-	working := false
+	working, waiting := false, false
 	if t := m.transcripts[m.selectedID()]; t != nil {
 		working = t.InTurn()
+	}
+	for _, p := range m.prompts {
+		if p.Agent == m.selectedID() {
+			waiting = true
+			break
+		}
 	}
 	content, rows := renderAll(lines, RenderOpts{
 		Width:    m.vp.Width,
 		Details:  m.details,
 		Spinner:  m.sp.View(),
 		Working:  working,
+		Waiting:  waiting,
 		Expanded: m.expanded[m.selectedID()],
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,

@@ -838,6 +838,10 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	if !tr.InTurn() || !strings.HasSuffix(out, "\n\n   ⠋ working…") {
 		t.Fatalf("mid-turn should end with the indicator:\n%s", out)
 	}
+	// blocked on a permission: an exclamation mark and a different label
+	if s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Waiting: true}); !strings.HasSuffix(stripANSI(s), "\n\n   ! permission requested") || strings.Contains(s, "working") {
+		t.Fatalf("waiting indicator:\n%s", stripANSI(s))
+	}
 	// the indicator is not an item: the cursor/expand bookkeeping ignores it
 	if _, rows := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Working: true}); len(rows) != tr.Items() {
 		t.Fatalf("rows %d, items %d", len(rows), tr.Items())

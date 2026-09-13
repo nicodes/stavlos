@@ -108,6 +108,7 @@ type RenderOpts struct {
 	Details  bool
 	Spinner  string
 	Working  bool // a turn is in progress: append the ephemeral "working…" line
+	Waiting  bool // …and it is blocked on a permission: "! permission requested" instead
 	Expanded map[int]bool
 	Cursor   int
 	Focused  bool
@@ -209,7 +210,12 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		if n > 0 {
 			b.WriteString("\n\n")
 		}
-		b.WriteString("   " + o.Spinner + " " + styleDim.Render("working…")) // gutter + leader, like every chat line
+		// Gutter + leader, like every chat line.
+		if o.Waiting {
+			b.WriteString("   " + styleWarn.Render("!") + " " + styleWarn.Render("permission requested"))
+		} else {
+			b.WriteString("   " + o.Spinner + " " + styleDim.Render("working…"))
+		}
 	}
 	return b.String(), rows
 }
