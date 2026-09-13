@@ -1761,3 +1761,17 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 		t.Fatalf("hover over the sidebar should release the chat: %v", m.focus)
 	}
 }
+
+func TestSidebarRowsLeaveOneColumn(t *testing.T) {
+	m := sessionModel()
+	m.showTree = true
+	m.width, m.height = 120, 40
+	m.agents = []protocol.AgentInfo{{ID: "a", Label: "a-very-long-agent-label-that-will-not-fit-here", Archetype: "general", State: "idle"}}
+	m.selected = 0
+	m.layout()
+	for _, row := range m.treeRows(sidebarWidth - 1) {
+		if w := ansi.StringWidth(stripANSI(row)); w != sidebarWidth-1 {
+			t.Fatalf("a truncated row should be %d wide, got %d: %q", sidebarWidth-1, w, stripANSI(row))
+		}
+	}
+}
