@@ -610,10 +610,9 @@ func placeholderIndex(t time.Time) int {
 // --- prompt (input) box ---
 
 const (
-	promptBoxMin  = 75
-	sidebarWidth  = 32
-	sidebarMinW   = 100
-	inputBoxLines = 2
+	promptBoxMin = 75
+	sidebarWidth = 32
+	sidebarMinW  = 100
 )
 
 // promptBoxWidth is the home-state box width: max(75, 70%) capped at width-4.

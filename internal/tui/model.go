@@ -15,9 +15,11 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/nicodes/stavlos/internal/event"
@@ -81,7 +83,7 @@ type Model struct {
 	presets []protocol.PresetInfo
 
 	vp    viewport.Model
-	input textinput.Model
+	input textarea.Model // grows with the text, up to inputMaxLines
 	sp    spinner.Model
 
 	width, height int
@@ -174,9 +176,34 @@ func (l *loginFlow) reset() {
 	*l = loginFlow{}
 }
 
+// inputMaxLines caps how tall the input grows before it scrolls inside.
+const inputMaxLines = 8
+
+// newInputArea builds the message input: a textarea that starts one line
+// tall and grows with the text (see fitInput), no line numbers, no cursor
+// line highlight, enter sends and ctrl+j (or alt+enter) breaks a line.
+func newInputArea() textarea.Model {
+	ta := textarea.New()
+	ta.Prompt = "› "
+	ta.ShowLineNumbers = false
+	ta.CharLimit = 0
+	ta.MaxHeight = inputMaxLines
+	ta.SetHeight(1)
+	ta.EndOfBufferCharacter = ' '
+	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"))
+	plain := lipgloss.NewStyle()
+	ta.FocusedStyle.Base, ta.BlurredStyle.Base = plain, plain
+	ta.FocusedStyle.CursorLine, ta.BlurredStyle.CursorLine = plain, plain
+	ta.FocusedStyle.EndOfBuffer, ta.BlurredStyle.EndOfBuffer = plain, plain
+	ta.FocusedStyle.Text, ta.BlurredStyle.Text = plain, plain
+	ta.FocusedStyle.Placeholder, ta.BlurredStyle.Placeholder = styleDim, styleDim
+	// The prompt chevron carries the focus colour (there is no box border).
+	ta.FocusedStyle.Prompt, ta.BlurredStyle.Prompt = styleBorderUser, styleBorderMuted
+	return ta
+}
+
 func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
-	ti := textinput.New()
-	ti.Prompt = "› "
+	ti := newInputArea()
 	ti.Placeholder = placeholders[placeholderIndex(time.Now())]
 	ti.Focus()
 
@@ -214,7 +241,7 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 // Init starts the cursor blink, the spinner, the placeholder cycle and the
 // reconcile snapshot.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.sessionID))
+	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.sessionID))
 }
 
 // Update is the single-threaded state machine.
@@ -705,6 +732,33 @@ func (m Model) highlightSelection(frame string) string {
 	return strings.Join(lines, "\n")
 }
 
+// fitInput sizes the input to its wrapped text: one line for an empty or
+// short message, more as it wraps or gains lines, up to inputMaxLines
+// (beyond that the textarea scrolls inside).
+func (m *Model) fitInput() {
+	w := m.input.Width() - len([]rune(m.input.Prompt))
+	if w < 1 {
+		w = 1
+	}
+	rows := 0
+	for _, line := range strings.Split(m.input.Value(), "\n") {
+		if line == "" {
+			rows++
+			continue
+		}
+		rows += strings.Count(ansi.Wrap(line, w, ""), "\n") + 1
+	}
+	if rows < 1 {
+		rows = 1
+	}
+	if rows > inputMaxLines {
+		rows = inputMaxLines
+	}
+	if rows != m.input.Height() {
+		m.input.SetHeight(rows)
+	}
+}
+
 // mouseHover is mouse movement: over a chat item it does what ↑/↓ do (the
 // chat takes focus, the cursor moves to that item, it previews); leaving
 // the chat area gives focus back to the input, without scrolling. Focus the
@@ -800,9 +854,9 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 		if isTab(m.focus) && m.focus != focusPermission {
 			m.agCursor = y - lay.strip - 1
 		}
-	case y == lay.input: // the input line
+	case y >= lay.input && y < lay.meta: // the input lines
 		return m.setFocus(focusInput)
-	case y == lay.input+1: // the meta row: its parts are buttons
+	case y == lay.meta: // the meta row: its parts are buttons
 		switch m.metaHit(x) {
 		case metaYolo:
 			return setYoloCmd(m.ctx, m.c, m.sessionID, false)
@@ -891,7 +945,8 @@ func (m *Model) metaHit(x int) metaPart {
 type rowLayout struct {
 	strip    int // the tab strip line
 	stripEnd int // last row of the strip block (its body when a tab is open)
-	input    int // the input line (the meta row follows)
+	input    int // first row of the input (it may span several)
+	meta     int // the meta row under the input
 }
 
 // rows derives the row layout the same way sessionView stacks its parts.
@@ -906,6 +961,7 @@ func (m *Model) rows() rowLayout {
 		y += strings.Count(pv, "\n") + 1
 	}
 	lay.input = y
+	lay.meta = y + m.input.Height()
 	return lay
 }
 
@@ -1109,12 +1165,18 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			m.palIdx = (m.palIdx - 1 + len(pm)) % len(pm)
 			return nil
 		}
+		if m.input.Line() > 0 { // inside a multi-line draft ↑ moves up a line
+			break
+		}
 		m.historyMove(-1)
 		return nil
 	case key.Matches(msg, keys.SelDown):
 		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
 			m.palIdx = (m.palIdx + 1) % len(pm)
 			return nil
+		}
+		if m.input.Line() < m.input.LineCount()-1 { // ↓ moves down a line until the last
+			break
 		}
 		m.historyMove(1)
 		return nil
@@ -1820,16 +1882,12 @@ func (m *Model) layout() {
 		return
 	}
 	boxW := m.boxWidth()
-	m.input.Width = boxW - len([]rune(m.input.Prompt)) - 1 // prompt + cursor
-	// The prompt chevron carries the focus colour (there is no box border).
-	m.input.PromptStyle = styleBorderMuted
-	if m.focus == focusInput {
-		m.input.PromptStyle = styleBorderUser
-	}
+	m.input.SetWidth(boxW)
+	m.fitInput()
 	m.promptInput.Width = boxW - 4 - len([]rune(m.promptInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
-	bodyH := m.height - kb - 2 - inputBoxLines // key bar, blank + chat rule, input + meta row
+	bodyH := m.height - kb - 2 - (m.input.Height() + 1) // key bar, blank + chat rule, input lines + meta row
 	if sv := m.sectionsView(m.contentWidth()); sv != "" {
 		bodyH -= strings.Count(sv, "\n") + 1 + 1 // plus the blank line below
 	}
