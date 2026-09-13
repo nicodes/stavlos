@@ -177,7 +177,7 @@ func TestMonitorRows(t *testing.T) {
 	spawned := map[string]time.Time{"c1": now.Add(-75 * time.Second), "c2": now.Add(-3 * time.Second)}
 	agents := []protocol.AgentInfo{
 		{ID: "root", Label: "coder", Archetype: "coder", State: "idle"},
-		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running", Turn: 2, CostUSD: 0.0012},
+		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running", Turn: 2, CostUSD: 0.0012, Monitored: true},
 		{ID: "c2", Parent: "root", Label: "tester", Archetype: "tester", State: "idle"},
 		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "finished"},
 		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running"},
@@ -188,6 +188,9 @@ func TestMonitorRows(t *testing.T) {
 	}
 	if !strings.Contains(rows[0], "scout (explorer)") || !strings.Contains(rows[0], "turn 2") || !strings.Contains(rows[0], "1m15s") || !strings.Contains(rows[0], "⠋") {
 		t.Fatalf("%q", rows[0])
+	}
+	if !strings.Contains(rows[0], "wakes parent") || strings.Contains(rows[1], "wakes parent") {
+		t.Fatalf("armed marker: %q", rows)
 	}
 	if !strings.Contains(rows[1], "tester") || !strings.Contains(rows[1], "3s") || strings.Contains(rows[1], "turn") {
 		t.Fatalf("%q", rows[1])

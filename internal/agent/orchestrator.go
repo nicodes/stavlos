@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -64,8 +65,9 @@ func (o orchestrator) Kill(parent, id string) error {
 	return nil
 }
 
-// Monitor marks the parent's turn to end after the current tool batch. The
-// children already deliver ChildFinished envelopes; nothing else is needed.
+// Monitor arms a wake for the listed (or all live) children and marks the
+// parent's turn to end after the current tool batch. A child that already
+// finished still gets delivered: the yield starts a turn that drains it.
 func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus, error) {
 	p, ok := o.s.Agent(parent)
 	if !ok {
@@ -79,23 +81,57 @@ func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus,
 		}
 	}
 	var out []tools.ChildStatus
+	var armed []string
 	for _, id := range ids {
 		c, err := o.child(parent, id)
 		if err != nil {
 			return nil, err
 		}
 		in := c.Info()
-		out = append(out, tools.ChildStatus{ID: c.ID, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD})
+		out = append(out, tools.ChildStatus{ID: c.ID, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Monitored: true})
+		if c.Alive() {
+			armed = append(armed, id)
+		}
 	}
-	// Yield if anything is live or a result is already waiting in the inbox;
-	// a child that finished before monitor was called must still be delivered.
 	p.mu.Lock()
+	for _, id := range armed {
+		p.armed[id] = true
+	}
 	pending := len(p.childDone) > 0
 	if len(out) > 0 || pending {
 		p.yieldFlag = true
 	}
 	p.mu.Unlock()
+	if len(armed) > 0 {
+		_, _ = p.record(context.Background(), event.MonitorArmed, event.MonitorPayload{IDs: armed})
+	}
 	return out, nil
+}
+
+// Unmonitor disarms wakes; children and results are untouched.
+func (o orchestrator) Unmonitor(parent string, ids []string) ([]string, error) {
+	p, ok := o.s.Agent(parent)
+	if !ok {
+		return nil, fmt.Errorf("unknown agent %q", parent)
+	}
+	p.mu.Lock()
+	if len(ids) == 0 {
+		for id := range p.armed {
+			ids = append(ids, id)
+		}
+	}
+	var disarmed []string
+	for _, id := range ids {
+		if p.armed[id] {
+			delete(p.armed, id)
+			disarmed = append(disarmed, id)
+		}
+	}
+	p.mu.Unlock()
+	if len(disarmed) > 0 {
+		_, _ = p.record(context.Background(), event.MonitorDisarmed, event.MonitorPayload{IDs: disarmed})
+	}
+	return disarmed, nil
 }
 
 // Result returns a finished child's result and marks it consumed so the
@@ -116,7 +152,6 @@ func (o orchestrator) Result(parent, id string) (tools.ChildResult, bool, error)
 		return tools.ChildResult{}, false, nil
 	}
 	delete(p.results, id)
-	// drop the pending inbox copy
 	kept := p.childDone[:0]
 	for _, x := range p.childDone {
 		if x.ID != id {
@@ -143,7 +178,7 @@ func (o orchestrator) Status(parent, id string) ([]tools.ChildStatus, error) {
 			return nil, err
 		}
 		in := c.Info()
-		out = append(out, tools.ChildStatus{ID: c.ID, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary})
+		out = append(out, tools.ChildStatus{ID: c.ID, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, Monitored: in.Monitored})
 	}
 	return out, nil
 }

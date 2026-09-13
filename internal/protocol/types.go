@@ -193,6 +193,7 @@ type AgentInfo struct {
 	Tokens    int     `json:"tokens"`            // input+output total
 	Summary   string  `json:"summary,omitempty"` // finish summary
 	Status    string  `json:"status,omitempty"`  // finish status
+	Monitored bool    `json:"monitored"`         // parent armed a wake for this child
 }
 type AgentTreeParams struct {
 	V       int    `json:"v"`

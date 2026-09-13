@@ -482,3 +482,127 @@ func TestMonitorKeepsParentResponsive(t *testing.T) {
 		t.Fatalf("turn 3: %+v", te)
 	}
 }
+
+func TestUnmonitoredChildDoesNotWake(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		// turn 1: spawn two children and just stop (no monitor)
+		func(model.Request) model.Response {
+			return model.Response{Blocks: []model.Block{
+				{Type: model.BlockToolUse, ID: "c1", Name: "spawn", Input: json.RawMessage(`{"archetype":"explorer","label":"one","task":"a"}`)},
+				{Type: model.BlockToolUse, ID: "c2", Name: "spawn", Input: json.RawMessage(`{"archetype":"explorer","label":"two","task":"b"}`)},
+			}, StopReason: model.StopToolUse}
+		},
+		func(model.Request) model.Response { return text("spawned, carrying on") },
+		// turn 2 (user prompted): both results are handed over at turn start
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1]
+			joined := ""
+			for _, b := range last.Blocks {
+				joined += b.Text + "\n"
+			}
+			if !strings.Contains(joined, `"one"`) || !strings.Contains(joined, `"two"`) || !strings.Contains(joined, "anything new?") {
+				t.Errorf("turn 2 input missing results or prompt: %q", joined)
+			}
+			return text("both done")
+		},
+	}
+	fm.childSteps = []func(model.Request) model.Response{
+		func(model.Request) model.Response { return call("k", "finish", `{"summary":"x","status":"success"}`) },
+		func(model.Request) model.Response { return call("k", "finish", `{"summary":"y","status":"success"}`) },
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
+	e := h.waitFor(event.TurnEnded, root)
+	var te event.TurnEndedPayload
+	_ = e.Decode(&te)
+	if te.Turn != 1 {
+		t.Fatalf("%+v", te)
+	}
+	h.waitFor(event.AgentFinished, "")
+	h.waitFor(event.AgentFinished, "")
+	// no wake: the parent stays idle at turn 1
+	time.Sleep(300 * time.Millisecond)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].Turn != 1 || agents[0].State != "idle" {
+		t.Fatalf("parent was woken without monitor: %+v", agents[0])
+	}
+	if agents[1].Monitored || agents[2].Monitored {
+		t.Fatalf("children should not be armed: %+v", agents[1:])
+	}
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "anything new?")
+	e = h.waitFor(event.TurnEnded, root)
+	_ = e.Decode(&te)
+	if te.Turn != 2 || te.Reason != "end_turn" {
+		t.Fatalf("%+v", te)
+	}
+}
+
+func TestUnmonitorDisarms(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	release := make(chan struct{})
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			return call("c1", "spawn", `{"archetype":"explorer","label":"slow","task":"a"}`)
+		},
+		func(model.Request) model.Response { return call("c2", "monitor", `{}`) },
+		// turn 2 (user prompted while armed): disarm, then stop
+		func(model.Request) model.Response { return call("c3", "unmonitor", `{}`) },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1]
+			if !strings.Contains(last.Blocks[0].Content, "disarmed") {
+				t.Errorf("unmonitor result: %+v", last)
+			}
+			return text("ok, not waiting")
+		},
+	}
+	fm.childSteps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			<-release
+			return call("k", "finish", `{"summary":"late","status":"success"}`)
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
+	h.waitFor(event.MonitorArmed, root)
+	h.waitFor(event.TurnEnded, root)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if !agents[1].Monitored {
+		t.Fatalf("child should be armed: %+v", agents[1])
+	}
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "never mind")
+	h.waitFor(event.MonitorDisarmed, root)
+	e := h.waitFor(event.TurnEnded, root)
+	var te event.TurnEndedPayload
+	_ = e.Decode(&te)
+	if te.Turn != 2 {
+		t.Fatalf("%+v", te)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[1].Monitored {
+		t.Fatalf("child still armed: %+v", agents[1])
+	}
+	close(release)
+	h.waitFor(event.AgentFinished, "")
+	time.Sleep(300 * time.Millisecond)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].Turn != 2 || agents[0].State != "idle" {
+		t.Fatalf("parent woken after unmonitor: %+v", agents[0])
+	}
+}

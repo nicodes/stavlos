@@ -22,6 +22,9 @@ const (
 	AgentKilled       Type = "agent.killed"        // AgentRefPayload
 	AgentModelChanged Type = "agent.model_changed" // ModelChangedPayload
 
+	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: parent asked to be woken by these children
+	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
+
 	PromptQueued  Type = "prompt.queued"  // TextPayload
 	SteerReceived Type = "steer.received" // TextPayload
 
@@ -105,6 +108,11 @@ type AgentRefPayload struct {
 type TextPayload struct {
 	Text   string `json:"text"`
 	Source string `json:"source,omitempty"`
+}
+
+// MonitorPayload lists child ids whose finish wakes (or no longer wakes) the agent.
+type MonitorPayload struct {
+	IDs []string `json:"ids"`
 }
 
 type TurnPayload struct {

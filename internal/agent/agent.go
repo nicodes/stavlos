@@ -51,8 +51,9 @@ type Agent struct {
 	events     []event.Event       // this agent's events (projection cache)
 	cancelTurn context.CancelFunc
 	finished   *tools.ChildResult
-	finishFlag bool // set by the finish tool during a turn
-	yieldFlag  bool // set by the monitor tool: end the turn after this batch
+	finishFlag bool            // set by the finish tool during a turn
+	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
+	armed      map[string]bool // child ids whose finish wakes this agent (monitor)
 	children   []string
 	results    map[string]tools.ChildResult // finished children not yet consumed by wait/result
 	done       chan struct{}                // closed on finish or kill
@@ -67,7 +68,7 @@ func newAgent(s *Session, id, parent, archetype, label, modelID string, depth in
 	return &Agent{
 		ID: id, Parent: parent, Archetype: archetype, Label: label, Depth: depth,
 		s: s, preset: preset, modelID: modelID, state: StateIdle,
-		wake: make(chan struct{}, 1), results: map[string]tools.ChildResult{}, done: make(chan struct{}),
+		wake: make(chan struct{}, 1), results: map[string]tools.ChildResult{}, armed: map[string]bool{}, done: make(chan struct{}),
 	}
 }
 
@@ -210,21 +211,43 @@ func (a *Agent) closeDone() {
 	}
 }
 
-// deliverChildFinished is the ChildFinished envelope (PRD §6.3).
+// deliverChildFinished is the ChildFinished envelope (PRD §6.3). The result
+// goes to the mailbox; the agent is woken only if it armed a wake for this
+// child with monitor. Otherwise the result waits for result/status or the
+// start of the next turn.
 func (a *Agent) deliverChildFinished(r tools.ChildResult) {
 	a.mu.Lock()
 	a.results[r.ID] = r
 	a.childDone = append(a.childDone, r)
+	wake := a.armed[r.ID]
+	delete(a.armed, r.ID)
 	a.mu.Unlock()
-	a.signal()
+	if wake {
+		a.signal()
+	}
 }
 
 func (a *Agent) childGone(id string) {
 	a.mu.Lock()
-	if _, ok := a.results[id]; !ok {
-		a.results[id] = tools.ChildResult{ID: id, Status: "killed", Summary: "The agent was killed before finishing."}
+	r, ok := a.results[id]
+	if !ok {
+		r = tools.ChildResult{ID: id, Status: "killed", Summary: "The agent was killed before finishing."}
+		a.results[id] = r
+		a.childDone = append(a.childDone, r)
 	}
+	wake := a.armed[id]
+	delete(a.armed, id)
 	a.mu.Unlock()
+	if wake {
+		a.signal()
+	}
+}
+
+// IsArmed reports whether this agent will be woken when child id finishes.
+func (a *Agent) IsArmed(id string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.armed[id]
 }
 
 func (a *Agent) addChild(id string) {
@@ -299,6 +322,11 @@ func (a *Agent) Info() protocol.AgentInfo {
 		info.Summary = a.finished.Summary
 		info.Status = a.finished.Status
 	}
+	a.mu.Unlock()
+	if p, ok := a.s.Agent(a.Parent); ok {
+		info.Monitored = p.IsArmed(a.ID)
+	}
+	a.mu.Lock()
 	return info
 }
 

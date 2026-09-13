@@ -740,9 +740,10 @@ func (m Model) connected() bool {
 	return true
 }
 
-// monitorsView lists the selected agent's live children: everything it is
-// waiting to be woken by. A child that finishes leaves this block and its
-// result shows up in the transcript instead.
+// monitorsView lists the selected agent's live children. "wakes parent"
+// marks the ones it armed with monitor; the rest report silently to its
+// mailbox. A child that finishes leaves this block and its result shows up
+// in the transcript when the parent next takes a turn.
 func (m Model) monitorsView(width int) string {
 	sel := m.selectedID()
 	if sel == "" {
@@ -768,6 +769,9 @@ func monitorRows(agents []protocol.AgentInfo, parent string, spawned map[string]
 			lead = styleRunning.Render(spinner)
 		}
 		meta := []string{a.State}
+		if a.Monitored {
+			meta = append(meta, styleAccent.Render("wakes parent"))
+		}
 		if a.Turn > 0 {
 			meta = append(meta, fmt.Sprintf("turn %d", a.Turn))
 		}

@@ -42,10 +42,14 @@ type Orchestrator interface {
 	Steer(parent, id, text string) error
 	Cancel(parent, id string) error
 	Kill(parent, id string) error
-	// Monitor is the only way to await children: the caller's turn ends
-	// after this tool batch and each child's result wakes it as a message.
-	// A child's finish always wakes its parent; monitor just yields now.
+	// Monitor arms a wake: the caller's turn ends after this tool batch and
+	// the finish of any listed child starts a new turn carrying its result.
+	// Without monitor a finish never wakes the parent; results wait in the
+	// mailbox for result/status or the parent's next turn.
 	Monitor(parent string, ids []string) ([]ChildStatus, error)
+	// Unmonitor disarms wakes for the listed children (all if empty). The
+	// children keep running and their results stay available.
+	Unmonitor(parent string, ids []string) ([]string, error)
 	Result(parent, id string) (ChildResult, bool, error)
 	Status(parent, id string) ([]ChildStatus, error)
 	// Finish records the caller's completion; the loop ends the turn after it.
@@ -72,6 +76,7 @@ type ChildStatus struct {
 	Turn      int     `json:"turn"`
 	CostUSD   float64 `json:"cost_usd"`
 	Summary   string  `json:"summary,omitempty"`
+	Monitored bool    `json:"monitored"` // a wake is armed for this child
 }
 
 type Artifact struct {
@@ -87,7 +92,7 @@ func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
 		bashTool{}, readTool{}, writeTool{}, editTool{}, grepTool{}, globTool{}, skillTool{}, finishTool{},
-		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, monitorTool{}, resultTool{}, statusTool{},
+		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, monitorTool{}, unmonitorTool{}, resultTool{}, statusTool{},
 	} {
 		s[t.Def().Name] = t
 	}
@@ -95,7 +100,7 @@ func Builtin() Set {
 }
 
 // OrchestrationNames are the tools implied by a non-empty spawn list.
-var OrchestrationNames = []string{"spawn", "send", "steer", "cancel", "kill", "monitor", "result", "status"}
+var OrchestrationNames = []string{"spawn", "send", "steer", "cancel", "kill", "monitor", "unmonitor", "result", "status"}
 
 func schema(props map[string]any, required ...string) json.RawMessage {
 	m := map[string]any{"type": "object", "properties": props}
