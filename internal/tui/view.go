@@ -917,9 +917,6 @@ func (m Model) sidebarView(height int) string {
 		styleBold.Render("agents") + m.sidebarFocusHint(),
 	}
 	rows = append(rows, m.treeRows(inner)...)
-	if n := len(m.prompts); n > 0 {
-		rows = append(rows, "", styleWarn.Render(fmt.Sprintf("△ %d pending", n)))
-	}
 	if len(rows) > height {
 		rows = rows[:height]
 	}
