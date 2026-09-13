@@ -887,7 +887,7 @@ func (m Model) promptView(width int) string {
 	}
 	focused := m.focus == focusPermission
 	if !focused {
-		return promptSummary(p, m.agentLabel(p.Agent), len(m.prompts), width)
+		return promptSummary(p, len(m.prompts), width)
 	}
 	inner := width - 4
 	if inner < 20 {
@@ -961,35 +961,10 @@ func (m Model) promptView(width int) string {
 	return box.Width(inner).Render(strings.Join(lines, "\n"))
 }
 
-// promptSummary is the one-line form of a pending prompt shown while the
-// permission section is not focused.
-func promptSummary(p *protocol.PromptInfo, agent string, pending, width int) string {
-	var what string
-	switch p.Kind {
-	case "question":
-		what = "question: " + firstLine(p.Question)
-	case "trust":
-		what = "trust the project configuration?"
-	default:
-		what = "permission: " + p.Tool
-		var in map[string]any
-		if json.Unmarshal(p.Input, &in) == nil {
-			for _, k := range []string{"command", "path", "patch"} {
-				if v, ok := in[k].(string); ok && v != "" {
-					what += "  " + firstLine(v)
-					break
-				}
-			}
-		}
-	}
-	head := styleWorking.Render("?") + " " + styleBold.Render(what)
-	if agent != "" {
-		head += styleDim.Render(" · " + agent)
-	}
-	if pending > 1 {
-		head += styleDim.Render(fmt.Sprintf(" · +%d more", pending-1))
-	}
-	head += styleDim.Render("  tab to answer")
+// promptSummary is the one-line form shown while the permission section is
+// not focused: just the count of pending prompts, e.g. "? permission (2)".
+func promptSummary(p *protocol.PromptInfo, pending int, width int) string {
+	head := styleWorking.Render("?") + " " + styleBold.Render(fmt.Sprintf("permission (%d)", pending)) + styleDim.Render("  tab to answer")
 	return ansi.Truncate(head, width, "…")
 }
 
@@ -1078,20 +1053,9 @@ func (m Model) backgroundView(width int) string {
 }
 
 // backgroundSummary is the one-line form shown while the section is not
-// focused: "background (3)  ⑂ scout running · ⑂ checks idle · ⚙  go test".
+// focused: just the count of live children and jobs, e.g. "background (3)".
 func backgroundSummary(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, width int) string {
-	parts := make([]string, 0, len(kids)+len(jobs))
-	for _, a := range kids {
-		state := a.State
-		if agentOutcome(a) == "error" {
-			state = "error"
-		}
-		parts = append(parts, agentGlyph(a)+" "+styleBold.Render(a.Label)+" "+styleDim.Render(state))
-	}
-	for _, j := range jobs {
-		parts = append(parts, jobGlyph(j)+" "+styleBold.Render(j.Label))
-	}
-	head := styleDim.Render(fmt.Sprintf("background (%d)", len(parts))) + "  " + strings.Join(parts, styleDim.Render(" · "))
+	head := styleDim.Render(fmt.Sprintf("background (%d)", len(kids)+len(jobs))) + styleDim.Render("  tab to open")
 	return ansi.Truncate(head, width, "…")
 }
 
