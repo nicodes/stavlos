@@ -170,7 +170,7 @@ func TestToolLine(t *testing.T) {
 		{"agent_kill", `{"id":"ag_1"}`, "Agent kill  ag_1"},
 		{"agent_result", `{"id":"ag_2"}`, "Agent result  ag_2"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
-		{"agent_finish", `{"status":"success","summary":"x"}`, "Agent finish  success"},
+		{"agent_finish", `{"status":"success","summary":"x"}`, "Agent complete  success"},
 		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
 		{"bash", ``, "Bash"},
 	}
