@@ -94,10 +94,18 @@ type Model struct {
 	statusToken int
 
 	confirmKill bool
-	loading     bool  // replaying events up to replayTo
-	replayTo    int64 // seq from reconcile
-	treeTimer   bool  // a debounced tree refresh is scheduled
-	reconciled  bool  // the first reconcile landed
+
+	// Focus: the sidebar takes ↑/↓/enter when focused; otherwise ↑/↓ in
+	// the input walk the prompt history.
+	sidebarFocus bool
+	sbCursor     int
+	history      []string // prompts sent from this client (and replayed human prompts)
+	histIdx      int      // == len(history) when editing a new line
+	histDraft    string   // unsent text saved while browsing history
+	loading      bool     // replaying events up to replayTo
+	replayTo     int64    // seq from reconcile
+	treeTimer    bool     // a debounced tree refresh is scheduled
+	reconciled   bool     // the first reconcile landed
 
 	ov        *overlay                // open modal, or nil
 	providers []protocol.ProviderInfo // last provider.list result
@@ -342,6 +350,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.setStatus("kill cancelled", false)
 	}
 
+	if m.sidebarFocus && m.sidebarVisible() {
+		return m.sidebarKey(msg)
+	}
+	m.sidebarFocus = false
+
 	switch {
 	case key.Matches(msg, keys.NextAgent):
 		return m.moveSelection(1)
@@ -366,18 +379,10 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.follow = true
 		return nil
 	case key.Matches(msg, keys.SelUp):
-		if m.input.Value() == "" {
-			return m.moveSelection(-1)
-		}
-		m.vp.ScrollUp(1)
-		m.follow = m.vp.AtBottom()
+		m.historyMove(-1)
 		return nil
 	case key.Matches(msg, keys.SelDown):
-		if m.input.Value() == "" {
-			return m.moveSelection(1)
-		}
-		m.vp.ScrollDown(1)
-		m.follow = m.vp.AtBottom()
+		m.historyMove(1)
 		return nil
 	case key.Matches(msg, keys.Clear):
 		m.input.Reset()
@@ -411,6 +416,7 @@ func (m *Model) submit() tea.Cmd {
 	if text == "" {
 		return nil
 	}
+	m.pushHistory(text)
 	if p := m.currentPrompt(); p != nil && p.Kind == "question" && !strings.HasPrefix(text, "/") {
 		if n, err := strconv.Atoi(text); err == nil && n >= 1 && n <= len(p.Options) {
 			text = p.Options[n-1]
@@ -562,6 +568,14 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 					Label: p.Label, Model: p.Model, Depth: p.Depth, State: "idle",
 				})
 			}
+		}
+	case event.PromptQueued:
+		var p event.TextPayload
+		if m.loading && ev.Decode(&p) == nil && strings.HasPrefix(p.Source, "human:") && p.Text != "" {
+			if n := len(m.history); n == 0 || m.history[n-1] != p.Text {
+				m.history = append(m.history, p.Text)
+			}
+			m.histIdx = len(m.history)
 		}
 	case event.SessionModelChanged:
 		var p event.ModelChangedPayload
@@ -748,9 +762,110 @@ func (m *Model) moveSelection(delta int) tea.Cmd {
 func (m *Model) toggleTree() tea.Cmd {
 	m.showTree = !m.showTree
 	if m.showTree && m.width < sidebarMinW {
+		m.showTree = false
 		return m.setStatus(fmt.Sprintf("sidebar needs %d columns", sidebarMinW), true)
 	}
+	m.layout()
+	if m.showTree {
+		m.focusSidebar()
+	} else {
+		m.focusInput()
+	}
 	return nil
+}
+
+// focusSidebar moves keyboard focus to the agent list.
+func (m *Model) focusSidebar() {
+	m.sidebarFocus = true
+	m.sbCursor = m.selected
+	m.input.Blur()
+}
+
+// focusInput returns keyboard focus to the text input.
+func (m *Model) focusInput() {
+	m.sidebarFocus = false
+	m.input.Focus()
+}
+
+// sidebarKey handles keys while the sidebar has focus: ↑/↓ (or j/k) move
+// the cursor, enter selects that agent and returns to the input, esc
+// returns without changing the selection, ctrl+b closes the sidebar.
+func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
+	n := len(m.agents)
+	switch {
+	case key.Matches(msg, keys.ToggleTree):
+		return m.toggleTree()
+	case key.Matches(msg, keys.OvClose), key.Matches(msg, keys.NextAgent):
+		m.focusInput()
+		return nil
+	case key.Matches(msg, keys.SelUp), msg.String() == "k":
+		if n > 0 {
+			m.sbCursor = ((m.sbCursor-1)%n + n) % n
+		}
+		return nil
+	case key.Matches(msg, keys.SelDown), msg.String() == "j":
+		if n > 0 {
+			m.sbCursor = (m.sbCursor + 1) % n
+		}
+		return nil
+	case key.Matches(msg, keys.PageUp):
+		m.vp.PageUp()
+		m.follow = m.vp.AtBottom()
+		return nil
+	case key.Matches(msg, keys.PageDown):
+		m.vp.PageDown()
+		m.follow = m.vp.AtBottom()
+		return nil
+	case key.Matches(msg, keys.Submit):
+		if n > 0 && m.sbCursor != m.selected {
+			m.selected = m.sbCursor
+			m.follow = true
+			m.refreshViewport()
+		}
+		m.focusInput()
+		return nil
+	}
+	return nil
+}
+
+// --- prompt history ---
+
+// pushHistory records a submitted line; consecutive duplicates collapse.
+func (m *Model) pushHistory(text string) {
+	if n := len(m.history); n == 0 || m.history[n-1] != text {
+		m.history = append(m.history, text)
+	}
+	m.histIdx = len(m.history)
+	m.histDraft = ""
+}
+
+// historyMove walks the history: -1 older, +1 newer. Moving past the newest
+// entry restores whatever was being typed before browsing began.
+func (m *Model) historyMove(delta int) {
+	n := len(m.history)
+	if n == 0 {
+		return
+	}
+	if m.histIdx == n {
+		m.histDraft = m.input.Value()
+	}
+	idx := m.histIdx + delta
+	if idx < 0 {
+		idx = 0
+	}
+	if idx > n {
+		idx = n
+	}
+	if idx == m.histIdx {
+		return
+	}
+	m.histIdx = idx
+	if idx == n {
+		m.input.SetValue(m.histDraft)
+	} else {
+		m.input.SetValue(m.history[idx])
+	}
+	m.input.CursorEnd()
 }
 
 func (m *Model) transcript(id string) *Transcript {

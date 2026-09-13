@@ -75,7 +75,7 @@ var helpLines = []string{
 	"  /tips                            toggle the home-screen tips",
 	"  /help                            this list",
 	"  /quit                            exit",
-	"keys: tab/shift+tab or ctrl+n/ctrl+p cycle agents · ↑/↓ (empty input) select · pgup/pgdn scroll · esc clear · ctrl+b sidebar",
+	"keys: tab/shift+tab or ctrl+n/ctrl+p cycle agents · ↑/↓ prompt history · ctrl+b sidebar (↑/↓ enter to pick an agent) · pgup/pgdn scroll · esc clear · ctrl+b sidebar",
 	"overlays: ↑/↓ or ctrl+p/ctrl+n move · enter select · esc close · type to filter · pgup/pgdn page",
 	"sign-in: open the URL on any device and enter the code · o open in browser · esc cancel",
 	"prompts: y allow · n deny · a allow always · questions: type and press enter",
