@@ -770,9 +770,9 @@ func EventLines(ev event.Event) []Line {
 			// "⑂ Response from scout (a1b2c3d4)" over the answer's text. The
 			// agent's own agent_response call reads "Agent response  → id",
 			// so incoming and outgoing never look alike.
-			head := "**Response from** " + p.From
-			if p.From == "" {
-				head = "**Response from** an agent"
+			head := "**Agent response received**"
+			if p.From != "" {
+				head += " · " + p.From
 			}
 			lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: head, Block: BlockChild, Glyph: GlyphChild}}
 			for _, l := range strings.Split(strings.TrimRight(p.Text, "\n"), "\n") {
@@ -822,12 +822,23 @@ func EventLines(ev event.Event) []Line {
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
+		if p.Name == "agent_response" {
+			// The message itself is the interesting part: show it under the
+			// call the way an incoming answer shows its text.
+			var in struct{ Text string }
+			_ = json.Unmarshal(p.Input, &in)
+			lines := []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, tool: p.Name}}
+			return append(lines, outputLines(strings.TrimRight(in.Text, "\n"))...)
+		}
 		return []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID, tool: p.Name}}
 
 	case event.ToolCallFinished:
 		var p event.ToolFinishedPayload
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
+		}
+		if p.Name == "agent_response" && !p.IsError {
+			return nil // the message already sits under the call; "response delivered" adds nothing
 		}
 		return outputLines(strings.TrimRight(p.Output, "\n"))
 
@@ -1210,8 +1221,11 @@ func toolArg(name string, raw json.RawMessage) string {
 // the name, except agent_finish, which reads "Agent complete" (the call
 // marks the agent's work complete).
 func toolTitle(name string) string {
-	if name == "agent_finish" {
+	switch name {
+	case "agent_finish": // legacy
 		return "Agent complete"
+	case "agent_response":
+		return "Agent response delivered"
 	}
 	return titleCase(name)
 }
