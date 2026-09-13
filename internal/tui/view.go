@@ -758,7 +758,7 @@ func (m Model) sidebarVisible() bool { return m.showTree && m.width >= sidebarMi
 func (m Model) contentWidth() int {
 	w := m.width
 	if m.sidebarVisible() {
-		w -= sidebarWidth + 1
+		w -= sidebarWidth + 2 // the separator and the space after it
 	}
 	if w < 10 {
 		w = 10
@@ -882,8 +882,8 @@ func (m Model) sessionView(width, height int) string {
 	top := padLines(m.vp.View()+"\n"+m.statusLine(cw), cw)
 	if m.sidebarVisible() {
 		h := m.vp.Height + 1
-		sep := styleSep.Render(strings.TrimSuffix(strings.Repeat("│\n", h), "\n"))
-		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top) // the sidebar sits on the left
+		sep := styleSep.Render(strings.TrimSuffix(strings.Repeat("│ \n", h), "\n")) // a space keeps the chat off the line
+		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top)                // the sidebar sits on the left
 	}
 	// Under the rule: the meta row (YOLO, role, model, variant, usage), then
 	// the tab strip, a blank line, the palette, and the input.

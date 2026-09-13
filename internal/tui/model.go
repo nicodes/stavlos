@@ -689,7 +689,7 @@ func (m *Model) mainX(x, y int) (int, bool) {
 	if !m.sidebarVisible() || y > m.vp.Height {
 		return x, true
 	}
-	off := sidebarWidth + 1
+	off := sidebarWidth + 2 // separator + gap
 	if x < off {
 		return x, false
 	}
