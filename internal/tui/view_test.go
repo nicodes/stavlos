@@ -100,19 +100,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("coder", "anthropic/claude-opus-5", "", 0, false)); got != "Coder · claude-opus-5 anthropic · default" {
+	if got := stripANSI(metaLine("coder", "anthropic/claude-opus-5", "", 0, false)); got != "Coder · anthropic/claude-opus-5 · default" {
 		t.Fatalf("with model: %q", got)
 	}
 	if got := stripANSI(metaLine("coder", "", "", 0, false)); got != "Coder · no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "ollama/llama3", "", 2, false)); got != "Scout · llama3 ollama · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "ollama/llama3", "", 2, false)); got != "Scout · ollama/llama3 · default · 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("coder", "openai/gpt-5", "high", 0, false)); got != "Coder · gpt-5 openai · high" {
+	if got := stripANSI(metaLine("coder", "openai/gpt-5", "high", 0, false)); got != "Coder · openai/gpt-5 · high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("coder", "openai/gpt-5", "", 0, true)); got != "YOLO · Coder · gpt-5 openai · default" {
+	if got := stripANSI(metaLine("coder", "openai/gpt-5", "", 0, true)); got != "YOLO · Coder · openai/gpt-5 · default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
