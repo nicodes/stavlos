@@ -890,6 +890,9 @@ func (m Model) promptView(width int) string {
 		return ""
 	}
 	focused := m.focus == focusPermission
+	if !focused {
+		return promptSummary(p, m.agentLabel(p.Agent), len(m.prompts), width)
+	}
 	inner := width - 4
 	if inner < 20 {
 		inner = 20
@@ -962,6 +965,38 @@ func (m Model) promptView(width int) string {
 	return box.Width(inner).Render(strings.Join(lines, "\n"))
 }
 
+// promptSummary is the one-line form of a pending prompt shown while the
+// permission section is not focused.
+func promptSummary(p *protocol.PromptInfo, agent string, pending, width int) string {
+	var what string
+	switch p.Kind {
+	case "question":
+		what = "question: " + firstLine(p.Question)
+	case "trust":
+		what = "trust the project configuration?"
+	default:
+		what = "permission: " + p.Tool
+		var in map[string]any
+		if json.Unmarshal(p.Input, &in) == nil {
+			for _, k := range []string{"command", "path", "patch"} {
+				if v, ok := in[k].(string); ok && v != "" {
+					what += "  " + firstLine(v)
+					break
+				}
+			}
+		}
+	}
+	head := styleWorking.Render("?") + " " + styleBold.Render(what)
+	if agent != "" {
+		head += styleDim.Render(" · " + agent)
+	}
+	if pending > 1 {
+		head += styleDim.Render(fmt.Sprintf(" · +%d more", pending-1))
+	}
+	head += styleDim.Render("  tab to answer")
+	return ansi.Truncate(head, width, "…")
+}
+
 // footerView is the bottom line: dim cwd on the left, summary or a
 // transient status on the right.
 func (m Model) footerView() string {
@@ -1029,12 +1064,42 @@ func (m Model) agentsView(width int) string {
 	if sel == "" {
 		return ""
 	}
-	rows := agentRows(m.agents, sel, m.spawned, time.Now(), m.sp.View(), width)
-	if len(rows) == 0 {
+	kids := m.liveChildren()
+	if len(kids) == 0 {
 		return ""
 	}
-	head := styleDim.Render("agents") + " " + styleDim.Render(fmt.Sprintf("(%d)", len(rows)))
+	if m.focus != focusAgents {
+		return agentsSummary(kids, m.sp.View(), width)
+	}
+	rows := agentRows(m.agents, sel, m.spawned, time.Now(), m.sp.View(), width-2)
+	head := styleAccent.Render("agents") + " " + styleDim.Render(fmt.Sprintf("(%d) · ↑/↓ move · enter select · esc back", len(rows)))
+	for i := range rows {
+		marker := "  "
+		if i == m.agCursor%len(rows) {
+			marker = styleAccent.Render("▶") + " "
+		}
+		rows[i] = marker + strings.TrimPrefix(rows[i], "  ")
+	}
 	return strings.Join(append([]string{head}, rows...), "\n")
+}
+
+// agentsSummary is the one-line form of the agents block shown while it is
+// not focused: "agents (2)  ● scout running · ○ checks idle  tab to expand".
+func agentsSummary(kids []protocol.AgentInfo, spinner string, width int) string {
+	parts := make([]string, 0, len(kids))
+	for _, a := range kids {
+		lead := agentDot(a)
+		if a.State == "running" || a.State == "blocked" {
+			lead = lipgloss.NewStyle().Foreground(colWarning).Render(spinner)
+		}
+		state := a.State
+		if agentOutcome(a) == "error" {
+			state = "error"
+		}
+		parts = append(parts, lead+" "+styleBold.Render(a.Label)+" "+styleDim.Render(state))
+	}
+	head := styleDim.Render(fmt.Sprintf("agents (%d)", len(kids))) + "  " + strings.Join(parts, styleDim.Render(" · "))
+	return ansi.Truncate(head, width, "…")
 }
 
 // agentRows is the pure part of agentsView.

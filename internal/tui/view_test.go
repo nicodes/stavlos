@@ -495,8 +495,8 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 		t.Fatal("focused box should show the hotkeys directly")
 	}
 	m.focus = focusInput
-	if !strings.Contains(stripANSI(m.promptView(80)), "tab to focus") {
-		t.Fatal("unfocused box should point at tab")
+	if pv := stripANSI(m.promptView(80)); !strings.Contains(pv, "tab to answer") || strings.Count(pv, "\n") != 0 {
+		t.Fatalf("unfocused prompt should be one line pointing at tab: %q", pv)
 	}
 	m.focus = focusPermission
 	hs := m.keyHints()
@@ -646,5 +646,56 @@ func TestAgentOutcomeColours(t *testing.T) {
 	}
 	if agentDot(protocol.AgentInfo{State: "idle"}) == agentDot(protocol.AgentInfo{State: "finished"}) {
 		t.Error("idle and complete should use different glyphs")
+	}
+}
+
+func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
+	m := newModel(context.Background(), nil, "s")
+	m.width, m.height = 120, 40
+	m.reconciled = true
+	m.agents = []protocol.AgentInfo{
+		{ID: "root", Label: "coder", Archetype: "coder", State: "idle"},
+		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running"},
+		{ID: "c2", Parent: "root", Label: "checks", Archetype: "tester", State: "idle"},
+	}
+	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "bash", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
+
+	// unfocused: one line each
+	av := stripANSI(m.agentsView(100))
+	if strings.Count(av, "\n") != 0 || !strings.Contains(av, "agents (2)") || !strings.Contains(av, "scout") || !strings.Contains(av, "checks") {
+		t.Fatalf("collapsed agents:\n%s", av)
+	}
+	pv := stripANSI(m.promptView(100))
+	if strings.Count(pv, "\n") != 0 || !strings.Contains(pv, "permission: bash") || !strings.Contains(pv, "make test") || !strings.Contains(pv, "tab to answer") {
+		t.Fatalf("collapsed prompt:\n%s", pv)
+	}
+
+	// tab order: chat is skipped on the home view; permission, agents, input
+	order := m.focusOrder()
+	if len(order) != 3 || order[0] != focusPermission || order[1] != focusAgents || order[2] != focusInput {
+		t.Fatalf("order %v", order)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission
+	if m.focus != focusPermission || strings.Count(stripANSI(m.promptView(100)), "\n") < 2 {
+		t.Fatalf("permission should expand when focused: focus=%v\n%s", m.focus, stripANSI(m.promptView(100)))
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // permission → agents
+	if m.focus != focusAgents {
+		t.Fatalf("focus %v", m.focus)
+	}
+	av = stripANSI(m.agentsView(100))
+	if strings.Count(av, "\n") != 2 || !strings.Contains(av, "▶") {
+		t.Fatalf("expanded agents:\n%s", av)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown})
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.selectedID() != "c2" || m.focus != focusInput {
+		t.Fatalf("enter should select the child under the cursor: %s focus %v", m.selectedID(), m.focus)
+	}
+	// now the selected agent has no children: the agents section leaves the cycle
+	for _, f := range m.focusOrder() {
+		if f == focusAgents {
+			t.Fatal("agents section should not be in the order without live children")
+		}
 	}
 }
