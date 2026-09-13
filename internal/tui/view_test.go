@@ -152,7 +152,7 @@ func TestHomeAndSessionViews(t *testing.T) {
 		t.Fatalf("home view must fill the window: %d lines", len(lines))
 	}
 	plain := stripANSI(home)
-	if !strings.Contains(plain, "▀") || !strings.Contains(plain, "/provider   sign in with ChatGPT or Grok") || !strings.Contains(plain, "Get started /provider") {
+	if !strings.Contains(plain, "▀") || strings.Contains(plain, "sign in with ChatGPT or Grok") || !strings.Contains(plain, "Get started /provider") {
 		t.Fatalf("home view:\n%s", plain)
 	}
 	if strings.Contains(plain, "session ") {

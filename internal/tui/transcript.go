@@ -737,7 +737,7 @@ func EventLines(ev event.Event) []Line {
 		}
 		if hasText {
 			// The model that produced the response is not shown (it is on
-			// the meta row and in the sidebar); LineModel stays for /tips
+			// the meta row and in the sidebar); LineModel stays for notices
 			// style notices that name a model.
 			lines = append(lines, Line{Kind: LineBlank})
 		}

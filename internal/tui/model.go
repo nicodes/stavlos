@@ -84,12 +84,11 @@ type Model struct {
 	sp    spinner.Model
 
 	width, height int
-	showTree      bool // right sidebar toggle (/tree, ctrl+b)
-	showTips      bool // home-state tips block (/tips)
-	hideKeys      bool // the key bar (divider + legend) at the bottom is hidden; /help shows it
+	showTree      bool      // right sidebar toggle (/tree, ctrl+b)
+	hideKeys      bool      // the key bar (divider + legend) at the bottom is hidden; /help shows it
 	cancelArmed   time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
-	details       bool // expanded tool output (/details)
-	follow        bool // auto-scroll to bottom
+	details       bool      // expanded tool output (/details)
+	follow        bool      // auto-scroll to bottom
 
 	status      string
 	statusErr   bool
@@ -202,7 +201,6 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 		input:       ti,
 		promptInput: pi,
 		sp:          sp,
-		showTips:    true,
 		hideKeys:    true, // the key bar is off until /help
 		follow:      true,
 		loading:     true,
@@ -1005,9 +1003,6 @@ func (m *Model) command(text string) tea.Cmd {
 			return m.setStatus("tool output expanded", false)
 		}
 		return m.setStatus("tool output collapsed", false)
-	case "/tips":
-		m.showTips = !m.showTips
-		return nil
 	case "/role":
 		if c := needAgent(); c != nil {
 			return c
