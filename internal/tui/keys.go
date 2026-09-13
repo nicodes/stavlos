@@ -70,7 +70,8 @@ var helpKeyLines = []string{
 	"chat: ↑/↓ or j/k move by item · enter expand/collapse a tool's output · pgup/pgdn page · home/end first/last",
 	"permission: y allow once · a allow for session · n deny · questions: type in the box, enter answers",
 	"sidebar: ctrl+b open/close · ↑/↓ move · enter pick an agent",
-	"background: the section above the input lists the selected agent's live children (⑂) and running async jobs (⚙); tab to it, ↑/↓ move, enter selects an agent",
+	"sections: the strip above the input has a tab per section, background (⑂ live children, ⚙ async jobs) and a pending permission, each with its count; the focused tab shows its contents",
+	"background: tab to it, ↑/↓ move, enter selects an agent",
 	"overlays: ↑/↓ or ctrl+p/ctrl+n move · enter select · esc close · type to filter · pgup/pgdn page",
 	"sign-in: open the URL on any device and enter the code · o open in browser · esc cancel",
 }

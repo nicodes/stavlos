@@ -714,3 +714,43 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		}
 	}
 }
+
+func TestSectionTabStrip(t *testing.T) {
+	m := sessionModel()
+	m.agents = []protocol.AgentInfo{
+		{ID: "root", Label: "coder", Archetype: "coder", State: "working"},
+		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "working"},
+	}
+	m.selected = 0
+	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "bash", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
+
+	// unfocused: both titles on one line, counts only
+	v := stripANSI(m.sectionsView(100))
+	if strings.Count(v, "\n") != 0 || !strings.Contains(v, "background (1)") || !strings.Contains(v, "permission (1)") || strings.Contains(v, "scout") || strings.Contains(v, "make test") {
+		t.Fatalf("tab strip:\n%s", v)
+	}
+	// background focused: same strip, then its rows
+	m.focus = focusBackground
+	v = stripANSI(m.sectionsView(100))
+	lines := strings.Split(v, "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], "background (1)") || !strings.Contains(lines[0], "permission (1)") || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "scout") {
+		t.Fatalf("background focused:\n%s", v)
+	}
+	// permission focused: same strip, then the box
+	m.focus = focusPermission
+	v = stripANSI(m.sectionsView(100))
+	lines = strings.Split(v, "\n")
+	if len(lines) < 3 || !strings.Contains(lines[0], "background (1)") || !strings.Contains(lines[0], "permission (1)") || !strings.Contains(v, "make test") || strings.Contains(v, "scout") {
+		t.Fatalf("permission focused:\n%s", v)
+	}
+	// the open tab carries the ▾ marker
+	if !strings.Contains(lines[0], "▾ permission (1)") || strings.Contains(lines[0], "▾ background") {
+		t.Fatalf("open tab should be marked:\n%s", lines[0])
+	}
+	// only one section present: only its tab
+	m.prompts = nil
+	m.focus = focusInput
+	if v := stripANSI(m.sectionsView(100)); strings.Contains(v, "permission") || strings.Contains(v, "│") {
+		t.Fatalf("single tab:\n%s", v)
+	}
+}
