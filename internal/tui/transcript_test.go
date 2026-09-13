@@ -161,7 +161,7 @@ func TestToolLine(t *testing.T) {
 		{"edit", `{"path":"file.go","old_string":"a","new_string":"b"}`, "Edit  file.go"},
 		{"write", `{"path":"x.go","content":"..."}`, "Write  x.go"},
 		{"bash_async", `{"command":"go test ./..."}`, "Bash async  go test ./..."},
-		{"bash_kill", `{"id":"m1"}`, "Bash kill  m1"},
+		{"bash_async_kill", `{"id":"m1"}`, "Bash async kill  m1"},
 		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
 		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`, "Agent create  scout (explorer)"},
 		{"agent_prompt", `{"id":"ag_1","text":"go"}`, "Agent prompt  ag_1"},
@@ -170,7 +170,7 @@ func TestToolLine(t *testing.T) {
 		{"agent_kill", `{"id":"ag_1"}`, "Agent kill  ag_1"},
 		{"agent_result", `{"id":"ag_2"}`, "Agent result  ag_2"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
-		{"finish", `{"status":"success","summary":"x"}`, "Finish  success"},
+		{"agent_finish", `{"status":"success","summary":"x"}`, "Agent finish  success"},
 		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
 		{"bash", ``, "Bash"},
 	}

@@ -133,7 +133,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "read", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "skill", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_create", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "finish", Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: "agent_finish", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_prompt", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_steer", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_cancel", Pattern: "*", Verb: policy.Allow},
@@ -142,7 +142,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "agent_status", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "bash", Pattern: "*", Verb: policy.Ask},
 		policy.Rule{Tool: "bash_async", Pattern: "*", Verb: policy.Ask},
-		policy.Rule{Tool: "bash_kill", Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: "bash_async_kill", Pattern: "*", Verb: policy.Allow},
 		// Read-only shell commands are allowed by default so searching and
 		// looking around never prompts; anything that writes still asks.
 		policy.Rule{Tool: "bash", Pattern: "grep *", Verb: policy.Allow},
@@ -559,7 +559,7 @@ Report what you changed and what you verified.`,
 			Tools:       []string{"read", "bash", "skill"},
 			Loop:        "default",
 			Body: `You are a read-only code explorer. Answer the question you were given by reading files and searching with bash (grep -rn, rg, find, ls). Do not modify anything.
-When you have the answer, call finish with a concise summary that includes exact file paths and line numbers.`,
+When you have the answer, call agent_finish with a concise summary that includes exact file paths and line numbers.`,
 		},
 		{
 			Name: "tester", Layer: "builtin",
@@ -567,7 +567,7 @@ When you have the answer, call finish with a concise summary that includes exact
 			Tools:       []string{"bash", "read", "skill"},
 			Loop:        "default",
 			Body: `You run the project's tests, builds, or linters as instructed and report the results faithfully. Do not edit source files.
-Call finish with the outcome: what you ran, whether it passed, and the relevant failing output if not.`,
+Call agent_finish with the outcome: what you ran, whether it passed, and the relevant failing output if not.`,
 		},
 	}
 }

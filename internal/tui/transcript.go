@@ -1015,7 +1015,7 @@ func toolArg(name string, raw json.RawMessage) string {
 	switch name {
 	case "bash", "bash_async":
 		return str("command")
-	case "bash_kill":
+	case "bash_async_kill":
 		return str("id")
 	case "read", "write", "edit":
 		return str("path")
@@ -1049,7 +1049,7 @@ func toolArg(name string, raw json.RawMessage) string {
 		return str("id")
 	case "skill":
 		return str("name")
-	case "finish":
+	case "agent_finish":
 		return str("status")
 	}
 	return compactArgs(raw)

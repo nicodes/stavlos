@@ -299,7 +299,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	fmt.Fprintf(&sb, "Working directory: %s\n", a.s.Dir)
 	fmt.Fprintf(&sb, "Your agent id is %s.\n", a.ID)
 	if a.Parent != "" {
-		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) working for a parent agent (id %s). The task you were given arrives as the first message. When it is complete, or cannot be completed, call the finish tool exactly once with a summary; your parent only sees what you put there. Do not finish until the work is actually done. Other agents in this session can message you, and agent_prompt lets you message any of them, including your parent, by id.\n", a.Archetype, a.Label, a.Parent)
+		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) working for a parent agent (id %s). The task you were given arrives as the first message. When it is complete, or cannot be completed, call the agent_finish tool exactly once with a summary; your parent only sees what you put there. Do not call it until the work is actually done. Other agents in this session can message you, and agent_prompt lets you message any of them, including your parent, by id.\n", a.Archetype, a.Label, a.Parent)
 	}
 	if cfg.AgentsMD != "" {
 		sb.WriteString("\n# Project instructions (AGENTS.md)\n\n" + cfg.AgentsMD + "\n")
@@ -322,7 +322,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 		names = append(names, tools.AsyncNames...)
 	}
 	if a.Parent != "" {
-		names = append(names, "finish")
+		names = append(names, "agent_finish")
 	}
 	// Every agent can message every other agent in its session; only the
 	// main agent can steer (a steer cuts into a running turn).
@@ -334,7 +334,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	}
 	can, why := a.s.canSpawn(a)
 	if contains(names, "bash") {
-		sb.WriteString("\n# Background jobs\nbash_async starts a command as a job and returns its id at once; when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. Use it for anything slow. bash_kill stops a job. There is no wait tool: when nothing more can be done until a result arrives, end your turn and you will be woken.\n")
+		sb.WriteString("\n# Background jobs\nbash_async starts a command as a job and returns its id at once; when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. Use it for anything slow. bash_async_kill stops a job. There is no wait tool: when nothing more can be done until a result arrives, end your turn and you will be woken.\n")
 	}
 	if a.canOrchestrate() {
 		sb.WriteString("\n# Delegation\n")
@@ -444,10 +444,10 @@ func (a *Agent) setFinished(summary, status string, arts []tools.Artifact) error
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.finished != nil {
-		return errors.New("finish already called")
+		return errors.New("agent_finish already called")
 	}
 	if a.Parent == "" {
-		return errors.New("the root agent does not finish; just stop")
+		return errors.New("the root agent does not call agent_finish; just stop")
 	}
 	a.finished = &tools.ChildResult{ID: a.ID, Label: a.Label, Status: status, Summary: summary, Artifacts: arts}
 	a.finishFlag = true

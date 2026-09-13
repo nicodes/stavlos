@@ -134,7 +134,7 @@ var OrchestrationNames = []string{"agent_create", "agent_prompt", "agent_steer",
 var MessagingNames = []string{"agent_prompt", "agent_status"}
 
 // AsyncNames are offered to every agent that has bash.
-var AsyncNames = []string{"bash_async", "bash_kill"}
+var AsyncNames = []string{"bash_async", "bash_async_kill"}
 
 func schema(props map[string]any, required ...string) json.RawMessage {
 	m := map[string]any{"type": "object", "properties": props}
