@@ -67,6 +67,10 @@ type Request struct {
 	Messages  []Message // must alternate roles starting with user
 	Tools     []ToolDef
 	MaxTokens int // 0 → adapter default
+	// Variant selects a provider-defined flavour of the model (reasoning
+	// effort, thinking budget…); "" is the provider default. Providers list
+	// the valid names through the optional Variants interface.
+	Variant string
 }
 
 // StopReason reports why generation stopped.
@@ -116,6 +120,13 @@ type Provider interface {
 	Name() string
 	// Open returns a Model for the bare id. Credentials come from env (PRD §8.4).
 	Open(modelID string) (Model, error)
+}
+
+// Variants is implemented by providers whose models come in flavours
+// (reasoning effort, thinking budget). The names are provider-defined and
+// shown to the user as-is; an empty list means the model has none.
+type Variants interface {
+	Variants(modelID string) []string
 }
 
 // Split parses "provider/model-id". The model id may itself contain slashes.

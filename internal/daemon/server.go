@@ -308,6 +308,27 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		}
 		return map[string]bool{"ok": true}, nil
 
+	case protocol.MAgentSetVariant:
+		var p protocol.AgentSetVariantParams
+		if e := decode(&p); e != nil {
+			return nil, e
+		}
+		_, a, err := d.agentSession(p.Agent)
+		if err != nil {
+			return nil, perr(protocol.ErrNotFound, err)
+		}
+		if err := a.SetVariant(ctx, p.Variant); err != nil {
+			return nil, perr(protocol.ErrInvalidParams, err)
+		}
+		return map[string]bool{"ok": true}, nil
+
+	case protocol.MVariants:
+		var p protocol.VariantsParams
+		if e := decode(&p); e != nil {
+			return nil, e
+		}
+		return protocol.VariantsResult{Variants: d.Registry.Variants(p.Model)}, nil
+
 	case protocol.MPromptList:
 		var p protocol.PromptListParams
 		if e := decode(&p); e != nil {

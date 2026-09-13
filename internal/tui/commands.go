@@ -278,6 +278,36 @@ func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.
 	}
 }
 
+// variantsMsg carries the variant names a model offers, for the /variants
+// picker.
+type variantsMsg struct {
+	model    string
+	current  string
+	variants []string
+	err      error
+}
+
+func variantsCmd(ctx context.Context, c *client.Client, modelID, current string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		vs, err := c.Variants(ctx, modelID)
+		return variantsMsg{modelID, current, vs, err}
+	}
+}
+
+func pickVariantCmd(ctx context.Context, c *client.Client, agent, variant string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		what := "variant set to " + variant
+		if variant == "" {
+			what = "variant reset to the provider default"
+		}
+		return resultMsg{what, c.SetAgentVariant(ctx, agent, variant)}
+	}
+}
+
 // pickAgentModelCmd / pickSessionModelCmd are the /models overlay actions.
 func pickAgentModelCmd(ctx context.Context, c *client.Client, agent, modelID string) tea.Cmd {
 	return func() tea.Msg {

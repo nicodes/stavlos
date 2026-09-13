@@ -77,6 +77,12 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				_ = e.Decode(&p)
 				a.modelID = p.Model
 			}
+		case event.AgentVariantChanged:
+			if a, ok := s.agents[e.Agent]; ok {
+				var p event.VariantChangedPayload
+				_ = e.Decode(&p)
+				a.variant = p.Variant
+			}
 		case event.PromptQueued:
 			var p event.TextPayload
 			_ = e.Decode(&p)

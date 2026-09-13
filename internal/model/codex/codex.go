@@ -55,6 +55,14 @@ func NewWithEndpoint(src model.TokenSource, endpoint string) model.Provider {
 
 func (p *provider) Name() string { return "openai" }
 
+// codexVariants are the reasoning efforts the Codex backend accepts; the
+// default (no variant) is medium.
+var codexVariants = []string{"low", "medium", "high", "xhigh"}
+
+// Variants implements model.Variants: every ChatGPT model reasons, so all
+// get the same list.
+func (p *provider) Variants(string) []string { return append([]string(nil), codexVariants...) }
+
 func (p *provider) Open(modelID string) (model.Model, error) {
 	return &client{p: p, id: modelID}, nil
 }

@@ -17,11 +17,12 @@ const (
 	SessionArchived     Type = "session.archived"      // (none)
 	SessionModelChanged Type = "session.model_changed" // ModelChangedPayload
 
-	AgentSpawned      Type = "agent.spawned"       // AgentSpawnedPayload
-	AgentFinished     Type = "agent.finished"      // AgentFinishedPayload
-	AgentKilled       Type = "agent.killed"        // AgentRefPayload
-	AgentModelChanged Type = "agent.model_changed" // ModelChangedPayload
-	AgentRoleChanged  Type = "agent.role_changed"  // RoleChangedPayload: the agent's preset was switched
+	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
+	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload
+	AgentKilled         Type = "agent.killed"          // AgentRefPayload
+	AgentModelChanged   Type = "agent.model_changed"   // ModelChangedPayload
+	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
+	AgentVariantChanged Type = "agent.variant_changed" // VariantChangedPayload: model variant (reasoning effort) switched
 
 	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: wake armed for these ids (children or monitors)
 	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
@@ -88,6 +89,12 @@ type ModelChangedPayload struct {
 type RoleChangedPayload struct {
 	Role  string `json:"role"`
 	Label string `json:"label"`
+}
+
+// VariantChangedPayload records a model-variant switch; "" is the
+// provider default.
+type VariantChangedPayload struct {
+	Variant string `json:"variant"`
 }
 
 type AgentSpawnedPayload struct {

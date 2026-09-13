@@ -611,9 +611,9 @@ func inputBox(input, meta string) string {
 	return input + "\n" + meta
 }
 
-// metaLine is "Coder · claude-opus-5 anthropic" (or the no-model nudge):
-// the role and the model separated by a dot.
-func metaLine(label, model string, queued int) string {
+// metaLine is "Coder · claude-opus-5 anthropic · high" (or the no-model
+// nudge): the role, the model and, when one is set, its variant.
+func metaLine(label, model, variant string, queued int) string {
 	s := titleCase(label) + " · "
 	if model == "" {
 		return s + styleWarn.Render("no model — /models")
@@ -622,6 +622,9 @@ func metaLine(label, model string, queued int) string {
 	s += short
 	if prov != "" {
 		s += " " + styleDim.Render(prov)
+	}
+	if variant != "" {
+		s += " · " + variant
 	}
 	if queued > 0 {
 		s += styleDim.Render(fmt.Sprintf(" · %d queued", queued))
@@ -739,14 +742,14 @@ func (m Model) inputBoxView(width int) string {
 // and cost (or a transient status) on the right, dot separators within
 // each side. The left side is truncated first when they collide.
 func (m Model) metaRow(width int) string {
-	label, model, queued := "agent", m.session.Model, 0
+	label, model, variant, queued := "agent", m.session.Model, "", 0
 	if a := m.selectedAgent(); a != nil {
-		label, queued = a.Label, a.Queued
+		label, variant, queued = a.Label, a.Variant, a.Queued
 		if a.Model != "" {
 			model = a.Model
 		}
 	}
-	left := metaLine(label, model, queued)
+	left := metaLine(label, model, variant, queued)
 	right := m.footerRightView()
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {

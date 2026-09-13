@@ -60,6 +60,9 @@ func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {
 	} else {
 		cr.MaxTokens = maxTokens
 	}
+	if req.Variant != "" {
+		cr.ReasoningEffort = req.Variant
+	}
 	return json.Marshal(cr)
 }
 

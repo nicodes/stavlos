@@ -273,6 +273,18 @@ func (c *Client) Reconcile(ctx context.Context, session string) (protocol.Reconc
 	return r, err
 }
 
+// SetAgentVariant switches an agent's model variant ("" = provider default).
+func (c *Client) SetAgentVariant(ctx context.Context, agent, variant string) error {
+	return c.Call(ctx, protocol.MAgentSetVariant, protocol.AgentSetVariantParams{V: protocol.Version, Agent: agent, Variant: variant}, nil)
+}
+
+// Variants lists the variant names a model offers.
+func (c *Client) Variants(ctx context.Context, modelID string) ([]string, error) {
+	var r protocol.VariantsResult
+	err := c.Call(ctx, protocol.MVariants, protocol.VariantsParams{V: protocol.Version, Model: modelID}, &r)
+	return r.Variants, err
+}
+
 func (c *Client) Presets(ctx context.Context, session string) ([]protocol.PresetInfo, error) {
 	var r protocol.PresetsResult
 	err := c.Call(ctx, protocol.MPresets, protocol.PresetsParams{Session: session}, &r)

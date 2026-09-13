@@ -91,6 +91,9 @@ func buildBody(id string, req model.Request) ([]byte, error) {
 		Reasoning:         reasoningConfig{Effort: "medium", Summary: "auto"},
 		Text:              textConfig{Verbosity: "medium"},
 	}
+	if req.Variant != "" {
+		rr.Reasoning.Effort = req.Variant
+	}
 	if req.MaxTokens > 0 {
 		rr.MaxOutputTokens = req.MaxTokens
 	}
