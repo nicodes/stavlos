@@ -640,7 +640,7 @@ func inputBox(input, meta string) string {
 }
 
 // metaLine is "Coder · claude-opus-5 anthropic · high" (or the no-model
-// nudge): the role, the model and, when one is set, its variant.
+// nudge): the role, the model and its variant ("default" when none is set).
 func metaLine(label, model, variant string, queued int) string {
 	s := titleCase(label) + " · "
 	if model == "" {
@@ -651,9 +651,10 @@ func metaLine(label, model, variant string, queued int) string {
 	if prov != "" {
 		s += " " + styleDim.Render(prov)
 	}
-	if variant != "" {
-		s += " · " + variant
+	if variant == "" {
+		variant = "default"
 	}
+	s += " · " + variant
 	if queued > 0 {
 		s += styleDim.Render(fmt.Sprintf(" · %d queued", queued))
 	}
