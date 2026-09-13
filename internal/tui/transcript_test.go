@@ -79,7 +79,7 @@ func TestBuildTranscript(t *testing.T) {
 		"       partial",
 		"   ◌ thinking…",
 		"   Done.",
-				"   ◦ turn cancelled",
+		"   ◦ turn cancelled",
 		"   ✓ finished · success",
 		"   all good",
 	})
