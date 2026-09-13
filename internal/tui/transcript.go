@@ -132,6 +132,7 @@ type Transcript struct {
 	prompts    map[string]int    // prompt id → item of the tool call it gates
 	promptLine map[string]int    // prompt id → index of its "?" line (tone flips on answer)
 	monitors   map[string]int    // monitor id → index of its "started" line
+	children   map[string]int    // child agent id → index of the agent_create line that spawned it
 	monKinds   map[string]string // monitor id → kind, for the glyph on later events
 	items      int               // committed items so far
 	streamTurn int
@@ -171,7 +172,7 @@ func (t *Transcript) TurnStats(now time.Time) (time.Duration, int) {
 
 // NewTranscript returns an empty transcript.
 func NewTranscript() *Transcript {
-	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}, promptLine: map[string]int{}, monitors: map[string]int{}, monKinds: map[string]string{}}
+	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}, promptLine: map[string]int{}, monitors: map[string]int{}, monKinds: map[string]string{}, children: map[string]int{}}
 }
 
 // Apply appends the rendering of ev. An assistant.message (or the end of a
@@ -446,6 +447,51 @@ func (t *Transcript) insertIntoItem(item int, lines []Line) {
 			t.monitors[id] = idx + len(lines)
 		}
 	}
+	for id, idx := range t.children {
+		if idx >= at {
+			t.children[id] = idx + len(lines)
+		}
+	}
+}
+
+// ChildSpawned ties a just-spawned child to the agent_create call that
+// made it: the call line reads as in progress (yellow) until ChildDone,
+// the way a bash_async call tracks its job.
+func (t *Transcript) ChildSpawned(childID string) {
+	if i := t.lastAgentCreateCall(); i >= 0 {
+		t.Lines[i].Tone = ToneWorking
+		t.children[childID] = i
+	}
+}
+
+// ChildDone settles the agent_create line of a child that finished or was
+// killed: grey on success or partial, red on failure or kill.
+func (t *Transcript) ChildDone(childID, status string) {
+	i, ok := t.children[childID]
+	if !ok || i >= len(t.Lines) {
+		return
+	}
+	t.Lines[i].Tone = ToneNone
+	if status == "failure" || status == "killed" {
+		t.Lines[i].Tone = ToneError
+	}
+	delete(t.children, childID)
+}
+
+// lastAgentCreateCall returns the index of the most recent agent_create
+// call line not yet tied to a child, or -1.
+func (t *Transcript) lastAgentCreateCall() int {
+	tied := map[int]bool{}
+	for _, idx := range t.children {
+		tied[idx] = true
+	}
+	for i := len(t.Lines) - 1; i >= 0; i-- {
+		l := t.Lines[i]
+		if l.Kind == LineTool && l.tool == "agent_create" && !tied[i] {
+			return i
+		}
+	}
+	return -1
 }
 
 func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
