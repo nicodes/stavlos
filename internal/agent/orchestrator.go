@@ -74,11 +74,18 @@ func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus,
 		return nil, fmt.Errorf("unknown agent %q", parent)
 	}
 	if len(ids) == 0 {
+		// All live children, plus any whose result is still unread: the
+		// caller asked to be told about everything outstanding.
 		for _, cid := range p.Children() {
 			if c, ok := o.s.Agent(cid); ok && c.Alive() {
 				ids = append(ids, cid)
 			}
 		}
+		p.mu.Lock()
+		for _, r := range p.childDone {
+			ids = append(ids, r.ID)
+		}
+		p.mu.Unlock()
 	}
 	var out []tools.ChildStatus
 	var armed []string
