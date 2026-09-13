@@ -25,6 +25,9 @@ func (m Model) keyHints() []keyHint {
 	case m.ov != nil:
 		return []keyHint{{"enter", "select"}, {"↑/↓", "move"}, {"type", "filter"}, {"pgup/pgdn", "page"}, {"esc", "close"}}
 	}
+	if m.sidebarFocus && m.sidebarVisible() {
+		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
+	}
 	if p := m.currentPrompt(); p != nil {
 		switch p.Kind {
 		case "trust":
@@ -40,13 +43,13 @@ func (m Model) keyHints() []keyHint {
 		tree = "hide sidebar"
 	}
 	if m.isHome() {
-		return []keyHint{{"enter", "send"}, {"/provider", "sign in"}, {"/models", "pick model"}, {"/spawn", "delegate"}, {"tab", "agents"}, {"ctrl+b", tree}, {"/help", "all commands"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/provider", "sign in"}, {"/models", "pick model"}, {"/spawn", "delegate"}, {"tab", "agents"}, {"ctrl+b", tree}, {"/help", "all commands"}, {"ctrl+c", "quit"}}
 	}
 	details := "expand tool output"
 	if m.details {
 		details = "collapse tool output"
 	}
-	return []keyHint{{"enter", "send"}, {"/steer", "redirect mid-turn"}, {"/cancel", "stop turn"}, {"/spawn", "delegate"}, {"/kill", "kill agent"}, {"tab", "agents"}, {"↑/↓", "select (empty input)"}, {"pgup/pgdn", "scroll"}, {"ctrl+b", tree}, {"/details", details}, {"/models", "model"}, {"/help", "all commands"}, {"ctrl+c", "quit"}}
+	return []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/steer", "redirect mid-turn"}, {"/cancel", "stop turn"}, {"/spawn", "delegate"}, {"/kill", "kill agent"}, {"tab", "agents"}, {"pgup/pgdn", "scroll"}, {"ctrl+b", tree}, {"/details", details}, {"/models", "model"}, {"/help", "all commands"}, {"ctrl+c", "quit"}}
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at

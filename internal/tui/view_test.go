@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	tea "github.com/charmbracelet/bubbletea"
 	"strings"
 	"testing"
 	"time"
@@ -200,5 +202,64 @@ func TestMonitorRows(t *testing.T) {
 	}
 	if got := fmtElapsed(3725 * time.Second); got != "1h02m" {
 		t.Fatalf("%s", got)
+	}
+}
+
+func TestHistoryNavigation(t *testing.T) {
+	m := newModel(context.Background(), nil, "s")
+	m.pushHistory("first")
+	m.pushHistory("second")
+	m.pushHistory("second") // duplicate collapses
+	if len(m.history) != 2 || m.histIdx != 2 {
+		t.Fatalf("%v %d", m.history, m.histIdx)
+	}
+	m.input.SetValue("draft")
+	m.historyMove(-1)
+	if m.input.Value() != "second" {
+		t.Fatalf("up: %q", m.input.Value())
+	}
+	m.historyMove(-1)
+	m.historyMove(-1) // clamps at oldest
+	if m.input.Value() != "first" {
+		t.Fatalf("up twice: %q", m.input.Value())
+	}
+	m.historyMove(1)
+	m.historyMove(1)
+	if m.input.Value() != "draft" {
+		t.Fatalf("back to draft: %q", m.input.Value())
+	}
+}
+
+func TestSidebarFocusAndSelect(t *testing.T) {
+	m := newModel(context.Background(), nil, "s")
+	m.width, m.height = 120, 40
+	m.agents = []protocol.AgentInfo{{ID: "a", Label: "coder"}, {ID: "b", Label: "scout", Depth: 1}, {ID: "c", Label: "tester", Depth: 1}}
+	m.toggleTree()
+	if !m.showTree || !m.sidebarFocus || m.input.Focused() {
+		t.Fatalf("open should focus the sidebar: show=%v focus=%v inputFocused=%v", m.showTree, m.sidebarFocus, m.input.Focused())
+	}
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	m.handleKey(down)
+	m.handleKey(down)
+	if m.sbCursor != 2 || m.selected != 0 {
+		t.Fatalf("cursor %d selected %d", m.sbCursor, m.selected)
+	}
+	rows := m.treeRows(30)
+	if !strings.Contains(rows[2], "▶") || !strings.Contains(rows[0], "▸") {
+		t.Fatalf("markers: %q", rows)
+	}
+	m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if m.selected != 2 || m.sidebarFocus || !m.input.Focused() {
+		t.Fatalf("enter: selected %d focus %v", m.selected, m.sidebarFocus)
+	}
+	// ↑ in the input now walks history, not agents
+	m.pushHistory("hello")
+	m.handleKey(tea.KeyMsg{Type: tea.KeyUp})
+	if m.input.Value() != "hello" || m.selected != 2 {
+		t.Fatalf("history: %q selected %d", m.input.Value(), m.selected)
+	}
+	m.toggleTree()
+	if m.showTree || m.sidebarFocus || !m.input.Focused() {
+		t.Fatal("close should return focus to the input")
 	}
 }

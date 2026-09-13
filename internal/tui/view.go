@@ -565,7 +565,7 @@ func (m Model) sidebarView(height int) string {
 		" " + styleDim.Render("model") + "    " + truncRunes(model, inner-9),
 		" " + styleDim.Render("cost") + "     $" + fmtCost(m.totalCost()),
 		"",
-		" " + styleBold.Render("agents"),
+		" " + styleBold.Render("agents") + m.sidebarFocusHint(),
 	}
 	rows = append(rows, m.treeRows(inner)...)
 	if n := len(m.prompts); n > 0 {
@@ -579,10 +579,14 @@ func (m Model) sidebarView(height int) string {
 
 func (m Model) treeRows(width int) []string {
 	rows := make([]string, 0, len(m.agents))
+	focused := m.sidebarFocus && m.sidebarVisible()
 	for i, a := range m.agents {
 		indent := strings.Repeat("  ", a.Depth)
 		marker := "  "
-		if i == m.selected {
+		switch {
+		case focused && i == m.sbCursor:
+			marker = styleAccent.Render("▶") + " "
+		case i == m.selected:
 			marker = styleAccent.Render("▸") + " "
 		}
 		dot := lipgloss.NewStyle().Foreground(stateColor(a.State)).Render("●")
@@ -591,9 +595,12 @@ func (m Model) treeRows(width int) []string {
 			avail = 4
 		}
 		text := truncRunes(fmt.Sprintf("%s (%s) · %s", a.Label, a.Archetype, a.State), avail)
-		if i == m.selected {
+		switch {
+		case focused && i == m.sbCursor:
+			text = styleBold.Render(text)
+		case i == m.selected:
 			text = styleSelected.Render(text)
-		} else {
+		default:
 			text = styleDim.Render(text)
 		}
 		row := " " + indent + marker + dot + " " + text
@@ -798,4 +805,12 @@ func fmtElapsed(d time.Duration) string {
 		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
 	}
 	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
+// sidebarFocusHint marks the agent list as focused.
+func (m Model) sidebarFocusHint() string {
+	if m.sidebarFocus && m.sidebarVisible() {
+		return styleDim.Render("  ↑/↓ enter")
+	}
+	return ""
 }
