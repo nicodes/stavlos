@@ -169,10 +169,10 @@ func (monitorTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 		return errf("%v", err)
 	}
 	if len(st) == 0 {
-		return Result{Output: "no live children; any finished results arrive as your next message"}
+		return Result{Output: "nothing to monitor: no live children and no unread results"}
 	}
 	b, _ := json.MarshalIndent(st, "", "  ")
-	return Result{Output: "wake armed; your turn ends after this batch and you will be woken when these finish:\n" + string(b)}
+	return Result{Output: "wake armed; your turn ends after this batch and you will be woken with results from:\n" + string(b)}
 }
 
 // --- unmonitor ---
