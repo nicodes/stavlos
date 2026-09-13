@@ -213,7 +213,12 @@ func TestAgentRows(t *testing.T) {
 	m.agents = agents
 	m.selected = 0
 	view := stripANSI(m.backgroundView(100))
-	if !strings.HasPrefix(view, "background (2)") || !strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
+	if !strings.HasPrefix(view, "background (2)") || strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
+		t.Fatalf("collapsed background should only count:\n%s", view)
+	}
+	m.focus = focusBackground
+	view = stripANSI(m.backgroundView(100))
+	if !strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
 		t.Fatalf("background section:\n%s", view)
 	}
 }
@@ -663,12 +668,12 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 
 	// unfocused: one line each
 	av := stripANSI(m.backgroundView(100))
-	if strings.Count(av, "\n") != 0 || !strings.Contains(av, "background (2)") || !strings.Contains(av, "scout") || !strings.Contains(av, "checks") {
-		t.Fatalf("collapsed agents:\n%s", av)
+	if strings.Count(av, "\n") != 0 || !strings.Contains(av, "background (2)") || strings.Contains(av, "scout") || strings.Contains(av, "checks") {
+		t.Fatalf("collapsed background should only count:\n%s", av)
 	}
 	pv := stripANSI(m.promptView(100))
-	if strings.Count(pv, "\n") != 0 || !strings.Contains(pv, "permission: bash") || !strings.Contains(pv, "make test") || !strings.Contains(pv, "tab to answer") {
-		t.Fatalf("collapsed prompt:\n%s", pv)
+	if strings.Count(pv, "\n") != 0 || !strings.Contains(pv, "permission (1)") || strings.Contains(pv, "make test") || !strings.Contains(pv, "tab to answer") {
+		t.Fatalf("collapsed prompt should only count:\n%s", pv)
 	}
 
 	// tab order: chat is skipped on the home view; background, permission, input
