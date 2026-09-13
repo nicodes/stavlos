@@ -101,7 +101,7 @@ func keyBarLines(hints []keyHint, width, maxRows int) []string {
 
 // keyBarView is the divider plus legend rows, and how many lines it takes.
 func (m Model) keyBarView() (string, int) {
-	if m.width <= 0 {
+	if m.width <= 0 || m.hideKeys {
 		return "", 0
 	}
 	rows := keyBarLines(m.keyHints(), m.width, 2)

@@ -86,6 +86,7 @@ type Model struct {
 	width, height int
 	showTree      bool // right sidebar toggle (/tree, ctrl+b)
 	showTips      bool // home-state tips block (/tips)
+	hideKeys      bool // /help hides the key bar (divider + legend) at the bottom; shown by default
 	details       bool // expanded tool output (/details)
 	follow        bool // auto-scroll to bottom
 
@@ -948,8 +949,12 @@ func (m *Model) command(text string) tea.Cmd {
 	case "/quit", "/q", "/exit":
 		return tea.Quit
 	case "/help", "/h", "/?":
-		m.notice(helpLines()...)
-		return nil
+		m.hideKeys = !m.hideKeys
+		m.layout()
+		if m.hideKeys {
+			return m.setStatus("key bar hidden (/help shows it)", false)
+		}
+		return m.setStatus("key bar shown (/help hides it)", false)
 	case "/tree":
 		return m.toggleTree()
 	case "/details":
