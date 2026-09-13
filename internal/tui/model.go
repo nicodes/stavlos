@@ -296,32 +296,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.treeTimer = false
 		cmds = append(cmds, treeCmd(m.ctx, m.c, m.sessionID))
 
-	case presetsMsg:
-		if msg.err != nil {
-			cmds = append(cmds, m.setStatus("presets: "+msg.err.Error(), true))
-			break
-		}
-		m.presets = msg.presets
-		lines := []string{"presets:"}
-		for _, p := range msg.presets {
-			s := "  " + p.Name
-			if p.Model != "" {
-				s += " [" + p.Model + "]"
-			}
-			if p.Description != "" {
-				s += " — " + p.Description
-			}
-			if len(p.Spawn) > 0 {
-				s += " (spawns: " + strings.Join(p.Spawn, ", ") + ")"
-			}
-			lines = append(lines, s)
-		}
-		if len(msg.presets) == 0 {
-			lines = append(lines, "  (none)")
-		}
-		m.notice(lines...)
-		cmds = append(cmds, m.setStatus(fmt.Sprintf("%d presets", len(msg.presets)), false))
-
 	case resultMsg:
 		if msg.err != nil {
 			cmds = append(cmds, m.setStatus(msg.err.Error(), true))
@@ -993,7 +967,9 @@ func (m *Model) command(text string) tea.Cmd {
 		return m.setStatus("key bar shown (/help hides it)", false)
 	case "/tree":
 		return m.toggleTree()
-	case "/role":
+	case "/roles", "/role", "/presets":
+		// The one role dialog: enter switches the selected agent's preset.
+		// A name argument sets it directly.
 		if c := needAgent(); c != nil {
 			return c
 		}
@@ -1001,8 +977,6 @@ func (m *Model) command(text string) tea.Cmd {
 			return rolesCmd(m.ctx, m.c, m.sessionID)
 		}
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
-	case "/roles", "/presets":
-		return presetsCmd(m.ctx, m.c, m.sessionID)
 	case "/yolo":
 		on := !m.session.Yolo
 		switch strings.ToLower(rest) {
