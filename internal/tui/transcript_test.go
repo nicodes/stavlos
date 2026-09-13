@@ -131,11 +131,11 @@ func TestUserBlockBorderAndWrap(t *testing.T) {
 	got := renderWith(Build([]event.Event{
 		mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi\n" + text}),
 	}), RenderOpts{Width: 30, NoFold: true})
-	if got[1] != " │  hi" {
-		t.Fatalf("border + 2-space padding: %q", got[1])
+	if got[0] != " │  hi" {
+		t.Fatalf("border + 2-space padding: %q", got[0])
 	}
 	// Long lines wrap inside the border; every continuation keeps it.
-	body := got[2:]
+	body := got[1:]
 	for len(body) > 0 && body[len(body)-1] == "" {
 		body = body[:len(body)-1]
 	}
@@ -431,11 +431,13 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 		t.Fatalf("collapsed override:\n%s", strings.Join(col, "\n"))
 	}
 	_, rows := renderAll(lines, RenderOpts{Width: 80, NoFold: true})
-	if r := rows[1]; r.first != 3 || r.last != 7 {
-		t.Fatalf("tool rows: %+v (want 3..7: tool line, 3 output lines, trailer)", r)
+	// user block on row 0 (no leading blank at the top), one blank row of
+	// spacing, then the tool item: line, 3 output lines, trailer
+	if r := rows[0]; r.first != 0 || r.last != 0 {
+		t.Fatalf("user rows: %+v (want 0..0)", r)
 	}
-	if r := rows[0]; r.first != 0 || r.last != 2 {
-		t.Fatalf("user rows: %+v (want 0..2, blank padding included)", r)
+	if r := rows[1]; r.first != 2 || r.last != 6 {
+		t.Fatalf("tool rows: %+v (want 2..6: tool line, 3 output lines, trailer)", r)
 	}
 }
 

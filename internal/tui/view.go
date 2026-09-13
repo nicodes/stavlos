@@ -133,11 +133,16 @@ func Render(lines []Line, o RenderOpts) string {
 // renderAll is Render plus, for every item, the rendered rows it occupies
 // (so the model can scroll the cursor item into view).
 func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
-	var b strings.Builder
-	rows := map[int]rowRange{}
-	row := 0
-	first := true
 	folds := o.folds(lines)
+	spaced := spacedItems(lines)
+
+	// Pass 1: render each visible line into rows, tagged with its item.
+	type row struct {
+		item  int
+		text  string
+		blank bool
+	}
+	var out []row
 	for i, l := range lines {
 		if !o.showLine(l) {
 			continue
@@ -146,31 +151,79 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		if folded && i != f.show {
 			continue
 		}
-		if !first {
+		cur := o.Focused && l.Item == o.Cursor
+		if l.Kind == LineBlank {
+			// Blank lines inside items are dropped; spacing is applied
+			// per item below so it is uniform whether folded or not.
+			continue
+		}
+		if folded && f.hidden > 0 {
+			l.Suffix = strings.TrimSpace(l.Suffix + fmt.Sprintf(" +%d", f.hidden))
+		}
+		text := renderLine(l, o, cur)
+		for _, part := range strings.Split(text, "\n") {
+			out = append(out, row{item: l.Item, text: part})
+		}
+	}
+
+	// Pass 2: a blank row above and below spaced items (user inputs,
+	// thinking, assistant responses), never doubled, none at the very top.
+	var b strings.Builder
+	rows := map[int]rowRange{}
+	n := 0
+	lastBlank := true // suppress a leading blank
+	emit := func(r row) {
+		if r.blank && lastBlank {
+			return
+		}
+		if n > 0 {
 			b.WriteByte('\n')
 		}
-		first = false
-		cur := o.Focused && l.Item == o.Cursor
-		text := ""
-		if l.Kind != LineBlank {
-			if folded && f.hidden > 0 {
-				l.Suffix = strings.TrimSpace(l.Suffix + fmt.Sprintf(" +%d", f.hidden))
-			}
-			text = renderLine(l, o, cur)
-		} else if cur {
-			text = styleGutter.Render(gutterMark)
-		}
-		b.WriteString(text)
-		n := strings.Count(text, "\n") + 1
-		if r, ok := rows[l.Item]; ok {
-			r.last = row + n - 1
-			rows[l.Item] = r
+		if r.blank && o.Focused && r.item == o.Cursor {
+			b.WriteString(styleGutter.Render(gutterMark))
 		} else {
-			rows[l.Item] = rowRange{row, row + n - 1}
+			b.WriteString(r.text)
 		}
-		row += n
+		if !r.blank {
+			if rr, ok := rows[r.item]; ok {
+				rr.last = n
+				rows[r.item] = rr
+			} else {
+				rows[r.item] = rowRange{n, n}
+			}
+		}
+		n++
+		lastBlank = r.blank
+	}
+	for i, r := range out {
+		startOfItem := i == 0 || out[i-1].item != r.item
+		endOfItem := i == len(out)-1 || out[i+1].item != r.item
+		if startOfItem && spaced[r.item] {
+			emit(row{item: r.item, blank: true})
+		}
+		emit(r)
+		if endOfItem && spaced[r.item] && i != len(out)-1 {
+			emit(row{item: r.item, blank: true})
+		}
 	}
 	return b.String(), rows
+}
+
+// spacedItems marks the items that get breathing room: user inputs,
+// thinking, and assistant responses.
+func spacedItems(lines []Line) map[int]bool {
+	out := map[int]bool{}
+	for _, l := range lines {
+		switch {
+		case l.Block == BlockUser || l.Block == BlockSteer:
+			out[l.Item] = true
+		case l.Kind == LineThink:
+			out[l.Item] = true
+		case (l.Kind == LineText || l.Kind == LineHeading || l.Kind == LineCode || l.Kind == LineStream) && l.Block == BlockNone:
+			out[l.Item] = true
+		}
+	}
+	return out
 }
 
 // fold describes a collapsed item: the one line index to show and how many
