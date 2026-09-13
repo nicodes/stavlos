@@ -867,6 +867,13 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	if _, tok := tr.TurnStats(time.Now()); tok != 0 {
 		t.Fatalf("a new turn starts its token count over: %d", tok)
 	}
+	// each turn gets a horse-flavoured verb, stable within the turn
+	if v := tr.TurnVerb(); v != turnVerbs[1] {
+		t.Fatalf("turn 2 verb %q, want %q", v, turnVerbs[1])
+	}
+	if s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Verb: tr.TurnVerb()}); !strings.HasSuffix(stripANSI(s), "⠋ "+turnVerbs[1]+"…") {
+		t.Fatalf("verb on the indicator:\n%s", stripANSI(s))
+	}
 	tr.Apply(mk(5, event.TurnAborted, event.TurnPayload{Turn: 2}))
 	if tr.InTurn() {
 		t.Fatal("aborted turn should clear the indicator")
