@@ -326,13 +326,14 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	case LineNotice:
 		style = styleNotice.Render
 	case LineTool:
+		g, gap := toolGlyph(l.tool)
 		switch {
 		case l.Running && o.Spinner != "":
 			glyph = styleWorking.Render(o.Spinner) + " "
 		case l.Err:
-			glyph = styleError.Render("⚙") + "  " // red gear on failure
+			glyph = styleError.Render(g) + gap // same glyph, red, on failure
 		default:
-			glyph = styleTool.Render("⚙") + "  " // two spaces: many terminals draw the gear two cells wide
+			glyph = styleTool.Render(g) + gap
 		}
 		style = renderToolText
 		if l.Suffix != "" {
@@ -361,7 +362,7 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	if l.Glyph != "" {
 		gs := glyphStyle(l)
 		gap := " "
-		if l.Glyph == "⚙" {
+		if l.Glyph == glyphToolFiles {
 			gap = "  "
 		}
 		if l.Running && o.Spinner != "" && l.Kind != LineTool {
@@ -1087,13 +1088,33 @@ func monitorRows(monitors []protocol.MonitorInfo, now time.Time, spinner string,
 
 // monitorGlyph is the single-width marker for a monitor kind: ⚙ command,
 // (the gear is used for every kind; ⏱ draws two cells wide in many terminals).
-// monitorGlyph is the gear for every monitor kind.
-func monitorGlyph(kind string) string { return "⚙" }
+// Tool-call glyphs by group: the gear for files, shell and finish; the
+// clock for monitors; the fork for agent tools.
+const (
+	glyphToolFiles    = "⚙"
+	glyphToolMonitors = "◷"
+	glyphToolAgents   = "⑂"
+)
+
+// toolGlyph returns the glyph for a tool name and the gap after it (the
+// gear gets two spaces: many terminals draw it two cells wide).
+func toolGlyph(tool string) (string, string) {
+	switch {
+	case strings.HasPrefix(tool, "agent_"):
+		return glyphToolAgents, " "
+	case tool == "monitor" || tool == "unmonitor" || tool == "watch" || tool == "timer" || tool == "monitors":
+		return glyphToolMonitors, " "
+	}
+	return glyphToolFiles, "  "
+}
+
+// monitorGlyph is the clock for every monitor kind.
+func monitorGlyph(kind string) string { return glyphToolMonitors }
 
 // monitorGlyphGap is the spacing after a kind glyph; the gear gets two
 // spaces because many terminals draw it two cells wide (as renderLine does).
 func monitorGlyphGap(kind string) string {
-	if monitorGlyph(kind) == "⚙" {
+	if monitorGlyph(kind) == glyphToolFiles {
 		return "  "
 	}
 	return " "

@@ -112,6 +112,7 @@ const (
 type streamSeg struct {
 	kind LineKind // LineStream (text), LineDim (thinking), LineTool (tool name), LineToolOut (tool output)
 	text string
+	tool string // raw tool name for LineTool
 }
 
 // Transcript accumulates rendered lines for one agent. Lines are grouped
@@ -405,20 +406,20 @@ func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 		if k > 0 && t.stream[k-1].kind == LineToolOut {
 			t.stream[k-1].text += n.Text
 		} else {
-			t.stream = append(t.stream, streamSeg{LineToolOut, n.Text})
+			t.stream = append(t.stream, streamSeg{LineToolOut, n.Text, ""})
 		}
 	case n.Text != "":
 		if k > 0 && t.stream[k-1].kind == LineStream {
 			t.stream[k-1].text += n.Text
 		} else {
-			t.stream = append(t.stream, streamSeg{LineStream, n.Text})
+			t.stream = append(t.stream, streamSeg{LineStream, n.Text, ""})
 		}
 	case n.Thinking != "":
 		if k == 0 || t.stream[k-1].kind != LineThink {
-			t.stream = append(t.stream, streamSeg{LineThink, "◌ thinking…"})
+			t.stream = append(t.stream, streamSeg{LineThink, "◌ thinking…", ""})
 		}
 	case n.ToolName != "":
-		t.stream = append(t.stream, streamSeg{LineTool, titleCase(n.ToolName)})
+		t.stream = append(t.stream, streamSeg{LineTool, titleCase(n.ToolName), n.ToolName})
 	}
 }
 
@@ -458,7 +459,7 @@ func (t *Transcript) All() []Line {
 		case LineToolOut:
 			out = append(out, outputLines(strings.TrimRight(s.text, "\n"))...)
 		case LineTool:
-			out = append(out, Line{Kind: LineTool, Text: s.text, Running: true})
+			out = append(out, Line{Kind: LineTool, Text: s.text, Running: true, tool: s.tool})
 		default:
 			out = append(out, Line{Kind: s.kind, Text: s.text})
 		}
