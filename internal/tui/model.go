@@ -36,7 +36,7 @@ func Run(ctx context.Context, c *client.Client, sessionID string) error {
 	defer cancel()
 
 	m := newModel(ctx, c, sessionID)
-	p := tea.NewProgram(m, tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(m, tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseAllMotion())
 	go forwardNotifications(ctx, c, p)
 
 	final, err := p.Run()
