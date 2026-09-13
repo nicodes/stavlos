@@ -1722,6 +1722,21 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 	if !found {
 		t.Fatalf("sidebar should be on the left:\n%s", strings.Join(lines, "\n"))
 	}
+	// the divider and everything below span the whole window; the sidebar
+	// stops above the divider
+	rule := -1
+	for i, l := range lines {
+		if strings.HasPrefix(l, "─") {
+			rule = i
+			break
+		}
+	}
+	if rule < 0 || ansi.StringWidth(lines[rule]) != m.width || !strings.HasPrefix(lines[rule+1], "coder ·") {
+		t.Fatalf("the rule should start at the left edge and span the window:\n%s", strings.Join(lines, "\n"))
+	}
+	if strings.Contains(lines[rule], "│") || strings.Contains(lines[rule+1], "│") {
+		t.Fatal("the sidebar separator must not run past the divider")
+	}
 	ev := func(msg tea.MouseMsg) tea.Cmd {
 		nm, cmd := m.Update(msg)
 		m = nm.(Model)

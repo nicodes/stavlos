@@ -771,7 +771,7 @@ func (m Model) boxWidth() int {
 	if m.isHome() {
 		return promptBoxWidth(m.width)
 	}
-	return m.contentWidth()
+	return m.width // the bottom block spans the window, sidebar or not
 }
 
 // inputBoxView is the input line over the meta row for the selected agent.
@@ -876,24 +876,26 @@ func (m Model) homeView(width, height int) string {
 // sessionView is the transcript over the input box, plus the sidebar.
 func (m Model) sessionView(width, height int) string {
 	cw := m.contentWidth()
-	// A rule closes the chat area; below it the background/permission tab
-	// strip (and the focused section's body) sit right above the input.
+	// The chat (and the status line above the rule) share the top with the
+	// sidebar; everything from the rule down spans the whole window, so the
+	// footer cuts the sidebar off, not the other way round.
+	top := padLines(m.vp.View()+"\n"+m.statusLine(cw), cw)
+	if m.sidebarVisible() {
+		h := m.vp.Height + 1
+		sep := styleSep.Render(strings.TrimSuffix(strings.Repeat("│\n", h), "\n"))
+		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top) // the sidebar sits on the left
+	}
 	// Under the rule: the meta row (YOLO, role, model, variant, usage), then
-	// the tab strip, a blank line, and the input.
-	parts := []string{m.vp.View(), m.statusLine(cw), styleRule.Render(strings.Repeat("─", cw)), m.metaRow(cw)} // the status line doubles as breathing room above the rule
-	if sv := m.sectionsView(cw); sv != "" {
+	// the tab strip, a blank line, the palette, and the input.
+	parts := []string{top, styleRule.Render(strings.Repeat("─", width)), m.metaRow(width)}
+	if sv := m.sectionsView(width); sv != "" {
 		parts = append(parts, sv, "") // a blank line below the strip, before the input
 	}
-	if pv := m.paletteViewFor(cw); pv != "" {
+	if pv := m.paletteViewFor(width); pv != "" {
 		parts = append(parts, pv)
 	}
-	parts = append(parts, m.inputBoxView(cw))
-	left := padLines(strings.Join(parts, "\n"), cw)
-	if !m.sidebarVisible() {
-		return left
-	}
-	sep := styleSep.Render(strings.TrimSuffix(strings.Repeat("│\n", height), "\n"))
-	return lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(height), sep, left) // the sidebar sits on the left
+	parts = append(parts, m.inputBoxView(width))
+	return padLines(strings.Join(parts, "\n"), width)
 }
 
 // sidebarView is the left panel: session summary, agent tree, prompts.
