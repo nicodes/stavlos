@@ -105,6 +105,7 @@ type Model struct {
 	palIdx      int      // highlighted row in the "/" command palette
 	agCursor    int      // highlighted row in the agents/async tab while it has focus
 	history     []string // prompts sent from this client (and replayed human prompts)
+	parentOf    map[string]string // child agent id → parent id, for the parent's agent_create line
 	histIdx     int      // == len(history) when editing a new line
 	histDraft   string   // unsent text saved while browsing history
 	loading     bool     // replaying events up to replayTo
@@ -1080,6 +1081,31 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 					ID: p.ID, Session: ev.Session, Parent: p.Parent, Archetype: p.Archetype,
 					Label: p.Label, Model: p.Model, Depth: p.Depth, State: "idle",
 				})
+			}
+			if p.Parent != "" {
+				// The parent's agent_create line tracks this child's life.
+				if m.parentOf == nil {
+					m.parentOf = map[string]string{}
+				}
+				m.parentOf[p.ID] = p.Parent
+				m.transcript(p.Parent).ChildSpawned(p.ID)
+				if !m.loading && p.Parent == m.selectedID() {
+					m.refreshViewport()
+				}
+			}
+		}
+	case event.AgentFinished, event.AgentKilled:
+		status := "killed"
+		if ev.Type == event.AgentFinished {
+			var p event.AgentFinishedPayload
+			if ev.Decode(&p) == nil {
+				status = p.Status
+			}
+		}
+		if parent := m.parentOf[ev.Agent]; parent != "" {
+			m.transcript(parent).ChildDone(ev.Agent, status)
+			if !m.loading && parent == m.selectedID() {
+				m.refreshViewport()
 			}
 		}
 	case event.PromptQueued:

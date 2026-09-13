@@ -953,3 +953,50 @@ func markCursorForTest(t *testing.T) {
 	highlightRow = func(s string, _ int) string { return gutterMark + s }
 	t.Cleanup(func() { highlightRow = prev })
 }
+
+func TestAgentCreateLineTracksChild(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Input: json.RawMessage(`{"archetype":"explorer","label":"scout","task":"look"}`)}))
+	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Output: "spawned scout (explorer) as x1"}))
+	line := func() Line {
+		for _, l := range tr.All() {
+			if l.Kind == LineTool && l.tool == "agent_create" {
+				return l
+			}
+		}
+		t.Fatal("no agent_create line")
+		return Line{}
+	}
+	if line().Tone != ToneNone {
+		t.Fatalf("before the spawn: %v", line().Tone)
+	}
+	tr.ChildSpawned("x1")
+	if line().Tone != ToneWorking {
+		t.Fatalf("while the child runs the line should be working: %v", line().Tone)
+	}
+	// more lines after it do not lose the tie
+	tr.Apply(mk(4, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c2", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(5, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c2", Name: "bash", Output: "ok"}))
+	tr.ChildDone("x1", "success")
+	if line().Tone != ToneNone {
+		t.Fatalf("after success the line should be grey: %v", line().Tone)
+	}
+	// a second child that fails turns its own line red; the first stays grey
+	tr.Apply(mk(6, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c3", Name: "agent_create", Input: json.RawMessage(`{"archetype":"tester","label":"checks","task":"test"}`)}))
+	tr.Apply(mk(7, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c3", Name: "agent_create", Output: "spawned checks (tester) as x2"}))
+	tr.ChildSpawned("x2")
+	tr.ChildDone("x2", "failure")
+	var tones []Tone
+	for _, l := range tr.All() {
+		if l.Kind == LineTool && l.tool == "agent_create" {
+			tones = append(tones, l.Tone)
+		}
+	}
+	if len(tones) != 2 || tones[0] != ToneNone || tones[1] != ToneError {
+		t.Fatalf("tones %v", tones)
+	}
+}

@@ -979,3 +979,32 @@ func TestFirstPermissionOpensItsTabWhenIdle(t *testing.T) {
 		t.Fatalf("chat focus should stay: %v", m.focus)
 	}
 }
+
+func TestParentAgentCreateLineFollowsChildEvents(t *testing.T) {
+	m := sessionModel()
+	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "coder"}}
+	m.selected = 0
+	ev := func(seq int64, agent string, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Session: "s", Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	m.applyEvent(ev(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}))
+	m.applyEvent(ev(2, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Input: json.RawMessage(`{"archetype":"explorer","label":"scout","task":"look"}`)}))
+	m.applyEvent(ev(3, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a", Archetype: "explorer", Label: "scout", Model: "fake/m1", Depth: 1}))
+	m.applyEvent(ev(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Output: "spawned scout (explorer) as c1"}))
+	tone := func() Tone {
+		for _, l := range m.transcript("a").All() {
+			if l.Kind == LineTool && l.tool == "agent_create" {
+				return l.Tone
+			}
+		}
+		t.Fatal("no agent_create line in the parent's chat")
+		return ToneNone
+	}
+	if tone() != ToneWorking {
+		t.Fatalf("child running: tone %v", tone())
+	}
+	m.applyEvent(ev(5, "c1", event.AgentFinished, event.AgentFinishedPayload{Summary: "done", Status: "success"}))
+	if tone() != ToneNone {
+		t.Fatalf("child finished: tone %v", tone())
+	}
+}
