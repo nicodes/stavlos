@@ -486,3 +486,45 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 		}
 	}
 }
+
+func TestThinkingIsItsOwnItem(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "hi"}))
+	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "openai/gpt-5.4", Blocks: []model.Block{
+		{Type: model.BlockThinking, Text: "let me see"},
+		{Type: model.BlockText, Text: "here is the answer"},
+	}}))
+	lines := tr.All()
+	var thinkItem, textItem, userItem = -1, -1, -1
+	for _, l := range lines {
+		switch {
+		case l.Kind == LineThink:
+			thinkItem = l.Item
+		case l.Kind == LineText && strings.Contains(l.Text, "answer"):
+			textItem = l.Item
+		case l.Block == BlockUser && strings.Contains(l.Text, "hi"):
+			userItem = l.Item
+		}
+	}
+	if thinkItem < 0 || textItem < 0 || userItem < 0 {
+		t.Fatalf("missing lines: think=%d text=%d user=%d", thinkItem, textItem, userItem)
+	}
+	if !(userItem < thinkItem && thinkItem < textItem) {
+		t.Fatalf("items not separate/in order: user=%d think=%d text=%d", userItem, thinkItem, textItem)
+	}
+	if tr.Items() != 3 {
+		t.Fatalf("items %d", tr.Items())
+	}
+	// streaming: a thinking delta then text form two in-progress items
+	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 2, Thinking: "hmm"})
+	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 2, Text: "so far"})
+	all := tr.All()
+	last := all[len(all)-1]
+	prev := all[len(all)-2]
+	if prev.Kind != LineThink || last.Kind != LineStream || prev.Item == last.Item {
+		t.Fatalf("stream items: prev=%+v last=%+v", prev, last)
+	}
+}

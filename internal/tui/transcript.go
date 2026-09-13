@@ -28,6 +28,7 @@ const (
 	LineError                    // error text
 	LineStream                   // in-progress streaming text (rendered like LineText)
 	LineModel                    // "· <model>" trailer after the final assistant text
+	LineThink                    // thinking summary ("∴ thinking…"); always its own item
 	LineBlank                    // spacer
 )
 
@@ -161,17 +162,40 @@ func (t *Transcript) Apply(ev event.Event) {
 }
 
 // appendItem commits lines under item; a fresh item index bumps the count.
+// Thinking is always its own item: each contiguous run of LineThink lines,
+// and the run of other lines after it, get successive item indices.
 func (t *Transcript) appendItem(item int, lines []Line) {
 	if len(lines) == 0 {
 		return
 	}
-	for i := range lines {
-		lines[i].Item = item
+	if item != t.items {
+		for i := range lines {
+			lines[i].Item = item
+		}
+		t.Lines = append(t.Lines, lines...)
+		return
 	}
-	t.Lines = append(t.Lines, lines...)
-	if item == t.items {
+	for _, run := range splitThinking(lines) {
+		for i := range run {
+			run[i].Item = t.items
+		}
+		t.Lines = append(t.Lines, run...)
 		t.items++
 	}
+}
+
+// splitThinking cuts lines at every boundary between thinking and
+// non-thinking lines, preserving order.
+func splitThinking(lines []Line) [][]Line {
+	var runs [][]Line
+	start := 0
+	for i := 1; i <= len(lines); i++ {
+		if i == len(lines) || (lines[i].Kind == LineThink) != (lines[start].Kind == LineThink) {
+			runs = append(runs, lines[start:i])
+			start = i
+		}
+	}
+	return runs
 }
 
 // openCallItem returns the item of the most recently started, still-open
@@ -260,8 +284,8 @@ func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 			t.stream = append(t.stream, streamSeg{LineStream, n.Text})
 		}
 	case n.Thinking != "":
-		if k == 0 || t.stream[k-1].kind != LineDim {
-			t.stream = append(t.stream, streamSeg{LineDim, "∴ thinking…"})
+		if k == 0 || t.stream[k-1].kind != LineThink {
+			t.stream = append(t.stream, streamSeg{LineThink, "∴ thinking…"})
 		}
 	case n.ToolName != "":
 		t.stream = append(t.stream, streamSeg{LineTool, titleCase(n.ToolName)})
@@ -305,8 +329,12 @@ func (t *Transcript) All() []Line {
 			out = append(out, Line{Kind: s.kind, Text: s.text})
 		}
 	}
+	cur := item
 	for i := start; i < len(out); i++ {
-		out[i].Item = item
+		if i > start && (out[i].Kind == LineThink) != (out[i-1].Kind == LineThink) && !(cur == item && item != t.items) {
+			cur++
+		}
+		out[i].Item = cur
 	}
 	return out
 }
@@ -622,13 +650,13 @@ func headingLevel(s string) int {
 func thinkingLine(summary string) Line {
 	summary = strings.TrimSpace(summary)
 	if summary == "" {
-		return Line{Kind: LineDim, Text: "∴ thinking…"}
+		return Line{Kind: LineThink, Text: "∴ thinking…"}
 	}
 	first := summary
 	if i := strings.IndexByte(first, '\n'); i >= 0 {
 		first = first[:i]
 	}
-	return Line{Kind: LineDim, Text: "∴ " + truncRunes(first, maxThinkChars)}
+	return Line{Kind: LineThink, Text: "∴ " + truncRunes(first, maxThinkChars)}
 }
 
 // truncLines splits text into at most n lines of the given kind, appending
