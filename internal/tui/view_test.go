@@ -1529,3 +1529,19 @@ func TestInputNewlineAndHistoryKeys(t *testing.T) {
 		t.Fatalf("↑ on the first line should recall history: %q", m.input.Value())
 	}
 }
+
+func TestInputShowsOneChevron(t *testing.T) {
+	m := sessionModel()
+	m.width, m.height = 60, 30
+	m.input.SetValue("first line\nsecond line\nthird")
+	m.layout()
+	v := stripANSI(m.input.View())
+	if strings.Count(v, "›") != 1 || !strings.HasPrefix(v, "› first line") {
+		t.Fatalf("one chevron on the first line only:\n%s", v)
+	}
+	for i, l := range strings.Split(v, "\n")[1:] {
+		if !strings.HasPrefix(l, "  ") {
+			t.Fatalf("continuation line %d should be indented under the chevron: %q", i+1, l)
+		}
+	}
+}

@@ -185,20 +185,30 @@ const inputMaxLines = 8
 func newInputArea() textarea.Model {
 	ta := textarea.New()
 	ta.Prompt = "› "
+	// One chevron: the first line carries ›, continuation lines are
+	// indented under it.
+	ta.SetPromptFunc(2, func(lineIdx int) string {
+		if lineIdx == 0 {
+			return "› "
+		}
+		return "  "
+	})
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 0
 	ta.MaxHeight = inputMaxLines
 	ta.SetHeight(1)
 	ta.EndOfBufferCharacter = ' '
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"))
-	plain := lipgloss.NewStyle()
-	ta.FocusedStyle.Base, ta.BlurredStyle.Base = plain, plain
-	ta.FocusedStyle.CursorLine, ta.BlurredStyle.CursorLine = plain, plain
-	ta.FocusedStyle.EndOfBuffer, ta.BlurredStyle.EndOfBuffer = plain, plain
-	ta.FocusedStyle.Text, ta.BlurredStyle.Text = plain, plain
-	ta.FocusedStyle.Placeholder, ta.BlurredStyle.Placeholder = styleDim, styleDim
+	// A subtle background makes the input stand out from the chat above
+	// and the meta row below; every part of the block shares it.
+	bg := lipgloss.NewStyle().Background(colInputBg)
+	ta.FocusedStyle.Base, ta.BlurredStyle.Base = bg, bg
+	ta.FocusedStyle.CursorLine, ta.BlurredStyle.CursorLine = bg, bg
+	ta.FocusedStyle.EndOfBuffer, ta.BlurredStyle.EndOfBuffer = bg, bg
+	ta.FocusedStyle.Text, ta.BlurredStyle.Text = bg, bg
+	ta.FocusedStyle.Placeholder, ta.BlurredStyle.Placeholder = styleDim.Background(colInputBg), styleDim.Background(colInputBg)
 	// The prompt chevron carries the focus colour (there is no box border).
-	ta.FocusedStyle.Prompt, ta.BlurredStyle.Prompt = styleBorderUser, styleBorderMuted
+	ta.FocusedStyle.Prompt, ta.BlurredStyle.Prompt = styleBorderUser.Background(colInputBg), styleBorderMuted.Background(colInputBg)
 	return ta
 }
 

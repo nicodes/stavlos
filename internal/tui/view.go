@@ -23,6 +23,7 @@ var (
 	colBlocked = lipgloss.AdaptiveColor{Light: "#9333EA", Dark: "#C084FC"}
 	colBorder  = colMuted
 	colSelBg   = lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#2A2F3A"} // chat cursor row background
+	colInputBg = lipgloss.AdaptiveColor{Light: "#F3F4F6", Dark: "#1C2129"} // the message input's background
 
 	styleDim      = lipgloss.NewStyle().Foreground(colMuted)
 	styleKey      = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
