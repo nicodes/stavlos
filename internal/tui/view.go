@@ -740,12 +740,8 @@ func (m Model) homeView(width, height int) string {
 	logo := logoLines(width)
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lines = append(lines, "")
-	if bv := m.backgroundView(boxW); bv != "" {
-		add(bv, boxW)
-		lines = append(lines, "")
-	}
-	if pb := m.promptView(boxW); pb != "" {
-		add(pb, boxW)
+	if sv := m.sectionsView(boxW); sv != "" {
+		add(sv, boxW)
 		lines = append(lines, "")
 	}
 	if pv := m.paletteViewFor(boxW); pv != "" {
@@ -786,14 +782,11 @@ func (m Model) homeView(width, height int) string {
 // sessionView is the transcript over the input box, plus the sidebar.
 func (m Model) sessionView(width, height int) string {
 	cw := m.contentWidth()
-	// A rule closes the chat area; the sections below it follow the tab
-	// cycle: background, then the permission box right above the input.
+	// A rule closes the chat area; below it the background/permission tab
+	// strip (and the focused section's body) sit right above the input.
 	parts := []string{m.vp.View(), styleRule.Render(strings.Repeat("─", cw))}
-	if bv := m.backgroundView(cw); bv != "" {
-		parts = append(parts, bv)
-	}
-	if pb := m.promptView(cw); pb != "" {
-		parts = append(parts, pb)
+	if sv := m.sectionsView(cw); sv != "" {
+		parts = append(parts, sv)
 	}
 	if pv := m.paletteViewFor(cw); pv != "" {
 		parts = append(parts, pv)
@@ -877,18 +870,87 @@ func (m Model) treeRows(width int) []string {
 	return rows
 }
 
-// promptView renders the permission/question/trust box for the head of the
-// queue at the given width, or "". The box is accent while the permission
-// section has focus (its hotkeys apply only then), muted otherwise.
-func (m Model) promptView(width int) string {
+// sectionsView is the block between the chat and the input: a tab strip
+// naming the background section and the pending permission with their
+// counts, followed by the body of whichever one has focus. "" when there is
+// nothing to show.
+func (m Model) sectionsView(width int) string {
+	kids := m.liveChildren()
+	jobs := m.runningJobs()
+	nBack := len(kids) + len(jobs)
 	p := m.currentPrompt()
-	if p == nil {
+	if nBack == 0 && p == nil {
 		return ""
 	}
-	focused := m.focus == focusPermission
-	if !focused {
-		return promptSummary(p, len(m.prompts), width)
+	strip := m.sectionTabs(nBack, p, width)
+	switch m.focus {
+	case focusBackground:
+		if nBack > 0 {
+			return strings.Join(append([]string{strip}, m.backgroundRows(jobs, width)...), "\n")
+		}
+	case focusPermission:
+		if p != nil {
+			return strip + "\n" + m.promptBox(p, width)
+		}
 	}
+	return strip
+}
+
+// sectionTabs is the one-line strip: each present section as a tab with its
+// count, the focused one in accent, the rest dim, then a hint.
+func (m Model) sectionTabs(nBack int, p *protocol.PromptInfo, width int) string {
+	// The open tab is accent with a ▾ pointing at its contents below; the
+	// rest are dim.
+	tab := func(label string, on bool) string {
+		if on {
+			return styleBoxTitleFocus.Render("▾ " + label)
+		}
+		return styleDim.Render(label)
+	}
+	var tabs []string
+	if nBack > 0 {
+		tabs = append(tabs, tab(fmt.Sprintf("background (%d)", nBack), m.focus == focusBackground))
+	}
+	if p != nil {
+		label := fmt.Sprintf("%s (%d)", p.Kind, len(m.prompts))
+		if m.focus == focusPermission {
+			tabs = append(tabs, styleWorking.Render("?")+" "+tab(label, true))
+		} else {
+			tabs = append(tabs, styleWorking.Render("?")+" "+tab(label, false))
+		}
+	}
+	var hint string
+	switch m.focus {
+	case focusBackground:
+		hint = "↑/↓ move · enter select agent · esc back"
+	case focusPermission:
+		hint = ""
+	default:
+		hint = "tab to open"
+		if p != nil {
+			hint = "tab to answer"
+		}
+	}
+	line := strings.Join(tabs, styleDim.Render("  │  "))
+	if hint != "" {
+		line += styleDim.Render("  " + hint)
+	}
+	return ansi.Truncate(line, width, "…")
+}
+
+// promptView is the tab strip plus the permission box when the permission
+// section has focus; kept as the entry point tests and the layout use.
+func (m Model) promptView(width int) string {
+	if m.currentPrompt() == nil {
+		return ""
+	}
+	return m.sectionsView(width)
+}
+
+// promptBox renders the permission/question/trust box for the head of the
+// queue at the given width. It is only drawn while the section has focus
+// (its hotkeys apply only then).
+func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 	inner := width - 4
 	if inner < 20 {
 		inner = 20
@@ -900,10 +962,7 @@ func (m Model) promptView(width int) string {
 	if n := len(m.prompts); n > 1 {
 		title += fmt.Sprintf("  [1 of %d]", n)
 	}
-	box, titleStyle := styleBox, styleBoxTitle
-	if focused {
-		box, titleStyle = styleBoxFocus, styleBoxTitleFocus
-	}
+	box, titleStyle := styleBoxFocus, styleBoxTitleFocus
 	lines := []string{titleStyle.Render(title)}
 	var hint string
 
@@ -953,19 +1012,10 @@ func (m Model) promptView(width int) string {
 		lines = append(lines, styleStatusErr.Render("claimed by another client"))
 	case m.promptBusy == p.ID:
 		lines = append(lines, styleDim.Render("answering…"))
-	case !focused:
-		lines = append(lines, styleDim.Render("tab to focus, then "+hint))
 	default:
 		lines = append(lines, styleDim.Render(hint))
 	}
 	return box.Width(inner).Render(strings.Join(lines, "\n"))
-}
-
-// promptSummary is the one-line form shown while the permission section is
-// not focused: just the count of pending prompts, e.g. "? permission (2)".
-func promptSummary(p *protocol.PromptInfo, pending int, width int) string {
-	head := styleWorking.Render("?") + " " + styleBold.Render(fmt.Sprintf("permission (%d)", pending)) + styleDim.Render("  tab to answer")
-	return ansi.Truncate(head, width, "…")
 }
 
 // footerView is the bottom line: dim cwd on the left, summary or a
@@ -1026,22 +1076,20 @@ func (m Model) connected() bool {
 	return true
 }
 
-// backgroundView is the "background" section above the input: the
-// selected agent's live children and its running async jobs, one line each
-// with the chat's glyphs and lifecycle colours. It collapses to a summary
-// line unless it has focus.
+// backgroundView is the tab strip plus the background rows when the
+// section has focus; kept as the entry point tests and the layout use.
 func (m Model) backgroundView(width int) string {
-	kids := m.liveChildren()
-	jobs := m.runningJobs()
-	if len(kids)+len(jobs) == 0 {
+	if len(m.liveChildren())+len(m.runningJobs()) == 0 {
 		return ""
 	}
-	if m.focus != focusBackground {
-		return backgroundSummary(kids, jobs, width)
-	}
+	return m.sectionsView(width)
+}
+
+// backgroundRows lists the selected agent's live children (⑂) and running
+// async jobs (⚙), one per line, with a cursor marker on the current row.
+func (m Model) backgroundRows(jobs []protocol.MonitorInfo, width int) []string {
 	rows := agentRows(m.agents, m.selectedID(), m.spawned, time.Now(), width-2)
 	rows = append(rows, monitorRows(jobs, time.Now(), width-2)...)
-	head := styleAccent.Render("background") + " " + styleDim.Render(fmt.Sprintf("(%d) · ↑/↓ move · enter select agent · esc back", len(rows)))
 	for i := range rows {
 		marker := "  "
 		if i == m.agCursor%len(rows) {
@@ -1049,14 +1097,7 @@ func (m Model) backgroundView(width int) string {
 		}
 		rows[i] = marker + strings.TrimPrefix(rows[i], "  ")
 	}
-	return strings.Join(append([]string{head}, rows...), "\n")
-}
-
-// backgroundSummary is the one-line form shown while the section is not
-// focused: just the count of live children and jobs, e.g. "background (3)".
-func backgroundSummary(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, width int) string {
-	head := styleDim.Render(fmt.Sprintf("background (%d)", len(kids)+len(jobs))) + styleDim.Render("  tab to open")
-	return ansi.Truncate(head, width, "…")
+	return rows
 }
 
 // agentGlyph is the fork, coloured by the agent's lifecycle like the chat:
