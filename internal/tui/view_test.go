@@ -100,19 +100,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("coder", "anthropic/claude-opus-5", "", 0, false)); got != "Coder · anthropic/claude-opus-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, false)); got != "main (coder) · anthropic/claude-opus-5 · default" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("coder", "", "", 0, false)); got != "Coder · no model — /models" {
+	if got := stripANSI(metaLine("main", "coder", "", "", 0, false)); got != "main (coder) · no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "ollama/llama3", "", 2, false)); got != "Scout · ollama/llama3 · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, false)); got != "scout (explorer) · ollama/llama3 · default · 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("coder", "openai/gpt-5", "high", 0, false)); got != "Coder · openai/gpt-5 · high" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, false)); got != "main (coder) · openai/gpt-5 · high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("coder", "openai/gpt-5", "", 0, true)); got != "YOLO · Coder · openai/gpt-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, true)); got != "YOLO · main (coder) · openai/gpt-5 · default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
@@ -903,7 +903,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	meta, strip := -1, -1
 	for i, l := range lines {
 		switch {
-		case strings.HasPrefix(l, "Coder · "):
+		case strings.HasPrefix(l, "coder · "):
 			meta = i
 		case strings.HasPrefix(l, "permission ("):
 			strip = i

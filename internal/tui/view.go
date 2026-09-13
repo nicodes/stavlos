@@ -640,15 +640,20 @@ func inputBox(input, meta string) string {
 	return input + "\n" + meta
 }
 
-// metaLine is "Coder · anthropic/claude-opus-5 · high" (or the no-model
-// nudge): the role, the model and its variant ("default" when none is
-// set), led by a warning-coloured YOLO tag while the session auto-approves.
-func metaLine(label, model, variant string, queued int, yolo bool) string {
+// metaLine is "main (coder) · anthropic/claude-opus-5 · high" (or the
+// no-model nudge): the agent as "label (role)" like the tab rows, the
+// model and its variant ("default" when none is set), led by a
+// warning-coloured YOLO tag while the session auto-approves.
+func metaLine(label, role, model, variant string, queued int, yolo bool) string {
 	s := ""
 	if yolo {
 		s = styleWarn.Render("YOLO") + " · "
 	}
-	s += titleCase(label) + " · "
+	if role != "" {
+		s += fmt.Sprintf("%s (%s) · ", label, role)
+	} else {
+		s += label + " · "
+	}
 	if model == "" {
 		return s + styleWarn.Render("no model — /models")
 	}
@@ -773,14 +778,14 @@ func (m Model) inputBoxView(width int) string {
 // and cost (or a transient status) on the right, dot separators within
 // each side. The left side is truncated first when they collide.
 func (m Model) metaRow(width int) string {
-	label, model, variant, queued := "agent", m.session.Model, "", 0
+	label, role, model, variant, queued := "agent", "", m.session.Model, "", 0
 	if a := m.selectedAgent(); a != nil {
-		label, variant, queued = a.Label, a.Variant, a.Queued
+		label, role, variant, queued = a.Label, a.Archetype, a.Variant, a.Queued
 		if a.Model != "" {
 			model = a.Model
 		}
 	}
-	left := metaLine(label, model, variant, queued, m.session.Yolo)
+	left := metaLine(label, role, model, variant, queued, m.session.Yolo)
 	right := m.footerRightView()
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {
