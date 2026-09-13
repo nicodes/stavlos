@@ -918,3 +918,35 @@ func TestTurnIndicatorFollowsPrompts(t *testing.T) {
 		t.Fatalf("after the answer:\n%s", v)
 	}
 }
+
+func TestFirstPermissionOpensItsTabWhenIdle(t *testing.T) {
+	req := func(id string) protocol.PromptNotification {
+		return protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: id, Kind: "permission", Agent: "a", Tool: "bash"}}
+	}
+	// idle input: the first prompt opens the permission tab
+	m := sessionModel()
+	m.applyPromptNotification(req("p1"))
+	if m.focus != focusPermission {
+		t.Fatalf("idle input should jump to the permission tab: focus=%v", m.focus)
+	}
+	// a second prompt behind a pending one changes nothing
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	m.applyPromptNotification(req("p2"))
+	if m.focus != focusInput {
+		t.Fatalf("second prompt should not steal focus: %v", m.focus)
+	}
+	// a draft in the input is never interrupted
+	m = sessionModel()
+	m.input.SetValue("half a thou")
+	m.applyPromptNotification(req("p3"))
+	if m.focus != focusInput {
+		t.Fatalf("typing should keep focus: %v", m.focus)
+	}
+	// nor is another section
+	m = sessionModel()
+	m.setFocus(focusChat)
+	m.applyPromptNotification(req("p4"))
+	if m.focus != focusChat {
+		t.Fatalf("chat focus should stay: %v", m.focus)
+	}
+}
