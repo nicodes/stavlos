@@ -229,6 +229,12 @@ func (c *Client) SetAgentModel(ctx context.Context, agent, modelID string) error
 	return c.Call(ctx, protocol.MAgentSetModel, protocol.AgentSetModelParams{Agent: agent, Model: modelID}, nil)
 }
 
+// SetAgentRole switches an agent's preset (system prompt, tools, spawn list)
+// in place; it takes effect at the agent's next turn.
+func (c *Client) SetAgentRole(ctx context.Context, agent, role string) error {
+	return c.Call(ctx, protocol.MAgentSetRole, protocol.AgentSetRoleParams{Agent: agent, Role: role}, nil)
+}
+
 func (c *Client) Prompts(ctx context.Context, session string) ([]protocol.PromptInfo, error) {
 	var r protocol.PromptListResult
 	err := c.Call(ctx, protocol.MPromptList, protocol.PromptListParams{Session: session}, &r)

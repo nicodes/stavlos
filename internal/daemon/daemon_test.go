@@ -566,3 +566,57 @@ func TestBashKillStopsJob(t *testing.T) {
 		t.Fatalf("%+v", agents[0].Monitors)
 	}
 }
+
+func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			if !strings.Contains(req.System, "senior software engineer") {
+				t.Errorf("turn 1 should use the coder preset: %.80q", req.System)
+			}
+			return text("hi from coder")
+		},
+		func(req model.Request) model.Response {
+			if !strings.Contains(req.System, "read-only code explorer") {
+				t.Errorf("turn 2 should use the explorer preset: %.80q", req.System)
+			}
+			for _, d := range req.Tools {
+				if d.Name == "apply_patch" || d.Name == "agent_create" {
+					t.Errorf("explorer should not have %s", d.Name)
+				}
+			}
+			return text("hi from explorer")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "one")
+	h.waitFor(event.TurnEnded, root)
+	if err := h.c.SetAgentRole(ctx, root, "nope"); err == nil {
+		t.Fatal("unknown role accepted")
+	}
+	if err := h.c.SetAgentRole(ctx, root, "explorer"); err != nil {
+		t.Fatal(err)
+	}
+	h.waitFor(event.AgentRoleChanged, root)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].Archetype != "explorer" || agents[0].Label != "explorer" {
+		t.Fatalf("tree after role change: %+v", agents[0])
+	}
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "two")
+	var te event.TurnEndedPayload
+	for te.Turn != 2 {
+		e := h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	if te.Reason != "end_turn" {
+		t.Fatalf("%+v", te)
+	}
+}

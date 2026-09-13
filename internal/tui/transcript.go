@@ -676,6 +676,13 @@ func EventLines(ev event.Event) []Line {
 	case event.AgentKilled:
 		return errorBlockWith("killed", GlyphKilled)
 
+	case event.AgentRoleChanged:
+		var p event.RoleChangedPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "role → " + p.Role}}
+
 	case event.AgentModelChanged:
 		var p event.ModelChangedPayload
 		if err := ev.Decode(&p); err != nil {

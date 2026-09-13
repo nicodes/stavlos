@@ -320,6 +320,27 @@ func (a *Agent) SetModel(ctx context.Context, id string) error {
 	return err
 }
 
+// SetRole switches the agent's preset in place. The system prompt, tool
+// list, skills, and spawn list change at the next model call; the label
+// follows when it was just the old role's name.
+func (a *Agent) SetRole(ctx context.Context, role string) error {
+	preset, ok := a.s.Config().Presets[role]
+	if !ok {
+		return fmt.Errorf("unknown role %q (see /roles)", role)
+	}
+	a.mu.Lock()
+	if a.Label == a.Archetype {
+		a.Label = role
+	}
+	a.Archetype = role
+	a.preset = preset
+	label := a.Label
+	a.mu.Unlock()
+	_, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentRoleChanged,
+		Payload: event.MustPayload(event.RoleChangedPayload{Role: role, Label: label})})
+	return err
+}
+
 // Children returns child ids.
 func (a *Agent) Children() []string {
 	a.mu.Lock()

@@ -341,6 +341,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case loginDoneMsg:
 		cmds = append(cmds, m.onLoginDone(msg))
 
+	case rolesMsg:
+		cmds = append(cmds, m.onRoles(msg))
 	case modelsMsg:
 		cmds = append(cmds, m.onModels(msg))
 
@@ -794,7 +796,15 @@ func (m *Model) command(text string) tea.Cmd {
 	case "/tips":
 		m.showTips = !m.showTips
 		return nil
-	case "/presets":
+	case "/role":
+		if c := needAgent(); c != nil {
+			return c
+		}
+		if rest == "" {
+			return rolesCmd(m.ctx, m.c, m.sessionID)
+		}
+		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
+	case "/roles", "/presets":
 		return presetsCmd(m.ctx, m.c, m.sessionID)
 	case "/queue":
 		if c := needAgent(); c != nil {
@@ -902,7 +912,7 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	switch ev.Type {
 	case event.AgentSpawned, event.AgentFinished, event.AgentKilled,
 		event.TurnStarted, event.TurnEnded, event.Usage,
-		event.AgentModelChanged, event.SessionModelChanged,
+		event.AgentModelChanged, event.AgentRoleChanged, event.SessionModelChanged,
 		event.MonitorStarted, event.MonitorFired, event.MonitorStopped:
 		if !m.loading {
 			cmds = append(cmds, m.markTreeDirty())
@@ -1349,6 +1359,16 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 		}
 		return nil
 
+	case ovRoles:
+		it := o.selected()
+		if it == nil {
+			return nil
+		}
+		agent := m.selectedID()
+		if agent == "" {
+			return m.setStatus("no agent selected", true)
+		}
+		return tea.Batch(m.closeOverlay(), pickRoleCmd(m.ctx, m.c, agent, it.id))
 	case ovModels:
 		it := o.selected()
 		if it == nil {
@@ -1511,6 +1531,24 @@ func (m *Model) onProviders(msg providersMsg) tea.Cmd {
 		return tea.Batch(cmd, m.setStatus("unknown provider "+msg.jump, true))
 	}
 	return cmd
+}
+
+func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
+	if msg.err != nil {
+		return m.setStatus("roles: "+msg.err.Error(), true)
+	}
+	label := m.agentLabel(m.selectedID())
+	o := newOverlay(ovRoles, overlayList, "Change role of "+label, "enter: switch this agent's preset · takes effect at its next turn")
+	items := make([]overlayItem, 0, len(msg.roles))
+	for _, r := range msg.roles {
+		hint := r.Description
+		if len(r.Spawn) > 0 {
+			hint += "  · spawns " + strings.Join(r.Spawn, ", ")
+		}
+		items = append(items, overlayItem{id: r.Name, label: r.Name, hint: hint})
+	}
+	o.setItems(items)
+	return m.openOverlay(o)
 }
 
 func (m *Model) onModels(msg modelsMsg) tea.Cmd {
