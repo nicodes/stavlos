@@ -331,7 +331,7 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		case l.Err:
 			glyph = styleError.Render("✗") + " "
 		default:
-			glyph = styleTool.Render("↳") + " "
+			glyph = styleTool.Render("⚙") + " "
 		}
 		style = renderToolText
 		if l.Suffix != "" {
