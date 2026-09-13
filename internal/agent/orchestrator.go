@@ -123,7 +123,9 @@ func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus,
 		p.yieldFlag = true
 	}
 	if pending {
-		p.wakeFlag = true
+		for _, r := range p.childDone {
+			p.wakes[r.ID] = true
+		}
 	}
 	p.mu.Unlock()
 	if len(armed) > 0 {
@@ -143,12 +145,19 @@ func (o orchestrator) Unmonitor(parent string, ids []string) ([]string, error) {
 		for id := range p.armed {
 			ids = append(ids, id)
 		}
+		for id := range p.wakes {
+			ids = append(ids, id)
+		}
 		sort.Strings(ids)
 	}
 	var disarmed []string
 	for _, id := range ids {
 		if p.armed[id] {
 			delete(p.armed, id)
+			disarmed = append(disarmed, id)
+		}
+		if p.wakes[id] { // finished before the disarm: cancel the pending wake too
+			delete(p.wakes, id)
 			disarmed = append(disarmed, id)
 		}
 	}

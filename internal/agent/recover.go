@@ -179,7 +179,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			a.monDone = append(a.monDone, res)
 			if a.armed[id] {
 				delete(a.armed, id)
-				a.wakeFlag = true
+				a.wakes[id] = true
 			}
 		}
 	}
@@ -203,7 +203,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 		a.steers = pendingSteers[id]
 		for cid := range a.armed {
 			if c, ok := s.agents[cid]; ok && !c.Alive() {
-				a.wakeFlag = true
+				a.wakes[cid] = true
 			}
 		}
 		if s.archived {

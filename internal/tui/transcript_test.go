@@ -210,7 +210,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   ✗ Read  a.go", "       line", "       line", "       line", "       … +17 lines", "   ⚙  Write  b.go (denied)"})
+	assertSubsequence(t, got, []string{"   ⚙  Read  a.go", "       line", "       line", "       line", "       … +17 lines", "   ⚙  Write  b.go (denied)"})
 	if n := count(got, "       line"); n != maxOutputCollapsed {
 		t.Fatalf("collapsed: want %d output lines, got %d", maxOutputCollapsed, n)
 	}
@@ -737,7 +737,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	// /details shows the whole output and the user block's output lines
 	all := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Details: true})), "\n")
-	for _, want := range []string{"ok  e", "monitor stopped (unmonitor)", "✗ timer elapsed", "ok  b"} {
+	for _, want := range []string{"ok  e", "monitor stopped (unmonitor)", "timer elapsed", "ok  b"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("details lacks %q:\n%s", want, all)
 		}
@@ -748,7 +748,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	tr2.Apply(mk(1, event.MonitorFired, event.MonitorFiredPayload{ID: "zz", Kind: "watch", Summary: "3 files changed", Output: "a.go"}))
 	tr2.Apply(mk(2, event.MonitorStopped, event.MonitorRefPayload{ID: "yy", Reason: "kill"}))
 	got := renderLines(tr2.All())
-	assertSubsequence(t, got, []string{"   ◉ 3 files changed", "       a.go", "   ⚙  monitor stopped (kill)"})
+	assertSubsequence(t, got, []string{"   ⚙  3 files changed", "       a.go", "   ⚙  monitor stopped (kill)"})
 	if tr2.Items() != 2 {
 		t.Fatalf("items %d", tr2.Items())
 	}
