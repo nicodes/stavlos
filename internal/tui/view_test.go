@@ -1120,9 +1120,9 @@ func TestEscTwiceCancelsTheTurn(t *testing.T) {
 }
 
 func TestSessionItemAndBind(t *testing.T) {
-	created := time.Now().Add(-90 * time.Second).Format(time.RFC3339)
+	created := time.Now().Add(-3 * time.Hour).Format(time.RFC3339)
 	it := sessionItem(protocol.SessionInfo{ID: "s1", Title: "fix the login bug", Created: created, Model: "openai/gpt-5", CostUSD: 0.12, Live: 2}, false)
-	if it.label != "fix the login bug" || !strings.HasPrefix(it.hint, "1m30s ago · openai/gpt-5 · $0.12 · 2 live") || it.good {
+	if it.label != "fix the login bug" || !strings.HasPrefix(it.hint, "3h00m ago · openai/gpt-5 · $0.12 · 2 live") || it.good {
 		t.Fatalf("item: %+v", it)
 	}
 	it = sessionItem(protocol.SessionInfo{ID: "s2", Created: created}, true)
@@ -1142,5 +1142,25 @@ func TestSessionItemAndBind(t *testing.T) {
 	}
 	if !m.isHome() {
 		t.Fatal("a freshly bound session shows the home screen until its history replays")
+	}
+}
+
+func TestSessionsPickerSkipsEmptySessions(t *testing.T) {
+	m := sessionModel()
+	m.sessionID = "cur"
+	m.onSessions(sessionsMsg{sessions: []protocol.SessionInfo{
+		{ID: "cur", Created: time.Now().Format(time.RFC3339)},
+		{ID: "empty", Created: time.Now().Format(time.RFC3339)},
+		{ID: "old", Title: "fix the login bug", Created: time.Now().Format(time.RFC3339)},
+	}})
+	if m.ov == nil || m.ov.kind != ovSessions {
+		t.Fatal("picker should open")
+	}
+	var ids []string
+	for _, it := range m.ov.items {
+		ids = append(ids, it.id)
+	}
+	if strings.Join(ids, " ") != "cur old" {
+		t.Fatalf("picker rows %v: the untouched session should be left out, the current one kept", ids)
 	}
 }

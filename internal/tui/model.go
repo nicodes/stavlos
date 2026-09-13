@@ -1839,7 +1839,8 @@ func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
 }
 
 // onSessions opens the /sessions picker: this directory's sessions, newest
-// first, each titled by its first prompt.
+// first, each titled by its first prompt. Sessions nobody has prompted are
+// left out (except the current one): there is nothing to resume there.
 func (m *Model) onSessions(msg sessionsMsg) tea.Cmd {
 	if msg.err != nil {
 		return m.setStatus("sessions: "+msg.err.Error(), true)
@@ -1847,6 +1848,9 @@ func (m *Model) onSessions(msg sessionsMsg) tea.Cmd {
 	o := newOverlay(ovSessions, overlayList, "Sessions in "+shortHome(m.session.Dir), "enter: resume where it left off · esc: close")
 	items := make([]overlayItem, 0, len(msg.sessions))
 	for _, s := range msg.sessions {
+		if s.Title == "" && s.ID != m.sessionID {
+			continue // never prompted: nothing to resume
+		}
 		items = append(items, sessionItem(s, s.ID == m.sessionID))
 	}
 	if len(items) == 0 {
