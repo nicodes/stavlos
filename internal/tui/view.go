@@ -795,7 +795,10 @@ func (m Model) metaRow(width int) string {
 	return ansi.Truncate(left+strings.Repeat(" ", gap)+right, width, "")
 }
 
-// homeView centers the logo, the prompt box and the tips vertically.
+// tagline sits under the logo on the home screen.
+const tagline = "Saddle up."
+
+// homeView centers the logo, the tagline and the prompt box vertically.
 func (m Model) homeView(width, height int) string {
 	boxW := promptBoxWidth(width)
 	var lines []string
@@ -811,6 +814,8 @@ func (m Model) homeView(width, height int) string {
 	}
 	logo := logoLines(width)
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
+	lines = append(lines, "")
+	add(styleDim.Render(tagline), lipgloss.Width(tagline))
 	lines = append(lines, "")
 	if m.stripShown() {
 		if sv := m.sectionsView(boxW); sv != "" {

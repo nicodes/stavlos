@@ -158,6 +158,9 @@ func TestHomeAndSessionViews(t *testing.T) {
 	if strings.Contains(plain, "session ") {
 		t.Fatal("home view must not show the sidebar")
 	}
+	if !strings.Contains(plain, "Saddle up.") {
+		t.Fatalf("home view should carry the tagline:\n%s", plain)
+	}
 	if strings.Contains(plain, "permission (") || strings.Contains(plain, "agents (") {
 		t.Fatalf("home view should not show the empty tab strip:\n%s", plain)
 	}
