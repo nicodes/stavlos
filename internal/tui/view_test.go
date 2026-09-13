@@ -1668,3 +1668,32 @@ func TestStartScreenHistoryComesFromEarlierSessions(t *testing.T) {
 		t.Fatal("seeding must not touch an existing history")
 	}
 }
+
+func TestStatusShowsAboveTheDivider(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	m.width, m.height = 80, 30
+	m.setStatus("copied 12 characters", false)
+	m.layout()
+	lines := strings.Split(stripANSI(m.View()), "\n")
+	rule := -1
+	for i, l := range lines {
+		if strings.HasPrefix(l, "─") {
+			rule = i
+			break
+		}
+	}
+	if rule < 1 || !strings.HasPrefix(lines[rule-1], "copied 12 characters") {
+		t.Fatalf("the status should sit left-aligned right above the rule:\n%s", strings.Join(lines, "\n"))
+	}
+	if strings.Contains(lines[rule+1], "copied") {
+		t.Fatal("the meta row no longer carries the status")
+	}
+	// and the line is blank without a status
+	m.status = ""
+	m.layout()
+	lines = strings.Split(stripANSI(m.View()), "\n")
+	if strings.TrimSpace(lines[rule-1]) != "" {
+		t.Fatalf("no status → blank line: %q", lines[rule-1])
+	}
+}

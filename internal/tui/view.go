@@ -836,7 +836,7 @@ func (m Model) homeLines(width, height int) homeLayout {
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lay.lines = append(lay.lines, "")
 	add(styleDim.Render(tagline), lipgloss.Width(tagline))
-	lay.lines = append(lay.lines, "")
+	add(m.statusLine(boxW), boxW) // status messages sit above the meta row, as in a session
 	add(m.metaRow(boxW), boxW)
 	if m.stripShown() {
 		if sv := m.sectionsView(boxW); sv != "" {
@@ -876,7 +876,7 @@ func (m Model) sessionView(width, height int) string {
 	// strip (and the focused section's body) sit right above the input.
 	// Under the rule: the meta row (YOLO, role, model, variant, usage), then
 	// the tab strip, a blank line, and the input.
-	parts := []string{m.vp.View(), "", styleRule.Render(strings.Repeat("─", cw)), m.metaRow(cw)} // breathing room above the rule
+	parts := []string{m.vp.View(), m.statusLine(cw), styleRule.Render(strings.Repeat("─", cw)), m.metaRow(cw)} // the status line doubles as breathing room above the rule
 	if sv := m.sectionsView(cw); sv != "" {
 		parts = append(parts, sv, "") // a blank line below the strip, before the input
 	}
@@ -1124,15 +1124,24 @@ func fullToolArg(tool string, raw json.RawMessage) string {
 	return toolArg(tool, raw)
 }
 
-func (m Model) footerRightView() string {
+// statusLine is the line between the chat and the divider: the transient
+// message (copied, resumed, an error…) left-aligned, or blank.
+func (m Model) statusLine(width int) string {
+	var s string
 	switch {
 	case m.status != "" && m.statusErr:
-		return styleStatusErr.Render(m.status)
+		s = styleStatusErr.Render(m.status)
 	case m.status != "":
-		return styleStatusOK.Render(m.status)
+		s = styleStatusOK.Render(m.status)
 	case m.loading:
-		return styleDim.Render("replaying events…")
+		s = styleDim.Render("replaying events…")
+	default:
+		return ""
 	}
+	return ansi.Truncate(s, width, "…")
+}
+
+func (m Model) footerRightView() string {
 	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.session.Model}
 	if a := m.selectedAgent(); a != nil {
 		f.label, f.tokens, f.cost = a.Label, a.Tokens, a.CostUSD
