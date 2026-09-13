@@ -1632,43 +1632,44 @@ func TestInputNeverHidesRows(t *testing.T) {
 	}
 }
 
-func TestHomeScreenListsRecentSessions(t *testing.T) {
+func TestStartScreenHistoryComesFromEarlierSessions(t *testing.T) {
 	m := newModel(context.Background(), nil, "cur")
 	m.width, m.height = 100, 40
 	m.reconciled = true
 	m.layout()
-	if strings.Contains(stripANSI(m.View()), "recent") {
-		t.Fatal("no history without sessions")
-	}
 	now := time.Now()
 	nm, _ := m.Update(sessionsMsg{quiet: true, sessions: []protocol.SessionInfo{
 		{ID: "cur", Title: "the one we are in", Created: now.Format(time.RFC3339)},
 		{ID: "empty", Created: now.Format(time.RFC3339)},
 		{ID: "s1", Title: "fix the login bug", Created: now.Add(-2 * time.Hour).Format(time.RFC3339)},
-		{ID: "s2", Title: "add a README section about presets that is rather long indeed and goes on", Created: now.Add(-26 * time.Hour).Format(time.RFC3339)},
+		{ID: "s2", Title: "add a README section", Created: now.Add(-26 * time.Hour).Format(time.RFC3339)},
+		{ID: "s3", Title: "fix the login bug", Created: now.Add(-50 * time.Hour).Format(time.RFC3339)}, // duplicate title
 	}})
 	m = nm.(Model)
-	if m.ov != nil {
-		t.Fatal("a quiet sessions message must not open the picker")
+	if m.ov != nil || strings.Contains(stripANSI(m.View()), "recent") {
+		t.Fatal("no picker and no list: the history lives in ↑/↓")
 	}
-	v := stripANSI(m.View())
-	if !strings.Contains(v, "recent") || !strings.Contains(v, "› fix the login bug") || !strings.Contains(v, "2h00m ago") {
-		t.Fatalf("home should list earlier sessions:\n%s", v)
+	press(&m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.input.Value() != "fix the login bug" {
+		t.Fatalf("↑ should recall the most recent earlier session's first prompt: %q", m.input.Value())
 	}
-	if strings.Contains(v, "the one we are in") || strings.Count(v, "› ") != 3 { // input chevron + two rows
-		t.Fatalf("the current and untitled sessions stay out:\n%s", v)
+	press(&m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.input.Value() != "add a README section" {
+		t.Fatalf("↑↑ should recall the one before: %q", m.input.Value())
 	}
-	// a click on a row resumes that session (a command is issued)
-	lay := m.homeLines(m.width, m.bodyHeight())
-	y := lay.top + lay.recentStart
-	x := m.width / 2
-	if idx, ok := m.homeRecentAt(x, y); !ok || m.recentRows()[idx].ID != "s1" {
-		t.Fatalf("first row should be s1: %d %v", idx, ok)
+	press(&m, tea.KeyMsg{Type: tea.KeyUp}) // oldest was a duplicate title: nothing older
+	if m.input.Value() != "add a README section" {
+		t.Fatalf("duplicates are collapsed: %q", m.input.Value())
 	}
-	nm, _ = m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	nm2, cmd := nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
-	m = nm2.(Model)
-	if cmd == nil {
-		t.Fatal("clicking a recent row should issue the resume")
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown})
+	if m.input.Value() != "" {
+		t.Fatalf("↓ past the newest restores the empty draft: %q", m.input.Value())
+	}
+	// a session that already has its own history is left alone
+	m.history = []string{"typed here"}
+	m.histIdx = 1
+	m.seedHistory([]protocol.SessionInfo{{ID: "x", Title: "elsewhere"}})
+	if len(m.history) != 1 {
+		t.Fatal("seeding must not touch an existing history")
 	}
 }
