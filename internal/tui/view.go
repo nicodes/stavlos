@@ -330,7 +330,7 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		case l.Running && o.Spinner != "":
 			glyph = styleWorking.Render(o.Spinner) + " "
 		case l.Err:
-			glyph = styleError.Render(GlyphFailed) + " "
+			glyph = styleError.Render("⚙") + "  " // red gear on failure
 		default:
 			glyph = styleTool.Render("⚙") + "  " // two spaces: many terminals draw the gear two cells wide
 		}
@@ -1086,16 +1086,9 @@ func monitorRows(monitors []protocol.MonitorInfo, now time.Time, spinner string,
 }
 
 // monitorGlyph is the single-width marker for a monitor kind: ⚙ command,
-// ◉ watch, ◔ timer (⏱ draws two cells wide in many terminals).
-func monitorGlyph(kind string) string {
-	switch kind {
-	case "watch":
-		return "◉"
-	case "timer":
-		return "◔"
-	}
-	return "⚙"
-}
+// (the gear is used for every kind; ⏱ draws two cells wide in many terminals).
+// monitorGlyph is the gear for every monitor kind.
+func monitorGlyph(kind string) string { return "⚙" }
 
 // monitorGlyphGap is the spacing after a kind glyph; the gear gets two
 // spaces because many terminals draw it two cells wide (as renderLine does).

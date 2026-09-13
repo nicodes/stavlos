@@ -57,7 +57,7 @@ type Agent struct {
 	armed      map[string]bool // ids (children, monitors) whose completion wakes this agent
 	monitors   map[string]*Monitor
 	monDone    []event.MonitorFiredPayload // fired monitors not yet delivered
-	wakeFlag   bool                        // an armed child finished: start a turn even with no prompt
+	wakes      map[string]bool             // ids whose completion is waiting to wake this agent (unmonitor cancels)
 	lastError  string                      // error that ended the most recent turn; cleared when a turn starts
 	children   []string
 	results    map[string]tools.ChildResult // finished children not yet consumed by wait/result
@@ -73,7 +73,7 @@ func newAgent(s *Session, id, parent, archetype, label, modelID string, depth in
 	return &Agent{
 		ID: id, Parent: parent, Archetype: archetype, Label: label, Depth: depth,
 		s: s, preset: preset, modelID: modelID, state: StateIdle,
-		wake: make(chan struct{}, 1), results: map[string]tools.ChildResult{}, armed: map[string]bool{}, monitors: map[string]*Monitor{}, done: make(chan struct{}),
+		wake: make(chan struct{}, 1), results: map[string]tools.ChildResult{}, armed: map[string]bool{}, wakes: map[string]bool{}, monitors: map[string]*Monitor{}, done: make(chan struct{}),
 	}
 }
 
@@ -128,10 +128,10 @@ func (a *Agent) takeInputs() []event.UserMessagePayload {
 	if a.state == StateFinished || a.state == StateKilled {
 		return nil
 	}
-	if len(a.prompts) == 0 && len(a.steers) == 0 && !a.wakeFlag {
+	if len(a.prompts) == 0 && len(a.steers) == 0 && len(a.wakes) == 0 {
 		return nil
 	}
-	a.wakeFlag = false
+	a.wakes = map[string]bool{}
 	var in []event.UserMessagePayload
 	for _, q := range a.prompts {
 		in = append(in, event.UserMessagePayload{Kind: "prompt", Text: q.text})
@@ -237,7 +237,7 @@ func (a *Agent) deliverChildFinished(r tools.ChildResult) {
 	wake := a.armed[r.ID]
 	delete(a.armed, r.ID)
 	if wake {
-		a.wakeFlag = true
+		a.wakes[r.ID] = true
 	}
 	a.mu.Unlock()
 	if wake {
@@ -256,7 +256,7 @@ func (a *Agent) childGone(id string) {
 	wake := a.armed[id]
 	delete(a.armed, id)
 	if wake {
-		a.wakeFlag = true
+		a.wakes[id] = true
 	}
 	a.mu.Unlock()
 	if wake {

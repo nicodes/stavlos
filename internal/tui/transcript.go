@@ -63,7 +63,7 @@ type Line struct {
 	Block   BlockKind
 	Vis     Visibility
 	Running bool   // tool call still in progress (spinner glyph)
-	Err     bool   // tool call failed (✗ glyph)
+	Err     bool   // tool call failed (red gear)
 	Suffix  string // dim trailer, e.g. "(cancelled)"
 	Item    int    // index of the item (event group) this line belongs to
 	Lead    bool   // first text line of a user/steer block: carries the "›" glyph
@@ -95,8 +95,8 @@ const (
 	GlyphModel     = "⇄" // model changed
 	GlyphNotice    = "»" // a local notice (/help, lists)
 	GlyphPrompt    = "?" // a question for the user
-	GlyphAnswer    = "→" // the user's answer
-	GlyphFailed    = "✗" // a failed tool call or monitor
+	GlyphAnswer    = "?" // the user's answer (same mark as the question)
+	GlyphFailed    = "✗" // a failed finish
 	GlyphCompacted = "┄┄ compacted ┄┄"
 )
 
@@ -769,12 +769,12 @@ func monitorKindWord(kind string) string {
 	return "background"
 }
 
-// monitorFiredLines renders "<glyph> <summary>" (✗ on error) followed by
+// monitorFiredLines renders "<glyph> <summary>" (red on error) followed by
 // the output collapsed like tool output.
 func monitorFiredLines(p event.MonitorFiredPayload) []Line {
 	head := Line{Kind: LineDim, Glyph: monitorGlyph(p.Kind)}
 	if p.IsError {
-		head.Glyph, head.Tone = GlyphFailed, ToneError
+		head.Tone = ToneError
 	}
 	summary := strings.TrimSpace(p.Summary)
 	if summary == "" {

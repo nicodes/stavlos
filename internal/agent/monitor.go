@@ -365,7 +365,7 @@ func (a *Agent) fireMonitor(m *Monitor, res event.MonitorFiredPayload) {
 	wake := a.armed[m.ID]
 	delete(a.armed, m.ID)
 	if wake {
-		a.wakeFlag = true
+		a.wakes[m.ID] = true
 	}
 	a.mu.Unlock()
 	if wake {
