@@ -229,7 +229,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	}
 
 	cfg := a.s.Config()
-	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Mon: a.monitorsAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
+	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Waiter: orchestrator{s: a.s}, Mon: a.monitorsAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
 		Partial: func(s string) {
 			a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
 		}}
@@ -320,18 +320,18 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	if a.canOrchestrate() {
 		sb.WriteString("\n# Delegation\n")
 		if can {
-			sb.WriteString("You may spawn child agents with the spawn tool. Archetypes available to you:\n")
+			sb.WriteString("You may create child agents with the agent_create tool. Archetypes available to you:\n")
 			for _, arch := range a.preset.Spawn {
 				if p, ok := cfg.Presets[arch]; ok {
 					fmt.Fprintf(&sb, "- %s: %s\n", arch, p.Description)
 				}
 			}
-			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents live in this session. Children run in the background. A child that finishes wakes you with its result as a new message, never mid-turn (a result that lands while you are working arrives when your current turn ends). Call monitor to end your turn and wait for children; call unmonitor if you would rather not be woken and will check with result or status instead. There is no blocking wait. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Live(), cfg.Limits.MaxAgents)
+			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents live in this session. Children run in the background. A child that finishes wakes you with its result as a new message, never mid-turn (a result that lands while you are working arrives when your current turn ends). Call monitor to end your turn and wait for children; call unmonitor if you would rather not be woken and will check with agent_result or agent_status instead. There is no blocking wait. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Live(), cfg.Limits.MaxAgents)
 			names = append(names, tools.OrchestrationNames...)
 		} else {
 			fmt.Fprintf(&sb, "You cannot spawn right now (%s). Do the work yourself.\n", why)
 			for _, n := range tools.OrchestrationNames {
-				if n != "spawn" {
+				if n != "agent_create" {
 					names = append(names, n)
 				}
 			}

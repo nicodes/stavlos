@@ -27,6 +27,13 @@ type Env struct {
 	Partial   func(string)            // receives streamed partial output (bash); may be nil
 	MaxOutput int                     // truncate tool output beyond this many bytes (0 = 32k)
 	Mon       Monitors                // general monitors (background commands, watches, timers); nil if unavailable
+	Waiter    Waiter                  // monitor/unmonitor for children and monitors alike; nil if unavailable
+}
+
+// Waiter arms and disarms wakes; every agent has one.
+type Waiter interface {
+	Monitor(agent string, ids []string) ([]ChildStatus, error)
+	Unmonitor(agent string, ids []string) ([]string, error)
 }
 
 // Monitors is implemented by the agent runtime: sources other than children
@@ -126,10 +133,11 @@ func Builtin() Set {
 }
 
 // OrchestrationNames are the tools implied by a non-empty spawn list.
-var OrchestrationNames = []string{"spawn", "send", "steer", "cancel", "kill", "monitor", "unmonitor", "result", "status"}
+var OrchestrationNames = []string{"agent_create", "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status"}
 
-// MonitorNames are the general-monitor tools every agent gets.
-var MonitorNames = []string{"watch", "timer", "monitors", "unmonitor"}
+// MonitorNames are the general-monitor tools every agent gets. monitor
+// (wait to be woken) and unmonitor apply to children and monitors alike.
+var MonitorNames = []string{"monitor", "unmonitor", "watch", "timer", "monitors"}
 
 func schema(props map[string]any, required ...string) json.RawMessage {
 	m := map[string]any{"type": "object", "properties": props}

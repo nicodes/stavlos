@@ -34,7 +34,7 @@ func jsonOut(v any) Result {
 type spawnTool struct{}
 
 func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "spawn", Description: "Create a child agent that works on a task in the background. Returns its id immediately. When it finishes you are woken with its result as a new message (never mid-turn: a result that arrives while you are working is delivered when your current turn ends). Call monitor to end your turn and wait for it; call unmonitor if you would rather check on it yourself with result or status.",
+	return model.ToolDef{Name: "agent_create", Description: "Create a child agent that works on a task in the background. Returns its id immediately. When it finishes you are woken with its result as a new message (never mid-turn: a result that arrives while you are working is delivered when your current turn ends). Call monitor to end your turn and wait for it; call unmonitor if you would rather check on it yourself with agent_result or agent_status.",
 		Schema: schema(map[string]any{
 			"archetype": prop("string", "Preset name of the child (see the list in your instructions)"),
 			"label":     prop("string", "Short human-facing name for this child, e.g. 'auth-explorer' (required)"),
@@ -73,7 +73,7 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type sendTool struct{}
 
 func (sendTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "send", Description: "Queue a prompt for a child agent; it runs after the child's current turn ends.",
+	return model.ToolDef{Name: "agent_prompt", Description: "Queue a prompt for a child agent; it runs after the child's current turn ends.",
 		Schema: schema(map[string]any{"id": prop("string", "Child agent id"), "text": prop("string", "Message")}, "id", "text")}
 }
 func (sendTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
@@ -94,7 +94,7 @@ func (sendTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type steerTool struct{}
 
 func (steerTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "steer", Description: "Redirect a running child at its next model-call boundary without discarding its work. If the child is idle this behaves like send.",
+	return model.ToolDef{Name: "agent_steer", Description: "Redirect a running child at its next model-call boundary without discarding its work. If the child is idle this behaves like agent_prompt.",
 		Schema: schema(map[string]any{"id": prop("string", "Child agent id"), "text": prop("string", "Instruction")}, "id", "text")}
 }
 func (steerTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
@@ -115,7 +115,7 @@ func (steerTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type cancelTool struct{}
 
 func (cancelTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "cancel", Description: "End a child's current turn immediately. The child survives and can be sent new prompts.",
+	return model.ToolDef{Name: "agent_cancel", Description: "End a child's current turn immediately. The child survives and can be sent new prompts.",
 		Schema: schema(map[string]any{"id": prop("string", "Child agent id")}, "id")}
 }
 func (cancelTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
@@ -132,7 +132,7 @@ func (cancelTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 type killTool struct{}
 
 func (killTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "kill", Description: "Tear down a child agent and its subtree. Its history is preserved but it cannot be resumed.",
+	return model.ToolDef{Name: "agent_kill", Description: "Tear down a child agent and its subtree. Its history is preserved but it cannot be resumed.",
 		Schema: schema(map[string]any{"id": prop("string", "Child agent id")}, "id")}
 }
 func (killTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
@@ -153,19 +153,19 @@ func (killTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type monitorTool struct{}
 
 func (monitorTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "monitor", Description: "End your turn and wait to be woken: put anything else you need in the same batch, then when a listed child finishes you get its result as a new message (several finishing together wake you once). Children wake you by default, so this is mainly how you wait; it also re-arms any child you had unmonitored. Omit ids for all live children. There is no blocking wait.",
-		Schema: schema(map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Child ids (default: all live children)"}})}
+	return model.ToolDef{Name: "monitor", Description: "End your turn and wait to be woken: put anything else you need in the same batch, then when a listed child agent or monitor completes you get its result as a new message (several completing together wake you once). Children and monitors wake you by default, so this is mainly how you wait; it also re-arms anything you had unmonitored. Omit ids for everything live. There is no blocking wait.",
+		Schema: schema(map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Child agent or monitor ids (default: all live)"}})}
 }
 func (monitorTool) PolicyArg(in json.RawMessage) string { return "" }
 func (monitorTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	if r := needOrch(env); r != nil {
-		return *r
+	if env.Waiter == nil {
+		return errf("monitor is not available to this agent")
 	}
 	var a struct{ IDs []string }
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
-	st, err := env.Orch.Monitor(env.Agent, a.IDs)
+	st, err := env.Waiter.Monitor(env.Agent, a.IDs)
 	if err != nil {
 		return errf("%v", err)
 	}
@@ -181,7 +181,7 @@ func (monitorTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 type unmonitorTool struct{}
 
 func (unmonitorTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "unmonitor", Description: "Stop the given children or monitors (all if omitted) from waking you. Children keep running and their results stay in your mailbox for result/status or your next turn. With stop=true a general monitor is ended instead: a background command is killed, a watch or timer cancelled.",
+	return model.ToolDef{Name: "unmonitor", Description: "Stop the given children or monitors (all if omitted) from waking you. Children keep running and their results stay in your mailbox for agent_result/agent_status or your next turn. With stop=true a general monitor is ended instead: a background command is killed, a watch or timer cancelled.",
 		Schema: schema(map[string]any{
 			"ids":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Child or monitor ids (default: all)"},
 			"stop": prop("boolean", "Also stop the monitors themselves (kill commands, cancel watches/timers)"),
@@ -212,8 +212,8 @@ func (unmonitorTool) Run(ctx context.Context, in json.RawMessage, env *Env) Resu
 			}
 		}
 	}
-	if env.Orch != nil {
-		ids, err := env.Orch.Unmonitor(env.Agent, a.IDs)
+	if env.Waiter != nil {
+		ids, err := env.Waiter.Unmonitor(env.Agent, a.IDs)
 		if err != nil {
 			return errf("%v", err)
 		}
@@ -296,7 +296,7 @@ func (timerTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type monitorsTool struct{}
 
 func (monitorsTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "monitors", Description: "List your running monitors (background commands, watches, timers) with their progress. Children are listed by status, not here.",
+	return model.ToolDef{Name: "monitors", Description: "List your running monitors (background commands, watches, timers) with their progress. Children are listed by agent_status, not here.",
 		Schema: schema(map[string]any{})}
 }
 func (monitorsTool) PolicyArg(in json.RawMessage) string { return "" }
@@ -314,7 +314,7 @@ func (monitorsTool) Run(ctx context.Context, in json.RawMessage, env *Env) Resul
 type resultTool struct{}
 
 func (resultTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "result", Description: "Fetch a finished child's result without blocking.",
+	return model.ToolDef{Name: "agent_result", Description: "Fetch a finished child's result without blocking.",
 		Schema: schema(map[string]any{"id": prop("string", "Child agent id")}, "id")}
 }
 func (resultTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
@@ -335,7 +335,7 @@ func (resultTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 type statusTool struct{}
 
 func (statusTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "status", Description: "State, turn count, and cost of one or all children.",
+	return model.ToolDef{Name: "agent_status", Description: "State, turn count, and cost of one or all children.",
 		Schema: schema(map[string]any{"id": prop("string", "Child id; omit for all")})}
 }
 func (statusTool) PolicyArg(in json.RawMessage) string { return idArg(in) }

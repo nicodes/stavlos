@@ -221,17 +221,17 @@ Available to any agent whose preset permits them:
 
 | Tool | Effect |
 |---|---|
-| `spawn(archetype, label, task, model?)` | Create a child agent; returns its ID immediately |
-| `send(id, text)` | Queue a `Prompt` |
-| `steer(id, text)` | Deliver a `Steer` |
-| `cancel(id)` | Deliver a `Cancel` |
-| `kill(id)` | Deliver a `Kill` |
-| `monitor(ids?)` | End this turn and wait: the next armed child or monitor to complete starts a new turn carrying every result that has arrived |
-| `unmonitor(ids?, stop?)` | Disarm wakes for children or monitors; with `stop`, end the monitor itself (kill the command, cancel the watch or timer) |
+| `agent_create(archetype, label, task, model?)` | Create a child agent; returns its ID immediately |
+| `agent_prompt(id, text)` | Queue a `Prompt` |
+| `agent_steer(id, text)` | Deliver a `Steer` |
+| `agent_cancel(id)` | Deliver a `Cancel` |
+| `agent_kill(id)` | Deliver a `Kill` |
+
+`monitor(ids?)` and `unmonitor(ids?, stop?)` are not orchestration tools: every agent has them. `monitor` ends the turn and waits for the next armed child or monitor to complete, which starts a new turn carrying every result that has arrived; `unmonitor` disarms wakes, and with `stop` ends a monitor itself (kills the command, cancels the watch or timer).
 
 **General monitors** use the same mailbox and wake: `bash` with `background: true` runs a command as a monitor and wakes the agent with its exit code and output; `watch(path, glob?)` wakes it once when something under a path changes; `timer(seconds, note)` wakes it after a delay with the note; `monitors` lists them. Every agent has these, whether or not it may spawn. They are logged (`monitor.started`, `monitor.fired`, `monitor.stopped`) and rebuilt on restart: timers and watches resume, a background command whose process died with the daemon is reported to its owner as lost. In the TUI, live children and general monitors are two separate blocks above the input, because monitoring a child is part of the subagent flow and monitoring a command or a file is not.
-| `result(id)` | Retrieve a finished result without blocking |
-| `status(id?)` | State and usage (§4.4) of one or all children |
+| `agent_result(id)` | Retrieve a finished result without blocking |
+| `agent_status(id?)` | State and usage (§4.4) of one or all children |
 
 `label` is **required** on spawn. It is the human-facing name in thread titles, pickers, and webhook identities. Optional labels produce unusable UI.
 
@@ -451,7 +451,7 @@ JSONC with a `$schema` for editor validation. Every key is optional; anything om
     "edit":  { "src/**": "allow", "**": "ask" },
     "write": { "src/**": "allow", "**": "ask" },
     "read":  "allow",
-    "spawn": "allow",
+    "agent_create": "allow",
     "skill": "allow",
     "mcp:github/*":     "ask",
     "mcp:github/get_*": "allow"
@@ -484,7 +484,7 @@ You are a Go engineer working in this repository. Prefer small commits.
 Delegate reading unfamiliar code to an explorer before editing it.
 ```
 
-The orchestration tools are implied by a non-empty `spawn` list. Presets are the hub — skills, MCP servers, and policy are referenced *by* presets, not parallel to them. Preset creation must be as frictionless as skill creation, or users will reach for skills when a preset is correct.
+The orchestration tools (`agent_*`) are implied by a non-empty `spawn` list. Presets are the hub — skills, MCP servers, and policy are referenced *by* presets, not parallel to them. Preset creation must be as frictionless as skill creation, or users will reach for skills when a preset is correct.
 
 ### 10.4 Skills — `skills/<name>/SKILL.md`
 
@@ -598,7 +598,7 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - Codex (ChatGPT) and Grok adapters, `go-plugin` model seam, `stavlos plugin install`, lockfile, models.dev metadata
 - MCP client
 - Three-layer configuration with trust gate; skills, presets, declarative policy
-- Built-in tools: `bash` (with background monitors), `read`, `write`, `edit`, `grep`, `glob`, `finish`, `skill`, `watch`, `timer`, `monitors`, and the orchestration set (`spawn`, `send`, `steer`, `cancel`, `kill`, `monitor`, `unmonitor`, `result`, `status`)
+- Built-in tools: `bash` (with background monitors), `read`, `write`, `edit`, `grep`, `glob`, `finish`, `skill`, `watch`, `timer`, `monitors`, and the orchestration set (`agent_create`, `agent_prompt`, `agent_steer`, `agent_cancel`, `agent_kill`, `agent_result`, `agent_status`), plus `monitor` and `unmonitor` for every agent
 - Usage accounting: per-call `Usage` events, per-agent and per-session aggregates
 - Subscription sign-in for ChatGPT and Grok (device-code flows, token refresh), credential store, `/provider` and `/models` in the TUI, `stavlos auth login|list|logout`
 - Depth and per-session fan-out limits
