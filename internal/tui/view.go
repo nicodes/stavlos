@@ -659,7 +659,7 @@ func (m Model) View() string {
 		return "starting…"
 	}
 	keybar, kb := m.keyBarView()
-	mainH := m.height - 1 - kb
+	mainH := m.height - kb
 	if mainH < 1 {
 		mainH = 1
 	}
@@ -672,7 +672,7 @@ func (m Model) View() string {
 	if m.ov != nil {
 		main = composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
 	}
-	return main + "\n" + keybar + "\n" + m.footerView()
+	return main + "\n" + keybar
 }
 
 // isHome reports whether the selected agent has nothing to show yet.
@@ -741,6 +741,7 @@ func (m Model) homeView(width, height int) string {
 		add(pv, boxW)
 	}
 	add(m.inputBoxView(), boxW)
+	add(m.footerView(boxW), boxW)
 
 	if m.showTips {
 		tipsW := tipsMaxWidth
@@ -784,7 +785,7 @@ func (m Model) sessionView(width, height int) string {
 	if pv := m.paletteViewFor(cw); pv != "" {
 		parts = append(parts, pv)
 	}
-	parts = append(parts, m.inputBoxView())
+	parts = append(parts, m.inputBoxView(), m.footerView(cw))
 	left := padLines(strings.Join(parts, "\n"), cw)
 	if !m.sidebarVisible() {
 		return left
@@ -1015,24 +1016,25 @@ func fullToolArg(tool string, raw json.RawMessage) string {
 	return toolArg(tool, raw)
 }
 
-// footerView is the bottom line: dim cwd on the left, summary or a
-// transient status on the right.
-func (m Model) footerView() string {
+// footerView is the line under the input's meta line: dim cwd on the
+// left, the usage summary (tokens, cost) or a transient status on the
+// right. It sits above the key bar's rule.
+func (m Model) footerView(width int) string {
 	left := styleDim.Render(shortHome(m.session.Dir))
 	right := m.footerRightView()
-	gap := m.width - lipgloss.Width(left) - lipgloss.Width(right)
+	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 1 {
-		avail := m.width - lipgloss.Width(right) - 1
+		avail := width - lipgloss.Width(right) - 1
 		if avail < 0 {
 			avail = 0
 		}
 		left = styleDim.Render(ansi.Truncate(shortHome(m.session.Dir), avail, "…"))
-		gap = m.width - lipgloss.Width(left) - lipgloss.Width(right)
+		gap = width - lipgloss.Width(left) - lipgloss.Width(right)
 		if gap < 1 {
 			gap = 1
 		}
 	}
-	return ansi.Truncate(left+strings.Repeat(" ", gap)+right, m.width, "")
+	return ansi.Truncate(left+strings.Repeat(" ", gap)+right, width, "")
 }
 
 func (m Model) footerRightView() string {
