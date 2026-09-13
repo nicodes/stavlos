@@ -282,7 +282,7 @@ Implementation note: Bubble Tea's update loop is single-threaded. Daemon events 
 
 **Inbound addressing.** Mentionable roles, one per *archetype* (`@coder`, `@explorer`, `@tester`). Roles need no members to be mentionable. Discord resolves them client-side and delivers `mention_roles` in the message payload, so there is no text parsing.
 
-**Verbs.** A plain message is a `Steer`: it reaches a busy agent at its next model-call boundary and simply starts a turn when the agent is idle, which is what people mean when they type at a working agent. `/queue <text>` sends a `Prompt` instead (after the current turn), and `/cancel` ends a turn. Creating and killing agents is left to the model (`agent_create`, `agent_kill`); humans steer, they do not micromanage the tree. Role mentions and thread context choose the *target*; the slash command chooses the *verb*. A slash command with no target in a channel addresses the root; in a thread it addresses that thread's agent.
+**Verbs.** A plain message is a `Steer`: it reaches a busy agent at its next model-call boundary and simply starts a turn when the agent is idle, which is what people mean when they type at a working agent. `/queue <text>` sends a `Prompt` instead (after the current turn), and esc twice on an empty input (the first press warns, the second within a few seconds confirms) sends a `Cancel`. Creating and killing agents is left to the model (`agent_create`, `agent_kill`); humans steer, they do not micromanage the tree. Role mentions and thread context choose the *target*; the slash command chooses the *verb*. A slash command with no target in a channel addresses the root; in a thread it addresses that thread's agent.
 
 **Scoping.** Roles are guild-scoped; there is no channel-scoped role. Resolution is therefore on the pair `(channelID, roleID)` — `@coder` in one channel and `@coder` in another reach different agents via the same role. Inside a subagent thread, a plain message with no mention targets that thread's agent; role mentions still work there for addressing siblings or the root. Disambiguation (below) is therefore only needed for mentions in the channel itself.
 
@@ -434,7 +434,7 @@ JSONC with a `$schema` for editor validation. Every key is optional; anything om
   "rootAgent": "coder",                   // preset a new session's root uses
 
   "limits":     { "maxDepth": 3, "maxAgents": 6 },
-  "escalation": { "claimTimeout": "30s", "answerTimeout": "5m", "default": "deny" },
+  "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
   "compaction": { "threshold": 0.8, "maxToolOutput": "32kb" },
 
   // MCP servers reachable by presets that list them. Trust-gated at project level.

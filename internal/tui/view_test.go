@@ -1066,3 +1066,41 @@ func TestHelpTogglesKeyBar(t *testing.T) {
 		t.Fatal("/help again should hide the key bar")
 	}
 }
+
+func TestEscTwiceCancelsTheTurn(t *testing.T) {
+	m := sessionModel()
+	m.agents[0].State = "running"
+	esc := tea.KeyMsg{Type: tea.KeyEsc}
+	// text in the input: esc clears it and does not arm
+	m.input.SetValue("draft")
+	if cmd := press(&m, esc); cmd != nil || m.input.Value() != "" || !m.cancelArmed.IsZero() {
+		t.Fatalf("esc with text should only clear: cmd=%v value=%q armed=%v", cmd != nil, m.input.Value(), m.cancelArmed)
+	}
+	// empty input, busy agent: first esc arms with a warning, second cancels
+	if cmd := press(&m, esc); cmd == nil || m.cancelArmed.IsZero() || !strings.Contains(m.status, "esc again") {
+		t.Fatalf("first esc should warn and arm: status=%q armed=%v", m.status, m.cancelArmed)
+	}
+	if cmd := press(&m, esc); cmd == nil || !m.cancelArmed.IsZero() {
+		t.Fatalf("second esc should send the cancel and disarm: cmd=%v armed=%v", cmd != nil, m.cancelArmed)
+	}
+	// another key in between disarms
+	press(&m, esc)
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	if !m.cancelArmed.IsZero() {
+		t.Fatal("typing should disarm the cancel")
+	}
+	m.input.Reset()
+	// an expired arm starts over
+	press(&m, esc)
+	m.cancelArmed = time.Now().Add(-2 * cancelWindow)
+	press(&m, esc)
+	if m.cancelArmed.IsZero() || time.Since(m.cancelArmed) > time.Second {
+		t.Fatal("after the window a fresh esc should re-arm rather than cancel")
+	}
+	// an idle agent: esc does nothing
+	m.agents[0].State = "idle"
+	m.cancelArmed = time.Time{}
+	if cmd := press(&m, esc); cmd != nil || !m.cancelArmed.IsZero() {
+		t.Fatal("esc on an idle agent should be inert")
+	}
+}

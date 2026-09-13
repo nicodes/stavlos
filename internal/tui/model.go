@@ -87,6 +87,7 @@ type Model struct {
 	showTree      bool // right sidebar toggle (/tree, ctrl+b)
 	showTips      bool // home-state tips block (/tips)
 	hideKeys      bool // the key bar (divider + legend) at the bottom is hidden; /help shows it
+	cancelArmed   time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
 	details       bool // expanded tool output (/details)
 	follow        bool // auto-scroll to bottom
 
@@ -577,6 +578,37 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+// cancelWindow is how long a first esc stays armed for the second.
+const cancelWindow = 3 * time.Second
+
+// escCancel is esc on an empty input: while the selected agent is busy, the
+// first press warns and arms, the second within cancelWindow cancels the
+// turn. Idle agents ignore it.
+func (m *Model) escCancel() tea.Cmd {
+	a := m.selectedAgent()
+	if a == nil || !m.agentBusy() {
+		m.cancelArmed = time.Time{}
+		return nil
+	}
+	if !m.cancelArmed.IsZero() && time.Since(m.cancelArmed) <= cancelWindow {
+		m.cancelArmed = time.Time{}
+		return sendCmd(m.ctx, m.c, a.ID, protocol.KindCancel, "", "cancel sent")
+	}
+	m.cancelArmed = time.Now()
+	return m.setStatusFor("press esc again to cancel "+a.Label+"'s turn", true, cancelWindow)
+}
+
+// agentBusy reports whether the selected agent is mid-turn.
+func (m *Model) agentBusy() bool {
+	if t := m.transcripts[m.selectedID()]; t != nil && t.InTurn() {
+		return true
+	}
+	if a := m.selectedAgent(); a != nil && (a.State == "running" || a.State == "blocked") {
+		return true
+	}
+	return false
+}
+
 // ensureFocus falls back to the input when the focused section is gone
 // (prompt answered, sidebar hidden, transcript empty).
 func (m *Model) ensureFocus() tea.Cmd {
@@ -652,6 +684,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if m.ov != nil {
 		return m.overlayKey(msg)
 	}
+	if !key.Matches(msg, keys.Clear) {
+		m.cancelArmed = time.Time{} // any other key disarms the two-step cancel
+	}
 
 	// While the "/" palette is open in the input, tab completes the command
 	// (handled below) instead of cycling focus.
@@ -716,9 +751,13 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		m.historyMove(1)
 		return nil
 	case key.Matches(msg, keys.Clear):
-		m.input.Reset()
-		m.palIdx = 0
-		return nil
+		if m.input.Value() != "" {
+			m.input.Reset()
+			m.palIdx = 0
+			m.cancelArmed = time.Time{}
+			return nil
+		}
+		return m.escCancel()
 	case msg.Type == tea.KeyTab:
 		// only reached when the palette is open (tab otherwise cycles focus)
 		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
@@ -1022,11 +1061,6 @@ func (m *Model) command(text string) tea.Cmd {
 			return m.setStatus("usage: /queue <text>", true)
 		}
 		return sendCmd(m.ctx, m.c, agent, protocol.KindPrompt, rest, "queued for after the current turn")
-	case "/cancel":
-		if c := needAgent(); c != nil {
-			return c
-		}
-		return sendCmd(m.ctx, m.c, agent, protocol.KindCancel, "", "cancel sent")
 	case "/model":
 		if c := needAgent(); c != nil {
 			return c
