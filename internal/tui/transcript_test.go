@@ -79,8 +79,8 @@ func TestBuildTranscript(t *testing.T) {
 		"   ◌ thinking…",
 		"   Done.",
 		"   · claude-x",
-		"   · turn cancelled",
-		"   finished · success",
+		"   ◦ turn cancelled",
+		"   ✓ finished · success",
 		"   all good",
 	})
 	for _, g := range got {
@@ -98,7 +98,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look around"}))
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"   spawned scout (explorer) · m", "   task", "   look around"})
+	assertSubsequence(t, got, []string{"   ⤴ spawned scout (explorer) · m", "   task", "   ▹ look around"})
 }
 
 func TestUserMessageKinds(t *testing.T) {
@@ -108,7 +108,7 @@ func TestUserMessageKinds(t *testing.T) {
 		mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}),
 	})
 	got := renderLines(lines)
-	assertSubsequence(t, got, []string{"   steer", "   › focus", "   child", "   child done", "   › hi"})
+	assertSubsequence(t, got, []string{"   steer", "   › focus", "   child", "   ↰ child done", "   › hi"})
 
 	// Blocks carry their kind so Render can pick the border color.
 	var blocks []BlockKind
@@ -220,7 +220,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 			rule = g
 		}
 	}
-	if strings.TrimSpace(rule) != "── compacted ──" || !strings.HasPrefix(rule, "    ") {
+	if strings.TrimSpace(rule) != "┄┄ compacted ┄┄" || !strings.HasPrefix(rule, "    ") {
 		t.Fatalf("compacted rule should be centered: %q", rule)
 	}
 
@@ -265,7 +265,7 @@ func TestAssistantMarkdownAndErrors(t *testing.T) {
 		mk(2, "a", event.TurnEnded, event.TurnEndedPayload{Reason: "error", Error: "boom"}),
 		mk(3, "a", event.AgentKilled, nil),
 	}))
-	assertSubsequence(t, got, []string{"   Plan", "   Some bold text", "     fmt.Println()", "   - item", "   boom", "   killed"})
+	assertSubsequence(t, got, []string{"   Plan", "   Some bold text", "     fmt.Println()", "   - item", "   ! boom", "   ⊘ killed"})
 	for _, g := range got {
 		if strings.Contains(g, "```") || strings.Contains(g, "· gpt-x") {
 			t.Fatalf("unexpected line %q (fences dropped; no model trailer on tool_use)", g)
@@ -639,16 +639,16 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		return -1, Line{}
 	}
 	// started notices
-	_, cmdStart := find("⚙ background: go test")
-	_, watchStart := find("◉ watch: src")
-	_, timerStart := find("◔ timer: cooldown")
+	_, cmdStart := find("background: go test")
+	_, watchStart := find("watch: src")
+	_, timerStart := find("timer: cooldown")
 	for _, l := range []Line{cmdStart, watchStart, timerStart} {
 		if l.Kind != LineDim || l.Running {
 			t.Fatalf("started notice should be a static dim line: %+v", l)
 		}
 	}
 	// fired output joins the started item and sits right under it, collapsed
-	firedAt, fired := find("⚙ go test exited 0")
+	firedAt, fired := find("go test exited 0")
 	if fired.Item != cmdStart.Item || fired.Kind != LineDim {
 		t.Fatalf("fired line item %d != started item %d (%+v)", fired.Item, cmdStart.Item, fired)
 	}
@@ -672,12 +672,12 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		t.Fatalf("assistant item %d vs started item %d", waiting.Item, cmdStart.Item)
 	}
 	// stopped: glyph from the remembered kind, grouped with its start
-	_, stopped := find("◉ monitor stopped (unmonitor)")
+	_, stopped := find("monitor stopped (unmonitor)")
 	if stopped.Item != watchStart.Item || stopped.Kind != LineDim {
 		t.Fatalf("stopped: %+v (watch item %d)", stopped, watchStart.Item)
 	}
 	// error outcome swaps the glyph for ✗
-	_, errFired := find("✗ timer elapsed")
+	_, errFired := find("timer elapsed")
 	if errFired.Item != timerStart.Item {
 		t.Fatalf("error fired: %+v (timer item %d)", errFired, timerStart.Item)
 	}
@@ -709,12 +709,12 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	plain := nonblank(renderWith(lines, RenderOpts{Width: 80}))
 	joined := strings.Join(plain, "\n")
-	for _, want := range []string{"run the tests", "waiting", "all green", "⚙ background: go test", "◉ watch: src", "◔ timer: cooldown", "Monitor \"go test\" (command, m1): go test exited 0"} {
+	for _, want := range []string{"run the tests", "waiting", "all green", "background: go test", "watch: src", "timer: cooldown", "Monitor \"go test\" (command, m1): go test exited 0"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}
 	}
-	for _, leak := range []string{"⚙ go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
+	for _, leak := range []string{"⚙  go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
 		if strings.Contains(joined, leak) {
 			t.Fatalf("folded monitor item leaked %q:\n%s", leak, joined)
 		}
@@ -727,7 +727,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	// cursor on the command monitor shows the fired line and collapsed output
 	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
-	for _, want := range []string{"⚙ go test exited 0", "ok  a", "ok  c", "… +2 lines"} {
+	for _, want := range []string{"⚙  go test exited 0", "ok  a", "ok  c", "… +2 lines"} {
 		if !strings.Contains(full, want) {
 			t.Fatalf("cursor on monitor lacks %q:\n%s", want, full)
 		}
@@ -748,7 +748,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	tr2.Apply(mk(1, event.MonitorFired, event.MonitorFiredPayload{ID: "zz", Kind: "watch", Summary: "3 files changed", Output: "a.go"}))
 	tr2.Apply(mk(2, event.MonitorStopped, event.MonitorRefPayload{ID: "yy", Reason: "kill"}))
 	got := renderLines(tr2.All())
-	assertSubsequence(t, got, []string{"   ◉ 3 files changed", "       a.go", "   ⚙ monitor stopped (kill)"})
+	assertSubsequence(t, got, []string{"   ◉ 3 files changed", "       a.go", "   ⚙  monitor stopped (kill)"})
 	if tr2.Items() != 2 {
 		t.Fatalf("items %d", tr2.Items())
 	}
