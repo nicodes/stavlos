@@ -158,6 +158,20 @@ func TestHomeAndSessionViews(t *testing.T) {
 	if strings.Contains(plain, "session ") {
 		t.Fatal("home view must not show the sidebar")
 	}
+	if strings.Contains(plain, "permission (") || strings.Contains(plain, "agents (") {
+		t.Fatalf("home view should not show the empty tab strip:\n%s", plain)
+	}
+	for _, f := range m.focusOrder() {
+		if f == focusTabs {
+			t.Fatal("the empty strip should not be a tab stop on the home screen")
+		}
+	}
+	// once a prompt is waiting the strip (and its tab stop) appears
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "trust", Agent: "a"}}
+	if v := stripANSI(m.View()); !strings.Contains(v, "trust (1)") {
+		t.Fatalf("a waiting prompt should bring the strip to the home screen:\n%s", v)
+	}
+	m.prompts = nil
 	for _, l := range lines {
 		if ansi.StringWidth(l) > 100 {
 			t.Fatalf("line wider than the window: %q", l)

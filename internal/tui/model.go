@@ -369,11 +369,24 @@ func (m *Model) focusOrder() []focus {
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
-	order = append(order, focusTabs, focusInput)
+	if m.stripShown() {
+		order = append(order, focusTabs)
+	}
+	order = append(order, focusInput)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
 	}
 	return order
+}
+
+// stripShown reports whether the permission/agents/async strip is drawn:
+// always in a session, and on the home (logo) screen only once something
+// is in it, so a trust prompt or an early child is still reachable.
+func (m *Model) stripShown() bool {
+	if !m.isHome() {
+		return true
+	}
+	return m.currentPrompt() != nil || len(m.liveChildren())+len(m.runningJobs()) > 0
 }
 
 // liveChildren returns the selected agent's live children, in tree order.

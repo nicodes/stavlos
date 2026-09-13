@@ -812,9 +812,11 @@ func (m Model) homeView(width, height int) string {
 	logo := logoLines(width)
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lines = append(lines, "")
-	if sv := m.sectionsView(boxW); sv != "" {
-		add(sv, boxW)
-		lines = append(lines, "")
+	if m.stripShown() {
+		if sv := m.sectionsView(boxW); sv != "" {
+			add(sv, boxW)
+			lines = append(lines, "")
+		}
 	}
 	if pv := m.paletteViewFor(boxW); pv != "" {
 		add(pv, boxW)
