@@ -596,18 +596,19 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 		t.Fatalf("down clamps: cursor %d", m.chatCursor)
 	}
 
-	// Enter on the tool item expands its output for this item only.
+	// Under the cursor the tool item previews a few lines; enter expands
+	// this item fully; enter again returns to the preview.
 	view := func() string { return stripANSI(m.vp.View()) }
-	if strings.Count(view(), "out") != maxOutputCollapsed {
-		t.Fatalf("collapsed before enter:\n%s", view())
+	if n := strings.Count(view(), "out"); n != previewLines-1 {
+		t.Fatalf("preview before enter (%d 'out' lines):\n%s", n, view())
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
 	if !m.expanded["a"][items-1] || strings.Count(view(), "out") != 8 {
 		t.Fatalf("expanded after enter (%v):\n%s", m.expanded["a"], view())
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.expanded["a"][items-1] || strings.Count(view(), "out") != maxOutputCollapsed {
-		t.Fatalf("collapsed after second enter:\n%s", view())
+	if m.expanded["a"][items-1] || strings.Count(view(), "out") != previewLines-1 {
+		t.Fatalf("preview after second enter:\n%s", view())
 	}
 	// Enter on a non-tool item is inert.
 	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter})

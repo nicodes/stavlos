@@ -147,7 +147,7 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 			continue
 		}
 		f, folded := folds[l.Item]
-		if folded && i != f.show {
+		if folded && !f.show[i] {
 			continue
 		}
 		cur := o.Focused && l.Item == o.Cursor
@@ -156,7 +156,7 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 			// per item below so it is uniform whether folded or not.
 			continue
 		}
-		if folded && f.hidden > 0 {
+		if folded && f.hidden > 0 && i == f.last {
 			l.Suffix = strings.TrimSpace(l.Suffix + fmt.Sprintf(" +%d", f.hidden))
 		}
 		text := renderLine(l, o, cur)
@@ -225,9 +225,18 @@ func spacedItems(lines []Line) map[int]bool {
 	return out
 }
 
-// fold describes a collapsed item: the one line index to show and how many
-// other non-blank lines are hidden behind it.
-type fold struct{ show, hidden int }
+// fold describes a collapsed item: which line indices to show (one when
+// folded, up to previewLines under the chat cursor) and how many other
+// non-blank lines are hidden; the "+N" marker goes on the last shown line.
+type fold struct {
+	show   map[int]bool
+	last   int
+	hidden int
+}
+
+// previewLines is how many lines an item shows while the chat cursor is on
+// it; enter expands it fully.
+const previewLines = 3
 
 // folds decides which items collapse to a single line. User inputs and
 // assistant responses always show in full; everything else (tool calls with
@@ -244,6 +253,7 @@ func (o RenderOpts) folds(lines []Line) map[int]fold {
 		show     int
 		nonblank int
 		seen     bool
+		visible  []int // non-blank, shown line indices in order
 	}
 	byItem := map[int]*info{}
 	order := []int{}
@@ -266,6 +276,7 @@ func (o RenderOpts) folds(lines []Line) map[int]fold {
 			continue
 		}
 		in.nonblank++
+		in.visible = append(in.visible, i)
 		// prefer the first content line over a block label ("child", "task")
 		if in.show < 0 || (lines[in.show].Kind == LineLabel && l.Kind != LineLabel && !in.seen) {
 			in.show = i
@@ -277,13 +288,31 @@ func (o RenderOpts) folds(lines []Line) map[int]fold {
 		if in.full || in.show < 0 {
 			continue
 		}
-		if o.Focused && item == o.Cursor {
-			continue
-		}
 		if v, ok := o.Expanded[item]; ok && v {
-			continue
+			continue // enter: fully expanded
 		}
-		out[item] = fold{show: in.show, hidden: in.nonblank - 1}
+		f := fold{show: map[int]bool{}}
+		if o.Focused && item == o.Cursor {
+			// preview: the first few lines, starting from the chosen lead line
+			start := 0
+			for k, idx := range in.visible {
+				if idx == in.show {
+					start = k
+				}
+			}
+			n := 0
+			for k := start; k < len(in.visible) && n < previewLines; k++ {
+				f.show[in.visible[k]] = true
+				f.last = in.visible[k]
+				n++
+			}
+			f.hidden = in.nonblank - n
+		} else {
+			f.show[in.show] = true
+			f.last = in.show
+			f.hidden = in.nonblank - 1
+		}
+		out[item] = f
 	}
 	return out
 }
@@ -336,9 +365,6 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 			glyph = styleTool.Render(g) + gap
 		}
 		style = renderToolText
-		if l.Suffix != "" {
-			text += " " + l.Suffix
-		}
 	case LineToolOut:
 		leader = "      "
 		style = styleToolOut.Render
@@ -356,6 +382,9 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		style = styleError.Render
 	default:
 		style = func(s ...string) string { return strings.Join(s, "") }
+	}
+	if l.Suffix != "" {
+		text += " " + l.Suffix
 	}
 	// A line's own glyph, coloured by lifecycle: yellow in progress, red on
 	// error or termination, otherwise the glyph's natural colour.
