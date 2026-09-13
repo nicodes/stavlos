@@ -57,6 +57,7 @@ type fakeProvider struct{ m *fakeModel }
 
 func (p fakeProvider) Name() string                     { return "fake" }
 func (p fakeProvider) Open(string) (model.Model, error) { return p.m, nil }
+func (p fakeProvider) Variants(string) []string         { return []string{"low", "high"} }
 
 func text(s string) model.Response {
 	return model.Response{Blocks: []model.Block{{Type: model.BlockText, Text: s}}, StopReason: model.StopEndTurn}
@@ -712,5 +713,87 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 	}
 	if te.Reason != "end_turn" {
 		t.Fatalf("turn 2: %+v", te)
+	}
+}
+
+func TestVariants(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	var seen []string
+	var mu sync.Mutex
+	fm.steps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			mu.Lock()
+			seen = append(seen, req.Variant)
+			mu.Unlock()
+			return call("c1", "agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`)
+		},
+		func(model.Request) model.Response { return text("delegated") },
+		func(model.Request) model.Response { return text("noted") },
+	}
+	fm.childSteps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			mu.Lock()
+			seen = append(seen, "child:"+req.Variant)
+			mu.Unlock()
+			return call("k1", "agent_finish", `{"summary":"ok","status":"success"}`)
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+
+	if vs, err := h.c.Variants(ctx, "fake/m1"); err != nil || len(vs) != 2 || vs[1] != "high" {
+		t.Fatalf("variants: %v %v", vs, err)
+	}
+	if err := h.c.SetAgentVariant(ctx, root, "extreme"); err == nil {
+		t.Fatal("unknown variant should be rejected")
+	}
+	if err := h.c.SetAgentVariant(ctx, root, "high"); err != nil {
+		t.Fatal(err)
+	}
+	e := h.waitFor(event.AgentVariantChanged, root)
+	var vp event.VariantChangedPayload
+	_ = e.Decode(&vp)
+	if vp.Variant != "high" {
+		t.Fatalf("%+v", vp)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].Variant != "high" {
+		t.Fatalf("tree variant: %+v", agents[0])
+	}
+
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	sp := h.waitFor(event.AgentSpawned, "")
+	var spp event.AgentSpawnedPayload
+	_ = sp.Decode(&spp)
+	h.waitFor(event.AgentFinished, spp.ID)
+	var te event.TurnEndedPayload
+	for te.Turn != 2 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) < 2 || seen[0] != "high" || seen[1] != "child:high" {
+		t.Fatalf("variants seen by the model: %v", seen)
+	}
+	// the child (same model) inherited the variant and it shows in the tree
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents) != 2 || agents[1].Variant != "high" {
+		t.Fatalf("child variant: %+v", agents)
+	}
+	// back to the default
+	if err := h.c.SetAgentVariant(ctx, root, ""); err != nil {
+		t.Fatal(err)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].Variant != "" {
+		t.Fatalf("reset: %+v", agents[0])
 	}
 }

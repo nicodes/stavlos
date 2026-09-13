@@ -26,6 +26,7 @@ type Host interface {
 	Stream(n protocol.StreamNotification)
 	Resolve(modelID string) (model.Model, model.Info, error)
 	CheckModel(modelID string) error
+	Variants(modelID string) []string
 	Prompt(ctx context.Context, info protocol.PromptInfo) escalation.Answer
 }
 
@@ -276,6 +277,9 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		}
 	}
 	a := newAgent(s, NewID("a"), parentID, archetype, label, modelID, depth, preset)
+	if parent != nil && modelID == parent.ModelID() {
+		a.variant = parent.Variant() // same model: same flavour (logged below, after the spawn event)
+	}
 	if parent != nil {
 		a.ctx, a.kill = context.WithCancel(parent.ctx)
 	} else {
@@ -291,6 +295,12 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Agent: a.ID, Type: event.AgentSpawned,
 		Payload: event.MustPayload(event.AgentSpawnedPayload{ID: a.ID, Parent: parentID, Archetype: archetype, Label: label, Model: modelID, Task: task, Depth: depth})}); err != nil {
 		return nil, err
+	}
+	if a.variant != "" { // inherited: logged so recovery restores it
+		if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Agent: a.ID, Type: event.AgentVariantChanged,
+			Payload: event.MustPayload(event.VariantChangedPayload{Variant: a.variant})}); err != nil {
+			return nil, err
+		}
 	}
 	if parent != nil {
 		// A child wakes its parent when it finishes unless the parent

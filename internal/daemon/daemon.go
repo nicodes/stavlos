@@ -139,6 +139,7 @@ func (d *Daemon) Stream(n protocol.StreamNotification) {
 
 func (d *Daemon) Resolve(id string) (model.Model, model.Info, error) { return d.Registry.Resolve(id) }
 func (d *Daemon) CheckModel(id string) error                         { return d.Registry.Check(id) }
+func (d *Daemon) Variants(id string) []string                        { return d.Registry.Variants(id) }
 
 func (d *Daemon) Prompt(ctx context.Context, info protocol.PromptInfo) escalation.Answer {
 	return d.esc.Request(ctx, info)

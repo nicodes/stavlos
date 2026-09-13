@@ -361,6 +361,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case rolesMsg:
 		cmds = append(cmds, m.onRoles(msg))
+	case variantsMsg:
+		cmds = append(cmds, m.onVariants(msg))
 	case modelsMsg:
 		cmds = append(cmds, m.onModels(msg))
 
@@ -970,6 +972,29 @@ func (m *Model) command(text string) tea.Cmd {
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
 	case "/roles", "/presets":
 		return presetsCmd(m.ctx, m.c, m.sessionID)
+	case "/variants", "/variant":
+		if c := needAgent(); c != nil {
+			return c
+		}
+		a := m.selectedAgent()
+		modelID, current := m.session.Model, ""
+		if a != nil {
+			current = a.Variant
+			if a.Model != "" {
+				modelID = a.Model
+			}
+		}
+		if modelID == "" {
+			return m.setStatus("no model selected — /models first", true)
+		}
+		if rest == "" {
+			return variantsCmd(m.ctx, m.c, modelID, current)
+		}
+		v := strings.ToLower(rest)
+		if v == "default" || v == "none" || v == "off" {
+			v = ""
+		}
+		return pickVariantCmd(m.ctx, m.c, agent, v)
 	case "/queue":
 		if c := needAgent(); c != nil {
 			return c
@@ -1076,7 +1101,7 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	switch ev.Type {
 	case event.AgentSpawned, event.AgentFinished, event.AgentKilled,
 		event.TurnStarted, event.TurnEnded, event.Usage,
-		event.AgentModelChanged, event.AgentRoleChanged, event.SessionModelChanged,
+		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.SessionModelChanged,
 		event.MonitorStarted, event.MonitorFired, event.MonitorStopped:
 		if !m.loading {
 			cmds = append(cmds, m.markTreeDirty())
@@ -1564,6 +1589,16 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 			return m.setStatus("no agent selected", true)
 		}
 		return tea.Batch(m.closeOverlay(), pickRoleCmd(m.ctx, m.c, agent, it.id))
+	case ovVariants:
+		it := o.selected()
+		if it == nil {
+			return nil
+		}
+		agent := m.selectedID()
+		if agent == "" {
+			return m.setStatus("no agent selected", true)
+		}
+		return tea.Batch(m.closeOverlay(), pickVariantCmd(m.ctx, m.c, agent, it.id))
 	case ovModels:
 		it := o.selected()
 		if it == nil {
@@ -1741,6 +1776,31 @@ func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
 			hint += "  · spawns " + strings.Join(r.Spawn, ", ")
 		}
 		items = append(items, overlayItem{id: r.Name, label: r.Name, hint: hint})
+	}
+	o.setItems(items)
+	return m.openOverlay(o)
+}
+
+// onVariants opens the /variants picker: the provider default plus every
+// variant the model offers, the one in force marked.
+func (m *Model) onVariants(msg variantsMsg) tea.Cmd {
+	if msg.err != nil {
+		return m.setStatus("variants: "+msg.err.Error(), true)
+	}
+	label := m.agentLabel(m.selectedID())
+	o := newOverlay(ovVariants, overlayList, "Variant for "+label+" · "+msg.model, "enter: use this variant at the agent's next model call")
+	if len(msg.variants) == 0 {
+		o.setInfo("this model has no variants", false)
+	}
+	mark := func(id string) string {
+		if id == msg.current {
+			return "  · current"
+		}
+		return ""
+	}
+	items := []overlayItem{{id: "", label: "default", hint: "provider default" + mark("")}}
+	for _, v := range msg.variants {
+		items = append(items, overlayItem{id: v, label: v, hint: "reasoning effort" + mark(v)})
 	}
 	o.setItems(items)
 	return m.openOverlay(o)

@@ -27,11 +27,13 @@ const (
 	MSessionArchive  = "session.archive"
 	MSessionSetModel = "session.set_model"
 
-	MAgentTree     = "agent.tree"
-	MAgentSend     = "agent.send" // Prompt / Steer / Cancel / Kill
-	MAgentSpawn    = "agent.spawn"
-	MAgentSetModel = "agent.set_model"
-	MAgentSetRole  = "agent.set_role" // switch an agent's preset in place
+	MAgentTree       = "agent.tree"
+	MAgentSend       = "agent.send" // Prompt / Steer / Cancel / Kill
+	MAgentSpawn      = "agent.spawn"
+	MAgentSetModel   = "agent.set_model"
+	MAgentSetRole    = "agent.set_role"    // switch an agent's preset in place
+	MAgentSetVariant = "agent.set_variant" // switch an agent's model variant (reasoning effort)
+	MVariants        = "variants"          // variant names a model offers
 
 	MPromptList  = "prompt.list"
 	MPromptClaim = "prompt.claim"
@@ -186,6 +188,7 @@ type AgentInfo struct {
 	Archetype string        `json:"archetype"`
 	Label     string        `json:"label"`
 	Model     string        `json:"model"`
+	Variant   string        `json:"variant,omitempty"` // model variant (reasoning effort); "" = default
 	Depth     int           `json:"depth"`
 	State     string        `json:"state"` // idle | running | waiting | blocked | finished | killed
 	Turn      int           `json:"turn"`
@@ -233,6 +236,18 @@ type AgentSetRoleParams struct {
 	V     int    `json:"v"`
 	Agent string `json:"agent"`
 	Role  string `json:"role"` // preset name
+}
+type AgentSetVariantParams struct {
+	V       int    `json:"v"`
+	Agent   string `json:"agent"`
+	Variant string `json:"variant"` // "" = provider default
+}
+type VariantsParams struct {
+	V     int    `json:"v"`
+	Model string `json:"model"` // provider/id
+}
+type VariantsResult struct {
+	Variants []string `json:"variants"`
 }
 
 // PromptInfo is a pending permission/question/trust prompt.

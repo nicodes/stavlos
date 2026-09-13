@@ -45,6 +45,15 @@ func NewWithToken(name, baseURL string, src model.TokenSource) model.Provider {
 
 func (p *provider) Name() string { return p.name }
 
+// Variants implements model.Variants. Grok's reasoning models (the "mini"
+// ones) take reasoning_effort low|high; the others reject the field.
+func (p *provider) Variants(id string) []string {
+	if p.name == "xai" && strings.Contains(id, "mini") {
+		return []string{"low", "high"}
+	}
+	return nil
+}
+
 func (p *provider) Open(modelID string) (model.Model, error) {
 	return &client{p: p, id: modelID}, nil
 }

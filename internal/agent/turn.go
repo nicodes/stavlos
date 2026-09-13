@@ -104,7 +104,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 			history = append(history, model.Message{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "(continue)"}}})
 		}
 
-		resp, err := m.Complete(turnCtx, model.Request{Model: bareID(modelID), System: system, Messages: history, Tools: defs},
+		resp, err := m.Complete(turnCtx, model.Request{Model: bareID(modelID), System: system, Messages: history, Tools: defs, Variant: a.Variant()},
 			func(d model.Delta) {
 				a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName})
 			})

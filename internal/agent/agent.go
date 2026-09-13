@@ -32,6 +32,7 @@ type Agent struct {
 	ID        string
 	Parent    string
 	Archetype string
+	variant   string // model variant (reasoning effort); "" = provider default
 	Label     string
 	Depth     int
 
@@ -307,6 +308,37 @@ func (a *Agent) ModelID() string {
 	return a.modelID
 }
 
+// Variant returns the model variant in force ("" = provider default).
+func (a *Agent) Variant() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.variant
+}
+
+// SetVariant switches the model variant (reasoning effort and the like)
+// at the agent's next model call. "" restores the provider default; any
+// other name must be one the model offers.
+func (a *Agent) SetVariant(ctx context.Context, v string) error {
+	if v != "" {
+		ok := false
+		for _, name := range a.s.host.Variants(a.ModelID()) {
+			if name == v {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return fmt.Errorf("unknown variant %q for %s (see /variants)", v, a.ModelID())
+		}
+	}
+	a.mu.Lock()
+	a.variant = v
+	a.mu.Unlock()
+	_, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentVariantChanged,
+		Payload: event.MustPayload(event.VariantChangedPayload{Variant: v})})
+	return err
+}
+
 // SetModel switches the agent's model at its next model call.
 func (a *Agent) SetModel(ctx context.Context, id string) error {
 	if err := a.s.host.CheckModel(id); err != nil {
@@ -364,7 +396,7 @@ func (a *Agent) Info() protocol.AgentInfo {
 	defer a.mu.Unlock()
 	info := protocol.AgentInfo{
 		ID: a.ID, Session: a.s.ID, Parent: a.Parent, Archetype: a.Archetype, Label: a.Label,
-		Model: a.modelID, Depth: a.Depth, State: string(a.state), Turn: a.turn,
+		Model: a.modelID, Variant: a.variant, Depth: a.Depth, State: string(a.state), Turn: a.turn,
 		Queued:  len(a.prompts) + len(a.steers) + len(a.childDone),
 		CostUSD: a.usage.cost, Tokens: a.usage.tokens,
 	}

@@ -777,6 +777,17 @@ func EventLines(ev event.Event) []Line {
 		}
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "model → " + p.Model}}
 
+	case event.AgentVariantChanged:
+		var p event.VariantChangedPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		v := p.Variant
+		if v == "" {
+			v = "default"
+		}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "variant → " + v}}
+
 	case event.MonitorStarted:
 		var p event.MonitorStartedPayload
 		if err := ev.Decode(&p); err != nil {

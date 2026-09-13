@@ -12,6 +12,7 @@ type chatRequest struct {
 	StreamOptions       *streamOptions  `json:"stream_options,omitempty"`
 	MaxTokens           int             `json:"max_tokens,omitempty"`
 	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
+	ReasoningEffort     string          `json:"reasoning_effort,omitempty"` // variant, for models that take it
 	ExtraBody           json.RawMessage `json:"-"`
 }
 

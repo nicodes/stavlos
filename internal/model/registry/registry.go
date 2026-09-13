@@ -290,6 +290,19 @@ func (r *Registry) Check(full string) error {
 
 // Resolve opens (or returns the cached) model for full and its metadata.
 // Subscription models carry no per-token price, so cost stays zero.
+// Variants lists the variant names a model offers ("" when it has none or
+// the provider is unknown).
+func (r *Registry) Variants(full string) []string {
+	p, id, err := r.lookup(full)
+	if err != nil {
+		return nil
+	}
+	if v, ok := p.(model.Variants); ok {
+		return v.Variants(id)
+	}
+	return nil
+}
+
 func (r *Registry) Resolve(full string) (model.Model, model.Info, error) {
 	p, id, err := r.lookup(full)
 	if err != nil {
