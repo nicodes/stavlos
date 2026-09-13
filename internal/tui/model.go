@@ -110,6 +110,7 @@ type Model struct {
 // other id are stale and dropped).
 type loginFlow struct {
 	provider, name string
+	method         string // "" = provider default
 	id             string
 	cancel         context.CancelFunc
 }
@@ -873,10 +874,10 @@ func (m *Model) loginKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		for _, p := range m.providers {
 			if p.ID == m.login.provider {
-				return m.startLogin(p)
+				return m.startLogin(p, m.login.method)
 			}
 		}
-		return m.startLogin(protocol.ProviderInfo{ID: m.login.provider, Name: m.login.name})
+		return m.startLogin(protocol.ProviderInfo{ID: m.login.provider, Name: m.login.name}, m.login.method)
 	}
 	return nil
 }
@@ -898,7 +899,22 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 		}
 		for _, p := range m.providers {
 			if p.ID == it.id {
-				return m.startLogin(p)
+				if len(p.Methods) > 1 {
+					return m.openMethodMenu(p)
+				}
+				return m.startLogin(p, "")
+			}
+		}
+		return nil
+
+	case ovMethods:
+		it := o.selected()
+		if it == nil {
+			return nil
+		}
+		for _, p := range m.providers {
+			if p.ID == m.login.provider {
+				return m.startLogin(p, it.id)
 			}
 		}
 		return nil
@@ -922,19 +938,37 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 
 // startLogin switches the overlay to "Sign in to <Name>" and asks the
 // daemon for a device code. Any earlier sign-in is abandoned.
-func (m *Model) startLogin(p protocol.ProviderInfo) tea.Cmd {
+// openMethodMenu shows the provider's sign-in methods (opencode's "Login
+// method" step), default first.
+func (m *Model) openMethodMenu(p protocol.ProviderInfo) tea.Cmd {
 	name := p.Name
 	if name == "" {
 		name = p.ID
 	}
 	m.login.reset()
 	m.login.provider, m.login.name = p.ID, name
+	items := make([]overlayItem, 0, len(p.Methods))
+	for _, me := range p.Methods {
+		items = append(items, overlayItem{id: me.ID, label: me.Label})
+	}
+	ov := newOverlay(ovMethods, overlayList, "Login method", "enter to select · esc to close")
+	ov.setItems(items)
+	return m.openOverlay(ov)
+}
+
+func (m *Model) startLogin(p protocol.ProviderInfo, method string) tea.Cmd {
+	name := p.Name
+	if name == "" {
+		name = p.ID
+	}
+	m.login.reset()
+	m.login.provider, m.login.name, m.login.method = p.ID, name, method
 	var cmd tea.Cmd
 	if m.ov == nil {
 		cmd = m.openOverlay(newOverlay(ovProviders, overlayLogin, "", ""))
 	}
 	m.ov.switchLogin(name)
-	return tea.Batch(cmd, loginStartCmd(m.ctx, m.c, p.ID))
+	return tea.Batch(cmd, loginStartCmd(m.ctx, m.c, p.ID, method))
 }
 
 // onLoginStart shows the URL and code, opens the browser once and starts
@@ -1033,7 +1067,10 @@ func (m *Model) onProviders(msg providersMsg) tea.Cmd {
 	if msg.jump != "" {
 		for _, p := range msg.res.Providers {
 			if p.ID == msg.jump || strings.ToLower(p.Name) == msg.jump {
-				return m.startLogin(p)
+				if len(p.Methods) > 1 {
+					return m.openMethodMenu(p)
+				}
+				return m.startLogin(p, "")
 			}
 		}
 	}

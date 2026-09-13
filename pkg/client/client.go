@@ -279,10 +279,11 @@ func (c *Client) Providers(ctx context.Context) (protocol.ProviderListResult, er
 	return r, err
 }
 
-// LoginStart begins a subscription login; show URL and Code to the user.
-func (c *Client) LoginStart(ctx context.Context, provider string) (protocol.LoginStartResult, error) {
+// LoginStart begins a subscription login with the given method ("" for the
+// provider's default); show the URL (and Code for the device method).
+func (c *Client) LoginStart(ctx context.Context, provider, method string) (protocol.LoginStartResult, error) {
 	var r protocol.LoginStartResult
-	err := c.Call(ctx, protocol.MProviderLoginStart, protocol.ProviderRef{Provider: provider}, &r)
+	err := c.Call(ctx, protocol.MProviderLoginStart, protocol.LoginStartParams{Provider: provider, Method: method}, &r)
 	return r, err
 }
 

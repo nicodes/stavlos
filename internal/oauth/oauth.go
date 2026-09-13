@@ -33,27 +33,43 @@ type Tokens struct {
 	Email     string
 }
 
-// Pending is a device-code login waiting for the user.
+// Method ids.
+const (
+	MethodBrowser = "browser" // authorize in a browser; callback to localhost
+	MethodDevice  = "device"  // show a URL and a code; poll (headless)
+)
+
+// Method is one way to sign in to a provider.
+type Method struct {
+	ID    string
+	Label string
+}
+
+// Pending is a login waiting for the user.
 type Pending struct {
 	Provider     string
+	Method       string
 	URL          string // where the user goes
-	Code         string // what they type there
+	Code         string // what they type there (device method only)
 	Instructions string
 	ExpiresIn    time.Duration
 	interval     time.Duration
 	deviceCode   string // xai
-	deviceAuthID string // openai
+	deviceAuthID string // openai device
+	browser      *browserLogin
 }
 
 // Flow is one provider's login and refresh logic.
 type Flow interface {
 	// Provider id: "openai" or "xai".
 	Provider() string
-	// Label is the human-facing method name.
+	// Label is the human-facing subscription name.
 	Label() string
-	// Start requests a device code.
-	Start(ctx context.Context) (*Pending, error)
-	// Wait polls until the user completes the login, the code expires, or ctx ends.
+	// Methods lists sign-in methods, default first.
+	Methods() []Method
+	// Start begins a login with the given method ("" = default).
+	Start(ctx context.Context, method string) (*Pending, error)
+	// Wait blocks until the user completes the login, it expires, or ctx ends.
 	Wait(ctx context.Context, p *Pending) (Tokens, error)
 	// Refresh exchanges a refresh token for a new pair.
 	Refresh(ctx context.Context, refresh string) (Tokens, error)

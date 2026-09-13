@@ -207,11 +207,11 @@ func refreshProvidersCmd(ctx context.Context, c *client.Client) tea.Cmd {
 }
 
 // loginStartCmd begins the device-code login for provider.
-func loginStartCmd(ctx context.Context, c *client.Client, provider string) tea.Cmd {
+func loginStartCmd(ctx context.Context, c *client.Client, provider, method string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)
 		defer cancel()
-		res, err := c.LoginStart(ctx, provider)
+		res, err := c.LoginStart(ctx, provider, method)
 		return loginStartMsg{provider: provider, res: res, err: err}
 	}
 }

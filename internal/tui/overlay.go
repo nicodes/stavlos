@@ -37,6 +37,7 @@ type overlayKind int
 
 const (
 	ovProviders overlayKind = iota // pick a provider
+	ovMethods                      // pick a login method (providers with more than one)
 	ovModels                       // pick a model
 )
 
@@ -44,6 +45,7 @@ const (
 // still being started; err replaces the waiting line once set.
 type loginState struct {
 	url, code, instructions string
+	browser                 bool // browser method: no code, the callback lands on this machine
 	err                     string
 }
 
@@ -122,7 +124,7 @@ func (o *overlay) switchLogin(name string) {
 
 // setLogin fills in the device-code details and clears any error.
 func (o *overlay) setLogin(url, code, instructions string) {
-	o.login = loginState{url: url, code: code, instructions: instructions}
+	o.login = loginState{url: url, code: code, instructions: instructions, browser: code == ""}
 }
 
 // setLoginError replaces the waiting line with err.
@@ -263,12 +265,18 @@ func (o *overlay) loginLines(inner int, spinner string) []string {
 		)
 	}
 	if l.url != "" {
-		out = append(out, "Open this URL on any device:")
+		if l.browser {
+			out = append(out, "Your browser should open to sign in. If it does not, open:")
+		} else {
+			out = append(out, "Open this URL on any device:")
+		}
 		for _, u := range strings.Split(ansi.Hardwrap(l.url, inner-2, true), "\n") {
 			out = append(out, "  "+styleOvURL.Render(u))
 		}
-		out = append(out, "and enter the code:")
-		out = append(out, "  "+styleOvCode.Render(truncRunes(spacedCode(l.code), inner-2)))
+		if !l.browser {
+			out = append(out, "and enter the code:")
+			out = append(out, "  "+styleOvCode.Render(truncRunes(spacedCode(l.code), inner-2)))
+		}
 		if ins := strings.TrimSpace(l.instructions); ins != "" {
 			for _, s := range strings.Split(ansi.Wrap(ins, inner, ""), "\n") {
 				out = append(out, styleDim.Render(s))

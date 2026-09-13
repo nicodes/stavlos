@@ -94,11 +94,29 @@ func loginFlow(ctx context.Context, c *client.Client, want string) (string, erro
 			return "", err
 		}
 	}
-	start, err := c.LoginStart(ctx, chosen.id)
+	method := ""
+	for _, p := range r.Providers {
+		if p.ID == chosen.id && len(p.Methods) > 1 {
+			var ms []pick
+			for _, m := range p.Methods {
+				ms = append(ms, pick{id: m.ID, label: m.Label})
+			}
+			mp, err := selectFrom("Login method", ms)
+			if err != nil {
+				return "", err
+			}
+			method = mp.id
+		}
+	}
+	start, err := c.LoginStart(ctx, chosen.id, method)
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("\nOpen this URL on any device:\n\n    %s\n\nand enter the code:\n\n    %s\n\n%s\n", start.URL, start.Code, start.Instructions)
+	if start.Code != "" {
+		fmt.Printf("\nOpen this URL on any device:\n\n    %s\n\nand enter the code:\n\n    %s\n\n%s\n", start.URL, start.Code, start.Instructions)
+	} else {
+		fmt.Printf("\nOpening your browser to sign in. If it does not open, visit:\n\n    %s\n\n%s\n", start.URL, start.Instructions)
+	}
 	openBrowser(start.URL)
 	fmt.Print("Waiting for you to finish signing in… (ctrl+c to cancel)\n")
 	info, err := c.LoginWait(ctx, start.ID)
