@@ -355,6 +355,15 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	if l.Block != BlockNone && (l.Kind == LineText || l.Kind == LineLabel) {
 		bs := blockStyle(l.Block)
 		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), bs) }
+		// User prompts and steers read like a shell: "› text" on the first
+		// line, later lines indented to align under it.
+		if l.Kind == LineText && (l.Block == BlockUser || l.Block == BlockSteer) {
+			if l.Lead {
+				glyph = bs.Render("›") + " "
+			} else {
+				leader += "  "
+			}
+		}
 	}
 
 	glyphW := ansi.StringWidth(glyph)

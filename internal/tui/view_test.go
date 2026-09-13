@@ -493,7 +493,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if m.chatCursor != items-2 {
 		t.Fatalf("up: cursor %d", m.chatCursor)
 	}
-	if got := marked(); got != "msg H" {
+	if got := marked(); got != "› msg H" {
 		t.Fatalf("cursor item not marked: %q\n%s", got, stripANSI(m.vp.View()))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}, tea.KeyMsg{Type: tea.KeyPgUp})

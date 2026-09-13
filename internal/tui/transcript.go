@@ -66,6 +66,7 @@ type Line struct {
 	Err     bool   // tool call failed (✗ glyph)
 	Suffix  string // dim trailer, e.g. "(cancelled)"
 	Item    int    // index of the item (event group) this line belongs to
+	Lead    bool   // first text line of a user/steer block: carries the "›" glyph
 	callID  string
 	tool    string // raw tool name on a LineTool line
 }
@@ -608,8 +609,9 @@ func block(kind BlockKind, label, text string) []Line {
 	if label != "" {
 		lines = append(lines, Line{Kind: LineLabel, Text: label, Block: kind})
 	}
-	for _, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
-		lines = append(lines, Line{Kind: LineText, Text: l, Block: kind})
+	for i, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		lead := i == 0 && (kind == BlockUser || kind == BlockSteer)
+		lines = append(lines, Line{Kind: LineText, Text: l, Block: kind, Lead: lead})
 	}
 	return append(lines, Line{Kind: LineBlank})
 }
