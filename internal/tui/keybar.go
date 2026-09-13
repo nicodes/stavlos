@@ -24,7 +24,7 @@ func (m Model) keyHints() []keyHint {
 		return []keyHint{{"enter", "select"}, {"↑/↓", "move"}, {"type", "filter"}, {"pgup/pgdn", "page"}, {"esc", "close"}}
 	}
 	switch m.focus {
-	case focusAgents:
+	case focusBackground:
 		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusSidebar:
 		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}

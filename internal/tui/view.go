@@ -744,12 +744,8 @@ func (m Model) homeView(width, height int) string {
 		add(pb, boxW)
 		lines = append(lines, "")
 	}
-	if av := m.agentsView(boxW); av != "" {
-		add(av, boxW)
-		lines = append(lines, "")
-	}
-	if mv := m.monitorsView(boxW); mv != "" {
-		add(mv, boxW)
+	if bv := m.backgroundView(boxW); bv != "" {
+		add(bv, boxW)
 		lines = append(lines, "")
 	}
 	if pv := m.paletteViewFor(boxW); pv != "" {
@@ -791,15 +787,12 @@ func (m Model) homeView(width, height int) string {
 func (m Model) sessionView(width, height int) string {
 	cw := m.contentWidth()
 	parts := []string{m.vp.View(), ""}
-	// Section order matches the tab cycle: permission, agents, monitors.
+	// Section order matches the tab cycle: permission, background.
 	if pb := m.promptView(cw); pb != "" {
 		parts = append(parts, pb)
 	}
-	if av := m.agentsView(cw); av != "" {
-		parts = append(parts, av)
-	}
-	if mv := m.monitorsView(cw); mv != "" {
-		parts = append(parts, mv)
+	if bv := m.backgroundView(cw); bv != "" {
+		parts = append(parts, bv)
 	}
 	if pv := m.paletteViewFor(cw); pv != "" {
 		parts = append(parts, pv)
@@ -1057,24 +1050,22 @@ func (m Model) connected() bool {
 	return true
 }
 
-// agentsView lists the selected agent's live children. "wakes parent"
-// marks the ones it armed with monitor; the rest report silently to its
-// mailbox. A child that finishes leaves this block and its result shows up
-// in the transcript when the parent next takes a turn.
-func (m Model) agentsView(width int) string {
-	sel := m.selectedID()
-	if sel == "" {
-		return ""
-	}
+// backgroundView is the "background" section above the input: the
+// selected agent's live children and its running async jobs, one line each
+// with the chat's glyphs and lifecycle colours. It collapses to a summary
+// line unless it has focus.
+func (m Model) backgroundView(width int) string {
 	kids := m.liveChildren()
-	if len(kids) == 0 {
+	jobs := m.runningJobs()
+	if len(kids)+len(jobs) == 0 {
 		return ""
 	}
-	if m.focus != focusAgents {
-		return agentsSummary(kids, m.sp.View(), width)
+	if m.focus != focusBackground {
+		return backgroundSummary(kids, jobs, width)
 	}
-	rows := agentRows(m.agents, sel, m.spawned, time.Now(), m.sp.View(), width-2)
-	head := styleAccent.Render("agents") + " " + styleDim.Render(fmt.Sprintf("(%d) · ↑/↓ move · enter select · esc back", len(rows)))
+	rows := agentRows(m.agents, m.selectedID(), m.spawned, time.Now(), width-2)
+	rows = append(rows, monitorRows(jobs, time.Now(), width-2)...)
+	head := styleAccent.Render("background") + " " + styleDim.Render(fmt.Sprintf("(%d) · ↑/↓ move · enter select agent · esc back", len(rows)))
 	for i := range rows {
 		marker := "  "
 		if i == m.agCursor%len(rows) {
@@ -1085,36 +1076,58 @@ func (m Model) agentsView(width int) string {
 	return strings.Join(append([]string{head}, rows...), "\n")
 }
 
-// agentsSummary is the one-line form of the agents block shown while it is
-// not focused: "agents (2)  ● scout running · ○ checks idle  tab to expand".
-func agentsSummary(kids []protocol.AgentInfo, spinner string, width int) string {
-	parts := make([]string, 0, len(kids))
+// backgroundSummary is the one-line form shown while the section is not
+// focused: "background (3)  ⑂ scout running · ⑂ checks idle · ◷ go test".
+func backgroundSummary(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, width int) string {
+	parts := make([]string, 0, len(kids)+len(jobs))
 	for _, a := range kids {
-		lead := agentDot(a)
-		if a.State == "running" || a.State == "blocked" {
-			lead = lipgloss.NewStyle().Foreground(colWarning).Render(spinner)
-		}
 		state := a.State
 		if agentOutcome(a) == "error" {
 			state = "error"
 		}
-		parts = append(parts, lead+" "+styleBold.Render(a.Label)+" "+styleDim.Render(state))
+		parts = append(parts, agentGlyph(a)+" "+styleBold.Render(a.Label)+" "+styleDim.Render(state))
 	}
-	head := styleDim.Render(fmt.Sprintf("agents (%d)", len(kids))) + "  " + strings.Join(parts, styleDim.Render(" · "))
+	for _, j := range jobs {
+		parts = append(parts, jobGlyph(j)+" "+styleBold.Render(j.Label))
+	}
+	head := styleDim.Render(fmt.Sprintf("background (%d)", len(parts))) + "  " + strings.Join(parts, styleDim.Render(" · "))
 	return ansi.Truncate(head, width, "…")
 }
 
+// agentGlyph is the fork, coloured by the agent's lifecycle like the chat:
+// yellow working, red errored, grey complete, dim otherwise.
+func agentGlyph(a protocol.AgentInfo) string {
+	switch agentOutcome(a) {
+	case "working":
+		return styleWorking.Render(glyphToolAgents)
+	case "error":
+		return styleError.Render(glyphToolAgents)
+	case "complete":
+		return styleDim.Render(glyphToolAgents)
+	}
+	return styleTool.Render(glyphToolAgents)
+}
+
+// jobGlyph is the clock, yellow while the job runs, red if it errored or
+// was lost, dim otherwise.
+func jobGlyph(j protocol.MonitorInfo) string {
+	switch j.State {
+	case "running", "":
+		return styleWorking.Render(glyphToolMonitors)
+	case "lost", "stopped":
+		return styleError.Render(glyphToolMonitors)
+	}
+	return styleDim.Render(glyphToolMonitors)
+}
+
 // agentRows is the pure part of agentsView.
-func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, now time.Time, spinner string, width int) []string {
+func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, now time.Time, width int) []string {
 	var rows []string
 	for _, a := range agents {
 		if a.Parent != parent || a.State == "finished" || a.State == "killed" {
 			continue
 		}
-		lead := agentDot(a)
-		if a.State == "running" || a.State == "blocked" {
-			lead = lipgloss.NewStyle().Foreground(colWarning).Render(spinner)
-		}
+		lead := agentGlyph(a)
 		meta := []string{a.State}
 		if agentOutcome(a) == "error" {
 			meta = []string{styleStatusErr.Render("error")}
@@ -1138,37 +1151,18 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 	return rows
 }
 
-// monitorsView lists the general monitors the selected agent waits on: a
-// background command, a file watch or a timer. Children are not monitors;
-// they have their own block (agentsView).
-func (m Model) monitorsView(width int) string {
-	a := m.selectedAgent()
-	if a == nil {
-		return ""
-	}
-	rows := monitorRows(a.Monitors, time.Now(), m.sp.View(), width)
-	if len(rows) == 0 {
-		return ""
-	}
-	head := styleDim.Render("monitors") + " " + styleDim.Render(fmt.Sprintf("(%d)", len(rows)))
-	return strings.Join(append([]string{head}, rows...), "\n")
-}
-
 // monitorRows is the pure part of monitorsView: one row per running
 // monitor with its kind glyph, bold label, a spinner for commands still
 // running, and dim meta (kind, progress, elapsed, "wakes parent").
-func monitorRows(monitors []protocol.MonitorInfo, now time.Time, spinner string, width int) []string {
+func monitorRows(monitors []protocol.MonitorInfo, now time.Time, width int) []string {
 	var rows []string
 	for _, mo := range monitors {
 		switch mo.State {
 		case "fired", "stopped", "lost":
 			continue
 		}
-		lead := styleTool.Render(monitorGlyph(mo.Kind)) + monitorGlyphGap(mo.Kind)
+		lead := jobGlyph(mo) + monitorGlyphGap(mo.Kind)
 		label := styleBold.Render(mo.Label)
-		if mo.Kind == "command" && (mo.State == "running" || mo.State == "") && spinner != "" {
-			label += " " + lipgloss.NewStyle().Foreground(colWarning).Render(spinner)
-		}
 		meta := []string{mo.Kind}
 		if mo.Progress != "" {
 			meta = append(meta, mo.Progress)

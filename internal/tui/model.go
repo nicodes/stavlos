@@ -103,7 +103,7 @@ type Model struct {
 	promptInput textinput.Model // answer field of a question prompt
 	sbCursor    int
 	palIdx      int      // highlighted row in the "/" command palette
-	agCursor    int      // highlighted row in the agents block while it has focus
+	agCursor    int      // highlighted row in the background section while it has focus
 	history     []string // prompts sent from this client (and replayed human prompts)
 	histIdx     int      // == len(history) when editing a new line
 	histDraft   string   // unsent text saved while browsing history
@@ -127,7 +127,7 @@ const (
 	focusInput      focus = iota // the text input (typing, enter sends)
 	focusChat                    // the transcript: a cursor walks its items
 	focusPermission              // the pending prompt box (y/n/a, question field)
-	focusAgents                  // the live-children block above the input (↑/↓ enter)
+	focusBackground              // the background section above the input: live children + async jobs
 	focusSidebar                 // the agent tree (↑/↓ enter)
 )
 
@@ -378,8 +378,8 @@ func (m *Model) focusOrder() []focus {
 	if m.currentPrompt() != nil {
 		order = append(order, focusPermission)
 	}
-	if len(m.liveChildren()) > 0 {
-		order = append(order, focusAgents)
+	if len(m.liveChildren())+len(m.runningJobs()) > 0 {
+		order = append(order, focusBackground)
 	}
 	order = append(order, focusInput)
 	if m.sidebarVisible() {
@@ -401,6 +401,14 @@ func (m *Model) liveChildren() []protocol.AgentInfo {
 		}
 	}
 	return out
+}
+
+// runningJobs returns the selected agent's running async jobs.
+func (m *Model) runningJobs() []protocol.MonitorInfo {
+	if a := m.selectedAgent(); a != nil {
+		return a.Monitors
+	}
+	return nil
 }
 
 // cycleFocus moves focus delta steps (+1 tab, -1 shift+tab) through
@@ -446,18 +454,18 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		}
 	case focusSidebar:
 		m.sbCursor = m.selected
-	case focusAgents:
+	case focusBackground:
 		m.agCursor = 0
 	}
 	return nil
 }
 
-// agentsKey handles keys while the agents block has focus: ↑/↓ (or j/k)
-// move over the live children, enter selects that child and returns to
-// the input, esc returns without changing the selection.
-func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
+// backgroundKey handles keys while the background section has focus: ↑/↓
+// (or j/k) move over the rows, enter on an agent row selects that agent
+// and returns to the input, esc returns without changing the selection.
+func (m *Model) backgroundKey(msg tea.KeyMsg) tea.Cmd {
 	kids := m.liveChildren()
-	n := len(kids)
+	n := len(kids) + len(m.runningJobs())
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.setFocus(focusInput)
@@ -470,7 +478,7 @@ func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
 			m.agCursor = (m.agCursor + 1) % n
 		}
 	case key.Matches(msg, keys.Submit):
-		if n > 0 {
+		if n > 0 && m.agCursor%n < len(kids) { // agent rows come first; job rows are informational
 			if i := m.findAgent(kids[m.agCursor%n].ID); i >= 0 && i != m.selected {
 				m.selected = i
 				m.follow = true
@@ -573,8 +581,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	}
 
 	switch m.focus {
-	case focusAgents:
-		return m.agentsKey(msg)
+	case focusBackground:
+		return m.backgroundKey(msg)
 	case focusSidebar:
 		return m.sidebarKey(msg)
 	case focusChat:
@@ -1263,11 +1271,8 @@ func (m *Model) layout() {
 
 	_, kb := m.keyBarView()
 	bodyH := m.height - 1 - kb - 1 - inputBoxLines // footer, key bar, spacer, input box
-	if av := m.agentsView(m.contentWidth()); av != "" {
-		bodyH -= strings.Count(av, "\n") + 1
-	}
-	if mv := m.monitorsView(m.contentWidth()); mv != "" {
-		bodyH -= strings.Count(mv, "\n") + 1
+	if bv := m.backgroundView(m.contentWidth()); bv != "" {
+		bodyH -= strings.Count(bv, "\n") + 1
 	}
 	if pb := m.promptView(m.contentWidth()); pb != "" {
 		bodyH -= strings.Count(pb, "\n") + 1
