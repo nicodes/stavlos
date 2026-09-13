@@ -72,8 +72,8 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type sendTool struct{}
 
 func (sendTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_prompt", Description: "Queue a prompt for a child agent; it runs after the child's current turn ends.",
-		Schema: schema(map[string]any{"id": prop("string", "Child agent id"), "text": prop("string", "Message")}, "id", "text")}
+	return model.ToolDef{Name: "agent_prompt", Description: "Send a message to any other agent in this session (a child, a sibling, or your parent); it runs after that agent's current turn ends. The recipient sees it as coming from you. agent_status lists every agent and its id.",
+		Schema: schema(map[string]any{"id": prop("string", "Target agent id (any agent in the session)"), "text": prop("string", "Message")}, "id", "text")}
 }
 func (sendTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
 func (sendTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
@@ -93,8 +93,8 @@ func (sendTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type steerTool struct{}
 
 func (steerTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_steer", Description: "Redirect a running child at its next model-call boundary without discarding its work. If the child is idle this behaves like agent_prompt.",
-		Schema: schema(map[string]any{"id": prop("string", "Child agent id"), "text": prop("string", "Instruction")}, "id", "text")}
+	return model.ToolDef{Name: "agent_steer", Description: "Main agent only: redirect any other agent in this session at its next model-call boundary without discarding its work. If the agent is idle this behaves like agent_prompt.",
+		Schema: schema(map[string]any{"id": prop("string", "Target agent id (any agent in the session)"), "text": prop("string", "Instruction")}, "id", "text")}
 }
 func (steerTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
 func (steerTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
@@ -171,8 +171,8 @@ func (resultTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 type statusTool struct{}
 
 func (statusTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_status", Description: "State, turn count, and cost of one or all children.",
-		Schema: schema(map[string]any{"id": prop("string", "Child id; omit for all")})}
+	return model.ToolDef{Name: "agent_status", Description: "State, turn count, and cost of one agent, or of every agent in the session (the whole tree, parents before children; your own row is marked).",
+		Schema: schema(map[string]any{"id": prop("string", "Agent id; omit for the whole session")})}
 }
 func (statusTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
 func (statusTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
@@ -182,9 +182,6 @@ func (statusTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 	st, err := env.Orch.Status(env.Agent, idArg(in))
 	if err != nil {
 		return errf("%v", err)
-	}
-	if len(st) == 0 {
-		return Result{Output: "no children"}
 	}
 	return jsonOut(st)
 }

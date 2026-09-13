@@ -222,8 +222,8 @@ Available to any agent whose preset permits them:
 | Tool | Effect |
 |---|---|
 | `agent_create(archetype, label, task, model?)` | Create a child agent; returns its ID immediately |
-| `agent_prompt(id, text)` | Queue a `Prompt` |
-| `agent_steer(id, text)` | Deliver a `Steer` |
+| `agent_prompt(id, text)` | Queue a `Prompt` for any agent in the session |
+| `agent_steer(id, text)` | Deliver a `Steer` to any agent in the session (main agent only) |
 | `agent_cancel(id)` | Deliver a `Cancel` |
 | `agent_kill(id)` | Deliver a `Kill` |
 
@@ -231,7 +231,9 @@ There is no wait tool. A parent that has nothing to do until a child reports sim
 
 **Background jobs** use the same mailbox and wake: `bash_async(command)` starts a job and returns its id at once; when it exits the agent is woken with the exit code and output, and `bash_kill(id)` stops it. Every agent with `bash` has these. Nothing is armed by hand: a job's exit always wakes its owner, as a child's finish always wakes its parent. Jobs are logged (`monitor.started`, `monitor.fired`, `monitor.stopped`); a job whose process died with the daemon is reported to its owner as lost on restart. File watches and timers were tried and removed: models rarely used them well, and `bash_async` of `sleep` or `inotifywait` covers the need. In the TUI, the permission queue, live children ("agents") and jobs ("async") are three permanent tabs on one strip under the rule that closes the chat, each showing only its count (down to "(0)") until opened; the strip is one stop in the tab cycle (it opens on the first non-empty tab, permission when all are empty) and ←/→ move between tabs.
 | `agent_result(id)` | Retrieve a finished result without blocking |
-| `agent_status(id?)` | State and usage (§4.4) of one or all children |
+| `agent_status(id?)` | State and usage (§4.4) of one agent, or the whole session tree |
+
+**Prompting is session-wide, steering is the main agent's, lifecycle is parent-only.** Every agent has `agent_prompt` and `agent_status`: a prompt may address any agent in the same session — a child, a sibling, or the caller's parent — and the recipient sees who sent it (`from` on the logged message, `[message from agent …]` in the model's history). `agent_steer` is offered only to the main agent, since a steer cuts into a running turn; subagents that need to redirect someone prompt them instead. `agent_cancel`, `agent_kill` and `agent_result` still work only on the caller's own children: killing an agent someone else created would fire its parent's wake with a surprise. "Same tree" means same session; agents never reach across sessions.
 
 `label` is **required** on spawn. It is the human-facing name in thread titles, pickers, and webhook identities. Optional labels produce unusable UI.
 

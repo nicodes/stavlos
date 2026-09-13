@@ -3,13 +3,48 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
 // orchestrator implements tools.Orchestrator on top of a session (PRD §6.4).
-// Every method checks that the target is a child of the caller.
+// Prompt and status reach any agent in the session: a child, a sibling, or
+// the caller's parent. Steer is the main agent's alone. Lifecycle (cancel,
+// kill, result) stays with the parent that created the agent.
 type orchestrator struct{ s *Session }
+
+// senderLabel turns an envelope source into the From shown to the
+// recipient: "scout (a1b2c3d4)" for "agent:<id>", "" for humans.
+func (s *Session) senderLabel(source string) string {
+	id, ok := strings.CutPrefix(source, "agent:")
+	if !ok {
+		return ""
+	}
+	if a, ok := s.Agent(id); ok {
+		return fmt.Sprintf("%s (%s)", a.Label, shortID(id))
+	}
+	return shortID(id)
+}
+
+func shortID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
+}
+
+// peer resolves any other live agent in the same session.
+func (o orchestrator) peer(caller, id string) (*Agent, error) {
+	if id == caller {
+		return nil, fmt.Errorf("agent %q is you", id)
+	}
+	c, ok := o.s.Agent(id)
+	if !ok {
+		return nil, fmt.Errorf("unknown agent %q", id)
+	}
+	return c, nil
+}
 
 func (o orchestrator) child(parent, id string) (*Agent, error) {
 	c, ok := o.s.Agent(id)
@@ -30,20 +65,25 @@ func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task,
 	return a.ID, nil
 }
 
-func (o orchestrator) Send(parent, id, text string) error {
-	c, err := o.child(parent, id)
+func (o orchestrator) Send(caller, id, text string) error {
+	c, err := o.peer(caller, id)
 	if err != nil {
 		return err
 	}
-	return c.Prompt(context.Background(), text, "agent:"+parent)
+	return c.Prompt(context.Background(), text, "agent:"+caller)
 }
 
-func (o orchestrator) Steer(parent, id, text string) error {
-	c, err := o.child(parent, id)
+// Steer is the main agent's alone: a steer cuts into a running turn, which
+// is too invasive for a subagent to do to a peer.
+func (o orchestrator) Steer(caller, id, text string) error {
+	if a, ok := o.s.Agent(caller); !ok || a.Parent != "" {
+		return fmt.Errorf("only the main agent can steer; use agent_prompt")
+	}
+	c, err := o.peer(caller, id)
 	if err != nil {
 		return err
 	}
-	return c.Steer(context.Background(), text, "agent:"+parent)
+	return c.Steer(context.Background(), text, "agent:"+caller)
 }
 
 func (o orchestrator) Cancel(parent, id string) error {
@@ -92,23 +132,26 @@ func (o orchestrator) Result(parent, id string) (tools.ChildResult, bool, error)
 	return r, true, nil
 }
 
-func (o orchestrator) Status(parent, id string) ([]tools.ChildStatus, error) {
-	p, ok := o.s.Agent(parent)
-	if !ok {
-		return nil, fmt.Errorf("unknown agent %q", parent)
+// Status describes one agent (any in the session) or, with no id, the
+// whole session tree in pre-order.
+func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
+	if _, ok := o.s.Agent(caller); !ok {
+		return nil, fmt.Errorf("unknown agent %q", caller)
 	}
-	ids := p.Children()
+	var agents []*Agent
 	if id != "" {
-		ids = []string{id}
+		c, ok := o.s.Agent(id)
+		if !ok {
+			return nil, fmt.Errorf("unknown agent %q", id)
+		}
+		agents = []*Agent{c}
+	} else {
+		agents = o.s.Agents()
 	}
 	var out []tools.ChildStatus
-	for _, cid := range ids {
-		c, err := o.child(parent, cid)
-		if err != nil {
-			return nil, err
-		}
+	for _, c := range agents {
 		in := c.Info()
-		out = append(out, tools.ChildStatus{ID: c.ID, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, Monitored: in.Monitored})
+		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, Monitored: in.Monitored, You: c.ID == caller})
 	}
 	return out, nil
 }

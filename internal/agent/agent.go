@@ -134,11 +134,11 @@ func (a *Agent) takeInputs() []event.UserMessagePayload {
 	a.wakes = map[string]bool{}
 	var in []event.UserMessagePayload
 	for _, q := range a.prompts {
-		in = append(in, event.UserMessagePayload{Kind: "prompt", Text: q.text})
+		in = append(in, event.UserMessagePayload{Kind: "prompt", Text: q.text, From: a.s.senderLabel(q.source)})
 	}
 	a.prompts = nil
 	for _, q := range a.steers { // idle: a steer is just a prompt, and reads as one
-		in = append(in, event.UserMessagePayload{Kind: "prompt", Text: q.text})
+		in = append(in, event.UserMessagePayload{Kind: "prompt", Text: q.text, From: a.s.senderLabel(q.source)})
 	}
 	a.steers = nil
 	for _, r := range a.childDone {

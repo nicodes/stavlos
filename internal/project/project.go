@@ -43,7 +43,11 @@ func Project(events []event.Event) []model.Message {
 			_ = e.Decode(&p)
 			// A new user message implies any dangling calls are over.
 			closeOpen(e.Seq, "was abandoned")
-			msgs = append(msgs, message{seq: e.Seq, m: model.Message{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: p.Text}}}})
+			text := p.Text
+			if p.From != "" {
+				text = "[message from agent " + p.From + "]\n" + text
+			}
+			msgs = append(msgs, message{seq: e.Seq, m: model.Message{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: text}}}})
 
 		case event.AssistantMessage:
 			var p event.AssistantMessagePayload

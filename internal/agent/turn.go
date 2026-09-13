@@ -77,7 +77,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 		a.steers = nil
 		a.mu.Unlock()
 		for _, st := range steers {
-			_, _ = a.record(bg, event.UserMessage, event.UserMessagePayload{Turn: turn, Kind: "steer", Text: st.text})
+			_, _ = a.record(bg, event.UserMessage, event.UserMessagePayload{Turn: turn, Kind: "steer", Text: st.text, From: a.s.senderLabel(st.source)})
 		}
 
 		modelID := a.ModelID()
@@ -285,12 +285,10 @@ func (a *Agent) skills(cfg *config.Effective) map[string]config.Skill {
 // canOrchestrate reports whether the orchestration tools are offered.
 func (a *Agent) canOrchestrate() bool { return len(a.preset.Spawn) > 0 }
 
-func (a *Agent) orch() tools.Orchestrator {
-	if !a.canOrchestrate() && a.Parent == "" {
-		return nil
-	}
-	return orchestrator{s: a.s}
-}
+// orch is the runtime behind the agent_* tools. Every agent gets one
+// (messaging is universal); which tools are offered is decided in
+// buildContext.
+func (a *Agent) orch() tools.Orchestrator { return orchestrator{s: a.s} }
 
 // buildContext assembles the system prompt and tool list for a model call.
 func (a *Agent) buildContext() (string, []model.ToolDef) {
@@ -299,8 +297,9 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	sb.WriteString(a.preset.Body)
 	sb.WriteString("\n\n")
 	fmt.Fprintf(&sb, "Working directory: %s\n", a.s.Dir)
+	fmt.Fprintf(&sb, "Your agent id is %s.\n", a.ID)
 	if a.Parent != "" {
-		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) working for a parent agent. The task you were given arrives as the first message. When it is complete, or cannot be completed, call the finish tool exactly once with a summary; your parent only sees what you put there. Do not finish until the work is actually done.\n", a.Archetype, a.Label)
+		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) working for a parent agent (id %s). The task you were given arrives as the first message. When it is complete, or cannot be completed, call the finish tool exactly once with a summary; your parent only sees what you put there. Do not finish until the work is actually done. Other agents in this session can message you, and agent_prompt lets you message any of them, including your parent, by id.\n", a.Archetype, a.Label, a.Parent)
 	}
 	if cfg.AgentsMD != "" {
 		sb.WriteString("\n# Project instructions (AGENTS.md)\n\n" + cfg.AgentsMD + "\n")
@@ -325,6 +324,14 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	if a.Parent != "" {
 		names = append(names, "finish")
 	}
+	// Every agent can message every other agent in its session; only the
+	// main agent can steer (a steer cuts into a running turn).
+	names = append(names, tools.MessagingNames...)
+	sb.WriteString("\n# Messaging\nagent_prompt sends a message to any other agent in this session (a child, a sibling, or your parent) by id; it is delivered between that agent's turns, and a message you receive names its sender. agent_status lists every agent in the session with its id and state.\n")
+	if a.Parent == "" {
+		names = append(names, "agent_steer")
+		sb.WriteString("As the main agent you can also agent_steer any agent: the instruction reaches it at its next step, mid-turn, without discarding its work.\n")
+	}
 	can, why := a.s.canSpawn(a)
 	if contains(names, "bash") {
 		sb.WriteString("\n# Background jobs\nbash_async starts a command as a job and returns its id at once; when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. Use it for anything slow. bash_kill stops a job. There is no wait tool: when nothing more can be done until a result arrives, end your turn and you will be woken.\n")
@@ -343,7 +350,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 		} else {
 			fmt.Fprintf(&sb, "You cannot spawn right now (%s). Do the work yourself.\n", why)
 			for _, n := range tools.OrchestrationNames {
-				if n != "agent_create" {
+				if n != "agent_create" && n != "agent_steer" {
 					names = append(names, n)
 				}
 			}
@@ -352,6 +359,9 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	seen := map[string]bool{}
 	var defs []model.ToolDef
 	for _, n := range names {
+		if n == "agent_steer" && a.Parent != "" {
+			continue // steering is the main agent's alone
+		}
 		if seen[n] {
 			continue
 		}
