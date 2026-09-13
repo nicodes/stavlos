@@ -1224,3 +1224,34 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 		t.Fatalf("hover should not steal focus from the permission tab: %v", m.focus)
 	}
 }
+
+func TestMouseClickTogglesItem(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	tr := m.transcript("a")
+	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "bash", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
+	m.width, m.height = 100, 40
+	m.layout()
+	m.refreshViewport()
+	item := tr.Items() - 1
+	r := m.itemRows[item]
+	click := func(y int) {
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+	}
+	view := func() string { return stripANSI(m.vp.View()) }
+	click(r.first - m.vp.YOffset)
+	if m.focus != focusChat || m.chatCursor != item || !m.expanded["a"][item] || strings.Count(view(), "out") != 8 {
+		t.Fatalf("click should select and expand: focus=%v cursor=%d expanded=%v\n%s", m.focus, m.chatCursor, m.expanded["a"], view())
+	}
+	click(r.first - m.vp.YOffset)
+	if m.expanded["a"][item] || strings.Count(view(), "out") != previewLines-1 {
+		t.Fatalf("second click should collapse to the preview:\n%s", view())
+	}
+	// a click on a user item is inert beyond selecting it
+	click(m.itemRows[0].first - m.vp.YOffset)
+	if m.chatCursor != 0 || len(m.expanded["a"]) != 0 {
+		t.Fatalf("click on a non-tool item: cursor=%d expanded=%v", m.chatCursor, m.expanded["a"])
+	}
+}
