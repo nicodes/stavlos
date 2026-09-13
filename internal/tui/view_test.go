@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -1165,5 +1166,61 @@ func TestSessionsPickerSkipsEmptySessions(t *testing.T) {
 	}
 	if strings.Join(ids, " ") != "cur old" {
 		t.Fatalf("picker rows %v: the untouched session should be left out, the current one kept", ids)
+	}
+}
+
+func TestMouseHoverMovesChatCursor(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	tr := m.transcript("a")
+	for i := 0; i < 6; i++ {
+		tr.Apply(mk(int64(i+2), "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: fmt.Sprintf("prompt %d", i)}))
+	}
+	m.width, m.height = 100, 40
+	m.layout()
+	m.refreshViewport()
+	items := tr.Items()
+	// find the screen row of the second item
+	r, ok := m.itemRows[1]
+	if !ok {
+		t.Fatal("no rows for item 1")
+	}
+	move := func(x, y int) {
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
+		m = nm.(Model)
+	}
+	move(5, r.first-m.vp.YOffset)
+	if m.focus != focusChat || m.chatCursor != 1 || !m.hoverFocus {
+		t.Fatalf("hover should focus the chat on item 1: focus=%v cursor=%d hover=%v", m.focus, m.chatCursor, m.hoverFocus)
+	}
+	// the row is highlighted like an arrow-key visit
+	markCursorForTest(t)
+	m.refreshViewport()
+	if !strings.Contains(stripANSI(m.vp.View()), gutterMark+"› prompt 0") {
+		t.Fatalf("hovered item should carry the cursor:\n%s", stripANSI(m.vp.View()))
+	}
+	// hovering another item moves the cursor
+	r2 := m.itemRows[items-1]
+	move(5, r2.first-m.vp.YOffset)
+	if m.chatCursor != items-1 {
+		t.Fatalf("cursor should follow the mouse: %d", m.chatCursor)
+	}
+	// leaving the chat area hands focus back to the input
+	move(5, m.vp.Height+2)
+	if m.focus != focusInput || m.hoverFocus || !m.input.Focused() {
+		t.Fatalf("leaving should restore the input: focus=%v hover=%v", m.focus, m.hoverFocus)
+	}
+	// keyboard focus is not dropped by the mouse leaving
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → chat
+	move(5, m.vp.Height+2)
+	if m.focus != focusChat {
+		t.Fatalf("keyboard chat focus should survive mouse movement: %v", m.focus)
+	}
+	// hover never pulls focus out of another section
+	m.setFocus(focusInput)
+	m.setFocus(focusPermission)
+	move(5, r.first-m.vp.YOffset)
+	if m.focus != focusPermission {
+		t.Fatalf("hover should not steal focus from the permission tab: %v", m.focus)
 	}
 }

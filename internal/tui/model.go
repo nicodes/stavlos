@@ -87,6 +87,7 @@ type Model struct {
 	showTree      bool      // right sidebar toggle (/tree, ctrl+b)
 	hideKeys      bool      // the key bar (divider + legend) at the bottom is hidden; /help shows it
 	cancelArmed   time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
+	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
 	details       bool      // expanded tool output (/details)
 	follow        bool      // auto-scroll to bottom
 
@@ -231,6 +232,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.follow = m.vp.AtBottom()
 		}
 		cmds = append(cmds, cmd)
+		if msg.Action == tea.MouseActionMotion {
+			cmds = append(cmds, m.mouseHover(msg.X, msg.Y))
+		}
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd
@@ -489,6 +493,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	}
 	prev := m.focus
 	m.focus = f
+	m.hoverFocus = false // keyboard focus changes always win over hover
 	m.input.Blur()
 	m.promptInput.Blur()
 	if prev == focusChat {
@@ -569,6 +574,60 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// mouseHover is mouse movement: over a chat item it does what ↑/↓ do (the
+// chat takes focus, the cursor moves to that item, it previews); leaving
+// the chat area gives focus back to the input, without scrolling. Focus the
+// keyboard took is left alone.
+func (m *Model) mouseHover(x, y int) tea.Cmd {
+	if m.ov != nil || m.isHome() {
+		return nil
+	}
+	inChat := x >= 0 && x < m.contentWidth() && y >= 0 && y < m.vp.Height
+	if !inChat {
+		if m.hoverFocus && m.focus == focusChat {
+			m.hoverFocus = false
+			m.focus = focusInput
+			m.collapseAll()
+			m.refreshViewport()
+			m.follow = m.vp.AtBottom()
+			return m.input.Focus()
+		}
+		return nil
+	}
+	item, ok := m.itemAtRow(m.vp.YOffset + y)
+	if !ok {
+		return nil
+	}
+	if m.focus == focusChat && m.chatCursor == item {
+		return nil
+	}
+	if m.focus != focusChat {
+		if m.focus != focusInput {
+			return nil // hovering does not pull focus out of a tab, the sidebar or the permission box
+		}
+		m.hoverFocus = true
+		m.focus = focusChat
+		m.input.Blur()
+		m.follow = false
+	}
+	if m.chatCursor != item {
+		m.collapseAll() // per-visit expansion, as with the arrow keys
+	}
+	m.chatCursor = item
+	m.refreshViewport()
+	return nil
+}
+
+// itemAtRow maps a viewport content row to the chat item drawn there.
+func (m *Model) itemAtRow(row int) (int, bool) {
+	for item, r := range m.itemRows {
+		if row >= r.first && row <= r.last {
+			return item, true
+		}
+	}
+	return 0, false
 }
 
 // cancelWindow is how long a first esc stays armed for the second.
