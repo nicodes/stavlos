@@ -898,7 +898,8 @@ func (m Model) sectionsView(width int) string {
 
 // sectionTabs is the one-line strip: the three tabs with their counts, the
 // focused one in accent with a ▾ pointing at its contents below, the rest
-// dim, then a hint.
+// dim (except a permission tab with prompts waiting, which is warning
+// orange), then a hint.
 func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo, width int) string {
 	tab := func(label string, on bool) string {
 		if on {
@@ -910,8 +911,14 @@ func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInf
 	if p != nil && p.Kind != "permission" {
 		label = fmt.Sprintf("%s (%d)", p.Kind, len(m.prompts))
 	}
+	// An unfocused permission tab with prompts waiting is warning-coloured
+	// so it stands out until someone tabs to it.
+	permTab := tab(label, m.focus == focusPermission)
+	if p != nil && m.focus != focusPermission {
+		permTab = styleWarn.Render(label)
+	}
 	tabs := []string{
-		tab(label, m.focus == focusPermission),
+		permTab,
 		tab(fmt.Sprintf("agents (%d)", len(kids)), m.focus == focusAgents),
 		tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
 	}
