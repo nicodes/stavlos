@@ -481,6 +481,15 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 	if reqAt < 0 || ansAt < 0 || outAt < 0 || !(reqAt < ansAt && ansAt < outAt) {
 		t.Fatalf("order within tool item wrong (req %d, ans %d, out %d):\n%s", reqAt, ansAt, outAt, joined)
 	}
+	// the notices are nested under the call at the output's indent
+	rendered := renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem})
+	for _, r := range rendered {
+		if strings.Contains(r, "permission") || strings.Contains(r, "answered") {
+			if !strings.HasPrefix(strings.TrimLeft(r, "▍"), "      ") {
+				t.Fatalf("notice not indented under the call: %q", r)
+			}
+		}
+	}
 	// nothing of the tool item, and no permission notice, lives outside it
 	for i := last + 1; i < len(lines); i++ {
 		if lines[i].Item == toolItem || strings.Contains(lines[i].Text, "permission") {
