@@ -36,7 +36,7 @@ var (
 	styleRule     = lipgloss.NewStyle().Foreground(colBorder)
 	styleError    = lipgloss.NewStyle().Foreground(colError)
 	styleWarn     = lipgloss.NewStyle().Foreground(colWarning)
-	styleRunning  = lipgloss.NewStyle().Foreground(colSuccess)
+	styleRunning  = lipgloss.NewStyle().Foreground(colWarning) // spinner colour outside the chat
 
 	styleLogoMuted  = lipgloss.NewStyle().Foreground(colMuted)
 	styleLogoBright = lipgloss.NewStyle().Bold(true)
@@ -357,8 +357,8 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	case LineTool:
 		g, gap := toolGlyph(l.tool)
 		switch {
-		case l.Running && o.Spinner != "":
-			glyph = styleWorking.Render(o.Spinner) + " "
+		case l.Running:
+			glyph = styleWorking.Render(g) + gap // in progress: the glyph, yellow
 		case l.Err:
 			glyph = styleError.Render(g) + gap // same glyph, red, on failure
 		default:
@@ -394,8 +394,8 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		if l.Glyph == glyphToolFiles {
 			gap = "  "
 		}
-		if l.Running && o.Spinner != "" && l.Kind != LineTool {
-			glyph = styleWorking.Render(o.Spinner) + gap
+		if l.Running && l.Kind != LineTool {
+			glyph = styleWorking.Render(l.Glyph) + gap
 		} else {
 			glyph = gs.Render(l.Glyph) + gap
 		}
