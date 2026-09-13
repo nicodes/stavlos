@@ -396,7 +396,8 @@ func initConfig(args []string) error {
   "limits": { "maxDepth": 3, "maxAgents": 6 },
   "escalation": { "claimTimeout": "30s", "answerTimeout": "5m", "default": "deny" },
   "policy": {
-    "bash":  { "git push*": "ask", "rm -rf*": "deny", "*": "ask" },
+    // read-only commands (grep, rg, find, ls, git status/log/diff, …) are allowed by the built-in defaults
+    "bash":  { "git push*": "ask", "rm -rf*": "deny" },
     "edit":  { "**": "ask" },
     "write": { "**": "ask" },
     "read":  "allow"

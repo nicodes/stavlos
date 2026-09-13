@@ -929,8 +929,8 @@ func toolArg(name string, raw json.RawMessage) string {
 		return str("command")
 	case "read", "write", "edit":
 		return str("path")
-	case "grep", "glob":
-		return str("pattern")
+	case "watch":
+		return str("path")
 	case "agent_create", "spawn":
 		label, arch := str("label"), str("archetype")
 		switch {

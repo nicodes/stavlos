@@ -48,7 +48,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			_ = e.Decode(&p)
 			preset, ok := cfg.Presets[p.Archetype]
 			if !ok {
-				preset = config.Preset{Name: p.Archetype, Description: "(preset no longer exists)", Tools: []string{"read", "grep", "glob"}, Loop: "default"}
+				preset = config.Preset{Name: p.Archetype, Description: "(preset no longer exists)", Tools: []string{"read", "bash"}, Loop: "default"}
 			}
 			a := newAgent(s, p.ID, p.Parent, p.Archetype, p.Label, p.Model, p.Depth, preset)
 			if par, ok := s.agents[p.Parent]; ok {

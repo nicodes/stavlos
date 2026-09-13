@@ -5,15 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
-	"github.com/nicodes/stavlos/internal/policy"
 )
 
 func resolve(env *Env, p string) string {
@@ -38,8 +34,6 @@ func relForPolicy(dir, p string) string {
 	}
 	return abs
 }
-
-var skipDirs = map[string]bool{".git": true, "node_modules": true, ".stavlos-cache": true, "vendor": false}
 
 // --- read ---
 
@@ -178,174 +172,4 @@ func (editTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		return errf("%v", err)
 	}
 	return Result{Output: fmt.Sprintf("edited %s (%d replacement(s))", a.Path, n)}
-}
-
-// --- glob ---
-
-type globTool struct{}
-
-func (globTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "glob", Description: "Find files by glob pattern (supports **). Returns paths relative to the working directory, newest first.",
-		Schema: schema(map[string]any{
-			"pattern": prop("string", "Glob such as **/*.go or src/**/test_*.py"),
-			"path":    prop("string", "Directory to search (default: working directory)"),
-		}, "pattern")}
-}
-func (globTool) PolicyArg(in json.RawMessage) string { return pathArg(in) }
-func (globTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	var a struct{ Pattern, Path string }
-	if err := decode(in, &a); err != nil {
-		return errf("bad input: %v", err)
-	}
-	root := resolve(env, a.Path)
-	type hit struct {
-		p string
-		t int64
-	}
-	var hits []hit
-	err := walk(ctx, root, func(p string, d fs.DirEntry) {
-		rel, _ := filepath.Rel(root, p)
-		if policy.Match(a.Pattern, rel) {
-			info, _ := d.Info()
-			var t int64
-			if info != nil {
-				t = info.ModTime().UnixNano()
-			}
-			hits = append(hits, hit{rel, t})
-		}
-	})
-	if err != nil {
-		return errf("%v", err)
-	}
-	sort.Slice(hits, func(i, j int) bool { return hits[i].t > hits[j].t })
-	if len(hits) == 0 {
-		return Result{Output: "no matches"}
-	}
-	var sb strings.Builder
-	for i, h := range hits {
-		if i >= 500 {
-			fmt.Fprintf(&sb, "… %d more\n", len(hits)-i)
-			break
-		}
-		sb.WriteString(h.p + "\n")
-	}
-	return Result{Output: clip(sb.String(), env.MaxOutput)}
-}
-
-func walk(ctx context.Context, root string, fn func(p string, d fs.DirEntry)) error {
-	return filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if d.IsDir() {
-			if p != root && skipDirs[d.Name()] {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		fn(p, d)
-		return nil
-	})
-}
-
-// --- grep ---
-
-type grepTool struct{}
-
-func (grepTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "grep", Description: "Search file contents with a regular expression. Returns path:line:text matches.",
-		Schema: schema(map[string]any{
-			"pattern":     prop("string", "Go/RE2 regular expression"),
-			"path":        prop("string", "Directory or file to search (default: working directory)"),
-			"glob":        prop("string", "Only search files matching this glob, e.g. *.go"),
-			"ignore_case": prop("boolean", "Case-insensitive"),
-			"max":         prop("integer", "Max matches (default 200)"),
-		}, "pattern")}
-}
-func (grepTool) PolicyArg(in json.RawMessage) string { return pathArg(in) }
-func (grepTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	var a struct {
-		Pattern, Path, Glob string
-		IgnoreCase          bool `json:"ignore_case"`
-		Max                 int
-	}
-	if err := decode(in, &a); err != nil {
-		return errf("bad input: %v", err)
-	}
-	pat := a.Pattern
-	if a.IgnoreCase {
-		pat = "(?i)" + pat
-	}
-	re, err := regexp.Compile(pat)
-	if err != nil {
-		return errf("bad regexp: %v", err)
-	}
-	if a.Max <= 0 {
-		a.Max = 200
-	}
-	root := resolve(env, a.Path)
-	var sb strings.Builder
-	count := 0
-	search := func(p string) {
-		if count >= a.Max {
-			return
-		}
-		f, err := os.Open(p)
-		if err != nil {
-			return
-		}
-		defer f.Close()
-		sc := bufio.NewScanner(f)
-		sc.Buffer(make([]byte, 1<<20), 8<<20)
-		ln := 0
-		for sc.Scan() {
-			ln++
-			line := sc.Text()
-			if ln == 1 && strings.IndexByte(line, 0) >= 0 {
-				return // binary
-			}
-			if re.MatchString(line) {
-				rel, _ := filepath.Rel(env.Dir, p)
-				if strings.HasPrefix(rel, "..") {
-					rel = p
-				}
-				if len(line) > 300 {
-					line = line[:300] + "…"
-				}
-				fmt.Fprintf(&sb, "%s:%d:%s\n", rel, ln, line)
-				count++
-				if count >= a.Max {
-					return
-				}
-			}
-		}
-	}
-	if st, err := os.Stat(root); err == nil && !st.IsDir() {
-		search(root)
-	} else {
-		err := walk(ctx, root, func(p string, d fs.DirEntry) {
-			if a.Glob != "" {
-				if ok := policy.Match(a.Glob, d.Name()); !ok {
-					rel, _ := filepath.Rel(root, p)
-					if !policy.Match(a.Glob, rel) {
-						return
-					}
-				}
-			}
-			search(p)
-		})
-		if err != nil {
-			return errf("%v", err)
-		}
-	}
-	if count == 0 {
-		return Result{Output: "no matches"}
-	}
-	if count >= a.Max {
-		fmt.Fprintf(&sb, "… stopped at %d matches\n", a.Max)
-	}
-	return Result{Output: clip(sb.String(), env.MaxOutput)}
 }

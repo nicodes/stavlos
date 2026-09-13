@@ -123,7 +123,7 @@ type Set map[string]Tool
 func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
-		bashTool{}, readTool{}, writeTool{}, editTool{}, grepTool{}, globTool{}, skillTool{}, finishTool{},
+		bashTool{}, readTool{}, writeTool{}, editTool{}, skillTool{}, finishTool{},
 		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, monitorTool{}, unmonitorTool{}, resultTool{}, statusTool{},
 		watchTool{}, timerTool{}, monitorsTool{},
 	} {

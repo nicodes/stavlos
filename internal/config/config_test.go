@@ -74,3 +74,21 @@ func TestLoadLayersAndTrust(t *testing.T) {
 		t.Fatal("builtin missing")
 	}
 }
+
+func TestReadOnlyBashAllowedByDefault(t *testing.T) {
+	t.Setenv("STAVLOS_CONFIG_DIR", t.TempDir())
+	e, err := Load(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{"grep -rn foo .", "rg foo", "find . -name '*.go'", "ls -la", "git status", "git log --oneline", "cat go.mod"} {
+		if v := e.Policy.Decide("bash", cmd); v != policy.Allow {
+			t.Errorf("%q: %s, want allow", cmd, v)
+		}
+	}
+	for _, cmd := range []string{"rm -rf x", "git push origin main", "go test ./...", "grepx"} {
+		if v := e.Policy.Decide("bash", cmd); v == policy.Allow {
+			t.Errorf("%q should not be allowed by default", cmd)
+		}
+	}
+}
