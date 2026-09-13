@@ -42,7 +42,10 @@ type Orchestrator interface {
 	Steer(parent, id, text string) error
 	Cancel(parent, id string) error
 	Kill(parent, id string) error
-	Wait(ctx context.Context, parent string, ids []string) ([]ChildResult, error)
+	// Monitor is the only way to await children: the caller's turn ends
+	// after this tool batch and each child's result wakes it as a message.
+	// A child's finish always wakes its parent; monitor just yields now.
+	Monitor(parent string, ids []string) ([]ChildStatus, error)
 	Result(parent, id string) (ChildResult, bool, error)
 	Status(parent, id string) ([]ChildStatus, error)
 	// Finish records the caller's completion; the loop ends the turn after it.
@@ -84,7 +87,7 @@ func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
 		bashTool{}, readTool{}, writeTool{}, editTool{}, grepTool{}, globTool{}, skillTool{}, finishTool{},
-		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, waitTool{}, resultTool{}, statusTool{},
+		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, monitorTool{}, resultTool{}, statusTool{},
 	} {
 		s[t.Def().Name] = t
 	}
@@ -92,7 +95,7 @@ func Builtin() Set {
 }
 
 // OrchestrationNames are the tools implied by a non-empty spawn list.
-var OrchestrationNames = []string{"spawn", "send", "steer", "cancel", "kill", "wait", "result", "status"}
+var OrchestrationNames = []string{"spawn", "send", "steer", "cancel", "kill", "monitor", "result", "status"}
 
 func schema(props map[string]any, required ...string) json.RawMessage {
 	m := map[string]any{"type": "object", "properties": props}

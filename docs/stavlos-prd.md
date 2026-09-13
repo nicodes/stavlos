@@ -213,7 +213,7 @@ A turn ending and work being done are different events. A subagent may run six t
 
 The root agent does not get `finish`. It has no parent to report to; the session simply idles between turns. `finish` is added to the tool list only for spawned children.
 
-**Spawning is asynchronous.** `spawn` returns immediately with the child's ID. The child runs in the background. When it calls `finish`, a `ChildFinished` envelope is delivered to the parent's inbox and, if the parent is idle, starts a new turn. A parent that wants to block on a child calls `wait`.
+**Spawning is asynchronous, and there is no blocking wait.** `spawn` returns immediately with the child's ID. The child runs in the background. When it calls `finish`, a `ChildFinished` envelope is delivered to the parent's inbox and, if the parent is idle, starts a new turn; this is built in and cannot be switched off. A parent that has nothing else to do calls `monitor`, which ends its turn so it stays responsive to prompts and steers while it waits to be woken. A blocking wait was considered and rejected: it makes the parent deaf for the duration and buys nothing, since the history is intact when the result arrives.
 
 ### 6.4 Orchestration tools
 
@@ -226,7 +226,7 @@ Available to any agent whose preset permits them:
 | `steer(id, text)` | Deliver a `Steer` |
 | `cancel(id)` | Deliver a `Cancel` |
 | `kill(id)` | Deliver a `Kill` |
-| `wait(id \| ids)` | Block this turn until the child(ren) finish; returns results |
+| `monitor(ids?)` | Yield: end this turn now; each child's `finish` wakes the parent as a message (there is no blocking wait) |
 | `result(id)` | Retrieve a finished result without blocking |
 | `status(id?)` | State and usage (§4.4) of one or all children |
 
@@ -595,7 +595,7 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - Codex (ChatGPT) and Grok adapters, `go-plugin` model seam, `stavlos plugin install`, lockfile, models.dev metadata
 - MCP client
 - Three-layer configuration with trust gate; skills, presets, declarative policy
-- Built-in tools: `bash`, `read`, `write`, `edit`, `grep`, `glob`, `finish`, `skill`, and the orchestration set (`spawn`, `send`, `steer`, `cancel`, `kill`, `wait`, `result`, `status`)
+- Built-in tools: `bash`, `read`, `write`, `edit`, `grep`, `glob`, `finish`, `skill`, and the orchestration set (`spawn`, `send`, `steer`, `cancel`, `kill`, `monitor`, `result`, `status`)
 - Usage accounting: per-call `Usage` events, per-agent and per-session aggregates
 - Subscription sign-in for ChatGPT and Grok (device-code flows, token refresh), credential store, `/provider` and `/models` in the TUI, `stavlos auth login|list|logout`
 - Depth and per-session fan-out limits

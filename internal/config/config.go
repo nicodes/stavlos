@@ -140,7 +140,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "steer", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "cancel", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "kill", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "wait", Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: "monitor", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "result", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "status", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "bash", Pattern: "*", Verb: policy.Ask},
@@ -535,7 +535,7 @@ func builtinPresets() []Preset {
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
 Work carefully: read before you edit, prefer small targeted changes, and run the project's tests or build after changing code.
 Delegate reading unfamiliar or large areas of code to an explorer subagent when it would save your own context; delegate running test suites to a tester subagent when the suite is slow.
-When you spawn subagents, give each a specific task and a short label, and continue with other work while they run. Use wait or result to collect their findings.
+When you spawn subagents, give each a specific task and a short label, then call monitor so their results come back to you as messages while you stay available.
 Report what you changed and what you verified.`,
 		},
 		{

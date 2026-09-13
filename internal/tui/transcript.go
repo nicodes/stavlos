@@ -544,7 +544,7 @@ func toolArg(name string, raw json.RawMessage) string {
 		}
 	case "send", "steer", "cancel", "kill", "result", "status":
 		return str("id")
-	case "wait":
+	case "monitor":
 		if ids, ok := in["ids"].([]any); ok && len(ids) > 0 {
 			parts := make([]string, 0, len(ids))
 			for _, v := range ids {

@@ -13,7 +13,7 @@ The TUI opens immediately. With nothing configured, the first prompt answers "no
 
 Stavlos uses your existing subscription, not platform API keys. `/provider` offers two sign-ins: **ChatGPT** (Plus or Pro, through the Codex sign-in) and **Grok** (SuperGrok, through the Grok CLI sign-in). ChatGPT signs in through your browser by default (a headless URL-plus-code option exists for SSH boxes, once "Device code authorization for Codex" is enabled in ChatGPT's Security settings); Grok shows a URL and a short code. Tokens live in `~/.local/share/stavlos/auth.json` (mode 0600) and refresh automatically. `/models` picks a model; the first pick becomes your default. On the command line, `stavlos auth login [openai|xai]`, `stavlos auth list`, and `stavlos auth logout` do the same.
 
-In the TUI: type to prompt the selected agent. `/steer <text>` redirects it mid-turn, `/cancel` ends the current turn, `/kill` tears an agent down, `/spawn <archetype> <label> <task>` delegates, Tab cycles agents, `/help` lists the rest. Permission prompts appear above the input; `y` allows once, `a` allows for the session, `n` denies.
+In the TUI: type to prompt the selected agent. `/steer <text>` redirects it mid-turn, `/cancel` ends the current turn, `/kill` tears an agent down, `/spawn <archetype> <label> <task>` delegates (agents await children with `monitor`, which yields; there is no blocking wait), Tab cycles agents, `/help` lists the rest. Permission prompts appear above the input; `y` allows once, `a` allows for the session, `n` denies.
 
 Other commands:
 

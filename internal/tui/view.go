@@ -23,6 +23,7 @@ var (
 	colBorder  = colMuted
 
 	styleDim      = lipgloss.NewStyle().Foreground(colMuted)
+	styleKey      = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
 	styleBold     = lipgloss.NewStyle().Bold(true)
 	styleAccent   = lipgloss.NewStyle().Foreground(colAccent)
 	styleNotice   = lipgloss.NewStyle().Foreground(colMuted).Italic(true)
@@ -414,7 +415,11 @@ func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "starting…"
 	}
-	mainH := m.height - 1
+	keybar, kb := m.keyBarView()
+	mainH := m.height - 1 - kb
+	if mainH < 1 {
+		mainH = 1
+	}
 	var main string
 	if m.isHome() {
 		main = m.homeView(m.width, mainH)
@@ -424,7 +429,7 @@ func (m Model) View() string {
 	if m.ov != nil {
 		main = composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
 	}
-	return main + "\n" + m.footerView()
+	return main + "\n" + keybar + "\n" + m.footerView()
 }
 
 // isHome reports whether the selected agent has nothing to show yet.
@@ -695,10 +700,6 @@ func (m Model) footerRightView() string {
 		return styleStatusErr.Render(m.status)
 	case m.status != "":
 		return styleStatusOK.Render(m.status)
-	case m.ov != nil && m.ov.mode == overlayLogin:
-		return styleDim.Render(loginHint)
-	case m.ov != nil:
-		return styleDim.Render(overlayHint)
 	case m.loading:
 		return styleDim.Render("replaying events…")
 	}

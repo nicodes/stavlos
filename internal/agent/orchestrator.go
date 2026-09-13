@@ -64,41 +64,33 @@ func (o orchestrator) Kill(parent, id string) error {
 	return nil
 }
 
-func (o orchestrator) Wait(ctx context.Context, parent string, ids []string) ([]tools.ChildResult, error) {
+// Monitor marks the parent's turn to end after the current tool batch. The
+// children already deliver ChildFinished envelopes; nothing else is needed.
+func (o orchestrator) Monitor(parent string, ids []string) ([]tools.ChildStatus, error) {
 	p, ok := o.s.Agent(parent)
 	if !ok {
 		return nil, fmt.Errorf("unknown agent %q", parent)
 	}
 	if len(ids) == 0 {
-		// Every live child, plus finished ones whose result was not consumed.
-		p.mu.Lock()
-		pending := map[string]bool{}
-		for id := range p.results {
-			pending[id] = true
-		}
-		p.mu.Unlock()
 		for _, cid := range p.Children() {
-			if c, ok := o.s.Agent(cid); ok && (c.Alive() || pending[cid]) {
+			if c, ok := o.s.Agent(cid); ok && c.Alive() {
 				ids = append(ids, cid)
 			}
 		}
-		if len(ids) == 0 {
-			return nil, nil
-		}
 	}
-	var out []tools.ChildResult
+	var out []tools.ChildStatus
 	for _, id := range ids {
 		c, err := o.child(parent, id)
 		if err != nil {
-			return out, err
+			return nil, err
 		}
-		select {
-		case <-c.Done():
-		case <-ctx.Done():
-			return out, ctx.Err()
-		}
-		r, _, _ := o.Result(parent, id)
-		out = append(out, r)
+		in := c.Info()
+		out = append(out, tools.ChildStatus{ID: c.ID, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD})
+	}
+	if len(out) > 0 {
+		p.mu.Lock()
+		p.yieldFlag = true
+		p.mu.Unlock()
 	}
 	return out, nil
 }

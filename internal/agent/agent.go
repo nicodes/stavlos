@@ -17,7 +17,6 @@ type State string
 const (
 	StateIdle     State = "idle"
 	StateRunning  State = "running"
-	StateWaiting  State = "waiting" // blocked in wait()
 	StateBlocked  State = "blocked" // awaiting a permission/question answer
 	StateFinished State = "finished"
 	StateKilled   State = "killed"
@@ -53,6 +52,7 @@ type Agent struct {
 	cancelTurn context.CancelFunc
 	finished   *tools.ChildResult
 	finishFlag bool // set by the finish tool during a turn
+	yieldFlag  bool // set by the monitor tool: end the turn after this batch
 	children   []string
 	results    map[string]tools.ChildResult // finished children not yet consumed by wait/result
 	done       chan struct{}                // closed on finish or kill

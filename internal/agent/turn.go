@@ -29,12 +29,13 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	a.state = StateRunning
 	a.cancelTurn = cancel
 	a.finishFlag = false
+	a.yieldFlag = false
 	a.mu.Unlock()
 	defer func() {
 		cancel()
 		a.mu.Lock()
 		a.cancelTurn = nil
-		if a.state == StateRunning || a.state == StateWaiting || a.state == StateBlocked {
+		if a.state == StateRunning || a.state == StateBlocked {
 			a.state = StateIdle
 		}
 		a.mu.Unlock()
@@ -54,7 +55,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	end := func(reason, errText string) {
 		a.mu.Lock()
 		a.cancelTurn = nil
-		if a.state == StateRunning || a.state == StateWaiting || a.state == StateBlocked {
+		if a.state == StateRunning || a.state == StateBlocked {
 			a.state = StateIdle
 		}
 		a.mu.Unlock()
@@ -153,6 +154,14 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 				return
 			}
 		}
+		// monitor: hand control back; ChildFinished envelopes wake the agent.
+		a.mu.Lock()
+		yield := a.yieldFlag
+		a.mu.Unlock()
+		if yield {
+			end("end_turn", "")
+			return
+		}
 	}
 }
 
@@ -220,13 +229,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		Partial: func(s string) {
 			a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
 		}}
-	if c.Name == "wait" {
-		a.setState(StateWaiting)
-	}
 	res := t.Run(turnCtx, c.Input, env)
-	if c.Name == "wait" {
-		a.setState(StateRunning)
-	}
 	if turnCtx.Err() != nil {
 		finish(res.Output, true, true, false)
 		return
@@ -317,7 +320,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 					fmt.Fprintf(&sb, "- %s: %s\n", arch, p.Description)
 				}
 			}
-			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents live in this session. Children run in the background; their finish results arrive as messages, or use wait to block. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Live(), cfg.Limits.MaxAgents)
+			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents live in this session. Children run in the background. After spawning, call monitor: your turn ends and each child's result arrives as a new message, so you stay responsive to the user in the meantime; there is no blocking wait. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Live(), cfg.Limits.MaxAgents)
 			names = append(names, tools.OrchestrationNames...)
 		} else {
 			fmt.Fprintf(&sb, "You cannot spawn right now (%s). Do the work yourself.\n", why)
