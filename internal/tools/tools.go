@@ -59,6 +59,13 @@ type MonitorStatus struct {
 	Started   time.Time `json:"started"`
 }
 
+// MultiArg is implemented by tools that touch several paths in one call
+// (apply_patch); policy evaluates every path and the most restrictive
+// decision wins.
+type MultiArg interface {
+	PolicyArgs(input json.RawMessage) []string
+}
+
 // Tool is one callable tool.
 type Tool interface {
 	Def() model.ToolDef
@@ -123,7 +130,7 @@ type Set map[string]Tool
 func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
-		bashTool{}, readTool{}, writeTool{}, editTool{}, skillTool{}, finishTool{},
+		bashTool{}, readTool{}, patchTool{}, skillTool{}, finishTool{},
 		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, monitorTool{}, unmonitorTool{}, resultTool{}, statusTool{},
 		watchTool{}, timerTool{}, monitorsTool{},
 	} {

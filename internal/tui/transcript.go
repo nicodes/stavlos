@@ -929,6 +929,11 @@ func toolArg(name string, raw json.RawMessage) string {
 		return str("command")
 	case "read", "write", "edit":
 		return str("path")
+	case "apply_patch":
+		if patch, ok := in["patch"].(string); ok {
+			return patchFiles(patch)
+		}
+		return ""
 	case "watch":
 		return str("path")
 	case "agent_create", "spawn":
@@ -1051,4 +1056,24 @@ func prettyJSON(raw json.RawMessage) string {
 		return string(raw)
 	}
 	return buf.String()
+}
+
+// patchFiles summarises the files an apply_patch touches: "a.go, b.md" or
+// "a.go, b.md (+2 more)".
+func patchFiles(patch string) string {
+	var files []string
+	for _, l := range strings.Split(patch, "\n") {
+		for _, h := range []string{"*** Add File: ", "*** Update File: ", "*** Delete File: "} {
+			if strings.HasPrefix(l, h) {
+				files = append(files, strings.TrimSpace(strings.TrimPrefix(l, h)))
+			}
+		}
+	}
+	switch {
+	case len(files) == 0:
+		return ""
+	case len(files) <= 2:
+		return strings.Join(files, ", ")
+	}
+	return strings.Join(files[:2], ", ") + fmt.Sprintf(" (+%d more)", len(files)-2)
 }

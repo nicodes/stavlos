@@ -15,13 +15,18 @@ func TestFileToolsAndBash(t *testing.T) {
 	env := &Env{Dir: dir}
 	ts := Builtin()
 	ctx := context.Background()
-	r := ts["write"].Run(ctx, json.RawMessage(`{"path":"a/b.txt","content":"hello\nworld\n"}`), env)
+	r := ts["apply_patch"].Run(ctx, json.RawMessage(`{"patch":"*** Begin Patch\n*** Add File: a/b.txt\n+hello\n+world\n*** End Patch"}`), env)
 	if r.IsError {
 		t.Fatal(r.Output)
 	}
-	r = ts["edit"].Run(ctx, json.RawMessage(`{"path":"a/b.txt","old_string":"world","new_string":"there"}`), env)
+	r = ts["apply_patch"].Run(ctx, json.RawMessage(`{"patch":"*** Begin Patch\n*** Update File: a/b.txt\n hello\n-world\n+there\n*** End Patch"}`), env)
 	if r.IsError {
 		t.Fatal(r.Output)
+	}
+	for _, gone := range []string{"write", "edit"} {
+		if _, ok := ts[gone]; ok {
+			t.Fatalf("%s should be gone: apply_patch covers it", gone)
+		}
 	}
 	r = ts["read"].Run(ctx, json.RawMessage(`{"path":"a/b.txt"}`), env)
 	if !strings.Contains(r.Output, "2\tthere") {

@@ -161,6 +161,7 @@ func TestToolLine(t *testing.T) {
 		{"edit", `{"path":"file.go","old_string":"a","new_string":"b"}`, "Edit  file.go"},
 		{"write", `{"path":"x.go","content":"..."}`, "Write  x.go"},
 		{"watch", `{"path":"src","glob":"**/*.go"}`, "Watch  src"},
+		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
 		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`, "Agent create  scout (explorer)"},
 		{"agent_prompt", `{"id":"ag_1","text":"go"}`, "Agent prompt  ag_1"},
 		{"agent_steer", `{"id":"ag_1","text":"go"}`, "Agent steer  ag_1"},

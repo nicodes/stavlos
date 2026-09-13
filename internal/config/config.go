@@ -163,8 +163,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "bash", Pattern: "git diff*", Verb: policy.Allow},
 		policy.Rule{Tool: "bash", Pattern: "git show*", Verb: policy.Allow},
 		policy.Rule{Tool: "bash", Pattern: "git blame*", Verb: policy.Allow},
-		policy.Rule{Tool: "write", Pattern: "*", Verb: policy.Ask},
-		policy.Rule{Tool: "edit", Pattern: "*", Verb: policy.Ask},
+		policy.Rule{Tool: "apply_patch", Pattern: "*", Verb: policy.Ask},
 	)
 	for _, p := range builtinPresets() {
 		e.Presets[p.Name] = p
@@ -376,7 +375,7 @@ func ReadPreset(path string) (Preset, error) {
 		p.Loop = "default"
 	}
 	if len(p.Tools) == 0 {
-		p.Tools = []string{"bash", "read", "write", "edit", "skill"}
+		p.Tools = []string{"bash", "read", "apply_patch", "skill"}
 	}
 	return p, nil
 }
@@ -548,7 +547,7 @@ func builtinPresets() []Preset {
 		{
 			Name: "coder", Layer: "builtin",
 			Description: "Implements features and fixes bugs in this repository",
-			Tools:       []string{"bash", "read", "write", "edit", "skill"},
+			Tools:       []string{"bash", "read", "apply_patch", "skill"},
 			Spawn:       []string{"explorer", "tester"},
 			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
