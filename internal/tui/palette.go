@@ -32,9 +32,7 @@ var commands = []Command{
 	{Name: "/roles", Desc: "list available roles", Aliases: []string{"/presets"}, Direct: true},
 	{Name: "/yolo", Args: "[on|off]", Desc: "session-wide: auto-approve every permission prompt (no arg toggles)", Direct: true},
 	{Name: "/tree", Desc: "toggle the agent sidebar (also ctrl+b)", Direct: true},
-	{Name: "/details", Desc: "expand or collapse all tool output", Direct: true},
 	{Name: "/help", Desc: "show or hide the key bar at the bottom (off by default)", Aliases: []string{"/h", "/?"}, Direct: true},
-	{Name: "/quit", Desc: "exit", Aliases: []string{"/q", "/exit"}, Direct: true},
 }
 
 // paletteMax is how many rows the palette shows at once.
