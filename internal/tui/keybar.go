@@ -61,13 +61,9 @@ func (m Model) keyHints() []keyHint {
 		hs = append(hs, tab...)
 		return append(hs, keyHint{"ctrl+n/p", "agents"}, keyHint{"ctrl+b", tree}, keyHint{"ctrl+c", "quit"})
 	}
-	details := "expand tool output"
-	if m.details {
-		details = "collapse tool output"
-	}
 	hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}}
 	hs = append(hs, tab...)
-	return append(hs, keyHint{"/queue", "send after turn"}, keyHint{"esc esc", "cancel turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"/details", details}, keyHint{"/models", "model"}, keyHint{"ctrl+c", "quit"})
+	return append(hs, keyHint{"/queue", "send after turn"}, keyHint{"esc esc", "cancel turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"/models", "model"}, keyHint{"ctrl+c", "quit"})
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at

@@ -984,8 +984,6 @@ func (m *Model) command(text string) tea.Cmd {
 	}
 
 	switch name {
-	case "/quit", "/q", "/exit":
-		return tea.Quit
 	case "/help", "/h", "/?":
 		m.hideKeys = !m.hideKeys
 		m.layout()
@@ -995,14 +993,6 @@ func (m *Model) command(text string) tea.Cmd {
 		return m.setStatus("key bar shown (/help hides it)", false)
 	case "/tree":
 		return m.toggleTree()
-	case "/details":
-		m.details = !m.details
-		m.expanded = map[string]map[int]bool{} // a global toggle resets per-item overrides
-		m.refreshViewport()
-		if m.details {
-			return m.setStatus("tool output expanded", false)
-		}
-		return m.setStatus("tool output collapsed", false)
 	case "/role":
 		if c := needAgent(); c != nil {
 			return c
