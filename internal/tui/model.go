@@ -88,15 +88,15 @@ type Model struct {
 	sp    spinner.Model
 
 	width, height int
-	showTree      bool                   // right sidebar toggle (/tree, ctrl+b)
-	hideKeys      bool                   // the key bar (divider + legend) at the bottom is hidden; /help shows it
-	cancelArmed   time.Time              // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
-	hoverFocus    bool                   // the chat has focus because the mouse is over it (released when the mouse leaves)
-	hoverFrom     focus                  // where focus was before hover took it, restored when the mouse leaves the chat
-	sel           selection              // mouse text selection (drag to select, release to copy)
-	metaSel       metaPart               // the highlighted part of the meta row while it has focus
-	details       bool                   // expanded tool output (/details)
-	follow        bool                   // auto-scroll to bottom
+	showTree      bool      // right sidebar toggle (/tree, ctrl+b)
+	hideKeys      bool      // the key bar (divider + legend) at the bottom is hidden; /help shows it
+	cancelArmed   time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
+	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
+	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
+	sel           selection // mouse text selection (drag to select, release to copy)
+	metaSel       metaPart  // the highlighted part of the meta row while it has focus
+	details       bool      // expanded tool output (/details)
+	follow        bool      // auto-scroll to bottom
 
 	status      string
 	statusErr   bool
