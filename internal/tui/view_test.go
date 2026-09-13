@@ -1216,12 +1216,16 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 	if m.focus != focusChat {
 		t.Fatalf("keyboard chat focus should survive mouse movement: %v", m.focus)
 	}
-	// hover never pulls focus out of another section
+	// hover takes focus from a tab too, and hands it back on leaving
 	m.setFocus(focusInput)
 	m.setFocus(focusPermission)
 	move(5, r.first-m.vp.YOffset)
+	if m.focus != focusChat || m.hoverFrom != focusPermission {
+		t.Fatalf("hover should take focus from the permission tab: %v (from %v)", m.focus, m.hoverFrom)
+	}
+	move(5, m.vp.Height+2)
 	if m.focus != focusPermission {
-		t.Fatalf("hover should not steal focus from the permission tab: %v", m.focus)
+		t.Fatalf("leaving should give focus back to the permission tab: %v", m.focus)
 	}
 }
 
@@ -1253,5 +1257,61 @@ func TestMouseClickTogglesItem(t *testing.T) {
 	click(m.itemRows[0].first - m.vp.YOffset)
 	if m.chatCursor != 0 || len(m.expanded["a"]) != 0 {
 		t.Fatalf("click on a non-tool item: cursor=%d expanded=%v", m.chatCursor, m.expanded["a"])
+	}
+}
+
+func TestMouseClicksFocusTabsAndInput(t *testing.T) {
+	m := sessionModel()
+	m.showTree = false
+	m.agents = []protocol.AgentInfo{
+		{ID: "a", Label: "main", Archetype: "coder", State: "working"},
+		{ID: "c1", Parent: "a", Label: "scout", Archetype: "explorer", State: "working"},
+		{ID: "c2", Parent: "a", Label: "checks", Archetype: "tester", State: "idle"},
+	}
+	m.selected = 0
+	m.width, m.height = 100, 40
+	m.layout()
+	m.refreshViewport()
+	click := func(x, y int) {
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+	}
+	move := func(x, y int) {
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
+		m = nm.(Model)
+	}
+	lay := m.rows()
+	// the strip sits right under the rule; "agents (2)" starts after "permission (0)" + " · "
+	agentsX := len("permission (0)") + 3 + 1
+	click(agentsX, lay.strip)
+	if m.focus != focusAgents {
+		t.Fatalf("clicking the agents label should open the agents tab: %v", m.focus)
+	}
+	// a row inside the open tab moves its cursor
+	lay = m.rows()
+	click(5, lay.strip+2)
+	if m.agCursor != 1 {
+		t.Fatalf("clicking the second agent row should select it: %d", m.agCursor)
+	}
+	// clicking the input focuses it
+	lay = m.rows()
+	click(5, lay.input)
+	if m.focus != focusInput || !m.input.Focused() {
+		t.Fatalf("clicking the input should focus it: %v", m.focus)
+	}
+	// hover over the chat takes focus from a tab, and gives it back on leaving
+	lay = m.rows() // the viewport regrew when the tab body closed
+	click(2, lay.strip) // permission tab
+	if m.focus != focusPermission {
+		t.Fatalf("permission tab: %v", m.focus)
+	}
+	r := m.itemRows[0]
+	move(3, r.first-m.vp.YOffset)
+	if m.focus != focusChat || !m.hoverFocus || m.hoverFrom != focusPermission {
+		t.Fatalf("hover should take focus from the tab: focus=%v hover=%v from=%v", m.focus, m.hoverFocus, m.hoverFrom)
+	}
+	move(3, m.vp.Height+1)
+	if m.focus != focusPermission {
+		t.Fatalf("leaving the chat should return focus to the tab: %v", m.focus)
 	}
 }
