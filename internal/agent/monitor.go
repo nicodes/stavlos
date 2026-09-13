@@ -45,11 +45,11 @@ const (
 )
 
 // Info is the protocol view.
-func (m *Monitor) Info(armed bool) protocol.MonitorInfo {
+func (m *Monitor) Info() protocol.MonitorInfo {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return protocol.MonitorInfo{ID: m.ID, Agent: "", Kind: m.Kind, Label: m.Label, Spec: m.Spec, State: m.state,
-		Started: m.Started.UTC().Format(time.RFC3339), Progress: m.progress, Monitored: armed}
+		Started: m.Started.UTC().Format(time.RFC3339), Progress: m.progress}
 }
 
 // --- agent side ---
@@ -65,8 +65,8 @@ func (m monitorsAPI) StartCommand(command string, timeout time.Duration) (string
 func (m monitorsAPI) List() []tools.MonitorStatus {
 	var out []tools.MonitorStatus
 	for _, mon := range m.a.monitorList() {
-		in := mon.Info(m.a.IsArmed(mon.ID))
-		out = append(out, tools.MonitorStatus{ID: in.ID, Kind: in.Kind, Label: in.Label, Spec: in.Spec, State: in.State, Progress: in.Progress, Monitored: in.Monitored, Started: mon.Started})
+		in := mon.Info()
+		out = append(out, tools.MonitorStatus{ID: in.ID, Kind: in.Kind, Label: in.Label, Spec: in.Spec, State: in.State, Progress: in.Progress, Started: mon.Started})
 	}
 	return out
 }

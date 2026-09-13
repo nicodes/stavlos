@@ -185,7 +185,7 @@ func TestAgentRows(t *testing.T) {
 	spawned := map[string]time.Time{"c1": now.Add(-75 * time.Second), "c2": now.Add(-3 * time.Second)}
 	agents := []protocol.AgentInfo{
 		{ID: "root", Label: "coder", Archetype: "coder", State: "idle"},
-		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running", Turn: 2, CostUSD: 0.0012, Monitored: true},
+		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running", Turn: 2, CostUSD: 0.0012},
 		{ID: "c2", Parent: "root", Label: "tester", Archetype: "tester", State: "idle"},
 		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "finished"},
 		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running"},
@@ -194,10 +194,10 @@ func TestAgentRows(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
-	if !strings.Contains(rows[0], "scout (explorer)") || !strings.Contains(rows[0], "turn 2") || !strings.Contains(rows[0], "1m15s") || !strings.Contains(rows[0], "⑂") {
+	if !strings.Contains(rows[0], "scout (explorer)") || !strings.Contains(rows[0], "1m15s") || !strings.Contains(rows[0], "⑂") {
 		t.Fatalf("%q", rows[0])
 	}
-	if !strings.Contains(rows[0], "wakes parent") || strings.Contains(rows[1], "wakes parent") {
+	if strings.Contains(rows[0], "wakes parent") {
 		t.Fatalf("armed marker: %q", rows)
 	}
 	if !strings.Contains(rows[1], "tester") || !strings.Contains(rows[1], "3s") || strings.Contains(rows[1], "turn") {
@@ -230,7 +230,7 @@ func TestAgentRows(t *testing.T) {
 func TestMonitorRows(t *testing.T) {
 	now := time.Now().Truncate(time.Second) // Started is RFC3339: whole seconds
 	monitors := []protocol.MonitorInfo{
-		{ID: "m1", Agent: "root", Kind: "command", Label: "go test", Spec: "go test ./...", State: "running", Started: now.Add(-75 * time.Second).Format(time.RFC3339), Progress: "42 lines", Monitored: true},
+		{ID: "m1", Agent: "root", Kind: "command", Label: "go test", Spec: "go test ./...", State: "running", Started: now.Add(-75 * time.Second).Format(time.RFC3339), Progress: "42 lines"},
 		{ID: "m2", Agent: "root", Kind: "command", Label: "src changes", Spec: "./watch.sh", State: "running", Started: now.Add(-3 * time.Second).Format(time.RFC3339)},
 		{ID: "m3", Agent: "root", Kind: "command", Label: "cooldown", Spec: "sleep 300", State: "running", Started: now.Add(-2 * time.Hour).Format(time.RFC3339), Progress: "3m left"},
 		{ID: "m4", Agent: "root", Kind: "command", Label: "old", State: "fired", Started: now.Format(time.RFC3339)},
@@ -243,17 +243,17 @@ func TestMonitorRows(t *testing.T) {
 	for i, r := range rows {
 		plain[i] = stripANSI(r)
 	}
-	// command: clock glyph, bold label, kind, progress, elapsed, wakes parent
+	// command: glyph, bold label, kind, progress, elapsed
 	if !strings.HasPrefix(plain[0], "  ⚙") || !strings.Contains(plain[0], "go test") {
 		t.Fatalf("command row: %q", plain[0])
 	}
-	for _, want := range []string{"command", "42 lines", "1m15s", "wakes parent"} {
+	for _, want := range []string{"command", "42 lines", "1m15s"} {
 		if !strings.Contains(plain[0], want) {
 			t.Fatalf("command row lacks %q: %q", want, plain[0])
 		}
 	}
 	// a second running job: no wake tag, elapsed
-	if !strings.HasPrefix(plain[1], "  ⚙  src changes") || strings.Contains(plain[1], "wakes parent") || !strings.Contains(plain[1], "command · 3s") {
+	if !strings.HasPrefix(plain[1], "  ⚙  src changes") || !strings.Contains(plain[1], "command · 3s") {
 		t.Fatalf("second job row: %q", plain[1])
 	}
 	// progress and hours elapsed
@@ -803,7 +803,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 func TestSectionTabStrip(t *testing.T) {
 	m := sessionModel()
 	m.agents = []protocol.AgentInfo{
-		{ID: "root", Label: "coder", Archetype: "coder", State: "working", Monitors: []protocol.MonitorInfo{{ID: "j1", Kind: "command", Label: "go test", State: "running", Monitored: true}}},
+		{ID: "root", Label: "coder", Archetype: "coder", State: "working", Monitors: []protocol.MonitorInfo{{ID: "j1", Kind: "command", Label: "go test", State: "running"}}},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "working"},
 	}
 	m.selected = 0

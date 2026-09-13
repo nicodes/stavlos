@@ -412,12 +412,9 @@ func (a *Agent) Info() protocol.AgentInfo {
 	a.mu.Unlock()
 	sort.Slice(mons, func(i, j int) bool { return mons[i].Started.Before(mons[j].Started) })
 	for _, m := range mons {
-		mi := m.Info(a.IsArmed(m.ID))
+		mi := m.Info()
 		mi.Agent = a.ID
 		info.Monitors = append(info.Monitors, mi)
-	}
-	if p, ok := a.s.Agent(a.Parent); ok {
-		info.Monitored = p.IsArmed(a.ID)
 	}
 	a.mu.Lock()
 	return info

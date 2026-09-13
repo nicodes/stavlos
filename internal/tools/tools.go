@@ -40,14 +40,13 @@ type Monitors interface {
 
 // MonitorStatus is a running general monitor.
 type MonitorStatus struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	Label     string    `json:"label"`
-	Spec      string    `json:"spec"`
-	State     string    `json:"state"`
-	Progress  string    `json:"progress,omitempty"`
-	Monitored bool      `json:"wakes_you"`
-	Started   time.Time `json:"started"`
+	ID       string    `json:"id"`
+	Kind     string    `json:"kind"`
+	Label    string    `json:"label"`
+	Spec     string    `json:"spec"`
+	State    string    `json:"state"`
+	Progress string    `json:"progress,omitempty"`
+	Started  time.Time `json:"started"`
 }
 
 // MultiArg is implemented by tools that touch several paths in one call
@@ -100,7 +99,6 @@ type ChildStatus struct {
 	Turn      int     `json:"turn"`
 	CostUSD   float64 `json:"cost_usd"`
 	Summary   string  `json:"summary,omitempty"`
-	Monitored bool    `json:"monitored"` // a wake is armed for this child
 }
 
 type Artifact struct {

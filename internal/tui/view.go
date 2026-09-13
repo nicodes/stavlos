@@ -1182,12 +1182,6 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 		if agentOutcome(a) == "error" {
 			meta = []string{styleStatusErr.Render("error")}
 		}
-		if a.Monitored {
-			meta = append(meta, styleAccent.Render("wakes parent"))
-		}
-		if a.Turn > 0 {
-			meta = append(meta, fmt.Sprintf("turn %d", a.Turn))
-		}
 		if a.CostUSD > 0 {
 			meta = append(meta, "$"+fmtCost(a.CostUSD))
 		}
@@ -1203,7 +1197,7 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 
 // monitorRows is the pure part of monitorsView: one row per running
 // monitor with its kind glyph, bold label, a spinner for commands still
-// running, and dim meta (kind, progress, elapsed, "wakes parent").
+// running, and dim meta (kind, progress, elapsed).
 func monitorRows(monitors []protocol.MonitorInfo, now time.Time, width int) []string {
 	var rows []string
 	for _, mo := range monitors {
@@ -1219,9 +1213,6 @@ func monitorRows(monitors []protocol.MonitorInfo, now time.Time, width int) []st
 		}
 		if t, err := time.Parse(time.RFC3339, mo.Started); err == nil && !t.IsZero() {
 			meta = append(meta, fmtElapsed(now.Sub(t)))
-		}
-		if mo.Monitored {
-			meta = append(meta, styleAccent.Render("wakes parent"))
 		}
 		row := "  " + lead + label + "  " + styleDim.Render(strings.Join(meta, " · "))
 		rows = append(rows, ansi.Truncate(row, width, "…"))
