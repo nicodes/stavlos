@@ -122,7 +122,7 @@ func TestProviderItems(t *testing.T) {
 	if items[0].label != "ChatGPT" || items[0].hint != "connected · nico@example.com" || !items[0].good {
 		t.Errorf("connected row: %+v", items[0])
 	}
-	if items[1].label != "Grok" || items[1].hint != "SuperGrok subscription" || items[1].good {
+	if items[1].label != "Grok" || items[1].hint != "SuperGrok subscription · not signed in" || items[1].good {
 		t.Errorf("not-connected row: %+v", items[1])
 	}
 	// Connected without an account still reads "connected".

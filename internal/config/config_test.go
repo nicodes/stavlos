@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/policy"
 )
@@ -90,5 +91,16 @@ func TestReadOnlyBashAllowedByDefault(t *testing.T) {
 		if v := e.Policy.Decide("bash", cmd); v == policy.Allow {
 			t.Errorf("%q should not be allowed by default", cmd)
 		}
+	}
+}
+
+func TestDefaultEscalationAnswerTimeout(t *testing.T) {
+	t.Setenv("STAVLOS_CONFIG_DIR", t.TempDir())
+	e, err := Load(t.TempDir(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Escalation.AnswerTimeout != 3*time.Minute {
+		t.Fatalf("default answer timeout = %s, want 3m", e.Escalation.AnswerTimeout)
 	}
 }

@@ -428,7 +428,10 @@ func composite(base string, bodyWidth, bodyHeight int, box string) string {
 func providerItems(ps []protocol.ProviderInfo) []overlayItem {
 	out := make([]overlayItem, 0, len(ps))
 	for _, p := range ps {
-		it := overlayItem{id: p.ID, label: p.Name, hint: p.Label}
+		it := overlayItem{id: p.ID, label: p.Name, hint: "not signed in"}
+		if p.Label != "" {
+			it.hint = p.Label + " · not signed in"
+		}
 		if it.label == "" {
 			it.label = p.ID
 		}

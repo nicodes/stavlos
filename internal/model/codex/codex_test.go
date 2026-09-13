@@ -51,6 +51,17 @@ func staticSource(access, account string) model.TokenSource {
 	}
 }
 
+func TestResponseHeaderTimeout(t *testing.T) {
+	p := NewWithEndpoint(staticSource("tok", "acct"), DefaultEndpoint).(*provider)
+	transport, ok := p.http.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport = %T, want *http.Transport", p.http.Transport)
+	}
+	if transport.ResponseHeaderTimeout != 3*time.Minute {
+		t.Fatalf("response header timeout = %s, want 3m", transport.ResponseHeaderTimeout)
+	}
+}
+
 func TestCompleteStream(t *testing.T) {
 	var gotHdr http.Header
 	var gotBody map[string]any
@@ -224,7 +235,7 @@ func TestCompleteUnauthorized(t *testing.T) {
 
 	m, _ := NewWithEndpoint(staticSource("expired", ""), srv.URL).Open("gpt-5.4")
 	_, err := m.Complete(context.Background(), model.Request{Model: "gpt-5.4"}, nil)
-	if err == nil || !strings.Contains(err.Error(), "unauthorized") || !strings.Contains(err.Error(), "/provider") {
+	if err == nil || !strings.Contains(err.Error(), "unauthorized") || !strings.Contains(err.Error(), "/providers") {
 		t.Errorf("err = %v", err)
 	}
 }

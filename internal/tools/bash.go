@@ -16,11 +16,13 @@ import (
 
 type bashTool struct{}
 
+const defaultBashTimeoutSeconds = int(3 * time.Minute / time.Second)
+
 func (bashTool) Def() model.ToolDef {
 	return model.ToolDef{Name: "bash", Description: "Run a shell command in the working directory and return its combined output. Use it for searching too (grep -rn, rg, find, ls); read-only commands like these are allowed by default. Long-running commands are killed at the timeout; for anything slow or long-lived use bash_async instead.",
 		Schema: schema(map[string]any{
 			"command": prop("string", "The command line to run with bash -c"),
-			"timeout": prop("integer", "Seconds before the command is killed (default 300, max 1800)"),
+			"timeout": prop("integer", "Seconds before the command is killed (default 180, max 1800)"),
 		}, "command")}
 }
 
@@ -67,7 +69,7 @@ func (bashTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		return errf("empty command")
 	}
 	if a.Timeout <= 0 {
-		a.Timeout = 300
+		a.Timeout = defaultBashTimeoutSeconds
 	}
 	if a.Timeout > 1800 {
 		a.Timeout = 1800

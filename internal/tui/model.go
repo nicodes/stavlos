@@ -1059,15 +1059,10 @@ func (m *Model) command(text string) tea.Cmd {
 		return setAgentModelCmd(m.ctx, m.c, agent, rest)
 	case "/models":
 		return modelsCmd(m.ctx, m.c)
-	case "/provider", "/connect", "/login":
+	case "/providers", "/provider", "/connect", "/login":
+		// The one provider dialog: sign in, re-sign in, sign out. A name
+		// argument jumps straight to that provider's sign-in.
 		return providersCmd(m.ctx, m.c, false, strings.ToLower(rest))
-	case "/providers":
-		return providersCmd(m.ctx, m.c, true, "")
-	case "/disconnect":
-		if rest == "" {
-			return m.setStatus("usage: /disconnect <provider>", true)
-		}
-		return disconnectProviderCmd(m.ctx, m.c, strings.ToLower(rest))
 	case "/session-model":
 		if rest == "" || !strings.Contains(rest, "/") {
 			return m.setStatus("usage: /session-model <provider/id>", true)
@@ -1155,7 +1150,7 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		var p event.TurnEndedPayload
 		if !m.loading && ev.Decode(&p) == nil && p.Reason == "error" &&
 			(strings.Contains(p.Error, "not connected") || strings.Contains(p.Error, "/provider")) {
-			cmds = append(cmds, m.setStatus("provider not connected — run /provider", true))
+			cmds = append(cmds, m.setStatus("provider not connected — run /providers", true))
 		}
 	}
 
@@ -1581,6 +1576,8 @@ func (m *Model) overlayKey(msg tea.KeyMsg) tea.Cmd {
 		return m.overlaySubmit(false)
 	case key.Matches(msg, keys.OvAlt):
 		return m.overlaySubmit(true)
+	case key.Matches(msg, keys.OvRemove):
+		return m.overlayRemove()
 	case o.handleNav(msg):
 		return nil
 	}
@@ -1788,30 +1785,6 @@ func (m *Model) onProviders(msg providersMsg) tea.Cmd {
 	if msg.refresh {
 		return nil
 	}
-	if msg.notice {
-		lines := []string{"providers:"}
-		n := 0
-		for _, p := range msg.res.Providers {
-			name := p.Name
-			if name == "" {
-				name = p.ID
-			}
-			state := "not connected"
-			if p.Connected {
-				n++
-				state = connectedHint(p)
-			}
-			lines = append(lines, "  "+name+" ("+p.ID+") · "+state)
-		}
-		if len(msg.res.Providers) == 0 {
-			lines = append(lines, "  (none)")
-		} else if n == 0 {
-			lines = append(lines, "  run /provider to sign in")
-		}
-		m.notice(lines...)
-		return m.setStatus(fmt.Sprintf("%d connected", n), false)
-	}
-
 	if msg.jump != "" {
 		for _, p := range msg.res.Providers {
 			if p.ID == msg.jump || strings.ToLower(p.Name) == msg.jump {
@@ -1822,13 +1795,38 @@ func (m *Model) onProviders(msg providersMsg) tea.Cmd {
 			}
 		}
 	}
-	o := newOverlay(ovProviders, overlayList, "Connect a provider", "type to search · enter to select · esc to close")
+	o := newOverlay(ovProviders, overlayList, "Providers", "enter: sign in · ctrl+d: sign out · esc: close")
 	o.setItems(providerItems(msg.res.Providers))
 	cmd := m.openOverlay(o)
-	if msg.jump != "" {
+	switch {
+	case msg.jump != "":
 		return tea.Batch(cmd, m.setStatus("unknown provider "+msg.jump, true))
+	case msg.status != "":
+		return tea.Batch(cmd, m.setStatus(msg.status, false))
 	}
 	return cmd
+}
+
+// overlayRemove is ctrl+d in a list overlay: in the providers dialog it
+// signs out of the selected provider.
+func (m *Model) overlayRemove() tea.Cmd {
+	o := m.ov
+	if o == nil || o.kind != ovProviders {
+		return nil
+	}
+	it := o.selected()
+	if it == nil {
+		return nil
+	}
+	for _, p := range m.providers {
+		if p.ID == it.id {
+			if !p.Connected {
+				return m.setStatus(it.label+" is not signed in", true)
+			}
+			return disconnectProviderCmd(m.ctx, m.c, p.ID)
+		}
+	}
+	return nil
 }
 
 func (m *Model) onRoles(msg rolesMsg) tea.Cmd {

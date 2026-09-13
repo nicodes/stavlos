@@ -20,14 +20,14 @@ func TestPaletteMatches(t *testing.T) {
 	if len(pm) != 2 || pm[0].Name != "/models" || pm[1].Name != "/model" {
 		t.Fatalf("prefix filter: %+v", pm)
 	}
-	if pm := paletteMatches("/conn"); len(pm) != 1 || pm[0].Name != "/provider" {
+	if pm := paletteMatches("/conn"); len(pm) != 1 || pm[0].Name != "/providers" {
 		t.Fatalf("alias filter: %+v", pm)
 	}
 	if pm := paletteMatches("/zzz"); len(pm) != 0 {
 		t.Fatalf("no match: %+v", pm)
 	}
-	view := stripANSI(paletteView(paletteMatches("/"), 2, 100))
-	if !strings.Contains(view, "▸ /provider") || !strings.Contains(view, "/queue <text>") || !strings.Contains(view, "tab complete") {
+	view := stripANSI(paletteView(paletteMatches("/"), 1, 100))
+	if !strings.Contains(view, "▸ /providers") || !strings.Contains(view, "/queue <text>") || !strings.Contains(view, "tab complete") {
 		t.Fatalf("view:\n%s", view)
 	}
 	help := helpLines()

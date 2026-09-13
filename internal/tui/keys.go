@@ -34,6 +34,7 @@ type keyMap struct {
 	OvClose  key.Binding
 	OvAlt    key.Binding // secondary action (models: session default)
 	OvOpen   key.Binding // login: open the URL in the browser again
+	OvRemove key.Binding // providers: sign out of the selected provider
 }
 
 var keys = keyMap{
@@ -65,6 +66,7 @@ var keys = keyMap{
 	OvClose:  key.NewBinding(key.WithKeys("esc")),
 	OvAlt:    key.NewBinding(key.WithKeys("ctrl+s")),
 	OvOpen:   key.NewBinding(key.WithKeys("o", "O")),
+	OvRemove: key.NewBinding(key.WithKeys("ctrl+d")),
 }
 
 // helpKeyLines is the key reference appended to /help.

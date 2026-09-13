@@ -687,7 +687,7 @@ type footerInfo struct {
 func footerRight(f footerInfo) string {
 	switch {
 	case !f.connected:
-		return styleBold.Render("Get started") + " " + styleDim.Render("/provider")
+		return styleBold.Render("Get started") + " " + styleDim.Render("/providers")
 	case f.home:
 		return ""
 	}

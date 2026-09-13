@@ -78,7 +78,7 @@ func TestPlaceholderIndexCycles(t *testing.T) {
 
 func TestFooterRight(t *testing.T) {
 	got := stripANSI(footerRight(footerInfo{home: true, connected: false, label: "coder"}))
-	if got != "Get started /provider" {
+	if got != "Get started /providers" {
 		t.Fatalf("not connected: %q", got)
 	}
 	got = stripANSI(footerRight(footerInfo{home: true, connected: true, label: "coder", model: "anthropic/claude-opus-5"}))
@@ -152,7 +152,7 @@ func TestHomeAndSessionViews(t *testing.T) {
 		t.Fatalf("home view must fill the window: %d lines", len(lines))
 	}
 	plain := stripANSI(home)
-	if !strings.Contains(plain, "▀") || strings.Contains(plain, "sign in with ChatGPT or Grok") || !strings.Contains(plain, "Get started /provider") {
+	if !strings.Contains(plain, "▀") || strings.Contains(plain, "sign in with ChatGPT or Grok") || !strings.Contains(plain, "Get started /providers") {
 		t.Fatalf("home view:\n%s", plain)
 	}
 	if strings.Contains(plain, "session ") {

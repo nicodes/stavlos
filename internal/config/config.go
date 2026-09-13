@@ -125,7 +125,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 	e.RootAgent = "coder"
 	e.Limits = Limits{MaxDepth: 3, MaxAgents: 6}
 	e.Escalation.ClaimTimeout = 30 * time.Second
-	e.Escalation.AnswerTimeout = 5 * time.Minute
+	e.Escalation.AnswerTimeout = 3 * time.Minute
 	e.Escalation.Default = policy.Deny
 	e.Compaction.Threshold = 0.8
 	e.Compaction.MaxToolOutput = 32 * 1024

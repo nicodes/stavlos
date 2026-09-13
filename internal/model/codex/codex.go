@@ -48,7 +48,7 @@ func NewWithEndpoint(src model.TokenSource, endpoint string) model.Provider {
 		// bound how long the backend may take to start answering.
 		http: &http.Client{Transport: &http.Transport{
 			Proxy:                 http.ProxyFromEnvironment,
-			ResponseHeaderTimeout: 30 * time.Second,
+			ResponseHeaderTimeout: 3 * time.Minute,
 		}},
 	}
 }
@@ -107,7 +107,7 @@ func (p *provider) post(ctx context.Context, body []byte) (*http.Response, error
 		defer resp.Body.Close()
 		raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
 		if resp.StatusCode == http.StatusUnauthorized {
-			return nil, fmt.Errorf("codex: unauthorized (token expired or revoked): run /provider to log in again")
+			return nil, fmt.Errorf("codex: unauthorized (token expired or revoked): run /providers to log in again")
 		}
 		return nil, fmt.Errorf("codex: status %d: %s", resp.StatusCode, errorText(raw))
 	}

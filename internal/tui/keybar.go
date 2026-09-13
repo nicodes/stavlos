@@ -57,7 +57,7 @@ func (m Model) keyHints() []keyHint {
 		tree = "hide sidebar"
 	}
 	if m.isHome() {
-		hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/provider", "sign in"}, {"/models", "pick model"}}
+		hs := []keyHint{{"enter", "send"}, {"↑/↓", "history"}, {"/providers", "sign in"}, {"/models", "pick model"}}
 		hs = append(hs, tab...)
 		return append(hs, keyHint{"ctrl+n/p", "agents"}, keyHint{"ctrl+b", tree}, keyHint{"ctrl+c", "quit"})
 	}
