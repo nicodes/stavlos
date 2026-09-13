@@ -486,7 +486,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 		}
 		return ""
 	}
-	if got := marked(); !strings.HasPrefix(got, "⚙ Bash") {
+	if got := marked(); !strings.HasPrefix(got, "⚙  Bash") {
 		t.Fatalf("last item should be marked: %q", got)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
