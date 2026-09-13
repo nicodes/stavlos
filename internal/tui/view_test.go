@@ -283,12 +283,22 @@ func TestMonitorRows(t *testing.T) {
 	m.width, m.height = 120, 40
 	m.showTree = false
 	m.layout()
-	withBlock := m.vp.Height
+	collapsed := m.vp.Height
+	_, kbCollapsed := m.keyBarView()
+	m.focus = focusBackground
+	m.layout()
+	_, kbOpen := m.keyBarView()
+	// open, the section costs one line per job on top of the strip (the key
+	// bar legend may also change height with the focus)
+	if want := collapsed - 3 - (kbOpen - kbCollapsed); m.vp.Height != want {
+		t.Fatalf("layout: viewport %d collapsed, %d open with 3 jobs, want %d", collapsed, m.vp.Height, want)
+	}
+	// the strip stays (with "(0)") once the jobs are gone
+	m.focus = focusInput
 	m.agents[0].Monitors = nil
 	m.layout()
-	// collapsed, the section costs one line (plus its spacer)
-	if m.vp.Height != withBlock+1 {
-		t.Fatalf("layout: viewport %d with jobs, %d without", withBlock, m.vp.Height)
+	if m.vp.Height != collapsed || !strings.Contains(stripANSI(m.sectionsView(100)), "background (0)") {
+		t.Fatalf("layout: viewport %d without jobs, want %d:\n%s", m.vp.Height, collapsed, stripANSI(m.sectionsView(100)))
 	}
 }
 
@@ -390,17 +400,30 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.focus != focusInput {
 		t.Fatalf("default focus %v", m.focus)
 	}
-	// No prompt, sidebar hidden: input → chat → input.
+	// No prompt, sidebar hidden: input → chat → background → permission → input.
+	// The two tabs are always in the cycle, even while empty.
 	press(&m, tab)
 	if m.focus != focusChat || m.follow || m.input.Focused() {
 		t.Fatalf("tab: focus=%v follow=%v", m.focus, m.follow)
 	}
 	press(&m, tab)
+	if m.focus != focusBackground || !strings.Contains(stripANSI(m.sectionsView(100)), "nothing running here") {
+		t.Fatalf("tab tab: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+	}
+	press(&m, tab)
+	if m.focus != focusPermission || !strings.Contains(stripANSI(m.sectionsView(100)), "no prompts waiting") {
+		t.Fatalf("tab x3: focus=%v\n%s", m.focus, stripANSI(m.sectionsView(100)))
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}) // nothing to answer: ignored
+	if m.focus != focusPermission {
+		t.Fatalf("y on an empty permission tab: focus=%v", m.focus)
+	}
+	press(&m, tab)
 	if m.focus != focusInput || !m.follow || !m.input.Focused() {
-		t.Fatalf("tab tab: focus=%v follow=%v", m.focus, m.follow)
+		t.Fatalf("tab x4: focus=%v follow=%v", m.focus, m.follow)
 	}
 	press(&m, stab)
-	if m.focus != focusChat {
+	if m.focus != focusPermission {
 		t.Fatalf("shift+tab: focus=%v", m.focus)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
@@ -408,15 +431,15 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("esc: focus=%v", m.focus)
 	}
 
-	// Sidebar shown: input → sidebar → chat → input.
+	// Sidebar shown: input → sidebar → chat → background → permission → input.
 	m.showTree = true
 	m.layout()
 	var seen []focus
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 5; i++ {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusSidebar, focusChat, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusSidebar, focusChat, focusBackground, focusPermission, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with sidebar: %v, want %v", seen, want)
 	}
 	// Hiding the sidebar while it has focus falls back to the input.
@@ -427,17 +450,17 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("sidebar hidden: focus=%v", m.focus)
 	}
 
-	// Pending prompt: chat → permission → input → chat.
+	// Pending prompt: chat → background → permission → input.
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
 	if m.focus != focusInput {
 		t.Fatal("a new prompt must not steal focus")
 	}
 	seen = nil
-	for i := 0; i < 3; i++ {
+	for i := 0; i < 4; i++ {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusChat, focusPermission, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusChat, focusBackground, focusPermission, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with prompt: %v, want %v", seen, want)
 	}
 	press(&m, stab)
@@ -707,11 +730,9 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if m.selectedID() != "c2" || m.focus != focusInput {
 		t.Fatalf("enter should select the child under the cursor: %s focus %v", m.selectedID(), m.focus)
 	}
-	// now the selected agent has no children: the agents section leaves the cycle
-	for _, f := range m.focusOrder() {
-		if f == focusBackground {
-			t.Fatal("background section should not be in the order without live children or jobs")
-		}
+	// now the selected agent has no children: the tab stays, reading (0)
+	if v := stripANSI(m.sectionsView(100)); !strings.HasPrefix(v, "background (0)") {
+		t.Fatalf("empty background tab:\n%s", v)
 	}
 }
 
@@ -747,10 +768,10 @@ func TestSectionTabStrip(t *testing.T) {
 	if !strings.Contains(lines[0], "▾ permission (1)") || strings.Contains(lines[0], "▾ background") {
 		t.Fatalf("open tab should be marked:\n%s", lines[0])
 	}
-	// only one section present: only its tab
+	// no prompt: the tab stays with a zero count and the generic hint
 	m.prompts = nil
 	m.focus = focusInput
-	if v := stripANSI(m.sectionsView(100)); strings.Contains(v, "permission") || strings.Contains(v, "│") {
-		t.Fatalf("single tab:\n%s", v)
+	if v := stripANSI(m.sectionsView(100)); !strings.Contains(v, "background (1)  │  ? permission (0)") || !strings.Contains(v, "tab to open") {
+		t.Fatalf("empty permission tab:\n%s", v)
 	}
 }

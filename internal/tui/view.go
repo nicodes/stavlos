@@ -871,27 +871,26 @@ func (m Model) treeRows(width int) []string {
 }
 
 // sectionsView is the block between the chat and the input: a tab strip
-// naming the background section and the pending permission with their
-// counts, followed by the body of whichever one has focus. "" when there is
-// nothing to show.
+// naming the background section and the permission queue with their counts
+// (always shown, "(0)" when empty), followed by the body of whichever one
+// has focus.
 func (m Model) sectionsView(width int) string {
 	kids := m.liveChildren()
 	jobs := m.runningJobs()
 	nBack := len(kids) + len(jobs)
 	p := m.currentPrompt()
-	if nBack == 0 && p == nil {
-		return ""
-	}
 	strip := m.sectionTabs(nBack, p, width)
 	switch m.focus {
 	case focusBackground:
-		if nBack > 0 {
-			return strings.Join(append([]string{strip}, m.backgroundRows(jobs, width)...), "\n")
+		if nBack == 0 {
+			return strip + "\n" + styleDim.Render("  nothing running here")
 		}
+		return strings.Join(append([]string{strip}, m.backgroundRows(jobs, width)...), "\n")
 	case focusPermission:
-		if p != nil {
-			return strip + "\n" + m.promptBox(p, width)
+		if p == nil {
+			return strip + "\n" + styleDim.Render("  no prompts waiting")
 		}
+		return strip + "\n" + m.promptBox(p, width)
 	}
 	return strip
 }
@@ -907,18 +906,16 @@ func (m Model) sectionTabs(nBack int, p *protocol.PromptInfo, width int) string 
 		}
 		return styleDim.Render(label)
 	}
-	var tabs []string
-	if nBack > 0 {
-		tabs = append(tabs, tab(fmt.Sprintf("background (%d)", nBack), m.focus == focusBackground))
+	tabs := []string{tab(fmt.Sprintf("background (%d)", nBack), m.focus == focusBackground)}
+	label := fmt.Sprintf("permission (%d)", len(m.prompts))
+	if p != nil && p.Kind != "permission" {
+		label = fmt.Sprintf("%s (%d)", p.Kind, len(m.prompts))
 	}
+	q := styleDim.Render("?")
 	if p != nil {
-		label := fmt.Sprintf("%s (%d)", p.Kind, len(m.prompts))
-		if m.focus == focusPermission {
-			tabs = append(tabs, styleWorking.Render("?")+" "+tab(label, true))
-		} else {
-			tabs = append(tabs, styleWorking.Render("?")+" "+tab(label, false))
-		}
+		q = styleWorking.Render("?")
 	}
+	tabs = append(tabs, q+" "+tab(label, m.focus == focusPermission))
 	var hint string
 	switch m.focus {
 	case focusBackground:
@@ -939,13 +936,8 @@ func (m Model) sectionTabs(nBack int, p *protocol.PromptInfo, width int) string 
 }
 
 // promptView is the tab strip plus the permission box when the permission
-// section has focus; kept as the entry point tests and the layout use.
-func (m Model) promptView(width int) string {
-	if m.currentPrompt() == nil {
-		return ""
-	}
-	return m.sectionsView(width)
-}
+// section has focus; kept as the entry point tests use.
+func (m Model) promptView(width int) string { return m.sectionsView(width) }
 
 // promptBox renders the permission/question/trust box for the head of the
 // queue at the given width. It is only drawn while the section has focus
@@ -1077,13 +1069,8 @@ func (m Model) connected() bool {
 }
 
 // backgroundView is the tab strip plus the background rows when the
-// section has focus; kept as the entry point tests and the layout use.
-func (m Model) backgroundView(width int) string {
-	if len(m.liveChildren())+len(m.runningJobs()) == 0 {
-		return ""
-	}
-	return m.sectionsView(width)
-}
+// section has focus; kept as the entry point tests use.
+func (m Model) backgroundView(width int) string { return m.sectionsView(width) }
 
 // backgroundRows lists the selected agent's live children (⑂) and running
 // async jobs (⚙), one per line, with a cursor marker on the current row.
