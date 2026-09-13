@@ -1582,10 +1582,10 @@ func TestInputNeverHidesRows(t *testing.T) {
 	m.layout()
 	w := m.input.Width()
 	cases := []string{
-		strings.Repeat("a", w),        // exactly fills the row: the textarea spills to a second
-		strings.Repeat("a", w-1),      // one short
-		strings.Repeat("word ", 60),   // long, word-wrapped
-		strings.Repeat("x", 3*w+5),    // one unbroken token
+		strings.Repeat("a", w),      // exactly fills the row: the textarea spills to a second
+		strings.Repeat("a", w-1),    // one short
+		strings.Repeat("word ", 60), // long, word-wrapped
+		strings.Repeat("x", 3*w+5),  // one unbroken token
 		"Use subagents that in turn call other subagents to summarize the repo. Then compare all responses and give me the highlights.",
 		"short\n" + strings.Repeat("longer second line ", 12) + "\nend",
 	}
