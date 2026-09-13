@@ -778,3 +778,44 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		t.Fatalf("items %d", tr2.Items())
 	}
 }
+
+func TestAsyncJobJoinsItsCallLine(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "run the tests"}))
+	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "bash_async", Input: json.RawMessage(`{"command":"go test ./..."}`)}))
+	tr.Apply(mk(3, event.MonitorStarted, event.MonitorStartedPayload{ID: "m1", Kind: "command", Label: "go test ./...", Spec: "go test ./..."}))
+	tr.Apply(mk(4, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash_async", Output: "started job m1"}))
+	tr.Apply(mk(5, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "waiting"}}}))
+	lines := tr.All()
+	call := -1
+	for i, l := range lines {
+		if l.Kind == LineTool {
+			call = i
+		}
+		if strings.HasPrefix(l.Text, "job:") {
+			t.Fatalf("separate job line should not exist: %q", l.Text)
+		}
+	}
+	if call < 0 || lines[call].Tone != ToneWorking {
+		t.Fatalf("call line should be marked working: %+v", lines[call])
+	}
+	tr.Apply(mk(6, event.MonitorFired, event.MonitorFiredPayload{ID: "m1", Kind: "command", Label: "go test ./...", Summary: "exited 1", Output: "FAIL", IsError: true, ExitCode: 1}))
+	lines = tr.All()
+	if lines[call].Tone != ToneError {
+		t.Fatalf("call line should be red after a failed job: %+v", lines[call])
+	}
+	first, last := tr.ItemRange(lines[call].Item)
+	joined := ""
+	for i := first; i <= last; i++ {
+		joined += lines[i].Text + "\n"
+	}
+	if !strings.Contains(joined, "exited 1") || !strings.Contains(joined, "FAIL") {
+		t.Fatalf("job outcome should nest under the call:\n%s", joined)
+	}
+	if strings.Contains(joined, "waiting") {
+		t.Fatalf("assistant text leaked into the call item:\n%s", joined)
+	}
+}

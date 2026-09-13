@@ -357,9 +357,9 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	case LineTool:
 		g, gap := toolGlyph(l.tool)
 		switch {
-		case l.Running:
+		case l.Running || l.Tone == ToneWorking:
 			glyph = styleWorking.Render(g) + gap // in progress: the glyph, yellow
-		case l.Err:
+		case l.Err || l.Tone == ToneError:
 			glyph = styleError.Render(g) + gap // same glyph, red, on failure
 		default:
 			glyph = styleTool.Render(g) + gap
