@@ -102,7 +102,7 @@ func blockStyle(k BlockKind) lipgloss.Style {
 // --- transcript rendering ---
 
 // RenderOpts controls Render. Spinner is the glyph drawn in front of
-// running tool calls (falls back to ↳ when empty). Expanded overrides the
+// running tool calls (falls back to ⚙ when empty). Expanded overrides the
 // global Details toggle per item (the chat cursor's enter). With Focused
 // set, the lines of item Cursor carry the accent gutter marker.
 type RenderOpts struct {
