@@ -50,12 +50,8 @@ var (
 	styleBoxTitleFocus = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
 	styleGutter        = lipgloss.NewStyle().Foreground(colAccent)
 
-	styleBorderUser     = lipgloss.NewStyle().Foreground(colAccent)
-	styleBorderMuted    = lipgloss.NewStyle().Foreground(colMuted)
-	styleBorderSteer    = lipgloss.NewStyle().Foreground(colWarning)
-	styleBorderChild    = lipgloss.NewStyle().Foreground(colBorder)
-	styleBorderError    = lipgloss.NewStyle().Foreground(colError)
-	styleBorderFinished = lipgloss.NewStyle().Foreground(colSuccess)
+	styleBorderMuted = lipgloss.NewStyle().Foreground(colMuted)
+	styleBorderUser  = lipgloss.NewStyle().Foreground(colAccent) // focused input box
 )
 
 // agentOutcome collapses an agent's fields into the state the sidebar
@@ -85,20 +81,22 @@ func agentDot(a protocol.AgentInfo) string {
 	return lipgloss.NewStyle().Foreground(colMuted).Render("○")
 }
 
-func blockBorder(k BlockKind) string {
+// blockStyle colours a message block's text; blocks carry no border so the
+// only vertical bar on screen is the chat cursor.
+func blockStyle(k BlockKind) lipgloss.Style {
 	switch k {
 	case BlockUser:
-		return styleBorderUser.Render("│")
+		return lipgloss.NewStyle().Foreground(colAccent)
 	case BlockSteer:
-		return styleBorderSteer.Render("│")
+		return lipgloss.NewStyle().Foreground(colWarning)
 	case BlockChild:
-		return styleBorderChild.Render("│")
+		return lipgloss.NewStyle().Foreground(colMuted)
 	case BlockError:
-		return styleBorderError.Render("│")
+		return lipgloss.NewStyle().Foreground(colError)
 	case BlockFinished:
-		return styleBorderFinished.Render("│")
+		return lipgloss.NewStyle().Foreground(colSuccess)
 	}
-	return ""
+	return lipgloss.NewStyle()
 }
 
 // --- transcript rendering ---
@@ -307,9 +305,6 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		gutter = styleGutter.Render(gutterMark)
 	}
 	leader := "  "
-	if l.Block != BlockNone {
-		leader = blockBorder(l.Block) + "  "
-	}
 	glyph := ""
 	text := l.Text
 	var style func(...string) string
@@ -356,6 +351,10 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		style = styleError.Render
 	default:
 		style = func(s ...string) string { return strings.Join(s, "") }
+	}
+	if l.Block != BlockNone && (l.Kind == LineText || l.Kind == LineLabel) {
+		bs := blockStyle(l.Block)
+		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), bs) }
 	}
 
 	glyphW := ansi.StringWidth(glyph)
