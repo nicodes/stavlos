@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -739,12 +740,12 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("order %v", order)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission (a prompt waits)
-	if pv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(pv, "\n") != 1 || !strings.Contains(pv, "⚙  Bash  make test  ·  coder") || strings.Contains(pv, "{") {
-		t.Fatalf("permission should open as one tool row: focus=%v\n%s", m.focus, pv)
+	if pv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(pv, "\n") != 2 || !strings.Contains(pv, "⚙  Bash  ·  coder\n       make test") || strings.Contains(pv, "{") {
+		t.Fatalf("permission should open as a tool row over its command: focus=%v\n%s", m.focus, pv)
 	}
 	// the permission box is drawn under the strip, right above the input
 	full := stripANSI(m.View())
-	if bi, pi := strings.Index(full, "agents ("), strings.Index(full, "Bash  make test"); bi < 0 || pi < 0 || bi > pi {
+	if bi, pi := strings.Index(full, "agents ("), strings.Index(full, "make test"); bi < 0 || pi < 0 || bi > pi {
 		t.Fatalf("permission box should render below the strip:\n%s", full)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRight}) // permission → agents
@@ -807,7 +808,7 @@ func TestSectionTabStrip(t *testing.T) {
 	m.focus = focusPermission
 	v = stripANSI(m.sectionsView(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 2 || !strings.Contains(lines[0], "permission (1)") || strings.Contains(lines[0], "▾") || !strings.Contains(lines[1], "Bash  make test") || strings.Contains(v, "╭") || strings.Contains(v, "scout") {
+	if len(lines) != 3 || !strings.Contains(lines[0], "permission (1)") || strings.Contains(lines[0], "▾") || !strings.Contains(lines[1], "Bash") || lines[2] != "       make test" || strings.Contains(v, "scout") {
 		t.Fatalf("permission focused:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
@@ -839,5 +840,28 @@ func TestSessionViewFillsHeight(t *testing.T) {
 		if si < 1 || !strings.HasPrefix(lines[si-1], "─") {
 			t.Fatalf("focus %v: the strip should sit right under the chat rule:\n%s", f, stripANSI(v))
 		}
+	}
+}
+
+func TestPermissionShowsWholeCommand(t *testing.T) {
+	m := sessionModel()
+	long := "for f in $(ls /very/long/path/to/somewhere/deep/in/the/tree); do echo processing \"$f\" && sleep 1 && rm -f \"$f\".bak; done"
+	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":` + strconv.Quote(long+"\necho second line") + `}`)}}
+	m.focus = focusPermission
+	v := stripANSI(m.sectionsView(60))
+	// every line fits the width, nothing is elided, and the newline is kept
+	for _, l := range strings.Split(v, "\n") {
+		if ansi.StringWidth(l) > 60 || strings.Contains(l, "…") {
+			t.Fatalf("line %q too wide or elided:\n%s", l, v)
+		}
+	}
+	joined := strings.ReplaceAll(strings.ReplaceAll(v, "\n       ", ""), "\n", "")
+	for _, want := range []string{"rm -f \"$f\".bak; done", "echo second line"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q:\n%s", want, v)
+		}
+	}
+	if !strings.Contains(v, "\n       echo second line") {
+		t.Fatalf("newline in the command should start a new row:\n%s", v)
 	}
 }

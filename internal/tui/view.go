@@ -936,8 +936,8 @@ func (m Model) cursorRows(rows []string) []string {
 }
 
 // promptBox renders the head of the prompt queue under the strip, without a
-// border: a permission is one row naming the tool and its argument (the
-// command, path or files), like the chat's tool line; a question shows its
+// border: a permission is a row naming the tool (like the chat's tool line)
+// over its whole argument (the command, path or files); a question shows its
 // text, options and answer field; trust shows the directory and files. Key
 // hints live in the key bar, so only a status line (claimed, answering) is
 // added.
@@ -974,11 +974,19 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 		}
 	default:
 		g, gap := toolGlyph(p.Tool)
-		row := styleWorking.Render(g) + gap + styleBold.Render(titleCase(p.Tool))
-		if arg := toolArg(p.Tool, p.Input); arg != "" {
-			row += "  " + arg
+		lines = append(lines, styleWorking.Render(g)+gap+styleBold.Render(titleCase(p.Tool))+agent)
+		// The argument is shown whole: a shell command is what the user is
+		// approving, so it is never cut. Long lines wrap under the tool name.
+		if arg := fullToolArg(p.Tool, p.Input); arg != "" {
+			const indent = "     "
+			wrapW := width - 2 - len(indent)
+			if wrapW < 20 {
+				wrapW = 20
+			}
+			for _, l := range strings.Split(ansi.Hardwrap(arg, wrapW, true), "\n") {
+				lines = append(lines, indent+l)
+			}
 		}
-		lines = append(lines, row+agent)
 	}
 	switch {
 	case p.ClaimedBy != "" && !m.claimedByUs[p.ID]:
@@ -987,9 +995,24 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 		lines = append(lines, styleDim.Render("answering…"))
 	}
 	for i := range lines {
-		lines[i] = ansi.Truncate("  "+lines[i], width, "…")
+		lines[i] = "  " + lines[i]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// fullToolArg is toolArg without the one-line flattening for the tools
+// whose argument is text the user must read in full before approving.
+func fullToolArg(tool string, raw json.RawMessage) string {
+	switch tool {
+	case "bash", "bash_async":
+		var in struct {
+			Command string `json:"command"`
+		}
+		if json.Unmarshal(raw, &in) == nil {
+			return strings.TrimRight(in.Command, "\n")
+		}
+	}
+	return toolArg(tool, raw)
 }
 
 // footerView is the bottom line: dim cwd on the left, summary or a
