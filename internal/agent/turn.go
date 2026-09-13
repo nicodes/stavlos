@@ -324,7 +324,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 					fmt.Fprintf(&sb, "- %s: %s\n", arch, p.Description)
 				}
 			}
-			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents live in this session. Children run in the background. Children never interrupt you: a finished child's result waits in your mailbox, where result and status can read it, and anything still unread is handed to you at the start of your next turn. If you want to be woken as soon as a child is done, call monitor (it ends your turn and arms the wake); unmonitor disarms it. There is no blocking wait. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Live(), cfg.Limits.MaxAgents)
+			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents live in this session. Children run in the background. A child that finishes wakes you with its result as a new message, never mid-turn (a result that lands while you are working arrives when your current turn ends). Call monitor to end your turn and wait for children; call unmonitor if you would rather not be woken and will check with result or status instead. There is no blocking wait. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Live(), cfg.Limits.MaxAgents)
 			names = append(names, tools.OrchestrationNames...)
 		} else {
 			fmt.Fprintf(&sb, "You cannot spawn right now (%s). Do the work yourself.\n", why)
