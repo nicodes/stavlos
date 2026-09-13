@@ -125,18 +125,6 @@ func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.
 	}
 }
 
-func spawnCmd(ctx context.Context, c *client.Client, p protocol.AgentSpawnParams) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		id, err := c.Spawn(ctx, p)
-		if err != nil {
-			return resultMsg{err: err}
-		}
-		return resultMsg{ok: "spawned " + p.Label + " (" + id + ")"}
-	}
-}
-
 func setAgentModelCmd(ctx context.Context, c *client.Client, agent, modelID string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)

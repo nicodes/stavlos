@@ -69,8 +69,6 @@ var helpLines = []string{
 	"  <text>                           send to the selected agent (a busy agent takes it at its next step)",
 	"  /queue <text>                    send after the current turn ends instead",
 	"  /cancel                          cancel the selected agent's current turn",
-	"  /kill                            kill the selected agent and its subtree (asks y/n)",
-	"  /spawn <archetype> <label> <task> spawn a child of the selected agent",
 	"  /provider [openai|xai]           sign in with your ChatGPT or Grok subscription (alias /connect, /login)",
 	"  /providers                       show which providers are signed in",
 	"  /disconnect <openai|xai>         sign out of a provider",

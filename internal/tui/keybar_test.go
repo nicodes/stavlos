@@ -40,11 +40,6 @@ func TestKeyHintsByContext(t *testing.T) {
 	if hs := m.keyHints(); !has(hs, "/provider") || !has(hs, "ctrl+c") || has(hs, "/steer") {
 		t.Fatalf("home: %+v", hs)
 	}
-	m.confirmKill = true
-	if hs := m.keyHints(); len(hs) != 2 || hs[0].key != "y" {
-		t.Fatalf("kill: %+v", hs)
-	}
-	m.confirmKill = false
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission"}}
 	if hs := m.keyHints(); has(hs, "a") || !has(hs, "tab") {
 		t.Fatalf("input focus with a prompt: %+v", hs)
