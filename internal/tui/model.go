@@ -586,7 +586,13 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 // the chat area gives focus back to the input, without scrolling. Focus the
 // keyboard took is left alone.
 func (m *Model) mouseHover(x, y int) tea.Cmd {
-	if m.ov != nil || m.isHome() {
+	if m.ov != nil {
+		if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), m.sp.View()); ok {
+			m.ov.cursor = idx
+		}
+		return nil
+	}
+	if m.isHome() {
 		return nil
 	}
 	inChat := x >= 0 && x < m.contentWidth() && y >= 0 && y < m.vp.Height
@@ -632,6 +638,10 @@ func (m *Model) mouseHover(x, y int) tea.Cmd {
 // the hovered item (the click first moves the cursor there, like hover).
 func (m *Model) mouseClick(x, y int) tea.Cmd {
 	if m.ov != nil {
+		if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), m.sp.View()); ok {
+			m.ov.cursor = idx
+			return m.overlaySubmit(false)
+		}
 		return nil
 	}
 	if m.isHome() {
@@ -666,10 +676,91 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 		if isTab(m.focus) && m.focus != focusPermission {
 			m.agCursor = y - lay.strip - 1
 		}
-	case y >= lay.input && y <= lay.input+1: // the input and its meta row
+	case y == lay.input: // the input line
+		return m.setFocus(focusInput)
+	case y == lay.input+1: // the meta row: its parts are buttons
+		switch m.metaHit(x) {
+		case metaYolo:
+			return setYoloCmd(m.ctx, m.c, m.sessionID, false)
+		case metaRole:
+			return rolesCmd(m.ctx, m.c, m.sessionID)
+		case metaModel:
+			return modelsCmd(m.ctx, m.c)
+		case metaVariant:
+			return m.openVariants("")
+		}
 		return m.setFocus(focusInput)
 	}
 	return nil
+}
+
+// bodyHeight is the height of the main area a dialog is centred in (the
+// window minus the key bar), as View computes it.
+func (m *Model) bodyHeight() int {
+	_, kb := m.keyBarView()
+	h := m.height - kb
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
+// metaPart names what sits under an x position on the meta row.
+type metaPart int
+
+const (
+	metaNone    metaPart = iota
+	metaYolo             // the YOLO tag: click turns yolo off
+	metaRole             // "label (role)": click opens /roles
+	metaModel            // the model: click opens /models
+	metaVariant          // the variant: click opens /variants
+)
+
+// metaHit maps an x position on the meta row to its part, following the
+// layout metaLine draws: [YOLO · ]label (role) · model · variant.
+func (m *Model) metaHit(x int) metaPart {
+	label, role, model, variant := "agent", "", m.session.Model, ""
+	if a := m.selectedAgent(); a != nil {
+		label, role, variant = a.Label, a.Archetype, a.Variant
+		if a.Model != "" {
+			model = a.Model
+		}
+	}
+	x0 := 0
+	if m.session.Yolo {
+		if x < 4 {
+			return metaYolo
+		}
+		x0 = 4 + 3
+	}
+	name := label
+	if role != "" {
+		name = fmt.Sprintf("%s (%s)", label, role)
+	}
+	if x < x0 {
+		return metaNone
+	}
+	if x < x0+ansi.StringWidth(name) {
+		return metaRole
+	}
+	x0 += ansi.StringWidth(name) + 3
+	if model == "" {
+		return metaModel // "no model — /models" fills the rest
+	}
+	if x < x0 {
+		return metaNone
+	}
+	if x < x0+ansi.StringWidth(model) {
+		return metaModel
+	}
+	x0 += ansi.StringWidth(model) + 3
+	if variant == "" {
+		variant = "default"
+	}
+	if x >= x0 && x < x0+ansi.StringWidth(variant) {
+		return metaVariant
+	}
+	return metaNone
 }
 
 // rowLayout is where the session view's pieces sit, in screen rows.
@@ -1176,25 +1267,7 @@ func (m *Model) command(text string) tea.Cmd {
 		if c := needAgent(); c != nil {
 			return c
 		}
-		a := m.selectedAgent()
-		modelID, current := m.session.Model, ""
-		if a != nil {
-			current = a.Variant
-			if a.Model != "" {
-				modelID = a.Model
-			}
-		}
-		if modelID == "" {
-			return m.setStatus("no model selected — /models first", true)
-		}
-		if rest == "" {
-			return variantsCmd(m.ctx, m.c, modelID, current)
-		}
-		v := strings.ToLower(rest)
-		if v == "default" || v == "none" || v == "off" {
-			v = ""
-		}
-		return pickVariantCmd(m.ctx, m.c, agent, v)
+		return m.openVariants(rest)
 	case "/queue":
 		if c := needAgent(); c != nil {
 			return c
@@ -1287,6 +1360,14 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		var p event.YoloPayload
 		if ev.Decode(&p) == nil {
 			m.session.Yolo = p.On
+		}
+		// A session-wide switch with no agent of its own: note it in every
+		// agent's chat, like model and role changes.
+		for _, a := range m.agents {
+			m.transcript(a.ID).Apply(ev)
+		}
+		if !m.loading {
+			m.refreshViewport()
 		}
 	case event.TurnEnded:
 		var p event.TurnEndedPayload
@@ -2080,6 +2161,31 @@ func shortID(id string) string {
 		return id[:8]
 	}
 	return id
+}
+
+// openVariants is /variants: with no argument it opens the picker for the
+// selected agent's model; with a name it sets that variant ("default"
+// clears it).
+func (m *Model) openVariants(arg string) tea.Cmd {
+	a := m.selectedAgent()
+	if a == nil {
+		return m.setStatus("no agent selected", true)
+	}
+	modelID, current := m.session.Model, a.Variant
+	if a.Model != "" {
+		modelID = a.Model
+	}
+	if modelID == "" {
+		return m.setStatus("no model selected — /models first", true)
+	}
+	if arg == "" {
+		return variantsCmd(m.ctx, m.c, modelID, current)
+	}
+	v := strings.ToLower(arg)
+	if v == "default" || v == "none" || v == "off" {
+		v = ""
+	}
+	return pickVariantCmd(m.ctx, m.c, a.ID, v)
 }
 
 // onVariants opens the /variants picker: the provider default plus every

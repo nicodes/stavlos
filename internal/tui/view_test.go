@@ -1300,7 +1300,7 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 		t.Fatalf("clicking the input should focus it: %v", m.focus)
 	}
 	// hover over the chat takes focus from a tab, and gives it back on leaving
-	lay = m.rows() // the viewport regrew when the tab body closed
+	lay = m.rows()      // the viewport regrew when the tab body closed
 	click(2, lay.strip) // permission tab
 	if m.focus != focusPermission {
 		t.Fatalf("permission tab: %v", m.focus)
@@ -1313,5 +1313,89 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	move(3, m.vp.Height+1)
 	if m.focus != focusPermission {
 		t.Fatalf("leaving the chat should return focus to the tab: %v", m.focus)
+	}
+}
+
+func TestMetaRowHits(t *testing.T) {
+	m := sessionModel()
+	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "coder", Model: "openai/gpt-5", Variant: "high"}}
+	m.selected = 0
+	m.session.Yolo = true
+	// "YOLO · main (coder) · openai/gpt-5 · high"
+	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, true))
+	at := func(sub string) int { return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1 } // a column, not a byte offset
+	for _, c := range []struct {
+		x    int
+		want metaPart
+	}{
+		{at("YOLO"), metaYolo}, {at("main"), metaRole}, {at("(coder)"), metaRole},
+		{at("openai/gpt-5"), metaModel}, {at("high"), metaVariant}, {len(row) + 5, metaNone},
+	} {
+		if got := m.metaHit(c.x); got != c.want {
+			t.Fatalf("x=%d: got %v want %v", c.x, got, c.want)
+		}
+	}
+	// without yolo the row starts at the name; a missing variant reads "default"
+	m.session.Yolo = false
+	m.agents[0].Variant = ""
+	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, false))
+	if m.metaHit(0) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
+		t.Fatalf("no-yolo row: %q", row)
+	}
+}
+
+func TestDialogRowsTakeTheMouse(t *testing.T) {
+	m := sessionModel()
+	m.width, m.height = 100, 40
+	m.layout()
+	o := newOverlay(ovVariants, overlayList, "Variant", "hint")
+	o.setItems([]overlayItem{{id: "", label: "default"}, {id: "low", label: "low"}, {id: "high", label: "high"}})
+	m.openOverlay(o)
+	// find row 2 ("high") by scanning the composited screen for its text
+	view := stripANSI(m.View())
+	lines := strings.Split(view, "\n")
+	y := -1
+	for i, l := range lines {
+		if strings.Contains(l, "high") {
+			y = i
+		}
+	}
+	if y < 0 {
+		t.Fatalf("no row for high:\n%s", view)
+	}
+	x := strings.Index(lines[y], "high")
+	if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), ""); !ok || idx != 2 {
+		t.Fatalf("itemAt(%d,%d) = %d %v", x, y, idx, ok)
+	}
+	// hover moves the dialog cursor; click picks the row (the dialog closes)
+	nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
+	m = nm.(Model)
+	if m.ov == nil || m.ov.cursor != 2 {
+		t.Fatalf("hover should move the dialog cursor: %+v", m.ov)
+	}
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	m = nm.(Model)
+	if m.ov != nil {
+		t.Fatal("clicking a row should pick it and close the dialog")
+	}
+}
+
+func TestYoloToggleShowsInEveryChat(t *testing.T) {
+	m := sessionModel()
+	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main"}, {ID: "b", Parent: "a", Label: "scout"}}
+	m.applyEvent(event.Event{Seq: 9, Session: "s", Type: event.SessionYoloChanged, Time: time.Now(), Payload: event.MustPayload(event.YoloPayload{On: true})})
+	for _, id := range []string{"a", "b"} {
+		found := false
+		for _, l := range m.transcript(id).All() {
+			if strings.Contains(l.Text, "yolo → on") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("agent %s chat lacks the yolo line", id)
+		}
+	}
+	if !m.session.Yolo {
+		t.Fatal("session flag should follow the event")
 	}
 }
