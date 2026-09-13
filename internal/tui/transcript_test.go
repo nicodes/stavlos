@@ -846,12 +846,27 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	if _, rows := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Working: true}); len(rows) != tr.Items() {
 		t.Fatalf("rows %d, items %d", len(rows), tr.Items())
 	}
+	// elapsed time and tokens for the turn
+	tr.Apply(mk(21, event.Usage, event.UsagePayload{Turn: 1, Usage: model.Usage{InputTokens: 900, OutputTokens: 400, CacheReadTokens: 5000}}))
+	tr.Apply(mk(22, event.Usage, event.UsagePayload{Turn: 1, Usage: model.Usage{InputTokens: 100, OutputTokens: 100}}))
+	if el, tok := tr.TurnStats(tr.turnStart.Add(75 * time.Second)); el != 75*time.Second || tok != 1500 {
+		t.Fatalf("turn stats: %v %d", el, tok)
+	}
+	if got := turnStats(75*time.Second, 1500); got != "(1m15s · 2k tokens)" {
+		t.Fatalf("stats: %q", got)
+	}
+	if s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Stats: "(3s · 0 tokens)"}); !strings.HasSuffix(stripANSI(s), "⠋ working… (3s · 0 tokens)") {
+		t.Fatalf("stats suffix:\n%s", stripANSI(s))
+	}
 	tr.Apply(mk(3, event.TurnEnded, event.TurnEndedPayload{Turn: 1}))
 	if tr.InTurn() || strings.Contains(render(), "working…") {
 		t.Fatalf("after the turn the indicator must go:\n%s", render())
 	}
 	// an aborted turn (daemon restart) clears it too
 	tr.Apply(mk(4, event.TurnStarted, event.TurnPayload{Turn: 2}))
+	if _, tok := tr.TurnStats(time.Now()); tok != 0 {
+		t.Fatalf("a new turn starts its token count over: %d", tok)
+	}
 	tr.Apply(mk(5, event.TurnAborted, event.TurnPayload{Turn: 2}))
 	if tr.InTurn() {
 		t.Fatal("aborted turn should clear the indicator")
