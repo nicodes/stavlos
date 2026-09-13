@@ -589,9 +589,10 @@ func inputBox(input, meta string) string {
 	return input + "\n" + meta
 }
 
-// metaLine is "Coder  ·  claude-opus-5 anthropic" (or the no-model nudge).
+// metaLine is "Coder    claude-opus-5 anthropic" (or the no-model nudge):
+// the role and the model separated by a tab-sized gap.
 func metaLine(label, model string, queued int) string {
-	s := titleCase(label) + "  ·  "
+	s := titleCase(label) + "    "
 	if model == "" {
 		return s + styleWarn.Render("no model — /models")
 	}
