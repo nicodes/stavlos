@@ -333,6 +333,55 @@ func (o *overlay) listLines(inner int) []string {
 	return out
 }
 
+// itemAt maps a screen position to the list row drawn there, using the
+// same geometry as view and composite: the box is centred in the body,
+// its content starts inside the border after the title, the info line
+// (if any), the filter input and the rule, then an "↑ more" marker when
+// scrolled.
+func (o *overlay) itemAt(x, y, bodyWidth, bodyHeight int, spinner string) (int, bool) {
+	if o.mode != overlayList || len(o.shown) == 0 {
+		return 0, false
+	}
+	box := o.view(bodyWidth, spinner)
+	boxLines := strings.Split(box, "\n")
+	bw := lipgloss.Width(box)
+	x0 := (bodyWidth - bw) / 2
+	if x0 < 0 {
+		x0 = 0
+	}
+	y0 := (bodyHeight - len(boxLines)) / 2
+	if y0 < 0 {
+		y0 = 0
+	}
+	if x < x0 || x >= x0+bw {
+		return 0, false
+	}
+	row := y - y0 - 1 // top border
+	header := 3       // title, filter input, rule
+	if o.info != "" {
+		header++
+	}
+	row -= header
+	if o.offset > 0 {
+		if row == 0 {
+			return 0, false // the "↑ more" marker
+		}
+		row--
+	}
+	if row < 0 {
+		return 0, false
+	}
+	end := o.offset + overlayMaxRows
+	if end > len(o.shown) {
+		end = len(o.shown)
+	}
+	idx := o.offset + row
+	if idx >= end {
+		return 0, false
+	}
+	return idx, true
+}
+
 // renderItem lays out "▸ label  sub" on the left and the hint on the right,
 // truncating the left part when both do not fit.
 func renderItem(it overlayItem, cur bool, width int) string {
