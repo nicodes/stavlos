@@ -109,7 +109,7 @@ func TestUserMessageKinds(t *testing.T) {
 		mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}),
 	})
 	got := renderLines(lines)
-	assertSubsequence(t, got, []string{"   steer", "   › focus", "   child", "   ↰ child done", "   › hi"})
+	assertSubsequence(t, got, []string{"   steer", "   › focus", "   agent response", "   ↰ child done", "   › hi"})
 
 	// Blocks carry their kind so Render can pick the border color.
 	var blocks []BlockKind

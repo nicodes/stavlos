@@ -153,7 +153,7 @@ func (a *Agent) takeInputs() []event.UserMessagePayload {
 }
 
 func childText(r tools.ChildResult) string {
-	return fmt.Sprintf("Child agent %q (%s) finished with status %s.\n\n%s", r.Label, r.ID, r.Status, r.Summary)
+	return fmt.Sprintf("Agent %q (%s) finished with status %s.\n\n%s", r.Label, r.ID, r.Status, r.Summary)
 }
 
 // --- envelope delivery ---
