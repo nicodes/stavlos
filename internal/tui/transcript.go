@@ -180,8 +180,17 @@ func (t *Transcript) Apply(ev event.Event) {
 	case event.MonitorStarted:
 		var p event.MonitorStartedPayload
 		if ev.Decode(&p) == nil && p.ID != "" {
-			t.monitors[p.ID] = len(t.Lines)
 			t.monKinds[p.ID] = p.Kind
+			// A job started by bash_async is represented by that call's own
+			// line: it stays yellow while the job runs and the outcome nests
+			// under it. Only a job with no such call gets its own notice.
+			if i := t.lastAsyncCall(); i >= 0 {
+				t.monitors[p.ID] = i
+				t.Lines[i].Tone = ToneWorking
+				t.stream = nil
+				return
+			}
+			t.monitors[p.ID] = len(t.Lines)
 		}
 	case event.MonitorFired:
 		// The outcome joins the "started" notice's item, like tool output
@@ -198,6 +207,9 @@ func (t *Transcript) Apply(ev event.Event) {
 					t.Lines[i].Tone = ToneError
 				}
 				delete(t.monitors, p.ID)
+				if t.Lines[i].Kind == LineTool {
+					lines = nested(lines) // under the bash_async call, like tool output
+				}
 				t.insertIntoItem(t.Lines[i].Item, lines)
 				return
 			}
@@ -212,6 +224,9 @@ func (t *Transcript) Apply(ev event.Event) {
 			if i, ok := t.monitors[p.ID]; ok && i < len(t.Lines) {
 				t.Lines[i].Tone = ToneError
 				delete(t.monitors, p.ID)
+				if t.Lines[i].Kind == LineTool {
+					lines = nested(lines)
+				}
 				t.insertIntoItem(t.Lines[i].Item, lines)
 				return
 			}
@@ -316,6 +331,22 @@ func monitorKindFromText(text string) string {
 		}
 	}
 	return "command"
+}
+
+// lastAsyncCall returns the index of the most recent bash_async call line
+// that is not yet tied to a job, or -1.
+func (t *Transcript) lastAsyncCall() int {
+	tied := map[int]bool{}
+	for _, idx := range t.monitors {
+		tied[idx] = true
+	}
+	for i := len(t.Lines) - 1; i >= 0; i-- {
+		l := t.Lines[i]
+		if l.Kind == LineTool && l.tool == "bash_async" && !tied[i] {
+			return i
+		}
+	}
+	return -1
 }
 
 // openCallItem returns the item of the most recently started, still-open
