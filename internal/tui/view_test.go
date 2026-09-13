@@ -187,11 +187,11 @@ func TestAgentRows(t *testing.T) {
 		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "finished"},
 		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running"},
 	}
-	rows := agentRows(agents, "root", spawned, now, "⠋", 100)
+	rows := agentRows(agents, "root", spawned, now, 100)
 	if len(rows) != 2 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
-	if !strings.Contains(rows[0], "scout (explorer)") || !strings.Contains(rows[0], "turn 2") || !strings.Contains(rows[0], "1m15s") || !strings.Contains(rows[0], "⠋") {
+	if !strings.Contains(rows[0], "scout (explorer)") || !strings.Contains(rows[0], "turn 2") || !strings.Contains(rows[0], "1m15s") || !strings.Contains(rows[0], "⑂") {
 		t.Fatalf("%q", rows[0])
 	}
 	if !strings.Contains(rows[0], "wakes parent") || strings.Contains(rows[1], "wakes parent") {
@@ -200,24 +200,21 @@ func TestAgentRows(t *testing.T) {
 	if !strings.Contains(rows[1], "tester") || !strings.Contains(rows[1], "3s") || strings.Contains(rows[1], "turn") {
 		t.Fatalf("%q", rows[1])
 	}
-	if rows := agentRows(agents, "c2", spawned, now, "", 100); len(rows) != 0 {
+	if rows := agentRows(agents, "c2", spawned, now, 100); len(rows) != 0 {
 		t.Fatalf("no children expected: %q", rows)
 	}
 	if got := fmtElapsed(3725 * time.Second); got != "1h02m" {
 		t.Fatalf("%s", got)
 	}
 
-	// The block is titled "agents" and lists only the selected agent's children.
+	// The section is titled "background" and lists only the selected agent's children.
 	m := sessionModel()
 	m.spawned = spawned
 	m.agents = agents
 	m.selected = 0
-	view := stripANSI(m.agentsView(100))
-	if !strings.HasPrefix(view, "agents (2)") || !strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
-		t.Fatalf("agents block:\n%s", view)
-	}
-	if strings.Contains(view, "monitors") {
-		t.Fatalf("agents block must not be titled monitors:\n%s", view)
+	view := stripANSI(m.backgroundView(100))
+	if !strings.HasPrefix(view, "background (2)") || !strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
+		t.Fatalf("background section:\n%s", view)
 	}
 }
 
@@ -229,7 +226,7 @@ func TestMonitorRows(t *testing.T) {
 		{ID: "m3", Agent: "root", Kind: "command", Label: "cooldown", Spec: "sleep 300", State: "running", Started: now.Add(-2 * time.Hour).Format(time.RFC3339), Progress: "3m left"},
 		{ID: "m4", Agent: "root", Kind: "command", Label: "old", State: "fired", Started: now.Format(time.RFC3339)},
 	}
-	rows := monitorRows(monitors, now, "⠋", 100)
+	rows := monitorRows(monitors, now, 100)
 	if len(rows) != 3 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
@@ -237,8 +234,8 @@ func TestMonitorRows(t *testing.T) {
 	for i, r := range rows {
 		plain[i] = stripANSI(r)
 	}
-	// command: clock glyph, bold label, spinner, kind, progress, elapsed, wakes parent
-	if !strings.HasPrefix(plain[0], "  ◷") || !strings.Contains(plain[0], "go test ⠋") {
+	// command: clock glyph, bold label, kind, progress, elapsed, wakes parent
+	if !strings.HasPrefix(plain[0], "  ◷") || !strings.Contains(plain[0], "go test") {
 		t.Fatalf("command row: %q", plain[0])
 	}
 	for _, want := range []string{"command", "42 lines", "1m15s", "wakes parent"} {
@@ -246,8 +243,8 @@ func TestMonitorRows(t *testing.T) {
 			t.Fatalf("command row lacks %q: %q", want, plain[0])
 		}
 	}
-	// a second running job: spinner, no wake tag, elapsed
-	if !strings.HasPrefix(plain[1], "  ◷ src changes") || !strings.Contains(plain[1], "⠋") || strings.Contains(plain[1], "wakes parent") || !strings.Contains(plain[1], "command · 3s") {
+	// a second running job: no wake tag, elapsed
+	if !strings.HasPrefix(plain[1], "  ◷ src changes") || strings.Contains(plain[1], "wakes parent") || !strings.Contains(plain[1], "command · 3s") {
 		t.Fatalf("second job row: %q", plain[1])
 	}
 	// progress and hours elapsed
@@ -255,25 +252,28 @@ func TestMonitorRows(t *testing.T) {
 		t.Fatalf("third job row: %q", plain[2])
 	}
 	// a bad Started stamp just drops the elapsed field
-	rows = monitorRows([]protocol.MonitorInfo{{ID: "x", Kind: "command", Label: "w", State: "running", Started: "nope"}}, now, "", 100)
+	rows = monitorRows([]protocol.MonitorInfo{{ID: "x", Kind: "command", Label: "w", State: "running", Started: "nope"}}, now, 100)
 	if len(rows) != 1 || !strings.HasSuffix(strings.TrimRight(stripANSI(rows[0]), " "), "command") {
 		t.Fatalf("bad stamp: %q", rows)
 	}
-	if monitorRows(nil, now, "", 100) != nil {
+	if monitorRows(nil, now, 100) != nil {
 		t.Fatal("no monitors should give no rows")
 	}
 
-	// The block reads the selected agent's Monitors and is titled "monitors".
+	// The section reads the selected agent's Monitors; unfocused it is one
+	// summary line, focused it lists one row per job.
 	m := sessionModel()
 	m.agents = []protocol.AgentInfo{{ID: "root", Label: "coder", Archetype: "coder", State: "idle", Monitors: monitors[:3]}}
 	m.selected = 0
-	view := stripANSI(m.monitorsView(100))
-	if !strings.HasPrefix(view, "monitors (3)") || strings.Count(view, "\n") != 3 {
-		t.Fatalf("monitors block:\n%s", view)
+	view := stripANSI(m.backgroundView(100))
+	if !strings.HasPrefix(view, "background (3)") || strings.Count(view, "\n") != 0 {
+		t.Fatalf("collapsed background:\n%s", view)
 	}
-	if m.agentsView(100) != "" {
-		t.Fatal("no children: agents block should be empty")
+	m.focus = focusBackground
+	if view := stripANSI(m.backgroundView(100)); strings.Count(view, "\n") != 3 {
+		t.Fatalf("expanded background:\n%s", view)
 	}
+	m.focus = focusInput
 	// Both blocks are budgeted out of the transcript height.
 	m.width, m.height = 120, 40
 	m.showTree = false
@@ -281,8 +281,9 @@ func TestMonitorRows(t *testing.T) {
 	withBlock := m.vp.Height
 	m.agents[0].Monitors = nil
 	m.layout()
-	if m.vp.Height != withBlock+4 {
-		t.Fatalf("layout: viewport %d with monitors, %d without", withBlock, m.vp.Height)
+	// collapsed, the section costs one line (plus its spacer)
+	if m.vp.Height != withBlock+1 {
+		t.Fatalf("layout: viewport %d with jobs, %d without", withBlock, m.vp.Height)
 	}
 }
 
@@ -661,8 +662,8 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "bash", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
 
 	// unfocused: one line each
-	av := stripANSI(m.agentsView(100))
-	if strings.Count(av, "\n") != 0 || !strings.Contains(av, "agents (2)") || !strings.Contains(av, "scout") || !strings.Contains(av, "checks") {
+	av := stripANSI(m.backgroundView(100))
+	if strings.Count(av, "\n") != 0 || !strings.Contains(av, "background (2)") || !strings.Contains(av, "scout") || !strings.Contains(av, "checks") {
 		t.Fatalf("collapsed agents:\n%s", av)
 	}
 	pv := stripANSI(m.promptView(100))
@@ -672,7 +673,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 
 	// tab order: chat is skipped on the home view; permission, agents, input
 	order := m.focusOrder()
-	if len(order) != 3 || order[0] != focusPermission || order[1] != focusAgents || order[2] != focusInput {
+	if len(order) != 3 || order[0] != focusPermission || order[1] != focusBackground || order[2] != focusInput {
 		t.Fatalf("order %v", order)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → permission
@@ -680,10 +681,10 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("permission should expand when focused: focus=%v\n%s", m.focus, stripANSI(m.promptView(100)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // permission → agents
-	if m.focus != focusAgents {
+	if m.focus != focusBackground {
 		t.Fatalf("focus %v", m.focus)
 	}
-	av = stripANSI(m.agentsView(100))
+	av = stripANSI(m.backgroundView(100))
 	if strings.Count(av, "\n") != 2 || !strings.Contains(av, "▶") {
 		t.Fatalf("expanded agents:\n%s", av)
 	}
@@ -694,8 +695,8 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	}
 	// now the selected agent has no children: the agents section leaves the cycle
 	for _, f := range m.focusOrder() {
-		if f == focusAgents {
-			t.Fatal("agents section should not be in the order without live children")
+		if f == focusBackground {
+			t.Fatal("background section should not be in the order without live children or jobs")
 		}
 	}
 }
