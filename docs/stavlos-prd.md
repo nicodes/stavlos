@@ -324,7 +324,7 @@ Stavlos serves two providers, both through the user's own subscription rather th
 
 | Provider | Sign-in | Wire protocol |
 |---|---|---|
-| `openai` (ChatGPT Plus/Pro) | Codex device-code login at `auth.openai.com` | OpenAI Responses API at the Codex backend (`chatgpt.com/backend-api/codex/responses`), bearer token plus account-id header |
+| `openai` (ChatGPT Plus/Pro) | Codex sign-in at `auth.openai.com`: browser (PKCE, callback on `localhost:1455`) by default, or headless device code (needs "Device code authorization for Codex" enabled in ChatGPT's Security settings) | OpenAI Responses API at the Codex backend (`chatgpt.com/backend-api/codex/responses`), bearer token plus account-id header |
 | `xai` (SuperGrok) | Grok CLI device-code login at `auth.x.ai` (RFC 8628) | Chat Completions at `api.x.ai/v1` with a bearer token |
 
 Both use the official CLIs' public client ids, the same arrangement opencode uses. An OpenAI-compatible Chat Completions adapter and an Anthropic Messages adapter exist in-tree for future providers and plugins but are not offered in the picker. `Model` is an interface; exotic providers arrive as `go-plugin` binaries (§11).
@@ -346,7 +346,7 @@ The `provider` prefix is looked up in the provider map (§11.4). An unknown pref
 
 ### 8.4 Credentials
 
-Credentials are subscription logins, stored in `<data dir>/auth.json` (mode 0600) as `{"openai": {"type": "oauth", "access": …, "refresh": …, "expires": …, "account_id": …, "email": …}}`. The TUI's `/provider` (and `stavlos auth login`) offers ChatGPT and Grok; picking one starts a device-code flow: the daemon shows a URL and a short code, the user completes the sign-in in a browser on any device, and the daemon polls until the tokens arrive. Access tokens are refreshed on demand, single-flight per provider, and the rotated pair is persisted. `/models` lists what each subscription serves (for ChatGPT, the models the Codex backend accepts) at zero per-token cost, since the subscription is the billing unit; token counts are still recorded.
+Credentials are subscription logins, stored in `<data dir>/auth.json` (mode 0600) as `{"openai": {"type": "oauth", "access": …, "refresh": …, "expires": …, "account_id": …, "email": …}}`. The TUI's `/provider` (and `stavlos auth login`) offers ChatGPT and Grok. ChatGPT then asks for a login method, as opencode does: **browser** (default; the daemon listens on `localhost:1455`, opens the authorize URL with PKCE, and exchanges the code when OpenAI redirects back) or **headless** (a URL plus a short code to enter on any device; polled). Grok has only the device-code method. Access tokens are refreshed on demand, single-flight per provider, and the rotated pair is persisted. `/models` lists what each subscription serves (for ChatGPT, the models the Codex backend accepts) at zero per-token cost, since the subscription is the billing unit; token counts are still recorded.
 
 A session always starts, model or no model: the TUI opens, and a turn with no model, or a signed-out provider, ends with an error naming `/models` and `/provider`. Spawning a child does require a resolvable model. The first model picked in a session with none becomes the global default. `stavlos auth list` and `stavlos auth logout` round it out. Environment variables and API keys are not consulted.
 

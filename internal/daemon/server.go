@@ -346,11 +346,11 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		return d.ProviderList(), nil
 
 	case protocol.MProviderLoginStart:
-		var p protocol.ProviderRef
+		var p protocol.LoginStartParams
 		if e := decode(&p); e != nil {
 			return nil, e
 		}
-		r, err := d.LoginStart(ctx, p.Provider)
+		r, err := d.LoginStart(ctx, p.Provider, p.Method)
 		if err != nil {
 			return nil, perr(protocol.ErrInvalidParams, err)
 		}
@@ -516,8 +516,12 @@ func (d *Daemon) ProviderList() protocol.ProviderListResult {
 }
 
 func providerInfo(s registry.Status) protocol.ProviderInfo {
-	return protocol.ProviderInfo{ID: s.ID, Name: s.Name, Connected: s.Connected, Kind: string(s.Kind), Priority: s.Priority,
+	info := protocol.ProviderInfo{ID: s.ID, Name: s.Name, Connected: s.Connected, Kind: string(s.Kind), Priority: s.Priority,
 		Models: s.Models, Label: s.Label, Account: s.Account}
+	for _, m := range s.Methods {
+		info.Methods = append(info.Methods, protocol.LoginMethod{ID: m.ID, Label: m.Label})
+	}
+	return info
 }
 
 var _ = log.Printf

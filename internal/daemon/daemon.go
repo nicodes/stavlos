@@ -462,12 +462,12 @@ type pendingLogin struct {
 }
 
 // LoginStart begins a device-code login and returns what to show the user.
-func (d *Daemon) LoginStart(ctx context.Context, provider string) (protocol.LoginStartResult, error) {
+func (d *Daemon) LoginStart(ctx context.Context, provider, method string) (protocol.LoginStartResult, error) {
 	f, err := d.Registry.Flow(provider)
 	if err != nil {
 		return protocol.LoginStartResult{}, err
 	}
-	p, err := f.Start(ctx)
+	p, err := f.Start(context.Background(), method) // outlives the request; Wait owns cancellation
 	if err != nil {
 		return protocol.LoginStartResult{}, err
 	}
@@ -480,7 +480,7 @@ func (d *Daemon) LoginStart(ctx context.Context, provider string) (protocol.Logi
 	}
 	d.logins[id] = &pendingLogin{provider: provider, pending: p, started: time.Now()}
 	d.loginMu.Unlock()
-	return protocol.LoginStartResult{ID: id, Provider: provider, URL: p.URL, Code: p.Code, Instructions: p.Instructions, ExpiresIn: int(p.ExpiresIn.Seconds())}, nil
+	return protocol.LoginStartResult{ID: id, Provider: provider, Method: p.Method, URL: p.URL, Code: p.Code, Instructions: p.Instructions, ExpiresIn: int(p.ExpiresIn.Seconds())}, nil
 }
 
 // LoginWait polls until the login completes, then stores the tokens.

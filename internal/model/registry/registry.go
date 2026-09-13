@@ -44,6 +44,7 @@ type Status struct {
 	Account   string // email or account id
 	Priority  int
 	Models    int
+	Methods   []oauth.Method
 }
 
 // refreshSkew: refresh an access token this long before it expires.
@@ -160,6 +161,7 @@ func (r *Registry) Status(name string) (Status, bool) {
 		st := Status{ID: s.id, Name: s.name, Kind: KindSubscription, Priority: s.priority, Models: len(r.Models(s.id, true))}
 		if f, ok := r.flows[s.id]; ok {
 			st.Label = f.Label()
+			st.Methods = f.Methods()
 		}
 		if r.store != nil {
 			if c, ok := r.store.Get(s.id); ok && c.Type == "oauth" && c.Refresh != "" {

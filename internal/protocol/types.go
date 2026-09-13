@@ -304,18 +304,31 @@ type PresetsResult struct {
 
 // ProviderInfo describes one provider known to the daemon (PRD §8).
 type ProviderInfo struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Connected bool     `json:"connected"`
-	Source    string   `json:"source,omitempty"`  // "auth.json" | "env" | "local"
-	Via       string   `json:"via,omitempty"`     // file path or env var name
-	Env       []string `json:"env,omitempty"`     // env vars the provider reads
-	Hint      string   `json:"hint,omitempty"`    // where to get a key
-	Kind      string   `json:"kind"`              // "anthropic" | "openai-compatible" | "local" | "unsupported"
-	Priority  int      `json:"priority"`          // lower sorts first
-	Models    int      `json:"models"`            // catalog model count
-	Label     string   `json:"label,omitempty"`   // login method label, e.g. "ChatGPT Plus/Pro subscription"
-	Account   string   `json:"account,omitempty"` // email or account id once connected
+	ID        string        `json:"id"`
+	Name      string        `json:"name"`
+	Connected bool          `json:"connected"`
+	Source    string        `json:"source,omitempty"`  // "auth.json" | "env" | "local"
+	Via       string        `json:"via,omitempty"`     // file path or env var name
+	Env       []string      `json:"env,omitempty"`     // env vars the provider reads
+	Hint      string        `json:"hint,omitempty"`    // where to get a key
+	Kind      string        `json:"kind"`              // "anthropic" | "openai-compatible" | "local" | "unsupported"
+	Priority  int           `json:"priority"`          // lower sorts first
+	Models    int           `json:"models"`            // catalog model count
+	Label     string        `json:"label,omitempty"`   // subscription label, e.g. "ChatGPT Plus/Pro subscription"
+	Account   string        `json:"account,omitempty"` // email or account id once connected
+	Methods   []LoginMethod `json:"methods,omitempty"` // sign-in methods, default first
+}
+
+// LoginMethod is one way to sign in to a provider.
+type LoginMethod struct {
+	ID    string `json:"id"`    // "browser" | "device"
+	Label string `json:"label"` // e.g. "ChatGPT Plus/Pro (browser)"
+}
+
+type LoginStartParams struct {
+	V        int    `json:"v"`
+	Provider string `json:"provider"`
+	Method   string `json:"method,omitempty"` // "" = the provider's default
 }
 type ProviderListParams struct {
 	V int `json:"v"`
@@ -331,6 +344,7 @@ type ProviderListResult struct {
 type LoginStartResult struct {
 	ID           string `json:"id"`
 	Provider     string `json:"provider"`
+	Method       string `json:"method"` // "browser": open URL, no code; "device": URL + code
 	URL          string `json:"url"`
 	Code         string `json:"code"`
 	Instructions string `json:"instructions"`

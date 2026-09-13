@@ -37,7 +37,10 @@ type fakeFlow struct {
 
 func (f *fakeFlow) Provider() string { return f.provider }
 func (f *fakeFlow) Label() string    { return "fake" }
-func (f *fakeFlow) Start(context.Context) (*oauth.Pending, error) {
+func (f *fakeFlow) Methods() []oauth.Method {
+	return []oauth.Method{{ID: oauth.MethodDevice, Label: "fake device"}}
+}
+func (f *fakeFlow) Start(context.Context, string) (*oauth.Pending, error) {
 	return &oauth.Pending{Provider: f.provider, URL: "https://x/dev", Code: "AB-CD"}, nil
 }
 func (f *fakeFlow) Wait(context.Context, *oauth.Pending) (oauth.Tokens, error) {
@@ -92,7 +95,7 @@ func TestLoginRefreshAndResolve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, _ := f.Start(context.Background())
+	p, _ := f.Start(context.Background(), "")
 	tok, _ := f.Wait(context.Background(), p)
 	if err := r.SaveLogin("openai", tok); err != nil {
 		t.Fatal(err)

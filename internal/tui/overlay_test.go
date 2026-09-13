@@ -256,3 +256,21 @@ func TestCompositeKeepsWidth(t *testing.T) {
 		t.Errorf("box not centered: %q", lines[5])
 	}
 }
+
+func TestLoginOverlayBrowserMode(t *testing.T) {
+	o := newOverlay(ovProviders, overlayLogin, "", "")
+	o.switchLogin("ChatGPT")
+	o.setLogin("https://auth.example/oauth/authorize?x=1", "", "Complete the sign-in in your browser.")
+	if !o.login.browser {
+		t.Fatal("browser mode not detected")
+	}
+	out := strings.Join(o.loginLines(60, "⠋"), "\n")
+	if !strings.Contains(out, "browser should open") || !strings.Contains(out, "auth.example") || strings.Contains(out, "enter the code") {
+		t.Fatalf("%s", out)
+	}
+	o.setLogin("https://x/dev", "AB-CD", "")
+	out = strings.Join(o.loginLines(60, "⠋"), "\n")
+	if !strings.Contains(out, "enter the code") || !strings.Contains(out, "A B - C D") {
+		t.Fatalf("%s", out)
+	}
+}

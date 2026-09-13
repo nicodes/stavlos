@@ -26,7 +26,15 @@ type Grok struct {
 func (g *Grok) Provider() string { return "xai" }
 func (g *Grok) Label() string    { return "SuperGrok subscription" }
 
-func (g *Grok) Start(ctx context.Context) (*Pending, error) {
+// Methods: xAI's auth server offers the Grok CLI only the device grant.
+func (g *Grok) Methods() []Method {
+	return []Method{{MethodDevice, "SuperGrok subscription (device code)"}}
+}
+
+func (g *Grok) Start(ctx context.Context, method string) (*Pending, error) {
+	if method != "" && method != MethodDevice {
+		return nil, fmt.Errorf("grok: unsupported login method %q", method)
+	}
 	resp, err := postForm(ctx, g.DeviceURL, url.Values{"client_id": {grokClientID}, "scope": {grokScope}, "referrer": {"stavlos"}})
 	if err != nil {
 		return nil, err
@@ -62,7 +70,7 @@ func (g *Grok) Start(ctx context.Context) (*Pending, error) {
 		iv = time.Duration(d.Interval) * time.Second
 	}
 	return &Pending{
-		Provider: "xai", URL: u, Code: fmtCode(d.UserCode),
+		Provider: "xai", Method: MethodDevice, URL: u, Code: fmtCode(d.UserCode),
 		Instructions: "Sign in with the X account that has your SuperGrok subscription.",
 		ExpiresIn:    exp, interval: iv, deviceCode: d.DeviceCode,
 	}, nil

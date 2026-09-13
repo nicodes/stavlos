@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -70,7 +73,7 @@ func TestChatGPTDeviceFlow(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	f := &ChatGPT{Issuer: srv.URL}
-	p, err := f.Start(context.Background())
+	p, err := f.Start(context.Background(), MethodDevice)
 	if err != nil || p.Code != "ABCD-EFGH" || !strings.HasSuffix(p.URL, "/codex/device") {
 		t.Fatalf("%+v %v", p, err)
 	}
@@ -121,7 +124,7 @@ func TestGrokDeviceFlow(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	g := &Grok{DeviceURL: srv.URL + "/device/code", TokenURL: srv.URL + "/token"}
-	p, err := g.Start(context.Background())
+	p, err := g.Start(context.Background(), "")
 	if err != nil || p.Code != "WXYZ" || p.URL != "https://x/dev?c=wxyz" {
 		t.Fatalf("%+v %v", p, err)
 	}
@@ -145,5 +148,104 @@ func TestGrokDeviceFlow(t *testing.T) {
 	p.interval = 5 * time.Second
 	if _, err := g.Wait(ctx, p); err == nil {
 		t.Fatal("expected ctx error")
+	}
+}
+
+func TestChatGPTBrowserFlow(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/oauth/token", func(w http.ResponseWriter, r *http.Request) {
+		r.ParseForm()
+		if r.Form.Get("grant_type") != "authorization_code" || r.Form.Get("code") != "c0de" || r.Form.Get("code_verifier") == "" || !strings.Contains(r.Form.Get("redirect_uri"), "/auth/callback") {
+			t.Errorf("bad exchange %v", r.Form)
+		}
+		id := jwt(map[string]any{"email": "b@x.y", "chatgpt_account_id": "acct_b"})
+		w.Write([]byte(`{"access_token":"accB","refresh_token":"refB","id_token":"` + id + `","expires_in":10}`))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	f := &ChatGPT{Issuer: srv.URL, Port: 18455}
+	if ms := f.Methods(); len(ms) != 2 || ms[0].ID != MethodBrowser {
+		t.Fatalf("%+v", ms)
+	}
+	p, err := f.Start(context.Background(), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Method != MethodBrowser || p.Code != "" || !strings.Contains(p.URL, "/oauth/authorize?") || !strings.Contains(p.URL, "code_challenge_method=S256") || !strings.Contains(p.URL, "originator=stavlos") {
+		t.Fatalf("%+v", p)
+	}
+	// port is held while pending
+	if _, err := f.Start(context.Background(), ""); err == nil || !strings.Contains(err.Error(), "18455") {
+		t.Fatalf("second start: %v", err)
+	}
+	u, _ := url.Parse(p.URL)
+	state := u.Query().Get("state")
+	done := make(chan Tokens, 1)
+	errc := make(chan error, 1)
+	go func() {
+		tok, err := f.Wait(context.Background(), p)
+		if err != nil {
+			errc <- err
+			return
+		}
+		done <- tok
+	}()
+	time.Sleep(50 * time.Millisecond)
+	// wrong state is rejected, then the real callback lands
+	resp, err := http.Get("http://127.0.0.1:18455/auth/callback?code=x&state=bad")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("bad state status %d", resp.StatusCode)
+	}
+	select {
+	case err := <-errc:
+		if !strings.Contains(err.Error(), "state mismatch") {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no error after bad state")
+	}
+	// start over and succeed
+	p, err = f.Start(context.Background(), MethodBrowser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ = url.Parse(p.URL)
+	state = u.Query().Get("state")
+	go func() {
+		tok, err := f.Wait(context.Background(), p)
+		if err != nil {
+			errc <- err
+			return
+		}
+		done <- tok
+	}()
+	time.Sleep(50 * time.Millisecond)
+	resp, err = http.Get("http://127.0.0.1:18455/auth/callback?code=c0de&state=" + url.QueryEscape(state))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || !strings.Contains(string(body), "Signed in") {
+		t.Fatalf("callback %d %s", resp.StatusCode, body)
+	}
+	select {
+	case tok := <-done:
+		if tok.Access != "accB" || tok.AccountID != "acct_b" || tok.Email != "b@x.y" {
+			t.Fatalf("%+v", tok)
+		}
+	case err := <-errc:
+		t.Fatal(err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timeout")
+	}
+	// server released the port
+	time.Sleep(50 * time.Millisecond)
+	if _, err := net.Dial("tcp", "127.0.0.1:18455"); err == nil {
+		t.Fatal("port still open")
 	}
 }
