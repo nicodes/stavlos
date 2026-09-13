@@ -673,3 +673,162 @@ func TestSpawnArmsWakeByDefault(t *testing.T) {
 		t.Fatalf("parent was not woken: %+v", te)
 	}
 }
+
+func TestBackgroundCommandMonitorWakes(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			return call("c1", "bash", `{"command":"echo one; sleep 0.3; echo two; exit 3","background":true}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !strings.Contains(last.Content, "monitor m") {
+				t.Errorf("bash background result: %+v", last)
+			}
+			return text("started, carrying on")
+		},
+		// woken by the monitor
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks
+			txt := last[len(last)-1].Text
+			if !strings.Contains(txt, "exited 3") || !strings.Contains(txt, "one\ntwo") {
+				t.Errorf("monitor wake text: %q", txt)
+			}
+			return text("noted")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
+	e := h.waitFor(event.MonitorStarted, root)
+	var ms event.MonitorStartedPayload
+	_ = e.Decode(&ms)
+	if ms.Kind != "command" {
+		t.Fatalf("%+v", ms)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Kind != "command" || !agents[0].Monitors[0].Monitored {
+		t.Fatalf("monitors in tree: %+v", agents[0].Monitors)
+	}
+	e = h.waitFor(event.MonitorFired, root)
+	var mf event.MonitorFiredPayload
+	_ = e.Decode(&mf)
+	if mf.ExitCode != 3 || !mf.IsError || !strings.Contains(mf.Output, "two") {
+		t.Fatalf("%+v", mf)
+	}
+	var te event.TurnEndedPayload
+	for te.Turn != 2 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	if te.Reason != "end_turn" {
+		t.Fatalf("%+v", te)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents[0].Monitors) != 0 {
+		t.Fatalf("monitor should be gone: %+v", agents[0].Monitors)
+	}
+}
+
+func TestWatchAndTimerMonitors(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			return model.Response{Blocks: []model.Block{
+				{Type: model.BlockToolUse, ID: "c1", Name: "watch", Input: json.RawMessage(`{"path":".","glob":"*.txt"}`)},
+				{Type: model.BlockToolUse, ID: "c2", Name: "timer", Input: json.RawMessage(`{"seconds":1,"note":"check again"}`)},
+			}, StopReason: model.StopToolUse}
+		},
+		func(model.Request) model.Response { return text("waiting") },
+		func(req model.Request) model.Response {
+			// woken once or twice depending on timing; both texts must show up across wakes
+			return text("ok")
+		},
+		func(req model.Request) model.Response { return text("ok") },
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "watch and wait")
+	h.waitFor(event.MonitorStarted, root)
+	h.waitFor(event.MonitorStarted, root)
+	h.waitFor(event.TurnEnded, root)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents[0].Monitors) != 2 {
+		t.Fatalf("%+v", agents[0].Monitors)
+	}
+	// change a matching file → the watch fires
+	time.Sleep(200 * time.Millisecond)
+	os.WriteFile(filepath.Join(work, "note.txt"), []byte("hi"), 0o644)
+	kinds := map[string]event.MonitorFiredPayload{}
+	for len(kinds) < 2 {
+		e := h.waitFor(event.MonitorFired, root)
+		var p event.MonitorFiredPayload
+		_ = e.Decode(&p)
+		kinds[p.Kind] = p
+	}
+	if !strings.Contains(kinds["watch"].Output, "note.txt") || !strings.Contains(kinds["timer"].Summary, "check again") {
+		t.Fatalf("%+v", kinds)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		agents, _ = h.c.Tree(ctx, s.ID)
+		if len(agents[0].Monitors) == 0 && agents[0].State == "idle" && agents[0].Turn >= 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("monitors not cleared / parent not woken: %+v", agents[0])
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+func TestUnmonitorStopKillsCommand(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			return call("c1", "bash", `{"command":"echo start; sleep 30","background":true}`)
+		},
+		func(model.Request) model.Response { return call("c2", "unmonitor", `{"stop":true}`) },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !strings.Contains(last.Content, "stopped m") {
+				t.Errorf("unmonitor stop result: %+v", last)
+			}
+			return text("killed it")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	start := time.Now()
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	h.waitFor(event.MonitorStopped, root)
+	h.waitFor(event.TurnEnded, root)
+	if time.Since(start) > 5*time.Second {
+		t.Fatal("stop did not kill the command promptly")
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents[0].Monitors) != 0 {
+		t.Fatalf("%+v", agents[0].Monitors)
+	}
+}

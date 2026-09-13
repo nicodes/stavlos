@@ -22,8 +22,11 @@ const (
 	AgentKilled       Type = "agent.killed"        // AgentRefPayload
 	AgentModelChanged Type = "agent.model_changed" // ModelChangedPayload
 
-	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: parent asked to be woken by these children
+	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: wake armed for these ids (children or monitors)
 	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
+	MonitorStarted  Type = "monitor.started"  // MonitorStartedPayload: a general monitor (command, watch, timer) began
+	MonitorFired    Type = "monitor.fired"    // MonitorFiredPayload: it completed / detected a change / elapsed
+	MonitorStopped  Type = "monitor.stopped"  // MonitorRefPayload: stopped before firing (unmonitor stop, kill, restart)
 
 	PromptQueued  Type = "prompt.queued"  // TextPayload
 	SteerReceived Type = "steer.received" // TextPayload
@@ -113,6 +116,33 @@ type TextPayload struct {
 // MonitorPayload lists child ids whose finish wakes (or no longer wakes) the agent.
 type MonitorPayload struct {
 	IDs []string `json:"ids"`
+}
+
+// MonitorStartedPayload describes a general monitor. Kind: "command" |
+// "watch" | "timer". Spec is kind-specific: the command line, the watched
+// path (plus glob), or the duration in seconds.
+type MonitorStartedPayload struct {
+	ID      string  `json:"id"`
+	Kind    string  `json:"kind"`
+	Label   string  `json:"label"`
+	Spec    string  `json:"spec"`
+	Glob    string  `json:"glob,omitempty"`
+	Seconds float64 `json:"seconds,omitempty"`
+}
+
+type MonitorFiredPayload struct {
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Label    string `json:"label"`
+	Summary  string `json:"summary"`          // one line
+	Output   string `json:"output,omitempty"` // command output / changed paths
+	ExitCode int    `json:"exit_code,omitempty"`
+	IsError  bool   `json:"is_error,omitempty"`
+}
+
+type MonitorRefPayload struct {
+	ID     string `json:"id"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type TurnPayload struct {

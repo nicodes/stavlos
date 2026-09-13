@@ -611,3 +611,145 @@ func TestFoldingToOneLine(t *testing.T) {
 		t.Fatalf("details:\n%s", all)
 	}
 }
+
+func TestMonitorEventsGroupAndFold(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "run the tests in the background"}))
+	tr.Apply(mk(2, event.MonitorStarted, event.MonitorStartedPayload{ID: "m1", Kind: "command", Label: "go test", Spec: "go test ./..."}))
+	tr.Apply(mk(3, event.MonitorStarted, event.MonitorStartedPayload{ID: "m2", Kind: "watch", Label: "src", Spec: "./src", Glob: "*.go"}))
+	tr.Apply(mk(4, event.MonitorStarted, event.MonitorStartedPayload{ID: "m3", Kind: "timer", Label: "cooldown", Spec: "300", Seconds: 300}))
+	tr.Apply(mk(5, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "waiting"}}}))
+	tr.Apply(mk(6, event.MonitorFired, event.MonitorFiredPayload{ID: "m1", Kind: "command", Label: "go test", Summary: "go test exited 0", Output: "ok  a\nok  b\nok  c\nok  d\nok  e"}))
+	tr.Apply(mk(7, event.MonitorStopped, event.MonitorRefPayload{ID: "m2", Reason: "unmonitor"}))
+	tr.Apply(mk(8, event.MonitorFired, event.MonitorFiredPayload{ID: "m3", Kind: "timer", Label: "cooldown", Summary: "timer elapsed", IsError: true}))
+	tr.Apply(mk(9, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "monitor_fired", Text: "Monitor \"go test\" (command, m1): go test exited 0\n\nok  a\nok  b"}))
+	tr.Apply(mk(10, event.AssistantMessage, event.AssistantMessagePayload{Turn: 2, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "all green"}}}))
+
+	lines := tr.All()
+	find := func(text string) (int, Line) {
+		for i, l := range lines {
+			if strings.Contains(l.Text, text) {
+				return i, l
+			}
+		}
+		t.Fatalf("no line containing %q in:\n%s", text, strings.Join(renderLines(lines), "\n"))
+		return -1, Line{}
+	}
+	// started notices
+	_, cmdStart := find("⚙ background: go test")
+	_, watchStart := find("◉ watch: src")
+	_, timerStart := find("◔ timer: cooldown")
+	for _, l := range []Line{cmdStart, watchStart, timerStart} {
+		if l.Kind != LineDim || l.Running {
+			t.Fatalf("started notice should be a static dim line: %+v", l)
+		}
+	}
+	// fired output joins the started item and sits right under it, collapsed
+	firedAt, fired := find("⚙ go test exited 0")
+	if fired.Item != cmdStart.Item || fired.Kind != LineDim {
+		t.Fatalf("fired line item %d != started item %d (%+v)", fired.Item, cmdStart.Item, fired)
+	}
+	first, last := tr.ItemRange(cmdStart.Item)
+	for i := first; i <= last; i++ {
+		if lines[i].Item != cmdStart.Item {
+			t.Fatalf("started item not contiguous at %d: %+v", i, lines[i])
+		}
+	}
+	outAt, out := find("ok  a")
+	if out.Kind != LineToolOut || out.Item != cmdStart.Item || outAt != firedAt+1 {
+		t.Fatalf("output line: %+v at %d (fired at %d)", out, outAt, firedAt)
+	}
+	_, more := find("… +2 lines")
+	if more.Vis != VisCollapsed || more.Item != cmdStart.Item {
+		t.Fatalf("collapsed trailer: %+v", more)
+	}
+	// the assistant text between them stays its own item, after the group
+	_, waiting := find("waiting")
+	if waiting.Item == cmdStart.Item || waiting.Item < cmdStart.Item {
+		t.Fatalf("assistant item %d vs started item %d", waiting.Item, cmdStart.Item)
+	}
+	// stopped: glyph from the remembered kind, grouped with its start
+	_, stopped := find("◉ monitor stopped (unmonitor)")
+	if stopped.Item != watchStart.Item || stopped.Kind != LineDim {
+		t.Fatalf("stopped: %+v (watch item %d)", stopped, watchStart.Item)
+	}
+	// error outcome swaps the glyph for ✗
+	_, errFired := find("✗ timer elapsed")
+	if errFired.Item != timerStart.Item {
+		t.Fatalf("error fired: %+v (timer item %d)", errFired, timerStart.Item)
+	}
+	// the monitor_fired user message is a muted block labelled "monitor"
+	var label Line
+	for _, l := range lines {
+		if l.Kind == LineLabel && l.Text == "monitor" {
+			label = l
+		}
+	}
+	if label.Kind != LineLabel || label.Block != BlockChild {
+		t.Fatalf("monitor block label: %+v", label)
+	}
+	_, summary := find("Monitor \"go test\"")
+	if summary.Kind != LineText || summary.Block != BlockChild || summary.Item != label.Item || summary.Lead {
+		t.Fatalf("monitor block summary: %+v", summary)
+	}
+
+	// folding: every monitor item collapses to its started line (only tool
+	// lines carry a +N tag); the monitor_fired block folds to the summary line.
+	nonblank := func(out []string) []string {
+		var r []string
+		for _, l := range out {
+			if strings.TrimSpace(l) != "" {
+				r = append(r, l)
+			}
+		}
+		return r
+	}
+	plain := nonblank(renderWith(lines, RenderOpts{Width: 80}))
+	joined := strings.Join(plain, "\n")
+	for _, want := range []string{"run the tests", "waiting", "all green", "⚙ background: go test", "◉ watch: src", "◔ timer: cooldown", "Monitor \"go test\" (command, m1): go test exited 0"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("missing %q in\n%s", want, joined)
+		}
+	}
+	for _, leak := range []string{"⚙ go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
+		if strings.Contains(joined, leak) {
+			t.Fatalf("folded monitor item leaked %q:\n%s", leak, joined)
+		}
+	}
+	// the block label never becomes the folded line
+	for _, l := range plain {
+		if strings.TrimSpace(l) == "monitor" {
+			t.Fatalf("folded to the label line:\n%s", joined)
+		}
+	}
+	// cursor on the command monitor shows the fired line and collapsed output
+	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
+	for _, want := range []string{"⚙ go test exited 0", "ok  a", "ok  c", "… +2 lines"} {
+		if !strings.Contains(full, want) {
+			t.Fatalf("cursor on monitor lacks %q:\n%s", want, full)
+		}
+	}
+	if strings.Contains(full, "ok  d") || strings.Contains(full, "monitor stopped") {
+		t.Fatalf("cursor on monitor shows too much:\n%s", full)
+	}
+	// /details shows the whole output and the user block's output lines
+	all := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Details: true})), "\n")
+	for _, want := range []string{"ok  e", "monitor stopped (unmonitor)", "✗ timer elapsed", "ok  b"} {
+		if !strings.Contains(all, want) {
+			t.Fatalf("details lacks %q:\n%s", want, all)
+		}
+	}
+
+	// a fired event for an unknown monitor is its own item, not lost
+	tr2 := NewTranscript()
+	tr2.Apply(mk(1, event.MonitorFired, event.MonitorFiredPayload{ID: "zz", Kind: "watch", Summary: "3 files changed", Output: "a.go"}))
+	tr2.Apply(mk(2, event.MonitorStopped, event.MonitorRefPayload{ID: "yy", Reason: "kill"}))
+	got := renderLines(tr2.All())
+	assertSubsequence(t, got, []string{"   ◉ 3 files changed", "       a.go", "   ⚙ monitor stopped (kill)"})
+	if tr2.Items() != 2 {
+		t.Fatalf("items %d", tr2.Items())
+	}
+}

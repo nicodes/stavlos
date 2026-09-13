@@ -91,16 +91,18 @@ type streamSeg struct {
 type Transcript struct {
 	Lines []Line
 
-	calls      map[string]int // tool call id → index of its LineTool
-	prompts    map[string]int // prompt id → item of the tool call it gates
-	items      int            // committed items so far
+	calls      map[string]int    // tool call id → index of its LineTool
+	prompts    map[string]int    // prompt id → item of the tool call it gates
+	monitors   map[string]int    // monitor id → index of its "started" line
+	monKinds   map[string]string // monitor id → kind, for the glyph on later events
+	items      int               // committed items so far
 	streamTurn int
 	stream     []streamSeg
 }
 
 // NewTranscript returns an empty transcript.
 func NewTranscript() *Transcript {
-	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}}
+	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}, monitors: map[string]int{}, monKinds: map[string]string{}}
 }
 
 // Apply appends the rendering of ev. An assistant.message (or the end of a
@@ -135,6 +137,43 @@ func (t *Transcript) Apply(ev event.Event) {
 				t.insertIntoItem(item, nested(EventLines(ev)))
 				return
 			}
+		}
+	case event.MonitorStarted:
+		var p event.MonitorStartedPayload
+		if ev.Decode(&p) == nil && p.ID != "" {
+			t.monitors[p.ID] = len(t.Lines)
+			t.monKinds[p.ID] = p.Kind
+		}
+	case event.MonitorFired:
+		// The outcome joins the "started" notice's item, like tool output
+		// joins its call.
+		var p event.MonitorFiredPayload
+		if ev.Decode(&p) == nil {
+			if p.Kind == "" {
+				p.Kind = t.monKinds[p.ID]
+			}
+			lines := monitorFiredLines(p)
+			if i, ok := t.monitors[p.ID]; ok && i < len(t.Lines) {
+				delete(t.monitors, p.ID)
+				t.insertIntoItem(t.Lines[i].Item, lines)
+				return
+			}
+			delete(t.monitors, p.ID)
+			t.appendItem(item, lines)
+			return
+		}
+	case event.MonitorStopped:
+		var p event.MonitorRefPayload
+		if ev.Decode(&p) == nil {
+			lines := monitorStoppedLines(t.monKinds[p.ID], p.Reason)
+			if i, ok := t.monitors[p.ID]; ok && i < len(t.Lines) {
+				delete(t.monitors, p.ID)
+				t.insertIntoItem(t.Lines[i].Item, lines)
+				return
+			}
+			delete(t.monitors, p.ID)
+			t.appendItem(item, lines)
+			return
 		}
 	case event.ToolCallFinished:
 		var p event.ToolFinishedPayload
@@ -223,7 +262,8 @@ func (t *Transcript) openCallItem(name string) (int, bool) {
 }
 
 // insertIntoItem places lines immediately after the last line of item so
-// the item stays contiguous. Tracked call indices past the splice shift.
+// the item stays contiguous. Tracked call and monitor indices past the
+// splice shift.
 func (t *Transcript) insertIntoItem(item int, lines []Line) {
 	if len(lines) == 0 {
 		return
@@ -245,6 +285,11 @@ func (t *Transcript) insertIntoItem(item int, lines []Line) {
 	for id, idx := range t.calls {
 		if idx >= at {
 			t.calls[id] = idx + len(lines)
+		}
+	}
+	for id, idx := range t.monitors {
+		if idx >= at {
+			t.monitors[id] = idx + len(lines)
 		}
 	}
 }
@@ -452,6 +497,8 @@ func EventLines(ev event.Event) []Line {
 			return block(BlockSteer, "steer", p.Text)
 		case "child_finished":
 			return block(BlockChild, "child", p.Text)
+		case "monitor_fired":
+			return block(BlockChild, "monitor", p.Text)
 		default:
 			return block(BlockUser, p.Kind, p.Text)
 		}
@@ -551,6 +598,29 @@ func EventLines(ev event.Event) []Line {
 		}
 		return []Line{{Kind: LineDim, Text: "· model → " + p.Model}}
 
+	case event.MonitorStarted:
+		var p event.MonitorStartedPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return []Line{{Kind: LineDim, Text: monitorGlyph(p.Kind) + " " + monitorKindWord(p.Kind) + ": " + p.Label}}
+
+	case event.MonitorFired:
+		var p event.MonitorFiredPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return monitorFiredLines(p)
+
+	case event.MonitorStopped:
+		// Without the transcript's id → kind memory the glyph defaults to ⚙;
+		// Transcript.Apply looks it up.
+		var p event.MonitorRefPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return monitorStoppedLines("", p.Reason)
+
 	case event.Compacted:
 		var p event.CompactedPayload
 		if err := ev.Decode(&p); err != nil {
@@ -600,6 +670,39 @@ func EventLines(ev event.Event) []Line {
 
 func decodeErr(ev event.Event, err error) []Line {
 	return []Line{{Kind: LineError, Text: fmt.Sprintf("(bad %s payload: %v)", ev.Type, err)}}
+}
+
+// monitorKindWord is the word after the glyph in a monitor.started notice.
+func monitorKindWord(kind string) string {
+	switch kind {
+	case "watch", "timer":
+		return kind
+	}
+	return "background"
+}
+
+// monitorFiredLines renders "<glyph> <summary>" (✗ on error) followed by
+// the output collapsed like tool output.
+func monitorFiredLines(p event.MonitorFiredPayload) []Line {
+	glyph := monitorGlyph(p.Kind)
+	if p.IsError {
+		glyph = "✗"
+	}
+	summary := strings.TrimSpace(p.Summary)
+	if summary == "" {
+		summary = "monitor fired"
+	}
+	lines := []Line{{Kind: LineDim, Text: glyph + " " + summary}}
+	return append(lines, outputLines(strings.TrimRight(p.Output, "\n"))...)
+}
+
+// monitorStoppedLines renders "<glyph> monitor stopped (<reason>)".
+func monitorStoppedLines(kind, reason string) []Line {
+	text := monitorGlyph(kind) + " monitor stopped"
+	if reason = strings.TrimSpace(reason); reason != "" {
+		text += " (" + reason + ")"
+	}
+	return []Line{{Kind: LineDim, Text: text}}
 }
 
 // block renders text as a left-bordered block (blank line before and after)

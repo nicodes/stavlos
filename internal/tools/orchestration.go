@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/model"
 )
@@ -180,26 +181,134 @@ func (monitorTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 type unmonitorTool struct{}
 
 func (unmonitorTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "unmonitor", Description: "Stop the given children (all if omitted) from waking you when they finish. They keep running and their results stay in your mailbox for result/status or your next turn; you just will not be woken by them.",
-		Schema: schema(map[string]any{"ids": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Child ids (default: all)"}})}
+	return model.ToolDef{Name: "unmonitor", Description: "Stop the given children or monitors (all if omitted) from waking you. Children keep running and their results stay in your mailbox for result/status or your next turn. With stop=true a general monitor is ended instead: a background command is killed, a watch or timer cancelled.",
+		Schema: schema(map[string]any{
+			"ids":  map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Child or monitor ids (default: all)"},
+			"stop": prop("boolean", "Also stop the monitors themselves (kill commands, cancel watches/timers)"),
+		})}
 }
 func (unmonitorTool) PolicyArg(in json.RawMessage) string { return "" }
 func (unmonitorTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	if r := needOrch(env); r != nil {
-		return *r
+	var a struct {
+		IDs  []string `json:"ids"`
+		Stop bool     `json:"stop"`
 	}
-	var a struct{ IDs []string }
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
-	ids, err := env.Orch.Unmonitor(env.Agent, a.IDs)
+	var out []string
+	if a.Stop && env.Mon != nil {
+		ids := a.IDs
+		if len(ids) == 0 {
+			for _, m := range env.Mon.List() {
+				ids = append(ids, m.ID)
+			}
+		}
+		for _, id := range ids {
+			if env.Mon.Has(id) {
+				if err := env.Mon.Stop(id); err == nil {
+					out = append(out, "stopped "+id)
+				}
+			}
+		}
+	}
+	if env.Orch != nil {
+		ids, err := env.Orch.Unmonitor(env.Agent, a.IDs)
+		if err != nil {
+			return errf("%v", err)
+		}
+		if len(ids) > 0 {
+			out = append(out, "wake disarmed for: "+strings.Join(ids, ", "))
+		}
+	}
+	if len(out) == 0 {
+		return Result{Output: "nothing was armed or running for those ids"}
+	}
+	return Result{Output: strings.Join(out, "\n")}
+}
+
+// --- general monitors: watch / timer / monitors ---
+
+func needMon(env *Env) *Result {
+	if env.Mon == nil {
+		r := errf("monitors are not available to this agent")
+		return &r
+	}
+	return nil
+}
+
+type watchTool struct{}
+
+func (watchTool) Def() model.ToolDef {
+	return model.ToolDef{Name: "watch", Description: "Watch a file or directory and be woken once when something under it changes (added, modified, removed). Returns the monitor id immediately. Useful for waiting on another process or a person to change files. One-shot: call again to keep watching.",
+		Schema: schema(map[string]any{
+			"path": prop("string", "File or directory, absolute or relative to the working directory"),
+			"glob": prop("string", "Only files matching this glob (relative to path), e.g. **/*.go"),
+		}, "path")}
+}
+func (watchTool) PolicyArg(in json.RawMessage) string { return pathArg(in) }
+func (watchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
+	if r := needMon(env); r != nil {
+		return *r
+	}
+	var a struct{ Path, Glob string }
+	if err := decode(in, &a); err != nil {
+		return errf("bad input: %v", err)
+	}
+	id, err := env.Mon.StartWatch(a.Path, a.Glob)
 	if err != nil {
 		return errf("%v", err)
 	}
-	if len(ids) == 0 {
-		return Result{Output: "no wakes were armed"}
+	return Result{Output: fmt.Sprintf("watching as monitor %s; you will be woken on the first change", id)}
+}
+
+type timerTool struct{}
+
+func (timerTool) Def() model.ToolDef {
+	return model.ToolDef{Name: "timer", Description: "Be woken after a delay, with a note to yourself. Returns the monitor id immediately. Use it to re-check something later instead of polling.",
+		Schema: schema(map[string]any{
+			"seconds": prop("number", "Delay in seconds (max 86400)"),
+			"note":    prop("string", "What to do when it fires"),
+		}, "seconds")}
+}
+func (timerTool) PolicyArg(in json.RawMessage) string { return "" }
+func (timerTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
+	if r := needMon(env); r != nil {
+		return *r
 	}
-	return Result{Output: "wake disarmed for: " + strings.Join(ids, ", ")}
+	var a struct {
+		Seconds float64 `json:"seconds"`
+		Note    string  `json:"note"`
+	}
+	if err := decode(in, &a); err != nil {
+		return errf("bad input: %v", err)
+	}
+	if a.Seconds <= 0 || a.Seconds > 86400 {
+		return errf("seconds must be between 1 and 86400")
+	}
+	id, err := env.Mon.StartTimer(time.Duration(a.Seconds*float64(time.Second)), a.Note)
+	if err != nil {
+		return errf("%v", err)
+	}
+	return Result{Output: fmt.Sprintf("timer set as monitor %s", id)}
+}
+
+type monitorsTool struct{}
+
+func (monitorsTool) Def() model.ToolDef {
+	return model.ToolDef{Name: "monitors", Description: "List your running monitors (background commands, watches, timers) with their progress. Children are listed by status, not here.",
+		Schema: schema(map[string]any{})}
+}
+func (monitorsTool) PolicyArg(in json.RawMessage) string { return "" }
+func (monitorsTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
+	if r := needMon(env); r != nil {
+		return *r
+	}
+	ms := env.Mon.List()
+	if len(ms) == 0 {
+		return Result{Output: "no monitors running"}
+	}
+	return jsonOut(ms)
 }
 
 type resultTool struct{}

@@ -179,22 +179,23 @@ type SessionSetModelParams struct {
 }
 
 type AgentInfo struct {
-	ID        string  `json:"id"`
-	Session   string  `json:"session"`
-	Parent    string  `json:"parent,omitempty"`
-	Archetype string  `json:"archetype"`
-	Label     string  `json:"label"`
-	Model     string  `json:"model"`
-	Depth     int     `json:"depth"`
-	State     string  `json:"state"` // idle | running | waiting | blocked | finished | killed
-	Turn      int     `json:"turn"`
-	Queued    int     `json:"queued"` // prompts waiting
-	CostUSD   float64 `json:"cost_usd"`
-	Tokens    int     `json:"tokens"`               // input+output total
-	Summary   string  `json:"summary,omitempty"`    // finish summary
-	Status    string  `json:"status,omitempty"`     // finish status
-	LastError string  `json:"last_error,omitempty"` // error that ended the most recent turn, if any
-	Monitored bool    `json:"monitored"`            // parent armed a wake for this child
+	ID        string        `json:"id"`
+	Session   string        `json:"session"`
+	Parent    string        `json:"parent,omitempty"`
+	Archetype string        `json:"archetype"`
+	Label     string        `json:"label"`
+	Model     string        `json:"model"`
+	Depth     int           `json:"depth"`
+	State     string        `json:"state"` // idle | running | waiting | blocked | finished | killed
+	Turn      int           `json:"turn"`
+	Queued    int           `json:"queued"` // prompts waiting
+	CostUSD   float64       `json:"cost_usd"`
+	Tokens    int           `json:"tokens"`               // input+output total
+	Summary   string        `json:"summary,omitempty"`    // finish summary
+	Status    string        `json:"status,omitempty"`     // finish status
+	LastError string        `json:"last_error,omitempty"` // error that ended the most recent turn, if any
+	Monitors  []MonitorInfo `json:"monitors,omitempty"`   // this agent's general monitors (not children)
+	Monitored bool          `json:"monitored"`            // parent armed a wake for this child
 }
 type AgentTreeParams struct {
 	V       int    `json:"v"`
@@ -401,4 +402,18 @@ type StreamNotification struct {
 type PromptNotification struct {
 	Action string     `json:"action"`
 	Prompt PromptInfo `json:"prompt"`
+}
+
+// MonitorInfo is a general monitor owned by an agent: a background command,
+// a file watch, or a timer. Children are not monitors; they are agents.
+type MonitorInfo struct {
+	ID        string `json:"id"`
+	Agent     string `json:"agent"`
+	Kind      string `json:"kind"`  // command | watch | timer
+	Label     string `json:"label"` // human-facing
+	Spec      string `json:"spec"`  // command line / path / duration
+	State     string `json:"state"` // running | fired | stopped | lost
+	Started   string `json:"started"`
+	Progress  string `json:"progress,omitempty"` // e.g. "42 lines", "3m left"
+	Monitored bool   `json:"monitored"`          // wake armed
 }

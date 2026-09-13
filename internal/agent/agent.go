@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 
 	"github.com/nicodes/stavlos/internal/config"
@@ -53,9 +54,11 @@ type Agent struct {
 	finished   *tools.ChildResult
 	finishFlag bool            // set by the finish tool during a turn
 	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
-	armed      map[string]bool // child ids whose finish wakes this agent (monitor)
-	wakeFlag   bool            // an armed child finished: start a turn even with no prompt
-	lastError  string          // error that ended the most recent turn; cleared when a turn starts
+	armed      map[string]bool // ids (children, monitors) whose completion wakes this agent
+	monitors   map[string]*Monitor
+	monDone    []event.MonitorFiredPayload // fired monitors not yet delivered
+	wakeFlag   bool                        // an armed child finished: start a turn even with no prompt
+	lastError  string                      // error that ended the most recent turn; cleared when a turn starts
 	children   []string
 	results    map[string]tools.ChildResult // finished children not yet consumed by wait/result
 	done       chan struct{}                // closed on finish or kill
@@ -70,7 +73,7 @@ func newAgent(s *Session, id, parent, archetype, label, modelID string, depth in
 	return &Agent{
 		ID: id, Parent: parent, Archetype: archetype, Label: label, Depth: depth,
 		s: s, preset: preset, modelID: modelID, state: StateIdle,
-		wake: make(chan struct{}, 1), results: map[string]tools.ChildResult{}, armed: map[string]bool{}, done: make(chan struct{}),
+		wake: make(chan struct{}, 1), results: map[string]tools.ChildResult{}, armed: map[string]bool{}, monitors: map[string]*Monitor{}, done: make(chan struct{}),
 	}
 }
 
@@ -142,6 +145,10 @@ func (a *Agent) takeInputs() []event.UserMessagePayload {
 		in = append(in, event.UserMessagePayload{Kind: "child_finished", Text: childText(r)})
 	}
 	a.childDone = nil
+	for _, r := range a.monDone {
+		in = append(in, event.UserMessagePayload{Kind: "monitor_fired", Text: monitorText(r)})
+	}
+	a.monDone = nil
 	return in
 }
 
@@ -202,7 +209,7 @@ func (a *Agent) killNow() {
 	}
 	a.state = StateKilled
 	a.mu.Unlock()
-	a.kill()
+	a.kill() // cancels monitors too (their ctx derives from a.ctx)
 	a.closeDone()
 	_, _ = a.s.host.Append(context.Background(), event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentKilled,
 		Payload: event.MustPayload(event.AgentRefPayload{ID: a.ID})})
@@ -255,6 +262,14 @@ func (a *Agent) childGone(id string) {
 	if wake {
 		a.signal()
 	}
+}
+
+// hasMonitor reports whether id is one of this agent's running monitors.
+func (a *Agent) hasMonitor(id string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	_, ok := a.monitors[id]
+	return ok
 }
 
 // IsArmed reports whether this agent will be woken when child id finishes.
@@ -337,7 +352,17 @@ func (a *Agent) Info() protocol.AgentInfo {
 		info.Status = a.finished.Status
 	}
 	info.LastError = a.lastError
+	mons := make([]*Monitor, 0, len(a.monitors))
+	for _, m := range a.monitors {
+		mons = append(mons, m)
+	}
 	a.mu.Unlock()
+	sort.Slice(mons, func(i, j int) bool { return mons[i].Started.Before(mons[j].Started) })
+	for _, m := range mons {
+		mi := m.Info(a.IsArmed(m.ID))
+		mi.Agent = a.ID
+		info.Monitors = append(info.Monitors, mi)
+	}
 	if p, ok := a.s.Agent(a.Parent); ok {
 		info.Monitored = p.IsArmed(a.ID)
 	}
