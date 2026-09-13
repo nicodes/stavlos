@@ -237,8 +237,8 @@ func TestMonitorRows(t *testing.T) {
 	for i, r := range rows {
 		plain[i] = stripANSI(r)
 	}
-	// command: gear glyph, bold label, spinner, kind, progress, elapsed, wakes parent
-	if !strings.HasPrefix(plain[0], "  ⚙") || !strings.Contains(plain[0], "go test ⠋") {
+	// command: clock glyph, bold label, spinner, kind, progress, elapsed, wakes parent
+	if !strings.HasPrefix(plain[0], "  ◷") || !strings.Contains(plain[0], "go test ⠋") {
 		t.Fatalf("command row: %q", plain[0])
 	}
 	for _, want := range []string{"command", "42 lines", "1m15s", "wakes parent"} {
@@ -247,11 +247,11 @@ func TestMonitorRows(t *testing.T) {
 		}
 	}
 	// watch: no spinner, no progress, no wake tag
-	if !strings.HasPrefix(plain[1], "  ⚙  src changes") || strings.Contains(plain[1], "⠋") || strings.Contains(plain[1], "wakes parent") || !strings.Contains(plain[1], "watch · 3s") {
+	if !strings.HasPrefix(plain[1], "  ◷ src changes") || strings.Contains(plain[1], "⠋") || strings.Contains(plain[1], "wakes parent") || !strings.Contains(plain[1], "watch · 3s") {
 		t.Fatalf("watch row: %q", plain[1])
 	}
 	// timer: single-width glyph, progress, hours elapsed
-	if !strings.HasPrefix(plain[2], "  ⚙  cooldown") || !strings.Contains(plain[2], "timer · 3m left · 2h00m") || strings.Contains(plain[2], "⠋") {
+	if !strings.HasPrefix(plain[2], "  ◷ cooldown") || !strings.Contains(plain[2], "timer · 3m left · 2h00m") || strings.Contains(plain[2], "⠋") {
 		t.Fatalf("timer row: %q", plain[2])
 	}
 	// a bad Started stamp just drops the elapsed field
