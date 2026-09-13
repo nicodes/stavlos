@@ -1104,10 +1104,11 @@ func (m *Model) metaHit(x int) metaPart {
 	if x < x0 {
 		return metaNone
 	}
-	if x < x0+ansi.StringWidth(model) {
+	short, _ := splitModel(model) // drawn without its provider
+	if x < x0+ansi.StringWidth(short) {
 		return metaModel
 	}
-	x0 += ansi.StringWidth(model) + 3
+	x0 += ansi.StringWidth(short) + 3
 	if variant == "" {
 		variant = "default"
 	}

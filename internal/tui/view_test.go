@@ -102,19 +102,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, false, metaNone)); got != "main (coder) · anthropic/claude-opus-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, false, metaNone)); got != "main (coder) · claude-opus-5 · default" {
 		t.Fatalf("with model: %q", got)
 	}
 	if got := stripANSI(metaLine("main", "coder", "", "", 0, false, metaNone)); got != "main (coder) · no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, false, metaNone)); got != "scout (explorer) · ollama/llama3 · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, false, metaNone)); got != "scout (explorer) · llama3 · default · 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, false, metaNone)); got != "main (coder) · openai/gpt-5 · high" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, false, metaNone)); got != "main (coder) · gpt-5 · high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, true, metaNone)); got != "YOLO · main (coder) · openai/gpt-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, true, metaNone)); got != "YOLO · main (coder) · gpt-5 · default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
@@ -1344,7 +1344,7 @@ func TestMetaRowHits(t *testing.T) {
 		want metaPart
 	}{
 		{at("YOLO"), metaYolo}, {at("main"), metaRole}, {at("(coder)"), metaRole},
-		{at("openai/gpt-5"), metaModel}, {at("high"), metaVariant}, {len(row) + 5, metaNone},
+		{at("gpt-5"), metaModel}, {at("high"), metaVariant}, {len(row) + 5, metaNone},
 	} {
 		if got := m.metaHit(c.x); got != c.want {
 			t.Fatalf("x=%d: got %v want %v", c.x, got, c.want)

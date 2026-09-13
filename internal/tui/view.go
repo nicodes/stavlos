@@ -634,7 +634,7 @@ func promptBoxWidth(width int) int {
 // inputBox is the input line over its meta line. Focus shows on the prompt
 // chevron (set in layout), so there is no border.
 
-// metaLine is "main (coder) · anthropic/claude-opus-5 · high" (or the
+// metaLine is "main (coder) · claude-opus-5 · high" (or the
 // no-model nudge): the agent as "label (role)" like the tab rows, the
 // model and its variant ("default" when none is set), led by a
 // warning-coloured YOLO tag while the session auto-approves.
@@ -659,7 +659,8 @@ func metaLine(label, role, model, variant string, queued int, yolo bool, sel met
 	if model == "" {
 		return s + pick(metaModel, "no model — /models", styleWarn)
 	}
-	s += pick(metaModel, model, lipgloss.NewStyle()) // "provider/model", the same form /model and the config use
+	short, _ := splitModel(model) // just the model id; the provider is in /models
+	s += pick(metaModel, short, lipgloss.NewStyle())
 	if variant == "" {
 		variant = "default"
 	}
