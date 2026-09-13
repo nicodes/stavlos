@@ -79,7 +79,7 @@ func agentDot(a protocol.AgentInfo) string {
 	case "error":
 		return lipgloss.NewStyle().Foreground(colError).Render("●")
 	case "waiting":
-		return lipgloss.NewStyle().Foreground(colAccent).Render("◐")
+		return lipgloss.NewStyle().Foreground(colWarning).Render("◐")
 	case "complete":
 		return lipgloss.NewStyle().Foreground(colMuted).Render("●")
 	}
@@ -955,9 +955,6 @@ func (m Model) treeRows(width int) []string {
 			text = styleDim.Render(text)
 		}
 		row := " " + indent + marker + dot + " " + text
-		if a.State == "running" {
-			row += " " + m.sp.View()
-		}
 		rows = append(rows, row)
 	}
 	if len(rows) == 0 {
@@ -1184,7 +1181,7 @@ func agentGlyph(a protocol.AgentInfo) string {
 	case "error":
 		return styleError.Render(glyphToolAgents)
 	case "waiting":
-		return styleAccent.Render(glyphToolAgents) // idle, but a question or job is outstanding
+		return styleWorking.Render(glyphToolAgents) // idle, but a question or job is outstanding
 	case "complete":
 		return styleDim.Render(glyphToolAgents)
 	}
