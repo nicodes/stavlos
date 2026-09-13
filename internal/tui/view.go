@@ -640,7 +640,7 @@ func inputBox(input, meta string) string {
 	return input + "\n" + meta
 }
 
-// metaLine is "Coder · claude-opus-5 anthropic · high" (or the no-model
+// metaLine is "Coder · anthropic/claude-opus-5 · high" (or the no-model
 // nudge): the role, the model and its variant ("default" when none is
 // set), led by a warning-coloured YOLO tag while the session auto-approves.
 func metaLine(label, model, variant string, queued int, yolo bool) string {
@@ -652,11 +652,7 @@ func metaLine(label, model, variant string, queued int, yolo bool) string {
 	if model == "" {
 		return s + styleWarn.Render("no model — /models")
 	}
-	short, prov := splitModel(model)
-	s += short
-	if prov != "" {
-		s += " " + styleDim.Render(prov)
-	}
+	s += model // "provider/model", the same form /model and the config use
 	if variant == "" {
 		variant = "default"
 	}
