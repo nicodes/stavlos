@@ -1102,7 +1102,7 @@ func toolGlyph(tool string) (string, string) {
 	switch {
 	case strings.HasPrefix(tool, "agent_"):
 		return glyphToolAgents, " "
-	case tool == "monitor" || tool == "unmonitor" || tool == "watch" || tool == "timer" || tool == "monitors":
+	case tool == "bash_async" || tool == "bash_kill":
 		return glyphToolMonitors, " "
 	}
 	return glyphToolFiles, "  "

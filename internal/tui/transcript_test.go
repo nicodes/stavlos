@@ -160,15 +160,14 @@ func TestToolLine(t *testing.T) {
 		{"read", `{"path":"internal/agent/turn.go","offset":1}`, "Read  internal/agent/turn.go"},
 		{"edit", `{"path":"file.go","old_string":"a","new_string":"b"}`, "Edit  file.go"},
 		{"write", `{"path":"x.go","content":"..."}`, "Write  x.go"},
-		{"watch", `{"path":"src","glob":"**/*.go"}`, "Watch  src"},
+		{"bash_async", `{"command":"go test ./..."}`, "Bash async  go test ./..."},
+		{"bash_kill", `{"id":"m1"}`, "Bash kill  m1"},
 		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
 		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`, "Agent create  scout (explorer)"},
 		{"agent_prompt", `{"id":"ag_1","text":"go"}`, "Agent prompt  ag_1"},
 		{"agent_steer", `{"id":"ag_1","text":"go"}`, "Agent steer  ag_1"},
 		{"agent_cancel", `{"id":"ag_1"}`, "Agent cancel  ag_1"},
 		{"agent_kill", `{"id":"ag_1"}`, "Agent kill  ag_1"},
-		{"monitor", `{"ids":["a","b"]}`, "Monitor  a, b"},
-		{"monitor", `{}`, "Monitor"},
 		{"agent_result", `{"id":"ag_2"}`, "Agent result  ag_2"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
 		{"finish", `{"status":"success","summary":"x"}`, "Finish  success"},
@@ -619,13 +618,13 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "run the tests in the background"}))
 	tr.Apply(mk(2, event.MonitorStarted, event.MonitorStartedPayload{ID: "m1", Kind: "command", Label: "go test", Spec: "go test ./..."}))
-	tr.Apply(mk(3, event.MonitorStarted, event.MonitorStartedPayload{ID: "m2", Kind: "watch", Label: "src", Spec: "./src", Glob: "*.go"}))
-	tr.Apply(mk(4, event.MonitorStarted, event.MonitorStartedPayload{ID: "m3", Kind: "timer", Label: "cooldown", Spec: "300", Seconds: 300}))
+	tr.Apply(mk(3, event.MonitorStarted, event.MonitorStartedPayload{ID: "m2", Kind: "command", Label: "src", Spec: "./watch.sh"}))
+	tr.Apply(mk(4, event.MonitorStarted, event.MonitorStartedPayload{ID: "m3", Kind: "command", Label: "cooldown", Spec: "sleep 300"}))
 	tr.Apply(mk(5, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "waiting"}}}))
 	tr.Apply(mk(6, event.MonitorFired, event.MonitorFiredPayload{ID: "m1", Kind: "command", Label: "go test", Summary: "go test exited 0", Output: "ok  a\nok  b\nok  c\nok  d\nok  e"}))
 	tr.Apply(mk(7, event.MonitorStopped, event.MonitorRefPayload{ID: "m2", Reason: "unmonitor"}))
-	tr.Apply(mk(8, event.MonitorFired, event.MonitorFiredPayload{ID: "m3", Kind: "timer", Label: "cooldown", Summary: "timer elapsed", IsError: true}))
-	tr.Apply(mk(9, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "monitor_fired", Text: "Monitor \"go test\" (command, m1): go test exited 0\n\nok  a\nok  b"}))
+	tr.Apply(mk(8, event.MonitorFired, event.MonitorFiredPayload{ID: "m3", Kind: "command", Label: "cooldown", Summary: "timer elapsed", IsError: true}))
+	tr.Apply(mk(9, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "monitor_fired", Text: "Job \"go test\" (m1): go test exited 0\n\nok  a\nok  b"}))
 	tr.Apply(mk(10, event.AssistantMessage, event.AssistantMessagePayload{Turn: 2, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "all green"}}}))
 
 	lines := tr.All()
@@ -639,9 +638,9 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		return -1, Line{}
 	}
 	// started notices
-	_, cmdStart := find("background: go test")
-	_, watchStart := find("watch: src")
-	_, timerStart := find("timer: cooldown")
+	_, cmdStart := find("job: go test")
+	_, watchStart := find("job: src")
+	_, timerStart := find("job: cooldown")
 	for _, l := range []Line{cmdStart, watchStart, timerStart} {
 		if l.Kind != LineDim || l.Running {
 			t.Fatalf("started notice should be a static dim line: %+v", l)
@@ -672,7 +671,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		t.Fatalf("assistant item %d vs started item %d", waiting.Item, cmdStart.Item)
 	}
 	// stopped: glyph from the remembered kind, grouped with its start
-	_, stopped := find("monitor stopped (unmonitor)")
+	_, stopped := find("job stopped (unmonitor)")
 	if stopped.Item != watchStart.Item || stopped.Kind != LineDim {
 		t.Fatalf("stopped: %+v (watch item %d)", stopped, watchStart.Item)
 	}
@@ -681,17 +680,17 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	if errFired.Item != timerStart.Item {
 		t.Fatalf("error fired: %+v (timer item %d)", errFired, timerStart.Item)
 	}
-	// the monitor_fired user message is a muted block labelled "monitor"
+	// the monitor_fired user message is a muted block labelled "job"
 	var label Line
 	for _, l := range lines {
-		if l.Kind == LineLabel && l.Text == "monitor" {
+		if l.Kind == LineLabel && l.Text == "job" {
 			label = l
 		}
 	}
 	if label.Kind != LineLabel || label.Block != BlockChild {
 		t.Fatalf("monitor block label: %+v", label)
 	}
-	_, summary := find("Monitor \"go test\"")
+	_, summary := find("Job \"go test\"")
 	if summary.Kind != LineText || summary.Block != BlockChild || summary.Item != label.Item || summary.Lead {
 		t.Fatalf("monitor block summary: %+v", summary)
 	}
@@ -709,7 +708,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	plain := nonblank(renderWith(lines, RenderOpts{Width: 80}))
 	joined := strings.Join(plain, "\n")
-	for _, want := range []string{"run the tests", "waiting", "all green", "background: go test", "watch: src", "timer: cooldown", "Monitor \"go test\" (command, m1): go test exited 0"} {
+	for _, want := range []string{"run the tests", "waiting", "all green", "job: go test", "job: src", "job: cooldown", "Job \"go test\" (m1): go test exited 0"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}
@@ -721,7 +720,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	// the block label never becomes the folded line
 	for _, l := range plain {
-		if strings.TrimSpace(l) == "monitor" {
+		if strings.TrimSpace(l) == "job" {
 			t.Fatalf("folded to the label line:\n%s", joined)
 		}
 	}
@@ -737,7 +736,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	// /details shows the whole output and the user block's output lines
 	all := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Details: true})), "\n")
-	for _, want := range []string{"ok  e", "monitor stopped (unmonitor)", "timer elapsed", "ok  b"} {
+	for _, want := range []string{"ok  e", "job stopped (unmonitor)", "timer elapsed", "ok  b"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("details lacks %q:\n%s", want, all)
 		}
@@ -748,7 +747,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	tr2.Apply(mk(1, event.MonitorFired, event.MonitorFiredPayload{ID: "zz", Kind: "watch", Summary: "3 files changed", Output: "a.go"}))
 	tr2.Apply(mk(2, event.MonitorStopped, event.MonitorRefPayload{ID: "yy", Reason: "kill"}))
 	got := renderLines(tr2.All())
-	assertSubsequence(t, got, []string{"   ◷ 3 files changed", "       a.go", "   ◷ monitor stopped (kill)"})
+	assertSubsequence(t, got, []string{"   ◷ 3 files changed", "       a.go", "   ◷ job stopped (kill)"})
 	if tr2.Items() != 2 {
 		t.Fatalf("items %d", tr2.Items())
 	}

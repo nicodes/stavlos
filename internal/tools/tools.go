@@ -27,21 +27,12 @@ type Env struct {
 	Partial   func(string)            // receives streamed partial output (bash); may be nil
 	MaxOutput int                     // truncate tool output beyond this many bytes (0 = 32k)
 	Mon       Monitors                // general monitors (background commands, watches, timers); nil if unavailable
-	Waiter    Waiter                  // monitor/unmonitor for children and monitors alike; nil if unavailable
-}
-
-// Waiter arms and disarms wakes; every agent has one.
-type Waiter interface {
-	Monitor(agent string, ids []string) ([]ChildStatus, error)
-	Unmonitor(agent string, ids []string) ([]string, error)
 }
 
 // Monitors is implemented by the agent runtime: sources other than children
 // that land a result in the agent's mailbox and wake it when armed.
 type Monitors interface {
 	StartCommand(command string, timeout time.Duration) (string, error)
-	StartWatch(path, glob string) (string, error)
-	StartTimer(d time.Duration, note string) (string, error)
 	List() []MonitorStatus
 	Stop(id string) error
 	Has(id string) bool
@@ -81,14 +72,6 @@ type Orchestrator interface {
 	Steer(parent, id, text string) error
 	Cancel(parent, id string) error
 	Kill(parent, id string) error
-	// Monitor arms a wake: the caller's turn ends after this tool batch and
-	// the finish of any listed child starts a new turn carrying its result.
-	// Without monitor a finish never wakes the parent; results wait in the
-	// mailbox for result/status or the parent's next turn.
-	Monitor(parent string, ids []string) ([]ChildStatus, error)
-	// Unmonitor disarms wakes for the listed children (all if empty). The
-	// children keep running and their results stay available.
-	Unmonitor(parent string, ids []string) ([]string, error)
 	Result(parent, id string) (ChildResult, bool, error)
 	Status(parent, id string) ([]ChildStatus, error)
 	// Finish records the caller's completion; the loop ends the turn after it.
@@ -131,8 +114,8 @@ func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
 		bashTool{}, readTool{}, patchTool{}, skillTool{}, finishTool{},
-		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, monitorTool{}, unmonitorTool{}, resultTool{}, statusTool{},
-		watchTool{}, timerTool{}, monitorsTool{},
+		spawnTool{}, sendTool{}, steerTool{}, cancelTool{}, killTool{}, resultTool{}, statusTool{},
+		bashAsyncTool{}, bashKillTool{},
 	} {
 		s[t.Def().Name] = t
 	}
@@ -142,9 +125,8 @@ func Builtin() Set {
 // OrchestrationNames are the tools implied by a non-empty spawn list.
 var OrchestrationNames = []string{"agent_create", "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status"}
 
-// MonitorNames are the general-monitor tools every agent gets. monitor
-// (wait to be woken) and unmonitor apply to children and monitors alike.
-var MonitorNames = []string{"monitor", "unmonitor", "watch", "timer", "monitors"}
+// AsyncNames are offered to every agent that has bash.
+var AsyncNames = []string{"bash_async", "bash_kill"}
 
 func schema(props map[string]any, required ...string) json.RawMessage {
 	m := map[string]any{"type": "object", "properties": props}
