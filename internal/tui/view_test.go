@@ -561,8 +561,8 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 		t.Fatal("focused box should show the hotkeys directly")
 	}
 	m.focus = focusInput
-	if pv := stripANSI(m.sectionsView(80)); !strings.Contains(pv, "tab to answer") || strings.Count(pv, "\n") != 0 {
-		t.Fatalf("unfocused prompt should be one line pointing at tab: %q", pv)
+	if pv := stripANSI(m.sectionsView(80)); !strings.Contains(pv, "permission (1)") || strings.Count(pv, "\n") != 0 {
+		t.Fatalf("unfocused prompt should be one strip line: %q", pv)
 	}
 	m.focus = focusPermission
 	hs := m.keyHints()
@@ -729,7 +729,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	// unfocused: one strip line, counts only
 	sv := stripANSI(m.sectionsView(100))
 	if strings.Count(sv, "\n") != 0 || !strings.Contains(sv, "agents (2)") || !strings.Contains(sv, "async (0)") || !strings.Contains(sv, "permission (1)") ||
-		strings.Contains(sv, "scout") || strings.Contains(sv, "checks") || strings.Contains(sv, "make test") || !strings.Contains(sv, "tab to answer") {
+		strings.Contains(sv, "scout") || strings.Contains(sv, "checks") || strings.Contains(sv, "make test") || strings.Contains(sv, "tab to") {
 		t.Fatalf("collapsed strip should only count:\n%s", sv)
 	}
 
@@ -793,27 +793,27 @@ func TestSectionTabStrip(t *testing.T) {
 	m.focus = focusAgents
 	v = stripANSI(m.sectionsView(100))
 	lines := strings.Split(v, "\n")
-	if len(lines) != 2 || !strings.Contains(lines[0], "▾ agents (1)") || strings.Contains(lines[0], "▾ async") || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "scout") {
+	if len(lines) != 2 || lines[0] != "permission (1)  │  agents (1)  │  async (1)" || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "scout") {
 		t.Fatalf("agents focused:\n%s", v)
 	}
 	// async focused: the job row
 	m.focus = focusAsync
 	v = stripANSI(m.sectionsView(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 2 || !strings.Contains(lines[0], "▾ async (1)") || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "go test") || strings.Contains(v, "scout") {
+	if len(lines) != 2 || !strings.Contains(lines[0], "async (1)") || !strings.Contains(lines[1], "▶") || !strings.Contains(lines[1], "go test") || strings.Contains(v, "scout") {
 		t.Fatalf("async focused:\n%s", v)
 	}
 	// permission focused: same strip, then the box
 	m.focus = focusPermission
 	v = stripANSI(m.sectionsView(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) < 3 || !strings.Contains(lines[0], "▾ permission (1)") || strings.Contains(lines[0], "▾ agents") || !strings.Contains(v, "make test") || strings.Contains(v, "scout") {
+	if len(lines) < 3 || !strings.Contains(lines[0], "permission (1)") || strings.Contains(lines[0], "▾") || !strings.Contains(v, "make test") || strings.Contains(v, "scout") {
 		t.Fatalf("permission focused:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
 	m.prompts = nil
 	m.focus = focusInput
-	if v := stripANSI(m.sectionsView(100)); !strings.Contains(v, "permission (0)") || !strings.Contains(v, "tab to open") {
+	if v := stripANSI(m.sectionsView(100)); !strings.Contains(v, "permission (0)") || strings.Contains(v, "tab to") {
 		t.Fatalf("empty permission tab:\n%s", v)
 	}
 }
@@ -832,7 +832,7 @@ func TestSessionViewFillsHeight(t *testing.T) {
 		lines := strings.Split(stripANSI(v), "\n")
 		si := -1
 		for i, l := range lines {
-			if strings.HasPrefix(strings.TrimPrefix(l, "▾ "), "permission (") {
+			if strings.HasPrefix(l, "permission (") {
 				si = i
 			}
 		}
