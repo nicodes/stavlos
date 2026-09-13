@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/nicodes/stavlos/internal/protocol"
 	"strconv"
 	"strings"
 	"time"
@@ -490,6 +491,10 @@ func (m Model) homeView(width, height int) string {
 	logo := logoLines(width)
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lines = append(lines, "")
+	if mv := m.monitorsView(boxW); mv != "" {
+		add(mv, boxW)
+		lines = append(lines, "")
+	}
 	if pb := m.promptView(boxW); pb != "" {
 		add(pb, boxW)
 	}
@@ -529,6 +534,9 @@ func (m Model) homeView(width, height int) string {
 func (m Model) sessionView(width, height int) string {
 	cw := m.contentWidth()
 	parts := []string{m.vp.View(), ""}
+	if mv := m.monitorsView(cw); mv != "" {
+		parts = append(parts, mv)
+	}
 	if pb := m.promptView(cw); pb != "" {
 		parts = append(parts, pb)
 	}
@@ -730,4 +738,60 @@ func (m Model) connected() bool {
 		return false
 	}
 	return true
+}
+
+// monitorsView lists the selected agent's live children: everything it is
+// waiting to be woken by. A child that finishes leaves this block and its
+// result shows up in the transcript instead.
+func (m Model) monitorsView(width int) string {
+	sel := m.selectedID()
+	if sel == "" {
+		return ""
+	}
+	rows := monitorRows(m.agents, sel, m.spawned, time.Now(), m.sp.View(), width)
+	if len(rows) == 0 {
+		return ""
+	}
+	head := styleDim.Render("monitors") + " " + styleDim.Render(fmt.Sprintf("(%d)", len(rows)))
+	return strings.Join(append([]string{head}, rows...), "\n")
+}
+
+// monitorRows is the pure part of monitorsView.
+func monitorRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, now time.Time, spinner string, width int) []string {
+	var rows []string
+	for _, a := range agents {
+		if a.Parent != parent || a.State == "finished" || a.State == "killed" {
+			continue
+		}
+		lead := lipgloss.NewStyle().Foreground(stateColor(a.State)).Render("●")
+		if a.State == "running" || a.State == "blocked" {
+			lead = styleRunning.Render(spinner)
+		}
+		meta := []string{a.State}
+		if a.Turn > 0 {
+			meta = append(meta, fmt.Sprintf("turn %d", a.Turn))
+		}
+		if a.CostUSD > 0 {
+			meta = append(meta, "$"+fmtCost(a.CostUSD))
+		}
+		if t, ok := spawned[a.ID]; ok && !t.IsZero() {
+			meta = append(meta, fmtElapsed(now.Sub(t)))
+		}
+		text := fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
+		row := "  " + lead + " " + styleBold.Render(text) + "  " + styleDim.Render(strings.Join(meta, " · "))
+		rows = append(rows, ansi.Truncate(row, width, "…"))
+	}
+	return rows
+}
+
+// fmtElapsed renders a duration as 12s, 1m05s, 1h02m.
+func fmtElapsed(d time.Duration) string {
+	d = d.Round(time.Second)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
 }

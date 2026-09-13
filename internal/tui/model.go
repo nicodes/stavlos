@@ -65,6 +65,7 @@ type Model struct {
 	ctx       context.Context
 	c         *client.Client
 	sessionID string
+	spawned   map[string]time.Time // agent id → spawn time, for the monitors block
 
 	session     protocol.SessionInfo
 	agents      []protocol.AgentInfo // pre-order, root first
@@ -550,6 +551,10 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		var p event.AgentSpawnedPayload
 		if ev.Decode(&p) == nil && p.ID != "" {
 			target = p.ID
+			if m.spawned == nil {
+				m.spawned = map[string]time.Time{}
+			}
+			m.spawned[p.ID] = ev.Time
 			if !m.loading && m.findAgent(p.ID) < 0 {
 				// Placeholder until the debounced tree refresh lands.
 				m.agents = append(m.agents, protocol.AgentInfo{
@@ -795,6 +800,9 @@ func (m *Model) layout() {
 
 	_, kb := m.keyBarView()
 	bodyH := m.height - 1 - kb - 1 - inputBoxLines // footer, key bar, spacer, input box
+	if mv := m.monitorsView(m.contentWidth()); mv != "" {
+		bodyH -= strings.Count(mv, "\n") + 1
+	}
 	if pb := m.promptView(m.contentWidth()); pb != "" {
 		bodyH -= strings.Count(pb, "\n") + 1
 	}

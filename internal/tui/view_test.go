@@ -171,3 +171,31 @@ func TestHomeAndSessionViews(t *testing.T) {
 		t.Fatal("sidebar should auto-hide below 100 columns")
 	}
 }
+
+func TestMonitorRows(t *testing.T) {
+	now := time.Now()
+	spawned := map[string]time.Time{"c1": now.Add(-75 * time.Second), "c2": now.Add(-3 * time.Second)}
+	agents := []protocol.AgentInfo{
+		{ID: "root", Label: "coder", Archetype: "coder", State: "idle"},
+		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running", Turn: 2, CostUSD: 0.0012},
+		{ID: "c2", Parent: "root", Label: "tester", Archetype: "tester", State: "idle"},
+		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "finished"},
+		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running"},
+	}
+	rows := monitorRows(agents, "root", spawned, now, "⠋", 100)
+	if len(rows) != 2 {
+		t.Fatalf("rows %d: %q", len(rows), rows)
+	}
+	if !strings.Contains(rows[0], "scout (explorer)") || !strings.Contains(rows[0], "turn 2") || !strings.Contains(rows[0], "1m15s") || !strings.Contains(rows[0], "⠋") {
+		t.Fatalf("%q", rows[0])
+	}
+	if !strings.Contains(rows[1], "tester") || !strings.Contains(rows[1], "3s") || strings.Contains(rows[1], "turn") {
+		t.Fatalf("%q", rows[1])
+	}
+	if rows := monitorRows(agents, "c2", spawned, now, "", 100); len(rows) != 0 {
+		t.Fatalf("no children expected: %q", rows)
+	}
+	if got := fmtElapsed(3725 * time.Second); got != "1h02m" {
+		t.Fatalf("%s", got)
+	}
+}
