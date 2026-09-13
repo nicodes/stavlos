@@ -107,6 +107,7 @@ type RenderOpts struct {
 	Width    int
 	Details  bool
 	Spinner  string
+	Working  bool // a turn is in progress: append the ephemeral "working…" line
 	Expanded map[int]bool
 	Cursor   int
 	Focused  bool
@@ -201,6 +202,14 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 		if endOfItem && spaced[r.item] && i != len(out)-1 {
 			emit(row{item: r.item, blank: true})
 		}
+	}
+	// The ephemeral turn indicator: not an item (no cursor, no fold), gone
+	// as soon as the turn ends.
+	if o.Working {
+		if n > 0 {
+			b.WriteString("\n\n")
+		}
+		b.WriteString(o.Spinner + " " + styleDim.Render("working…"))
 	}
 	return b.String(), rows
 }

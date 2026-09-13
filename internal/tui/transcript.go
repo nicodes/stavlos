@@ -129,7 +129,12 @@ type Transcript struct {
 	items      int               // committed items so far
 	streamTurn int
 	stream     []streamSeg
+	turn       bool // a turn is in progress (TurnStarted seen, not yet ended)
 }
+
+// InTurn reports whether the agent is mid-turn: the chat shows an
+// ephemeral "working…" line with a spinner while this is true.
+func (t *Transcript) InTurn() bool { return t.turn }
 
 // NewTranscript returns an empty transcript.
 func NewTranscript() *Transcript {
@@ -253,10 +258,13 @@ func (t *Transcript) Apply(ev event.Event) {
 	}
 	t.appendItem(item, EventLines(ev))
 	switch ev.Type {
+	case event.TurnStarted:
+		t.turn = true
 	case event.AssistantMessage:
 		t.stream = nil
 	case event.TurnEnded, event.TurnAborted, event.AgentFinished, event.AgentKilled:
 		t.stream = nil
+		t.turn = false
 		t.stopRunning()
 	}
 }
