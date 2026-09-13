@@ -37,10 +37,6 @@ type (
 		err    error
 	}
 	treeTickMsg struct{}
-	presetsMsg  struct {
-		presets []protocol.PresetInfo
-		err     error
-	}
 	// resultMsg reports a fire-and-forget call; ok is shown on success.
 	resultMsg struct {
 		ok  string
@@ -127,14 +123,6 @@ func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.
 	}
 }
 
-func presetsCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		p, err := c.Presets(ctx, session)
-		return presetsMsg{p, err}
-	}
-}
 
 // answerPromptCmd claims then replies in one step. Claiming happens only
 // here, i.e. only once the user pressed a key (PRD §7.4).
