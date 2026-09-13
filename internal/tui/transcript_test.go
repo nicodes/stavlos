@@ -108,7 +108,12 @@ func TestUserMessageKinds(t *testing.T) {
 		mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}),
 	})
 	got := renderLines(lines)
-	assertSubsequence(t, got, []string{"steer", "› focus", "agent response", "⑂ child done", "› hi"})
+	assertSubsequence(t, got, []string{"› focus", "agent response", "⑂ child done", "› hi"})
+	for _, l := range got {
+		if strings.TrimSpace(l) == "steer" {
+			t.Fatalf("a steer should carry no title:\n%s", strings.Join(got, "\n"))
+		}
+	}
 
 	// Blocks carry their kind so Render can pick the border color.
 	var blocks []BlockKind
@@ -117,7 +122,7 @@ func TestUserMessageKinds(t *testing.T) {
 			blocks = append(blocks, l.Block)
 		}
 	}
-	if len(blocks) != 3 || blocks[0] != BlockSteer || blocks[1] != BlockChild || blocks[2] != BlockUser {
+	if len(blocks) != 3 || blocks[0] != BlockUser || blocks[1] != BlockChild || blocks[2] != BlockUser {
 		t.Fatalf("block kinds: %v", blocks)
 	}
 	// Blank line before and after each block.

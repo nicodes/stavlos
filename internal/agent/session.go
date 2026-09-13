@@ -114,7 +114,7 @@ func (s *Session) Start(ctx context.Context) error {
 		Payload: event.MustPayload(event.SessionCreatedPayload{Dir: s.Dir, Model: s.model, RootAgent: s.rootArch})}); err != nil {
 		return err
 	}
-	_, err := s.spawn(ctx, "", s.rootArch, s.rootArch, "", "")
+	_, err := s.spawn(ctx, "", s.rootArch, "main", "", "") // the root is always "main (role)"
 	return err
 }
 
