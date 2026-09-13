@@ -622,24 +622,19 @@ type footerInfo struct {
 	model     string // selected agent model (provider/id)
 	tokens    int
 	cost      float64
-	pending   int // pending prompts
 }
 
 // footerRight builds the right side of the footer.
+// Waiting permissions and /help are not repeated here: the tab strip
+// shows the former and the "/" palette lists every command.
 func footerRight(f footerInfo) string {
-	var parts []string
-	if f.pending > 0 {
-		parts = append(parts, styleWarn.Render(fmt.Sprintf("△ %d Permissions", f.pending)))
-	}
 	switch {
 	case !f.connected:
-		parts = append(parts, styleBold.Render("Get started")+" "+styleDim.Render("/provider"))
+		return styleBold.Render("Get started") + " " + styleDim.Render("/provider")
 	case f.home:
-		parts = append(parts, styleAccent.Render("●")+" "+f.label+" · "+f.model, styleDim.Render("/help"))
-	default:
-		parts = append(parts, fmt.Sprintf("%s tokens · $%s", fmtTokens(f.tokens), fmtCost(f.cost)), styleDim.Render("/help"))
+		return styleAccent.Render("●") + " " + f.label + " · " + f.model
 	}
-	return strings.Join(parts, "  ")
+	return fmt.Sprintf("%s tokens · $%s", fmtTokens(f.tokens), fmtCost(f.cost))
 }
 
 // fmtCost prints a dollar amount with 2–4 decimals.
@@ -1047,7 +1042,7 @@ func (m Model) footerRightView() string {
 	case m.loading:
 		return styleDim.Render("replaying events…")
 	}
-	f := footerInfo{home: m.isHome(), connected: m.connected(), pending: len(m.prompts), model: m.session.Model}
+	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.session.Model}
 	if a := m.selectedAgent(); a != nil {
 		f.label, f.tokens, f.cost = a.Label, a.Tokens, a.CostUSD
 		if a.Model != "" {

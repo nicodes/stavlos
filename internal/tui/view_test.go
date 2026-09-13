@@ -81,16 +81,12 @@ func TestFooterRight(t *testing.T) {
 		t.Fatalf("not connected: %q", got)
 	}
 	got = stripANSI(footerRight(footerInfo{home: true, connected: true, label: "coder", model: "anthropic/claude-opus-5"}))
-	if got != "● coder · anthropic/claude-opus-5  /help" {
+	if got != "● coder · anthropic/claude-opus-5" {
 		t.Fatalf("connected home: %q", got)
 	}
 	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5", tokens: 12_345, cost: 0.0123}))
-	if got != "12k tokens · $0.0123  /help" {
+	if got != "12k tokens · $0.0123" {
 		t.Fatalf("session: %q", got)
-	}
-	got = stripANSI(footerRight(footerInfo{connected: true, tokens: 500, cost: 1.5, pending: 2}))
-	if got != "△ 2 Permissions  500 tokens · $1.50  /help" {
-		t.Fatalf("pending: %q", got)
 	}
 }
 
