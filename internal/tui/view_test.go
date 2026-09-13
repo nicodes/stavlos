@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -190,11 +191,11 @@ func TestAgentRows(t *testing.T) {
 		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "finished"},
 		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running"},
 	}
-	rows := agentRows(agents, "root", spawned, now, 100)
+	rows := agentRows(agents, "root", spawned, map[string]string{"c1": "Running the tests now, hold on while I look through all of it"}, now, 100)
 	if len(rows) != 2 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
-	if !strings.Contains(rows[0], "scout (explorer)") || !strings.Contains(rows[0], "1m15s") || !strings.Contains(rows[0], "⑂") {
+	if !strings.Contains(rows[0], "scout (explorer)  Running the tests now, hold on while I l…  ") || !strings.Contains(rows[0], "1m15s") || !strings.Contains(rows[0], "⑂") {
 		t.Fatalf("%q", rows[0])
 	}
 	if strings.Contains(rows[0], "wakes parent") {
@@ -203,7 +204,7 @@ func TestAgentRows(t *testing.T) {
 	if !strings.Contains(rows[1], "tester") || !strings.Contains(rows[1], "3s") || strings.Contains(rows[1], "turn") {
 		t.Fatalf("%q", rows[1])
 	}
-	if rows := agentRows(agents, "c2", spawned, now, 100); len(rows) != 0 {
+	if rows := agentRows(agents, "c2", spawned, nil, now, 100); len(rows) != 0 {
 		t.Fatalf("no children expected: %q", rows)
 	}
 	if got := fmtElapsed(3725 * time.Second); got != "1h02m" {
@@ -1006,5 +1007,27 @@ func TestParentAgentCreateLineFollowsChildEvents(t *testing.T) {
 	m.applyEvent(ev(5, "c1", event.AgentFinished, event.AgentFinishedPayload{Summary: "done", Status: "success"}))
 	if tone() != ToneNone {
 		t.Fatalf("child finished: tone %v", tone())
+	}
+}
+
+func TestLastSnippet(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	if lastSnippet(nil) != "" || lastSnippet(tr) != "" {
+		t.Fatal("empty")
+	}
+	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "look around"}))
+	if got := lastSnippet(tr); got != "look around" {
+		t.Fatalf("prompt: %q", got)
+	}
+	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"ls -la"}`)}))
+	if got := lastSnippet(tr); got != "Bash  ls -la" {
+		t.Fatalf("tool: %q", got)
+	}
+	tr.Apply(mk(3, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "Found **three** files.\n"}}}))
+	if got := lastSnippet(tr); got != "Found **three** files." {
+		t.Fatalf("text (trailing blank skipped): %q", got)
 	}
 }
