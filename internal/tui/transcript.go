@@ -29,6 +29,7 @@ const (
 	LineStream                   // in-progress streaming text (rendered like LineText)
 	LineModel                    // "· <model>" trailer after the final assistant text
 	LineThink                    // thinking summary ("∴ thinking…"); always its own item
+	LineToolNote                 // permission notice nested under its tool call (indented like output)
 	LineBlank                    // spacer
 )
 
@@ -119,7 +120,7 @@ func (t *Transcript) Apply(ev event.Event) {
 		if ev.Decode(&p) == nil && p.Kind == "permission" {
 			if item, ok := t.openCallItem(p.Tool); ok {
 				t.prompts[p.ID] = item
-				t.insertIntoItem(item, EventLines(ev))
+				t.insertIntoItem(item, nested(EventLines(ev)))
 				return
 			}
 		}
@@ -130,7 +131,7 @@ func (t *Transcript) Apply(ev event.Event) {
 				if ev.Type != event.PromptClaimed {
 					delete(t.prompts, p.ID)
 				}
-				t.insertIntoItem(item, EventLines(ev))
+				t.insertIntoItem(item, nested(EventLines(ev)))
 				return
 			}
 		}
@@ -196,6 +197,16 @@ func splitThinking(lines []Line) [][]Line {
 		}
 	}
 	return runs
+}
+
+// nested re-kinds notice lines so they render indented under a tool call.
+func nested(lines []Line) []Line {
+	for i := range lines {
+		if lines[i].Kind == LineDim || lines[i].Kind == LineNotice {
+			lines[i].Kind = LineToolNote
+		}
+	}
+	return lines
 }
 
 // openCallItem returns the item of the most recently started, still-open

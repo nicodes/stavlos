@@ -345,6 +345,9 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	case LineToolOut:
 		leader = "      "
 		style = styleToolOut.Render
+	case LineToolNote:
+		leader = "      "
+		style = styleDim.Render
 	case LineFinished:
 		style = styleFinished.Render
 	case LineRule:
