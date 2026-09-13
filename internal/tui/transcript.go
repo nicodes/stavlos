@@ -767,10 +767,12 @@ func EventLines(ev event.Event) []Line {
 			return block(BlockUser, "", p.Text)
 		case "agent_response":
 			// Reads like a tool line so it is obvious what it is:
-			// "⑂ Agent response · scout (a1b2c3d4)" over the answer's text.
-			head := "**Agent response**"
-			if p.From != "" {
-				head += " · " + p.From
+			// "⑂ Response from scout (a1b2c3d4)" over the answer's text. The
+			// agent's own agent_response call reads "Agent response  → id",
+			// so incoming and outgoing never look alike.
+			head := "**Response from** " + p.From
+			if p.From == "" {
+				head = "**Response from** an agent"
 			}
 			lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: head, Block: BlockChild, Glyph: GlyphChild}}
 			for _, l := range strings.Split(strings.TrimRight(p.Text, "\n"), "\n") {
@@ -1199,7 +1201,7 @@ func toolArg(name string, raw json.RawMessage) string {
 	case "agent_finish": // legacy
 		return str("status")
 	case "agent_response":
-		return str("to")
+		return "→ " + str("to") // outgoing: who it answers
 	}
 	return compactArgs(raw)
 }
