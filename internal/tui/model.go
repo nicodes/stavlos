@@ -103,6 +103,7 @@ type Model struct {
 	promptInput textinput.Model // answer field of a question prompt
 	sbCursor    int
 	palIdx      int      // highlighted row in the "/" command palette
+	agCursor    int      // highlighted row in the agents block while it has focus
 	history     []string // prompts sent from this client (and replayed human prompts)
 	histIdx     int      // == len(history) when editing a new line
 	histDraft   string   // unsent text saved while browsing history
@@ -126,6 +127,7 @@ const (
 	focusInput      focus = iota // the text input (typing, enter sends)
 	focusChat                    // the transcript: a cursor walks its items
 	focusPermission              // the pending prompt box (y/n/a, question field)
+	focusAgents                  // the live-children block above the input (↑/↓ enter)
 	focusSidebar                 // the agent tree (↑/↓ enter)
 )
 
@@ -376,11 +378,29 @@ func (m *Model) focusOrder() []focus {
 	if m.currentPrompt() != nil {
 		order = append(order, focusPermission)
 	}
+	if len(m.liveChildren()) > 0 {
+		order = append(order, focusAgents)
+	}
 	order = append(order, focusInput)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
 	}
 	return order
+}
+
+// liveChildren returns the selected agent's live children, in tree order.
+func (m *Model) liveChildren() []protocol.AgentInfo {
+	sel := m.selectedID()
+	if sel == "" {
+		return nil
+	}
+	var out []protocol.AgentInfo
+	for _, a := range m.agents {
+		if a.Parent == sel && a.State != "finished" && a.State != "killed" {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // cycleFocus moves focus delta steps (+1 tab, -1 shift+tab) through
@@ -426,6 +446,38 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		}
 	case focusSidebar:
 		m.sbCursor = m.selected
+	case focusAgents:
+		m.agCursor = 0
+	}
+	return nil
+}
+
+// agentsKey handles keys while the agents block has focus: ↑/↓ (or j/k)
+// move over the live children, enter selects that child and returns to
+// the input, esc returns without changing the selection.
+func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
+	kids := m.liveChildren()
+	n := len(kids)
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.setFocus(focusInput)
+	case key.Matches(msg, keys.SelUp), msg.String() == "k":
+		if n > 0 {
+			m.agCursor = ((m.agCursor-1)%n + n) % n
+		}
+	case key.Matches(msg, keys.SelDown), msg.String() == "j":
+		if n > 0 {
+			m.agCursor = (m.agCursor + 1) % n
+		}
+	case key.Matches(msg, keys.Submit):
+		if n > 0 {
+			if i := m.findAgent(kids[m.agCursor%n].ID); i >= 0 && i != m.selected {
+				m.selected = i
+				m.follow = true
+				m.refreshViewport()
+			}
+		}
+		return m.setFocus(focusInput)
 	}
 	return nil
 }
@@ -521,6 +573,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	}
 
 	switch m.focus {
+	case focusAgents:
+		return m.agentsKey(msg)
 	case focusSidebar:
 		return m.sidebarKey(msg)
 	case focusChat:
