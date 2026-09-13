@@ -86,7 +86,7 @@ const (
 
 // Leader glyphs for chat items (see the glyph table in docs).
 const (
-	GlyphChild     = "↰" // a child agent reported back
+	GlyphChild     = "⑂" // a child agent reported back (same fork as spawn)
 	GlyphSpawn     = "⑂" // a child agent was spawned (fork)
 	GlyphTask      = "▹" // the task handed to a child
 	GlyphFinished  = "✓" // an agent finished
