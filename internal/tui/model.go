@@ -276,7 +276,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case promptMsg:
-		m.applyPromptNotification(msg.n)
+		cmds = append(cmds, m.applyPromptNotification(msg.n))
 
 	case disconnectedMsg:
 		m.fatal = msg.err
@@ -1091,10 +1091,15 @@ func (m *Model) markTreeDirty() tea.Cmd {
 
 // --- prompts ---
 
-func (m *Model) applyPromptNotification(n protocol.PromptNotification) {
+// applyPromptNotification keeps the prompt queue in step with the daemon.
+// The first prompt to arrive while the input is idle (focused, nothing
+// typed, no overlay) opens the permission tab so it can be answered at
+// once; a draft in progress is never interrupted.
+func (m *Model) applyPromptNotification(n protocol.PromptNotification) tea.Cmd {
 	if n.Prompt.Session != "" && n.Prompt.Session != m.sessionID {
-		return
+		return nil
 	}
+	before := len(m.prompts)
 	switch n.Action {
 	case "requested", "escalated", "claimed":
 		m.upsertPrompt(n.Prompt)
@@ -1106,6 +1111,10 @@ func (m *Model) applyPromptNotification(n protocol.PromptNotification) {
 	if n.Prompt.Agent == m.selectedID() {
 		m.refreshViewport()
 	}
+	if before == 0 && len(m.prompts) > 0 && m.focus == focusInput && m.ov == nil && strings.TrimSpace(m.input.Value()) == "" {
+		return m.setFocus(focusPermission)
+	}
+	return nil
 }
 
 func (m *Model) currentPrompt() *protocol.PromptInfo {
