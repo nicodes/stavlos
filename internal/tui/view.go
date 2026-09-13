@@ -826,7 +826,7 @@ func (m Model) sessionView(width, height int) string {
 	cw := m.contentWidth()
 	// A rule closes the chat area; below it the background/permission tab
 	// strip (and the focused section's body) sit right above the input.
-	parts := []string{m.vp.View(), styleRule.Render(strings.Repeat("─", cw))}
+	parts := []string{m.vp.View(), "", styleRule.Render(strings.Repeat("─", cw))} // breathing room above the rule
 	if sv := m.sectionsView(cw); sv != "" {
 		parts = append(parts, sv, "") // a blank line below the strip, before the input
 	}

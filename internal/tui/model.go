@@ -1375,7 +1375,7 @@ func (m *Model) layout() {
 	m.promptInput.Width = boxW - 4 - len([]rune(m.promptInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
-	bodyH := m.height - kb - 1 - inputBoxLines // key bar, chat rule, input + meta row
+	bodyH := m.height - kb - 2 - inputBoxLines // key bar, blank + chat rule, input + meta row
 	if sv := m.sectionsView(m.contentWidth()); sv != "" {
 		bodyH -= strings.Count(sv, "\n") + 1 + 1 // plus the blank line below
 	}
