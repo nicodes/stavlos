@@ -52,7 +52,7 @@ var (
 	styleGutter        = lipgloss.NewStyle().Foreground(colAccent)
 
 	styleBorderMuted = lipgloss.NewStyle().Foreground(colMuted)
-	styleBorderUser  = lipgloss.NewStyle().Foreground(colAccent) // focused input box
+	styleBorderUser  = lipgloss.NewStyle().Foreground(colAccent) // the input prompt while it has focus
 )
 
 // agentOutcome collapses an agent's fields into the state the sidebar
@@ -586,14 +586,10 @@ func promptBoxWidth(width int) int {
 	return w
 }
 
-// inputBox draws the left-bordered box around the input and its meta line;
-// the border is accent while the input has focus, muted otherwise.
-func inputBox(input, meta string, focused bool) string {
-	border := styleBorderMuted.Render("│")
-	if focused {
-		border = styleBorderUser.Render("│")
-	}
-	return border + "  " + input + "\n" + border + "  " + meta
+// inputBox is the input line over its meta line. Focus shows on the prompt
+// chevron (set in layout), so there is no border.
+func inputBox(input, meta string) string {
+	return input + "\n" + meta
 }
 
 // metaLine is "Coder  ·  claude-opus-5 anthropic" (or the no-model nudge).
@@ -720,7 +716,7 @@ func (m Model) inputBoxView() string {
 			model = a.Model
 		}
 	}
-	return inputBox(m.input.View(), metaLine(label, model, queued), m.focus == focusInput)
+	return inputBox(m.input.View(), metaLine(label, model, queued))
 }
 
 // homeView centers the logo, the prompt box and the tips vertically.

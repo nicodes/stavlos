@@ -115,8 +115,8 @@ func TestMetaLine(t *testing.T) {
 }
 
 func TestInputBoxAndPromptWidth(t *testing.T) {
-	box := stripANSI(inputBox("› hi", "Coder  ·  x", true))
-	if box != "│  › hi\n│  Coder  ·  x" {
+	box := stripANSI(inputBox("› hi", "Coder  ·  x"))
+	if box != "› hi\nCoder  ·  x" {
 		t.Fatalf("input box: %q", box)
 	}
 
