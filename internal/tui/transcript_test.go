@@ -595,10 +595,25 @@ func TestFoldingToOneLine(t *testing.T) {
 	if toolRows != 1 {
 		t.Fatalf("tool rows %d:\n%s", toolRows, joined)
 	}
-	// cursor on the tool item shows it in full; cursor on the child shows the result
-	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem})), "\n")
-	if !strings.Contains(full, "permission") || !strings.Contains(full, "allow") || strings.Contains(full, "found it") {
-		t.Fatalf("cursor on tool:\n%s", full)
+	// cursor on the tool item previews its first lines (call, permission,
+	// answer) with a +N marker; enter (Expanded) shows everything
+	prev := nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem}))
+	joinedPrev := strings.Join(prev, "\n")
+	if !strings.Contains(joinedPrev, "permission") || !strings.Contains(joinedPrev, "allow") || strings.Contains(joinedPrev, "found it") {
+		t.Fatalf("cursor on tool:\n%s", joinedPrev)
+	}
+	toolPrev := 0
+	for _, l := range prev {
+		if strings.Contains(l, "Bash") || strings.Contains(l, "permission") || strings.Contains(l, "allow") || strings.HasPrefix(strings.TrimLeft(l, "▍ "), "a") {
+			toolPrev++
+		}
+	}
+	if toolPrev > previewLines || !strings.Contains(joinedPrev, "+") {
+		t.Fatalf("preview should be at most %d lines with a +N marker:\n%s", previewLines, joinedPrev)
+	}
+	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem, Expanded: map[int]bool{toolItem: true}})), "\n")
+	if !strings.Contains(full, "permission") || !strings.Contains(full, "allow") || !strings.Contains(full, "\n") || strings.Count(full, "\n") < 5 {
+		t.Fatalf("expanded tool:\n%s", full)
 	}
 	child := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: childItem})), "\n")
 	if !strings.Contains(child, "found it") || strings.Contains(child, "permission") {
@@ -724,15 +739,26 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 			t.Fatalf("folded to the label line:\n%s", joined)
 		}
 	}
-	// cursor on the command monitor shows the fired line and collapsed output
-	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
-	for _, want := range []string{"◷ go test exited 0", "ok  a", "ok  c", "… +2 lines"} {
-		if !strings.Contains(full, want) {
-			t.Fatalf("cursor on monitor lacks %q:\n%s", want, full)
+	// cursor on the command monitor previews the start, the fired line and
+	// the first output line with a +N marker; expanded shows the collapsed
+	// output rule (3 lines + "… +N lines")
+	prev := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
+	for _, want := range []string{"◷ job: go test", "◷ go test exited 0", "ok  a", "+"} {
+		if !strings.Contains(prev, want) {
+			t.Fatalf("cursor on monitor lacks %q:\n%s", want, prev)
 		}
 	}
-	if strings.Contains(full, "ok  d") || strings.Contains(full, "monitor stopped") {
-		t.Fatalf("cursor on monitor shows too much:\n%s", full)
+	if strings.Contains(prev, "ok  c") {
+		t.Fatalf("preview shows too much:\n%s", prev)
+	}
+	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item, Expanded: map[int]bool{cmdStart.Item: true}})), "\n")
+	for _, want := range []string{"◷ go test exited 0", "ok  a", "ok  c", "ok  d", "ok  e"} {
+		if !strings.Contains(full, want) {
+			t.Fatalf("expanded monitor lacks %q:\n%s", want, full)
+		}
+	}
+	if strings.Contains(full, "job stopped") {
+		t.Fatalf("expanded monitor shows other items:\n%s", full)
 	}
 	// /details shows the whole output and the user block's output lines
 	all := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Details: true})), "\n")
