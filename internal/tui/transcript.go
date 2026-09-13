@@ -931,7 +931,7 @@ func toolArg(name string, raw json.RawMessage) string {
 		return str("path")
 	case "grep", "glob":
 		return str("pattern")
-	case "spawn":
+	case "agent_create", "spawn":
 		label, arch := str("label"), str("archetype")
 		switch {
 		case label != "" && arch != "":
@@ -941,7 +941,7 @@ func toolArg(name string, raw json.RawMessage) string {
 		default:
 			return arch
 		}
-	case "send", "steer", "cancel", "kill", "result", "status":
+	case "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status", "send", "steer", "cancel", "kill", "result", "status":
 		return str("id")
 	case "monitor":
 		if ids, ok := in["ids"].([]any); ok && len(ids) > 0 {
@@ -963,10 +963,13 @@ func toolArg(name string, raw json.RawMessage) string {
 }
 
 // titleCase upper-cases the first letter: "bash" → "Bash".
+// titleCase capitalises a tool name for display; underscores read as
+// spaces, so agent_create shows as "Agent create".
 func titleCase(s string) string {
 	if s == "" {
 		return s
 	}
+	s = strings.ReplaceAll(s, "_", " ")
 	r := []rune(s)
 	return strings.ToUpper(string(r[0])) + string(r[1:])
 }

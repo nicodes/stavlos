@@ -192,7 +192,7 @@ func TestEndToEnd(t *testing.T) {
 		},
 		// turn 2: spawn a child, wait for it
 		func(model.Request) model.Response {
-			return call("c3", "spawn", `{"archetype":"explorer","label":"scout","task":"look around"}`)
+			return call("c3", "agent_create", `{"archetype":"explorer","label":"scout","task":"look around"}`)
 		},
 		// parent yields with monitor, then is woken by the child's result
 		func(model.Request) model.Response { return call("c4", "monitor", `{}`) },
@@ -418,7 +418,7 @@ func TestMonitorKeepsParentResponsive(t *testing.T) {
 	fm.steps = []func(model.Request) model.Response{
 		// turn 1: spawn, then monitor → turn ends without waiting
 		func(model.Request) model.Response {
-			return call("c1", "spawn", `{"archetype":"explorer","label":"slow","task":"take your time"}`)
+			return call("c1", "agent_create", `{"archetype":"explorer","label":"slow","task":"take your time"}`)
 		},
 		func(model.Request) model.Response { return call("c2", "monitor", `{}`) },
 		// turn 2: a human prompt answered while the child is still running
@@ -493,8 +493,8 @@ func TestUnmonitoredChildDoesNotWake(t *testing.T) {
 		// turn 1: spawn two children, opt out of their wakes, and stop
 		func(model.Request) model.Response {
 			return model.Response{Blocks: []model.Block{
-				{Type: model.BlockToolUse, ID: "c1", Name: "spawn", Input: json.RawMessage(`{"archetype":"explorer","label":"one","task":"a"}`)},
-				{Type: model.BlockToolUse, ID: "c2", Name: "spawn", Input: json.RawMessage(`{"archetype":"explorer","label":"two","task":"b"}`)},
+				{Type: model.BlockToolUse, ID: "c1", Name: "agent_create", Input: json.RawMessage(`{"archetype":"explorer","label":"one","task":"a"}`)},
+				{Type: model.BlockToolUse, ID: "c2", Name: "agent_create", Input: json.RawMessage(`{"archetype":"explorer","label":"two","task":"b"}`)},
 				{Type: model.BlockToolUse, ID: "c3", Name: "unmonitor", Input: json.RawMessage(`{}`)},
 			}, StopReason: model.StopToolUse}
 		},
@@ -567,7 +567,7 @@ func TestUnmonitorDisarms(t *testing.T) {
 	release := make(chan struct{})
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return call("c1", "spawn", `{"archetype":"explorer","label":"slow","task":"a"}`)
+			return call("c1", "agent_create", `{"archetype":"explorer","label":"slow","task":"a"}`)
 		},
 		func(model.Request) model.Response { return call("c2", "monitor", `{}`) },
 		// turn 2 (user prompted while armed): disarm, then stop
@@ -629,7 +629,7 @@ func TestSpawnArmsWakeByDefault(t *testing.T) {
 	fm.steps = []func(model.Request) model.Response{
 		// turn 1: spawn and stop, without calling monitor
 		func(model.Request) model.Response {
-			return call("c1", "spawn", `{"archetype":"explorer","label":"slow","task":"a"}`)
+			return call("c1", "agent_create", `{"archetype":"explorer","label":"slow","task":"a"}`)
 		},
 		func(model.Request) model.Response { return text("spawned, done for now") },
 		// turn 2: woken by the child's finish
