@@ -1030,4 +1030,15 @@ func TestLastSnippet(t *testing.T) {
 	if got := lastSnippet(tr); got != "Found **three** files." {
 		t.Fatalf("text (trailing blank skipped): %q", got)
 	}
+	// a multi-line message reads from its first line, not its last
+	tr.Apply(mk(4, event.AssistantMessage, event.AssistantMessagePayload{Turn: 2, Blocks: []model.Block{{Type: model.BlockText, Text: "First the plan.\nThen the details.\nFinally the caveat."}}}))
+	if got := lastSnippet(tr); !strings.HasPrefix(got, "First the plan. Then the details.") {
+		t.Fatalf("multi-line message should start at its beginning: %q", got)
+	}
+	// a tool call with output: the call line comes first
+	tr.Apply(mk(5, event.ToolCallStarted, event.ToolStartedPayload{CallID: "c2", Name: "bash", Input: json.RawMessage(`{"command":"go test"}`)}))
+	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c2", Name: "bash", Output: "ok\nPASS"}))
+	if got := lastSnippet(tr); !strings.HasPrefix(got, "Bash  go test") {
+		t.Fatalf("tool item should start with the call: %q", got)
+	}
 }
