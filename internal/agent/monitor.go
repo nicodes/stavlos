@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -60,17 +59,6 @@ func (m monitorsAPI) Has(id string) bool {
 	defer m.a.mu.Unlock()
 	_, ok := m.a.monitors[id]
 	return ok
-}
-
-func (a *Agent) monitorList() []*Monitor {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	out := make([]*Monitor, 0, len(a.monitors))
-	for _, m := range a.monitors {
-		out = append(out, m)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Started.Before(out[j].Started) })
-	return out
 }
 
 // adoptMonitor turns a running shell command into a job: the process keeps

@@ -57,25 +57,6 @@ func mk(seq int64, agent string, typ event.Type, payload any) event.Event {
 	return event.Event{Seq: seq, Session: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
 }
 
-func contains(got []string, s string) bool {
-	for _, g := range got {
-		if g == s {
-			return true
-		}
-	}
-	return false
-}
-
-func count(got []string, s string) int {
-	n := 0
-	for _, g := range got {
-		if g == s {
-			n++
-		}
-	}
-	return n
-}
-
 // markCursorForTest swaps the (background colour) cursor highlight for a
 // visible gutter mark so assertions can see which rows carry the cursor.
 func markCursorForTest(t *testing.T) {

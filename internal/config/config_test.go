@@ -159,7 +159,7 @@ You review.
 		t.Fatalf("tools %v", p.Tools)
 	}
 	pol := p.PresetPolicy()
-	if pol.Decide("shell", "git push origin") != policy.Deny || pol.Decide("shell", "git push origin") != policy.Deny || pol.Decide("shell", "ls") != policy.Ask || pol.Decide("read", "x") != policy.Allow {
+	if pol.Decide("shell", "git push origin") != policy.Deny || pol.Decide("shell", "ls") != policy.Ask || pol.Decide("read", "x") != policy.Allow {
 		t.Fatalf("rules %+v", pol.Rules())
 	}
 	// whitelist helpers
