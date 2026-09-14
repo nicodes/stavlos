@@ -11,6 +11,7 @@ import (
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // Result is a tool's output.
@@ -144,24 +145,15 @@ func Builtin() Set {
 	return s
 }
 
-// OrchestrationNames are the tools implied by a non-empty spawn list.
-var OrchestrationNames = []string{"agent_create", "agent_cancel"}
-
-// MessagingNames are offered to every agent: any agent may prompt any
-// other in its session and see the tree. Steering is the main agent's
-// alone (it is offered separately), and lifecycle tools stay with the
-// parent (see OrchestrationNames).
-var MessagingNames = []string{"agent_message", "agent_response", "agent_status"}
-
-// AsyncNames are offered to every agent that has shell.
-var AsyncNames = []string{"shell_kill"}
-
-// AskNames are offered to every agent: asking the human is never a role
-// choice.
-var AskNames = []string{"ask_user"}
-
-// TodoNames are the tools implied by "todo" in a preset's tool list.
-var TodoNames = []string{"todo_add", "todo_update"}
+// The tool groups a preset's list implies live in toolname; these names
+// stay for the agent package's prompt assembly.
+var (
+	OrchestrationNames = toolname.Orchestration // implied by a non-empty spawn list
+	MessagingNames     = toolname.Messaging     // every agent may message any other and see the tree
+	AsyncNames         = toolname.Async         // every agent that has shell
+	AskNames           = toolname.Ask           // every agent: asking the human is never a role choice
+	TodoNames          = toolname.Todo          // implied by "todo" in a preset's tool list
+)
 
 func schema(props map[string]any, required ...string) json.RawMessage {
 	m := map[string]any{"type": "object", "properties": props}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -171,11 +172,11 @@ func (a *Agent) applyDirRemoved(dir string) {
 func (a *Agent) outsideDir(name string, input json.RawMessage, t tools.Tool) string {
 	var paths []string
 	switch name {
-	case "shell":
+	case toolname.Shell:
 		var in struct{ Command string }
 		_ = json.Unmarshal(input, &in)
 		paths = bashPathCandidates(in.Command, a.s.Dir)
-	case "read", "apply_patch":
+	case toolname.Read, toolname.ApplyPatch:
 		if ma, ok := t.(tools.MultiArg); ok {
 			paths = ma.PolicyArgs(input)
 		} else {

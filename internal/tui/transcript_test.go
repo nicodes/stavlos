@@ -163,8 +163,7 @@ func TestToolLine(t *testing.T) {
 		{"shell", `{"command":"git status"}`, "Shell  git status"},
 		{"shell", `{"command":"ls\nfoo"}`, "Shell  ls foo"},
 		{"read", `{"path":"internal/agent/turn.go","offset":1}`, "Read  internal/agent/turn.go"},
-		{"edit", `{"path":"file.go","old_string":"a","new_string":"b"}`, "Edit  file.go"},
-		{"write", `{"path":"x.go","content":"..."}`, "Write  x.go"},
+		{"bash", `{"command":"ls"}`, "Shell  ls"}, // a log from before the rename reads as the current tool
 		{"shell", `{"command":"go test ./..."}`, "Shell  go test ./..."},
 		{"shell_kill", `{"id":"m1"}`, "Shell kill  m1"},
 		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
@@ -173,7 +172,6 @@ func TestToolLine(t *testing.T) {
 		{"agent_cancel", `{"id":"ag_1"}`, "Agent cancel  ag_1"},
 		{"agent_response", `{"to":"ag_2","text":"found it"}`, "Agent response delivered  → ag_2"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
-		{"agent_finish", `{"status":"success","summary":"x"}`, "Agent complete  success"},
 		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
 		{"shell", ``, "Shell"},
 	}
@@ -204,15 +202,15 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "read", Output: sb.String(), IsError: true}))
-	tr.Apply(mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c2", Name: "write", Input: json.RawMessage(`{"path":"b.go"}`)}))
-	tr.Apply(mk(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c2", Name: "write", Denied: true}))
+	tr.Apply(mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c2", Name: "read", Input: json.RawMessage(`{"path":"b.go"}`)}))
+	tr.Apply(mk(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c2", Name: "read", Denied: true}))
 	tr.Apply(mk(5, "a", event.Compacted, event.CompactedPayload{FromSeq: 1, ToSeq: 3}))
 	if tr.Running() {
 		t.Fatal("Running() should be false after all calls finished")
 	}
 
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"◆ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "◆ Write  b.go (denied)"})
+	assertSubsequence(t, got, []string{"◆ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "◆ Read  b.go (denied)"})
 	if n := count(got, "  line"); n != maxOutputCollapsed {
 		t.Fatalf("collapsed: want %d output lines, got %d", maxOutputCollapsed, n)
 	}

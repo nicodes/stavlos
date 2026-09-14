@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -19,7 +20,7 @@ func (a *Agent) todosAPI() tools.Todos { return todosAPI{a: a} }
 // todoAPIIfEnabled is the list for the tool env, nil when the preset does
 // not include "todo" (the tools then report themselves unavailable).
 func (a *Agent) todoAPIIfEnabled() tools.Todos {
-	if contains(a.preset.Tools, "todo") {
+	if contains(a.preset.Tools, toolname.GroupTodo) {
 		return a.todosAPI()
 	}
 	return nil

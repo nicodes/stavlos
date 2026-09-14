@@ -9,6 +9,7 @@ import (
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // Recover rebuilds a session from its log (PRD §4.3, §5). Any turn that was
@@ -219,7 +220,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			}
 		case event.ToolCallStarted:
 			var p event.ToolStartedPayload
-			if _ = e.Decode(&p); p.Name == "agent_message" || p.Name == "agent_prompt" {
+			if _ = e.Decode(&p); toolname.Canonical(p.Name) == toolname.AgentMessage {
 				var in struct{ ID string }
 				if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
 					askTargets[p.CallID] = in.ID
@@ -323,7 +324,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 func missingRolePreset(name string) config.Preset {
 	return config.Preset{
 		Name: name, Description: "(role no longer exists)", Mode: config.ModeAll, Layer: "builtin", Loop: "default",
-		Tools: []string{"read"},
+		Tools: []string{toolname.Read},
 		Body:  "Your role's definition is gone from the configuration. You can only read files until the human picks a role with /role; say so if asked to do more.",
 	}
 }

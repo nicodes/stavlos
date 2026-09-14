@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // apply_patch: the Codex CLI patch grammar. No line numbers; hunks are
@@ -45,7 +46,7 @@ Rules: paths are relative to the working directory. Update hunks must include en
 type patchTool struct{}
 
 func (patchTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "apply_patch", Description: patchDescription,
+	return model.ToolDef{Name: toolname.ApplyPatch, Description: patchDescription,
 		Schema: schema(map[string]any{"patch": prop("string", "The full patch text, from *** Begin Patch to *** End Patch")}, "patch")}
 }
 

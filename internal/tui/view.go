@@ -6,6 +6,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
+	"github.com/nicodes/stavlos/internal/toolname"
 	"strconv"
 	"strings"
 	"time"
@@ -1630,20 +1631,20 @@ func (m Model) agentWhoLabel(id string) string {
 // fullToolArg is toolArg without the one-line flattening for the tools
 // whose argument is text the user must read in full before approving.
 func fullToolArg(tool string, raw json.RawMessage) string {
-	switch tool {
-	case "web_fetch":
+	switch toolname.Canonical(tool) {
+	case toolname.WebFetch:
 		var in struct {
 			URL string `json:"url"`
 		}
 		_ = json.Unmarshal(raw, &in)
 		return strings.TrimSpace(in.URL)
-	case "web_search":
+	case toolname.WebSearch:
 		var in struct {
 			Query string `json:"query"`
 		}
 		_ = json.Unmarshal(raw, &in)
 		return strings.TrimSpace(in.Query)
-	case "shell", "bash", "bash_async": // the last two: old logs
+	case toolname.Shell:
 		var in struct {
 			Command string `json:"command"`
 		}
@@ -1854,14 +1855,15 @@ const (
 
 // toolGlyph returns the glyph for a tool name and the gap after it.
 func toolGlyph(tool string) (string, string) {
+	tool = toolname.Canonical(tool)
 	switch {
 	case strings.HasPrefix(tool, "agent_"):
 		return glyphToolAgents, " "
-	case tool == "shell" || tool == "shell_kill" || tool == "bash" || tool == "bash_async" || tool == "bash_async_kill":
+	case tool == toolname.Shell || tool == toolname.ShellKill:
 		return glyphToolShell, " "
 	case strings.HasPrefix(tool, "todo_"):
 		return glyphToolTodo, " "
-	case strings.HasPrefix(tool, "mcp__"):
+	case strings.HasPrefix(tool, toolname.MCPPrefix):
 		return glyphToolMCP, " "
 	case strings.HasPrefix(tool, "web_"):
 		return glyphToolWeb, " "

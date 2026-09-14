@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 type skillTool struct{}
 
 func (skillTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "skill", Description: "Load the full instructions of a skill by name. Skill descriptions are listed in your system prompt; load one when its description matches the task.",
+	return model.ToolDef{Name: toolname.Skill, Description: "Load the full instructions of a skill by name. Skill descriptions are listed in your system prompt; load one when its description matches the task.",
 		Schema: schema(map[string]any{"name": prop("string", "Skill name")}, "name")}
 }
 func (skillTool) PolicyArg(in json.RawMessage) string {
@@ -41,7 +42,7 @@ func (skillTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type responseTool struct{}
 
 func (responseTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_response", Description: "Answer an agent that prompted you. The text lands in that agent's mailbox and wakes it between turns; you stay alive and can be prompted again. Use it once per asker; answer the human in your normal reply instead.",
+	return model.ToolDef{Name: toolname.AgentResponse, Description: "Answer an agent that prompted you. The text lands in that agent's mailbox and wakes it between turns; you stay alive and can be prompted again. Use it once per asker; answer the human in your normal reply instead.",
 		Schema: schema(map[string]any{
 			"to":   prop("string", "The asking agent's id (the message you are answering names it)"),
 			"text": prop("string", "Your answer: what you did or found, with exact paths and results"),

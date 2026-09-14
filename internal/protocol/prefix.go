@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/shellcmd"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // ToolPrefix is what "allow … for this session" may remember for a tool
@@ -12,9 +13,9 @@ import (
 // web_fetch, "" for tools without a sensible prefix.
 func ToolPrefix(tool, arg string) string {
 	switch tool {
-	case "shell":
+	case toolname.Shell:
 		return shellcmd.Prefix(arg)
-	case "web_fetch":
+	case toolname.WebFetch:
 		return URLHost(arg)
 	}
 	return ""
@@ -25,9 +26,9 @@ func ToolPrefix(tool, arg string) string {
 // web_fetch.
 func ToolPrefixCovers(tool, prefix, arg string) bool {
 	switch tool {
-	case "shell":
+	case toolname.Shell:
 		return shellcmd.Covers(prefix, arg)
-	case "web_fetch":
+	case toolname.WebFetch:
 		return prefix != "" && URLHost(arg) == prefix
 	}
 	return false
