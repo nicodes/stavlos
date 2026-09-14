@@ -559,14 +559,13 @@ func padLines(s string, width int) string {
 
 // --- logo ---
 
-// logoGlyphs are 3-row double-line letters, 3 cells wide, for the logo.
-// Stavlos is Greek (ΣΤΑΥΛΟΣ), so the v is an upsilon: two arms the full
-// height and the stem only a nub at the foot, so it does not read as a y.
+// logoGlyphs are 3-row double-line letters for the logo, 3 cells wide
+// except the v, whose legs need 4 to meet in a foot.
 var logoGlyphs = map[rune][3]string{
 	's': {"╔═╗", "╚═╗", "╚═╝"},
 	't': {"╔╦╗", " ║ ", " ╩ "},
 	'a': {"╔═╗", "╠═╣", "╩ ╩"},
-	'v': {"╦ ╦", "║ ║", "╚╦╝"},
+	'v': {"╦  ╦", "╚╗╔╝", " ╚╝ "},
 	'l': {"╦  ", "║  ", "╩═╝"},
 	'o': {"╔═╗", "║ ║", "╚═╝"},
 }
