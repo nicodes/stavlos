@@ -141,7 +141,7 @@ tests that pin current behaviour first.
     `partialWriter` stops streaming after adoption. Rune-safe truncation helper everywhere.
 4.7 web_search default: see decision D3.
 
-### Phase 5 — Agent core  [L]
+### Phase 5 — Agent core  [L]  ✅ done 2026-09-14 (5.1 as targeted replay fixes guarded by the round-trip test; 5.2 as roleView snapshots rather than a command channel; 5.3–5.7)
 
 5.1 **One reducer**: `(*Agent).apply(event)` / `(*Session).apply(event)`; live path = `Append` then
     `apply`; `Recover` = replay + `abortOpenTurns` + `reportLostJobs`. Log resolved target ids
