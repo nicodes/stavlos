@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/model/stream"
 )
 
 // defaultMaxTokens is used when Request.MaxTokens is zero.
@@ -28,7 +29,7 @@ func New(name, baseURL, apiKey string) model.Provider {
 		name:    name,
 		baseURL: strings.TrimRight(baseURL, "/"),
 		apiKey:  apiKey,
-		http:    &http.Client{}, // no timeout: streams are long; ctx bounds them
+		http:    stream.NewHTTPClient(),
 	}
 }
 
@@ -39,7 +40,7 @@ func NewWithToken(name, baseURL string, src model.TokenSource) model.Provider {
 		name:    name,
 		baseURL: strings.TrimRight(baseURL, "/"),
 		token:   src,
-		http:    &http.Client{},
+		http:    stream.NewHTTPClient(),
 	}
 }
 

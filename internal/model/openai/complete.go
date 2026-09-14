@@ -1,24 +1,21 @@
 package openai
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"sort"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/model/stream"
 )
 
-// maxErrorBody bounds how much of an error response we quote.
-const maxErrorBody = 2048
-
-// Complete streams one chat completion. On ctx cancellation it returns the
-// partial accumulation with ctx.Err().
+// Complete streams one chat completion through the shared transport
+// (internal/model/stream): retries before the first byte, an idle
+// watchdog, and an error when the stream ends without a finish reason. On
+// ctx cancellation it returns the partial accumulation with ctx.Err().
 func (m *client) Complete(ctx context.Context, req model.Request, onDelta func(model.Delta)) (model.Response, error) {
 	if onDelta == nil {
 		onDelta = func(model.Delta) {}
@@ -27,20 +24,9 @@ func (m *client) Complete(ctx context.Context, req model.Request, onDelta func(m
 	if err != nil {
 		return model.Response{}, fmt.Errorf("%s: %w", m.p.name, err)
 	}
-	resp, err := m.p.post(ctx, body)
-	if err != nil {
-		return model.Response{}, err
-	}
-	defer resp.Body.Close()
-
-	acc := newAccumulator(onDelta)
-	if err := readSSE(ctx, resp.Body, acc.feed); err != nil {
-		if ctx.Err() != nil {
-			return acc.response(), ctx.Err()
-		}
-		return acc.response(), fmt.Errorf("%s: %w", m.p.name, err)
-	}
-	return acc.response(), nil
+	return stream.Complete(ctx, stream.Request{
+		Name: m.p.name, Client: m.p.http, URL: m.p.baseURL + "/chat/completions", Body: body, Header: m.p.header,
+	}, newAccumulator(onDelta))
 }
 
 func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {
@@ -66,100 +52,18 @@ func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {
 	return json.Marshal(cr)
 }
 
-func (p *provider) post(ctx context.Context, body []byte) (*http.Response, error) {
-	url := p.baseURL + "/chat/completions"
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", p.name, err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "text/event-stream")
+// header sets the bearer credential: a rotating token when configured,
+// else a static key (none for local servers).
+func (p *provider) header(ctx context.Context, h http.Header) error {
 	switch {
 	case p.token != nil:
 		tok, err := p.token(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", p.name, err)
+			return fmt.Errorf("%s: %w", p.name, err)
 		}
-		httpReq.Header.Set("Authorization", "Bearer "+tok.Access)
+		h.Set("Authorization", "Bearer "+tok.Access)
 	case p.apiKey != "":
-		httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
-	}
-	resp, err := p.http.Do(httpReq)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, fmt.Errorf("%s: %w", p.name, err)
-	}
-	if resp.StatusCode/100 != 2 {
-		defer resp.Body.Close()
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
-		return nil, fmt.Errorf("%s: status %d: %s", p.name, resp.StatusCode, errorText(raw))
-	}
-	return resp, nil
-}
-
-// errorText extracts the API's message from an error body, or quotes it.
-func errorText(raw []byte) string {
-	var env errorEnvelope
-	if json.Unmarshal(raw, &env) == nil && env.Error != nil && env.Error.Message != "" {
-		if env.Error.Type != "" {
-			return env.Error.Type + ": " + env.Error.Message
-		}
-		return env.Error.Message
-	}
-	return strings.TrimSpace(string(raw))
-}
-
-// readSSE parses a text/event-stream body, calling onData for each
-// "data:" payload until [DONE], EOF, or ctx cancellation.
-func readSSE(ctx context.Context, r io.Reader, onData func([]byte) error) error {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64<<10), 16<<20)
-	var data []byte
-	flush := func() error {
-		if len(data) == 0 {
-			return nil
-		}
-		payload := data
-		data = nil
-		if bytes.Equal(bytes.TrimSpace(payload), []byte("[DONE]")) {
-			return io.EOF
-		}
-		return onData(payload)
-	}
-	for sc.Scan() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		line := sc.Bytes()
-		switch {
-		case len(line) == 0:
-			if err := flush(); err != nil {
-				if err == io.EOF {
-					return nil
-				}
-				return err
-			}
-		case bytes.HasPrefix(line, []byte(":")):
-			// comment / keepalive
-		case bytes.HasPrefix(line, []byte("data:")):
-			v := bytes.TrimPrefix(line, []byte("data:"))
-			v = bytes.TrimPrefix(v, []byte(" "))
-			if len(data) > 0 {
-				data = append(data, '\n')
-			}
-			data = append(data, v...)
-		}
-	}
-	if err := sc.Err(); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return err
-	}
-	if err := flush(); err != nil && err != io.EOF {
-		return err
+		h.Set("Authorization", "Bearer "+p.apiKey)
 	}
 	return nil
 }
@@ -178,6 +82,13 @@ type accumulator struct {
 func newAccumulator(onDelta func(model.Delta)) *accumulator {
 	return &accumulator{onDelta: onDelta, calls: map[int]*toolCall{}}
 }
+
+// Feed, Response and Terminal make the accumulator a stream.Codec.
+func (a *accumulator) Feed(payload []byte) error { return a.feed(payload) }
+func (a *accumulator) Response() model.Response  { return a.response() }
+
+// Terminal: a finish reason arrived (some servers close without [DONE]).
+func (a *accumulator) Terminal() bool { return a.finish != "" }
 
 func (a *accumulator) feed(payload []byte) error {
 	var chunk chatChunk
