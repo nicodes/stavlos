@@ -2249,7 +2249,7 @@ func TestSidebarNav(t *testing.T) {
 	}
 	m.setFocus(focusSidebar)
 	body, items := m.sidebarBody(sidebarWidth - 1)
-	if len(body) != len(m.agents)+2 || items[len(m.agents)+1] != len(m.agents) || !strings.Contains(stripANSI(body[len(m.agents)+1]), "sessions 2 ▸") {
+	if len(body) != len(m.agents)+2 || items[len(m.agents)+1] != len(m.agents) || !strings.HasPrefix(stripANSI(body[len(m.agents)+1]), "sessions 2 ▸") {
 		t.Fatalf("folded sessions section:\n%s\n%v", strings.Join(body, "\n"), items)
 	}
 	for m.sbCursor != len(m.agents) {
@@ -2264,7 +2264,7 @@ func TestSidebarNav(t *testing.T) {
 		plainBody[i] = stripANSI(r)
 	}
 	na := len(m.agents)
-	if len(body) != na+4 || !strings.Contains(plainBody[na+1], "sessions ▾") || !strings.HasPrefix(plainBody[na+2], "  › fix the login bug") || strings.Contains(plainBody[na+2], "\n") || !strings.HasSuffix(plainBody[na+2], "2h00m") || !strings.HasPrefix(plainBody[na+3], "  › docs sweep") || !strings.HasSuffix(plainBody[na+3], "26h00m") || items[na+3] != na+2 {
+	if len(body) != na+4 || !strings.HasPrefix(plainBody[na+1], "sessions ▾") || !strings.HasPrefix(plainBody[na+2], "  › fix the login bug") || strings.Contains(plainBody[na+2], "\n") || !strings.HasSuffix(plainBody[na+2], "2h00m") || !strings.HasPrefix(plainBody[na+3], "  › docs sweep") || !strings.HasSuffix(plainBody[na+3], "26h00m") || items[na+3] != na+2 {
 		t.Fatalf("open sessions section:\n%s\n%v", strings.Join(plainBody, "\n"), items)
 	}
 	for _, r := range plainBody[na+2:] {
