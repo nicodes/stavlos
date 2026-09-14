@@ -1131,3 +1131,55 @@ func TestTodoListLogsProjectsAndRecovers(t *testing.T) {
 		t.Fatalf("todos after recovery %+v", agents[0].Todos)
 	}
 }
+
+func TestFullAgentIDs(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			return call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look around"}`)
+		},
+		func(model.Request) model.Response { return text("waiting") },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0].Text
+			if !strings.Contains(last, "found it") {
+				t.Errorf("parent should have the child's answer: %q", last)
+			}
+			return text("thanks")
+		},
+	}
+	var parent string
+	fm.childSteps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			parent = parentIDFromSystem(req.System)
+			last := req.Messages[len(req.Messages)-1].Blocks[0].Text
+			// the task names its sender with the whole id, never a shortened one
+			if !strings.Contains(last, "[message from agent main ("+parent+")]") {
+				t.Errorf("task should name the parent by full id: %q (parent %s)", last, parent)
+			}
+			// a unique prefix still resolves, for models that shorten anyway
+			return call("k1", "agent_response", `{"to":"`+parent[:8]+`","text":"found it"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || !strings.Contains(last.Content, "response delivered") {
+				t.Errorf("prefix id should resolve: %+v", last)
+			}
+			return text("done")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	h.waitFor(event.ResponseReceived, root)
+	h.waitFor(event.TurnEnded, root) // the "thanks" turn
+	if len(fm.calls) < 3 {
+		h.waitFor(event.TurnEnded, root)
+	}
+}

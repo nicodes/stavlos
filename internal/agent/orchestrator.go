@@ -22,33 +22,28 @@ func (s *Session) senderLabel(source string) string {
 	if !ok {
 		return ""
 	}
+	// The label carries the full id: models copy it into agent_response,
+	// and a shortened one would not resolve.
 	if a, ok := s.Agent(id); ok {
-		return fmt.Sprintf("%s (%s)", a.Label, shortID(id))
-	}
-	return shortID(id)
-}
-
-func shortID(id string) string {
-	if len(id) > 8 {
-		return id[:8]
+		return fmt.Sprintf("%s (%s)", a.Label, id)
 	}
 	return id
 }
 
 // peer resolves any other live agent in the same session.
 func (o orchestrator) peer(caller, id string) (*Agent, error) {
-	if id == caller {
-		return nil, fmt.Errorf("agent %q is you", id)
-	}
-	c, ok := o.s.Agent(id)
+	c, ok := o.s.resolve(id)
 	if !ok {
 		return nil, fmt.Errorf("unknown agent %q", id)
+	}
+	if c.ID == caller {
+		return nil, fmt.Errorf("agent %q is you", id)
 	}
 	return c, nil
 }
 
 func (o orchestrator) child(parent, id string) (*Agent, error) {
-	c, ok := o.s.Agent(id)
+	c, ok := o.s.resolve(id)
 	if !ok {
 		return nil, fmt.Errorf("unknown agent %q", id)
 	}
@@ -78,7 +73,7 @@ func (o orchestrator) Message(caller, id, text string) error {
 		return err
 	}
 	if from, ok := o.s.Agent(caller); ok {
-		from.expect(id)
+		from.expect(c.ID)
 	}
 	return nil
 }
@@ -114,9 +109,11 @@ func (o orchestrator) Respond(caller, to, text string) error {
 	from, _ := o.s.Agent(caller)
 	label := caller
 	if from != nil {
-		label = fmt.Sprintf("%s (%s)", from.Label, shortID(caller))
+		label = fmt.Sprintf("%s (%s)", from.Label, caller)
 	}
-	if _, err := o.s.host.Append(context.Background(), event.Event{Session: o.s.ID, Agent: to, Type: event.ResponseReceived,
+	// Logged under the resolved id (to may be a prefix): recovery replays
+	// the event onto e.Agent.
+	if _, err := o.s.host.Append(context.Background(), event.Event{Session: o.s.ID, Agent: c.ID, Type: event.ResponseReceived,
 		Payload: event.MustPayload(event.ResponsePayload{From: caller, FromLabel: label, Text: text})}); err != nil {
 		return err
 	}
@@ -132,7 +129,7 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 	}
 	var agents []*Agent
 	if id != "" {
-		c, ok := o.s.Agent(id)
+		c, ok := o.s.resolve(id)
 		if !ok {
 			return nil, fmt.Errorf("unknown agent %q", id)
 		}

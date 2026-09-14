@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -181,6 +182,29 @@ func (s *Session) Agent(id string) (*Agent, bool) {
 	defer s.mu.RUnlock()
 	a, ok := s.agents[id]
 	return a, ok
+}
+
+// resolve finds an agent by its id, or by a unique prefix of at least four
+// characters (models sometimes copy a shortened id from a status line).
+func (s *Session) resolve(id string) (*Agent, bool) {
+	if a, ok := s.Agent(id); ok {
+		return a, true
+	}
+	if len(id) < 4 {
+		return nil, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var found *Agent
+	for _, a := range s.agents {
+		if strings.HasPrefix(a.ID, id) {
+			if found != nil {
+				return nil, false // ambiguous
+			}
+			found = a
+		}
+	}
+	return found, found != nil
 }
 
 // Root returns the root agent.
