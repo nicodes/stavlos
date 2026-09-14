@@ -213,7 +213,7 @@ func (d *Daemon) session(id string) (*agent.Session, error) {
 	defer d.mu.RUnlock()
 	s, ok := d.sessions[id]
 	if !ok {
-		return nil, fmt.Errorf("session %q not found", id)
+		return nil, fmt.Errorf("session %q %w", id, errNotFound)
 	}
 	return s, nil
 }
@@ -227,7 +227,7 @@ func (d *Daemon) agentSession(agentID string) (*agent.Session, *agent.Agent, err
 			return s, a, nil
 		}
 	}
-	return nil, nil, fmt.Errorf("agent %q not found", agentID)
+	return nil, nil, fmt.Errorf("agent %q %w", agentID, errNotFound)
 }
 
 // CreateSession creates and starts a session in dir.
@@ -705,8 +705,6 @@ func (d *Daemon) Status() protocol.DaemonStatusResult {
 	sort.Strings(provs)
 	return protocol.DaemonStatusResult{Version: protocol.Version, Build: buildid.ID(), PID: os.Getpid(), DataDir: d.DataDir, Sessions: len(d.sessions), Agents: n, Providers: provs}
 }
-
-var errNoSession = errors.New("session not found")
 
 // errTrustChanged: a trust reply carried a hash that no longer matches the
 // project's files (mapped to ErrConflict on the wire).

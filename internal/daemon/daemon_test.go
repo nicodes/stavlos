@@ -1,10 +1,12 @@
 package daemon
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -819,15 +821,29 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 	if !strings.HasPrefix(um.From, "scout (") || um.Text != "which branch?" || um.Kind != "prompt" {
 		t.Fatalf("parent's message: %+v", um)
 	}
-	var te event.TurnEndedPayload
-	for te.Turn != 2 {
-		e := h.waitFor(event.TurnEnded, rootID)
-		_ = e.Decode(&te)
+	// The parent's turn 2 ending and the child's agent_response (after its
+	// status check) race each other; either may come first.
+	var turn2, responded bool
+	deadline := time.After(10 * time.Second)
+	for !turn2 || !responded {
+		select {
+		case e := <-h.evs:
+			switch {
+			case e.Type == event.TurnEnded && e.Agent == rootID:
+				var te event.TurnEndedPayload
+				if _ = e.Decode(&te); te.Turn == 2 {
+					if te.Reason != "end_turn" {
+						t.Fatalf("turn 2: %+v", te)
+					}
+					turn2 = true
+				}
+			case e.Type == event.ResponseReceived && e.Agent == rootID:
+				responded = true
+			}
+		case <-deadline:
+			t.Fatalf("turn 2 ended %v, response received %v\nevents so far:\n%s", turn2, responded, strings.Join(h.recentEvents(), "\n"))
+		}
 	}
-	if te.Reason != "end_turn" {
-		t.Fatalf("turn 2: %+v", te)
-	}
-	h.waitFor(event.ResponseReceived, rootID) // the child's agent_response, after its status check
 }
 
 func TestVariants(t *testing.T) {
@@ -2275,9 +2291,20 @@ func TestSlowClientDoesNotStallTheDaemon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	stalled := attached(t, h.sock) // subscribes and never reads again
-	if err := stalled.Subscribe(ctx, s.ID, 0); err != nil {
+	// The stalled client is a raw connection that attaches, subscribes and
+	// never reads: its socket buffer fills after a few events.
+	stalled, err := net.Dial("unix", h.sock)
+	if err != nil {
 		t.Fatal(err)
+	}
+	defer stalled.Close()
+	if _, err := stalled.Write([]byte(`{"jsonrpc":"2.0","v":1,"id":1,"method":"attach","params":{"client":"stalled","tier":"interactive"}}` + "\n" +
+		`{"jsonrpc":"2.0","v":1,"id":2,"method":"subscribe","params":{"session":"` + s.ID + `","from":1}}` + "\n")); err != nil {
+		t.Fatal(err)
+	}
+	waitSubs := time.Now().Add(5 * time.Second)
+	for len(h.d.clientList()) < 2 && time.Now().Before(waitSubs) {
+		time.Sleep(10 * time.Millisecond)
 	}
 	good := attached(t, h.sock)
 	stop := make(chan struct{})
@@ -2285,16 +2312,15 @@ func TestSlowClientDoesNotStallTheDaemon(t *testing.T) {
 	if err := good.Subscribe(ctx, s.ID, 0); err != nil {
 		t.Fatal(err)
 	}
-	// 1500 events of 8 KB overflow the stalled client's buffer and its
-	// socket many times over. Before the outbound queue the appends blocked
-	// for good on the first full socket; now they finish (slowly under the
-	// race detector, hence the generous bound).
+	// 600 events of 8 KB overflow the stalled socket many times over.
+	// Before the outbound queue the appends blocked for good on the first
+	// full socket; now they finish.
 	payload := event.MustPayload(event.TextPayload{Text: strings.Repeat("x", 8000)})
 	var last event.Event
 	appended := make(chan error, 1)
 	go func() {
 		var err error
-		for i := 0; i < 1500 && err == nil; i++ {
+		for i := 0; i < 600 && err == nil; i++ {
 			last, err = h.d.Append(ctx, event.Event{Session: s.ID, Type: "test.noise", Payload: payload})
 		}
 		appended <- err
@@ -2375,5 +2401,58 @@ func TestSubscribeHandoverIsContiguous(t *testing.T) {
 		if len(evs) == 0 || evs[len(evs)-1].Seq != final {
 			t.Fatalf("round %d: got %d events, last appended %d", round, len(evs), final)
 		}
+	}
+}
+
+// TestWireErrors pins the envelope version check and the error codes the
+// handler table maps to.
+func TestWireErrors(t *testing.T) {
+	setupConfig(t)
+	h := newHarness(t, t.TempDir(), &fakeModel{})
+	defer h.close()
+	raw, err := net.Dial("unix", h.sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer raw.Close()
+	rd := bufio.NewReader(raw)
+	ask := func(line string) protocol.Response {
+		t.Helper()
+		if _, err := raw.Write([]byte(line + "\n")); err != nil {
+			t.Fatal(err)
+		}
+		b, err := rd.ReadBytes('\n')
+		if err != nil {
+			t.Fatal(err)
+		}
+		var r protocol.Response
+		if err := json.Unmarshal(b, &r); err != nil {
+			t.Fatalf("%s: %v", b, err)
+		}
+		return r
+	}
+	cases := []struct {
+		line string
+		code int
+	}{
+		{`{"jsonrpc":"2.0","id":1,"method":"daemon.status"}`, protocol.ErrVersion},
+		{`{"jsonrpc":"2.0","id":2,"v":1,"method":"no.such"}`, protocol.ErrMethodNotFound},
+		{`{"jsonrpc":"2.0","id":3,"v":1,"method":"session.resume","params":{"id":7}}`, protocol.ErrInvalidParams},
+		{`{"jsonrpc":"2.0","id":4,"v":1,"method":"session.resume","params":{"id":"s-missing"}}`, protocol.ErrNotFound},
+		{`{"jsonrpc":"2.0","id":5,"v":1,"method":"agent.send","params":{"agent":"a-missing","kind":"prompt"}}`, protocol.ErrNotFound},
+		{`{"jsonrpc":"2.0","id":6,"v":1,"method":"prompt.reply","params":{"id":"p-missing","answer":"allow"}}`, protocol.ErrConflict},
+		{`{"jsonrpc":"2.0","id":7,"v":1,"method":"session.create","params":{"dir":"/definitely/not/here"}}`, protocol.ErrInvalidParams},
+	}
+	for _, c := range cases {
+		r := ask(c.line)
+		if r.Error == nil || r.Error.Code != c.code {
+			t.Errorf("%s: got %+v, want code %d", c.line, r.Error, c.code)
+		}
+	}
+	if r := ask(`{"jsonrpc":"2.0","id":8,"v":1,"method":"daemon.status"}`); r.Error != nil || len(r.Result) == 0 {
+		t.Fatalf("status with the version: %+v", r)
+	}
+	if r := ask(`{"jsonrpc":"2.0","id":9,"v":1,"method":"session.resume","params":{"id":"s-missing"}}`); r.Error == nil || r.Error.Message != `session "s-missing" not found` {
+		t.Fatalf("message: %+v", r.Error)
 	}
 }
