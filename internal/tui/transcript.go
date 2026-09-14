@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -130,18 +131,30 @@ type streamSeg struct {
 // can be switched back on later.
 var ShowThinking = false
 
-type Transcript struct {
-	Lines []Line
+// lineRef addresses one committed line by its item and its offset inside
+// the item. Lines are only ever appended to an item (or the whole item is
+// replaced), so a ref stays valid however the transcript grows: nothing is
+// shifted when output is spliced in under an earlier call.
+type lineRef struct{ item, off int }
 
-	calls       map[string]int    // tool call id → index of its LineTool
-	prompts     map[string]int    // prompt id → item of the tool call it gates
-	promptLine  map[string]int    // prompt id → index of its "?" line (tone flips on answer)
-	monitors    map[string]int    // monitor id → index of its "started" line
-	children    map[string]int    // child agent id → index of the agent_create line that spawned it
-	askTarget   map[string]string // agent_message call id → the agent it asked (until the call finishes)
-	asks        map[string][]int  // agent id → indices of agent_message lines still waiting for its answer
-	monKinds    map[string]string // monitor id → kind, for the glyph on later events
-	items       int               // committed items so far
+func (r lineRef) after(o lineRef) bool {
+	return r.item > o.item || r.item == o.item && r.off > o.off
+}
+
+type Transcript struct {
+	items [][]Line // committed lines by item; items[i][j].Item == i
+	flat  []Line   // items flattened for rendering; nil when stale
+	start []int    // start[i]: index of items[i]'s first line in flat
+
+	calls      map[string]lineRef   // tool call id → its LineTool line
+	prompts    map[string]int       // prompt id → item of the tool call it gates
+	promptLine map[string]lineRef   // prompt id → its "?" line (tone flips when settled)
+	monitors   map[string]lineRef   // monitor id → its "started" line, or the shell call it grew from
+	children   map[string]lineRef   // child agent id → the agent_create line that spawned it
+	askTarget  map[string]string    // agent_message call id → the agent it asked (until the call finishes)
+	asks       map[string][]lineRef // agent id → agent_message lines still waiting for its answer
+	monKinds   map[string]string    // monitor id → kind, for the glyph on later events
+
 	streamTurn  int
 	stream      []streamSeg
 	turn        bool      // a turn is in progress (TurnStarted seen, not yet ended)
@@ -180,20 +193,26 @@ func (t *Transcript) TurnStats(now time.Time) (time.Duration, int) {
 
 // NewTranscript returns an empty transcript.
 func NewTranscript() *Transcript {
-	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}, promptLine: map[string]int{}, monitors: map[string]int{}, monKinds: map[string]string{}, children: map[string]int{}, askTarget: map[string]string{}, asks: map[string][]int{}, compactItem: -1}
+	return &Transcript{
+		calls: map[string]lineRef{}, prompts: map[string]int{}, promptLine: map[string]lineRef{},
+		monitors: map[string]lineRef{}, monKinds: map[string]string{}, children: map[string]lineRef{},
+		askTarget: map[string]string{}, asks: map[string][]lineRef{}, compactItem: -1,
+	}
 }
 
-// Apply appends the rendering of ev. An assistant.message (or the end of a
-// turn) replaces the in-progress streaming buffer; tool.call.finished updates
-// the matching tool line in place.
+// Apply folds ev into the transcript. An assistant.message (or the end of
+// a turn) replaces the in-progress streaming buffer; tool.call.finished
+// updates the matching tool line and nests the output under it.
 func (t *Transcript) Apply(ev event.Event) {
-	item := t.items // a new item, unless the lines extend an earlier one
 	// A compaction is one chat item: the rule with the sweeping bar while
 	// it runs, replaced in place by the result (or by a note when it
 	// failed, or when the turn ended without one — the daemon died).
 	switch ev.Type {
 	case event.CompactionStarted:
-		t.compactItem = item
+		if refs := t.appendItem(cleanLines(EventLines(ev))); len(refs) > 0 {
+			t.compactItem = refs[0].item
+		}
+		return
 	case event.Compacted, event.CompactionFailed:
 		if t.compactItem >= 0 {
 			t.replaceItem(t.compactItem, cleanLines(EventLines(ev)))
@@ -210,29 +229,35 @@ func (t *Transcript) Apply(ev event.Event) {
 	case event.ToolCallStarted:
 		var p event.ToolStartedPayload
 		if ev.Decode(&p) == nil && p.CallID != "" {
-			t.calls[p.CallID] = len(t.Lines)
+			if r, ok := t.find(t.appendItem(cleanLines(EventLines(ev))), isToolLine); ok {
+				t.calls[p.CallID] = r
+			}
 			if toolname.Canonical(p.Name) == toolname.AgentMessage {
 				var in struct{ ID string }
 				if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
 					t.askTarget[p.CallID] = in.ID
 				}
 			}
+			return
 		}
 	case event.PromptRequested:
 		// A permission prompt belongs to the call it gates: the open call
 		// with the same tool name (the latest one if several).
 		var p event.PromptRequestedPayload
 		if ev.Decode(&p) == nil {
-			if p.Kind == "permission" {
-				if item, ok := t.openCallItem(p.Tool); ok {
-					t.prompts[p.ID] = item
-					_, last := itemRange(t.Lines, item)
-					t.promptLine[p.ID] = last + 1 // where insertIntoItem puts it
-					t.insertIntoItem(item, nested(cleanLines(EventLines(ev))))
-					return
-				}
+			lines := cleanLines(EventLines(ev))
+			var refs []lineRef
+			item, gated := t.openCallItem(p.Tool)
+			if p.Kind == "permission" && gated {
+				t.prompts[p.ID] = item
+				refs = t.insertIntoItem(item, nested(lines))
+			} else {
+				refs = t.appendItem(lines)
 			}
-			t.promptLine[p.ID] = len(t.Lines)
+			if r, ok := t.find(refs, isPromptLine); ok {
+				t.promptLine[p.ID] = r
+			}
+			return
 		}
 	case event.PromptClaimed, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted:
 		var p event.PromptRefPayload
@@ -256,13 +281,16 @@ func (t *Transcript) Apply(ev event.Event) {
 			// call's own line: it stays yellow while the job runs and the
 			// outcome nests under it. Only a job with no such call gets its
 			// own notice.
-			if i := t.lastAsyncCall(); i >= 0 {
-				t.monitors[p.ID] = i
-				t.Lines[i].Tone = ToneWorking
+			if r, ok := t.lastUntiedCall(toolname.Shell, t.monitors); ok {
+				t.monitors[p.ID] = r
+				t.line(r).Tone = ToneWorking
 				t.stream = nil
 				return
 			}
-			t.monitors[p.ID] = len(t.Lines)
+			if r, ok := t.find(t.appendItem(cleanLines(EventLines(ev))), isNotBlank); ok {
+				t.monitors[p.ID] = r
+			}
+			return
 		}
 	case event.MonitorFired:
 		// The outcome joins the "started" notice's item, like tool output
@@ -272,58 +300,36 @@ func (t *Transcript) Apply(ev event.Event) {
 			if p.Kind == "" {
 				p.Kind = t.monKinds[p.ID]
 			}
-			lines := cleanLines(monitorFiredLines(p))
-			if i, ok := t.monitors[p.ID]; ok && i < len(t.Lines) {
-				t.Lines[i].Tone = ToneNone
-				if p.IsError {
-					t.Lines[i].Tone = ToneError
-				}
-				delete(t.monitors, p.ID)
-				if t.Lines[i].Kind == LineTool {
-					lines = nested(lines) // under the shell call, like tool output
-				}
-				t.insertIntoItem(t.Lines[i].Item, lines)
-				return
+			tone := ToneNone
+			if p.IsError {
+				tone = ToneError
 			}
-			delete(t.monitors, p.ID)
-			t.appendItem(item, lines)
+			t.settleMonitor(p.ID, tone, cleanLines(monitorFiredLines(p)))
 			return
 		}
 	case event.MonitorStopped:
 		var p event.MonitorRefPayload
 		if ev.Decode(&p) == nil {
-			lines := cleanLines(monitorStoppedLines(t.monKinds[p.ID], p.Reason))
-			if i, ok := t.monitors[p.ID]; ok && i < len(t.Lines) {
-				t.Lines[i].Tone = ToneError
-				delete(t.monitors, p.ID)
-				if t.Lines[i].Kind == LineTool {
-					lines = nested(lines)
-				}
-				t.insertIntoItem(t.Lines[i].Item, lines)
-				return
-			}
-			delete(t.monitors, p.ID)
-			t.appendItem(item, lines)
+			t.settleMonitor(p.ID, ToneError, cleanLines(monitorStoppedLines(t.monKinds[p.ID], p.Reason)))
 			return
 		}
 	case event.ToolCallFinished:
 		var p event.ToolFinishedPayload
 		if ev.Decode(&p) == nil {
-			if i, ok := t.calls[p.CallID]; ok && i < len(t.Lines) {
-				// Output joins the call's item and is placed right under the
-				// call, even when other items (a permission notice, say)
-				// were committed while the call ran.
-				item = t.Lines[i].Item
-				t.finishCall(p)
-				t.stream = nil
-				t.insertIntoItem(item, cleanLines(EventLines(ev)))
+			r, ok := t.calls[p.CallID]
+			t.finishCall(p)
+			t.stream = nil
+			if ok && t.valid(r) {
+				// Output joins the call's item, right under the call, even
+				// when other items (a question, say) were committed while the
+				// call ran.
+				t.insertIntoItem(r.item, cleanLines(EventLines(ev)))
 				return
 			}
-			t.finishCall(p)
 		}
 		t.stream = nil
 	}
-	t.appendItem(item, cleanLines(EventLines(ev)))
+	t.appendItem(cleanLines(EventLines(ev)))
 	switch ev.Type {
 	case event.TurnStarted:
 		t.turn, t.turnStart, t.turnTokens = true, ev.Time, 0
@@ -349,27 +355,106 @@ func (t *Transcript) Apply(ev event.Event) {
 	}
 }
 
-// appendItem commits lines under item; a fresh item index bumps the count.
+func isToolLine(l Line) bool   { return l.Kind == LineTool }
+func isPromptLine(l Line) bool { return l.Glyph == GlyphPrompt }
+func isNotBlank(l Line) bool   { return l.Kind != LineBlank }
+
+// --- item storage ---
+
+// valid reports whether r addresses a committed line.
+func (t *Transcript) valid(r lineRef) bool {
+	return r.item >= 0 && r.item < len(t.items) && r.off >= 0 && r.off < len(t.items[r.item])
+}
+
+// line returns the committed line at r for modification (nil if r is not
+// valid); the flattened view is rebuilt on the next read.
+func (t *Transcript) line(r lineRef) *Line {
+	if !t.valid(r) {
+		return nil
+	}
+	t.flat = nil
+	return &t.items[r.item][r.off]
+}
+
+// find returns the first of refs whose line satisfies ok.
+func (t *Transcript) find(refs []lineRef, ok func(Line) bool) (lineRef, bool) {
+	for _, r := range refs {
+		if t.valid(r) && ok(t.items[r.item][r.off]) {
+			return r, true
+		}
+	}
+	return lineRef{}, false
+}
+
+// appendItem commits lines as new items and returns a ref for each line.
 // Thinking is always its own item: each contiguous run of LineThink lines,
-// and the run of other lines after it, get successive item indices.
-func (t *Transcript) appendItem(item int, lines []Line) {
+// and the run of other lines after it, become successive items.
+func (t *Transcript) appendItem(lines []Line) []lineRef {
 	if len(lines) == 0 {
-		return
+		return nil
 	}
-	if item != t.items {
-		for i := range lines {
-			lines[i].Item = item
-		}
-		t.Lines = append(t.Lines, lines...)
-		return
-	}
+	refs := make([]lineRef, 0, len(lines))
 	for _, run := range splitThinking(lines) {
-		for i := range run {
-			run[i].Item = t.items
+		i := len(t.items)
+		run = slices.Clone(run) // each item owns its array: later inserts must not overwrite a neighbour
+		for j := range run {
+			run[j].Item = i
+			refs = append(refs, lineRef{i, j})
 		}
-		t.Lines = append(t.Lines, run...)
-		t.items++
+		t.items = append(t.items, run)
+		if t.flat != nil {
+			t.start = append(t.start, len(t.flat))
+			t.flat = append(t.flat, run...)
+		}
 	}
+	return refs
+}
+
+// insertIntoItem appends lines to the end of an existing item, so the item
+// stays contiguous, and returns their refs.
+func (t *Transcript) insertIntoItem(item int, lines []Line) []lineRef {
+	if len(lines) == 0 || item < 0 || item >= len(t.items) {
+		return nil
+	}
+	refs := make([]lineRef, 0, len(lines))
+	for j := range lines {
+		lines[j].Item = item
+		refs = append(refs, lineRef{item, len(t.items[item]) + j})
+	}
+	t.items[item] = append(t.items[item], lines...)
+	t.flat = nil
+	return refs
+}
+
+// replaceItem swaps every line of item for lines. Refs into the item are
+// no longer meaningful; a compaction rule, the only item replaced, has none.
+func (t *Transcript) replaceItem(item int, lines []Line) {
+	if item < 0 || item >= len(t.items) || len(lines) == 0 {
+		return
+	}
+	lines = slices.Clone(lines)
+	for j := range lines {
+		lines[j].Item = item
+	}
+	t.items[item] = lines
+	t.flat = nil
+}
+
+// committed is every committed line in item order.
+func (t *Transcript) committed() []Line {
+	if t.flat == nil {
+		n := 0
+		for _, it := range t.items {
+			n += len(it)
+		}
+		// A fresh array: slices handed out earlier stay as they were.
+		t.flat, t.start = make([]Line, 0, n), make([]int, 0, len(t.items))
+		for _, it := range t.items {
+			t.start = append(t.start, len(t.flat))
+			t.flat = append(t.flat, it...)
+		}
+	}
+	return t.flat
 }
 
 // splitThinking cuts lines at every boundary between thinking and
@@ -396,18 +481,40 @@ func nested(lines []Line) []Line {
 	return lines
 }
 
+// --- tracked lines ---
+
 // settlePrompt ends the "in progress" tone on a prompt's "?" line: as-is
 // when answered, red when denied by default or withdrawn.
 func (t *Transcript) settlePrompt(id string, terminated bool) {
-	i, ok := t.promptLine[id]
+	r, ok := t.promptLine[id]
 	delete(t.promptLine, id)
-	if !ok || i >= len(t.Lines) || t.Lines[i].Glyph != GlyphPrompt {
+	if !ok {
 		return
 	}
-	t.Lines[i].Tone = ToneNone
-	if terminated {
-		t.Lines[i].Tone = ToneError
+	if l := t.line(r); l != nil {
+		l.Tone = ToneNone
+		if terminated {
+			l.Tone = ToneError
+		}
 	}
+}
+
+// settleMonitor gives a job's line its final tone and nests the outcome
+// under it (indented when the line is the shell call the job grew from); a
+// job the transcript never saw start gets the outcome as its own item.
+func (t *Transcript) settleMonitor(id string, tone Tone, lines []Line) {
+	r, ok := t.monitors[id]
+	delete(t.monitors, id)
+	l := t.line(r)
+	if !ok || l == nil {
+		t.appendItem(lines)
+		return
+	}
+	l.Tone = tone
+	if l.Kind == LineTool {
+		lines = nested(lines)
+	}
+	t.insertIntoItem(r.item, lines)
 }
 
 // monitorKindFromText recovers the kind from a monitor wake message
@@ -421,148 +528,46 @@ func monitorKindFromText(text string) string {
 	return "command"
 }
 
-// lastAsyncCall returns the index of the most recent shell call line (or
-// bash_async in old logs) that is not yet tied to a job, or -1.
-func (t *Transcript) lastAsyncCall() int {
-	tied := map[int]bool{}
-	for _, idx := range t.monitors {
-		tied[idx] = true
+// lastUntiedCall returns the most recent call line of tool that no entry
+// of tied already claims.
+func (t *Transcript) lastUntiedCall(tool string, tied map[string]lineRef) (lineRef, bool) {
+	taken := make(map[lineRef]bool, len(tied))
+	for _, r := range tied {
+		taken[r] = true
 	}
-	for i := len(t.Lines) - 1; i >= 0; i-- {
-		l := t.Lines[i]
-		if l.Kind == LineTool && l.tool == toolname.Shell && !tied[i] {
-			return i
+	for i := len(t.items) - 1; i >= 0; i-- {
+		for j := len(t.items[i]) - 1; j >= 0; j-- {
+			if l := t.items[i][j]; l.Kind == LineTool && l.tool == tool && !taken[lineRef{i, j}] {
+				return lineRef{i, j}, true
+			}
 		}
 	}
-	return -1
+	return lineRef{}, false
 }
 
 // openCallItem returns the item of the most recently started, still-open
 // call of tool name.
 func (t *Transcript) openCallItem(name string) (int, bool) {
-	best, item := -1, 0
-	for _, idx := range t.calls {
-		if idx < len(t.Lines) && idx > best && strings.EqualFold(t.Lines[idx].tool, name) {
-			best, item = idx, t.Lines[idx].Item
+	var best lineRef
+	found := false
+	for _, r := range t.calls {
+		if t.valid(r) && strings.EqualFold(t.items[r.item][r.off].tool, name) && (!found || r.after(best)) {
+			best, found = r, true
 		}
 	}
-	return item, best >= 0
+	return best.item, found
 }
 
 // Compacting reports whether a compaction rule is waiting for its result.
 func (t *Transcript) Compacting() bool { return t.compactItem >= 0 }
 
-// replaceItem swaps every line of item for lines, in place; tracked indices
-// after the item shift by the size difference.
-func (t *Transcript) replaceItem(item int, lines []Line) {
-	first, last := itemRange(t.Lines, item)
-	if first < 0 {
-		return
-	}
-	for i := range lines {
-		lines[i].Item = item
-	}
-	delta := len(lines) - (last - first + 1)
-	out := make([]Line, 0, len(t.Lines)+delta)
-	out = append(out, t.Lines[:first]...)
-	out = append(out, lines...)
-	out = append(out, t.Lines[last+1:]...)
-	t.Lines = out
-	t.shiftIndices(last+1, delta)
-}
-
-// shiftIndices moves every tracked line index at or past at by delta.
-func (t *Transcript) shiftIndices(at, delta int) {
-	if delta == 0 {
-		return
-	}
-	for id, idx := range t.calls {
-		if idx >= at {
-			t.calls[id] = idx + delta
-		}
-	}
-	for id, idx := range t.promptLine {
-		if idx >= at {
-			t.promptLine[id] = idx + delta
-		}
-	}
-	for id, idx := range t.monitors {
-		if idx >= at {
-			t.monitors[id] = idx + delta
-		}
-	}
-	for id, idx := range t.children {
-		if idx >= at {
-			t.children[id] = idx + delta
-		}
-	}
-	for id, idxs := range t.asks {
-		for k, idx := range idxs {
-			if idx >= at {
-				idxs[k] = idx + delta
-			}
-		}
-		t.asks[id] = idxs
-	}
-}
-
-// insertIntoItem places lines immediately after the last line of item so
-// the item stays contiguous. Tracked call and monitor indices past the
-// splice shift.
-func (t *Transcript) insertIntoItem(item int, lines []Line) {
-	if len(lines) == 0 {
-		return
-	}
-	for i := range lines {
-		lines[i].Item = item
-	}
-	_, last := itemRange(t.Lines, item)
-	if last < 0 || last == len(t.Lines)-1 {
-		t.Lines = append(t.Lines, lines...)
-		return
-	}
-	at := last + 1
-	out := make([]Line, 0, len(t.Lines)+len(lines))
-	out = append(out, t.Lines[:at]...)
-	out = append(out, lines...)
-	out = append(out, t.Lines[at:]...)
-	t.Lines = out
-	for id, idx := range t.calls {
-		if idx >= at {
-			t.calls[id] = idx + len(lines)
-		}
-	}
-	for id, idx := range t.promptLine {
-		if idx >= at {
-			t.promptLine[id] = idx + len(lines)
-		}
-	}
-	for id, idx := range t.monitors {
-		if idx >= at {
-			t.monitors[id] = idx + len(lines)
-		}
-	}
-	for id, idx := range t.children {
-		if idx >= at {
-			t.children[id] = idx + len(lines)
-		}
-	}
-	for id, idxs := range t.asks {
-		for k, idx := range idxs {
-			if idx >= at {
-				t.asks[id][k] = idx + len(lines)
-			}
-		}
-	}
-}
-
 // ChildSpawned ties a just-spawned child to the agent_create call that
-// made it: the call line reads as in progress (yellow) until ChildDone,
-// the way a shell call tracks its job.
+// made it: the call line reads as in progress (yellow) until the child
+// settles, the way a shell call tracks its job.
 func (t *Transcript) ChildSpawned(childID string) {
-	if i := t.lastAgentCreateCall(); i >= 0 {
-		t.Lines[i].Tone = ToneWorking
-		t.children[childID] = i
+	if r, ok := t.lastUntiedCall(toolname.AgentCreate, t.children); ok {
+		t.line(r).Tone = ToneWorking
+		t.children[childID] = r
 	}
 }
 
@@ -570,43 +575,28 @@ func (t *Transcript) ChildSpawned(childID string) {
 // state: working (yellow) while it runs or is blocked, red once killed,
 // grey when it idles. Children no longer finish; they answer and wait.
 func (t *Transcript) ChildState(childID string, state protocol.AgentState) {
-	i, ok := t.children[childID]
-	if !ok || i >= len(t.Lines) {
+	r, ok := t.children[childID]
+	l := t.line(r)
+	if !ok || l == nil {
 		return
 	}
 	switch {
 	case state.Busy():
-		t.Lines[i].Tone = ToneWorking
+		l.Tone = ToneWorking
 	case state == protocol.AgentKilled:
-		t.Lines[i].Tone = ToneError
+		l.Tone = ToneError
 		delete(t.children, childID)
 	default:
-		t.Lines[i].Tone = ToneNone
+		l.Tone = ToneNone
 	}
-}
-
-// lastAgentCreateCall returns the index of the most recent agent_create
-// call line not yet tied to a child, or -1.
-func (t *Transcript) lastAgentCreateCall() int {
-	tied := map[int]bool{}
-	for _, idx := range t.children {
-		tied[idx] = true
-	}
-	for i := len(t.Lines) - 1; i >= 0; i-- {
-		l := t.Lines[i]
-		if l.Kind == LineTool && l.tool == toolname.AgentCreate && !tied[i] {
-			return i
-		}
-	}
-	return -1
 }
 
 func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
-	i, ok := t.calls[p.CallID]
-	if !ok || i >= len(t.Lines) {
+	r, ok := t.calls[p.CallID]
+	l := t.line(r)
+	if !ok || l == nil {
 		return
 	}
-	l := &t.Lines[i]
 	l.Running = false
 	l.Err = p.IsError
 	switch {
@@ -621,7 +611,7 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 		delete(t.askTarget, p.CallID)
 		if !p.IsError && !p.Cancelled && !p.Denied {
 			l.Tone = ToneWorking
-			t.asks[target] = append(t.asks[target], i)
+			t.asks[target] = append(t.asks[target], r)
 		}
 	}
 	delete(t.calls, p.CallID)
@@ -631,15 +621,11 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 // response's From ("label (shortid)" or a bare id): one answer covers all
 // the questions asked of it so far.
 func (t *Transcript) answered(from string) {
-	for target, idxs := range t.asks {
-		if len(idxs) == 0 || (from != target && !strings.Contains(from, "("+shortID(target)+")")) {
+	for target, refs := range t.asks {
+		if len(refs) == 0 || (from != target && !strings.Contains(from, "("+shortID(target)+")")) {
 			continue
 		}
-		for _, i := range idxs {
-			if i < len(t.Lines) {
-				t.Lines[i].Tone = ToneNone
-			}
-		}
+		t.setTone(refs, ToneNone)
 		delete(t.asks, target)
 	}
 }
@@ -647,19 +633,29 @@ func (t *Transcript) answered(from string) {
 // AskerGone marks every outstanding agent_message to a killed agent red:
 // no answer is coming.
 func (t *Transcript) AskerGone(id string) {
-	for _, i := range t.asks[id] {
-		if i < len(t.Lines) {
-			t.Lines[i].Tone = ToneError
-		}
-	}
+	t.setTone(t.asks[id], ToneError)
 	delete(t.asks, id)
 }
 
-func (t *Transcript) stopRunning() {
-	for i := range t.Lines {
-		t.Lines[i].Running = false
+func (t *Transcript) setTone(refs []lineRef, tone Tone) {
+	for _, r := range refs {
+		if l := t.line(r); l != nil {
+			l.Tone = tone
+		}
 	}
-	t.calls = map[string]int{}
+}
+
+// stopRunning clears every spinner when a turn ends.
+func (t *Transcript) stopRunning() {
+	for i := range t.items {
+		for j := range t.items[i] {
+			if t.items[i][j].Running {
+				t.items[i][j].Running = false
+				t.flat = nil
+			}
+		}
+	}
+	t.calls = map[string]lineRef{}
 }
 
 // ApplyStream folds a transient stream notification into the live buffer.
@@ -704,22 +700,25 @@ func (t *Transcript) Notice(lines ...string) {
 		}
 		ls = append(ls, ln)
 	}
-	t.appendItem(t.items, ls)
+	t.appendItem(ls)
 }
 
 // All returns the committed lines followed by the live streaming buffer.
 // Buffer lines belong to the in-progress item: the running tool call when
 // the buffer continues one, otherwise a new item after the committed ones.
+// The slice must not be modified.
 func (t *Transcript) All() []Line {
+	lines := t.committed()
 	if len(t.stream) == 0 {
-		return t.Lines
+		return lines
 	}
-	item := t.items
-	if n := len(t.Lines); n > 0 && t.Lines[n-1].Kind == LineTool && t.Lines[n-1].Running {
-		item = t.Lines[n-1].Item
+	next := len(t.items)
+	item := next
+	if n := len(lines); n > 0 && lines[n-1].Kind == LineTool && lines[n-1].Running {
+		item = lines[n-1].Item
 	}
-	out := make([]Line, 0, len(t.Lines)+8)
-	out = append(out, t.Lines...)
+	out := make([]Line, 0, len(lines)+8)
+	out = append(out, lines...)
 	start := len(out)
 	for _, s := range t.stream {
 		switch s.kind {
@@ -737,7 +736,7 @@ func (t *Transcript) All() []Line {
 	}
 	cur := item
 	for i := start; i < len(out); i++ {
-		if i > start && (out[i].Kind == LineThink) != (out[i-1].Kind == LineThink) && !(cur == item && item != t.items) {
+		if i > start && (out[i].Kind == LineThink) != (out[i-1].Kind == LineThink) && !(cur == item && item != next) {
 			cur++
 		}
 		out[i].Item = cur
@@ -747,12 +746,26 @@ func (t *Transcript) All() []Line {
 
 // Items is the number of items All() spans (committed plus the in-progress
 // one when the streaming buffer starts a new item).
-func (t *Transcript) Items() int { return itemCount(t.All()) }
+func (t *Transcript) Items() int {
+	if len(t.stream) == 0 {
+		return len(t.items)
+	}
+	return itemCount(t.All())
+}
 
 // ItemRange returns the first and last index into All() of item i, or
 // (-1, -1) when there is no such item. Items are contiguous: tool output is
-// spliced in under its call even when other events landed in between.
-func (t *Transcript) ItemRange(i int) (first, last int) { return itemRange(t.All(), i) }
+// nested under its call even when other events landed in between.
+func (t *Transcript) ItemRange(i int) (first, last int) {
+	if len(t.stream) > 0 && i >= len(t.items)-1 {
+		return itemRange(t.All(), i) // the buffer may extend or follow the last item
+	}
+	if i < 0 || i >= len(t.items) || len(t.items[i]) == 0 {
+		return -1, -1
+	}
+	t.committed()
+	return t.start[i], t.start[i] + len(t.items[i]) - 1
+}
 
 func itemCount(lines []Line) int {
 	n := 0
@@ -792,7 +805,7 @@ func itemIsTool(lines []Line, item int) bool {
 func (t *Transcript) Streaming() bool { return len(t.stream) > 0 }
 
 // Empty reports whether nothing at all would be shown (the home state).
-func (t *Transcript) Empty() bool { return len(t.Lines) == 0 && len(t.stream) == 0 }
+func (t *Transcript) Empty() bool { return len(t.items) == 0 && len(t.stream) == 0 }
 
 // Running reports whether a tool call is in progress (spinner needs redraws).
 func (t *Transcript) Running() bool {

@@ -94,7 +94,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	tr := NewTranscript()
 	tr.Apply(mk(1, "a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Archetype: "coder", Label: "root"}))
 	if !tr.Empty() {
-		t.Fatalf("root spawn should not produce lines: %+v", tr.Lines)
+		t.Fatalf("root spawn should not produce lines: %+v", tr.All())
 	}
 	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look around"}))
 	got := renderLines(tr.All())
@@ -1091,5 +1091,55 @@ func TestDeliveredResponseShowsItsText(t *testing.T) {
 	}
 	if folded := renderWith(tr.All(), RenderOpts{Width: 80}); !contains(folded, "⑂ Agent response delivered  → a4e33e14942 +2") {
 		t.Fatalf("folded:\n%s", strings.Join(folded, "\n"))
+	}
+}
+
+// TestTrackedLinesSurviveLaterItems: a prompt's "?" line, a call's line
+// and its output are found by reference, not by index, so items committed
+// in between (and output nested under an earlier call) never misplace them;
+// a slice from All() is a snapshot later changes do not touch.
+func TestTrackedLinesSurviveLaterItems(t *testing.T) {
+	tr := NewTranscript()
+	tr.Apply(mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"make"}`)}))
+	tr.Apply(mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c2", Name: "read", Input: json.RawMessage(`{"path":"x"}`)}))
+	tr.Apply(mk(4, "a", event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
+	tr.Apply(mk(5, "a", event.PromptRequested, event.PromptRequestedPayload{ID: "q1", Kind: "question", Question: "which?"}))
+	snapshot := tr.All()
+	tr.Apply(mk(6, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c2", Name: "read", Output: "r1\nr2"}))
+	tr.Apply(mk(7, "a", event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
+	tr.Apply(mk(8, "a", event.PromptWithdrawn, event.PromptRefPayload{ID: "q1"}))
+	tr.Apply(mk(9, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "built"}))
+
+	lines := tr.All()
+	find := func(text string) Line {
+		t.Helper()
+		for _, l := range lines {
+			if strings.Contains(l.Text, text) {
+				return l
+			}
+		}
+		t.Fatalf("no line %q in:\n%s", text, strings.Join(renderLines(lines), "\n"))
+		return Line{}
+	}
+	perm, question := find("permission: shell"), find("question: which?")
+	if perm.Glyph != GlyphPrompt || perm.Tone != ToneNone {
+		t.Fatalf("answered permission prompt: %+v", perm)
+	}
+	if question.Tone != ToneError {
+		t.Fatalf("withdrawn question: %+v", question)
+	}
+	shell, built, read, r2 := find("make"), find("built"), find("x"), find("r2")
+	if shell.Running || built.Item != shell.Item || r2.Item != read.Item || shell.Item == read.Item {
+		t.Fatalf("output must nest under its own call: shell %+v built %+v read %+v r2 %+v", shell, built, read, r2)
+	}
+	first, last := tr.ItemRange(shell.Item)
+	if lines[first].Text != shell.Text || lines[last].Text != built.Text {
+		t.Fatalf("shell item range %d..%d: %q..%q", first, last, lines[first].Text, lines[last].Text)
+	}
+	for _, l := range snapshot {
+		if strings.Contains(l.Text, "built") || strings.Contains(l.Text, "r2") || (l.Glyph == GlyphPrompt && l.Tone != ToneWorking) {
+			t.Fatalf("an earlier All() slice changed: %+v", l)
+		}
 	}
 }

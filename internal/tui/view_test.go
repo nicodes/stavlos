@@ -1119,15 +1119,15 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if a, b := stripANSI(compactSweep(0)), stripANSI(compactSweep(5)); a == b {
 		t.Fatalf("the bar should move: %q %q", a, b)
 	}
-	before := len(tr.Lines)
+	before := len(tr.All())
 	m.applyEvent(event.Event{Seq: 51, Agent: "a", Type: event.Compacted, Time: now, Payload: event.MustPayload(event.CompactedPayload{FromSeq: 1, ToSeq: 40, Summary: "S", Before: 84_000, After: 12_000})})
 	m.refreshViewport()
 	v = stripANSI(m.vp.View())
 	if tr.Compacting() || m.status != "" || strings.Contains(v, "compacting") || !strings.Contains(v, "┄┄ compacted 84k → 12k tokens ┄┄") {
 		t.Fatalf("the result should replace the bar in the chat: status=%q\n%s", m.status, v)
 	}
-	if len(tr.Lines) != before+1 { // blank, rule, summary, blank replaced blank, rule, blank
-		t.Fatalf("the result should take the bar's item: %d → %d lines", before, len(tr.Lines))
+	if len(tr.All()) != before+1 { // blank, rule, summary, blank replaced blank, rule, blank
+		t.Fatalf("the result should take the bar's item: %d → %d lines", before, len(tr.All()))
 	}
 	// a failure replaces the bar with a note; an ended turn with no result
 	// marks it interrupted
