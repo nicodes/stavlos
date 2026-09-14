@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/nicodes/stavlos/internal/tui/format"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -880,7 +881,7 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
-	s := fmtTokens(f.tokens) + " tokens · $" + fmtCost(f.cost)
+	s := format.Tokens(f.tokens) + " tokens · $" + format.Cost(f.cost)
 	if bar := contextBar(f.context, f.window); bar != "" {
 		s = bar + " · " + s
 	}
@@ -902,7 +903,7 @@ func contextBar(context, window int) string {
 	if pct >= 70 {
 		st = styleWarn
 	}
-	return st.Render(fmt.Sprintf("%d%% of %s", pct, fmtTokens(window)))
+	return st.Render(fmt.Sprintf("%d%% of %s", pct, format.Tokens(window)))
 }
 
 // compactSweep is the bar inside a running compaction's rule: a segment
@@ -929,17 +930,7 @@ func compactFrame(now time.Time) int {
 
 // turnStats formats the indicator's suffix: "(12s · 1.2k tokens)".
 func turnStats(elapsed time.Duration, tokens int) string {
-	return fmt.Sprintf("(%s · %s tokens)", fmtElapsed(elapsed), fmtTokens(tokens))
-}
-
-// fmtCost prints a dollar amount with 2–4 decimals.
-func fmtCost(v float64) string {
-	s := strconv.FormatFloat(v, 'f', 4, 64)
-	dot := strings.IndexByte(s, '.')
-	for len(s)-dot-1 > 2 && strings.HasSuffix(s, "0") {
-		s = s[:len(s)-1]
-	}
-	return s
+	return fmt.Sprintf("(%s · %s tokens)", format.Elapsed(elapsed), format.Tokens(tokens))
 }
 
 // --- view ---
@@ -1095,7 +1086,7 @@ func (m Model) homeLines(width, height int) homeLayout {
 		}
 	}
 	// The directory the session will work in, dim, above the meta row.
-	add(styleDim.Render(shortHome(m.session.Dir)), boxW)
+	add(styleDim.Render(format.ShortHome(m.session.Dir)), boxW)
 	add(m.metaRow(boxW), boxW)
 	lay.top = (height - len(lay.lines)) / 2
 	if lay.top < 0 {
@@ -1165,17 +1156,17 @@ func (m Model) sidebarView(height int) string {
 // waiting", or "idle"), a blank, and the "agents" heading. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
-	dir := shortHome(m.session.Dir)
+	dir := format.ShortHome(m.session.Dir)
 	if dir == "" {
 		dir = "—"
 	}
-	usage := fmtTokens(m.totalTokens()) + " tokens · $" + fmtCost(m.totalCost())
+	usage := format.Tokens(m.totalTokens()) + " tokens · $" + format.Cost(m.totalCost())
 	return []string{
 		styleAccent.Bold(true).Render("Stavlos"),
 		"",
-		styleDim.Render(truncRunes(dir, width)),
-		styleDim.Render(truncRunes(usage, width)),
-		styleDim.Render(truncRunes(m.swarmLine(), width)),
+		styleDim.Render(format.Trunc(dir, width)),
+		styleDim.Render(format.Trunc(usage, width)),
+		styleDim.Render(format.Trunc(m.swarmLine(), width)),
 		"",
 		styleBold.Render("agents") + m.sidebarFocusHint(),
 	}
@@ -1224,7 +1215,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	for k, s := range m.navSessions {
 		age := ""
 		if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
-			age = fmtElapsed(time.Since(t))
+			age = format.Elapsed(time.Since(t))
 		}
 		avail := width - 4 - len([]rune(age)) - 1
 		if avail < 4 {
@@ -1232,7 +1223,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		title := sessionTitle(s)
 		if len([]rune(title)) > avail {
-			title = truncRunes(title, avail-1)
+			title = format.Trunc(title, avail-1)
 		}
 		gap := width - 4 - ansi.StringWidth(title) - len([]rune(age))
 		if gap < 1 {
@@ -1319,7 +1310,7 @@ func (m Model) treeRows(width int) []string {
 			right, rightW = styleWarn.Render(b), 1
 		}
 		if a.CostUSD > 0 {
-			c := "$" + fmtCost(a.CostUSD)
+			c := "$" + format.Cost(a.CostUSD)
 			if right != "" {
 				right += " "
 				rightW++
@@ -1341,7 +1332,7 @@ func (m Model) treeRows(width int) []string {
 			text += " · error"
 		}
 		if len([]rune(text)) > avail {
-			text = truncRunes(text, avail-1) // the ellipsis takes the last column
+			text = format.Trunc(text, avail-1) // the ellipsis takes the last column
 		}
 		textW := ansi.StringWidth(text)
 		tint := ""
@@ -1547,7 +1538,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		if m.dirEdit != "" {
 			label := "add a directory"
 			if m.dirEdit != "add" {
-				label = "replace " + shortHome(m.dirEdit)
+				label = "replace " + format.ShortHome(m.dirEdit)
 			}
 			rows = append(rows, "", styleDim.Render(label), m.dirInput.View())
 		}
@@ -1725,7 +1716,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 			Files []string `json:"files"`
 		}
 		_ = json.Unmarshal(p.Input, &t)
-		head := styleWorking.Render("◆") + " " + shortHome(t.Dir)
+		head := styleWorking.Render("◆") + " " + format.ShortHome(t.Dir)
 		if who != "" {
 			head += "  " + styleDim.Render(who)
 		}
@@ -1777,7 +1768,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 			}
 		}
 		if p.Dir != "" {
-			lines = append(lines, styleWarn.Render("outside its directories")+styleDim.Render(" · "+shortHome(p.Dir)))
+			lines = append(lines, styleWarn.Render("outside its directories")+styleDim.Render(" · "+format.ShortHome(p.Dir)))
 		}
 	}
 	lines = append(lines, "")
@@ -1933,15 +1924,15 @@ func agentRows(agents []protocol.AgentInfo, spawned map[string]time.Time, last m
 			meta = append(meta, o)
 		}
 		if a.CostUSD > 0 {
-			meta = append(meta, "$"+fmtCost(a.CostUSD))
+			meta = append(meta, "$"+format.Cost(a.CostUSD))
 		}
 		if t, ok := spawned[a.ID]; ok && !t.IsZero() {
-			meta = append(meta, fmtElapsed(now.Sub(t)))
+			meta = append(meta, format.Elapsed(now.Sub(t)))
 		}
 		text := fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
 		row := "  " + roleStyle(tint[a.Archetype]).Bold(true).Render(text)
 		if s := last[a.ID]; s != "" {
-			row += "  " + truncRunes(s, snippetChars)
+			row += "  " + format.Trunc(s, snippetChars)
 		}
 		if len(meta) > 0 {
 			row += "  " + styleDim.Render(strings.Join(meta, " · "))
@@ -2030,7 +2021,7 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 			meta = append(meta, mo.Progress)
 		}
 		if t, err := time.Parse(time.RFC3339, mo.Started); err == nil && !t.IsZero() {
-			meta = append(meta, fmtElapsed(now.Sub(t)))
+			meta = append(meta, format.Elapsed(now.Sub(t)))
 		}
 		row := "  " + label
 		if len(meta) > 0 {
@@ -2114,7 +2105,7 @@ func todoRows(items []event.TodoItem, width int) []string {
 func dirRows(items []protocol.DirInfo, width int) []string {
 	rows := make([]string, 0, len(items))
 	for _, d := range items {
-		row := "  " + styleBold.Render(shortHome(d.Path)) + "  " + styleDim.Render(d.Source)
+		row := "  " + styleBold.Render(format.ShortHome(d.Path)) + "  " + styleDim.Render(d.Source)
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows
@@ -2159,7 +2150,7 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 		case protocol.MCPConnected:
 			meta = append(meta, fmt.Sprintf("%d tools", len(it.Tools)))
 			if t, err := time.Parse(time.RFC3339, it.Started); err == nil && !t.IsZero() {
-				meta = append(meta, fmtElapsed(now.Sub(t)))
+				meta = append(meta, format.Elapsed(now.Sub(t)))
 			}
 		case protocol.MCPFailed, protocol.MCPStopped:
 			if it.Error != "" {
@@ -2183,18 +2174,6 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 		}
 	}
 	return rows, owners
-}
-
-// fmtElapsed renders a duration as 12s, 1m05s, 1h02m.
-func fmtElapsed(d time.Duration) string {
-	d = d.Round(time.Second)
-	switch {
-	case d < time.Minute:
-		return fmt.Sprintf("%ds", int(d.Seconds()))
-	case d < time.Hour:
-		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
-	}
-	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
 }
 
 // sidebarFocusHint marks the agent list as focused.

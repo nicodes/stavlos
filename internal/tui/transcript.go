@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/tui/format"
+
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -624,7 +626,7 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 // the questions asked of it so far.
 func (t *Transcript) answered(from string) {
 	for target, refs := range t.asks {
-		if len(refs) == 0 || (from != target && !strings.Contains(from, "("+shortID(target)+")")) {
+		if len(refs) == 0 || (from != target && !strings.Contains(from, "("+format.ShortID(target)+")")) {
 			continue
 		}
 		t.setTone(refs, ToneNone)
@@ -981,11 +983,11 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		if p.On {
 			mode = protocol.ModeYolo
 		}
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + mode + " · " + modeDesc(mode)}}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + mode + " · " + protocol.ModeSummary(mode)}}
 	}),
 
 	event.SessionModeChanged: decoded(func(p event.ModePayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + p.Mode + " · " + modeDesc(p.Mode)}}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + p.Mode + " · " + protocol.ModeSummary(p.Mode)}}
 	}),
 
 	event.AgentVariantChanged: decoded(func(p event.VariantChangedPayload) []Line {
@@ -1009,7 +1011,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.AgentDirAdded: decoded(func(p event.DirAddedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: glyphToolFiles, Text: fmt.Sprintf("dirs: + %s (%s)", shortHome(p.Dir), p.Source)}}
+		return []Line{{Kind: LineDim, Glyph: glyphToolFiles, Text: fmt.Sprintf("dirs: + %s (%s)", format.ShortHome(p.Dir), p.Source)}}
 	}),
 
 	event.MCPStopped: decoded(func(p event.MCPRefPayload) []Line {
@@ -1037,7 +1039,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	event.Compacted: decoded(func(p event.CompactedPayload) []Line {
 		rule := GlyphCompacted
 		if p.Before > 0 && p.After > 0 {
-			rule = fmt.Sprintf("┄┄ compacted %s → %s tokens ┄┄", fmtTokens(p.Before), fmtTokens(p.After))
+			rule = fmt.Sprintf("┄┄ compacted %s → %s tokens ┄┄", format.Tokens(p.Before), format.Tokens(p.After))
 		}
 		lines := []Line{{Kind: LineBlank}, {Kind: LineRule, Text: rule}}
 		if s := strings.TrimSpace(p.Summary); s != "" {
@@ -1049,7 +1051,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	event.PromptRequested: decoded(func(p event.PromptRequestedPayload) []Line {
 		switch p.Kind {
 		case "question":
-			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "question: " + firstLine(p.Question)}}
+			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "question: " + format.FirstLine(p.Question)}}
 		case "trust":
 			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "trust requested"}}
 		default:
@@ -1058,7 +1060,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.PromptAnswered: decoded(func(p event.PromptAnsweredPayload) []Line {
-		ln := Line{Kind: LineNotice, Glyph: GlyphAnswer, Text: "answered: " + firstLine(p.Answer)}
+		ln := Line{Kind: LineNotice, Glyph: GlyphAnswer, Text: "answered: " + format.FirstLine(p.Answer)}
 		if strings.HasPrefix(strings.ToLower(p.Answer), "deny") {
 			ln.Tone = ToneError
 		}
@@ -1066,7 +1068,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.PromptDefaulted: decoded(func(p event.PromptAnsweredPayload) []Line {
-		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: "defaulted: " + firstLine(p.Answer)}}
+		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: "defaulted: " + format.FirstLine(p.Answer)}}
 	}),
 
 	event.PromptWithdrawn: func(event.Event) []Line {
@@ -1189,7 +1191,7 @@ func thinkingLine(summary string) Line {
 	if i := strings.IndexByte(first, '\n'); i >= 0 {
 		first = first[:i]
 	}
-	return Line{Kind: LineThink, Text: "◌ " + truncRunes(first, maxThinkChars)}
+	return Line{Kind: LineThink, Text: "◌ " + format.Trunc(first, maxThinkChars)}
 }
 
 // truncLines splits text into at most n lines of the given kind, appending
@@ -1220,7 +1222,7 @@ func toolLine(name string, input json.RawMessage) string {
 	if arg == "" {
 		return title
 	}
-	return title + "  " + truncRunes(arg, maxArgChars)
+	return title + "  " + format.Trunc(arg, maxArgChars)
 }
 
 // toolArg picks the argument worth showing for a tool call.
@@ -1340,23 +1342,7 @@ func compactArgs(raw json.RawMessage) string {
 		s = buf.String()
 	}
 	s = strings.ReplaceAll(s, "\n", " ")
-	return truncRunes(s, maxArgChars)
-}
-
-func truncRunes(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n]) + "…"
-}
-
-func firstLine(s string) string {
-	s = strings.TrimSpace(s)
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i] + "…"
-	}
-	return s
+	return format.Trunc(s, maxArgChars)
 }
 
 // outputLines renders tool output collapsed by default: the first

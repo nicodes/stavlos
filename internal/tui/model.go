@@ -7,11 +7,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path"
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/nicodes/stavlos/internal/tui/format"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -684,7 +685,7 @@ func (m *Model) openMode() tea.Cmd {
 	}
 	var items []overlayItem
 	for _, mode := range []string{protocol.ModeAsk, protocol.ModeAuto, protocol.ModeYolo} {
-		hint := modeDesc(mode)
+		hint := protocol.ModeSummary(mode)
 		if mode == cur {
 			hint += "  · current"
 		}
@@ -2025,7 +2026,7 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 	case p.Dir != "":
 		return []permOption{
 			{"allow", "Allow once", ""},
-			{"add", "Allow and add " + shortHome(p.Dir), "the agent keeps the directory for the session"},
+			{"add", "Allow and add " + format.ShortHome(p.Dir), "the agent keeps the directory for the session"},
 			{"add_other", "Allow and add another directory…", "type the path"},
 			{"deny", "Deny", "with an optional reason"},
 		}
@@ -3408,7 +3409,7 @@ func (m *Model) onSessions(msg sessionsMsg) tea.Cmd {
 	if msg.err != nil {
 		return m.setStatus("sessions: "+msg.err.Error(), true)
 	}
-	o := newOverlay(ovSessions, overlayList, "Sessions in "+shortHome(m.session.Dir))
+	o := newOverlay(ovSessions, overlayList, "Sessions in "+format.ShortHome(m.session.Dir))
 	items := make([]overlayItem, 0, len(msg.sessions))
 	for _, s := range msg.sessions {
 		if s.Title == "" && s.ID != m.sessionID {
@@ -3432,13 +3433,13 @@ func sessionItem(s protocol.SessionInfo, current bool) overlayItem {
 	}
 	var meta []string
 	if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
-		meta = append(meta, fmtElapsed(time.Since(t))+" ago")
+		meta = append(meta, format.Elapsed(time.Since(t))+" ago")
 	}
 	if s.Model != "" {
 		meta = append(meta, s.Model)
 	}
 	if s.CostUSD > 0 {
-		meta = append(meta, "$"+fmtCost(s.CostUSD))
+		meta = append(meta, "$"+format.Cost(s.CostUSD))
 	}
 	if s.Live > 0 {
 		meta = append(meta, fmt.Sprintf("%d live", s.Live))
@@ -3446,7 +3447,7 @@ func sessionItem(s protocol.SessionInfo, current bool) overlayItem {
 	if current {
 		meta = append(meta, "current")
 	}
-	return overlayItem{id: s.ID, label: truncRunes(label, 60), hint: strings.Join(meta, " · "), good: current}
+	return overlayItem{id: s.ID, label: format.Trunc(label, 60), hint: strings.Join(meta, " · "), good: current}
 }
 
 // bindSession rebinds the TUI to another session: every per-session
@@ -3457,14 +3458,7 @@ func (m *Model) bindSession(info protocol.SessionInfo) tea.Cmd {
 	m.input.Reset()
 	m.refreshViewport()
 	m.layout()
-	return tea.Batch(m.setFocus(focusInput), reconcileCmd(m.ctx, m.c, m.sessionID), m.setStatus("resumed "+shortID(info.ID), false))
-}
-
-func shortID(id string) string {
-	if len(id) > 8 {
-		return id[:8]
-	}
-	return id
+	return tea.Batch(m.setFocus(focusInput), reconcileCmd(m.ctx, m.c, m.sessionID), m.setStatus("resumed "+format.ShortID(info.ID), false))
 }
 
 // openVariants is /variants: with no argument it opens the picker for the
@@ -3562,12 +3556,4 @@ func containsStr(xs []string, x string) bool {
 		}
 	}
 	return false
-}
-
-// shortHome abbreviates the home directory prefix.
-func shortHome(p string) string {
-	if h, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, h) {
-		return "~" + strings.TrimPrefix(p, h)
-	}
-	return p
 }

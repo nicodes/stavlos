@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/tui/format"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/nicodes/stavlos/internal/event"
@@ -228,24 +230,12 @@ func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.
 	return resultCmd(ctx, "role set to "+role, func(ctx context.Context) error { return c.SetAgentRole(ctx, agent, role) })
 }
 
-// modeDesc is what each permission mode does, for the /mode picker, the
-// status line and the chat.
-func modeDesc(mode string) string {
-	switch mode {
-	case protocol.ModeAuto:
-		return "asks only outside the agent's directories"
-	case protocol.ModeYolo:
-		return "every permission is approved, directories included"
-	}
-	return "every permission is asked"
-}
-
 func addDirCmd(ctx context.Context, c *client.Client, agent, dir string) tea.Cmd {
 	return resultCmd(ctx, "added "+dir, func(ctx context.Context) error { return c.AddAgentDir(ctx, agent, dir) })
 }
 
 func removeDirCmd(ctx context.Context, c *client.Client, agent, dir string) tea.Cmd {
-	return resultCmd(ctx, "removed "+shortHome(dir), func(ctx context.Context) error { return c.RemoveAgentDir(ctx, agent, dir) })
+	return resultCmd(ctx, "removed "+format.ShortHome(dir), func(ctx context.Context) error { return c.RemoveAgentDir(ctx, agent, dir) })
 }
 
 // replaceDirCmd swaps one directory for another (an edit in the dirs
@@ -255,12 +245,12 @@ func replaceDirCmd(ctx context.Context, c *client.Client, agent, oldDir, newDir 
 		if err := c.AddAgentDir(ctx, agent, newDir); err != nil {
 			return resultMsg{"", err}
 		}
-		return resultMsg{"replaced " + shortHome(oldDir) + " with " + newDir, c.RemoveAgentDir(ctx, agent, oldDir)}
+		return resultMsg{"replaced " + format.ShortHome(oldDir) + " with " + newDir, c.RemoveAgentDir(ctx, agent, oldDir)}
 	})
 }
 
 func setModeCmd(ctx context.Context, c *client.Client, session, mode string) tea.Cmd {
-	return resultCmd(ctx, "mode "+mode+": "+modeDesc(mode), func(ctx context.Context) error { return c.SetSessionMode(ctx, session, mode) })
+	return resultCmd(ctx, "mode "+mode+": "+protocol.ModeSummary(mode), func(ctx context.Context) error { return c.SetSessionMode(ctx, session, mode) })
 }
 
 // compactCmd is /compact. Summarising takes a model call, so it gets a
