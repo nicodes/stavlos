@@ -842,18 +842,18 @@ func (m Model) homeLines(width, height int) homeLayout {
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lay.lines = append(lay.lines, "")
 	add(styleDim.Render(tagline), lipgloss.Width(tagline))
-	add(m.statusLine(boxW), boxW) // status messages sit above the meta row, as in a session
+	add(m.statusLine(boxW), boxW) // status messages sit above the input, as in a session
+	if pv := m.paletteViewFor(boxW); pv != "" {
+		add(pv, boxW)
+	}
+	add(m.inputBoxView(boxW), boxW)
+	lay.lines = append(lay.lines, "")
 	add(m.metaRow(boxW), boxW)
 	if m.stripShown() {
 		if sv := m.sectionsView(boxW); sv != "" {
 			add(sv, boxW)
 		}
 	}
-	lay.lines = append(lay.lines, "")
-	if pv := m.paletteViewFor(boxW); pv != "" {
-		add(pv, boxW)
-	}
-	add(m.inputBoxView(boxW), boxW)
 	lay.top = (height - len(lay.lines)) / 2
 	if lay.top < 0 {
 		lay.top = 0
@@ -887,16 +887,18 @@ func (m Model) sessionView(width, height int) string {
 		sep := styleSep.Render(strings.TrimSuffix(strings.Repeat("│ \n", h), "\n")) // a space keeps the chat off the line
 		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top)     // the sidebar sits on the left
 	}
-	// Under the rule: the meta row (YOLO, role, model, variant, usage), then
-	// the tab strip, a blank line, the palette, and the input.
-	parts := []string{top, styleRule.Render(strings.Repeat("─", width)), m.metaRow(width)}
-	if sv := m.sectionsView(width); sv != "" {
-		parts = append(parts, sv, "") // a blank line below the strip, before the input
-	}
+	// Under the rule: the palette (while open) and the input, a blank line,
+	// then the meta row (YOLO, role, model, variant, usage) and the tab strip.
+	parts := []string{top, styleRule.Render(strings.Repeat("─", width))}
 	if pv := m.paletteViewFor(width); pv != "" {
 		parts = append(parts, pv)
 	}
 	parts = append(parts, m.inputBoxView(width))
+	if sv := m.sectionsView(width); sv != "" {
+		parts = append(parts, "", m.metaRow(width), sv)
+	} else {
+		parts = append(parts, "", m.metaRow(width))
+	}
 	return padLines(strings.Join(parts, "\n"), width)
 }
 
