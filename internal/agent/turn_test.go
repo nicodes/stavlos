@@ -489,3 +489,89 @@ func TestSubagentTurnLimit(t *testing.T) {
 		t.Fatalf("parent still waiting: %+v", root.Info())
 	}
 }
+
+// TestCompact pins /compact: it summarises an idle agent now, queues on a
+// busy one for its next model call, refuses to run twice at once, and is
+// refused on a killed agent.
+func TestCompact(t *testing.T) {
+	fm := &fakeModel{steps: []step{reply(text("hello"))}}
+	s, h := newTestSession(t, testConfig{}, fm)
+	root := s.Root()
+	ctx := context.Background()
+	runTurn(t, s, h, "go")
+
+	// Idle: the summariser runs now; a second /compact meanwhile is refused.
+	gate := make(chan struct{})
+	fm.steps = []step{func(_ context.Context, req model.Request) (model.Response, error) {
+		if !strings.Contains(req.System, "summarise") || !strings.Contains(lastUserText(req), "hello") {
+			return text(""), errors.New("not the summariser call: " + req.System)
+		}
+		<-gate
+		return text("SUMMARY ONE"), nil
+	}}
+	res := make(chan string, 1)
+	go func() {
+		st, err := root.Compact(ctx)
+		if err != nil {
+			st = "error: " + err.Error()
+		}
+		res <- st
+	}()
+	waitUntil(t, h, func() bool { return len(fm.requests()) == 2 })
+	if _, err := root.Compact(ctx); err == nil || !strings.Contains(err.Error(), "already running") {
+		t.Fatalf("second compact: %v", err)
+	}
+	close(gate)
+	if st := <-res; st != "compacted" {
+		t.Fatalf("compact: %s", st)
+	}
+	comp := h.ofType(event.Compacted, root.ID)
+	var cp event.CompactedPayload
+	if len(comp) != 1 || comp[0].Decode(&cp) != nil || cp.Summary != "SUMMARY ONE" || cp.Before == 0 {
+		t.Fatalf("compacted events %+v payload %+v", comp, cp)
+	}
+	if in := root.Info(); in.Context == 0 || in.State != "idle" {
+		t.Fatalf("%+v", in)
+	}
+
+	// Busy: queued, then done before the next model call of the turn.
+	gate2 := make(chan struct{})
+	fm.steps = []step{
+		func(context.Context, model.Request) (model.Response, error) {
+			<-gate2
+			return call("c1", "shell", `{"command":"echo x"}`), nil
+		},
+		func(_ context.Context, req model.Request) (model.Response, error) {
+			if !strings.Contains(req.System, "summarise") {
+				return text(""), errors.New("expected the summariser, got a turn call")
+			}
+			return text("SUMMARY TWO"), nil
+		},
+		func(_ context.Context, req model.Request) (model.Response, error) {
+			if !strings.Contains(req.Messages[0].Blocks[0].Text, "compacted. Summary follows") || !strings.Contains(req.Messages[0].Blocks[0].Text, "SUMMARY TWO") {
+				return text(""), errors.New("history not compacted: " + req.Messages[0].Blocks[0].Text)
+			}
+			return text("done"), nil
+		},
+	}
+	_ = s.SetMode(ctx, protocol.ModeYolo)
+	_ = root.Prompt(ctx, "again", "human:test")
+	waitUntil(t, h, func() bool { return root.StateOf() == StateRunning })
+	if st, err := root.Compact(ctx); err != nil || st != "queued" {
+		t.Fatalf("busy compact: %s %v", st, err)
+	}
+	close(gate2)
+	if end := h.waitTurnEnd(t, root.ID, 2); end.Reason != "end_turn" {
+		t.Fatalf("%+v", end)
+	}
+	if n := len(h.ofType(event.Compacted, root.ID)); n != 2 {
+		t.Fatalf("compacted events: %d", n)
+	}
+
+	// Killed: refused.
+	_ = s.Kill(root.ID)
+	<-root.Done()
+	if _, err := root.Compact(ctx); err == nil {
+		t.Fatal("compact on a killed agent should fail")
+	}
+}

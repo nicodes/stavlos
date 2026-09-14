@@ -74,6 +74,7 @@ type Agent struct {
 	wakes       map[string]bool             // ids whose completion is waiting to wake this agent (unmonitor cancels)
 	lastError   string                      // error that ended the most recent turn; cleared when a turn starts
 	compactNext bool                        // /compact arrived mid-turn: compact before the next model call, whatever the size
+	compacting  bool                        // a compaction is running (manual or automatic): no second one starts meanwhile
 	ctxTokens   int                         // estimated size of the projected history + system prompt at the last model call (or after compaction)
 	ctxWindow   int                         // the model\'s context window as of the last model call
 	children    []string
@@ -409,14 +410,23 @@ func (a *Agent) Preset() config.Preset {
 // ("queued"). Auto-compaction keeps running on its own at the threshold.
 func (a *Agent) Compact(ctx context.Context) (string, error) {
 	a.mu.Lock()
+	if a.state == StateKilled {
+		a.mu.Unlock()
+		return "", fmt.Errorf("agent %s is killed", a.ID)
+	}
 	busy := a.state == StateRunning || a.state == StateBlocked
 	if busy {
 		a.compactNext = true
-	}
-	a.mu.Unlock()
-	if busy {
+		a.mu.Unlock()
 		return "queued", nil
 	}
+	if a.compacting {
+		a.mu.Unlock()
+		return "", errors.New("a compaction is already running")
+	}
+	a.compacting = true // claimed under the same lock as the state: a turn that starts now sees it
+	a.mu.Unlock()
+	defer a.endCompacting()
 	modelID := a.ModelID()
 	if modelID == "" {
 		return "", errors.New(ErrNoModel)
@@ -434,6 +444,12 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 	a.ctxTokens = est
 	a.mu.Unlock()
 	return "compacted", nil
+}
+
+func (a *Agent) endCompacting() {
+	a.mu.Lock()
+	a.compacting = false
+	a.mu.Unlock()
 }
 
 func (a *Agent) SetRole(ctx context.Context, role string) error {
