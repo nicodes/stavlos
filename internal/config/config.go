@@ -2,6 +2,7 @@
 package config
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -259,7 +261,9 @@ func Load(dir string, trust Trust) (*Effective, error) {
 			if len(pf.Plugins) > 0 {
 				fmt.Fprintf(os.Stderr, "stavlos: ignoring plugins in %s (global only)\n", pdir)
 			}
-			e.applyFile(pf, "project")
+			if err := e.applyFile(pf, "project"); err != nil {
+				return nil, fmt.Errorf("project config: %w", err)
+			}
 			if err := e.loadPresets(filepath.Join(pdir, "roles"), "project"); err != nil {
 				return nil, err
 			}
@@ -280,7 +284,9 @@ func Load(dir string, trust Trust) (*Effective, error) {
 	if err != nil {
 		return nil, fmt.Errorf("local config: %w", err)
 	}
-	e.applyFile(lf, "local")
+	if err := e.applyFile(lf, "local"); err != nil {
+		return nil, fmt.Errorf("local config: %w", err)
+	}
 	return e, nil
 }
 
@@ -344,7 +350,9 @@ func LoadGlobal() (*Effective, error) {
 	if err != nil {
 		return nil, fmt.Errorf("global config: %w", err)
 	}
-	e.applyFile(gf, "global")
+	if err := e.applyFile(gf, "global"); err != nil {
+		return nil, fmt.Errorf("global config: %w", err)
+	}
 	e.Plugins = gf.Plugins
 	if err := e.loadPresets(filepath.Join(gdir, "roles"), "global"); err != nil {
 		return nil, err
@@ -356,7 +364,10 @@ func LoadGlobal() (*Effective, error) {
 	return e, nil
 }
 
-func (e *Effective) applyFile(f File, layer string) {
+// applyFile layers one file onto e. Every value is validated: a setting
+// that cannot be applied is an error, never a silent fallback to the
+// default (an unreadable deny rule is the worst kind of failure).
+func (e *Effective) applyFile(f File, layer string) error {
 	if f.Model != "" {
 		e.Model = f.Model
 	}
@@ -364,6 +375,9 @@ func (e *Effective) applyFile(f File, layer string) {
 		e.RootAgent = f.RootAgent
 	}
 	if f.Limits != nil {
+		if f.Limits.MaxDepth < 0 || f.Limits.MaxAgents < 0 {
+			return errors.New("limits: maxDepth and maxAgents must be positive")
+		}
 		if f.Limits.MaxDepth > 0 {
 			e.Limits.MaxDepth = f.Limits.MaxDepth
 		}
@@ -372,29 +386,57 @@ func (e *Effective) applyFile(f File, layer string) {
 		}
 	}
 	if f.Escalation != nil {
-		if d, err := time.ParseDuration(f.Escalation.ClaimTimeout); err == nil {
+		if f.Escalation.ClaimTimeout != "" {
+			d, err := time.ParseDuration(f.Escalation.ClaimTimeout)
+			if err != nil || d <= 0 {
+				return fmt.Errorf("escalation.claimTimeout %q: want a duration such as 30s", f.Escalation.ClaimTimeout)
+			}
 			e.Escalation.ClaimTimeout = d
 		}
-		if d, err := time.ParseDuration(f.Escalation.AnswerTimeout); err == nil {
+		if f.Escalation.AnswerTimeout != "" {
+			d, err := time.ParseDuration(f.Escalation.AnswerTimeout)
+			if err != nil || d <= 0 {
+				return fmt.Errorf("escalation.answerTimeout %q: want a duration such as 3m", f.Escalation.AnswerTimeout)
+			}
 			e.Escalation.AnswerTimeout = d
 		}
-		if v := policy.Verb(f.Escalation.Default); v == policy.Allow || v == policy.Deny {
+		if f.Escalation.Default != "" {
+			v := policy.Verb(f.Escalation.Default)
+			if v != policy.Allow && v != policy.Deny {
+				return fmt.Errorf("escalation.default %q: allow or deny", f.Escalation.Default)
+			}
 			e.Escalation.Default = v
 		}
 	}
 	if f.Compaction != nil {
-		if f.Compaction.Threshold > 0 {
+		if f.Compaction.Threshold != 0 {
+			if f.Compaction.Threshold <= 0 || f.Compaction.Threshold > 1 {
+				return fmt.Errorf("compaction.threshold %v: a fraction of the context window between 0 and 1", f.Compaction.Threshold)
+			}
 			e.Compaction.Threshold = f.Compaction.Threshold
 		}
-		if n := parseSize(f.Compaction.MaxToolOutput); n > 0 {
+		if f.Compaction.MaxToolOutput != "" {
+			n, err := parseSize(f.Compaction.MaxToolOutput)
+			if err != nil {
+				return fmt.Errorf("compaction.maxToolOutput: %v", err)
+			}
 			e.Compaction.MaxToolOutput = n
 		}
 	}
 	if f.Search != nil {
 		if f.Search.Provider != "" {
-			e.Search.Provider = strings.ToLower(f.Search.Provider)
+			p := strings.ToLower(f.Search.Provider)
+			switch p {
+			case "brave", "tavily", "exa":
+			default:
+				return fmt.Errorf("search.provider %q: brave, tavily or exa", f.Search.Provider)
+			}
+			e.Search.Provider = p
 		}
 		if f.Search.APIKey != "" {
+			if !strings.Contains(f.Search.APIKey, "${env:") {
+				fmt.Fprintf(os.Stderr, "stavlos: search.apiKey is written into the %s config; prefer \"${env:NAME}\" so the key stays in the environment\n", layer)
+			}
 			e.Search.APIKey = ExpandEnv(f.Search.APIKey)
 		}
 	}
@@ -408,7 +450,10 @@ func (e *Effective) applyFile(f File, layer string) {
 			}
 		}
 	}
-	rules := ParsePolicy(f.Policy)
+	rules, err := ParsePolicy(f.Policy)
+	if err != nil {
+		return err
+	}
 	if layer == "project" {
 		// The project's rules are an overlay: they can only tighten what
 		// the global and local layers decide (PRD §10.6).
@@ -416,10 +461,13 @@ func (e *Effective) applyFile(f File, layer string) {
 	} else {
 		e.Policy = policy.Layer(e.Policy.Base().Merge(rules), e.Policy.Overlays()...)
 	}
+	return nil
 }
 
-// ParsePolicy converts the JSON policy shape into rules.
-func ParsePolicy(m map[string]any) *policy.Set {
+// ParsePolicy converts the JSON policy shape (tool → verb, or tool →
+// {pattern: verb}) into rules. A verb that is not allow, ask or deny, or
+// a value of another shape, is an error naming the entry.
+func ParsePolicy(m map[string]any) (*policy.Set, error) {
 	var rules []policy.Rule
 	keys := make([]string, 0, len(m))
 	for k := range m {
@@ -429,9 +477,11 @@ func ParsePolicy(m map[string]any) *policy.Set {
 	for _, tool := range keys {
 		switch v := m[tool].(type) {
 		case string:
-			if pv := policy.Verb(v); pv.Valid() {
-				rules = append(rules, policy.Rule{Tool: tool, Pattern: "*", Verb: pv})
+			pv := policy.Verb(v)
+			if !pv.Valid() {
+				return nil, fmt.Errorf("policy.%s: %q is not a verb (allow, ask or deny)", tool, v)
 			}
+			rules = append(rules, policy.Rule{Tool: tool, Pattern: "*", Verb: pv})
 		case map[string]any:
 			pk := make([]string, 0, len(v))
 			for k := range v {
@@ -439,15 +489,21 @@ func ParsePolicy(m map[string]any) *policy.Set {
 			}
 			sort.Strings(pk)
 			for _, pat := range pk {
-				if s, ok := v[pat].(string); ok {
-					if pv := policy.Verb(s); pv.Valid() {
-						rules = append(rules, policy.Rule{Tool: tool, Pattern: pat, Verb: pv})
-					}
+				str, ok := v[pat].(string)
+				if !ok {
+					return nil, fmt.Errorf("policy.%s.%q: want a verb (allow, ask or deny), got %T", tool, pat, v[pat])
 				}
+				pv := policy.Verb(str)
+				if !pv.Valid() {
+					return nil, fmt.Errorf("policy.%s.%q: %q is not a verb (allow, ask or deny)", tool, pat, str)
+				}
+				rules = append(rules, policy.Rule{Tool: tool, Pattern: pat, Verb: pv})
 			}
+		default:
+			return nil, fmt.Errorf("policy.%s: want a verb or a {pattern: verb} object, got %T", tool, m[tool])
 		}
 	}
-	return policy.New(rules...)
+	return policy.New(rules...), nil
 }
 
 func (e *Effective) loadPresets(dir, layer string) error {
@@ -721,6 +777,9 @@ func frontmatter(s string, v any) (string, error) {
 }
 
 // readFile reads a JSONC file; a missing file is an empty File.
+// readFile parses a stavlos.json (JSONC: comments and trailing commas).
+// Unknown keys are errors: a misspelt "policy" would otherwise vanish, and
+// with it every deny rule under it.
 func readFile(path string) (File, error) {
 	var f File
 	b, err := os.ReadFile(path)
@@ -730,7 +789,9 @@ func readFile(path string) (File, error) {
 	if err != nil {
 		return f, err
 	}
-	if err := json.Unmarshal(StripJSONC(b), &f); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(StripJSONC(b)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&f); err != nil {
 		return f, fmt.Errorf("%s: %w", path, err)
 	}
 	return f, nil
@@ -784,7 +845,8 @@ func StripJSONC(b []byte) []byte {
 	return out
 }
 
-func parseSize(s string) int {
+func parseSize(s string) (int, error) {
+	orig := s
 	s = strings.ToLower(strings.TrimSpace(s))
 	mult := 1
 	switch {
@@ -795,9 +857,11 @@ func parseSize(s string) int {
 	case strings.HasSuffix(s, "b"):
 		s = strings.TrimSuffix(s, "b")
 	}
-	var n int
-	fmt.Sscanf(s, "%d", &n)
-	return n * mult
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("%q: want a size such as 32kb or 1mb", orig)
+	}
+	return n * mult, nil
 }
 
 // ProjectHash lists the trust-gated files under dir (.stavlos/** except
@@ -857,7 +921,8 @@ func (p Preset) PresetPolicy() *policy.Set {
 			m[t] = r
 		}
 	}
-	return ParsePolicy(m)
+	set, _ := ParsePolicy(m) // verbs were checked when the role file was read
+	return set
 }
 
 // toolGroup expands a tools: key to the tool names it gates.
@@ -899,7 +964,7 @@ func SetGlobalModel(modelID string) error {
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			return err
 		}
-		return os.WriteFile(p, []byte(fmt.Sprintf("{\n  \"model\": %q\n}\n", modelID)), 0o644)
+		return os.WriteFile(p, []byte(fmt.Sprintf("{\n  \"model\": %q\n}\n", modelID)), 0o600)
 	}
 	s := string(b)
 	re := regexp.MustCompile(`"model"\s*:\s*"[^"]*"`)
@@ -912,7 +977,7 @@ func SetGlobalModel(modelID string) error {
 		}
 		s = s[:i+1] + fmt.Sprintf("\n  \"model\": %q,", modelID) + s[i+1:]
 	}
-	return os.WriteFile(p, []byte(s), 0o644)
+	return os.WriteFile(p, []byte(s), 0o600) // it may hold a search key
 }
 
 func contains(xs []string, x string) bool {

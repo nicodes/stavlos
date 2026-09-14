@@ -435,7 +435,7 @@ Three layers with one layout. Global is yours and trusted. Project is the team's
 
 ### 10.2 `stavlos.json`
 
-JSONC with a `$schema` for editor validation. Every key is optional; anything omitted falls through to the next layer, then to built-in defaults. `stavlos.local.json` has the identical schema.
+JSONC with a `$schema` for editor validation. Every key is optional; anything omitted falls through to the next layer, then to built-in defaults. `stavlos.local.json` has the identical schema. Loading is strict: an unknown key, a verb other than allow/ask/deny, a malformed duration, size, threshold or provider is an error that names the entry, never a silent default — a misspelt deny rule must not disarm itself. `stavlos.json` is written 0600 because it may hold a search key; `${env:NAME}` is preferred and a literal key draws a warning.
 
 ```jsonc
 {
