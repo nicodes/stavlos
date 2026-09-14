@@ -2157,3 +2157,36 @@ func TestAskUser(t *testing.T) {
 		_ = e.Decode(&te)
 	}
 }
+
+// TestTrustReplyChecksTheHash: trust.reply names a directory and the hash
+// the client was shown; the daemon recomputes the hash from disk, so a
+// stale or invented one trusts nothing, and the directory is normalised.
+func TestTrustReplyChecksTheHash(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(work, ".stavlos"), 0o755)
+	os.WriteFile(filepath.Join(work, ".stavlos", "stavlos.json"), []byte(`{"policy":{"shell":{"curl*":"deny"}}}`), 0o644)
+	h := newHarness(t, t.TempDir(), &fakeModel{})
+	defer h.close()
+	ctx := context.Background()
+	st, err := h.c.TrustStatus(ctx, work)
+	if err != nil || !st.Pending || st.Hash == "" {
+		t.Fatalf("status %+v %v", st, err)
+	}
+	if err := h.c.TrustReply(ctx, work, "stale", true); err == nil || !strings.Contains(err.Error(), "changed") {
+		t.Fatalf("a stale hash should be refused: %v", err)
+	}
+	if err := h.c.TrustReply(ctx, t.TempDir(), st.Hash, true); err == nil {
+		t.Fatal("a directory without project config should be refused")
+	}
+	if st2, _ := h.c.TrustStatus(ctx, work); !st2.Pending {
+		t.Fatal("nothing should be trusted yet")
+	}
+	// The right hash, through an unnormalised path, trusts the directory.
+	if err := h.c.TrustReply(ctx, work+"/./", st.Hash, true); err != nil {
+		t.Fatal(err)
+	}
+	if st3, _ := h.c.TrustStatus(ctx, work); st3.Pending {
+		t.Fatal("should be trusted now")
+	}
+}

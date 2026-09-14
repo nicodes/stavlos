@@ -183,18 +183,6 @@ func answerPromptCmd(ctx context.Context, c *client.Client, id, answer string) t
 	}
 }
 
-// trustReplyCmd claims the trust prompt then answers via trust.reply.
-func trustReplyCmd(ctx context.Context, c *client.Client, id, dir, hash string, trust bool) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		if err := c.ClaimPrompt(ctx, id); err != nil {
-			return promptReplyMsg{id, err}
-		}
-		return promptReplyMsg{id, c.TrustReply(ctx, dir, hash, trust)}
-	}
-}
-
 func providersCmd(ctx context.Context, c *client.Client, notice bool, jump string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)

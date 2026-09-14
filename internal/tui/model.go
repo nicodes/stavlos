@@ -5,7 +5,6 @@ package tui
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -2632,17 +2631,8 @@ func (m *Model) answerPrompt(p *protocol.PromptInfo, answer string) tea.Cmd {
 	}
 	m.promptBusy = p.ID
 	m.claimedByUs[p.ID] = true
-	if p.Kind == "trust" {
-		var t struct {
-			Dir  string `json:"dir"`
-			Hash string `json:"hash"`
-		}
-		if err := json.Unmarshal(p.Input, &t); err != nil || t.Dir == "" {
-			m.promptBusy = ""
-			return m.setStatus("trust prompt: bad input", true)
-		}
-		return trustReplyCmd(m.ctx, m.c, p.ID, t.Dir, t.Hash, answer == "allow")
-	}
+	// A trust prompt is answered like any other, by id: the daemon knows
+	// which directory and hash it asked about.
 	return answerPromptCmd(m.ctx, m.c, p.ID, answer)
 }
 

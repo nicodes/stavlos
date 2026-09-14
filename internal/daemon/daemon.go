@@ -447,10 +447,25 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Session) {
 	}()
 }
 
-// Trust records a decision and reloads config for sessions in dir.
+// Trust records a decision and reloads config for sessions in dir. The
+// directory is normalised and the hash recomputed from what is on disk:
+// a client says which directory it means and whether it trusts what it
+// was shown; the daemon decides what that content is.
 func (d *Daemon) Trust(ctx context.Context, dir, hash string, trust bool) error {
+	dir, _ = filepath.Abs(dir)
+	dir = filepath.Clean(dir)
 	if trust {
-		if err := d.trust.set(ctx, dir, hash); err != nil {
+		_, current, err := config.ProjectHash(dir)
+		if err != nil {
+			return err
+		}
+		if current == "" {
+			return fmt.Errorf("%s has no project configuration to trust", dir)
+		}
+		if hash != current {
+			return fmt.Errorf("%w: the project configuration in %s changed since it was shown; look again before trusting it", errTrustChanged, dir)
+		}
+		if err := d.trust.set(ctx, dir, current); err != nil {
 			return err
 		}
 	}
@@ -628,3 +643,7 @@ func (d *Daemon) Status() protocol.DaemonStatusResult {
 }
 
 var errNoSession = errors.New("session not found")
+
+// errTrustChanged: a trust reply carried a hash that no longer matches the
+// project's files (mapped to ErrConflict on the wire).
+var errTrustChanged = errors.New("trust: content changed")
