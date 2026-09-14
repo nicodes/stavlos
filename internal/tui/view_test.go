@@ -20,29 +20,24 @@ import (
 
 func TestBuildLogo(t *testing.T) {
 	rows := buildLogo("stav")
-	if len(rows) != 3 {
-		t.Fatalf("want 3 rows, got %d", len(rows))
+	if len(rows) != 5 {
+		t.Fatalf("want 5 rows, got %d", len(rows))
 	}
 	w := ansi.StringWidth(rows[0])
-	if w != 3*3+4 { // s, t, a are 3 wide; the v is 4
-		t.Fatalf("width: got %d, want %d", w, 3*3+4)
+	if w != 7+8+7+8+3 { // s t a v, one space between letters
+		t.Fatalf("width: got %d, want %d", w, 7+8+7+8+3)
 	}
 	for i, r := range rows {
 		if ansi.StringWidth(r) != w {
 			t.Errorf("row %d width %d != %d: %q", i, ansi.StringWidth(r), w, r)
 		}
-		if strings.Trim(r, "╔╗╚╝╦╩╠╣║═ ") != "" {
-			t.Errorf("row %d has glyphs outside the double-line set: %q", i, r)
+		if strings.Trim(r, "█ ") != "" {
+			t.Errorf("row %d has glyphs outside the block set: %q", i, r)
 		}
-	}
-	// the classic v: legs that meet in a flat foot
-	v := logoGlyphs['v']
-	if v[0] != "╦  ╦" || v[1] != "╚╗╔╝" || v[2] != " ╚╝ " {
-		t.Fatalf("v %q", v)
 	}
 	// Unknown letters keep the grid aligned.
 	for _, r := range buildLogo("s?s") {
-		if ansi.StringWidth(r) != 3*3 {
+		if ansi.StringWidth(r) != 7*3+2 {
 			t.Errorf("unknown glyph broke alignment: %q", r)
 		}
 	}
@@ -50,8 +45,8 @@ func TestBuildLogo(t *testing.T) {
 
 func TestLogoLines(t *testing.T) {
 	big := logoLines(80)
-	if len(big) != 3 {
-		t.Fatalf("want 3 rows, got %d", len(big))
+	if len(big) != 5 {
+		t.Fatalf("want 5 rows, got %d", len(big))
 	}
 	w := ansi.StringWidth(big[0])
 	for i, r := range big {
@@ -154,7 +149,7 @@ func TestHomeAndSessionViews(t *testing.T) {
 		t.Fatalf("home view must fill the window: %d lines", len(lines))
 	}
 	plain := stripANSI(home)
-	if !strings.Contains(plain, "╔═╗╔╦╗") || strings.Contains(plain, "sign in with ChatGPT or Grok") || !strings.Contains(plain, "Get started /providers") {
+	if !strings.Contains(plain, "███████ ████████") || strings.Contains(plain, "sign in with ChatGPT or Grok") || !strings.Contains(plain, "Get started /providers") {
 		t.Fatalf("home view:\n%s", plain)
 	}
 	if strings.Contains(plain, "session ") {
