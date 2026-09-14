@@ -340,10 +340,10 @@ func (a *Agent) setState(st State) {
 	a.mu.Unlock()
 }
 
-// policy returns the effective policy for this agent: session policy
-// tightened by the preset.
-func (a *Agent) policy() *policy.Set {
-	return a.s.Config().Policy.Tighten(a.preset.PresetPolicy())
+// policy returns the effective policy for this agent: the session's
+// layered policy with the role's rules as one more tightening overlay.
+func (a *Agent) policy() *policy.Layered {
+	return a.s.Config().Policy.With(a.preset.PresetPolicy())
 }
 
 func (a *Agent) skills(cfg *config.Effective) map[string]config.Skill {

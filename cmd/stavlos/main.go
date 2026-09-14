@@ -178,7 +178,7 @@ func run(args []string) error {
 			fmt.Println("nothing pending for", d)
 			return nil
 		}
-		fmt.Printf("Project configuration in %s is not yet trusted. It can start MCP servers, loosen policy (within global limits), and instruct agents.\nFiles:\n", d)
+		fmt.Printf("Project configuration in %s is not yet trusted. It can start MCP servers, tighten policy, add roles and skills, and instruct agents.\nFiles:\n", d)
 		for _, f := range st.Files {
 			fmt.Println("  ", f)
 		}

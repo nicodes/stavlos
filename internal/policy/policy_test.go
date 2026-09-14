@@ -35,15 +35,32 @@ func TestDecide(t *testing.T) {
 	}
 }
 
-func TestTighten(t *testing.T) {
+func TestLayered(t *testing.T) {
 	g := New(Rule{"shell", "*", Allow}, Rule{"shell", "git push*", Ask})
 	p := New(Rule{"shell", "git push*", Allow}, Rule{"shell", "curl*", Deny})
-	s := g.Tighten(p)
+	s := Layer(g, p)
 	if s.Decide("shell", "git push x") != Ask {
 		t.Error("project loosened global")
 	}
 	if s.Decide("shell", "curl x") != Deny {
 		t.Error("project tighten ignored")
+	}
+	if s.Decide("shell", "ls") != Allow || s.Decide("read", "x") != Ask {
+		t.Error("base decision lost where the overlay says nothing")
+	}
+	// An overlay rule with a longer literal prefix than a base deny still
+	// cannot win: the decision is the most restrictive across layers.
+	g = New(Rule{"shell", "*", Allow}, Rule{"shell", "*--force*", Deny})
+	if Layer(g, New(Rule{"shell", "git*", Allow})).Decide("shell", "git push --force") != Deny {
+		t.Error("overlay shadowed a base deny")
+	}
+	// Overlays stack; empty ones are dropped.
+	l := Layer(g).With(New()).With(nil).With(New(Rule{"shell", "ls*", Ask})).With(New(Rule{"shell", "ls -la", Deny}))
+	if len(l.Overlays()) != 2 || l.Decide("shell", "ls -la") != Deny || l.Decide("shell", "ls") != Ask || l.Decide("shell", "pwd") != Allow {
+		t.Errorf("stacked overlays: %v", l.Overlays())
+	}
+	if v, ok := New().Lookup("shell", "x"); ok || v != "" {
+		t.Error("Lookup on an empty set")
 	}
 }
 
