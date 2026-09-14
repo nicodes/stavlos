@@ -54,14 +54,6 @@ type monitorsAPI struct{ a *Agent }
 func (m monitorsAPI) AdoptCommand(command string, job tools.Job, timeout time.Duration) (string, error) {
 	return m.a.adoptMonitor(command, job, timeout)
 }
-func (m monitorsAPI) List() []tools.MonitorStatus {
-	var out []tools.MonitorStatus
-	for _, mon := range m.a.monitorList() {
-		in := mon.Info()
-		out = append(out, tools.MonitorStatus{ID: in.ID, Kind: in.Kind, Label: in.Label, Spec: in.Spec, State: string(in.State), Progress: in.Progress, Started: mon.Started})
-	}
-	return out
-}
 func (m monitorsAPI) Stop(id string) error { return m.a.stopMonitor(id, "stopped by agent") }
 func (m monitorsAPI) Has(id string) bool {
 	m.a.mu.Lock()

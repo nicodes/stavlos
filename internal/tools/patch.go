@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -50,23 +51,16 @@ func (patchTool) Def() model.ToolDef {
 		Schema: schema(map[string]any{"patch": prop("string", "The full patch text, from *** Begin Patch to *** End Patch")}, "patch")}
 }
 
-// PolicyArg is the first path; PolicyArgs lists every path touched so the
-// policy can consider each one.
-func (patchTool) PolicyArg(in json.RawMessage) string {
-	if ps := (patchTool{}).PolicyArgs(in); len(ps) > 0 {
-		return ps[0]
-	}
-	return ""
-}
-
-func (patchTool) PolicyArgs(in json.RawMessage) []string {
+// Subject lists every path the patch touches (a move counts both ends), so
+// the policy judges each one and the most restrictive decision wins.
+func (patchTool) Subject(in json.RawMessage) policy.Subject {
 	var a struct{ Patch string }
 	if decode(in, &a) != nil {
-		return nil
+		return policy.Path()
 	}
 	ops, err := parsePatch(a.Patch)
 	if err != nil {
-		return nil
+		return policy.Path()
 	}
 	var out []string
 	for _, op := range ops {
@@ -75,7 +69,7 @@ func (patchTool) PolicyArgs(in json.RawMessage) []string {
 			out = append(out, op.moveTo)
 		}
 	}
-	return out
+	return policy.Path(out...)
 }
 
 func (patchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {

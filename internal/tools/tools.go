@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
@@ -22,17 +22,22 @@ type Result struct {
 
 // Env is what a tool gets from the calling agent.
 type Env struct {
-	Dir       string                  // session working directory
-	Skills    map[string]config.Skill // skills this agent may load
-	Agent     string                  // caller agent id
-	Orch      Orchestrator            // nil if the agent cannot orchestrate
-	Partial   func(string)            // receives streamed partial output (shell); may be nil
-	MaxOutput int                     // truncate tool output beyond this many bytes (0 = 32k)
-	Mon       Monitors                // general monitors (background commands, watches, timers); nil if unavailable
-	Todo      Todos                   // the agent's todo list; nil if the preset does not include "todo"
-	Ask       Asker                   // raises a question batch to the human and waits; nil in tests without a runtime
-	Search    SearchConfig            // web_search backend; zero → the tool explains how to configure it
-	PassEnv   []string                // environment variables kept for child processes although their names look like secrets (config env.pass)
+	Dir       string           // session working directory
+	Skills    map[string]Skill // skills this agent may load
+	Agent     string           // caller agent id
+	Orch      Orchestrator     // nil if the agent cannot orchestrate
+	Partial   func(string)     // receives streamed partial output (shell); may be nil
+	MaxOutput int              // truncate tool output beyond this many bytes (0 = 32k)
+	Mon       Monitors         // general monitors (background commands, watches, timers); nil if unavailable
+	Todo      Todos            // the agent's todo list; nil if the preset does not include "todo"
+	Ask       Asker            // raises a question batch to the human and waits; nil in tests without a runtime
+	Search    SearchConfig     // web_search backend; zero → the tool explains how to configure it
+	PassEnv   []string         // environment variables kept for child processes although their names look like secrets (config env.pass)
+}
+
+// Skill is a loadable skill: its front matter and its body.
+type Skill struct {
+	Name, Description, Body, Dir string
 }
 
 // Asker is implemented by the agent runtime: it blocks the turn on a
@@ -49,7 +54,6 @@ type Monitors interface {
 	// outlived its wait window, or was started in the background) and
 	// kills, reaps and reports it like any other job.
 	AdoptCommand(command string, job Job, timeout time.Duration) (string, error)
-	List() []MonitorStatus
 	Stop(id string) error
 	Has(id string) bool
 }
@@ -64,29 +68,14 @@ type Job interface {
 	Started() time.Time
 }
 
-// MonitorStatus is a running general monitor.
-type MonitorStatus struct {
-	ID       string    `json:"id"`
-	Kind     string    `json:"kind"`
-	Label    string    `json:"label"`
-	Spec     string    `json:"spec"`
-	State    string    `json:"state"`
-	Progress string    `json:"progress,omitempty"`
-	Started  time.Time `json:"started"`
-}
-
-// MultiArg is implemented by tools that touch several paths in one call
-// (apply_patch); policy evaluates every path and the most restrictive
-// decision wins.
-type MultiArg interface {
-	PolicyArgs(input json.RawMessage) []string
-}
-
 // Tool is one callable tool.
 type Tool interface {
 	Def() model.ToolDef
-	// PolicyArg extracts the string that policy patterns match against.
-	PolicyArg(input json.RawMessage) string
+	// Subject is what policy judges for a call: the strings rules match
+	// (every path a patch touches, the URL as it will be fetched, the
+	// command line) and their kind, which tells the harness what else the
+	// text means.
+	Subject(input json.RawMessage) policy.Subject
 	Run(ctx context.Context, input json.RawMessage, env *Env) Result
 }
 
@@ -120,11 +109,6 @@ type ChildStatus struct {
 	CostUSD   float64  `json:"cost_usd"`
 	Summary   string   `json:"summary,omitempty"`
 	Dirs      []string `json:"dirs,omitempty"` // working directories (what a parent may grant on)
-}
-
-type Artifact struct {
-	Path        string `json:"path"`
-	Description string `json:"description,omitempty"`
 }
 
 // Set is a named collection.

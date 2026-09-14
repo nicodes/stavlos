@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -17,10 +18,10 @@ func (skillTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.Skill, Description: "Load the full instructions of a skill by name. Skill descriptions are listed in your system prompt; load one when its description matches the task.",
 		Schema: schema(map[string]any{"name": prop("string", "Skill name")}, "name")}
 }
-func (skillTool) PolicyArg(in json.RawMessage) string {
+func (skillTool) Subject(in json.RawMessage) policy.Subject {
 	var a struct{ Name string }
 	_ = decode(in, &a)
-	return a.Name
+	return policy.Text(a.Name)
 }
 func (skillTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	var a struct{ Name string }
@@ -48,7 +49,7 @@ func (responseTool) Def() model.ToolDef {
 			"text": prop("string", "Your answer: what you did or found, with exact paths and results"),
 		}, "to", "text")}
 }
-func (responseTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
+func (responseTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 func (responseTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	var a struct{ To, Text string }
 	if err := decode(in, &a); err != nil {

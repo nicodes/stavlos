@@ -8,6 +8,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -46,10 +47,10 @@ func (todoAddTool) Def() model.ToolDef {
 		Schema: schema(map[string]any{"text": prop("string", "The step, imperative and short (\"Run the tests\")")}, "text")}
 }
 
-func (todoAddTool) PolicyArg(in json.RawMessage) string {
+func (todoAddTool) Subject(in json.RawMessage) policy.Subject {
 	var a struct{ Text string }
 	_ = decode(in, &a)
-	return a.Text
+	return policy.Text(a.Text)
 }
 
 func (todoAddTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
@@ -82,7 +83,7 @@ func (todoUpdateTool) Def() model.ToolDef {
 		}, "id")}
 }
 
-func (todoUpdateTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
+func (todoUpdateTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 
 func (todoUpdateTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if env.Todo == nil {
