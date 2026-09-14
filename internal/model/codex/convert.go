@@ -19,7 +19,6 @@ type responsesRequest struct {
 	Include           []string        `json:"include"`
 	Reasoning         reasoningConfig `json:"reasoning"`
 	Text              textConfig      `json:"text"`
-	MaxOutputTokens   int             `json:"max_output_tokens,omitempty"`
 }
 
 type reasoningConfig struct {
@@ -94,9 +93,10 @@ func buildBody(id string, req model.Request) ([]byte, error) {
 	if req.Variant != "" {
 		rr.Reasoning.Effort = req.Variant
 	}
-	if req.MaxTokens > 0 {
-		rr.MaxOutputTokens = req.MaxTokens
-	}
+	// Request.MaxTokens is not forwarded: the ChatGPT Codex backend rejects
+	// max_output_tokens ("Unsupported parameter"), so the model's own limit
+	// applies. Callers that set it (compaction) get a longer answer at
+	// worst.
 	return json.Marshal(rr)
 }
 
