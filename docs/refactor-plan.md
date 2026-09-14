@@ -219,7 +219,7 @@ tests that pin current behaviour first.
     `keyBarView` computed once per Update. Makes permission/question option clicks work.
 8.4 ✅ (as one `stepCursor` shared by the tab dialogs, sidebar, permission and questions; todo uses the formerly dead `listKey`; empty notes come from `tabBodyRows`; overlays keep their clamped, filtered, paged movement) Generic `listDialog` component for the six tabs, sidebar and overlay: cursor/wrap/filter/empty
     text; the five `*Key` handlers and the dead `listKey` collapse into it.
-8.5 `Model` split into `sessionState` (zeroed wholesale on bind), `dialogs`, `uiPrefs`; `reply()`
+8.5 ✅ (per-session dialog state — question, permission and dirs rows, mcp folds — joined `sessionState`; commands share `rpcCmd`/`resultCmd`/`tick`) `Model` split into `sessionState` (zeroed wholesale on bind), `dialogs`, `uiPrefs`; `reply()`
     and `claimThen()` helpers; msg/cmd near-duplicates merged (`sessionsMsg`, `rolesMsg`,
     `providersMsg`, tick helper).
 8.6 `EventLines` as a renderer table; `handleKey` split (`inputKey`); dead code removed

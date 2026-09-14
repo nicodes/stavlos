@@ -2033,7 +2033,7 @@ func TestStartScreenHistoryComesFromEarlierSessions(t *testing.T) {
 	m.reconciled = true
 	m.layout()
 	now := time.Now()
-	nm, _ := m.Update(sessionsMsg{quiet: true, sessions: []protocol.SessionInfo{
+	nm, _ := m.Update(sessionsMsg{purpose: sessionsHistory, sessions: []protocol.SessionInfo{
 		{ID: "cur", Title: "the one we are in", Created: now.Format(time.RFC3339)},
 		{ID: "empty", Created: now.Format(time.RFC3339)},
 		{ID: "s1", Title: "fix the login bug", Created: now.Add(-2 * time.Hour).Format(time.RFC3339)},
