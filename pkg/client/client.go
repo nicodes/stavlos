@@ -25,7 +25,8 @@ type Client struct {
 	pmu     sync.Mutex
 
 	// Notifications is fed every server→client notification. It is buffered;
-	// a consumer that falls far behind will block the reader.
+	// a consumer that falls far behind blocks the reader, and the daemon then
+	// drops the connection rather than wait (the client reconnects).
 	Notifications chan protocol.Response
 
 	closed chan struct{}
@@ -42,7 +43,7 @@ func Dial(socket string) (*Client, error) {
 		conn:          conn,
 		w:             bufio.NewWriter(conn),
 		pending:       map[int64]chan protocol.Response{},
-		Notifications: make(chan protocol.Response, 1024),
+		Notifications: make(chan protocol.Response, 4096),
 		closed:        make(chan struct{}),
 	}
 	go c.readLoop()
@@ -94,23 +95,35 @@ func (c *Client) Closed() <-chan struct{} { return c.closed }
 // Close closes the connection.
 func (c *Client) Close() error { return c.conn.Close() }
 
-// Call performs one JSON-RPC request. params must be a struct with a V field
-// or a map; the version is injected if missing.
+// Call performs one JSON-RPC request; params is the method's params struct
+// (nil for none). The protocol version travels in the envelope.
 func (c *Client) Call(ctx context.Context, method string, params any, result any) error {
 	id := c.nextID.Add(1)
-	raw, err := withVersion(params)
-	if err != nil {
-		return err
+	var raw json.RawMessage
+	if params != nil {
+		b, err := json.Marshal(params)
+		if err != nil {
+			return err
+		}
+		raw = b
 	}
 	idb, _ := json.Marshal(id)
 	idr := json.RawMessage(idb)
-	req := protocol.Request{JSONRPC: "2.0", ID: &idr, Method: method, Params: raw}
-	b, _ := json.Marshal(req)
+	req := protocol.Request{JSONRPC: "2.0", V: protocol.Version, ID: &idr, Method: method, Params: raw}
+	b, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
 
 	ch := make(chan protocol.Response, 1)
 	c.pmu.Lock()
 	c.pending[id] = ch
 	c.pmu.Unlock()
+	defer func() { // answered, abandoned or failed: the id is done either way
+		c.pmu.Lock()
+		delete(c.pending, id)
+		c.pmu.Unlock()
+	}()
 
 	c.wmu.Lock()
 	_, werr := c.w.Write(append(b, '\n'))
@@ -138,24 +151,6 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 	case <-c.closed:
 		return c.err
 	}
-}
-
-func withVersion(params any) (json.RawMessage, error) {
-	if params == nil {
-		params = map[string]any{}
-	}
-	b, err := json.Marshal(params)
-	if err != nil {
-		return nil, err
-	}
-	var m map[string]any
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, fmt.Errorf("params must be an object: %w", err)
-	}
-	if v, ok := m["v"]; !ok || v == float64(0) {
-		m["v"] = protocol.Version
-	}
-	return json.Marshal(m)
 }
 
 // --- typed helpers ---
@@ -211,7 +206,7 @@ func (c *Client) SetSessionModel(ctx context.Context, id, modelID string) error 
 
 // SetSessionMode sets the session's permission mode: ask, auto or yolo.
 func (c *Client) SetSessionMode(ctx context.Context, id, mode string) error {
-	return c.Call(ctx, protocol.MSessionSetMode, protocol.SessionSetModeParams{V: protocol.Version, ID: id, Mode: mode}, nil)
+	return c.Call(ctx, protocol.MSessionSetMode, protocol.SessionSetModeParams{ID: id, Mode: mode}, nil)
 }
 
 func (c *Client) Tree(ctx context.Context, session string) ([]protocol.AgentInfo, error) {
@@ -304,7 +299,7 @@ func (c *Client) Reconcile(ctx context.Context, session string) (protocol.Reconc
 
 // SetAgentVariant switches an agent's model variant ("" = provider default).
 func (c *Client) SetAgentVariant(ctx context.Context, agent, variant string) error {
-	return c.Call(ctx, protocol.MAgentSetVariant, protocol.AgentSetVariantParams{V: protocol.Version, Agent: agent, Variant: variant}, nil)
+	return c.Call(ctx, protocol.MAgentSetVariant, protocol.AgentSetVariantParams{Agent: agent, Variant: variant}, nil)
 }
 
 // AddAgentDir puts a directory in an agent's working set; RemoveAgentDir
@@ -314,21 +309,21 @@ func (c *Client) SetAgentVariant(ctx context.Context, agent, variant string) err
 // next model call.
 func (c *Client) CompactAgent(ctx context.Context, agent string) (string, error) {
 	var r protocol.AgentCompactResult
-	err := c.Call(ctx, protocol.MAgentCompact, protocol.AgentCompactParams{V: protocol.Version, Agent: agent}, &r)
+	err := c.Call(ctx, protocol.MAgentCompact, protocol.AgentCompactParams{Agent: agent}, &r)
 	return r.Status, err
 }
 
 func (c *Client) AddAgentDir(ctx context.Context, agent, dir string) error {
-	return c.Call(ctx, protocol.MAgentAddDir, protocol.AgentDirParams{V: protocol.Version, Agent: agent, Dir: dir}, nil)
+	return c.Call(ctx, protocol.MAgentAddDir, protocol.AgentDirParams{Agent: agent, Dir: dir}, nil)
 }
 func (c *Client) RemoveAgentDir(ctx context.Context, agent, dir string) error {
-	return c.Call(ctx, protocol.MAgentRemoveDir, protocol.AgentDirParams{V: protocol.Version, Agent: agent, Dir: dir}, nil)
+	return c.Call(ctx, protocol.MAgentRemoveDir, protocol.AgentDirParams{Agent: agent, Dir: dir}, nil)
 }
 
 // Variants lists the variant names a model offers.
 func (c *Client) Variants(ctx context.Context, modelID string) ([]string, error) {
 	var r protocol.VariantsResult
-	err := c.Call(ctx, protocol.MVariants, protocol.VariantsParams{V: protocol.Version, Model: modelID}, &r)
+	err := c.Call(ctx, protocol.MVariants, protocol.VariantsParams{Model: modelID}, &r)
 	return r.Variants, err
 }
 

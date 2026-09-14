@@ -1,7 +1,7 @@
 // Package protocol defines the JSON-RPC 2.0 wire contract (PRD §9).
 //
 // Transport: newline-delimited JSON-RPC 2.0 over a Unix domain socket.
-// Every request carries "v": 1 in params (Version). Server→client
+// Every request carries "v": 1 beside "method" (Version). Server→client
 // notifications: "event", "stream", "prompt".
 package protocol
 
@@ -176,6 +176,7 @@ const (
 
 type Request struct {
 	JSONRPC string           `json:"jsonrpc"`
+	V       int              `json:"v"` // protocol version (Version); a daemon refuses a version it does not serve
 	ID      *json.RawMessage `json:"id,omitempty"`
 	Method  string           `json:"method"`
 	Params  json.RawMessage  `json:"params,omitempty"`
@@ -214,7 +215,6 @@ const (
 // --- params / results ---
 
 type AttachParams struct {
-	V      int    `json:"v"`
 	Client string `json:"client"` // human-facing name, e.g. "tui:pid"
 	Tier   Tier   `json:"tier"`
 }
@@ -250,7 +250,6 @@ type SessionInfo struct {
 }
 
 type SessionListParams struct {
-	V               int    `json:"v"`
 	Dir             string `json:"dir,omitempty"` // filter
 	IncludeArchived bool   `json:"include_archived,omitempty"`
 }
@@ -259,27 +258,22 @@ type SessionListResult struct {
 }
 
 type SessionCreateParams struct {
-	V         int    `json:"v"`
 	Dir       string `json:"dir"`
 	Model     string `json:"model,omitempty"`      // overrides config
 	RootAgent string `json:"root_agent,omitempty"` // archetype; overrides config
 }
 type SessionRef struct {
-	V  int    `json:"v"`
 	ID string `json:"id"`
 }
 type SessionForkParams struct {
-	V   int    `json:"v"`
 	ID  string `json:"id"`
 	Seq int64  `json:"seq"` // fork point (inclusive)
 }
 type SessionSetModelParams struct {
-	V     int    `json:"v"`
 	ID    string `json:"id"`
 	Model string `json:"model"`
 }
 type SessionSetModeParams struct {
-	V    int    `json:"v"`
 	ID   string `json:"id"`
 	Mode string `json:"mode"` // ask | auto | yolo
 }
@@ -317,7 +311,6 @@ type AgentInfo struct {
 	Awaiting      []string         `json:"awaiting,omitempty"`       // ids of the agents whose answer this one is waiting for (a child's task, an agent_message)
 }
 type AgentTreeParams struct {
-	V       int    `json:"v"`
 	Session string `json:"session"`
 }
 type AgentTreeResult struct {
@@ -325,14 +318,12 @@ type AgentTreeResult struct {
 }
 
 type AgentSendParams struct {
-	V     int    `json:"v"`
 	Agent string `json:"agent"`
 	Kind  Kind   `json:"kind"`
 	Text  string `json:"text,omitempty"`
 }
 
 type AgentSpawnParams struct {
-	V         int      `json:"v"`
 	Parent    string   `json:"parent"`
 	Archetype string   `json:"archetype"`
 	Label     string   `json:"label"`
@@ -344,34 +335,28 @@ type AgentSpawnResult struct {
 	ID string `json:"id"`
 }
 type AgentSetModelParams struct {
-	V     int    `json:"v"`
 	Agent string `json:"agent"`
 	Model string `json:"model"`
 }
 type AgentSetRoleParams struct {
-	V     int    `json:"v"`
 	Agent string `json:"agent"`
 	Role  string `json:"role"` // preset name
 }
 type AgentCompactParams struct {
-	V     int    `json:"v"`
 	Agent string `json:"agent"`
 }
 type AgentCompactResult struct {
 	Status string `json:"status"` // compacted | queued (the agent is mid-turn; it compacts before its next model call)
 }
 type AgentDirParams struct {
-	V     int    `json:"v"`
 	Agent string `json:"agent"`
 	Dir   string `json:"dir"` // absolute, ~ or relative to the session directory
 }
 type AgentSetVariantParams struct {
-	V       int    `json:"v"`
 	Agent   string `json:"agent"`
 	Variant string `json:"variant"` // "" = provider default
 }
 type VariantsParams struct {
-	V     int    `json:"v"`
 	Model string `json:"model"` // provider/id
 }
 type VariantsResult struct {
@@ -409,18 +394,15 @@ type QuestionOption struct {
 	Description string `json:"description,omitempty"`
 }
 type PromptListParams struct {
-	V       int    `json:"v"`
 	Session string `json:"session,omitempty"`
 }
 type PromptListResult struct {
 	Prompts []PromptInfo `json:"prompts"`
 }
 type PromptClaimParams struct {
-	V  int    `json:"v"`
 	ID string `json:"id"`
 }
 type PromptReplyParams struct {
-	V      int    `json:"v"`
 	ID     string `json:"id"`
 	Answer string `json:"answer"`           // allow | deny | allow_always | text
 	Dir    string `json:"dir,omitempty"`    // boundary prompt + allow_always: add this directory instead of the offered one
@@ -431,7 +413,6 @@ type PromptReplyParams struct {
 }
 
 type TrustStatusParams struct {
-	V   int    `json:"v"`
 	Dir string `json:"dir"`
 }
 type TrustStatusResult struct {
@@ -441,14 +422,12 @@ type TrustStatusResult struct {
 	Files   []string `json:"files,omitempty"` // what would be trusted
 }
 type TrustReplyParams struct {
-	V     int    `json:"v"`
 	Dir   string `json:"dir"`
 	Hash  string `json:"hash"`
 	Trust bool   `json:"trust"`
 }
 
 type SubscribeParams struct {
-	V       int    `json:"v"`
 	Session string `json:"session"`
 	From    int64  `json:"from"` // first per-session seq to deliver (0 = from start)
 }
@@ -462,7 +441,6 @@ type ReconcileResult struct {
 }
 
 type PresetsParams struct {
-	V       int    `json:"v"`
 	Session string `json:"session"`
 }
 type PresetInfo struct {
@@ -509,12 +487,10 @@ type LoginMethod struct {
 }
 
 type LoginStartParams struct {
-	V        int    `json:"v"`
 	Provider string `json:"provider"`
 	Method   string `json:"method,omitempty"` // "" = the provider's default
 }
 type ProviderListParams struct {
-	V int `json:"v"`
 }
 type ProviderListResult struct {
 	AuthPath  string         `json:"auth_path"`
@@ -534,11 +510,9 @@ type LoginStartResult struct {
 	ExpiresIn    int    `json:"expires_in"` // seconds
 }
 type LoginWaitParams struct {
-	V  int    `json:"v"`
 	ID string `json:"id"`
 }
 type ProviderRef struct {
-	V        int    `json:"v"`
 	Provider string `json:"provider"`
 }
 
@@ -552,7 +526,6 @@ type ModelInfo struct {
 	OutputPrice float64 `json:"output_price,omitempty"` // USD per 1M
 }
 type ModelListParams struct {
-	V        int    `json:"v"`
 	Provider string `json:"provider,omitempty"` // filter; empty = all connected providers
 	All      bool   `json:"all,omitempty"`      // include unconnected providers
 }
