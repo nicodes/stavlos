@@ -146,8 +146,17 @@ func TestProjectGolden(t *testing.T) {
 func TestEstimateAndTranscript(t *testing.T) {
 	h := Project([]event.Event{user(1, "12345678"), assistant(2, use("c1", "read")), result(3, "c1", "abcd")})
 	// system 4 + text 8+8 + use 2+8 + result 4+8 = 42 → /4
-	if got := EstimateTokens(h, "sys!"); got != 10 {
+	if got := EstimateTokens(h, "sys!", nil); got != 10 {
 		t.Fatalf("estimate %d", got)
+	}
+	// Tool definitions and thinking signatures count: both travel with the call.
+	defs := []model.ToolDef{{Name: "read", Description: "Read a file.", Schema: json.RawMessage(`{"type":"object"}`)}}
+	if got := EstimateTokens(h, "sys!", defs); got != 10+(4+12+17+8)/4 {
+		t.Fatalf("estimate with tools %d", got)
+	}
+	sig := Project([]event.Event{user(1, "a"), assistant(2, model.Block{Type: model.BlockThinking, Signature: strings.Repeat("s", 80)}, txt("b"))})
+	if EstimateTokens(sig, "", nil) <= EstimateTokens(Project([]event.Event{user(1, "a"), assistant(2, txt("b"))}), "", nil) {
+		t.Fatal("a signature should add to the estimate")
 	}
 	want := "user: 12345678\nassistant calls read {}\ntool result: abcd\n"
 	if got := Transcript(h); got != want {

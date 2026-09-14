@@ -11,6 +11,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/project"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
@@ -67,7 +68,10 @@ type Agent struct {
 	mcpIdle     *time.Timer           // stops idle MCP servers (MCPIdleAfter)
 	extraDirs   []dirEntry            // working directories beyond the session\'s and the role\'s: grants and the human\'s answers (logged)
 	removedDirs map[string]bool       // directories the human took out (role ones stay hidden while listed)
-	events      []event.Event         // this agent's events (projection cache)
+	events      []event.Event         // this agent's events since the last compaction (what the projection reads)
+	evVer       int                   // bumps on every recorded event: the history cache is valid for one version
+	hist        []model.Message       // the projected history for histVer
+	histVer     int
 	cancelTurn  context.CancelFunc
 	armed       map[string]bool // job ids whose exit wakes this agent
 	monitors    map[string]*Monitor
@@ -447,8 +451,8 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 	if err := a.compact(ctx, m, len(a.eventsCopy())); err != nil {
 		return "", err
 	}
-	system, _ := a.buildContext(a.role(), a.s.Config())
-	est := project.EstimateTokens(project.Project(a.eventsCopy()), system) // eventsCopy takes a.mu: compute before locking
+	system, defs := a.buildContext(a.role(), a.s.Config())
+	est := project.EstimateTokens(a.history(), system, defs) // takes a.mu itself: compute before locking
 	a.mu.Lock()
 	a.ctxTokens = est
 	a.mu.Unlock()
@@ -572,9 +576,44 @@ func (a *Agent) record(ctx context.Context, t event.Type, payload any) (event.Ev
 		return e, err
 	}
 	a.mu.Lock()
+	if cp, ok := payload.(event.CompactedPayload); ok {
+		// Everything the summary covers is gone from the projection for
+		// good; dropping it here keeps memory and every later projection
+		// proportional to what the model still sees.
+		kept := a.events[:0]
+		for _, old := range a.events {
+			if old.Seq > cp.ToSeq {
+				kept = append(kept, old)
+			}
+		}
+		a.events = kept
+	}
 	a.events = append(a.events, e)
+	a.evVer++
 	a.mu.Unlock()
 	return e, nil
+}
+
+// history is the model-visible conversation, projected once per change to
+// the events and cached. The result is the caller's to extend but not to
+// mutate in place.
+func (a *Agent) history() []model.Message {
+	a.mu.Lock()
+	if a.hist != nil && a.histVer == a.evVer {
+		h := append([]model.Message(nil), a.hist...)
+		a.mu.Unlock()
+		return h
+	}
+	evs := append([]event.Event(nil), a.events...)
+	ver := a.evVer
+	a.mu.Unlock()
+	h := project.Project(evs)
+	a.mu.Lock()
+	if ver == a.evVer {
+		a.hist, a.histVer = h, ver
+	}
+	a.mu.Unlock()
+	return append([]model.Message(nil), h...)
 }
 
 // takeLogErr returns and clears the first log failure since the last call.
