@@ -161,6 +161,17 @@ func answerPromptDirCmd(ctx context.Context, c *client.Client, id, dir string) t
 	}
 }
 
+func allowPromptPrefixCmd(ctx context.Context, c *client.Client, id, prefix string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		if err := c.ClaimPrompt(ctx, id); err != nil {
+			return promptReplyMsg{id, err}
+		}
+		return promptReplyMsg{id, c.AllowPromptPrefix(ctx, id, prefix)}
+	}
+}
+
 func answerPromptCmd(ctx context.Context, c *client.Client, id, answer string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)

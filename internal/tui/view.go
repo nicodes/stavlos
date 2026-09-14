@@ -1290,14 +1290,19 @@ func (m Model) cursorRows(rows []string) []string {
 }
 
 // promptBox renders the head of the prompt queue as the body of the
-// permission dialog: a permission is one row in the async tab's style,
-// "$ name (role)  command", with the whole argument (the command, path or
-// files) wrapped onto indented continuation lines — it is what the user is
-// approving, so it is never cut; a question shows its text, options and
-// answer field; trust shows the directory and files. Key hints live in the
-// key bar, so only a status line (claimed, answering) is added.
+// permission dialog: the subject first — "$ command  name (role)" with the
+// whole argument (the command, path or files) wrapped onto indented
+// continuation lines, since it is what the user is approving and is never
+// cut; a boundary prompt adds the line saying it reaches outside the
+// agent's directories; trust shows the project directory and its files —
+// then the single-select list of answers, and the reason or path row
+// while one is open. Key hints live in the key bar.
 func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 	var lines []string
+	who := ""
+	if p.Agent != "" {
+		who = m.agentWhoLabel(p.Agent)
+	}
 	switch p.Kind {
 	case "trust":
 		var t struct {
@@ -1306,51 +1311,80 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 			Files []string `json:"files"`
 		}
 		_ = json.Unmarshal(p.Input, &t)
-		lines = append(lines, "trust project configuration in "+t.Dir+"?")
-		if len(t.Files) > 0 {
-			lines = append(lines, "files:")
-			for i, f := range t.Files {
-				if i == 10 {
-					lines = append(lines, fmt.Sprintf("  (+%d more)", len(t.Files)-10))
-					break
-				}
-				lines = append(lines, "  "+f)
+		head := styleWorking.Render("◆") + " " + shortHome(t.Dir)
+		if who != "" {
+			head += "  " + styleDim.Render(who)
+		}
+		lines = append(lines, head)
+		for i, f := range t.Files {
+			if i == 10 {
+				lines = append(lines, fmt.Sprintf("  (+%d more)", len(t.Files)-10))
+				break
 			}
+			lines = append(lines, "  "+f)
 		}
 	default:
 		g, gap := toolGlyph(p.Tool)
 		head := styleWorking.Render(g) + gap
-		if who := m.agentWhoLabel(p.Agent); who != "" {
-			head += styleBold.Render(who) + "  "
-		}
 		arg := fullToolArg(p.Tool, p.Input)
 		if arg == "" {
 			arg = toolTitle(p.Tool)
 		}
+		text := arg
+		if who != "" {
+			text += "  " + who
+		}
 		// Continuation lines are indented once from the dialog's left edge.
 		// The first line shares its row with the head, so the text is
-		// wrapped with the head's width reserved in front of it.
+		// wrapped with the head's width reserved in front of it. The agent
+		// label sits after the subject, dim, as in the questions dialog.
 		const indent = 2
 		wrapW := width - indent
 		if wrapW < 20 {
 			wrapW = 20
 		}
 		reserve := strings.Repeat(" ", max(lipgloss.Width(head)-indent, 0))
-		for i, l := range strings.Split(ansi.Hardwrap(reserve+arg, wrapW, true), "\n") {
+		rows := strings.Split(ansi.Hardwrap(reserve+text, wrapW, true), "\n")
+		for i, l := range rows {
 			if i == 0 {
-				lines = append(lines, head+strings.TrimPrefix(l, reserve))
+				l = strings.TrimPrefix(l, reserve)
+			}
+			if i == len(rows)-1 && who != "" {
+				if k := strings.LastIndex(l, "  "+who); k >= 0 {
+					l = l[:k] + "  " + styleDim.Render(who)
+				}
+			}
+			if i == 0 {
+				lines = append(lines, head+l)
 			} else {
 				lines = append(lines, strings.Repeat(" ", indent)+l)
 			}
 		}
-	}
-	if p.Dir != "" {
-		lines = append(lines, styleWarn.Render("outside its directories")+styleDim.Render(" · a adds "+shortHome(p.Dir)+" · e edits it first"))
-		if m.promptDir {
-			lines = append(lines, "", styleDim.Render("directory to add"), m.dirInput.View())
+		if p.Dir != "" {
+			lines = append(lines, styleWarn.Render("outside its directories")+styleDim.Render(" · "+shortHome(p.Dir)))
 		}
 	}
-	if m.promptDeny {
+	lines = append(lines, "")
+	sel := m.permSelection(p)
+	for i, o := range permOptions(p) {
+		marker := "  "
+		if i == sel && m.permEdit == "" {
+			marker = styleOvMarker.Render("▸") + " "
+		}
+		mark := styleDim.Render("○")
+		if i == sel {
+			mark = styleAccent.Render("●")
+		}
+		row := marker + mark + " " + o.label
+		if o.desc != "" {
+			row += "  " + styleDim.Render(o.desc)
+		}
+		lines = append(lines, ansi.Truncate(row, width, "…"))
+	}
+	switch m.permEdit {
+	case "dir":
+		lines = append(lines, "", styleDim.Render("directory to add"), m.dirInput.View())
+	case "deny":
 		lines = append(lines, "", styleDim.Render("deny · a reason the agent will read, or leave it empty"), m.dirInput.View())
 	}
 	switch {

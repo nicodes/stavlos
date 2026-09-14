@@ -1790,6 +1790,69 @@ func TestDenyReasonReachesTheAgent(t *testing.T) {
 	h.waitFor(event.TurnEnded, root)
 }
 
+// TestAllowPrefix: "allow_prefix" runs the call and approves every later
+// simple command of the tool starting with the prefix; a chained command
+// with the same start asks again.
+func TestAllowPrefix(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response { return call("c1", "bash", `{"command":"touch one"}`) },
+		func(req model.Request) model.Response {
+			if last := req.Messages[len(req.Messages)-1].Blocks[0]; last.IsError {
+				t.Errorf("first touch: %+v", last)
+			}
+			return call("c2", "bash", `{"command":"touch two words"}`)
+		},
+		func(req model.Request) model.Response {
+			if last := req.Messages[len(req.Messages)-1].Blocks[0]; last.IsError {
+				t.Errorf("covered touch should run without asking: %+v", last)
+			}
+			return call("c3", "bash", `{"command":"touch three; touch four"}`)
+		},
+		func(req model.Request) model.Response {
+			if last := req.Messages[len(req.Messages)-1].Blocks[0]; !last.IsError || !strings.Contains(last.Content, "denied") {
+				t.Errorf("chained command should have asked (and been denied): %+v", last)
+			}
+			return text("ok")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	h.waitFor(event.PromptRequested, root)
+	p := h.d.esc.Pending(s.ID)[0]
+	_ = h.c.ClaimPrompt(ctx, p.ID)
+	if err := h.c.AllowPromptPrefix(ctx, p.ID, "touch"); err != nil {
+		t.Fatal(err)
+	}
+	// the second echo runs without a prompt; the chained one asks
+	h.waitFor(event.PromptRequested, root)
+	p = h.d.esc.Pending(s.ID)[0]
+	if !strings.Contains(string(p.Input), "touch three; touch four") {
+		t.Fatalf("second prompt should be the chained command: %s", p.Input)
+	}
+	_ = h.c.ClaimPrompt(ctx, p.ID)
+	if err := h.c.DenyPrompt(ctx, p.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	h.waitFor(event.TurnEnded, root)
+	for _, f := range []string{"one", "two", "words"} {
+		if _, err := os.Stat(filepath.Join(work, f)); err != nil {
+			t.Errorf("%s should exist: %v", f, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(work, "three")); err == nil {
+		t.Error("the chained command was denied and must not have run")
+	}
+}
+
 // TestAskUser: ask_user raises one question prompt for the batch, the
 // answers come back as "header: answer" lines, and a cancel withdraws it.
 func TestAskUser(t *testing.T) {

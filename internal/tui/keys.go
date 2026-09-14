@@ -23,9 +23,6 @@ type keyMap struct {
 	Submit      key.Binding
 	Select      key.Binding
 	Clear       key.Binding
-	Yes         key.Binding
-	No          key.Binding
-	Always      key.Binding
 	ToggleTree  key.Binding
 
 	// Overlay (modal list / field) keys.
@@ -57,9 +54,6 @@ var keys = keyMap{
 	Submit:      key.NewBinding(key.WithKeys("enter")),
 	Select:      key.NewBinding(key.WithKeys(" ")), // space: select, open, toggle — outside text fields
 	Clear:       key.NewBinding(key.WithKeys("esc")),
-	Yes:         key.NewBinding(key.WithKeys("y", "Y")),
-	No:          key.NewBinding(key.WithKeys("n", "N")),
-	Always:      key.NewBinding(key.WithKeys("a", "A")),
 	ToggleTree:  key.NewBinding(key.WithKeys("ctrl+b")),
 
 	OvUp:     key.NewBinding(key.WithKeys("up", "ctrl+p")),

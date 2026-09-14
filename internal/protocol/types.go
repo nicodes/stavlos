@@ -321,6 +321,7 @@ type PromptReplyParams struct {
 	Answer string `json:"answer"`           // allow | deny | allow_always | text
 	Dir    string `json:"dir,omitempty"`    // boundary prompt + allow_always: add this directory instead of the offered one
 	Reason string `json:"reason,omitempty"` // deny: an optional note the agent sees in its tool result
+	Prefix string `json:"prefix,omitempty"` // allow_prefix: allow every command starting with this for the session
 	// Answers answers a question batch, one entry per question in order
 	// (a picked label, several joined with ", ", or typed text).
 	Answers []string `json:"answers,omitempty"`

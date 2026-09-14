@@ -207,6 +207,11 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	key := c.Name + "\x00" + arg
 	a.s.mu.RLock()
 	always := a.s.allowAlways[key]
+	for _, pre := range a.s.allowPrefix[c.Name] { // "go test" covers "go test ./...", never "go test; rm"
+		if protocol.PrefixCovers(pre, arg) {
+			always = true
+		}
+	}
 	a.s.mu.RUnlock()
 	if always {
 		verb = policy.Allow
@@ -246,6 +251,17 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		case ans.Withdrawn:
 			finish("", true, true, false)
 			return
+		case ans.Value == "allow_prefix" && strings.TrimSpace(ans.Prefix) != "":
+			a.s.mu.Lock()
+			a.s.allowPrefix[c.Name] = append(a.s.allowPrefix[c.Name], strings.TrimSpace(ans.Prefix))
+			a.s.mu.Unlock()
+			if boundary != "" {
+				dir := boundary
+				if strings.TrimSpace(ans.Dir) != "" {
+					dir = resolveDir(a.s.Dir, ans.Dir)
+				}
+				_ = a.addDir(bg, dir, "human")
+			}
 		case ans.Value == "allow_always":
 			a.s.mu.Lock()
 			a.s.allowAlways[key] = true

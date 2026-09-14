@@ -49,8 +49,9 @@ type Session struct {
 	archived    bool
 	ctx         context.Context
 	cancel      context.CancelFunc
-	allowAlways map[string]bool // "tool\x00arg" remembered allows (session-scoped)
-	mode        string          // permission mode: "" or ask (every ask prompts) | auto (asks inside the agent's dirs are allowed) | yolo (every ask is allowed)
+	allowAlways map[string]bool     // "tool\x00arg" remembered allows (session-scoped)
+	allowPrefix map[string][]string // tool → command prefixes allowed for the session ("go test")
+	mode        string              // permission mode: "" or ask (every ask prompts) | auto (asks inside the agent's dirs are allowed) | yolo (every ask is allowed)
 }
 
 // Mode reports the session's permission mode (protocol.ModeAsk by default).
@@ -112,6 +113,7 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, rootArch str
 		cfg: cfg, model: modelID, rootArch: rootArch,
 		agents: map[string]*Agent{}, ctx: ctx, cancel: cancel,
 		allowAlways: map[string]bool{},
+		allowPrefix: map[string][]string{},
 	}
 }
 
