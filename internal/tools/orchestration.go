@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 func idArg(in json.RawMessage) string {
@@ -33,7 +34,7 @@ func jsonOut(v any) Result {
 type spawnTool struct{}
 
 func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_create", Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its agent_response comes back to you as a new message between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive for the rest of the session: agent_message it again for follow-ups (it keeps its context). There is nothing to clean up.",
+	return model.ToolDef{Name: toolname.AgentCreate, Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its agent_response comes back to you as a new message between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive for the rest of the session: agent_message it again for follow-ups (it keeps its context). There is nothing to clean up.",
 		Schema: schema(map[string]any{
 			"archetype": prop("string", "Preset name of the child (see the list in your instructions)"),
 			"label":     prop("string", "Short human-facing name for this child, e.g. 'auth-explorer' (required)"),
@@ -76,7 +77,7 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 type messageTool struct{}
 
 func (messageTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_message", Description: "Send a message to any other agent in this session (a child, a sibling, or your parent). It reaches the agent at its next step: mid-turn if it is busy, as a new turn if it is idle. The recipient sees it as coming from you and answers with agent_response, which wakes you between turns. agent_status lists every agent and its id.",
+	return model.ToolDef{Name: toolname.AgentMessage, Description: "Send a message to any other agent in this session (a child, a sibling, or your parent). It reaches the agent at its next step: mid-turn if it is busy, as a new turn if it is idle. The recipient sees it as coming from you and answers with agent_response, which wakes you between turns. agent_status lists every agent and its id.",
 		Schema: schema(map[string]any{"id": prop("string", "Target agent id (any agent in the session)"), "text": prop("string", "Message")}, "id", "text")}
 }
 func (messageTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
@@ -97,7 +98,7 @@ func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 type cancelTool struct{}
 
 func (cancelTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_cancel", Description: "End a child's current turn immediately. The child survives and can be sent new prompts.",
+	return model.ToolDef{Name: toolname.AgentCancel, Description: "End a child's current turn immediately. The child survives and can be sent new prompts.",
 		Schema: schema(map[string]any{"id": prop("string", "Child agent id")}, "id")}
 }
 func (cancelTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
@@ -114,7 +115,7 @@ func (cancelTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 type statusTool struct{}
 
 func (statusTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_status", Description: "State, turn count, and cost of one agent, or of every agent in the session (the whole tree, parents before children; your own row is marked).",
+	return model.ToolDef{Name: toolname.AgentStatus, Description: "State, turn count, and cost of one agent, or of every agent in the session (the whole tree, parents before children; your own row is marked).",
 		Schema: schema(map[string]any{"id": prop("string", "Agent id; omit for the whole session")})}
 }
 func (statusTool) PolicyArg(in json.RawMessage) string { return idArg(in) }

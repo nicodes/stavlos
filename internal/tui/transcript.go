@@ -11,6 +11,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // LineKind selects the style a transcript line is rendered with.
@@ -210,7 +211,7 @@ func (t *Transcript) Apply(ev event.Event) {
 		var p event.ToolStartedPayload
 		if ev.Decode(&p) == nil && p.CallID != "" {
 			t.calls[p.CallID] = len(t.Lines)
-			if p.Name == "agent_message" || p.Name == "agent_prompt" { // (agent_prompt: old logs)
+			if toolname.Canonical(p.Name) == toolname.AgentMessage {
 				var in struct{ ID string }
 				if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
 					t.askTarget[p.CallID] = in.ID
@@ -429,7 +430,7 @@ func (t *Transcript) lastAsyncCall() int {
 	}
 	for i := len(t.Lines) - 1; i >= 0; i-- {
 		l := t.Lines[i]
-		if l.Kind == LineTool && (l.tool == "shell" || l.tool == "bash_async") && !tied[i] {
+		if l.Kind == LineTool && l.tool == toolname.Shell && !tied[i] {
 			return i
 		}
 	}
@@ -593,7 +594,7 @@ func (t *Transcript) lastAgentCreateCall() int {
 	}
 	for i := len(t.Lines) - 1; i >= 0; i-- {
 		l := t.Lines[i]
-		if l.Kind == LineTool && l.tool == "agent_create" && !tied[i] {
+		if l.Kind == LineTool && l.tool == toolname.AgentCreate && !tied[i] {
 			return i
 		}
 	}
@@ -665,7 +666,7 @@ func (t *Transcript) stopRunning() {
 // ToolName+Text is partial tool output; ToolName alone is a tool_use block
 // starting in the model's response.
 func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
-	n.Text, n.Thinking = textsafe.Clean(n.Text), textsafe.Clean(n.Thinking)
+	n.Text, n.Thinking, n.ToolName = textsafe.Clean(n.Text), textsafe.Clean(n.Thinking), toolname.Canonical(n.ToolName)
 	if n.Turn != t.streamTurn {
 		t.streamTurn = n.Turn
 		t.stream = nil
@@ -906,7 +907,8 @@ func EventLines(ev event.Event) []Line {
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		if p.Name == "agent_response" {
+		p.Name = toolname.Canonical(p.Name) // logs from before a rename read as the current tool
+		if p.Name == toolname.AgentResponse {
 			// The message itself is the interesting part: show it under the
 			// call the way an incoming answer shows its text.
 			var in struct{ Text string }
@@ -921,7 +923,7 @@ func EventLines(ev event.Event) []Line {
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		if p.Name == "agent_response" && !p.IsError {
+		if toolname.Canonical(p.Name) == toolname.AgentResponse && !p.IsError {
 			return nil // the message already sits under the call; "response delivered" adds nothing
 		}
 		return outputLines(strings.TrimRight(p.Output, "\n"))
@@ -1284,6 +1286,7 @@ func truncLines(text string, n int, kind LineKind) []Line {
 // toolLine renders "Bash  git status": the tool name title-cased and its
 // most relevant argument.
 func toolLine(name string, input json.RawMessage) string {
+	name = toolname.Canonical(name) // a direct caller (a prompt, a test) may hold an old name
 	title := toolTitle(name)
 	arg := toolArg(name, input)
 	if arg == "" {
@@ -1306,22 +1309,22 @@ func toolArg(name string, raw json.RawMessage) string {
 		return strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
 	}
 	switch name {
-	case "shell", "bash", "bash_async": // the old names: logs from before the rename
+	case toolname.Shell:
 		return str("command")
-	case "shell_kill", "bash_async_kill":
+	case toolname.ShellKill:
 		return str("id")
-	case "web_fetch":
+	case toolname.WebFetch:
 		return str("url")
-	case "web_search":
+	case toolname.WebSearch:
 		return str("query")
-	case "read", "write", "edit":
+	case toolname.Read:
 		return str("path")
-	case "apply_patch":
+	case toolname.ApplyPatch:
 		if patch, ok := in["patch"].(string); ok {
 			return patchFiles(patch)
 		}
 		return ""
-	case "agent_create", "spawn":
+	case toolname.AgentCreate:
 		label, arch := str("label"), str("archetype")
 		switch {
 		case label != "" && arch != "":
@@ -1331,22 +1334,11 @@ func toolArg(name string, raw json.RawMessage) string {
 		default:
 			return arch
 		}
-	case "agent_message", "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status", "send", "steer", "cancel", "kill", "result", "status": // agent_kill/agent_result/agent_prompt/agent_steer: legacy logs
+	case toolname.AgentMessage, toolname.AgentCancel, toolname.AgentStatus:
 		return str("id")
-	case "monitor":
-		if ids, ok := in["ids"].([]any); ok && len(ids) > 0 {
-			parts := make([]string, 0, len(ids))
-			for _, v := range ids {
-				if s, ok := v.(string); ok {
-					parts = append(parts, s)
-				}
-			}
-			return strings.Join(parts, ", ")
-		}
-		return str("id")
-	case "skill":
+	case toolname.Skill:
 		return str("name")
-	case "ask_user":
+	case toolname.AskUser:
 		var a struct {
 			Questions []struct{ Question string }
 		}
@@ -1358,9 +1350,9 @@ func toolArg(name string, raw json.RawMessage) string {
 			return strings.Join(qs, " · ")
 		}
 		return ""
-	case "todo_add":
+	case toolname.TodoAdd:
 		return str("text")
-	case "todo_update":
+	case toolname.TodoUpdate:
 		out := str("id")
 		if st := str("status"); st != "" {
 			out += " → " + st
@@ -1369,27 +1361,21 @@ func toolArg(name string, raw json.RawMessage) string {
 			out += "  " + tx
 		}
 		return out
-	case "agent_finish": // legacy
-		return str("status")
-	case "agent_response":
+	case toolname.AgentResponse:
 		return "→ " + str("to") // outgoing: who it answers
 	}
 	return compactArgs(raw)
 }
 
 // toolTitle is the display name of a tool on its chat line: titleCase of
-// the name, except agent_finish, which reads "Agent complete" (the call
-// marks the agent's work complete).
+// the name; agent_response reads as what it did.
 func toolTitle(name string) string {
-	switch name {
-	case "agent_finish": // legacy
-		return "Agent complete"
-	case "agent_response":
+	if name == toolname.AgentResponse {
 		return "Agent response delivered"
 	}
-	if strings.HasPrefix(name, "mcp__") {
+	if strings.HasPrefix(name, toolname.MCPPrefix) {
 		// mcp__server__tool reads "server · tool"
-		if parts := strings.SplitN(strings.TrimPrefix(name, "mcp__"), "__", 2); len(parts) == 2 {
+		if parts := strings.SplitN(strings.TrimPrefix(name, toolname.MCPPrefix), "__", 2); len(parts) == 2 {
 			return parts[0] + " · " + parts[1]
 		}
 	}

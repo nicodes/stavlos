@@ -10,6 +10,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/proc"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // shell is the one command tool. It runs the command and waits up to a
@@ -27,7 +28,7 @@ const (
 )
 
 func (shellTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "shell", Description: "Run a shell command in the working directory and return its combined output. Use it for searching too (grep -rn, rg, find, ls); read-only commands like these are allowed by default. A command still running after the wait window (default 15 seconds) continues as a background job: you get its id and the output so far, and when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. For servers, watchers and anything you know is slow, set background to true to skip the wait. If nothing more can be done until a job finishes, end your turn.",
+	return model.ToolDef{Name: toolname.Shell, Description: "Run a shell command in the working directory and return its combined output. Use it for searching too (grep -rn, rg, find, ls); read-only commands like these are allowed by default. A command still running after the wait window (default 15 seconds) continues as a background job: you get its id and the output so far, and when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. For servers, watchers and anything you know is slow, set background to true to skip the wait. If nothing more can be done until a job finishes, end your turn.",
 		Schema: schema(map[string]any{
 			"command":    prop("string", "The command line to run with bash -c"),
 			"wait":       prop("integer", "Seconds to wait for the command before it continues as a background job (default 15, max 300)"),
@@ -149,7 +150,7 @@ func shellResult(job *proc.Job, maxOutput int) Result {
 type shellKillTool struct{}
 
 func (shellKillTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "shell_kill", Description: "Stop a background job started by shell. Use it for servers and watchers you no longer need.",
+	return model.ToolDef{Name: toolname.ShellKill, Description: "Stop a background job started by shell. Use it for servers and watchers you no longer need.",
 		Schema: schema(map[string]any{"id": prop("string", "The job id shell returned")}, "id")}
 }
 

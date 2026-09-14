@@ -19,6 +19,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
+	"github.com/nicodes/stavlos/internal/toolname"
 	"gopkg.in/yaml.v3"
 )
 
@@ -307,38 +308,38 @@ func LoadGlobal() (*Effective, error) {
 	e.Compaction.Threshold = 0.8
 	e.Compaction.MaxToolOutput = 32 * 1024
 	e.Policy = policy.Layer(policy.New(
-		policy.Rule{Tool: "read", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "skill", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "agent_create", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "agent_response", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "agent_message", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "agent_cancel", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "agent_status", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "*", Verb: policy.Ask},
-		policy.Rule{Tool: "shell_kill", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "web_fetch", Pattern: "*", Verb: policy.Ask}, // per host: the dialog offers "allow <host> for this session"
-		policy.Rule{Tool: "web_search", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "todo_add", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "ask_user", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "todo_update", Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Read, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Skill, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.AgentCreate, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.AgentResponse, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.AgentMessage, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.AgentCancel, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.AgentStatus, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "*", Verb: policy.Ask},
+		policy.Rule{Tool: toolname.ShellKill, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.WebFetch, Pattern: "*", Verb: policy.Ask}, // per host: the dialog offers "allow <host> for this session"
+		policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.TodoAdd, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.AskUser, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.TodoUpdate, Pattern: "*", Verb: policy.Allow},
 		// Read-only shell commands are allowed by default so searching and
 		// looking around never prompts; anything that writes still asks.
-		policy.Rule{Tool: "shell", Pattern: "grep *", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "rg *", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "find *", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "ls*", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "cat *", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "head *", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "tail *", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "wc *", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "pwd", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "tree*", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "git status*", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "git log*", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "git diff*", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "git show*", Verb: policy.Allow},
-		policy.Rule{Tool: "shell", Pattern: "git blame*", Verb: policy.Allow},
-		policy.Rule{Tool: "apply_patch", Pattern: "*", Verb: policy.Ask},
+		policy.Rule{Tool: toolname.Shell, Pattern: "grep *", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "rg *", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "find *", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "ls*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "cat *", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "head *", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "tail *", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "wc *", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "pwd", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "tree*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "git status*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "git log*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "git diff*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "git show*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Shell, Pattern: "git blame*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.ApplyPatch, Pattern: "*", Verb: policy.Ask},
 	))
 	for _, p := range builtinPresets() {
 		e.Presets[p.Name] = p
@@ -612,7 +613,7 @@ type roleFile struct {
 }
 
 // DefaultTools is what a role gets when it lists none.
-var DefaultTools = []string{"shell", "read", "apply_patch", "skill", "web_fetch", "web_search"}
+var DefaultTools = []string{toolname.Shell, toolname.Read, toolname.ApplyPatch, toolname.Skill, toolname.WebFetch, toolname.WebSearch}
 
 // ReadPreset parses one roles/<name>.md file.
 func ReadPreset(path string) (Preset, error) {
@@ -926,13 +927,7 @@ func (p Preset) PresetPolicy() *policy.Set {
 }
 
 // toolGroup expands a tools: key to the tool names it gates.
-func toolGroup(name string) []string {
-	switch name {
-	case "todo":
-		return []string{"todo_add", "todo_update"}
-	}
-	return []string{name}
-}
+func toolGroup(name string) []string { return toolname.Expand([]string{name}) }
 
 // builtinPresets is the one role every install starts with. It can do
 // everything and can delegate to copies of itself; users add specialised
@@ -942,7 +937,7 @@ func builtinPresets() []Preset {
 		{
 			Name: "general", Layer: "builtin", Mode: ModeAll,
 			Description: "General-purpose engineer: reads, edits, runs, and delegates",
-			Tools:       []string{"shell", "read", "apply_patch", "skill", "todo", "web_fetch", "web_search"},
+			Tools:       []string{toolname.Shell, toolname.Read, toolname.ApplyPatch, toolname.Skill, toolname.GroupTodo, toolname.WebFetch, toolname.WebSearch},
 			Spawn:       []string{"general"},
 			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.

@@ -8,6 +8,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // Todos is implemented by the agent runtime: the agent's own todo list,
@@ -41,7 +42,7 @@ func validTodoStatus(s string) bool {
 type todoAddTool struct{}
 
 func (todoAddTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "todo_add", Description: "Add one step to your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep exactly one in_progress with todo_update as you go. Returns the item's id. Skip the list for single-step or trivial requests.",
+	return model.ToolDef{Name: toolname.TodoAdd, Description: "Add one step to your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep exactly one in_progress with todo_update as you go. Returns the item's id. Skip the list for single-step or trivial requests.",
 		Schema: schema(map[string]any{"text": prop("string", "The step, imperative and short (\"Run the tests\")")}, "text")}
 }
 
@@ -73,7 +74,7 @@ func (todoAddTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 type todoUpdateTool struct{}
 
 func (todoUpdateTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "todo_update", Description: "Update one item on your todo list: set its status (pending, in_progress, done, cancelled) and/or rewrite its text. Mark an item in_progress when you start it and done the moment it is finished and verified, never before; cancel steps you drop. Add a new item for a blocker instead of marking the blocked step done.",
+	return model.ToolDef{Name: toolname.TodoUpdate, Description: "Update one item on your todo list: set its status (pending, in_progress, done, cancelled) and/or rewrite its text. Mark an item in_progress when you start it and done the moment it is finished and verified, never before; cancel steps you drop. Add a new item for a blocker instead of marking the blocked step done.",
 		Schema: schema(map[string]any{
 			"id":     prop("string", "The item id returned by todo_add"),
 			"status": prop("string", "pending | in_progress | done | cancelled"),

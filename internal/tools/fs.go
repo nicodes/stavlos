@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 func resolve(env *Env, p string) string { return ResolvePath(env.Dir, p) }
@@ -51,7 +52,7 @@ func ResolvePath(root, p string) string {
 type readTool struct{}
 
 func (readTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "read", Description: "Read a file. Returns numbered lines. Use offset/limit for large files.",
+	return model.ToolDef{Name: toolname.Read, Description: "Read a file. Returns numbered lines. Use offset/limit for large files.",
 		Schema: schema(map[string]any{
 			"path":   prop("string", "File path, absolute or relative to the working directory"),
 			"offset": prop("integer", "1-based first line to return (default 1)"),

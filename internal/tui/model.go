@@ -24,6 +24,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/pkg/client"
 )
 
@@ -2057,9 +2058,9 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 	}
 	what := "this exact call"
 	switch p.Tool {
-	case "shell":
+	case toolname.Shell:
 		what = "this exact command"
-	case "web_fetch":
+	case toolname.WebFetch:
 		what = "this exact URL"
 	}
 	opts := []permOption{
@@ -2068,7 +2069,7 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 	}
 	if pre := p.Prefix; pre != "" {
 		desc := "every command starting with it"
-		if p.Tool == "web_fetch" {
+		if p.Tool == toolname.WebFetch {
 			desc = "every page on this host"
 		}
 		opts = append(opts, permOption{"prefix", "Allow " + pre + " for this session", desc})
@@ -2474,7 +2475,7 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		}
 	case event.ToolCallFinished: // a message or task just put another agent on the awaiting list
 		var p event.ToolFinishedPayload
-		if ev.Decode(&p) == nil && (p.Name == "agent_message" || p.Name == "agent_create") && !m.loading {
+		if ev.Decode(&p) == nil && (toolname.Canonical(p.Name) == toolname.AgentMessage || toolname.Canonical(p.Name) == toolname.AgentCreate) && !m.loading {
 			cmds = append(cmds, m.markTreeDirty())
 		}
 	}
