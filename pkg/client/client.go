@@ -262,7 +262,7 @@ func (c *Client) ReplyPromptDir(ctx context.Context, id, answer, dir string) err
 
 // AnswerQuestions answers a question batch, one entry per question.
 func (c *Client) AnswerQuestions(ctx context.Context, id string, answers []string) error {
-	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: "answered", Answers: answers}, nil)
+	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerAnswered, Answers: answers}, nil)
 }
 
 // AllowPromptPrefix allows a permission and, for the rest of the session,
@@ -270,12 +270,12 @@ func (c *Client) AnswerQuestions(ctx context.Context, id string, answers []strin
 // prefix for shell, a host for web_fetch). The daemon derives the prefix
 // from the call itself; a prompt without one behaves like allow_always.
 func (c *Client) AllowPromptPrefix(ctx context.Context, id string) error {
-	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: "allow_prefix"}, nil)
+	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerAllowPrefix}, nil)
 }
 
 // DenyPrompt denies a permission with an optional reason the agent will read.
 func (c *Client) DenyPrompt(ctx context.Context, id, reason string) error {
-	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: "deny", Reason: reason}, nil)
+	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerDeny, Reason: reason}, nil)
 }
 
 func (c *Client) TrustStatus(ctx context.Context, dir string) (protocol.TrustStatusResult, error) {

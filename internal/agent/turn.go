@@ -54,10 +54,10 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 
 	// end flips the agent back to idle before logging TurnEnded, so a client
 	// that reacts to the event never observes a stale "running" state.
-	end := func(reason, errText string) {
+	end := func(reason event.TurnReason, errText string) {
 		a.mu.Lock()
 		a.cancelTurn = nil
-		if reason == "error" {
+		if reason == event.ReasonError {
 			a.lastError = errText
 		}
 		if a.state == StateRunning || a.state == StateBlocked {
@@ -72,14 +72,14 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	// once and every agent waiting on it is told, so nobody waits forever.
 	if limit := a.Preset().MaxTurns; a.Parent != "" && limit > 0 && turn > limit {
 		msg := fmt.Sprintf("turn limit reached: %s may take at most %d turns", a.Label, limit)
-		end("error", msg)
+		end(event.ReasonError, msg)
 		a.reportTurnLimit(limit)
 		return
 	}
 
 	for {
 		if turnCtx.Err() != nil {
-			end("cancelled", "")
+			end(event.ReasonCancelled, "")
 			return
 		}
 		// Steer boundary: inject pending steers before the model call.
@@ -88,17 +88,17 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 		a.steers = nil
 		a.mu.Unlock()
 		for _, st := range steers {
-			_, _ = a.record(bg, event.UserMessage, event.UserMessagePayload{Turn: turn, Kind: "steer", Text: st.text, From: a.s.senderLabel(st.source)})
+			_, _ = a.record(bg, event.UserMessage, event.UserMessagePayload{Turn: turn, Kind: event.MsgSteer, Text: st.text, From: a.s.senderLabel(st.source)})
 		}
 
 		modelID := a.ModelID()
 		if modelID == "" {
-			end("error", ErrNoModel)
+			end(event.ReasonError, ErrNoModel)
 			return
 		}
 		m, info, err := a.s.host.Resolve(modelID)
 		if err != nil {
-			end("error", err.Error())
+			end(event.ReasonError, err.Error())
 			return
 		}
 		system, defs := a.buildContext()
@@ -153,10 +153,10 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 				if len(resp.Blocks) > 0 {
 					_, _ = a.record(bg, event.AssistantMessage, event.AssistantMessagePayload{Turn: turn, Blocks: resp.Blocks, StopReason: "cancelled", Model: modelID})
 				}
-				end("cancelled", "")
+				end(event.ReasonCancelled, "")
 				return
 			}
-			end("error", err.Error())
+			end(event.ReasonError, err.Error())
 			return
 		}
 		_, _ = a.record(bg, event.AssistantMessage, event.AssistantMessagePayload{Turn: turn, Blocks: resp.Blocks, StopReason: string(resp.StopReason), Model: modelID})
@@ -170,9 +170,9 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 		if len(calls) == 0 {
 			switch resp.StopReason {
 			case model.StopMaxTokens:
-				end("max_tokens", "")
+				end(event.ReasonMaxTokens, "")
 			default:
-				end("end_turn", "")
+				end(event.ReasonEndTurn, "")
 			}
 			return
 		}
@@ -187,7 +187,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 		yield := a.yieldFlag
 		a.mu.Unlock()
 		if yield {
-			end("end_turn", "")
+			end(event.ReasonEndTurn, "")
 			return
 		}
 	}
@@ -266,25 +266,25 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		// from the call itself; the prompt carries it for display.
 		prefix := protocol.ToolPrefix(c.Name, arg)
 		ans := a.s.host.Prompt(turnCtx, protocol.PromptInfo{
-			ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: "permission", Tool: c.Name, Input: c.Input,
+			ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
 			Question: question, Dir: boundary, Prefix: prefix,
 		})
 		a.setState(StateRunning)
 		switch ans.Value {
-		case "allow_prefix":
+		case protocol.AnswerAllowPrefix:
 			if prefix != "" {
 				a.s.permits.rememberPrefix(c.Name, prefix)
 			} else {
 				a.s.permits.rememberCall(c.Name, arg)
 			}
-		case "allow_always":
+		case protocol.AnswerAllowAlways:
 			a.s.permits.rememberCall(c.Name, arg)
 		}
 		switch {
 		case ans.Withdrawn:
 			finish("", true, true, false)
 			return
-		case ans.Value == "allow_prefix", ans.Value == "allow_always":
+		case ans.Value == protocol.AnswerAllowPrefix, ans.Value == protocol.AnswerAllowAlways:
 			if boundary != "" {
 				dir := boundary
 				if strings.TrimSpace(ans.Dir) != "" {
@@ -292,7 +292,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 				}
 				_ = a.addDir(bg, dir, "human")
 			}
-		case ans.Value == "allow":
+		case ans.Value == protocol.AnswerAllow:
 		default:
 			why := "Permission denied by the user."
 			if r := strings.TrimSpace(ans.Reason); r != "" {

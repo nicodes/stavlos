@@ -44,7 +44,7 @@ var MCPIdleAfter = 10 * time.Minute
 // mcpServer is one running (or failed) server owned by an agent.
 type mcpServer struct {
 	name    string
-	state   string // starting | connected | failed | stopped
+	state   protocol.MCPState // starting | connected | failed | stopped
 	err     string
 	started time.Time
 	session *mcp.ClientSession
@@ -87,7 +87,7 @@ func (a *Agent) ensureMCP(ctx context.Context, cfg *config.Effective) {
 	listed := append([]string(nil), a.preset.MCP...)
 	var start []string
 	for _, name := range listed {
-		if s, ok := a.mcps[name]; !ok || s.state == "stopped" {
+		if s, ok := a.mcps[name]; !ok || s.state == protocol.MCPStopped {
 			start = append(start, name)
 		}
 	}
@@ -109,13 +109,13 @@ func (a *Agent) ensureMCP(ctx context.Context, cfg *config.Effective) {
 
 // startMCP launches one server and lists its tools.
 func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string) {
-	s := &mcpServer{name: name, state: "starting", started: time.Now(), tools: map[string]*mcp.Tool{}}
+	s := &mcpServer{name: name, state: protocol.MCPStarting, started: time.Now(), tools: map[string]*mcp.Tool{}}
 	a.mu.Lock()
 	a.mcps[name] = s
 	a.mu.Unlock()
 	fail := func(err error) {
 		a.mu.Lock()
-		s.state, s.err = "failed", err.Error()
+		s.state, s.err = protocol.MCPFailed, err.Error()
 		a.mu.Unlock()
 		_, _ = a.record(context.Background(), event.MCPFailed, event.MCPFailedPayload{Server: name, Error: err.Error()})
 	}
@@ -164,7 +164,7 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 		names = append(names, n)
 	}
 	a.mu.Lock()
-	s.session, s.state = session, "connected"
+	s.session, s.state = session, protocol.MCPConnected
 	a.mu.Unlock()
 	_, _ = a.record(context.Background(), event.MCPStarted, event.MCPStartedPayload{Server: name, Tools: names})
 	// A server that exits on its own is reported once, so the tab and the
@@ -172,11 +172,11 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 	go func() {
 		err := session.Wait()
 		a.mu.Lock()
-		if s.state != "connected" {
+		if s.state != protocol.MCPConnected {
 			a.mu.Unlock()
 			return
 		}
-		s.state, s.session = "stopped", nil
+		s.state, s.session = protocol.MCPStopped, nil
 		s.err = "exited"
 		if err != nil {
 			s.err = err.Error()
@@ -236,8 +236,8 @@ func (a *Agent) stopMCP(name string) {
 	a.mu.Unlock()
 	for _, s := range victims {
 		a.mu.Lock()
-		sess, wasUp := s.session, s.state == "connected"
-		s.state, s.session = "stopped", nil
+		sess, wasUp := s.session, s.state == protocol.MCPConnected
+		s.state, s.session = protocol.MCPStopped, nil
 		a.mu.Unlock()
 		if sess != nil {
 			_ = sess.Close()
@@ -260,7 +260,7 @@ func (a *Agent) mcpDefs() []model.ToolDef {
 	var defs []model.ToolDef
 	for _, n := range servers {
 		s := a.mcps[n]
-		if s.state != "connected" {
+		if s.state != protocol.MCPConnected {
 			continue
 		}
 		for _, tn := range s.order {
@@ -287,7 +287,7 @@ func (a *Agent) mcpTool(name string) (tools.Tool, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, s := range a.mcps {
-		if t, ok := s.tools[name]; ok && s.state == "connected" {
+		if t, ok := s.tools[name]; ok && s.state == protocol.MCPConnected {
 			return mcpTool{server: s, tool: t, name: name}, true
 		}
 	}
@@ -304,7 +304,7 @@ func (a *Agent) mcpInfoLocked() []protocol.MCPInfo {
 			return
 		}
 		seen[name] = true
-		info := protocol.MCPInfo{Name: name, State: "pending"}
+		info := protocol.MCPInfo{Name: name, State: protocol.MCPPending}
 		if s, ok := a.mcps[name]; ok {
 			info.State, info.Error = s.state, s.err
 			info.Tools = append([]string(nil), s.order...)

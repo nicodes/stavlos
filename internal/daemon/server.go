@@ -265,9 +265,9 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		// prompt, auto only the ones that stay inside the agent's directories.
 		switch p.Mode {
 		case protocol.ModeYolo:
-			d.esc.AnswerAll(s.ID, "permission", "allow", "yolo")
+			d.esc.AnswerAll(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "yolo")
 		case protocol.ModeAuto:
-			d.esc.AnswerWhere(s.ID, "permission", "allow", "auto", func(pi protocol.PromptInfo) bool { return pi.Dir == "" })
+			d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir == "" })
 		}
 		return map[string]bool{"ok": true}, nil
 

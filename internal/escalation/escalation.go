@@ -51,7 +51,7 @@ type Manager struct {
 	mu   sync.Mutex
 	pend map[string]*pending
 	// Record is called on every state change so the daemon can log events.
-	Record func(action string, info protocol.PromptInfo, answer string, client string)
+	Record func(action protocol.PromptAction, info protocol.PromptInfo, answer string, client string)
 }
 
 // New creates a manager.
@@ -80,12 +80,12 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo) Answer 
 	m.mu.Lock()
 	m.pend[info.ID] = p
 	m.mu.Unlock()
-	m.record("requested", info, "", "")
-	m.sink.Notify(protocol.PromptNotification{Action: "requested", Prompt: info}, []protocol.Tier{protocol.TierInteractive})
+	m.record(protocol.ActionRequested, info, "", "")
+	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionRequested, Prompt: info}, []protocol.Tier{protocol.TierInteractive})
 
 	claimT := time.NewTimer(m.cfg.ClaimTimeout)
 	answerT := time.NewTimer(m.cfg.AnswerTimeout)
-	if info.Kind == "question" {
+	if info.Kind == protocol.PromptQuestion {
 		answerT.Stop() // a question has no sensible default: it waits until answered or withdrawn
 	}
 	defer claimT.Stop()
@@ -106,8 +106,8 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo) Answer 
 			info := p.info
 			m.mu.Unlock()
 			if esc {
-				m.record("escalated", info, "", "")
-				m.sink.Notify(protocol.PromptNotification{Action: "escalated", Prompt: info}, []protocol.Tier{protocol.TierInteractive, protocol.TierFallback})
+				m.record(protocol.ActionEscalated, info, "", "")
+				m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionEscalated, Prompt: info}, []protocol.Tier{protocol.TierInteractive, protocol.TierFallback})
 			}
 		case <-expiry.C:
 			// expire stale claims so the prompt can be re-claimed
@@ -116,22 +116,22 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo) Answer 
 				p.info.ClaimedBy = ""
 				info := p.info
 				m.mu.Unlock()
-				m.sink.Notify(protocol.PromptNotification{Action: "requested", Prompt: info}, m.tiersFor(info))
+				m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionRequested, Prompt: info}, m.tiersFor(info))
 				continue
 			}
 			m.mu.Unlock()
 		case <-answerT.C:
 			a := Answer{Value: m.cfg.Default, Defaulted: true}
 			if m.finish(info.ID, a) {
-				m.record("defaulted", info, a.Value, "")
-				m.sink.Notify(protocol.PromptNotification{Action: "defaulted", Prompt: m.snapshot(info.ID, p)}, m.tiersFor(p.info))
+				m.record(protocol.ActionDefaulted, info, a.Value, "")
+				m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionDefaulted, Prompt: m.snapshot(info.ID, p)}, m.tiersFor(p.info))
 			}
 			return a
 		case <-ctx.Done():
 			a := Answer{Withdrawn: true}
 			if m.finish(info.ID, a) {
-				m.record("withdrawn", info, "", "")
-				m.sink.Notify(protocol.PromptNotification{Action: "withdrawn", Prompt: m.snapshot(info.ID, p)}, m.tiersFor(p.info))
+				m.record(protocol.ActionWithdrawn, info, "", "")
+				m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionWithdrawn, Prompt: m.snapshot(info.ID, p)}, m.tiersFor(p.info))
 			}
 			return a
 		}
@@ -168,7 +168,7 @@ func (m *Manager) finish(id string, a Answer) bool {
 	return true
 }
 
-func (m *Manager) record(action string, info protocol.PromptInfo, answer, client string) {
+func (m *Manager) record(action protocol.PromptAction, info protocol.PromptInfo, answer, client string) {
 	if m.Record != nil {
 		m.Record(action, info, answer, client)
 	}
@@ -190,8 +190,8 @@ func (m *Manager) Claim(id, client string) error {
 	p.claimedAt = time.Now()
 	info := p.info
 	m.mu.Unlock()
-	m.record("claimed", info, "", client)
-	m.sink.Notify(protocol.PromptNotification{Action: "claimed", Prompt: info}, m.tiersFor(info))
+	m.record(protocol.ActionClaimed, info, "", client)
+	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionClaimed, Prompt: info}, m.tiersFor(info))
 	return nil
 }
 
@@ -230,21 +230,21 @@ func (m *Manager) ReplyAll(id, client, answer, dir, reason string, answers []str
 	if !m.finish(id, Answer{Value: answer, Dir: dir, Reason: reason, Answers: answers, Client: client}) {
 		return ErrLate
 	}
-	m.record("answered", info, answer, client)
-	m.sink.Notify(protocol.PromptNotification{Action: "answered", Prompt: info}, m.tiersFor(info))
+	m.record(protocol.ActionAnswered, info, answer, client)
+	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionAnswered, Prompt: info}, m.tiersFor(info))
 	return nil
 }
 
 // AnswerAll answers every open prompt of one kind in a session, ignoring
 // claims (used when a session switches to yolo: waiting permissions are
 // allowed on the spot). Returns how many were answered.
-func (m *Manager) AnswerAll(session, kind, answer, client string) int {
+func (m *Manager) AnswerAll(session string, kind protocol.PromptKind, answer, client string) int {
 	return m.AnswerWhere(session, kind, answer, client, nil)
 }
 
 // AnswerWhere answers the session's open prompts of one kind that keep
 // admits (nil = all of them).
-func (m *Manager) AnswerWhere(session, kind, answer, client string, keep func(protocol.PromptInfo) bool) int {
+func (m *Manager) AnswerWhere(session string, kind protocol.PromptKind, answer, client string, keep func(protocol.PromptInfo) bool) int {
 	m.mu.Lock()
 	var ids []string
 	for id, p := range m.pend {
@@ -267,8 +267,8 @@ func (m *Manager) AnswerWhere(session, kind, answer, client string, keep func(pr
 		if !m.finish(id, Answer{Value: answer, Client: client}) {
 			continue
 		}
-		m.record("answered", info, answer, client)
-		m.sink.Notify(protocol.PromptNotification{Action: "answered", Prompt: info}, m.tiersFor(info))
+		m.record(protocol.ActionAnswered, info, answer, client)
+		m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionAnswered, Prompt: info}, m.tiersFor(info))
 		n++
 	}
 	return n

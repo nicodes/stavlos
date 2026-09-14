@@ -32,7 +32,7 @@ func (t todosAPI) Add(text string) (string, error) {
 	a.mu.Lock()
 	a.todoSeq++
 	id := "t" + strconv.Itoa(a.todoSeq)
-	items := append(a.todosCopy(), event.TodoItem{ID: id, Text: text, Status: "pending"})
+	items := append(a.todosCopy(), event.TodoItem{ID: id, Text: text, Status: event.TodoPending})
 	a.mu.Unlock()
 	return id, a.setTodos(items)
 }
@@ -52,7 +52,7 @@ func (t todosAPI) Update(id, status, text string) error {
 		return fmt.Errorf("no todo item %q", id)
 	}
 	if status != "" {
-		items[i].Status = status
+		items[i].Status = event.TodoStatus(status)
 	}
 	if text != "" {
 		items[i].Text = text

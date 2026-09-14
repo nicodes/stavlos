@@ -95,9 +95,9 @@ func Project(events []event.Event) []model.Message {
 			var p event.TurnEndedPayload
 			_ = e.Decode(&p)
 			switch p.Reason {
-			case "cancelled":
+			case event.ReasonCancelled:
 				closeOpen(e.Seq, "was cancelled")
-			case "error":
+			case event.ReasonError:
 				closeOpen(e.Seq, "failed")
 			default:
 				closeOpen(e.Seq, "was abandoned")

@@ -539,7 +539,7 @@ func (m *Model) selectedTodos() []event.TodoItem {
 // activeTodo is the text of the selected agent's in-progress item, "" if none.
 func (m *Model) activeTodo() string {
 	for _, it := range m.selectedTodos() {
-		if it.Status == "in_progress" {
+		if it.Status == event.TodoInProgress {
 			return it.Text
 		}
 	}
@@ -571,7 +571,7 @@ func awaitedOf(agents []protocol.AgentInfo, id string) []protocol.AgentInfo {
 	}
 	var out []protocol.AgentInfo
 	for _, a := range agents {
-		if want[a.ID] && a.State != "killed" {
+		if want[a.ID] && a.State != protocol.AgentKilled {
 			out = append(out, a)
 		}
 	}
@@ -1783,7 +1783,7 @@ func (m *Model) agentBusy() bool {
 	if t := m.transcripts[m.selectedID()]; t != nil && t.InTurn() {
 		return true
 	}
-	if a := m.selectedAgent(); a != nil && (a.State == "running" || a.State == "blocked") {
+	if a := m.selectedAgent(); a != nil && a.State.Busy() {
 		return true
 	}
 	return false
@@ -2367,7 +2367,7 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 				// Placeholder until the debounced tree refresh lands.
 				m.agents = append(m.agents, protocol.AgentInfo{
 					ID: p.ID, Session: ev.Session, Parent: p.Parent, Archetype: p.Archetype,
-					Label: p.Label, Model: p.Model, Depth: p.Depth, State: "idle",
+					Label: p.Label, Model: p.Model, Depth: p.Depth, State: protocol.AgentIdle,
 				})
 			}
 			if p.Parent != "" {
@@ -2384,7 +2384,7 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		}
 	case event.AgentKilled:
 		if parent := m.parentOf[ev.Agent]; parent != "" {
-			m.transcript(parent).ChildState(ev.Agent, "killed")
+			m.transcript(parent).ChildState(ev.Agent, protocol.AgentKilled)
 		}
 		for _, t := range m.transcripts { // questions to it will never be answered
 			t.AskerGone(ev.Agent)
@@ -2450,9 +2450,9 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	if parent := m.parentOf[ev.Agent]; parent != "" {
 		switch ev.Type {
 		case event.TurnStarted:
-			m.transcript(parent).ChildState(ev.Agent, "running")
+			m.transcript(parent).ChildState(ev.Agent, protocol.AgentRunning)
 		case event.TurnEnded, event.TurnAborted:
-			m.transcript(parent).ChildState(ev.Agent, "idle")
+			m.transcript(parent).ChildState(ev.Agent, protocol.AgentIdle)
 		}
 	}
 	if target != "" {
@@ -2521,9 +2521,9 @@ func (m *Model) applyPromptNotification(n protocol.PromptNotification) tea.Cmd {
 	}
 	before := len(m.prompts)
 	switch n.Action {
-	case "requested", "escalated", "claimed":
+	case protocol.ActionRequested, protocol.ActionEscalated, protocol.ActionClaimed:
 		m.upsertPrompt(n.Prompt)
-	case "answered", "withdrawn", "defaulted":
+	case protocol.ActionAnswered, protocol.ActionWithdrawn, protocol.ActionDefaulted:
 		m.removePrompt(n.Prompt.ID)
 	}
 	// The turn indicator switches between "working…" and "permission

@@ -54,7 +54,7 @@ func txt(s string) model.Block { return model.Block{Type: model.BlockText, Text:
 func result(seq int64, id, out string) event.Event {
 	return ev(seq, event.ToolCallFinished, event.ToolFinishedPayload{CallID: id, Output: out})
 }
-func ended(seq int64, reason string) event.Event {
+func ended(seq int64, reason event.TurnReason) event.Event {
 	return ev(seq, event.TurnEnded, event.TurnEndedPayload{Reason: reason})
 }
 

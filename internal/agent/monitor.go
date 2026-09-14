@@ -31,7 +31,7 @@ type Monitor struct {
 	Started time.Time
 
 	mu       sync.Mutex
-	state    string // running | fired | stopped | lost
+	state    protocol.MonitorState
 	progress string
 	cancel   context.CancelFunc
 }
@@ -58,7 +58,7 @@ func (m monitorsAPI) List() []tools.MonitorStatus {
 	var out []tools.MonitorStatus
 	for _, mon := range m.a.monitorList() {
 		in := mon.Info()
-		out = append(out, tools.MonitorStatus{ID: in.ID, Kind: in.Kind, Label: in.Label, Spec: in.Spec, State: in.State, Progress: in.Progress, Started: mon.Started})
+		out = append(out, tools.MonitorStatus{ID: in.ID, Kind: in.Kind, Label: in.Label, Spec: in.Spec, State: string(in.State), Progress: in.Progress, Started: mon.Started})
 	}
 	return out
 }
@@ -88,7 +88,7 @@ func (a *Agent) adoptMonitor(command string, job tools.Job, timeout time.Duratio
 	if !a.Alive() {
 		return "", fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
 	}
-	m := &Monitor{ID: NewID("m"), Kind: "command", Spec: command, Started: job.Started(), state: "running"}
+	m := &Monitor{ID: NewID("m"), Kind: "command", Spec: command, Started: job.Started(), state: protocol.MonitorRunning}
 	m.Label = monitorLabel(command)
 	m.progress = fmt.Sprintf("%d lines", job.Lines())
 	ctx, cancel := context.WithCancel(a.ctx)
@@ -121,7 +121,7 @@ func (a *Agent) runAdopted(ctx context.Context, m *Monitor, job tools.Job, timeo
 			return
 		case <-ctx.Done():
 			job.Kill()
-			a.finishMonitor(m, "stopped")
+			a.finishMonitor(m, protocol.MonitorStopped)
 			return
 		case <-deadline.C:
 			killed = true
@@ -181,11 +181,11 @@ func fmtDuration(d time.Duration) string {
 // agent if the monitor is armed.
 func (a *Agent) fireMonitor(m *Monitor, res event.MonitorFiredPayload) {
 	m.mu.Lock()
-	if m.state != "running" {
+	if m.state != protocol.MonitorRunning {
 		m.mu.Unlock()
 		return
 	}
-	m.state = "fired"
+	m.state = protocol.MonitorFired
 	m.progress = ""
 	m.mu.Unlock()
 	_, _ = a.record(context.Background(), event.MonitorFired, res)
@@ -204,9 +204,9 @@ func (a *Agent) fireMonitor(m *Monitor, res event.MonitorFiredPayload) {
 }
 
 // finishMonitor ends a monitor without a result.
-func (a *Agent) finishMonitor(m *Monitor, state string) {
+func (a *Agent) finishMonitor(m *Monitor, state protocol.MonitorState) {
 	m.mu.Lock()
-	if m.state != "running" {
+	if m.state != protocol.MonitorRunning {
 		m.mu.Unlock()
 		return
 	}
@@ -227,7 +227,7 @@ func (a *Agent) stopMonitor(id, reason string) error {
 		return fmt.Errorf("no running monitor %q", id)
 	}
 	m.cancel()
-	a.finishMonitor(m, "stopped")
+	a.finishMonitor(m, protocol.MonitorStopped)
 	_, _ = a.record(context.Background(), event.MonitorStopped, event.MonitorRefPayload{ID: id, Reason: reason})
 	return nil
 }

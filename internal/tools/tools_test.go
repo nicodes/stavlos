@@ -165,7 +165,7 @@ func (f *fakeTodos) Update(id, status, text string) error {
 	for i := range f.items {
 		if f.items[i].ID == id {
 			if status != "" {
-				f.items[i].Status = status
+				f.items[i].Status = event.TodoStatus(status)
 			}
 			if text != "" {
 				f.items[i].Text = text

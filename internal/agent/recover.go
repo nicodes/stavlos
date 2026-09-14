@@ -138,7 +138,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			var p event.UserMessagePayload
 			_ = e.Decode(&p)
 			switch p.Kind {
-			case "prompt":
+			case event.MsgPrompt:
 				// A consumed prompt came from the prompt queue, or from a
 				// steer that arrived while idle (logged as a prompt).
 				if q := pendingPrompts[e.Agent]; len(q) > 0 && q[0].text == p.Text {
@@ -148,11 +148,11 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				} else if q := pendingPrompts[e.Agent]; len(q) > 0 {
 					pendingPrompts[e.Agent] = q[1:]
 				}
-			case "steer":
+			case event.MsgSteer:
 				if q := pendingSteers[e.Agent]; len(q) > 0 {
 					pendingSteers[e.Agent] = q[1:]
 				}
-			case "agent_response":
+			case event.MsgAgentResponse:
 				if q := pendingResponses[e.Agent]; len(q) > 0 {
 					pendingResponses[e.Agent] = q[1:]
 				}
@@ -199,7 +199,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			if a, ok := s.agents[e.Agent]; ok && e.Type == event.TurnEnded {
 				var p event.TurnEndedPayload
 				_ = e.Decode(&p)
-				if p.Reason == "error" {
+				if p.Reason == event.ReasonError {
 					a.lastError = p.Error
 				}
 			}

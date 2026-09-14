@@ -312,19 +312,14 @@ func (s *Session) Info() protocol.SessionInfo {
 	}
 }
 
-// state sums the agents up: working while any agent runs (or is blocked
-// on a prompt), waiting while any expects an answer, idle otherwise.
-func (s *Session) state() string {
-	out := "idle"
+// state sums the agents up (protocol.RollUp): working while any agent is
+// in a turn, waiting while any expects an answer, idle otherwise.
+func (s *Session) state() protocol.SessionState {
+	var states []protocol.AgentState
 	for _, a := range s.Agents() {
-		switch a.Info().State {
-		case "running", "blocked":
-			return "working"
-		case "waiting":
-			out = "waiting"
-		}
+		states = append(states, a.Info().State)
 	}
-	return out
+	return protocol.RollUp(states)
 }
 
 // Presets lists archetypes.

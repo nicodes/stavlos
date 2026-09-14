@@ -568,15 +568,15 @@ func (t *Transcript) ChildSpawned(childID string) {
 // ChildState colours the agent_create line of a child by its current
 // state: working (yellow) while it runs or is blocked, red once killed,
 // grey when it idles. Children no longer finish; they answer and wait.
-func (t *Transcript) ChildState(childID, state string) {
+func (t *Transcript) ChildState(childID string, state protocol.AgentState) {
 	i, ok := t.children[childID]
 	if !ok || i >= len(t.Lines) {
 		return
 	}
-	switch state {
-	case "running", "blocked":
+	switch {
+	case state.Busy():
 		t.Lines[i].Tone = ToneWorking
-	case "killed":
+	case state == protocol.AgentKilled:
 		t.Lines[i].Tone = ToneError
 		delete(t.children, childID)
 	default:
@@ -839,12 +839,12 @@ func EventLines(ev event.Event) []Line {
 			return decodeErr(ev, err)
 		}
 		switch p.Kind {
-		case "prompt", "":
+		case event.MsgPrompt, "":
 			if p.From != "" {
 				return block(BlockUser, "from "+p.From, p.Text)
 			}
 			return block(BlockUser, "", p.Text)
-		case "steer": // shown exactly like a prompt: blue ›, no title
+		case event.MsgSteer: // shown exactly like a prompt: blue ›, no title
 			if p.From != "" {
 				return block(BlockUser, "from "+p.From, p.Text)
 			}
@@ -865,10 +865,10 @@ func EventLines(ev event.Event) []Line {
 			return append(lines, Line{Kind: LineBlank})
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
-		case "monitor_fired":
+		case event.MsgMonitorFired:
 			return blockWith(BlockChild, "job result", p.Text, monitorGlyph("command"))
 		default:
-			return block(BlockUser, p.Kind, p.Text)
+			return block(BlockUser, string(p.Kind), p.Text)
 		}
 
 	case event.AssistantMessage:
@@ -932,15 +932,15 @@ func EventLines(ev event.Event) []Line {
 			return decodeErr(ev, err)
 		}
 		switch p.Reason {
-		case "cancelled":
+		case event.ReasonCancelled:
 			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn cancelled"}, {Kind: LineBlank}}
-		case "error":
+		case event.ReasonError:
 			msg := p.Error
 			if msg == "" {
 				msg = "turn error"
 			}
 			return errorBlock(msg)
-		case "max_tokens":
+		case event.ReasonMaxTokens:
 			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn stopped: max_tokens"}, {Kind: LineBlank}}
 		}
 		return nil
