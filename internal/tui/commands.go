@@ -18,6 +18,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/format"
+	"github.com/nicodes/stavlos/internal/tui/render"
 	"github.com/nicodes/stavlos/pkg/client"
 )
 
@@ -378,9 +379,7 @@ func pickSessionModelCmd(ctx context.Context, c *client.Client, session, modelID
 // compactTickMsg animates the compaction bar while a summariser runs.
 type compactTickMsg struct{}
 
-const compactTickPeriod = 120 * time.Millisecond
-
-func compactTickCmd() tea.Cmd     { return tick(compactTickPeriod, compactTickMsg{}) }
+func compactTickCmd() tea.Cmd     { return tick(render.CompactTick, compactTickMsg{}) }
 func placeholderTickCmd() tea.Cmd { return tick(placeholderPeriod, placeholderTickMsg{}) }
 
 func clearStatusCmd(token int, after time.Duration) tea.Cmd {
