@@ -73,7 +73,7 @@ var helpKeyLines = []string{
 	"chat: ↑/↓ or j/k move by item · enter expand/collapse a tool's output · pgup/pgdn page · home/end first/last",
 	"permission: y allow once · a allow for session · n deny · questions: type in the box, enter answers",
 	"sidebar: ctrl+b open/close · ↑/↓ move · enter pick an agent",
-	"tabs: the strip under the chat always shows permission, agents (live children) and async (running shell jobs) with their counts; tab opens the first non-empty one (permission when all are empty), ←/→ move between them, the open tab shows its contents",
+	"tabs: the strip under the chat always shows permission, agents (the agents the selected one is waiting on) and async (running shell jobs) with their counts; tab opens the first non-empty one (permission when all are empty), ←/→ move between them, the open tab shows its contents",
 	"agents: ↑/↓ move, enter selects an agent · glyph colours: orange working or waiting (half circle in the sidebar: a question or job is outstanding), red error, plain idle · async: ↑/↓ move",
 	"overlays: ↑/↓ or ctrl+p/ctrl+n move · enter select · esc close · type to filter · pgup/pgdn page",
 	"sign-in: open the URL on any device and enter the code · o open in browser · esc cancel",

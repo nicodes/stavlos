@@ -1008,7 +1008,7 @@ func (m Model) treeRows(width int) []string {
 // with their counts (always shown, "(0)" when empty). The body of whichever tab has
 // focus is a dialog (tabDialog), not an inline block.
 func (m Model) sectionsView(width int) string {
-	return m.sectionTabs(m.liveChildren(), m.runningJobs(), m.currentPrompt(), width)
+	return m.sectionTabs(m.awaitedAgents(), m.runningJobs(), m.currentPrompt(), width)
 }
 
 // tabDialogHeader is how many lines precede the rows in a tab dialog: the
@@ -1078,7 +1078,7 @@ func (m Model) tabTexts() []string {
 	return []string{
 		permKind + " " + permCount,
 		"questions " + qCount,
-		fmt.Sprintf("agents %d", len(m.liveChildren())),
+		fmt.Sprintf("agents %d", len(m.awaitedAgents())),
 		fmt.Sprintf("async %d", len(m.runningJobs())),
 		"todo " + todoCount(m.selectedTodos()),
 		"mcp " + mcpCount(m.selectedMCP()),
@@ -1103,11 +1103,11 @@ func dialogWidth(bodyWidth int) int {
 func (m Model) tabBodyLines(width int) []string {
 	switch m.focus {
 	case focusAgents:
-		kids := m.liveChildren()
-		if len(kids) == 0 {
-			return []string{styleDim.Render("  no subagents running")}
+		waiting := m.awaitedAgents()
+		if len(waiting) == 0 {
+			return []string{styleDim.Render("  not waiting on any agent")}
 		}
-		return m.cursorRows(agentRows(m.agents, m.selectedID(), m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2))
+		return m.cursorRows(agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2))
 	case focusAsync:
 		jobs := m.runningJobs()
 		if len(jobs) == 0 {
@@ -1489,17 +1489,15 @@ func roleStyle(name string) lipgloss.Style {
 	return lipgloss.NewStyle()
 }
 
-// agentRows is the pure part of agentsView.
+// agentRows renders the agents tab's rows, one per agent passed (the
+// awaited set, see awaitedOf).
 // last maps an agent id to a snippet of the latest line in its chat; it
 // sits between the name and the meta, like the job on an async row.
 // tint maps a role name to its colour name; a tinted role colours its
 // "label (role)" text.
-func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, last map[string]string, tint map[string]string, now time.Time, width int) []string {
+func agentRows(agents []protocol.AgentInfo, spawned map[string]time.Time, last map[string]string, tint map[string]string, now time.Time, width int) []string {
 	var rows []string
 	for _, a := range agents {
-		if a.Parent != parent || a.State == "killed" {
-			continue
-		}
 		var meta []string // the state first when it says something (working, waiting, error), then cost and age
 		if o := agentOutcome(a); o != "idle" && o != "complete" {
 			meta = append(meta, o)

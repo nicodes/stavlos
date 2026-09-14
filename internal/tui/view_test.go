@@ -209,13 +209,18 @@ func TestAgentRows(t *testing.T) {
 	now := time.Now()
 	spawned := map[string]time.Time{"c1": now.Add(-75 * time.Second), "c2": now.Add(-3 * time.Second)}
 	agents := []protocol.AgentInfo{
-		{ID: "root", Label: "coder", Archetype: "coder", State: "idle"},
+		{ID: "root", Label: "coder", Archetype: "coder", State: "waiting", Awaiting: []string{"c1", "c2", "c3"}},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running", Turn: 2, CostUSD: 0.0012},
 		{ID: "c2", Parent: "root", Label: "tester", Archetype: "tester", State: "idle"},
 		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "killed"},
-		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running"},
+		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running", Awaiting: []string{"root"}},
 	}
-	rows := agentRows(agents, "root", spawned, map[string]string{"c1": "Running the tests now, hold on while I look through all of it"}, nil, now, 100)
+	// the tab lists what the agent waits on: c1 and c2 (c3 is dead), not
+	// the grandchild it never asked; the grandchild waits on its grandparent
+	if got := awaitedOf(agents, "g1"); len(got) != 1 || got[0].ID != "root" {
+		t.Fatalf("awaited of g1: %+v", got)
+	}
+	rows := agentRows(awaitedOf(agents, "root"), spawned, map[string]string{"c1": "Running the tests now, hold on while I look through all of it"}, nil, now, 100)
 	if len(rows) != 2 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
@@ -228,15 +233,15 @@ func TestAgentRows(t *testing.T) {
 	if !strings.Contains(rows[1], "tester") || !strings.Contains(rows[1], "3s") || strings.Contains(rows[1], "turn") {
 		t.Fatalf("%q", rows[1])
 	}
-	if rows := agentRows(agents, "c2", spawned, nil, nil, now, 100); len(rows) != 0 {
-		t.Fatalf("no children expected: %q", rows)
+	if rows := agentRows(awaitedOf(agents, "c2"), spawned, nil, nil, now, 100); len(rows) != 0 {
+		t.Fatalf("c2 waits on nobody: %q", rows)
 	}
 	if got := fmtElapsed(3725 * time.Second); got != "1h02m" {
 		t.Fatalf("%s", got)
 	}
 
-	// The agents tab counts only the selected agent's children, and lists
-	// them once focused.
+	// The agents tab counts only what the selected agent waits on, and
+	// lists them once focused.
 	m := sessionModel()
 	m.spawned = spawned
 	m.agents = agents
@@ -483,7 +488,7 @@ func TestTabCyclesFocus(t *testing.T) {
 	}
 	// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
-	if dv := stripANSI(m.tabDialog(100)); m.focus != focusAgents || !strings.Contains(dv, "Agents 0") || !strings.Contains(dv, "no subagents running") || strings.Contains(dv, "permission") {
+	if dv := stripANSI(m.tabDialog(100)); m.focus != focusAgents || !strings.Contains(dv, "Agents 0") || !strings.Contains(dv, "not waiting on any agent") || strings.Contains(dv, "permission") {
 		t.Fatalf("enter: focus=%v\n%s", m.focus, dv)
 	}
 	press(&m, right)
@@ -874,7 +879,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	m.reconciled = true
 	m.transcript("root").Notice("hello") // a session, not the home screen (which has no strip)
 	m.agents = []protocol.AgentInfo{
-		{ID: "root", Label: "coder", Archetype: "coder", State: "idle"},
+		{ID: "root", Label: "coder", Archetype: "coder", State: "waiting", Awaiting: []string{"c1", "c2"}},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running"},
 		{ID: "c2", Parent: "root", Label: "checks", Archetype: "tester", State: "idle"},
 	}
@@ -939,7 +944,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if m.selectedID() != "c2" || m.focus != focusInput {
 		t.Fatalf("enter should select the child under the cursor: %s focus %v", m.selectedID(), m.focus)
 	}
-	// now the selected agent has no children: the tab stays, reading (0)
+	// now the selected agent waits on nobody: the tab stays, reading 0
 	if v := stripANSI(m.sectionsView(100)); !strings.Contains(v, "agents 0") {
 		t.Fatalf("empty agents tab:\n%s", v)
 	}
@@ -948,7 +953,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 func TestSectionTabStrip(t *testing.T) {
 	m := sessionModel()
 	m.agents = []protocol.AgentInfo{
-		{ID: "root", Label: "coder", Archetype: "coder", State: "working", Monitors: []protocol.MonitorInfo{{ID: "j1", Kind: "command", Label: "go test", State: "running"}}},
+		{ID: "root", Label: "coder", Archetype: "coder", State: "working", Awaiting: []string{"c1"}, Monitors: []protocol.MonitorInfo{{ID: "j1", Kind: "command", Label: "go test", State: "running"}}},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "working"},
 	}
 	m.selected = 0
@@ -1570,7 +1575,7 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	m := sessionModel()
 	m.showTree = false
 	m.agents = []protocol.AgentInfo{
-		{ID: "a", Label: "main", Archetype: "coder", State: "working"},
+		{ID: "a", Label: "main", Archetype: "coder", State: "working", Awaiting: []string{"c1", "c2"}},
 		{ID: "c1", Parent: "a", Label: "scout", Archetype: "explorer", State: "working"},
 		{ID: "c2", Parent: "a", Label: "checks", Archetype: "tester", State: "idle"},
 	}
@@ -2097,7 +2102,7 @@ func TestSidebarRowsLeaveOneColumn(t *testing.T) {
 func TestRoleAwareDialogs(t *testing.T) {
 	m := sessionModel()
 	m.agents = []protocol.AgentInfo{
-		{ID: "root", Label: "main", Archetype: "lead", Model: "openai/gpt-5"},
+		{ID: "root", Label: "main", Archetype: "lead", Model: "openai/gpt-5", Awaiting: []string{"c1"}},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "reviewer", Model: "openai/gpt-5", Variant: "high"},
 	}
 	m.presets = []protocol.PresetInfo{
@@ -2158,7 +2163,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 	if roleStyle("cyan").GetForeground() == roleStyle("").GetForeground() {
 		t.Fatal("cyan should tint")
 	}
-	rows := agentRows(m.agents, "root", nil, nil, m.roleTints(), time.Now(), 100)
+	rows := agentRows(awaitedOf(m.agents, "root"), nil, nil, m.roleTints(), time.Now(), 100)
 	if len(rows) != 1 || !strings.Contains(stripANSI(rows[0]), "scout (reviewer)") {
 		t.Fatalf("rows %q", rows)
 	}

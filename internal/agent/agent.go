@@ -466,6 +466,10 @@ func (a *Agent) Info() protocol.AgentInfo {
 		CostUSD: a.usage.cost, Tokens: a.usage.tokens,
 	}
 	info.LastError = a.lastError
+	for id := range a.awaiting {
+		info.Awaiting = append(info.Awaiting, id)
+	}
+	sort.Strings(info.Awaiting)
 	info.Todos = append([]event.TodoItem(nil), a.todos...)
 	info.MCP = a.mcpInfoLocked()
 	for _, d := range a.dirListLocked() {

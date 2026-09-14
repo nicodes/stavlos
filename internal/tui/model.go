@@ -148,7 +148,7 @@ const (
 	focusChat                    // the transcript: a cursor walks its items
 	focusPermission              // the permission tab: pending permission/trust prompts (y/n/a)
 	focusQuestions               // the questions tab: an ask_user batch, answered one question at a time
-	focusAgents                  // the agents tab: live children
+	focusAgents                  // the agents tab: the agents the selected one is waiting on
 	focusAsync                   // the async tab: running shell jobs
 	focusTodo                    // the todo tab: the selected agent's todo list
 	focusMCP                     // the mcp tab: the selected agent's MCP servers
@@ -525,15 +525,32 @@ func (m *Model) activeTodo() string {
 	return ""
 }
 
-// liveChildren returns the selected agent's live children, in tree order.
-func (m *Model) liveChildren() []protocol.AgentInfo {
-	sel := m.selectedID()
-	if sel == "" {
+// awaitedAgents returns the agents the selected one is waiting on — any
+// agent whose answer it expects (a child it tasked, a sibling or parent it
+// messaged), in tree order.
+func (m *Model) awaitedAgents() []protocol.AgentInfo {
+	return awaitedOf(m.agents, m.selectedID())
+}
+
+// awaitedOf lists the live agents whose ids are in id's awaiting set, in
+// the order of agents (the tree's pre-order).
+func awaitedOf(agents []protocol.AgentInfo, id string) []protocol.AgentInfo {
+	var self *protocol.AgentInfo
+	for i := range agents {
+		if agents[i].ID == id {
+			self = &agents[i]
+		}
+	}
+	if self == nil || len(self.Awaiting) == 0 {
 		return nil
 	}
+	want := map[string]bool{}
+	for _, w := range self.Awaiting {
+		want[w] = true
+	}
 	var out []protocol.AgentInfo
-	for _, a := range m.agents {
-		if a.Parent == sel && a.State != "killed" {
+	for _, a := range agents {
+		if want[a.ID] && a.State != "killed" {
 			out = append(out, a)
 		}
 	}
@@ -733,10 +750,10 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 }
 
 // agentsKey handles keys while the agents dialog is open: ↑/↓ (or j/k) move
-// over the live children, enter selects the child under the cursor and
+// over the awaited agents, space selects the agent under the cursor and
 // closes, esc closes without changing the selection.
 func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
-	kids := m.liveChildren()
+	kids := m.awaitedAgents()
 	n := len(kids)
 	switch {
 	case key.Matches(msg, keys.OvClose):
@@ -1206,7 +1223,7 @@ func (m *Model) tabDialogHit(x, y int) tabHit {
 func (m *Model) tabRowCount() int {
 	switch m.focus {
 	case focusAgents:
-		return len(m.liveChildren())
+		return len(m.awaitedAgents())
 	case focusAsync:
 		return len(m.runningJobs())
 	case focusTodo:
@@ -2436,8 +2453,13 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.SessionModelChanged,
 		event.MonitorStarted, event.MonitorFired, event.MonitorStopped,
 		event.AgentDirAdded, event.AgentDirRemoved, event.TodoChanged,
-		event.MCPStarted, event.MCPFailed, event.MCPStopped: // the tabs read these off the tree
+		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.ResponseReceived: // the tabs read these off the tree
 		if !m.loading {
+			cmds = append(cmds, m.markTreeDirty())
+		}
+	case event.ToolCallFinished: // a message or task just put another agent on the awaiting list
+		var p event.ToolFinishedPayload
+		if ev.Decode(&p) == nil && (p.Name == "agent_message" || p.Name == "agent_create") && !m.loading {
 			cmds = append(cmds, m.markTreeDirty())
 		}
 	}
