@@ -267,3 +267,51 @@ func TestLoadGlobalReadsNoDirectory(t *testing.T) {
 		t.Fatalf("%+v", l)
 	}
 }
+
+// TestConfigValidation: a setting that cannot be applied is an error at
+// load, never a silent default — a typo in a deny rule must not disarm it.
+func TestConfigValidation(t *testing.T) {
+	g := t.TempDir()
+	t.Setenv("STAVLOS_CONFIG_DIR", g)
+	cases := map[string]string{
+		`{"polciy":{"shell":"deny"}}`:                        `unknown field "polciy"`,
+		`{"policy":{"shell":"dney"}}`:                        `policy.shell: "dney" is not a verb`,
+		`{"policy":{"shell":{"rm *":"never"}}}`:              `policy.shell."rm *": "never" is not a verb`,
+		`{"policy":{"shell":{"rm *":1}}}`:                    `policy.shell."rm *": want a verb`,
+		`{"policy":{"shell":["deny"]}}`:                      `policy.shell: want a verb or a {pattern: verb} object`,
+		`{"escalation":{"default":"maybe"}}`:                 `escalation.default "maybe"`,
+		`{"escalation":{"answerTimeout":"soon"}}`:            `escalation.answerTimeout "soon"`,
+		`{"compaction":{"threshold":1.5}}`:                   `compaction.threshold 1.5`,
+		`{"compaction":{"maxToolOutput":"lots"}}`:            `compaction.maxToolOutput`,
+		`{"search":{"provider":"bing","apiKey":"${env:X}"}}`: `search.provider "bing"`,
+	}
+	for cfg, want := range cases {
+		os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(cfg), 0o644)
+		_, err := LoadGlobal()
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: got %v, want an error containing %q", cfg, err, want)
+		}
+	}
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{
+  // comments and trailing commas are fine
+  "$schema": "x",
+  "escalation": {"claimTimeout": "10s", "default": "allow"},
+  "compaction": {"threshold": 0.5, "maxToolOutput": "64kb"},
+  "search": {"provider": "Brave", "apiKey": "${env:STAVLOS_TEST_KEY}"},
+  "policy": {"shell": {"rm *": "deny"}, "read": "allow"},
+}`), 0o644)
+	t.Setenv("STAVLOS_TEST_KEY", "k")
+	e, err := LoadGlobal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Escalation.ClaimTimeout != 10*time.Second || e.Escalation.Default != policy.Allow || e.Compaction.Threshold != 0.5 || e.Compaction.MaxToolOutput != 64*1024 || e.Search.Provider != "brave" || e.Search.APIKey != "k" || e.Policy.Decide("shell", "rm -rf x") != policy.Deny {
+		t.Fatalf("%+v", e)
+	}
+	if n, err := parseSize("1mb"); err != nil || n != 1<<20 {
+		t.Fatalf("parseSize %d %v", n, err)
+	}
+	if _, err := parseSize("0"); err == nil {
+		t.Fatal("zero size accepted")
+	}
+}
