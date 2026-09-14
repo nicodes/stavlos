@@ -1060,13 +1060,13 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	default:
 		head += " ▸"
 	}
-	// The heading sits at the left edge like "agents"; the cursor on it
-	// shows as the accent colour rather than a marker, so it never shifts.
-	headStyle := styleBold
+	// The heading sits at the left edge like "agents"; the cursor on it is
+	// the row background, as everywhere in the sidebar.
+	headRow := styleBold.Render(head)
 	if focused && m.sbCursor == na {
-		headStyle = styleAccent.Bold(true)
+		headRow = highlightRow(headRow, width)
 	}
-	rows, items = append(rows, headStyle.Render(head)), append(items, na)
+	rows, items = append(rows, headRow), append(items, na)
 	if !m.navSessionsOpen {
 		return rows, items
 	}
@@ -1074,10 +1074,6 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		return append(rows, styleDim.Render("    (no other sessions here)")), append(items, -1)
 	}
 	for k, s := range m.navSessions {
-		marker := "  "
-		if focused && m.sbCursor == na+1+k {
-			marker = styleAccent.Render("▶") + " "
-		}
 		age := ""
 		if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
 			age = fmtElapsed(time.Since(t))
@@ -1094,11 +1090,11 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		if gap < 1 {
 			gap = 1
 		}
-		text := styleDim.Render(title)
+		row := "  " + stateDot(s.State) + " " + styleDim.Render(title) + strings.Repeat(" ", gap) + styleDim.Render(age)
 		if focused && m.sbCursor == na+1+k {
-			text = styleBold.Render(title)
+			row = highlightRow(row, width)
 		}
-		rows = append(rows, marker+stateDot(s.State)+" "+text+strings.Repeat(" ", gap)+styleDim.Render(age))
+		rows = append(rows, row)
 		items = append(items, na+1+k)
 	}
 	return rows, items
@@ -1168,22 +1164,16 @@ func (m Model) needsHuman(agent string) string {
 	return badge
 }
 
-// treeRows renders the agent tree, one row per agent: indent, the
-// cursor/selection marker, the state dot, "label (role)", then, at the
-// right edge, the needs-you badge and the agent's cost. Every row is
-// exactly width wide.
+// treeRows renders the agent tree, one row per agent: indent, the state
+// dot, "label (role)", then, at the right edge, the needs-you badge and
+// the agent's cost. Every row is exactly width wide. The selected agent
+// reads bold; the sidebar cursor is a background across the row, as in
+// the chat.
 func (m Model) treeRows(width int) []string {
 	rows := make([]string, 0, len(m.agents))
 	focused := m.focus == focusSidebar && m.sidebarVisible()
 	for i, a := range m.agents {
-		indent := strings.Repeat("  ", a.Depth)
-		marker := "  "
-		switch {
-		case focused && i == m.sbCursor:
-			marker = styleAccent.Render("▶") + " "
-		case i == m.selected:
-			marker = styleAccent.Render("▸") + " "
-		}
+		indent := "  " + strings.Repeat("  ", a.Depth)
 		dot := agentDot(a)
 		// The right column: the badge (warning) and the cost (dim), with a
 		// space before it whenever it is not empty.
@@ -1200,9 +1190,9 @@ func (m Model) treeRows(width int) []string {
 			right += styleDim.Render(c)
 			rightW += len([]rune(c))
 		}
-		// indent + marker + dot + " " is four columns plus the indent; the
-		// text gets what is left before the right column and one space.
-		avail := width - len([]rune(indent)) - 4 - rightW
+		// indent + dot + " " is two columns plus the indent; the text gets
+		// what is left before the right column and one space.
+		avail := width - len([]rune(indent)) - 2 - rightW
 		if rightW > 0 {
 			avail--
 		}
@@ -1222,8 +1212,6 @@ func (m Model) treeRows(width int) []string {
 			tint = r.Color
 		}
 		switch {
-		case focused && i == m.sbCursor:
-			text = roleStyle(tint).Bold(true).Render(text)
 		case i == m.selected:
 			text = roleStyle(tint).Inherit(styleSelected).Render(text)
 		case tint != "":
@@ -1231,14 +1219,17 @@ func (m Model) treeRows(width int) []string {
 		default:
 			text = styleDim.Render(text)
 		}
-		gap := width - len([]rune(indent)) - 4 - textW - rightW
+		gap := width - len([]rune(indent)) - 2 - textW - rightW
 		if gap < 1 && rightW > 0 {
 			gap = 1
 		}
 		if gap < 0 {
 			gap = 0
 		}
-		row := indent + marker + dot + " " + text + strings.Repeat(" ", gap) + right
+		row := indent + dot + " " + text + strings.Repeat(" ", gap) + right
+		if focused && i == m.sbCursor {
+			row = highlightRow(row, width)
+		}
 		rows = append(rows, row)
 	}
 	if len(rows) == 0 {

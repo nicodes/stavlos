@@ -381,9 +381,13 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 	if m.sbCursor != 2 || m.selected != 0 {
 		t.Fatalf("cursor %d selected %d", m.sbCursor, m.selected)
 	}
+	// the cursor is a row background (a visible marker here), never an arrow
+	prev := highlightRow
+	highlightRow = func(s string, _ int) string { return gutterMark + s }
+	t.Cleanup(func() { highlightRow = prev })
 	rows := m.treeRows(30)
-	if !strings.Contains(rows[2], "▶") || !strings.Contains(rows[0], "▸") {
-		t.Fatalf("markers: %q", rows)
+	if !strings.HasPrefix(rows[2], gutterMark) || strings.Contains(rows[0], gutterMark) || strings.Contains(strings.Join(rows, ""), "▶") || strings.Contains(strings.Join(rows, ""), "▸") {
+		t.Fatalf("cursor row: %q", rows)
 	}
 	m.handleKey(tea.KeyMsg{Type: tea.KeySpace})
 	if m.selected != 2 || m.focus != focusInput || !m.input.Focused() {
@@ -2196,7 +2200,7 @@ func TestSidebarNav(t *testing.T) {
 			t.Fatalf("row %d should be %d wide, got %d: %q", i, sidebarWidth-1, w, plain[i])
 		}
 	}
-	if !strings.HasPrefix(plain[0], "▸ ◐ main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
+	if !strings.HasPrefix(plain[0], "  ◐ main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
 		t.Fatalf("root row: %q", plain[0])
 	}
 	if !strings.HasPrefix(plain[1], "    ● world-politics (") || !strings.HasSuffix(plain[1], "… ! $0.05") {
