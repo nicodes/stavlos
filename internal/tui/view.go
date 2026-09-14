@@ -837,21 +837,8 @@ func (m Model) metaRow(width int) string {
 const tagline = "Giddy up!"
 
 // styleTagline: a terminal cannot draw the tagline larger, so it is bold in
-// the logo's bright tone and letter-spaced (taglineText) to read as a
-// heading rather than a caption.
+// the logo's bright tone to read as a heading rather than a caption.
 var styleTagline = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
-
-// taglineText spaces the tagline's letters out, "G i d d y   u p !".
-func taglineText() string {
-	var b strings.Builder
-	for i, r := range tagline {
-		if i > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteRune(r) // the word gap comes out as three cells: separator, space, separator
-	}
-	return b.String()
-}
 
 // homeLayout is the logo screen's stack of lines and where things sit in
 // it, shared by the renderer and the mouse.
@@ -878,8 +865,7 @@ func (m Model) homeLines(width, height int) homeLayout {
 	logo := logoLines(width)
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lay.lines = append(lay.lines, "")
-	tl := taglineText()
-	add(styleTagline.Render(tl), lipgloss.Width(tl))
+	add(styleTagline.Render(tagline), lipgloss.Width(tagline))
 	lay.lines = append(lay.lines, "") // air between the tagline and the input
 	add(m.statusLine(boxW), boxW)     // status messages sit above the input, as in a session
 	if pv := m.paletteViewFor(boxW); pv != "" {
