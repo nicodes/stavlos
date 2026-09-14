@@ -8,6 +8,7 @@
 package registry
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -16,12 +17,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/auth"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/model/chatcompletions"
 	"github.com/nicodes/stavlos/internal/model/codex"
-	"github.com/nicodes/stavlos/internal/model/openai"
 	"github.com/nicodes/stavlos/internal/modelsdev"
 	"github.com/nicodes/stavlos/internal/oauth"
 )
@@ -50,25 +52,76 @@ type Status struct {
 // refreshSkew: refresh an access token this long before it expires.
 const refreshSkew = 2 * time.Minute
 
+// xaiBaseURL is the Grok API.
+const xaiBaseURL = "https://api.x.ai/v1"
+
+// subscription is everything provider-specific about one supported
+// subscription; the rest of the registry is generic over this table.
+type subscription struct {
+	id, name string
+	priority int
+	// allow keeps the catalog models the subscription actually serves.
+	allow func(model string) bool
+	// open builds the adapter; src reads (and refreshes) the stored login.
+	open func(r *Registry, src model.TokenSource) model.Provider
+}
+
+var subscriptions = []subscription{
+	{
+		id: "openai", name: "ChatGPT", priority: 0,
+		allow: chatGPTAllowed,
+		open: func(r *Registry, src model.TokenSource) model.Provider {
+			return codex.NewWithEndpoint(src, cmp.Or(r.codexEndpoint, codex.DefaultEndpoint))
+		},
+	},
+	{
+		id: "xai", name: "Grok", priority: 1,
+		allow: grokAllowed,
+		open: func(r *Registry, src model.TokenSource) model.Provider {
+			return chatcompletions.NewWithToken("xai", cmp.Or(r.xaiBaseURL, xaiBaseURL), src)
+		},
+	},
+}
+
+func subscriptionByID(id string) (subscription, bool) {
+	for _, s := range subscriptions {
+		if s.id == id {
+			return s, true
+		}
+	}
+	return subscription{}, false
+}
+
 // Registry is the provider map. It is safe for concurrent use.
 type Registry struct {
-	cat   *modelsdev.Catalog
-	store *auth.Store
-	flows map[string]oauth.Flow
+	cat    atomic.Pointer[modelsdev.Catalog] // swapped whole by a background refresh
+	counts atomic.Pointer[modelCounts]       // per-subscription model counts for cat
+	store  *auth.Store
+	flows  map[string]oauth.Flow
 
-	// endpoints override the real services (tests).
+	// endpoints override the real services (tests); read under mu.
 	codexEndpoint string
 	xaiBaseURL    string
 
 	mu         sync.Mutex
 	providers  map[string]model.Provider // explicit registrations
+	subs       map[string]model.Provider // subscription adapters, built once (their token source reads the store per call)
 	opened     map[string]model.Model    // keyed by full "provider/id"
 	refreshing map[string]*sync.Mutex    // single-flight refresh per provider
 }
 
+// modelCounts memoises how many models each subscription lists for one
+// catalog, so a provider listing does not walk the catalog every time.
+type modelCounts struct {
+	cat *modelsdev.Catalog
+	n   map[string]int
+}
+
 // New returns a registry backed by cat for model metadata (may be nil).
 func New(cat *modelsdev.Catalog) *Registry {
-	return &Registry{cat: cat, flows: oauth.Flows(), providers: map[string]model.Provider{}, opened: map[string]model.Model{}, refreshing: map[string]*sync.Mutex{}}
+	r := &Registry{flows: oauth.Flows(), providers: map[string]model.Provider{}, subs: map[string]model.Provider{}, opened: map[string]model.Model{}, refreshing: map[string]*sync.Mutex{}}
+	r.cat.Store(cat)
+	return r
 }
 
 // WithStore attaches the credential store.
@@ -77,25 +130,47 @@ func (r *Registry) WithStore(s *auth.Store) *Registry { r.store = s; return r }
 // WithFlows replaces the login flows (tests).
 func (r *Registry) WithFlows(f map[string]oauth.Flow) *Registry { r.flows = f; return r }
 
-// WithEndpoints overrides service URLs (tests).
+// WithEndpoints overrides service URLs (tests). Adapters built for the old
+// endpoints are dropped.
 func (r *Registry) WithEndpoints(codexEndpoint, xaiBaseURL string) *Registry {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.codexEndpoint, r.xaiBaseURL = codexEndpoint, xaiBaseURL
+	r.subs = map[string]model.Provider{}
+	r.opened = map[string]model.Model{}
 	return r
 }
 
 // Catalog returns the metadata catalog (may be nil).
-func (r *Registry) Catalog() *modelsdev.Catalog { return r.cat }
+func (r *Registry) Catalog() *modelsdev.Catalog { return r.cat.Load() }
+
+// SetCatalog replaces the metadata catalog (a background refresh).
+func (r *Registry) SetCatalog(c *modelsdev.Catalog) {
+	if c != nil {
+		r.cat.Store(c)
+	}
+}
 
 // Store returns the credential store (may be nil).
 func (r *Registry) Store() *auth.Store { return r.store }
 
 // Default loads the models.dev catalog and returns the registry.
+// A stale catalog (an old cache, or the embedded copy) is used at once and
+// refreshed in the background, so startup never waits on the network.
 func Default(ctx context.Context, store *auth.Store) (*Registry, error) {
-	cat, err := modelsdev.Load(ctx)
+	cat, stale, err := modelsdev.Load(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return New(cat).WithStore(store), nil
+	r := New(cat).WithStore(store)
+	if stale {
+		go func() {
+			if c, err := modelsdev.Refresh(context.WithoutCancel(ctx)); err == nil {
+				r.SetCatalog(c)
+			}
+		}()
+	}
+	return r, nil
 }
 
 // Register adds an explicit provider. A second provider claiming the same
@@ -116,25 +191,15 @@ func (r *Registry) Register(p model.Provider) error {
 
 // --- listing ---
 
-var subscriptions = []struct {
-	id, name string
-	priority int
-}{
-	{"openai", "ChatGPT", 0},
-	{"xai", "Grok", 1},
-}
-
 // List returns every provider's status, ChatGPT first.
 func (r *Registry) List() []Status {
 	var out []Status
 	for _, s := range subscriptions {
-		if st, ok := r.Status(s.id); ok {
-			out = append(out, st)
-		}
+		out = append(out, r.subscriptionStatus(s))
 	}
 	r.mu.Lock()
 	for name := range r.providers {
-		out = append(out, Status{ID: name, Name: name, Kind: KindPlugin, Connected: true, Priority: 50})
+		out = append(out, pluginStatus(name))
 	}
 	r.mu.Unlock()
 	sort.SliceStable(out, func(i, j int) bool {
@@ -152,29 +217,44 @@ func (r *Registry) Status(name string) (Status, bool) {
 	_, explicit := r.providers[name]
 	r.mu.Unlock()
 	if explicit {
-		return Status{ID: name, Name: name, Kind: KindPlugin, Connected: true, Priority: 50}, true
+		return pluginStatus(name), true
 	}
-	for _, s := range subscriptions {
-		if s.id != name {
-			continue
-		}
-		st := Status{ID: s.id, Name: s.name, Kind: KindSubscription, Priority: s.priority, Models: len(r.Models(s.id, true))}
-		if f, ok := r.flows[s.id]; ok {
-			st.Label = f.Label()
-			st.Methods = f.Methods()
-		}
-		if r.store != nil {
-			if c, ok := r.store.Get(s.id); ok && c.Type == "oauth" && c.Refresh != "" {
-				st.Connected = true
-				st.Account = c.Email
-				if st.Account == "" {
-					st.Account = c.AccountID
-				}
-			}
-		}
-		return st, true
+	s, ok := subscriptionByID(name)
+	if !ok {
+		return Status{}, false
 	}
-	return Status{}, false
+	return r.subscriptionStatus(s), true
+}
+
+func pluginStatus(name string) Status {
+	return Status{ID: name, Name: name, Kind: KindPlugin, Connected: true, Priority: 50}
+}
+
+func (r *Registry) subscriptionStatus(s subscription) Status {
+	st := Status{ID: s.id, Name: s.name, Kind: KindSubscription, Priority: s.priority, Models: r.modelCount(s.id)}
+	if f, ok := r.flows[s.id]; ok {
+		st.Label = f.Label()
+		st.Methods = f.Methods()
+	}
+	if c, ok := r.credential(s.id); ok {
+		st.Connected = true
+		st.Account = cmp.Or(c.Email, c.AccountID)
+	}
+	return st
+}
+
+// modelCount is len(Models(id, true)), computed once per catalog.
+func (r *Registry) modelCount(id string) int {
+	cat := r.cat.Load()
+	if mc := r.counts.Load(); mc != nil && mc.cat == cat {
+		return mc.n[id]
+	}
+	mc := &modelCounts{cat: cat, n: map[string]int{}}
+	for _, m := range r.Models("", true) {
+		mc.n[m.Provider]++
+	}
+	r.counts.Store(mc)
+	return mc.n[id]
 }
 
 // Providers lists connected provider ids.
@@ -204,7 +284,7 @@ func (r *Registry) SaveLogin(provider string, t oauth.Tokens) error {
 	if r.store == nil {
 		return errors.New("no credential store")
 	}
-	if err := r.store.Set(provider, auth.Credential{Type: "oauth", Access: t.Access, Refresh: t.Refresh, Expires: t.ExpiresAt.UnixMilli(), AccountID: t.AccountID, Email: t.Email}); err != nil {
+	if err := r.store.Set(provider, credentialOf(t)); err != nil {
 		return err
 	}
 	r.Invalidate(provider)
@@ -234,12 +314,26 @@ func (r *Registry) Invalidate(provider string) {
 	}
 }
 
+func credentialOf(t oauth.Tokens) auth.Credential {
+	return auth.Credential{Type: "oauth", Access: t.Access, Refresh: t.Refresh, Expires: t.ExpiresAt.UnixMilli(), AccountID: t.AccountID, Email: t.Email}
+}
+
+// credential is a provider's usable login: an OAuth credential with a
+// refresh token.
+func (r *Registry) credential(provider string) (auth.Credential, bool) {
+	if r.store == nil {
+		return auth.Credential{}, false
+	}
+	c, ok := r.store.Get(provider)
+	return c, ok && c.Type == "oauth" && c.Refresh != ""
+}
+
 // tokenSource returns a TokenSource that refreshes the stored access token
 // when it is about to expire and persists the rotated pair.
 func (r *Registry) tokenSource(provider string) model.TokenSource {
 	return func(ctx context.Context) (model.Token, error) {
-		c, ok := r.store.Get(provider)
-		if !ok || c.Type != "oauth" || c.Refresh == "" {
+		c, ok := r.credential(provider)
+		if !ok {
 			return model.Token{}, fmt.Errorf("provider %q is not connected: run /provider to sign in", provider)
 		}
 		expSoon := c.Expires == 0 || time.UnixMilli(c.Expires).Before(time.Now().Add(refreshSkew)) || oauth.Expiring(c.Access, refreshSkew)
@@ -267,13 +361,9 @@ func (r *Registry) tokenSource(provider string) model.TokenSource {
 		if err != nil {
 			return model.Token{}, fmt.Errorf("%s session expired; run /provider to sign in again (%v)", provider, err)
 		}
-		if t.AccountID == "" {
-			t.AccountID = c.AccountID
-		}
-		if t.Email == "" {
-			t.Email = c.Email
-		}
-		if err := r.store.Set(provider, auth.Credential{Type: "oauth", Access: t.Access, Refresh: t.Refresh, Expires: t.ExpiresAt.UnixMilli(), AccountID: t.AccountID, Email: t.Email}); err != nil {
+		t.AccountID = cmp.Or(t.AccountID, c.AccountID)
+		t.Email = cmp.Or(t.Email, c.Email)
+		if err := r.store.Set(provider, credentialOf(t)); err != nil {
 			return model.Token{}, err
 		}
 		return model.Token{Access: t.Access, AccountID: t.AccountID}, nil
@@ -288,9 +378,7 @@ func (r *Registry) Check(full string) error {
 	return err
 }
 
-// Resolve opens (or returns the cached) model for full and its metadata.
-// Subscription models carry no per-token price, so cost stays zero.
-// Variants lists the variant names a model offers ("" when it has none or
+// Variants lists the variant names a model offers (nil when it has none or
 // the provider is unknown).
 func (r *Registry) Variants(full string) []string {
 	p, id, err := r.lookup(full)
@@ -303,16 +391,18 @@ func (r *Registry) Variants(full string) []string {
 	return nil
 }
 
+// Resolve opens (or returns the cached) model for full and its metadata.
+// Subscription models carry no per-token price, so cost stays zero.
 func (r *Registry) Resolve(full string) (model.Model, model.Info, error) {
 	p, id, err := r.lookup(full)
 	if err != nil {
 		return nil, model.Info{}, err
 	}
 	var info model.Info
-	if r.cat != nil {
-		info, _ = r.cat.Model(p.Name(), id)
-		if _, sub := r.flows[p.Name()]; sub {
-			info.InputPrice, info.OutputPrice, info.CacheReadPrice, info.CacheWritePrice = 0, 0, 0, 0
+	if cat := r.cat.Load(); cat != nil {
+		info, _ = cat.Model(p.Name(), id)
+		if name, _, _ := model.Split(full); isSubscription(name) {
+			info = subscriptionInfo(info)
 		}
 	}
 	r.mu.Lock()
@@ -339,27 +429,40 @@ func (r *Registry) lookup(full string) (model.Provider, string, error) {
 	if ok {
 		return p, id, nil
 	}
-	st, known := r.Status(name)
+	s, known := subscriptionByID(name)
 	if !known {
 		return nil, "", fmt.Errorf("unknown provider %q: Stavlos supports openai (ChatGPT) and xai (Grok); run /provider", name)
 	}
-	if !st.Connected {
-		return nil, "", fmt.Errorf("%s is not connected: run /provider to sign in with your %s subscription", st.Name, st.Name)
+	if _, ok := r.credential(name); !ok {
+		return nil, "", fmt.Errorf("%s is not connected: run /provider to sign in with your %s subscription", s.name, s.name)
 	}
-	switch name {
-	case "openai":
-		if r.codexEndpoint != "" {
-			return codex.NewWithEndpoint(r.tokenSource(name), r.codexEndpoint), id, nil
-		}
-		return codex.New(r.tokenSource(name)), id, nil
-	case "xai":
-		base := r.xaiBaseURL
-		if base == "" {
-			base = "https://api.x.ai/v1"
-		}
-		return openai.NewWithToken("xai", base, r.tokenSource(name)), id, nil
+	return r.adapter(s), id, nil
+}
+
+// adapter is a subscription's provider, built on first use and reused: its
+// token source reads the store on every call, so a login or refresh needs
+// no rebuild.
+func (r *Registry) adapter(s subscription) model.Provider {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	p, ok := r.subs[s.id]
+	if !ok {
+		p = s.open(r, r.tokenSource(s.id))
+		r.subs[s.id] = p
 	}
-	return nil, "", fmt.Errorf("provider %q has no adapter", name)
+	return p
+}
+
+func isSubscription(id string) bool {
+	_, ok := subscriptionByID(id)
+	return ok
+}
+
+// subscriptionInfo is a model's metadata as a subscriber sees it: the
+// subscription pays, so every price is zero.
+func subscriptionInfo(info model.Info) model.Info {
+	info.InputPrice, info.OutputPrice, info.CacheReadPrice, info.CacheWritePrice = 0, 0, 0, 0
+	return info
 }
 
 // --- models ---
@@ -396,10 +499,17 @@ func chatGPTAllowed(id string) bool {
 	return major > 5 || (major == 5 && minor > 4)
 }
 
+// grokAllowed keeps Grok's chat models; the image and video generators
+// (grok-imagine-*) cannot drive an agent.
+func grokAllowed(id string) bool {
+	return strings.HasPrefix(id, "grok") && !strings.Contains(id, "imagine")
+}
+
 // Models lists models for a provider (all if empty), connected providers
 // only unless all is true. Prices are zero: these are subscriptions.
 func (r *Registry) Models(provider string, all bool) []ModelEntry {
-	if r.cat == nil {
+	cat := r.cat.Load()
+	if cat == nil {
 		return nil
 	}
 	var out []ModelEntry
@@ -407,21 +517,15 @@ func (r *Registry) Models(provider string, all bool) []ModelEntry {
 		if provider != "" && s.id != provider {
 			continue
 		}
-		if !all {
-			if st, _ := r.Status(s.id); !st.Connected {
-				continue
-			}
+		if _, ok := r.credential(s.id); !ok && !all {
+			continue
 		}
-		for _, id := range r.cat.Models(s.id) {
-			if s.id == "openai" && !chatGPTAllowed(id) {
+		for _, id := range cat.Models(s.id) {
+			if !s.allow(id) {
 				continue
 			}
-			if s.id == "xai" && !strings.HasPrefix(id, "grok") {
-				continue
-			}
-			info, _ := r.cat.Model(s.id, id)
-			info.InputPrice, info.OutputPrice, info.CacheReadPrice, info.CacheWritePrice = 0, 0, 0, 0
-			out = append(out, ModelEntry{ID: s.id + "/" + id, Provider: s.id, Name: r.cat.ModelName(s.id, id), Info: info})
+			info, _ := cat.Model(s.id, id)
+			out = append(out, ModelEntry{ID: s.id + "/" + id, Provider: s.id, Name: cat.ModelName(s.id, id), Info: subscriptionInfo(info)})
 		}
 	}
 	return out
