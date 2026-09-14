@@ -559,29 +559,32 @@ func padLines(s string, width int) string {
 
 // --- logo ---
 
-// logoGlyphs are 3-row double-line letters for the logo, 3 cells wide
-// except the v, whose legs need 4 to meet in a foot.
-var logoGlyphs = map[rune][3]string{
-	's': {"╔═╗", "╚═╗", "╚═╝"},
-	't': {"╔╦╗", " ║ ", " ╩ "},
-	'a': {"╔═╗", "╠═╣", "╩ ╩"},
-	'v': {"╦  ╦", "╚╗╔╝", " ╚╝ "},
-	'l': {"╦  ", "║  ", "╩═╝"},
-	'o': {"╔═╗", "║ ║", "╚═╝"},
+// logoGlyphs are 5-row full-block letters for the logo; widths vary per
+// letter (7 or 8 cells) and buildLogo separates them with one space.
+var logoGlyphs = map[rune][5]string{
+	's': {"███████", "██     ", "███████", "     ██", "███████"},
+	't': {"████████", "   ██   ", "   ██   ", "   ██   ", "   ██   "},
+	'a': {" █████ ", "██   ██", "███████", "██   ██", "██   ██"},
+	'v': {"██    ██", "██    ██", "██    ██", " ██  ██ ", "  ████  "},
+	'l': {"██     ", "██     ", "██     ", "██     ", "███████"},
+	'o': {" ██████ ", "██    ██", "██    ██", "██    ██", " ██████ "},
 }
 
-const logoMinWidth = 30
+const logoMinWidth = 62
 
-// buildLogo lays out word as 3 rows of glyphs, letters touching. Unknown
-// letters render as blank cells so every row has the same width.
-func buildLogo(word string) [3]string {
-	var rows [3]string
-	for _, r := range word {
+// buildLogo lays out word as 5 rows of block glyphs separated by one space.
+// Unknown letters render as blank cells so every row has the same width.
+func buildLogo(word string) [5]string {
+	var rows [5]string
+	for i, r := range word {
 		g, ok := logoGlyphs[r]
 		if !ok {
-			g = [3]string{"   ", "   ", "   "}
+			g = [5]string{"       ", "       ", "       ", "       ", "       "}
 		}
 		for k := range rows {
+			if i > 0 {
+				rows[k] += " "
+			}
 			rows[k] += g[k]
 		}
 	}
@@ -595,9 +598,9 @@ func logoLines(width int) []string {
 		return []string{styleLogoMuted.Render("stav") + styleLogoBright.Render("los")}
 	}
 	a, b := buildLogo("stav"), buildLogo("los")
-	out := make([]string, 3)
+	out := make([]string, 5)
 	for i := range out {
-		out[i] = styleLogoMuted.Render(a[i]) + styleLogoBright.Render(b[i])
+		out[i] = styleLogoMuted.Render(a[i]) + " " + styleLogoBright.Render(b[i])
 	}
 	return out
 }
