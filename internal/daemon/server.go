@@ -11,6 +11,7 @@ import (
 	"os"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/agent"
 	"github.com/nicodes/stavlos/internal/config"
@@ -52,13 +53,34 @@ func (d *Daemon) Serve(ctx context.Context, socket string) error {
 	}
 }
 
+// conn is one client connection. Everything written to it goes through a
+// bounded queue drained by one writer goroutine with a write deadline, so
+// a client that stops reading never blocks the daemon: the agents' event
+// appends, other clients' deliveries and new connections all go on. A
+// client whose queue fills is dropped; it reconnects and resubscribes from
+// its last sequence number.
 type conn struct {
-	d   *Daemon
-	c   net.Conn
-	w   *bufio.Writer
-	wmu sync.Mutex
-	cl  *client
+	d    *Daemon
+	c    net.Conn
+	cl   *client
+	out  chan outMsg
+	done chan struct{}
+	once sync.Once
 }
+
+type outMsg struct {
+	b         []byte
+	droppable bool // a stream delta: the event that follows carries the whole text
+}
+
+// Outbound queue bounds. Stream deltas are dropped once the queue is half
+// full, so a burst of tokens never costs a client its connection; events,
+// replies and prompts are never dropped, and a queue full of them means the
+// client is gone for practical purposes.
+const outQueue = 1 << 14
+
+// writeTimeout bounds one write to a client (a variable for tests).
+var writeTimeout = 10 * time.Second
 
 // maxInFlight bounds the requests one connection may have outstanding;
 // maxLine bounds one request (a prompt with a big paste is well under it).
@@ -79,12 +101,13 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
 	// mid-login.wait (or mid-anything) takes its work with it.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c := &conn{d: d, c: nc, w: bufio.NewWriter(nc)}
+	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), done: make(chan struct{})}
 	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.notify}
 	d.addClient(c.cl)
+	go c.writer()
 	defer func() {
 		d.removeClient(c.cl.id)
-		nc.Close()
+		c.close()
 	}()
 	inFlight := make(chan struct{}, maxInFlight)
 	sc := bufio.NewScanner(nc)
@@ -107,12 +130,54 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
 	}
 }
 
-func (c *conn) write(v any) {
-	b, _ := json.Marshal(v)
-	c.wmu.Lock()
-	defer c.wmu.Unlock()
-	c.w.Write(append(b, '\n'))
-	c.w.Flush()
+func (c *conn) write(v any) { c.enqueue(v, false) }
+
+// enqueue queues one message without blocking.
+func (c *conn) enqueue(v any, droppable bool) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	if droppable && len(c.out) > outQueue/2 {
+		return
+	}
+	select {
+	case c.out <- outMsg{b: append(b, '\n'), droppable: droppable}:
+	case <-c.done:
+	default:
+		log.Printf("client %s (%s) is not reading; dropping it", c.cl.id, c.cl.name)
+		c.close()
+	}
+}
+
+// writer is the only goroutine that writes to the socket. It batches what
+// is queued into one flush and gives up on a write that stalls.
+func (c *conn) writer() {
+	w := bufio.NewWriter(c.c)
+	for {
+		select {
+		case m := <-c.out:
+			_ = c.c.SetWriteDeadline(time.Now().Add(writeTimeout))
+			_, err := w.Write(m.b)
+			if err == nil && len(c.out) == 0 {
+				err = w.Flush()
+			}
+			if err != nil {
+				c.close()
+				return
+			}
+		case <-c.done:
+			return
+		}
+	}
+}
+
+// close ends the connection once; the reader then removes the client.
+func (c *conn) close() {
+	c.once.Do(func() {
+		close(c.done)
+		c.c.Close()
+	})
 }
 
 func (c *conn) reply(id *json.RawMessage, result any, perr *protocol.Error) {
@@ -129,7 +194,7 @@ func (c *conn) reply(id *json.RawMessage, result any, perr *protocol.Error) {
 }
 
 func (c *conn) notify(method string, params json.RawMessage) {
-	c.write(protocol.Response{JSONRPC: "2.0", Method: method, Params: params})
+	c.enqueue(protocol.Response{JSONRPC: "2.0", Method: method, Params: params}, method == protocol.NStream)
 }
 
 func perr(code int, err error) *protocol.Error {
@@ -577,33 +642,11 @@ func tree(s *agent.Session) []protocol.AgentInfo {
 // subscribe replays from the requested offset, then goes live. Delivery is
 // deduplicated per subscription by seq, so the handover cannot double-send.
 func (c *conn) subscribe(ctx context.Context, p protocol.SubscribeParams) (any, *protocol.Error) {
-	from := p.From
-	if from <= 0 {
-		from = 1
-	}
-	c.cl.mu.Lock()
-	c.cl.subs[p.Session] = from - 1
-	c.cl.mu.Unlock()
-	live, cancel := c.d.Log.Subscribe(p.Session)
-	defer cancel()
-	evs, err := c.d.Log.Read(ctx, p.Session, from, 0)
+	last, err := c.d.subscribe(ctx, c.cl, p.Session, p.From)
 	if err != nil {
 		return nil, perr(protocol.ErrInternal, err)
 	}
-	for _, e := range evs {
-		c.cl.deliver(e)
-	}
-	for {
-		select {
-		case e := <-live:
-			c.cl.deliver(e)
-		default:
-			c.cl.mu.Lock()
-			last := c.cl.subs[p.Session]
-			c.cl.mu.Unlock()
-			return map[string]any{"ok": true, "seq": last}, nil
-		}
-	}
+	return map[string]any{"ok": true, "seq": last}, nil
 }
 
 // rememberModel makes the first model a user picks the global default when

@@ -20,15 +20,6 @@ import (
 type Log struct {
 	db *sql.DB
 	mu sync.Mutex // serialises Append
-
-	subMu   sync.RWMutex
-	subs    map[int64]*subscriber
-	nextSub int64
-}
-
-type subscriber struct {
-	session string
-	ch      chan Event
 }
 
 // Open opens or creates the log at path.
@@ -41,7 +32,7 @@ func Open(path string) (*Log, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	l := &Log{db: db, subs: map[int64]*subscriber{}}
+	l := &Log{db: db}
 	if err := l.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -78,8 +69,8 @@ CREATE TABLE IF NOT EXISTS kv (
 // Close closes the database.
 func (l *Log) Close() error { return l.db.Close() }
 
-// Append writes one event, assigning Seq and Global, and fans it out to
-// subscribers. The returned event carries the assigned numbers.
+// Append writes one event, assigning Seq and Global. The returned event
+// carries the assigned numbers; delivering it to clients is the daemon's.
 func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -105,39 +96,7 @@ func (l *Log) Append(ctx context.Context, e Event) (Event, error) {
 	if err := tx.Commit(); err != nil {
 		return e, err
 	}
-	l.fanout(e)
 	return e, nil
-}
-
-func (l *Log) fanout(e Event) {
-	l.subMu.RLock()
-	defer l.subMu.RUnlock()
-	for _, s := range l.subs {
-		if s.session == e.Session {
-			select {
-			case s.ch <- e:
-			default:
-				// Slow subscriber: drop. It can reconcile via Read from its
-				// last seq. Never block the writer.
-			}
-		}
-	}
-}
-
-// Subscribe returns a live channel for a session. Combine with Read for
-// replay-from-offset: read up to now, then subscribe, then dedupe by Seq.
-func (l *Log) Subscribe(session string) (<-chan Event, func()) {
-	l.subMu.Lock()
-	defer l.subMu.Unlock()
-	l.nextSub++
-	id := l.nextSub
-	s := &subscriber{session: session, ch: make(chan Event, 4096)}
-	l.subs[id] = s
-	return s.ch, func() {
-		l.subMu.Lock()
-		delete(l.subs, id)
-		l.subMu.Unlock()
-	}
 }
 
 // Read returns events for a session with seq >= from, in order. limit<=0 = all.

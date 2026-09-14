@@ -2213,3 +2213,167 @@ func TestOneDaemonPerDataDir(t *testing.T) {
 	}
 	d2.Close()
 }
+
+// collect drains a client's notifications into a list of events, until
+// stop is closed.
+func collect(c *rpc.Client, stop <-chan struct{}) (func() []event.Event, func()) {
+	var mu sync.Mutex
+	var got []event.Event
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case n := <-c.Notifications:
+				if n.Method == protocol.NEvent {
+					var en protocol.EventNotification
+					if json.Unmarshal(n.Params, &en) == nil {
+						mu.Lock()
+						got = append(got, en.Event)
+						mu.Unlock()
+					}
+				}
+			case <-stop:
+				return
+			}
+		}
+	}()
+	return func() []event.Event {
+			mu.Lock()
+			defer mu.Unlock()
+			return append([]event.Event(nil), got...)
+		}, func() {
+			<-done
+		}
+}
+
+func attached(t *testing.T, sock string) *rpc.Client {
+	t.Helper()
+	c, err := rpc.Dial(sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Attach(context.Background(), "extra", protocol.TierInteractive); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close() })
+	return c
+}
+
+// TestSlowClientDoesNotStallTheDaemon: a client that stops reading fills
+// its socket; the daemon keeps appending, keeps delivering to the others,
+// and drops the stalled one.
+func TestSlowClientDoesNotStallTheDaemon(t *testing.T) {
+	setupConfig(t)
+	old := writeTimeout
+	writeTimeout = 300 * time.Millisecond
+	defer func() { writeTimeout = old }()
+	h := newHarness(t, t.TempDir(), &fakeModel{})
+	defer h.close()
+	ctx := context.Background()
+	s, err := h.c.CreateSession(ctx, t.TempDir(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	stalled := attached(t, h.sock) // subscribes and never reads again
+	if err := stalled.Subscribe(ctx, s.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	good := attached(t, h.sock)
+	stop := make(chan struct{})
+	events, wait := collect(good, stop)
+	if err := good.Subscribe(ctx, s.ID, 0); err != nil {
+		t.Fatal(err)
+	}
+	// 1500 events of 8 KB overflow the stalled client's buffer and its
+	// socket many times over. Before the outbound queue the appends blocked
+	// for good on the first full socket; now they finish (slowly under the
+	// race detector, hence the generous bound).
+	payload := event.MustPayload(event.TextPayload{Text: strings.Repeat("x", 8000)})
+	var last event.Event
+	appended := make(chan error, 1)
+	go func() {
+		var err error
+		for i := 0; i < 1500 && err == nil; i++ {
+			last, err = h.d.Append(ctx, event.Event{Session: s.ID, Type: "test.noise", Payload: payload})
+		}
+		appended <- err
+	}()
+	select {
+	case err := <-appended:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(90 * time.Second):
+		t.Fatal("appends never finished: a stalled client blocked the daemon")
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		evs := events()
+		if len(evs) > 0 && evs[len(evs)-1].Seq == last.Seq {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if evs := events(); len(evs) == 0 || evs[len(evs)-1].Seq != last.Seq {
+		t.Fatalf("the reading client did not get everything: %d events", len(evs))
+	}
+	for time.Now().Before(deadline) && len(h.d.clientList()) > 2 {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if n := len(h.d.clientList()); n != 2 {
+		t.Fatalf("the stalled client should have been dropped: %d clients", n)
+	}
+	close(stop)
+	wait()
+}
+
+// TestSubscribeHandoverIsContiguous: subscribing while events are being
+// appended delivers every seq exactly once, in order.
+func TestSubscribeHandoverIsContiguous(t *testing.T) {
+	setupConfig(t)
+	h := newHarness(t, t.TempDir(), &fakeModel{})
+	defer h.close()
+	ctx := context.Background()
+	s, err := h.c.CreateSession(ctx, t.TempDir(), "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for round := 0; round < 5; round++ {
+		c := attached(t, h.sock)
+		stop := make(chan struct{})
+		events, wait := collect(c, stop)
+		appended := make(chan int64, 1)
+		go func() {
+			var last event.Event
+			for i := 0; i < 400; i++ {
+				last, _ = h.d.Append(ctx, event.Event{Session: s.ID, Type: "test.noise"})
+			}
+			appended <- last.Seq
+		}()
+		time.Sleep(time.Duration(round) * time.Millisecond)
+		if err := c.Subscribe(ctx, s.ID, 0); err != nil {
+			t.Fatal(err)
+		}
+		final := <-appended
+		deadline := time.Now().Add(10 * time.Second)
+		for time.Now().Before(deadline) {
+			evs := events()
+			if len(evs) > 0 && evs[len(evs)-1].Seq >= final {
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		close(stop)
+		wait()
+		evs := events()
+		for i, e := range evs {
+			if e.Seq != int64(i+1) {
+				t.Fatalf("round %d: event %d has seq %d (gap or duplicate)", round, i, e.Seq)
+			}
+		}
+		if len(evs) == 0 || evs[len(evs)-1].Seq != final {
+			t.Fatalf("round %d: got %d events, last appended %d", round, len(evs), final)
+		}
+	}
+}
