@@ -30,6 +30,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 	askTargets := map[string]string{} // agent_message call id → asked agent, while the call is open
 	pendingSteers := map[string][]queued{}
 	finished := map[string]bool{}
+	missingRole := map[string]string{} // agent id → why it runs read-only (set after replay: turns clear lastError)
 
 	for _, e := range events {
 		switch e.Type {
@@ -60,20 +61,17 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 		case event.AgentSpawned:
 			var p event.AgentSpawnedPayload
 			_ = e.Decode(&p)
-			arch := p.Archetype
-			preset, ok := cfg.Presets[arch]
+			preset, ok := cfg.Presets[p.Archetype]
 			if !ok {
-				// The preset this agent was created with is gone (removed,
-				// renamed, or a former built-in): it carries on as the
-				// configured root preset rather than a crippled read-only one.
-				arch = cfg.RootAgent
-				preset, ok = cfg.Presets[arch]
-				if !ok {
-					preset = config.Preset{Name: p.Archetype, Description: "(preset no longer exists)", Tools: []string{"read", "shell"}, Loop: "default"}
-					arch = p.Archetype
-				}
+				// The role this agent was created with is gone (removed or
+				// renamed). Recovery never widens what an agent may do: it
+				// comes back read-only, says so, and waits for /role.
+				preset = missingRolePreset(p.Archetype)
 			}
-			a := newAgent(s, p.ID, p.Parent, arch, p.Label, p.Model, p.Depth, preset)
+			a := newAgent(s, p.ID, p.Parent, p.Archetype, p.Label, p.Model, p.Depth, preset)
+			if !ok {
+				missingRole[a.ID] = missingRoleError(p.Archetype)
+			}
 			for _, d := range p.Dirs {
 				a.extraDirs = append(a.extraDirs, dirEntry{d, "grant"})
 			}
@@ -94,11 +92,12 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				_ = e.Decode(&p)
 				if preset, ok := cfg.Presets[p.Role]; ok {
 					a.preset = preset
-					a.Archetype = p.Role
-				} else if preset, ok := cfg.Presets[cfg.RootAgent]; ok {
-					a.preset = preset // the role it switched to is gone: same fallback as above
-					a.Archetype = cfg.RootAgent
+					delete(missingRole, a.ID)
+				} else {
+					a.preset = missingRolePreset(p.Role) // the role it switched to is gone: same fallback as above
+					missingRole[a.ID] = missingRoleError(p.Role)
 				}
+				a.Archetype = p.Role
 				if p.Label != "" {
 					a.Label = p.Label
 				}
@@ -285,6 +284,9 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			a.kill()
 			continue
 		}
+		if why, ok := missingRole[id]; ok {
+			a.lastError = why
+		}
 		a.prompts = pendingPrompts[id]
 		a.steers = pendingSteers[id]
 		a.responses = pendingResponses[id]
@@ -313,4 +315,19 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 		s.cancel()
 	}
 	return s, nil
+}
+
+// missingRolePreset stands in for a role that no longer exists in config:
+// read-only, no delegation, no MCP, so a restart can never hand an agent
+// more than its role gave it.
+func missingRolePreset(name string) config.Preset {
+	return config.Preset{
+		Name: name, Description: "(role no longer exists)", Mode: config.ModeAll, Layer: "builtin", Loop: "default",
+		Tools: []string{"read"},
+		Body:  "Your role's definition is gone from the configuration. You can only read files until the human picks a role with /role; say so if asked to do more.",
+	}
+}
+
+func missingRoleError(name string) string {
+	return fmt.Sprintf("role %q no longer exists: running read-only until /role picks another", name)
 }
