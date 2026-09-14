@@ -43,6 +43,7 @@ const (
 	ovRoles                        // pick a role (preset) for the selected agent
 	ovVariants                     // pick a model variant (reasoning effort) for the selected agent
 	ovSessions                     // pick a session of this directory to resume
+	ovMode                         // pick the session's permission mode (ask | auto | yolo)
 )
 
 // loginState is what the login mode shows. Before url is set the login is

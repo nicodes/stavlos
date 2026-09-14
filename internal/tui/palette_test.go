@@ -17,7 +17,7 @@ func TestPaletteMatches(t *testing.T) {
 		t.Fatalf("bare slash lists everything: %d", len(all))
 	}
 	pm := paletteMatches("/mo")
-	if len(pm) != 1 || pm[0].Name != "/models" {
+	if len(pm) != 2 || pm[0].Name != "/models" || pm[1].Name != "/mode" {
 		t.Fatalf("prefix filter: %+v", pm)
 	}
 	if pm := paletteMatches("/conn"); len(pm) != 1 || pm[0].Name != "/providers" {

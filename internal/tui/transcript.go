@@ -910,16 +910,23 @@ func EventLines(ev event.Event) []Line {
 		}
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "model → " + p.Model}}
 
-	case event.SessionYoloChanged:
+	case event.SessionYoloChanged: // legacy logs
 		var p event.YoloPayload
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		state := "off · permissions are asked"
+		mode := protocol.ModeAsk
 		if p.On {
-			state = "on · every permission is approved"
+			mode = protocol.ModeYolo
 		}
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "yolo → " + state}}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + mode + " · " + modeDesc(mode)}}
+
+	case event.SessionModeChanged:
+		var p event.ModePayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + p.Mode + " · " + modeDesc(p.Mode)}}
 
 	case event.AgentVariantChanged:
 		var p event.VariantChangedPayload

@@ -8,6 +8,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/protocol"
 )
 
 // Recover rebuilds a session from its log (PRD §4.3, §5). Any turn that was
@@ -45,10 +46,17 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			var p event.ModelChangedPayload
 			_ = e.Decode(&p)
 			s.model = p.Model
-		case event.SessionYoloChanged:
+		case event.SessionYoloChanged: // legacy logs
 			var p event.YoloPayload
 			_ = e.Decode(&p)
-			s.yolo = p.On
+			s.mode = protocol.ModeAsk
+			if p.On {
+				s.mode = protocol.ModeYolo
+			}
+		case event.SessionModeChanged:
+			var p event.ModePayload
+			_ = e.Decode(&p)
+			s.mode = p.Mode
 		case event.AgentSpawned:
 			var p event.AgentSpawnedPayload
 			_ = e.Decode(&p)

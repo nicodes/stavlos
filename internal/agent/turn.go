@@ -211,17 +211,18 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	if always {
 		verb = policy.Allow
 	}
-	if verb == policy.Ask && a.s.Yolo() {
-		verb = policy.Allow // yolo: the session answers every ask with allow
+	mode := a.s.Mode()
+	if verb == policy.Ask && mode != protocol.ModeAsk {
+		verb = policy.Allow // auto and yolo answer every policy ask with allow
 	}
 	// A call that reaches outside the agent's working directories asks
-	// first, even when policy allows the tool (yolo answers that too). The
-	// prompt names the directory; "allow_always" adds it to the agent.
+	// first, even when policy allows the tool; only yolo answers that too.
+	// The prompt names the directory; "allow_always" adds it to the agent.
 	boundary := ""
 	if verb != policy.Deny {
 		if d := a.outsideDir(c.Name, c.Input, t); d != "" {
 			boundary = d
-			if !a.s.Yolo() {
+			if mode != protocol.ModeYolo {
 				verb = policy.Ask
 			}
 		}

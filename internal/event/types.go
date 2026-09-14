@@ -16,7 +16,8 @@ const (
 	SessionCreated      Type = "session.created"       // SessionCreatedPayload
 	SessionArchived     Type = "session.archived"      // (none)
 	SessionModelChanged Type = "session.model_changed" // ModelChangedPayload
-	SessionYoloChanged  Type = "session.yolo_changed"  // YoloPayload: permission prompts auto-approved (on) or asked (off)
+	SessionYoloChanged  Type = "session.yolo_changed"  // YoloPayload (legacy: replayed as mode yolo/ask; new logs carry SessionModeChanged)
+	SessionModeChanged  Type = "session.mode_changed"  // ModePayload: the session's permission mode (ask | auto | yolo)
 
 	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
 	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload (legacy: agents no longer finish; kept for old logs)
@@ -98,6 +99,14 @@ type ModelChangedPayload struct {
 type RoleChangedPayload struct {
 	Role  string `json:"role"`
 	Label string `json:"label"`
+}
+
+// ModePayload records the session's permission mode: ask (every policy
+// ask prompts), auto (asks are allowed inside the agent's working
+// directories, the boundary still asks), yolo (everything a policy would
+// ask about is allowed, boundary included). Deny rules hold in every mode.
+type ModePayload struct {
+	Mode string `json:"mode"`
 }
 
 // YoloPayload records the session's yolo switch: while on, every tool

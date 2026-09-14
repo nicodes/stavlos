@@ -103,19 +103,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, false, metaNone, lipgloss.NewStyle())); got != "main (coder) · claude-opus-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, "", metaNone, lipgloss.NewStyle())); got != "main (coder) · claude-opus-5 · default" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "", "", 0, false, metaNone, lipgloss.NewStyle())); got != "main (coder) · no model — /models" {
+	if got := stripANSI(metaLine("main", "coder", "", "", 0, "", metaNone, lipgloss.NewStyle())); got != "main (coder) · no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, false, metaNone, lipgloss.NewStyle())); got != "scout (explorer) · llama3 · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, "", metaNone, lipgloss.NewStyle())); got != "scout (explorer) · llama3 · default · 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, false, metaNone, lipgloss.NewStyle())); got != "main (coder) · gpt-5 · high" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone, lipgloss.NewStyle())); got != "main (coder) · gpt-5 · high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, true, metaNone, lipgloss.NewStyle())); got != "YOLO · main (coder) · gpt-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "YOLO", metaNone, lipgloss.NewStyle())); got != "YOLO · main (coder) · gpt-5 · default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
@@ -1231,7 +1231,7 @@ func TestFocusAlwaysLandsLeftmost(t *testing.T) {
 		t.Fatalf("strip should land on permission: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// with YOLO on, the leftmost part of the meta row is the YOLO tag
-	m.session.Yolo = true
+	m.session.Mode = protocol.ModeYolo
 	press(&m, tab, tab, tab)
 	if m.focus != focusMeta || m.metaSel != metaYolo {
 		t.Fatalf("meta row with YOLO should land on YOLO: focus=%v sel=%v", m.focus, m.metaSel)
@@ -1586,9 +1586,9 @@ func TestMetaRowHits(t *testing.T) {
 	m := sessionModel()
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "coder", Model: "openai/gpt-5", Variant: "high"}}
 	m.selected = 0
-	m.session.Yolo = true
+	m.session.Mode = protocol.ModeYolo
 	// "YOLO · main (coder) · openai/gpt-5 · high"
-	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, true, metaNone, lipgloss.NewStyle()))
+	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "YOLO", metaNone, lipgloss.NewStyle()))
 	at := func(sub string) int { return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1 } // a column, not a byte offset
 	for _, c := range []struct {
 		x    int
@@ -1602,9 +1602,9 @@ func TestMetaRowHits(t *testing.T) {
 		}
 	}
 	// without yolo the row starts at the name; a missing variant reads "default"
-	m.session.Yolo = false
+	m.session.Mode = protocol.ModeAsk
 	m.agents[0].Variant = ""
-	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, false, metaNone, lipgloss.NewStyle()))
+	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "", metaNone, lipgloss.NewStyle()))
 	if m.metaHit(0) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
 		t.Fatalf("no-yolo row: %q", row)
 	}
@@ -1647,23 +1647,33 @@ func TestDialogRowsTakeTheMouse(t *testing.T) {
 	}
 }
 
-func TestYoloToggleShowsInEveryChat(t *testing.T) {
+func TestModeChangeShowsInEveryChat(t *testing.T) {
 	m := sessionModel()
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main"}, {ID: "b", Parent: "a", Label: "scout"}}
-	m.applyEvent(event.Event{Seq: 9, Session: "s", Type: event.SessionYoloChanged, Time: time.Now(), Payload: event.MustPayload(event.YoloPayload{On: true})})
+	m.applyEvent(event.Event{Seq: 9, Session: "s", Type: event.SessionModeChanged, Time: time.Now(), Payload: event.MustPayload(event.ModePayload{Mode: "auto"})})
 	for _, id := range []string{"a", "b"} {
 		found := false
 		for _, l := range m.transcript(id).All() {
-			if strings.Contains(l.Text, "yolo → on") {
+			if strings.Contains(l.Text, "mode → auto") {
 				found = true
 			}
 		}
 		if !found {
-			t.Fatalf("agent %s chat lacks the yolo line", id)
+			t.Fatalf("agent %s chat lacks the mode line", id)
 		}
 	}
-	if !m.session.Yolo {
-		t.Fatal("session flag should follow the event")
+	if m.session.Mode != "auto" || m.modeTag() != "AUTO" {
+		t.Fatalf("session mode should follow the event: %q", m.session.Mode)
+	}
+	// legacy yolo events still replay
+	m.applyEvent(event.Event{Seq: 10, Session: "s", Type: event.SessionYoloChanged, Time: time.Now(), Payload: event.MustPayload(event.YoloPayload{On: true})})
+	if m.session.Mode != "yolo" || m.modeTag() != "YOLO" {
+		t.Fatalf("legacy yolo event: %q", m.session.Mode)
+	}
+	// /mode lists the three modes with the current one marked
+	m.openMode()
+	if m.ov == nil || len(m.ov.items) != 3 || m.ov.items[2].id != "yolo" || !strings.Contains(m.ov.items[2].hint, "current") {
+		t.Fatalf("mode dialog: %+v", m.ov)
 	}
 }
 

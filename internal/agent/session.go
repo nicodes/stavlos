@@ -50,28 +50,39 @@ type Session struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	allowAlways map[string]bool // "tool\x00arg" remembered allows (session-scoped)
-	yolo        bool            // session-wide: policy "ask" outcomes are allowed without a prompt
+	mode        string          // permission mode: "" or ask (every ask prompts) | auto (asks inside the agent's dirs are allowed) | yolo (every ask is allowed)
 }
 
-// Yolo reports whether the session auto-approves permission prompts.
-func (s *Session) Yolo() bool {
+// Mode reports the session's permission mode (protocol.ModeAsk by default).
+func (s *Session) Mode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.yolo
+	if s.mode == "" {
+		return protocol.ModeAsk
+	}
+	return s.mode
 }
 
-// SetYolo switches the session-wide auto-approval and logs it. Explicit
-// deny rules and model questions are unaffected; only outcomes a policy
-// would ask about are allowed.
-func (s *Session) SetYolo(ctx context.Context, on bool) error {
+// Yolo reports whether every policy ask is allowed, boundary included.
+func (s *Session) Yolo() bool { return s.Mode() == protocol.ModeYolo }
+
+// SetMode switches the session's permission mode and logs it. Explicit
+// deny rules, model questions and the trust prompt are unaffected in every
+// mode.
+func (s *Session) SetMode(ctx context.Context, mode string) error {
+	switch mode {
+	case protocol.ModeAsk, protocol.ModeAuto, protocol.ModeYolo:
+	default:
+		return fmt.Errorf("unknown mode %q: ask, auto or yolo", mode)
+	}
 	s.mu.Lock()
-	changed := s.yolo != on
-	s.yolo = on
+	changed := s.mode != mode && !(s.mode == "" && mode == protocol.ModeAsk)
+	s.mode = mode
 	s.mu.Unlock()
 	if !changed {
 		return nil
 	}
-	_, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.SessionYoloChanged, Payload: event.MustPayload(event.YoloPayload{On: on})})
+	_, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.SessionModeChanged, Payload: event.MustPayload(event.ModePayload{Mode: mode})})
 	return err
 }
 
@@ -296,7 +307,7 @@ func (s *Session) Info() protocol.SessionInfo {
 	return protocol.SessionInfo{
 		ID: s.ID, Dir: s.Dir, Model: s.Model(), RootAgent: s.rootArch,
 		Created: s.Created.Format(time.RFC3339), Archived: s.Archived(),
-		Live: s.Live(), CostUSD: s.Cost(), TrustPending: cfg.TrustPending, Yolo: s.Yolo(),
+		Live: s.Live(), CostUSD: s.Cost(), TrustPending: cfg.TrustPending, Mode: s.Mode(),
 	}
 }
 
