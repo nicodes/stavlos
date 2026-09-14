@@ -13,6 +13,7 @@ import (
 	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/theme"
+	"github.com/nicodes/stavlos/internal/tui/transcript"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -60,17 +61,17 @@ func stateDot(state string) string {
 
 // blockStyle colours a message block's text; blocks carry no border so the
 // only vertical bar on screen is the chat cursor.
-func blockStyle(k BlockKind) lipgloss.Style {
+func blockStyle(k transcript.BlockKind) lipgloss.Style {
 	switch k {
-	case BlockUser:
+	case transcript.BlockUser:
 		return lipgloss.NewStyle().Foreground(theme.ColAccent)
-	case BlockSteer:
+	case transcript.BlockSteer:
 		return lipgloss.NewStyle().Foreground(theme.ColWarning)
-	case BlockChild:
+	case transcript.BlockChild:
 		return lipgloss.NewStyle().Foreground(theme.ColMuted)
-	case BlockError:
+	case transcript.BlockError:
 		return lipgloss.NewStyle().Foreground(theme.ColError)
-	case BlockFinished:
+	case transcript.BlockFinished:
 		return lipgloss.NewStyle().Foreground(theme.ColSuccess)
 	}
 	return lipgloss.NewStyle()
@@ -109,7 +110,7 @@ type rowRange struct{ first, last int }
 
 // Render styles, indents and wraps transcript lines into viewport content.
 // Lines hidden by the details toggle are skipped.
-func Render(lines []Line, o RenderOpts) string {
+func Render(lines []transcript.Line, o RenderOpts) string {
 	s, _ := renderAll(lines, o)
 	return s
 }
@@ -117,7 +118,7 @@ func Render(lines []Line, o RenderOpts) string {
 // renderAll is Render plus, for every item, the rendered rows it occupies
 // (so the model can scroll the cursor item into view). Items are
 // contiguous runs of lines.
-func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
+func renderAll(lines []transcript.Line, o RenderOpts) (string, map[int]rowRange) {
 	var parts []itemRows
 	for start := 0; start < len(lines); {
 		end := start + 1
@@ -141,12 +142,12 @@ type itemRows struct {
 // renderChatItem renders the lines of one item: the details toggle, folding
 // and the cursor highlight apply; blank lines are dropped (assemble spaces
 // items uniformly).
-func renderChatItem(lines []Line, o RenderOpts) itemRows {
+func renderChatItem(lines []transcript.Line, o RenderOpts) itemRows {
 	r := itemRows{item: lines[0].Item, spaced: isSpaced(lines)}
 	f, folded := o.folds(lines)[r.item]
 	cur := o.Focused && r.item == o.Cursor
 	for i, l := range lines {
-		if !o.showLine(l) || l.Kind == LineBlank || folded && !f.show[i] {
+		if !o.showLine(l) || l.Kind == transcript.LineBlank || folded && !f.show[i] {
 			continue
 		}
 		if folded && f.hidden > 0 && i == f.last {
@@ -266,23 +267,23 @@ type renderKey struct {
 	frame                   int
 }
 
-// Render renders the transcript like renderAll(t.All(), o), reusing the
+// renderTranscript renders t like renderAll(t.All(), o), reusing from c the
 // rows of committed items that have not changed.
-func (t *Transcript) Render(o RenderOpts) (string, map[int]rowRange) {
-	c := &t.cache
-	if len(c.entries) > len(t.items) {
-		c.entries = c.entries[:len(t.items)]
+func renderTranscript(t *transcript.Transcript, c *renderCache, o RenderOpts) (string, map[int]rowRange) {
+	if len(c.entries) > t.Committed() {
+		c.entries = c.entries[:t.Committed()]
 	}
-	for len(c.entries) < len(t.items) {
+	for len(c.entries) < t.Committed() {
 		c.entries = append(c.entries, cachedItem{})
 	}
-	tail := t.tail()
+	tail := t.Tail()
 	extended := -1 // the committed item the live buffer continues (a running call)
-	if len(tail) > 0 && tail[0].Item < len(t.items) {
+	if len(tail) > 0 && tail[0].Item < t.Committed() {
 		extended = tail[0].Item
 	}
-	parts := make([]itemRows, 0, len(t.items)+2)
-	for i, lines := range t.items {
+	parts := make([]itemRows, 0, t.Committed()+2)
+	for i := range t.Committed() {
+		lines := t.Item(i)
 		if len(lines) == 0 {
 			continue
 		}
@@ -295,7 +296,7 @@ func (t *Transcript) Render(o RenderOpts) (string, map[int]rowRange) {
 			tail = tail[k:]
 			continue
 		}
-		key := renderKey{epoch: renderEpoch, rev: t.revs[i], width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i}
+		key := renderKey{epoch: renderEpoch, rev: t.Rev(i), width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i}
 		if v, ok := o.Expanded[i]; ok {
 			key.expanded = 1
 			if v {
@@ -307,7 +308,9 @@ func (t *Transcript) Render(o RenderOpts) (string, map[int]rowRange) {
 			key.frame = o.CompactFrame
 		}
 		if !e.ok || e.key != key {
-			e.animated = slices.ContainsFunc(lines, func(l Line) bool { return l.Kind == LineRule && l.Text == GlyphCompacting })
+			e.animated = slices.ContainsFunc(lines, func(l transcript.Line) bool {
+				return l.Kind == transcript.LineRule && l.Text == transcript.GlyphCompacting
+			})
 			key.frame = 0
 			if e.animated {
 				key.frame = o.CompactFrame
@@ -353,14 +356,14 @@ func sgrPrefix(st lipgloss.Style) string {
 
 // isSpaced reports whether an item gets breathing room: user inputs,
 // thinking, and assistant responses.
-func isSpaced(lines []Line) bool {
+func isSpaced(lines []transcript.Line) bool {
 	for _, l := range lines {
 		switch {
-		case l.Block == BlockUser || l.Block == BlockSteer:
+		case l.Block == transcript.BlockUser || l.Block == transcript.BlockSteer:
 			return true
-		case l.Kind == LineThink:
+		case l.Kind == transcript.LineThink:
 			return true
-		case (l.Kind == LineText || l.Kind == LineHeading || l.Kind == LineCode || l.Kind == LineStream) && l.Block == BlockNone:
+		case (l.Kind == transcript.LineText || l.Kind == transcript.LineHeading || l.Kind == transcript.LineCode || l.Kind == transcript.LineStream) && l.Block == transcript.BlockNone:
 			return true
 		}
 	}
@@ -385,7 +388,7 @@ const previewLines = 3
 // their output and permission notices, thinking, child results, spawns,
 // errors, finish blocks, notices) folds unless the chat cursor is on it, it
 // was expanded with enter, or /details is on.
-func (o RenderOpts) folds(lines []Line) map[int]fold {
+func (o RenderOpts) folds(lines []transcript.Line) map[int]fold {
 	out := map[int]fold{}
 	if o.Details || o.NoFold {
 		return out
@@ -407,22 +410,22 @@ func (o RenderOpts) folds(lines []Line) map[int]fold {
 			order = append(order, l.Item)
 		}
 		switch {
-		case l.Block == BlockUser || l.Block == BlockSteer:
+		case l.Block == transcript.BlockUser || l.Block == transcript.BlockSteer:
 			in.full = true
-		case l.Kind == LineText || l.Kind == LineHeading || l.Kind == LineCode || l.Kind == LineStream || l.Kind == LineModel:
-			if l.Block == BlockNone {
+		case l.Kind == transcript.LineText || l.Kind == transcript.LineHeading || l.Kind == transcript.LineCode || l.Kind == transcript.LineStream || l.Kind == transcript.LineModel:
+			if l.Block == transcript.BlockNone {
 				in.full = true
 			}
 		}
-		if l.Kind == LineBlank || !o.showLine(l) {
+		if l.Kind == transcript.LineBlank || !o.showLine(l) {
 			continue
 		}
 		in.nonblank++
 		in.visible = append(in.visible, i)
 		// prefer the first content line over a block label ("child", "task")
-		if in.show < 0 || (lines[in.show].Kind == LineLabel && l.Kind != LineLabel && !in.seen) {
+		if in.show < 0 || (lines[in.show].Kind == transcript.LineLabel && l.Kind != transcript.LineLabel && !in.seen) {
 			in.show = i
-			in.seen = l.Kind != LineLabel
+			in.seen = l.Kind != transcript.LineLabel
 		}
 	}
 	for _, item := range order {
@@ -460,18 +463,18 @@ func (o RenderOpts) folds(lines []Line) map[int]fold {
 }
 
 // showLine applies the details toggle, honouring a per-item override.
-func (o RenderOpts) showLine(l Line) bool {
+func (o RenderOpts) showLine(l transcript.Line) bool {
 	details := o.Details
 	if v, ok := o.Expanded[l.Item]; ok {
 		details = v
 	}
-	return !((l.Vis == VisCollapsed && details) || (l.Vis == VisExpanded && !details))
+	return !((l.Vis == transcript.VisCollapsed && details) || (l.Vis == transcript.VisExpanded && !details))
 }
 
 // renderLine draws one logical line: the gutter (cursor marker or space),
 // a leader (block border or indent), an optional glyph, and the wrapped,
 // styled text.
-func renderLine(l Line, o RenderOpts, cursor bool) string {
+func renderLine(l transcript.Line, o RenderOpts, cursor bool) string {
 	// No gutter column and no margin: chat rows start at the same column as
 	// the strip and the input below; the cursor is a background highlight
 	// applied by renderAll.
@@ -482,48 +485,48 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	var style func(...string) string
 
 	switch l.Kind {
-	case LineText, LineStream:
+	case transcript.LineText, transcript.LineStream:
 		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), lipgloss.NewStyle()) }
-	case LineHeading:
+	case transcript.LineHeading:
 		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), theme.StyleBold) }
-	case LineCode:
+	case transcript.LineCode:
 		leader = " "
 		style = theme.StyleDim.Render
-	case LineDim, LineLabel, LineThink:
+	case transcript.LineDim, transcript.LineLabel, transcript.LineThink:
 		style = theme.StyleDim.Render
-	case LineModel:
+	case transcript.LineModel:
 		glyph = theme.StyleDim.Render("· ")
 		style = theme.StyleDim.Render
-	case LineNotice:
+	case transcript.LineNotice:
 		style = theme.StyleNotice.Render
-	case LineTool:
-		g, gap := toolGlyph(l.tool)
+	case transcript.LineTool:
+		g, gap := transcript.ToolGlyph(l.Tool)
 		switch {
-		case l.Running || l.Tone == ToneWorking:
+		case l.Running || l.Tone == transcript.ToneWorking:
 			glyph = theme.StyleWorking.Render(g) + gap // in progress: the glyph, yellow
-		case l.Err || l.Tone == ToneError:
+		case l.Err || l.Tone == transcript.ToneError:
 			glyph = theme.StyleError.Render(g) + gap // same glyph, red, on failure
 		default:
 			glyph = theme.StyleTool.Render(g) + gap
 		}
 		style = renderToolText
-	case LineToolOut:
+	case transcript.LineToolOut:
 		leader = "  " // under the tool name (after "◆ ")
 		style = theme.StyleToolOut.Render
-	case LineToolNote:
+	case transcript.LineToolNote:
 		leader = "  "
 		style = theme.StyleDim.Render
-	case LineFinished:
+	case transcript.LineFinished:
 		style = theme.StyleFinished.Render
-		if l.Tone == ToneError {
+		if l.Tone == transcript.ToneError {
 			style = theme.StyleError.Render
 		}
-	case LineRule:
-		if l.Text == GlyphCompacting {
+	case transcript.LineRule:
+		if l.Text == transcript.GlyphCompacting {
 			return gutter + centerText(theme.StyleRule.Render("┄┄ compacting ")+compactSweep(o.CompactFrame)+theme.StyleRule.Render(" ┄┄"), o.Width)
 		}
 		return gutter + centerText(theme.StyleRule.Render(l.Text), o.Width)
-	case LineError:
+	case transcript.LineError:
 		style = theme.StyleError.Render
 	default:
 		style = func(s ...string) string { return strings.Join(s, "") }
@@ -536,18 +539,18 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	if l.Glyph != "" {
 		gs := glyphStyle(l)
 		gap := " "
-		if l.Running && l.Kind != LineTool {
+		if l.Running && l.Kind != transcript.LineTool {
 			glyph = theme.StyleWorking.Render(l.Glyph) + gap
 		} else {
 			glyph = gs.Render(l.Glyph) + gap
 		}
 	}
-	if l.Block != BlockNone && (l.Kind == LineText || l.Kind == LineLabel) {
+	if l.Block != transcript.BlockNone && (l.Kind == transcript.LineText || l.Kind == transcript.LineLabel) {
 		bs := blockStyle(l.Block)
 		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), bs) }
 		// User prompts and steers read like a shell: "› text" on the first
 		// line, later lines indented to align under it.
-		if l.Kind == LineText && (l.Block == BlockUser || l.Block == BlockSteer) {
+		if l.Kind == transcript.LineText && (l.Block == transcript.BlockUser || l.Block == transcript.BlockSteer) {
 			if l.Lead {
 				glyph = bs.Render("›") + " "
 			} else {
@@ -779,7 +782,7 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 		part(metaModel, "no model — /models", theme.StyleWarn)
 		return b.String(), spans
 	}
-	short, _ := splitModel(model) // just the model id; the provider is in /models
+	short, _ := transcript.SplitModel(model) // just the model id; the provider is in /models
 	part(metaModel, short, lipgloss.NewStyle())
 	if variant == "" {
 		variant = "default"
@@ -1683,13 +1686,13 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 			lines = append(lines, "  "+f)
 		}
 	default:
-		g, gap := toolGlyph(p.Tool)
+		g, gap := transcript.ToolGlyph(p.Tool)
 		head := theme.StyleWorking.Render(g) + gap
 		// Controls in the subject are shown, not stripped: a command that
 		// tried to erase part of itself from the screen reads as "^[".
 		arg := textsafe.Visible(fullToolArg(p.Tool, p.Input))
 		if arg == "" {
-			arg = toolTitle(p.Tool)
+			arg = transcript.ToolTitle(p.Tool)
 		}
 		text := arg
 		if who != "" {
@@ -1798,7 +1801,7 @@ func fullToolArg(tool string, raw json.RawMessage) string {
 			return strings.TrimRight(in.Command, "\n")
 		}
 	}
-	return toolArg(tool, raw)
+	return transcript.ToolArg(tool, raw)
 }
 
 // statusLine is the line between the chat and the divider: the transient
@@ -1914,14 +1917,14 @@ func (m Model) lastLines() map[string]string {
 // lastSnippet is the latest chat item (message, tool call, notice) read
 // from its beginning: its lines flattened into one, for the caller to cut
 // at the end.
-func lastSnippet(t *Transcript) string {
+func lastSnippet(t *transcript.Transcript) string {
 	if t == nil {
 		return ""
 	}
 	lines := t.All()
 	last := -1
 	for i := len(lines) - 1; i >= 0; i-- {
-		if strings.TrimSpace(lines[i].Text) != "" && lines[i].Kind != LineLabel && lines[i].Kind != LineRule {
+		if strings.TrimSpace(lines[i].Text) != "" && lines[i].Kind != transcript.LineLabel && lines[i].Kind != transcript.LineRule {
 			last = i
 			break
 		}
@@ -1936,14 +1939,14 @@ func lastSnippet(t *Transcript) string {
 			continue
 		}
 		switch l.Kind {
-		case LineBlank, LineLabel, LineRule:
+		case transcript.LineBlank, transcript.LineLabel, transcript.LineRule:
 			continue
 		}
 		s := strings.TrimSpace(strings.ReplaceAll(l.Text, "\n", " "))
 		if s == "" {
 			continue
 		}
-		if l.Kind == LineTool && l.Suffix != "" {
+		if l.Kind == transcript.LineTool && l.Suffix != "" {
 			s += " " + l.Suffix
 		}
 		parts = append(parts, s)
@@ -1984,36 +1987,6 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows
-}
-
-// Tool-call glyphs by group: the gear for files, shell and finish; the
-// clock for monitors; the fork for agent tools.
-const (
-	glyphToolFiles    = "◆" // file tools (read, apply_patch, skill)
-	glyphToolShell    = "$" // shell, shell_kill (and the old bash names): the shell prompt
-	glyphToolMonitors = "$" // async jobs are shell commands
-	glyphToolAgents   = "⑂"
-	glyphToolTodo     = "◇" // todo_add, todo_update
-	glyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
-	glyphToolWeb      = "↗" // web_fetch, web_search
-)
-
-// toolGlyph returns the glyph for a tool name and the gap after it.
-func toolGlyph(tool string) (string, string) {
-	tool = toolname.Canonical(tool)
-	switch {
-	case strings.HasPrefix(tool, "agent_"):
-		return glyphToolAgents, " "
-	case tool == toolname.Shell || tool == toolname.ShellKill:
-		return glyphToolShell, " "
-	case strings.HasPrefix(tool, "todo_"):
-		return glyphToolTodo, " "
-	case strings.HasPrefix(tool, toolname.MCPPrefix):
-		return glyphToolMCP, " "
-	case strings.HasPrefix(tool, "web_"):
-		return glyphToolWeb, " "
-	}
-	return glyphToolFiles, " "
 }
 
 // todoCount is "done/total" for a todo list, "0" when empty; done counts
@@ -2139,21 +2112,21 @@ func (m Model) sidebarFocusHint() string {
 }
 
 // glyphStyle picks a glyph's colour from its tone, then its kind.
-func glyphStyle(l Line) lipgloss.Style {
+func glyphStyle(l transcript.Line) lipgloss.Style {
 	switch l.Tone {
-	case ToneWorking:
+	case transcript.ToneWorking:
 		return theme.StyleWorking
-	case ToneError:
+	case transcript.ToneError:
 		return theme.StyleError
 	}
 	switch {
-	case l.Kind == LineFinished:
+	case l.Kind == transcript.LineFinished:
 		return theme.StyleFinished
-	case l.Kind == LineError:
+	case l.Kind == transcript.LineError:
 		return theme.StyleError
-	case l.Block != BlockNone:
+	case l.Block != transcript.BlockNone:
 		return blockStyle(l.Block)
-	case l.Kind == LineNotice:
+	case l.Kind == transcript.LineNotice:
 		return theme.StyleNotice
 	}
 	return theme.StyleDim

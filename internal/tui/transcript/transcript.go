@@ -1,4 +1,8 @@
-package tui
+// Package transcript folds an agent's events into chat lines grouped in
+// items (a prompt, a tool call with its output, an answer), tracks the
+// lines later events update, and exposes items with revisions so a
+// renderer can cache them.
+package transcript
 
 import (
 	"bytes"
@@ -75,7 +79,7 @@ type Line struct {
 	Glyph   string // leader glyph for this line (Render styles it by Tone)
 	Tone    Tone   // in progress / error; zero means "as is"
 	callID  string
-	tool    string // raw tool name on a LineTool line
+	Tool    string // raw tool name on a LineTool line
 }
 
 // Tone colours a line's glyph by lifecycle: yellow while in progress, red
@@ -110,8 +114,8 @@ const (
 
 const (
 	maxArgChars        = 100
-	maxOutputCollapsed = 3
-	maxOutputExpanded  = 40
+	MaxOutputCollapsed = 3
+	MaxOutputExpanded  = 40
 	maxSummaryLine     = 3
 	maxThinkChars      = 100
 )
@@ -120,7 +124,7 @@ const (
 type streamSeg struct {
 	kind LineKind // LineStream (text), LineDim (thinking), LineTool (tool name), LineToolOut (tool output)
 	text string
-	tool string // raw tool name for LineTool
+	Tool string // raw tool name for LineTool
 }
 
 // Transcript accumulates rendered lines for one agent. Lines are grouped
@@ -148,7 +152,6 @@ type Transcript struct {
 	version uint64   // source of revisions
 	flat    []Line   // items flattened; nil when stale
 	start   []int    // start[i]: index of items[i]'s first line in flat
-	cache   renderCache
 
 	calls      map[string]lineRef   // tool call id → its LineTool line
 	prompts    map[string]int       // prompt id → item of the tool call it gates
@@ -171,7 +174,7 @@ type Transcript struct {
 // turnVerbs are the horse-flavoured labels the turn indicator cycles
 // through, one per turn (stable within a turn so the line does not
 // flicker).
-var turnVerbs = []string{
+var TurnVerbs = []string{
 	"Galloping", "Trotting", "Prancing", "Hoofing it", "Grazing", "Horsing around",
 }
 
@@ -213,13 +216,13 @@ func (t *Transcript) Apply(ev event.Event) {
 	// failed, or when the turn ended without one — the daemon died).
 	switch ev.Type {
 	case event.CompactionStarted:
-		if refs := t.appendItem(cleanLines(EventLines(ev))); len(refs) > 0 {
+		if refs := t.appendItem(CleanLines(EventLines(ev))); len(refs) > 0 {
 			t.compactItem = refs[0].item
 		}
 		return
 	case event.Compacted, event.CompactionFailed:
 		if t.compactItem >= 0 {
-			t.replaceItem(t.compactItem, cleanLines(EventLines(ev)))
+			t.replaceItem(t.compactItem, CleanLines(EventLines(ev)))
 			t.compactItem = -1
 			return
 		}
@@ -233,7 +236,7 @@ func (t *Transcript) Apply(ev event.Event) {
 	case event.ToolCallStarted:
 		var p event.ToolStartedPayload
 		if ev.Decode(&p) == nil && p.CallID != "" {
-			if r, ok := t.find(t.appendItem(cleanLines(EventLines(ev))), isToolLine); ok {
+			if r, ok := t.find(t.appendItem(CleanLines(EventLines(ev))), isToolLine); ok {
 				t.calls[p.CallID] = r
 			}
 			if toolname.Canonical(p.Name) == toolname.AgentMessage {
@@ -249,7 +252,7 @@ func (t *Transcript) Apply(ev event.Event) {
 		// with the same tool name (the latest one if several).
 		var p event.PromptRequestedPayload
 		if ev.Decode(&p) == nil {
-			lines := cleanLines(EventLines(ev))
+			lines := CleanLines(EventLines(ev))
 			var refs []lineRef
 			item, gated := t.openCallItem(p.Tool)
 			if p.Kind == "permission" && gated {
@@ -273,7 +276,7 @@ func (t *Transcript) Apply(ev event.Event) {
 				if ev.Type != event.PromptClaimed {
 					delete(t.prompts, p.ID)
 				}
-				t.insertIntoItem(item, nested(cleanLines(EventLines(ev))))
+				t.insertIntoItem(item, nested(CleanLines(EventLines(ev))))
 				return
 			}
 		}
@@ -291,7 +294,7 @@ func (t *Transcript) Apply(ev event.Event) {
 				t.stream = nil
 				return
 			}
-			if r, ok := t.find(t.appendItem(cleanLines(EventLines(ev))), isNotBlank); ok {
+			if r, ok := t.find(t.appendItem(CleanLines(EventLines(ev))), isNotBlank); ok {
 				t.monitors[p.ID] = r
 			}
 			return
@@ -308,13 +311,13 @@ func (t *Transcript) Apply(ev event.Event) {
 			if p.IsError {
 				tone = ToneError
 			}
-			t.settleMonitor(p.ID, tone, cleanLines(monitorFiredLines(p)))
+			t.settleMonitor(p.ID, tone, CleanLines(monitorFiredLines(p)))
 			return
 		}
 	case event.MonitorStopped:
 		var p event.MonitorRefPayload
 		if ev.Decode(&p) == nil {
-			t.settleMonitor(p.ID, ToneError, cleanLines(monitorStoppedLines(t.monKinds[p.ID], p.Reason)))
+			t.settleMonitor(p.ID, ToneError, CleanLines(monitorStoppedLines(t.monKinds[p.ID], p.Reason)))
 			return
 		}
 	case event.ToolCallFinished:
@@ -327,19 +330,19 @@ func (t *Transcript) Apply(ev event.Event) {
 				// Output joins the call's item, right under the call, even
 				// when other items (a question, say) were committed while the
 				// call ran.
-				t.insertIntoItem(r.item, cleanLines(EventLines(ev)))
+				t.insertIntoItem(r.item, CleanLines(EventLines(ev)))
 				return
 			}
 		}
 		t.stream = nil
 	}
-	t.appendItem(cleanLines(EventLines(ev)))
+	t.appendItem(CleanLines(EventLines(ev)))
 	switch ev.Type {
 	case event.TurnStarted:
 		t.turn, t.turnStart, t.turnTokens = true, ev.Time, 0
 		var p event.TurnPayload
 		_ = ev.Decode(&p)
-		t.turnVerb = turnVerbs[((p.Turn-1)%len(turnVerbs)+len(turnVerbs))%len(turnVerbs)]
+		t.turnVerb = TurnVerbs[((p.Turn-1)%len(TurnVerbs)+len(TurnVerbs))%len(TurnVerbs)]
 	case event.Usage:
 		var p event.UsagePayload
 		if ev.Decode(&p) == nil {
@@ -540,7 +543,7 @@ func (t *Transcript) lastUntiedCall(tool string, tied map[string]lineRef) (lineR
 	}
 	for i := len(t.items) - 1; i >= 0; i-- {
 		for j := len(t.items[i]) - 1; j >= 0; j-- {
-			if l := t.items[i][j]; l.Kind == LineTool && l.tool == tool && !taken[lineRef{i, j}] {
+			if l := t.items[i][j]; l.Kind == LineTool && l.Tool == tool && !taken[lineRef{i, j}] {
 				return lineRef{i, j}, true
 			}
 		}
@@ -554,7 +557,7 @@ func (t *Transcript) openCallItem(name string) (int, bool) {
 	var best lineRef
 	found := false
 	for _, r := range t.calls {
-		if t.valid(r) && strings.EqualFold(t.items[r.item][r.off].tool, name) && (!found || r.after(best)) {
+		if t.valid(r) && strings.EqualFold(t.items[r.item][r.off].Tool, name) && (!found || r.after(best)) {
 			best, found = r, true
 		}
 	}
@@ -689,24 +692,24 @@ func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 			t.stream = append(t.stream, streamSeg{LineThink, "◌ thinking…", ""})
 		}
 	case n.ToolName != "":
-		t.stream = append(t.stream, streamSeg{LineTool, toolTitle(n.ToolName), n.ToolName})
+		t.stream = append(t.stream, streamSeg{LineTool, ToolTitle(n.ToolName), n.ToolName})
 	}
 }
 
 // All returns the committed lines followed by the live streaming buffer.
 // The slice must not be modified.
 func (t *Transcript) All() []Line {
-	lines, tail := t.committed(), t.tail()
+	lines, tail := t.committed(), t.Tail()
 	if len(tail) == 0 {
 		return lines
 	}
 	return append(slices.Clip(lines), tail...)
 }
 
-// tail renders the live streaming buffer as lines. They belong to the
+// Tail renders the live streaming buffer as lines. They belong to the
 // in-progress item: the running tool call when the buffer continues one,
 // otherwise new items after the committed ones.
-func (t *Transcript) tail() []Line {
+func (t *Transcript) Tail() []Line {
 	if len(t.stream) == 0 {
 		return nil
 	}
@@ -727,9 +730,9 @@ func (t *Transcript) tail() []Line {
 				out = append(out, Line{Kind: LineStream, Text: l})
 			}
 		case LineToolOut:
-			out = append(out, outputLines(strings.TrimRight(s.text, "\n"))...)
+			out = append(out, OutputLines(strings.TrimRight(s.text, "\n"))...)
 		case LineTool:
-			out = append(out, Line{Kind: LineTool, Text: s.text, Running: true, tool: s.tool})
+			out = append(out, Line{Kind: LineTool, Text: s.text, Running: true, Tool: s.Tool})
 		default:
 			out = append(out, Line{Kind: s.kind, Text: s.text})
 		}
@@ -747,13 +750,13 @@ func (t *Transcript) tail() []Line {
 // Items is the number of items All() spans (committed plus the in-progress
 // one when the streaming buffer starts a new item).
 func (t *Transcript) Items() int {
-	if tail := t.tail(); len(tail) > 0 {
+	if tail := t.Tail(); len(tail) > 0 {
 		return max(len(t.items), tail[len(tail)-1].Item+1)
 	}
 	return len(t.items)
 }
 
-func itemCount(lines []Line) int {
+func ItemCount(lines []Line) int {
 	n := 0
 	for _, l := range lines {
 		if l.Item+1 > n {
@@ -763,7 +766,7 @@ func itemCount(lines []Line) int {
 	return n
 }
 
-func itemRange(lines []Line, item int) (first, last int) {
+func ItemRange(lines []Line, item int) (first, last int) {
 	first, last = -1, -1
 	for i, l := range lines {
 		if l.Item != item {
@@ -778,7 +781,7 @@ func itemRange(lines []Line, item int) (first, last int) {
 }
 
 // itemIsTool reports whether item is a tool call (has output to expand).
-func itemIsTool(lines []Line, item int) bool {
+func ItemIsTool(lines []Line, item int) bool {
 	for _, l := range lines {
 		if l.Item == item && l.Kind == LineTool {
 			return true
@@ -866,7 +869,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case event.MsgMonitorFired:
-			return blockWith(BlockChild, "job result", p.Text, glyphToolMonitors)
+			return blockWith(BlockChild, "job result", p.Text, GlyphToolMonitors)
 		default:
 			return block(BlockUser, string(p.Kind), p.Text)
 		}
@@ -906,17 +909,17 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			// call the way an incoming answer shows its text.
 			var in struct{ Text string }
 			_ = json.Unmarshal(p.Input, &in)
-			lines := []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, tool: p.Name}}
-			return append(lines, outputLines(strings.TrimRight(in.Text, "\n"))...)
+			lines := []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, Tool: p.Name}}
+			return append(lines, OutputLines(strings.TrimRight(in.Text, "\n"))...)
 		}
-		return []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID, tool: p.Name}}
+		return []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID, Tool: p.Name}}
 	}),
 
 	event.ToolCallFinished: decoded(func(p event.ToolFinishedPayload) []Line {
 		if toolname.Canonical(p.Name) == toolname.AgentResponse && !p.IsError {
 			return nil // the message already sits under the call; "response delivered" adds nothing
 		}
-		return outputLines(strings.TrimRight(p.Output, "\n"))
+		return OutputLines(strings.TrimRight(p.Output, "\n"))
 	}),
 
 	event.TurnEnded: decoded(func(p event.TurnEndedPayload) []Line {
@@ -998,23 +1001,23 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.MonitorStarted: decoded(func(p event.MonitorStartedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: glyphToolMonitors, Tone: ToneWorking, Text: "job: " + p.Label}}
+		return []Line{{Kind: LineDim, Glyph: GlyphToolMonitors, Tone: ToneWorking, Text: "job: " + p.Label}}
 	}),
 
 	event.MCPStarted: decoded(func(p event.MCPStartedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: glyphToolMCP, Text: fmt.Sprintf("mcp: %s connected · %d tools", p.Server, len(p.Tools))}}
+		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: fmt.Sprintf("mcp: %s connected · %d tools", p.Server, len(p.Tools))}}
 	}),
 
 	event.MCPFailed: decoded(func(p event.MCPFailedPayload) []Line {
-		return []Line{{Kind: LineError, Glyph: glyphToolMCP, Tone: ToneError, Text: fmt.Sprintf("mcp: %s failed: %s", p.Server, p.Error)}}
+		return []Line{{Kind: LineError, Glyph: GlyphToolMCP, Tone: ToneError, Text: fmt.Sprintf("mcp: %s failed: %s", p.Server, p.Error)}}
 	}),
 
 	event.AgentDirAdded: decoded(func(p event.DirAddedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: glyphToolFiles, Text: fmt.Sprintf("dirs: + %s (%s)", format.ShortHome(p.Dir), p.Source)}}
+		return []Line{{Kind: LineDim, Glyph: GlyphToolFiles, Text: fmt.Sprintf("dirs: + %s (%s)", format.ShortHome(p.Dir), p.Source)}}
 	}),
 
 	event.MCPStopped: decoded(func(p event.MCPRefPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: glyphToolMCP, Text: "mcp: " + p.Server + " stopped"}}
+		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: "mcp: " + p.Server + " stopped"}}
 	}),
 
 	event.MonitorFired: decoded(func(p event.MonitorFiredPayload) []Line {
@@ -1084,7 +1087,7 @@ func decodeErr(ev event.Event, err error) []Line {
 // monitorFiredLines renders "<glyph> <summary>" (red on error) followed by
 // the output collapsed like tool output.
 func monitorFiredLines(p event.MonitorFiredPayload) []Line {
-	head := Line{Kind: LineDim, Glyph: glyphToolMonitors}
+	head := Line{Kind: LineDim, Glyph: GlyphToolMonitors}
 	if p.IsError {
 		head.Tone = ToneError
 	}
@@ -1094,7 +1097,7 @@ func monitorFiredLines(p event.MonitorFiredPayload) []Line {
 	}
 	head.Text = summary
 	lines := []Line{head}
-	return append(lines, outputLines(strings.TrimRight(p.Output, "\n"))...)
+	return append(lines, OutputLines(strings.TrimRight(p.Output, "\n"))...)
 }
 
 // monitorStoppedLines renders "<glyph> monitor stopped (<reason>)".
@@ -1103,7 +1106,7 @@ func monitorStoppedLines(kind, reason string) []Line {
 	if reason = strings.TrimSpace(reason); reason != "" {
 		text += " (" + reason + ")"
 	}
-	return []Line{{Kind: LineDim, Glyph: glyphToolMonitors, Tone: ToneError, Text: text}}
+	return []Line{{Kind: LineDim, Glyph: GlyphToolMonitors, Tone: ToneError, Text: text}}
 }
 
 // block renders text as a left-bordered block (blank line before and after)
@@ -1216,8 +1219,8 @@ func truncLines(text string, n int, kind LineKind) []Line {
 // most relevant argument.
 func toolLine(name string, input json.RawMessage) string {
 	name = toolname.Canonical(name) // a direct caller (a prompt, a test) may hold an old name
-	title := toolTitle(name)
-	arg := toolArg(name, input)
+	title := ToolTitle(name)
+	arg := ToolArg(name, input)
 	if arg == "" {
 		return title
 	}
@@ -1225,7 +1228,7 @@ func toolLine(name string, input json.RawMessage) string {
 }
 
 // toolArg picks the argument worth showing for a tool call.
-func toolArg(name string, raw json.RawMessage) string {
+func ToolArg(name string, raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""
 	}
@@ -1298,7 +1301,7 @@ func toolArg(name string, raw json.RawMessage) string {
 
 // toolTitle is the display name of a tool on its chat line: titleCase of
 // the name; agent_response reads as what it did.
-func toolTitle(name string) string {
+func ToolTitle(name string) string {
 	if name == toolname.AgentResponse {
 		return "Agent response delivered"
 	}
@@ -1323,7 +1326,7 @@ func titleCase(s string) string {
 }
 
 // splitModel splits "provider/model-id" into the short id and the provider.
-func splitModel(id string) (short, provider string) {
+func SplitModel(id string) (short, provider string) {
 	if i := strings.IndexByte(id, '/'); i >= 0 {
 		return id[i+1:], id[:i]
 	}
@@ -1345,9 +1348,9 @@ func compactArgs(raw json.RawMessage) string {
 }
 
 // outputLines renders tool output collapsed by default: the first
-// maxOutputCollapsed lines always, up to maxOutputExpanded with /details,
+// MaxOutputCollapsed lines always, up to MaxOutputExpanded with /details,
 // and a "… +N lines" trailer for whichever mode is hiding something.
-func outputLines(out string) []Line {
+func OutputLines(out string) []Line {
 	if out == "" {
 		return nil
 	}
@@ -1355,20 +1358,20 @@ func outputLines(out string) []Line {
 	total := len(parts)
 	var lines []Line
 	for i, l := range parts {
-		if i >= maxOutputExpanded {
+		if i >= MaxOutputExpanded {
 			break
 		}
 		vis := VisAlways
-		if i >= maxOutputCollapsed {
+		if i >= MaxOutputCollapsed {
 			vis = VisExpanded
 		}
 		lines = append(lines, Line{Kind: LineToolOut, Text: l, Vis: vis})
 	}
-	if total > maxOutputCollapsed {
-		lines = append(lines, Line{Kind: LineToolOut, Text: fmt.Sprintf("… +%d lines", total-maxOutputCollapsed), Vis: VisCollapsed})
+	if total > MaxOutputCollapsed {
+		lines = append(lines, Line{Kind: LineToolOut, Text: fmt.Sprintf("… +%d lines", total-MaxOutputCollapsed), Vis: VisCollapsed})
 	}
-	if total > maxOutputExpanded {
-		lines = append(lines, Line{Kind: LineToolOut, Text: fmt.Sprintf("… +%d lines", total-maxOutputExpanded), Vis: VisExpanded})
+	if total > MaxOutputExpanded {
+		lines = append(lines, Line{Kind: LineToolOut, Text: fmt.Sprintf("… +%d lines", total-MaxOutputExpanded), Vis: VisExpanded})
 	}
 	return lines
 }
@@ -1391,4 +1394,72 @@ func patchFiles(patch string) string {
 		return strings.Join(files, ", ")
 	}
 	return strings.Join(files[:2], ", ") + fmt.Sprintf(" (+%d more)", len(files)-2)
+}
+
+func CleanLines(lines []Line) []Line {
+	for i := range lines {
+		lines[i].Text, lines[i].Suffix = textsafe.Clean(lines[i].Text), textsafe.Clean(lines[i].Suffix)
+	}
+	return lines
+}
+
+// Tool-call glyphs by group: the gear for files, shell and finish; the
+// clock for monitors; the fork for agent tools.
+const (
+	GlyphToolFiles    = "◆" // file tools (read, apply_patch, skill)
+	GlyphToolShell    = "$" // shell, shell_kill (and the old bash names): the shell prompt
+	GlyphToolMonitors = "$" // async jobs are shell commands
+	GlyphToolAgents   = "⑂"
+	GlyphToolTodo     = "◇" // todo_add, todo_update
+	GlyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
+	GlyphToolWeb      = "↗" // web_fetch, web_search
+)
+
+// toolGlyph returns the glyph for a tool name and the gap after it.
+func ToolGlyph(tool string) (string, string) {
+	tool = toolname.Canonical(tool)
+	switch {
+	case strings.HasPrefix(tool, "agent_"):
+		return GlyphToolAgents, " "
+	case tool == toolname.Shell || tool == toolname.ShellKill:
+		return GlyphToolShell, " "
+	case strings.HasPrefix(tool, "todo_"):
+		return GlyphToolTodo, " "
+	case strings.HasPrefix(tool, toolname.MCPPrefix):
+		return GlyphToolMCP, " "
+	case strings.HasPrefix(tool, "web_"):
+		return GlyphToolWeb, " "
+	}
+	return GlyphToolFiles, " "
+}
+
+// Committed is the number of committed items; the live tail may add more.
+func (t *Transcript) Committed() int { return len(t.items) }
+
+// Item is the lines of committed item i. The slice must not be modified.
+func (t *Transcript) Item(i int) []Line { return t.items[i] }
+
+// Rev changes whenever committed item i does.
+func (t *Transcript) Rev(i int) uint64 { return t.revs[i] }
+
+// Build folds a full event sequence into lines.
+func Build(evs []event.Event) []Line {
+	t := NewTranscript()
+	for _, ev := range evs {
+		t.Apply(ev)
+	}
+	return t.All()
+}
+
+// Notice appends a local (non-event) notice, e.g. /help output, as one item.
+func (t *Transcript) Notice(lines ...string) {
+	ls := make([]Line, 0, len(lines))
+	for i, l := range lines {
+		ln := Line{Kind: LineNotice, Text: l}
+		if i == 0 {
+			ln.Glyph = GlyphNotice
+		}
+		ls = append(ls, ln)
+	}
+	t.appendItem(ls)
 }

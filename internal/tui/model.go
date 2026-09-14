@@ -26,6 +26,7 @@ import (
 	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/theme"
+	"github.com/nicodes/stavlos/internal/tui/transcript"
 	"github.com/nicodes/stavlos/pkg/client"
 )
 
@@ -121,7 +122,8 @@ type sessionState struct {
 	selected    int
 	spawned     map[string]time.Time // agent id → spawn time, for the agents block
 	parentOf    map[string]string    // child agent id → parent id, for the parent's agent_create line
-	transcripts map[string]*Transcript
+	transcripts map[string]*transcript.Transcript
+	renders     map[string]*renderCache // per agent: rendered rows of its transcript's items
 	seq         int64
 	loading     bool  // replaying events up to replayTo
 	replayTo    int64 // seq from reconcile
@@ -155,7 +157,7 @@ func newSessionState(id string, info protocol.SessionInfo) sessionState {
 	return sessionState{
 		sessionID: id, session: info,
 		spawned: map[string]time.Time{}, parentOf: map[string]string{},
-		transcripts: map[string]*Transcript{}, claimedByUs: map[string]bool{},
+		transcripts: map[string]*transcript.Transcript{}, renders: map[string]*renderCache{}, claimedByUs: map[string]bool{},
 	}
 }
 
@@ -2210,7 +2212,7 @@ func (m *Model) scrollToCursor() {
 // collapsed (a per-item override of /details). Other items are inert.
 func (m *Model) toggleItem() {
 	t := m.transcripts[m.selectedID()]
-	if t == nil || !itemIsTool(t.All(), m.chatCursor) {
+	if t == nil || !transcript.ItemIsTool(t.All(), m.chatCursor) {
 		return
 	}
 	e := m.agentExpanded(m.selectedID())
@@ -2864,10 +2866,10 @@ func (m *Model) historyMove(delta int) {
 	m.input.CursorEnd()
 }
 
-func (m *Model) transcript(id string) *Transcript {
+func (m *Model) transcript(id string) *transcript.Transcript {
 	t := m.transcripts[id]
 	if t == nil {
-		t = NewTranscript()
+		t = transcript.NewTranscript()
 		m.transcripts[id] = t
 	}
 	return t
@@ -2979,7 +2981,7 @@ func (m *Model) refreshViewport() {
 	var content string
 	var rows map[int]rowRange
 	if t != nil {
-		content, rows = t.Render(opts) // unchanged items come from the transcript's render cache
+		content, rows = renderTranscript(t, m.chatCache(m.selectedID()), opts) // unchanged items come from the cache
 	} else {
 		content, rows = renderAll(nil, opts)
 	}
@@ -3342,7 +3344,7 @@ func roleHint(r protocol.PresetInfo) string {
 		hint += "  · " + r.Mode
 	}
 	if len(r.Models) > 0 {
-		short, _ := splitModel(r.Models[0].ID)
+		short, _ := transcript.SplitModel(r.Models[0].ID)
 		hint += "  · " + short
 		if len(r.Models) > 1 {
 			hint += fmt.Sprintf(" +%d", len(r.Models)-1)
@@ -3556,4 +3558,14 @@ func containsStr(xs []string, x string) bool {
 		}
 	}
 	return false
+}
+
+// chatCache is the render cache of agent id's transcript.
+func (m *Model) chatCache(id string) *renderCache {
+	c := m.renders[id]
+	if c == nil {
+		c = &renderCache{}
+		m.renders[id] = c
+	}
+	return c
 }
