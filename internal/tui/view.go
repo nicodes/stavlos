@@ -1179,13 +1179,21 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 		return append(lines, strings.Split(p.Question, "\n")...)
 	}
 	cur := p.Questions[q.idx]
-	// The question first (bold), then who is asking; the checklist below.
-	// Position in the batch is in the dialog title ("Questions 2/3").
-	for _, l := range strings.Split(ansi.Wrap(cur.Question, width, ""), "\n") {
-		lines = append(lines, styleBold.Render(l))
-	}
+	// The question (bold) with who is asking after it on the same line, dim;
+	// the checklist below. Position in the batch is in the dialog title.
+	head := cur.Question
 	if p.Agent != "" {
-		lines = append(lines, styleDim.Render(m.agentWhoLabel(p.Agent)))
+		head += "  " + m.agentWhoLabel(p.Agent)
+	}
+	qlines := strings.Split(ansi.Wrap(head, width, ""), "\n")
+	for i, l := range qlines {
+		if i == len(qlines)-1 && p.Agent != "" {
+			if k := strings.LastIndex(l, "  "+m.agentWhoLabel(p.Agent)); k >= 0 {
+				lines = append(lines, styleBold.Render(l[:k])+"  "+styleDim.Render(m.agentWhoLabel(p.Agent)))
+				continue
+			}
+		}
+		lines = append(lines, styleBold.Render(l))
 	}
 	lines = append(lines, "")
 	// The checklist: every option, then a last row for a typed answer.

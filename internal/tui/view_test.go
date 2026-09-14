@@ -2474,10 +2474,11 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 			t.Fatalf("dialog lacks %q:\n%s", want, dv)
 		}
 	}
-	// the question comes first, then who asks (no heading, no "asks" word), then the list
+	// the question comes first with who asks after it on the same line (no
+	// heading, no "asks" word), then the list
 	lines := strings.Split(dv, "\n")
-	if !strings.Contains(lines[3], "Which backend?") || !strings.Contains(lines[4], "coder (general)") || strings.Contains(dv, " asks") || strings.Contains(dv, "· Backend") {
-		t.Fatalf("order should be question, agent, list:\n%s", dv)
+	if !strings.Contains(lines[3], "Which backend?  coder (general)") || strings.Contains(dv, " asks") || strings.Contains(dv, "· Backend") {
+		t.Fatalf("the question line should carry the agent:\n%s", dv)
 	}
 	// a checklist: enter with nothing picked does nothing; ↓ space toggles
 	// SQLite; enter confirms and moves on
