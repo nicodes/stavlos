@@ -60,6 +60,9 @@ const (
 
 	Usage     Type = "usage"     // UsagePayload (PRD §4.4)
 	Compacted Type = "compacted" // CompactedPayload
+
+	CompactionStarted Type = "compaction.started" // CompactionPayload: the summariser is running
+	CompactionFailed  Type = "compaction.failed"  // CompactionPayload with Error
 )
 
 // Event is one log record.
@@ -316,6 +319,14 @@ type CompactedPayload struct {
 	FromSeq int64  `json:"from_seq"`
 	ToSeq   int64  `json:"to_seq"`
 	Summary string `json:"summary"`
+	Before  int    `json:"before,omitempty"` // estimated history tokens before and after (clients show "84k → 12k")
+	After   int    `json:"after,omitempty"`
+}
+
+// CompactionPayload marks the start or failure of a compaction.
+type CompactionPayload struct {
+	Before int    `json:"before,omitempty"` // estimated history tokens going in
+	Error  string `json:"error,omitempty"`
 }
 
 // MustPayload marshals v or panics; payloads are our own types.

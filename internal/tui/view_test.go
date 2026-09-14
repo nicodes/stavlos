@@ -1074,23 +1074,50 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 		t.Fatalf("no meta row or strip:\n%s", strings.Join(lines, "\n"))
 	}
 	// role and model on the left, tokens and cost on the right, no dots; no
-	// context bar while the window is unknown
-	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens · $0.02") || strings.Contains(row, "▱") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
+	// context figure while the window is unknown
+	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens · $0.02") || strings.Contains(row, "% of") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
 		t.Fatalf("meta row: %q", row)
 	}
-	// with a window: the context bar and percentage sit before the tokens
+	// with a window: "used% of window" sits before the tokens
 	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
-	if right := stripANSI(m.footerRightView()); right != "▰▰▰▱▱▱▱▱▱▱ 31% · 2k tokens · $0.02" {
+	if right := stripANSI(m.footerRightView()); right != "31% of 200k · 2k tokens · $0.02" {
 		t.Fatalf("meta right: %q", right)
 	}
-	if bar := stripANSI(contextBar(190_000, 200_000)); bar != "▰▰▰▰▰▰▰▰▰▱ 95%" {
-		t.Fatalf("bar %q", bar)
-	}
-	if bar := stripANSI(contextBar(250_000, 200_000)); bar != "▰▰▰▰▰▰▰▰▰▰ 100%" {
-		t.Fatalf("bar %q", bar)
+	if got := stripANSI(contextBar(250_000, 200_000)); got != "100% of 200k" {
+		t.Fatalf("context %q", got)
 	}
 	if contextBar(5, 0) != "" {
-		t.Fatal("no bar without a window")
+		t.Fatal("no context figure without a window")
+	}
+	// a running compaction shows a sweeping bar above the divider for the
+	// selected agent; the Compacted event replaces it with the shrink
+	now := time.Now()
+	m.applyEvent(event.Event{Seq: 50, Agent: "a", Type: event.CompactionStarted, Time: now, Payload: event.MustPayload(event.CompactionPayload{Before: 84_000})})
+	if !m.compactTick || m.compacting["a"] != now {
+		t.Fatalf("compaction should be tracked: tick=%v %v", m.compactTick, m.compacting)
+	}
+	if sl := stripANSI(m.statusLine(100)); !strings.HasPrefix(sl, "compacting ") || strings.Count(sl, "▰")+strings.Count(sl, "▱") != 10 {
+		t.Fatalf("status line while compacting: %q", sl)
+	}
+	if a, b := stripANSI(compactingBar(0)), stripANSI(compactingBar(5*compactTickPeriod)); a == b {
+		t.Fatalf("the bar should move: %q %q", a, b)
+	}
+	m.applyEvent(event.Event{Seq: 51, Agent: "a", Type: event.Compacted, Time: now, Payload: event.MustPayload(event.CompactedPayload{FromSeq: 1, ToSeq: 40, Summary: "S", Before: 84_000, After: 12_000})})
+	if len(m.compacting) != 0 || m.status != "compacted: 84k → 12k tokens" || m.statusErr {
+		t.Fatalf("after compaction: %v %q", m.compacting, m.status)
+	}
+	if sl := stripANSI(m.statusLine(100)); sl != "compacted: 84k → 12k tokens" {
+		t.Fatalf("status line after compaction: %q", sl)
+	}
+	m.applyEvent(event.Event{Seq: 52, Agent: "a", Type: event.CompactionStarted, Time: now, Payload: event.MustPayload(event.CompactionPayload{Before: 84_000})})
+	m.applyEvent(event.Event{Seq: 53, Agent: "a", Type: event.CompactionFailed, Time: now, Payload: event.MustPayload(event.CompactionPayload{Before: 84_000, Error: "boom"})})
+	if len(m.compacting) != 0 || m.status != "compaction failed: boom" || !m.statusErr {
+		t.Fatalf("after a failed compaction: %v %q", m.compacting, m.status)
+	}
+	// the chat rule names the shrink
+	m.refreshViewport()
+	if v := stripANSI(m.vp.View()); !strings.Contains(v, "┄┄ compacted 84k → 12k tokens ┄┄") {
+		t.Fatalf("chat rule:\n%s", v)
 	}
 	if strip < 3 || meta != strip+1 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], "›") || !strings.HasPrefix(lines[strip-3], "─") {
 		t.Fatalf("under the rule come the input, a blank line, the strip, then the meta row:\n%s", strings.Join(lines, "\n"))

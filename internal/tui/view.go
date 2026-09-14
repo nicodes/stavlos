@@ -723,10 +723,9 @@ func footerRight(f footerInfo) string {
 	return s
 }
 
-// contextBar draws how full the model's context is as a ten-cell bar with
-// the percentage — what auto-compaction watches (it summarises at 80%).
-// The fill is dim until 70%, warning-coloured from there. "" when the
-// window is unknown.
+// contextBar reads how full the model's context is — "31% of 200k" — which
+// is what auto-compaction watches (it summarises at 80%). Dim until 70%,
+// warning-coloured from there. "" when the window is unknown.
 func contextBar(context, window int) string {
 	if window <= 0 || context < 0 {
 		return ""
@@ -735,12 +734,28 @@ func contextBar(context, window int) string {
 	if pct > 100 {
 		pct = 100
 	}
-	cells := pct / 10 // full only at 100%
-	fill := styleDim
+	st := styleDim
 	if pct >= 70 {
-		fill = styleWarn
+		st = styleWarn
 	}
-	return fill.Render(strings.Repeat("▰", cells)) + styleDim.Render(strings.Repeat("▱", 10-cells)) + " " + styleDim.Render(fmt.Sprintf("%d%%", pct))
+	return st.Render(fmt.Sprintf("%d%% of %s", pct, fmtTokens(window)))
+}
+
+// compactingBar is the line above the divider while a compaction runs: a
+// segment sweeping across a ten-cell track (the summariser gives no
+// progress, so the bar shows activity, not completion).
+func compactingBar(elapsed time.Duration) string {
+	const cells, seg = 10, 3
+	pos := int(elapsed/compactTickPeriod) % (cells + seg)
+	var b strings.Builder
+	for i := 0; i < cells; i++ {
+		if i >= pos-seg && i < pos {
+			b.WriteString(styleWarn.Render("▰"))
+		} else {
+			b.WriteString(styleDim.Render("▱"))
+		}
+	}
+	return styleDim.Render("compacting ") + b.String()
 }
 
 // turnStats formats the indicator's suffix: "(12s · 1.2k tokens)".
@@ -1455,6 +1470,8 @@ func fullToolArg(tool string, raw json.RawMessage) string {
 func (m Model) statusLine(width int) string {
 	var s string
 	switch {
+	case m.compacting[m.selectedID()] != (time.Time{}):
+		s = compactingBar(time.Since(m.compacting[m.selectedID()]))
 	case m.status != "" && m.statusErr:
 		s = styleStatusErr.Render(m.status)
 	case m.status != "":
