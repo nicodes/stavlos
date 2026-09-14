@@ -652,7 +652,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 
 	// A question is not a permission: the permission tab ignores it and the
 	// questions dialog takes it (typing goes to its field, enter answers).
-	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Header: "Colour", Question: "which?"}}}}
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Header: "Colour", Question: "which?", Options: []protocol.QuestionOption{{Label: "blue"}}}}}}
 	m.promptBusy = ""
 	m.ensureFocus()
 	if m.currentPrompt() != nil || m.currentQuestion() == nil {
@@ -2356,7 +2356,7 @@ func TestEnterReturnsToInputAndSpaceSelects(t *testing.T) {
 		t.Fatalf("space in an overlay should pick the row: cmd=%v ov=%v", cmd != nil, m.ov != nil)
 	}
 	// text fields keep enter: a question's typed answer
-	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Header: "Name", Question: "which?"}}}}
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Header: "Name", Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}}}
 	m.setFocus(focusQuestions)
 	typedSpace := tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}} // as a terminal sends it
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}, typedSpace, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
@@ -2457,8 +2457,8 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 	}
 	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user", Questions: []protocol.Question{
 		{Header: "Backend", Question: "Which backend?", Options: []protocol.QuestionOption{{Label: "Postgres", Description: "what the repo uses"}, {Label: "SQLite"}}},
-		{Header: "Extras", Question: "Which extras?", Multi: true, Options: []protocol.QuestionOption{{Label: "Cache"}, {Label: "Queue"}, {Label: "Search"}}},
-		{Header: "Name", Question: "What should the service be called?"},
+		{Header: "Extras", Question: "Which extras?", Options: []protocol.QuestionOption{{Label: "Cache"}, {Label: "Queue"}, {Label: "Search"}}},
+		{Header: "Name", Question: "What should the service be called?", Options: []protocol.QuestionOption{{Label: "stavlos-api"}}},
 	}}
 	// a new question opens its dialog when the input is idle
 	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: batch})
@@ -2469,24 +2469,42 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 		t.Fatalf("strip with a question:\n%s", sv)
 	}
 	dv := stripANSI(m.tabDialog(120))
-	for _, want := range []string{"Questions (1)", "coder (general) asks", "1/3 · Backend", "Which backend?", "▸ ○ Postgres  what the repo uses", "○ SQLite", "or type an answer"} {
+	for _, want := range []string{"Questions (1)", "coder (general) asks", "1/3 · Backend", "Which backend?", "▸ □ Postgres  what the repo uses", "□ SQLite", "□ something else…"} {
 		if !strings.Contains(dv, want) {
 			t.Fatalf("dialog lacks %q:\n%s", want, dv)
 		}
 	}
-	// single choice: ↓ then space picks SQLite and moves to question 2
-	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
-	if m.q.idx != 1 || m.q.answers[0] != "SQLite" {
-		t.Fatalf("after the pick: idx=%d answers=%v", m.q.idx, m.q.answers)
+	// a checklist: enter with nothing picked does nothing; ↓ space toggles
+	// SQLite; enter confirms and moves on
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.q.idx != 0 {
+		t.Fatalf("enter with nothing picked should stay: idx=%d", m.q.idx)
 	}
-	// multi: space toggles, enter confirms the set
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace}, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.q.idx != 1 || m.q.answers[0] != "SQLite" {
+		t.Fatalf("after the first question: idx=%d answers=%v", m.q.idx, m.q.answers)
+	}
+	// several options plus something typed, joined in order
 	press(&m, tea.KeyMsg{Type: tea.KeySpace}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
 	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "■ Cache") || !strings.Contains(dv, "□ Queue") || !strings.Contains(dv, "■ Search") {
-		t.Fatalf("multi marks:\n%s", dv)
+		t.Fatalf("marks:\n%s", dv)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown})  // onto "something else"
+	press(&m, tea.KeyMsg{Type: tea.KeySpace}) // opens the field
+	if !m.q.typing {
+		t.Fatal("space on the last row should open the text field")
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("metrics")})
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // leave the field, keep the text
+	if m.q.typing || m.q.custom != "metrics" {
+		t.Fatalf("esc should keep the typed answer: typing=%v custom=%q", m.q.typing, m.q.custom)
+	}
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "■ metrics") {
+		t.Fatalf("the typed answer should show as picked:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.q.idx != 2 || m.q.answers[1] != "Cache, Search" {
-		t.Fatalf("after the multi confirm: idx=%d answers=%v", m.q.idx, m.q.answers)
+	if m.q.idx != 2 || m.q.answers[1] != "Cache, Search, metrics" {
+		t.Fatalf("after the second question: idx=%d answers=%v", m.q.idx, m.q.answers)
 	}
 	// ← goes back to review, → returns
 	press(&m, tea.KeyMsg{Type: tea.KeyLeft})
@@ -2494,8 +2512,8 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 		t.Fatalf("← should go back: %d", m.q.idx)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRight})
-	// free text: typing fills the field, enter confirms and, on the last
-	// question, submits the batch
+	// typing anywhere starts "something else"; enter in the field confirms
+	// and, on the last question, submits the batch
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("stavlos")})
 	if !m.q.typing || m.promptInput.Value() != "stavlos" {
 		t.Fatalf("typing: %v %q", m.q.typing, m.promptInput.Value())
@@ -2503,7 +2521,7 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q1" || !m.claimedByUs["q1"] {
 		t.Fatalf("the last answer should submit the batch: cmd=%v busy=%q", cmd != nil, m.promptBusy)
 	}
-	if strings.Join(m.q.answers, "|") != "SQLite|Cache, Search|stavlos" {
+	if strings.Join(m.q.answers, "|") != "SQLite|Cache, Search, metrics|stavlos" {
 		t.Fatalf("answers %v", m.q.answers)
 	}
 	// the answered batch leaves; the dialog closes onto where it came from

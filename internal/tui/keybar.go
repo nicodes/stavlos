@@ -48,7 +48,7 @@ func (m Model) keyHints() []keyHint {
 		if m.q.typing {
 			return []keyHint{{"enter", "answer"}, {"esc", "back to the options"}, {"ctrl+c", "quit"}}
 		}
-		return []keyHint{{"↑/↓", "option"}, {"space", "pick"}, {"enter", "confirm · next"}, {"←/→", "question"}, {"type", "other answer"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "option"}, {"space", "toggle"}, {"enter", "confirm · next"}, {"←/→", "question"}, {"type", "something else"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusPermission:
 		if p := m.currentPrompt(); p != nil {
 			switch p.Kind {

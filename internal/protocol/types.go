@@ -292,14 +292,13 @@ type PromptInfo struct {
 	Questions []Question      `json:"questions,omitempty"` // kind question: the batch an ask_user call raised, answered together
 }
 
-// Question is one entry of an ask_user batch. Options may be empty (free
-// text only); typed text is always accepted as well. Multi allows several
-// picks, joined with ", " in the answer.
+// Question is one entry of an ask_user batch: a checklist. Options are
+// always present; the human may pick any number of them and add a typed
+// answer of their own, all joined with ", " in the answer.
 type Question struct {
 	Header   string           `json:"header"`
 	Question string           `json:"question"`
-	Options  []QuestionOption `json:"options,omitempty"`
-	Multi    bool             `json:"multi,omitempty"`
+	Options  []QuestionOption `json:"options"`
 }
 
 type QuestionOption struct {

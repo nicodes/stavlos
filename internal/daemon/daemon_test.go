@@ -1807,14 +1807,14 @@ func TestAskUser(t *testing.T) {
 			if !has || !strings.Contains(req.System, "# Asking the human") {
 				t.Errorf("ask_user should be offered to every agent")
 			}
-			return call("c1", "ask_user", `{"questions":[{"header":"Backend","question":"Which backend?","options":[{"label":"Postgres","description":"in use"},{"label":"SQLite"}]},{"header":"Name","question":"Call it?"}]}`)
+			return call("c1", "ask_user", `{"questions":[{"header":"Backend","question":"Which backend?","options":[{"label":"Postgres","description":"in use"},{"label":"SQLite"}]},{"header":"Name","question":"Call it?","options":[{"label":"stavlos-api"}]}]}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if last.IsError || last.Content != "Backend: Postgres\nName: stavlos" {
 				t.Errorf("answers: %+v", last)
 			}
-			return call("c2", "ask_user", `{"questions":[{"header":"Again","question":"Sure?"}]}`)
+			return call("c2", "ask_user", `{"questions":[{"header":"Again","question":"Sure?","options":[{"label":"yes"}]}]}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
