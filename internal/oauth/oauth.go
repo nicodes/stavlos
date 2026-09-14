@@ -59,6 +59,16 @@ type Pending struct {
 	browser      *browserLogin
 }
 
+// Close abandons a pending login: the browser method's loopback server is
+// shut down and its port released. Wait releases it too; Close is for a
+// login nobody waited on.
+func (p *Pending) Close() {
+	if p != nil && p.browser != nil {
+		p.browser.finish(browserResult{err: errors.New("login abandoned")})
+		p.browser.shutdown()
+	}
+}
+
 // Flow is one provider's login and refresh logic.
 type Flow interface {
 	// Provider id: "openai" or "xai".
@@ -82,10 +92,12 @@ func Flows() map[string]Flow {
 	c := &ChatGPT{Issuer: chatGPTIssuer}
 	if v := os.Getenv("STAVLOS_OAUTH_OPENAI_ISSUER"); v != "" {
 		c.Issuer = strings.TrimRight(v, "/")
+		fmt.Fprintf(os.Stderr, "stavlos: STAVLOS_OAUTH_OPENAI_ISSUER is set: ChatGPT sign-ins and tokens go to %s\n", c.Issuer)
 	}
 	g := &Grok{DeviceURL: grokDeviceURL, TokenURL: grokTokenURL}
 	if v := os.Getenv("STAVLOS_OAUTH_XAI_BASE"); v != "" {
 		g.DeviceURL, g.TokenURL = strings.TrimRight(v, "/")+"/device/code", strings.TrimRight(v, "/")+"/token"
+		fmt.Fprintf(os.Stderr, "stavlos: STAVLOS_OAUTH_XAI_BASE is set: Grok sign-ins and tokens go to %s\n", strings.TrimRight(v, "/"))
 	}
 	return map[string]Flow{"openai": c, "xai": g}
 }
@@ -228,4 +240,3 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 
 func fmtCode(c string) string { return strings.ToUpper(strings.TrimSpace(c)) }
 
-var _ = fmt.Sprintf
