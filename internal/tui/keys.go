@@ -21,6 +21,7 @@ type keyMap struct {
 	ChatTop     key.Binding // chat focus only: plain home/end also jump
 	ChatBottom  key.Binding
 	Submit      key.Binding
+	Select      key.Binding
 	Clear       key.Binding
 	Yes         key.Binding
 	No          key.Binding
@@ -54,6 +55,7 @@ var keys = keyMap{
 	ChatTop:     key.NewBinding(key.WithKeys("home", "ctrl+home")),
 	ChatBottom:  key.NewBinding(key.WithKeys("end", "ctrl+end")),
 	Submit:      key.NewBinding(key.WithKeys("enter")),
+	Select:      key.NewBinding(key.WithKeys(" ")), // space: select, open, toggle — outside text fields
 	Clear:       key.NewBinding(key.WithKeys("esc")),
 	Yes:         key.NewBinding(key.WithKeys("y", "Y")),
 	No:          key.NewBinding(key.WithKeys("n", "N")),

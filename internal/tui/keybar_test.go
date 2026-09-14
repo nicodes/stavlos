@@ -45,7 +45,7 @@ func TestKeyHintsByContext(t *testing.T) {
 		t.Fatalf("input focus with a prompt: %+v", hs)
 	}
 	m.focus = focusPermission
-	if hs := m.keyHints(); !has(hs, "a") || !has(hs, "n") || has(hs, "enter") {
+	if hs := m.keyHints(); !has(hs, "a") || !has(hs, "n") || has(hs, "space") {
 		t.Fatalf("permission: %+v", hs)
 	}
 	m.focus = focusChat

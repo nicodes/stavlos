@@ -545,6 +545,31 @@ func (m *Model) cycleFocus(delta int) tea.Cmd {
 	return m.setFocus(order[((i+delta)%n+n)%n])
 }
 
+// textEntry reports whether a text field outside the input has the keys:
+// the question answer, the dirs path field, or a boundary prompt's edited
+// directory. Enter submits there and space types a space.
+func (m *Model) textEntry() bool {
+	if m.promptDir || (m.focus == focusDirs && m.dirEdit != "") {
+		return true
+	}
+	if m.focus == focusPermission {
+		if p := m.currentPrompt(); p != nil && p.Kind == "question" {
+			return true
+		}
+	}
+	return false
+}
+
+// closeOverlayToInput drops the overlay and puts the input in focus, wherever
+// the overlay was opened from (enter's job).
+func (m *Model) closeOverlayToInput() tea.Cmd {
+	m.ov = nil
+	if m.focus == focusInput {
+		return m.input.Focus()
+	}
+	return m.setFocus(focusInput)
+}
+
 // toggleMode is /auto or /yolo: no argument toggles between that mode and
 // ask, "on"/"off" set it.
 func (m *Model) toggleMode(mode, arg string) tea.Cmd {
@@ -628,7 +653,7 @@ func (m *Model) tabsKey(msg tea.KeyMsg) tea.Cmd {
 		if m.tabSel < len(tabFocuses)-1 {
 			m.tabSel++
 		}
-	case key.Matches(msg, keys.Submit):
+	case key.Matches(msg, keys.Select):
 		return m.setFocus(tabFocuses[m.tabSel])
 	}
 	return nil
@@ -703,7 +728,7 @@ func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
 		if n > 0 {
 			m.agCursor = (m.agCursor + 1) % n
 		}
-	case key.Matches(msg, keys.Submit):
+	case key.Matches(msg, keys.Select):
 		if n > 0 {
 			if i := m.findAgent(kids[m.agCursor%n].ID); i >= 0 && i != m.selected {
 				m.selected = i
@@ -805,7 +830,7 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 		m.dirEdit = "add"
 		m.dirInput.SetValue("")
 		return m.dirInput.Focus()
-	case key.Matches(msg, keys.Submit):
+	case key.Matches(msg, keys.Select):
 		d := cur()
 		if d == nil {
 			return nil
@@ -864,7 +889,7 @@ func (m *Model) mcpKey(msg tea.KeyMsg) tea.Cmd {
 		if n > 0 {
 			m.agCursor = (m.agCursor + 1) % n
 		}
-	case key.Matches(msg, keys.Submit):
+	case key.Matches(msg, keys.Select):
 		if n > 0 {
 			if name := owners[m.agCursor%n]; name != "" {
 				if m.mcpOpen == nil {
@@ -955,7 +980,7 @@ func (m *Model) dialogClick(x, y int) (tea.Cmd, bool) {
 	if h := m.tabDialogHit(x, y); h.rowOK {
 		m.agCursor = h.row
 		if m.focus == focusAgents {
-			return m.agentsKey(tea.KeyMsg{Type: tea.KeyEnter}), true
+			return m.agentsKey(tea.KeyMsg{Type: tea.KeySpace}), true // a click selects like space
 		}
 		return nil, true
 	}
@@ -1371,7 +1396,7 @@ func (m *Model) metaKey(msg tea.KeyMsg) tea.Cmd {
 		if i < len(parts)-1 {
 			m.metaSel = parts[i+1]
 		}
-	case key.Matches(msg, keys.Submit):
+	case key.Matches(msg, keys.Select):
 		return m.metaAction(m.metaSel)
 	}
 	return nil
@@ -1655,6 +1680,11 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	if !key.Matches(msg, keys.Clear) {
 		m.cancelArmed = time.Time{} // any other key disarms the two-step cancel
 	}
+	// Enter anywhere but the input (and outside a text field) closes what is
+	// open and goes back to typing; space is what selects, opens and toggles.
+	if key.Matches(msg, keys.Submit) && m.focus != focusInput && !m.textEntry() {
+		return m.setFocus(focusInput)
+	}
 
 	// While the "/" palette is open in the input, tab completes the command
 	// (handled below) instead of cycling focus.
@@ -1892,7 +1922,7 @@ func (m *Model) chatKey(msg tea.KeyMsg) tea.Cmd {
 		m.moveCursor(-m.chatItems())
 	case key.Matches(msg, keys.ChatBottom):
 		m.moveCursor(m.chatItems())
-	case key.Matches(msg, keys.Submit):
+	case key.Matches(msg, keys.Select):
 		m.toggleItem()
 	}
 	return nil
@@ -2392,7 +2422,7 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 		m.vp.PageDown()
 		m.follow = m.vp.AtBottom()
 		return nil
-	case key.Matches(msg, keys.Submit):
+	case key.Matches(msg, keys.Select):
 		if n > 0 && m.sbCursor != m.selected {
 			m.selected = m.sbCursor
 			m.follow = true
@@ -2599,8 +2629,10 @@ func (m *Model) overlayKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeOverlay()
-	case key.Matches(msg, keys.OvSelect):
+	case key.Matches(msg, keys.Select):
 		return m.overlaySubmit(false)
+	case key.Matches(msg, keys.OvSelect):
+		return m.closeOverlayToInput() // enter: back to typing, nothing picked
 	case key.Matches(msg, keys.OvAlt):
 		return m.overlaySubmit(true)
 	case key.Matches(msg, keys.OvRemove):
