@@ -27,18 +27,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nicodes/stavlos/internal/auth"
 	"github.com/nicodes/stavlos/internal/buildid"
 	"github.com/nicodes/stavlos/internal/daemon"
-	"github.com/nicodes/stavlos/internal/model/registry"
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui"
 	"github.com/nicodes/stavlos/pkg/client"
 )
-
-// buildTag is set with -ldflags -X for builds that must differ byte-wise (tests).
-var buildTag string
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -138,7 +133,11 @@ func run(args []string) error {
 		if err := fs.Parse(args); err != nil {
 			return err
 		}
-		return runDaemon(ctx, *socket, *dataDir)
+		err := daemon.Main(ctx, daemon.Options{Socket: *socket, DataDir: *dataDir})
+		if errors.Is(err, daemon.ErrAlreadyRunning) {
+			return fmt.Errorf("%v; connect to it with `stavlos`, or stop it first", err)
+		}
+		return err
 
 	case "status":
 		c, err := connect(ctx, false)
@@ -360,29 +359,6 @@ func startDaemon() error {
 	}
 	fmt.Fprintf(os.Stderr, "started stavlosd (pid %d, log %s)\n", cmd.Process.Pid, logf.Name())
 	return cmd.Process.Release()
-}
-
-func runDaemon(ctx context.Context, socket, dataDir string) error {
-	if err := os.MkdirAll(dataDir, 0o700); err != nil {
-		return err
-	}
-	reg, err := registry.Default(ctx, auth.Open(paths.AuthFile()))
-	if err != nil {
-		return fmt.Errorf("model registry: %w", err)
-	}
-	d, err := daemon.New(ctx, dataDir, reg)
-	if errors.Is(err, daemon.ErrAlreadyRunning) {
-		return fmt.Errorf("%v; connect to it with `stavlos`, or stop it first", err)
-	}
-	if err != nil {
-		return err
-	}
-	defer d.Close()
-	sctx, stop := context.WithCancel(signalCtx(ctx))
-	defer stop()
-	d.Shutdown = stop
-	fmt.Fprintf(os.Stderr, "%s stavlosd %s listening on %s (%d providers)\n", time.Now().Format(time.RFC3339), buildid.ID(), socket, len(reg.Providers()))
-	return d.Serve(sctx, socket)
 }
 
 func initConfig(args []string) error {
