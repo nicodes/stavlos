@@ -71,6 +71,9 @@ type Model struct {
 	sessionID string
 	spawned   map[string]time.Time // agent id → spawn time, for the agents block
 
+	navSessions     []protocol.SessionInfo // the sidebar's sessions section: other sessions of this directory, newest first
+	navSessionsOpen bool                   // the section is expanded
+
 	session     protocol.SessionInfo
 	agents      []protocol.AgentInfo // pre-order, root first
 	selected    int
@@ -384,6 +387,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.setStatus("tree: "+msg.err.Error(), true))
 		} else {
 			m.setAgents(msg.agents)
+			if m.sidebarVisible() {
+				cmds = append(cmds, navSessionsCmd(m.ctx, m.c, m.session.Dir, m.sessionID))
+			}
+		}
+
+	case navSessionsMsg:
+		if msg.err == nil {
+			m.navSessions = msg.sessions
 		}
 
 	case treeTickMsg:
@@ -2534,23 +2545,32 @@ func (m *Model) applyPromptNotification(n protocol.PromptNotification) tea.Cmd {
 
 // currentPrompt is the head of the permission queue: the oldest waiting
 // permission or trust prompt (questions have their own tab and queue).
-func (m *Model) currentPrompt() *protocol.PromptInfo {
-	for i := range m.prompts {
-		if m.prompts[i].Kind != "question" {
-			return &m.prompts[i]
-		}
-	}
-	return nil
-}
+func (m *Model) currentPrompt() *protocol.PromptInfo { return m.firstPrompt(false) }
 
-// currentQuestion is the oldest waiting ask_user batch.
-func (m *Model) currentQuestion() *protocol.PromptInfo {
+// currentQuestion is the waiting ask_user batch the questions dialog shows.
+func (m *Model) currentQuestion() *protocol.PromptInfo { return m.firstPrompt(true) }
+
+// firstPrompt picks the prompt a dialog shows: the selected agent's oldest
+// one when it has any (the footer controls the selected agent; the nav
+// badges point at the others), else the oldest overall so nothing waits
+// unseen. question selects the question batches or the permission-ish
+// prompts.
+func (m *Model) firstPrompt(question bool) *protocol.PromptInfo {
+	sel := m.selectedID()
+	var first *protocol.PromptInfo
 	for i := range m.prompts {
-		if m.prompts[i].Kind == "question" {
-			return &m.prompts[i]
+		p := &m.prompts[i]
+		if (p.Kind == "question") != question {
+			continue
+		}
+		if p.Agent == sel {
+			return p
+		}
+		if first == nil {
+			first = p
 		}
 	}
-	return nil
+	return first
 }
 
 // promptCounts is how many permission-ish prompts and question batches wait.
@@ -2741,7 +2761,7 @@ func (m *Model) toggleTree() tea.Cmd {
 	}
 	m.layout()
 	if m.showTree {
-		return m.setFocus(focusSidebar)
+		return tea.Batch(m.setFocus(focusSidebar), navSessionsCmd(m.ctx, m.c, m.session.Dir, m.sessionID))
 	}
 	return m.setFocus(focusInput)
 }
@@ -2751,7 +2771,7 @@ func (m *Model) toggleTree() tea.Cmd {
 // returns without changing the selection (ctrl+b, handled before, closes
 // the sidebar).
 func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
-	n := len(m.agents)
+	n := m.sidebarItems()
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.setFocus(focusInput)
@@ -2774,12 +2794,7 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 		m.follow = m.vp.AtBottom()
 		return nil
 	case key.Matches(msg, keys.Select):
-		if n > 0 && m.sbCursor != m.selected {
-			m.selected = m.sbCursor
-			m.follow = true
-			m.refreshViewport()
-		}
-		return m.setFocus(focusInput)
+		return m.sidebarSelect(m.sbCursor)
 	case msg.String() == "n": // the next agent that needs you, selected at once
 		if i := m.nextNeedy(m.sbCursor); i >= 0 {
 			m.sbCursor = i
@@ -2809,18 +2824,61 @@ func (m *Model) nextNeedy(from int) int {
 	return -1
 }
 
-// sidebarClick focuses the sidebar and, on a tree row, selects that agent.
-func (m *Model) sidebarClick(y int) tea.Cmd {
-	cmd := m.setFocus(focusSidebar)
-	if i := y - len(m.sidebarHeader(sidebarWidth-1)); i >= 0 && i < len(m.agents) {
-		m.sbCursor = i
+// sidebarItems is how many rows the sidebar cursor can rest on: the
+// agents, the sessions heading, and the sessions while the section is
+// open.
+func (m *Model) sidebarItems() int {
+	n := len(m.agents) + 1
+	if m.navSessionsOpen {
+		n += len(m.navSessions)
+	}
+	return n
+}
+
+// sidebarSelect acts on the item under the cursor: an agent is selected
+// (and the input focused), the sessions heading folds or unfolds, a
+// session is resumed in place of the current one.
+func (m *Model) sidebarSelect(i int) tea.Cmd {
+	na := len(m.agents)
+	switch {
+	case i < na:
 		if i != m.selected {
 			m.selected = i
 			m.follow = true
 			m.refreshViewport()
 		}
+		return m.setFocus(focusInput)
+	case i == na:
+		m.navSessionsOpen = !m.navSessionsOpen
+		return nil
+	case i-na-1 < len(m.navSessions):
+		s := m.navSessions[i-na-1]
+		return tea.Batch(m.setStatus("resuming "+sessionTitle(s), false), switchSessionCmd(m.ctx, m.c, m.sessionID, s.ID))
 	}
-	return cmd
+	return nil
+}
+
+// sidebarClick focuses the sidebar and acts on the row under the pointer
+// like space: an agent row selects that agent (the sidebar keeps focus),
+// the sessions heading toggles, a session row resumes it.
+func (m *Model) sidebarClick(y int) tea.Cmd {
+	cmd := m.setFocus(focusSidebar)
+	_, items := m.sidebarBody(sidebarWidth - 1)
+	row := y - len(m.sidebarHeader(sidebarWidth-1))
+	if row < 0 || row >= len(items) || items[row] < 0 {
+		return cmd
+	}
+	i := items[row]
+	m.sbCursor = i
+	if i < len(m.agents) {
+		if i != m.selected {
+			m.selected = i
+			m.follow = true
+			m.refreshViewport()
+		}
+		return cmd
+	}
+	return tea.Batch(cmd, m.sidebarSelect(i))
 }
 
 // --- prompt history ---

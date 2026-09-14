@@ -2240,6 +2240,75 @@ func TestSidebarNav(t *testing.T) {
 	if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 2 {
 		t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
 	}
+	// the sessions section: folded by default with the count, space on its
+	// heading unfolds it, ↓ walks into it, space on a session resumes it;
+	// a click does the same
+	m.navSessions = []protocol.SessionInfo{
+		{ID: "s-old", Title: "fix the login bug\nplease", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
+		{ID: "s-older", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
+	}
+	m.setFocus(focusSidebar)
+	body, items := m.sidebarBody(sidebarWidth - 1)
+	if len(body) != len(m.agents)+2 || items[len(m.agents)+1] != len(m.agents) || !strings.Contains(stripANSI(body[len(m.agents)+1]), "sessions 2 ▸") {
+		t.Fatalf("folded sessions section:\n%s\n%v", strings.Join(body, "\n"), items)
+	}
+	for m.sbCursor != len(m.agents) {
+		press(&m, tea.KeyMsg{Type: tea.KeyDown})
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd != nil || !m.navSessionsOpen || m.focus != focusSidebar {
+		t.Fatalf("space on the heading should unfold: open=%v focus=%v", m.navSessionsOpen, m.focus)
+	}
+	body, items = m.sidebarBody(sidebarWidth - 1)
+	plainBody := make([]string, len(body))
+	for i, r := range body {
+		plainBody[i] = stripANSI(r)
+	}
+	na := len(m.agents)
+	if len(body) != na+4 || !strings.Contains(plainBody[na+1], "sessions ▾") || !strings.HasPrefix(plainBody[na+2], "  › fix the login bug") || strings.Contains(plainBody[na+2], "\n") || !strings.HasSuffix(plainBody[na+2], "2h00m") || !strings.HasPrefix(plainBody[na+3], "  › docs sweep") || !strings.HasSuffix(plainBody[na+3], "26h00m") || items[na+3] != na+2 {
+		t.Fatalf("open sessions section:\n%s\n%v", strings.Join(plainBody, "\n"), items)
+	}
+	for _, r := range plainBody[na+2:] {
+		if w := ansi.StringWidth(r); w != sidebarWidth-1 {
+			t.Fatalf("session rows fill the width: %d %q", w, r)
+		}
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown})
+	if m.sbCursor != na+2 {
+		t.Fatalf("cursor should walk into the sessions: %d", m.sbCursor)
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "resuming docs sweep") {
+		t.Fatalf("space on a session should resume it: cmd=%v status=%q", cmd != nil, m.status)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the first agent
+	if m.sbCursor != 0 {
+		t.Fatalf("wrap: %d", m.sbCursor)
+	}
+	header = len(m.sidebarHeader(sidebarWidth - 1))
+	nm, _ = m.Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	m = nm.(Model)
+	if m.navSessionsOpen {
+		t.Fatal("a click on the heading should fold the section")
+	}
+	// the dialogs show the selected agent's prompt first, then the oldest
+	m.prompts = []protocol.PromptInfo{
+		{ID: "pb", Kind: "permission", Agent: "b", Tool: "shell"},
+		{ID: "qd", Kind: "question", Agent: "d", Questions: []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}},
+		{ID: "pd", Kind: "permission", Agent: "d", Tool: "read"},
+	}
+	m.selected = 0 // main has none: the oldest of each kind
+	if m.currentPrompt().ID != "pb" || m.currentQuestion().ID != "qd" {
+		t.Fatalf("no own prompt: %s %s", m.currentPrompt().ID, m.currentQuestion().ID)
+	}
+	m.selected = 3 // asker: its own permission jumps ahead of b's
+	if m.currentPrompt().ID != "pd" || m.currentQuestion().ID != "qd" {
+		t.Fatalf("own prompt first: %s %s", m.currentPrompt().ID, m.currentQuestion().ID)
+	}
+	if perms, qs := m.promptCounts(); perms != 2 || qs != 1 {
+		t.Fatalf("the strip still counts everything: %d %d", perms, qs)
+	}
+	m.prompts = nil
+	m.setFocus(focusInput)
 	// the swarm line reads idle when nothing is happening, and the need-you
 	// line disappears with the prompts (the header shrinks by a row)
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "general", State: "idle"}}

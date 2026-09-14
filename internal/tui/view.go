@@ -986,7 +986,8 @@ func (m Model) sessionView(width, height int) string {
 // shows and the footer controls.
 func (m Model) sidebarView(height int) string {
 	inner := sidebarWidth - 1 // rows start at the left edge; one column of right padding
-	rows := append(m.sidebarHeader(inner), m.treeRows(inner)...)
+	body, _ := m.sidebarBody(inner)
+	rows := append(m.sidebarHeader(inner), body...)
 	if len(rows) > height {
 		rows = rows[:height]
 	}
@@ -1021,6 +1022,84 @@ func (m Model) sidebarHeader(width int) []string {
 		rows = append(rows, styleWarn.Render(text))
 	}
 	return append(rows, "", styleBold.Render("agents")+m.sidebarFocusHint())
+}
+
+// sidebarBody is everything under the header: the agent tree, a blank,
+// the sessions heading ("sessions 3 ▸" folded, "sessions ▾" open) and,
+// open, one row per other session of this directory. items maps each row
+// to its cursor index (agents first, then the heading, then the
+// sessions), -1 for rows the cursor skips.
+func (m Model) sidebarBody(width int) (rows []string, items []int) {
+	tree := m.treeRows(width)
+	rows = append(rows, tree...)
+	for i := range tree {
+		if i < len(m.agents) {
+			items = append(items, i)
+		} else {
+			items = append(items, -1) // the "(no agents)" row
+		}
+	}
+	focused := m.focus == focusSidebar && m.sidebarVisible()
+	na := len(m.agents)
+	rows, items = append(rows, ""), append(items, -1)
+	marker := "  "
+	if focused && m.sbCursor == na {
+		marker = styleAccent.Render("▶") + " "
+	}
+	head := "sessions"
+	switch {
+	case m.navSessionsOpen:
+		head += " ▾"
+	case len(m.navSessions) > 0:
+		head += fmt.Sprintf(" %d ▸", len(m.navSessions))
+	default:
+		head += " ▸"
+	}
+	rows, items = append(rows, marker+styleBold.Render(head)), append(items, na)
+	if !m.navSessionsOpen {
+		return rows, items
+	}
+	if len(m.navSessions) == 0 {
+		return append(rows, styleDim.Render("    (no other sessions here)")), append(items, -1)
+	}
+	for k, s := range m.navSessions {
+		marker := "  "
+		if focused && m.sbCursor == na+1+k {
+			marker = styleAccent.Render("▶") + " "
+		}
+		age := ""
+		if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
+			age = fmtElapsed(time.Since(t))
+		}
+		avail := width - 4 - len([]rune(age)) - 1
+		if avail < 4 {
+			avail = 4
+		}
+		title := sessionTitle(s)
+		if len([]rune(title)) > avail {
+			title = truncRunes(title, avail-1)
+		}
+		gap := width - 4 - ansi.StringWidth(title) - len([]rune(age))
+		if gap < 1 {
+			gap = 1
+		}
+		text := styleDim.Render(title)
+		if focused && m.sbCursor == na+1+k {
+			text = styleBold.Render(title)
+		}
+		rows = append(rows, marker+styleDim.Render("› ")+text+strings.Repeat(" ", gap)+styleDim.Render(age))
+		items = append(items, na+1+k)
+	}
+	return rows, items
+}
+
+// sessionTitle is a session's first prompt, flattened to one line.
+func sessionTitle(s protocol.SessionInfo) string {
+	t := strings.Join(strings.Fields(s.Title), " ")
+	if t == "" {
+		return "(empty session)"
+	}
+	return t
 }
 
 // swarmLine counts the agents working and waiting on an answer; "idle"

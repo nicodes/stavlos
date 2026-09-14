@@ -422,6 +422,28 @@ func sessionsCmd(ctx context.Context, c *client.Client, dir string, quiet bool) 
 	}
 }
 
+// navSessionsMsg carries the sidebar's sessions section: the directory's
+// other resumable sessions, newest first.
+type navSessionsMsg struct {
+	sessions []protocol.SessionInfo
+	err      error
+}
+
+func navSessionsCmd(ctx context.Context, c *client.Client, dir, current string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		ss, err := c.Sessions(ctx, dir, false)
+		var out []protocol.SessionInfo
+		for _, s := range ss {
+			if s.ID != current && s.Title != "" { // never prompted: nothing to resume
+				out = append(out, s)
+			}
+		}
+		return navSessionsMsg{out, err}
+	}
+}
+
 // switchedMsg reports a session resume for the /sessions picker: the TUI
 // rebinds to info.ID and reconciles from scratch.
 type switchedMsg struct {
