@@ -468,11 +468,7 @@ type ProviderInfo struct {
 	ID        string        `json:"id"`
 	Name      string        `json:"name"`
 	Connected bool          `json:"connected"`
-	Source    string        `json:"source,omitempty"`  // "auth.json" | "env" | "local"
-	Via       string        `json:"via,omitempty"`     // file path or env var name
-	Env       []string      `json:"env,omitempty"`     // env vars the provider reads
-	Hint      string        `json:"hint,omitempty"`    // where to get a key
-	Kind      string        `json:"kind"`              // "anthropic" | "openai-compatible" | "local" | "unsupported"
+	Kind      string        `json:"kind"`              // "subscription" | "plugin"
 	Priority  int           `json:"priority"`          // lower sorts first
 	Models    int           `json:"models"`            // catalog model count
 	Label     string        `json:"label,omitempty"`   // subscription label, e.g. "ChatGPT Plus/Pro subscription"

@@ -41,30 +41,23 @@ func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {
 		Stream:        true,
 		StreamOptions: &streamOptions{IncludeUsage: true},
 	}
-	if p.usesMaxCompletionTokens() {
-		cr.MaxCompletionTokens = maxTokens
-	} else {
-		cr.MaxTokens = maxTokens
-	}
+	cr.MaxTokens = maxTokens
 	if req.Variant != "" {
 		cr.ReasoningEffort = req.Variant
 	}
 	return json.Marshal(cr)
 }
 
-// header sets the bearer credential: a rotating token when configured,
-// else a static key (none for local servers).
+// header sets the bearer credential from the token source.
 func (p *provider) header(ctx context.Context, h http.Header) error {
-	switch {
-	case p.token != nil:
-		tok, err := p.token(ctx)
-		if err != nil {
-			return fmt.Errorf("%s: %w", p.name, err)
-		}
-		h.Set("Authorization", "Bearer "+tok.Access)
-	case p.apiKey != "":
-		h.Set("Authorization", "Bearer "+p.apiKey)
+	if p.token == nil {
+		return nil
 	}
+	tok, err := p.token(ctx)
+	if err != nil {
+		return fmt.Errorf("%s: %w", p.name, err)
+	}
+	h.Set("Authorization", "Bearer "+tok.Access)
 	return nil
 }
 

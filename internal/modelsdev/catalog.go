@@ -1,6 +1,6 @@
 // Package modelsdev consumes the models.dev community database for model
-// metadata: pricing, limits, and provider auth env vars (PRD §8.1, §8.4).
-// Wire protocols are implemented elsewhere; this package is metadata only.
+// metadata: context windows, output limits, names (PRD §8.1). Wire
+// protocols are implemented elsewhere; this package is metadata only.
 package modelsdev
 
 import (
@@ -11,27 +11,14 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 )
 
-// ProviderInfo is the provider-level metadata from models.dev.
-type ProviderInfo struct {
-	Name    string   // provider key, e.g. "anthropic"
-	Display string   // human-facing name, e.g. "Anthropic"
-	EnvVars []string // env vars that may hold the API key (the "env" field)
-	API     string   // base URL for the wire protocol (the "api" field)
-	NPM     string   // Vercel AI SDK package name (the "npm" field); hints the protocol
-}
-
 // Catalog is a parsed models.dev database.
 type Catalog struct {
 	providers map[string]rawProvider
 }
 
-// rawProvider mirrors one top-level entry of api.json.
+// rawProvider mirrors one top-level entry of api.json (only its models are
+// consumed).
 type rawProvider struct {
-	ID     string              `json:"id"`
-	Name   string              `json:"name"`
-	Env    []string            `json:"env"`
-	API    string              `json:"api"`
-	NPM    string              `json:"npm"`
 	Models map[string]rawModel `json:"models"`
 }
 
@@ -68,19 +55,6 @@ func Parse(data []byte) (*Catalog, error) {
 	return &Catalog{providers: providers}, nil
 }
 
-// Provider returns provider metadata by key.
-func (c *Catalog) Provider(name string) (ProviderInfo, bool) {
-	p, ok := c.providers[name]
-	if !ok {
-		return ProviderInfo{}, false
-	}
-	disp := p.Name
-	if disp == "" {
-		disp = name
-	}
-	return ProviderInfo{Name: name, Display: disp, EnvVars: append([]string(nil), p.Env...), API: p.API, NPM: p.NPM}, true
-}
-
 // Model returns metadata for a bare model id under a provider.
 func (c *Catalog) Model(provider, id string) (model.Info, bool) {
 	p, ok := c.providers[provider]
@@ -99,16 +73,6 @@ func (c *Catalog) Model(provider, id string) (model.Info, bool) {
 		info.CacheWritePrice = m.Cost.CacheWrite
 	}
 	return info, true
-}
-
-// Providers lists every provider key, sorted.
-func (c *Catalog) Providers() []string {
-	out := make([]string, 0, len(c.providers))
-	for k := range c.providers {
-		out = append(out, k)
-	}
-	sort.Strings(out)
-	return out
 }
 
 // Models lists the bare model ids under a provider, sorted.

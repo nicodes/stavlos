@@ -5,15 +5,14 @@ import "encoding/json"
 // Request/response shapes for the Chat Completions API. Only what we use.
 
 type chatRequest struct {
-	Model               string          `json:"model"`
-	Messages            []chatMessage   `json:"messages"`
-	Tools               []chatTool      `json:"tools,omitempty"`
-	Stream              bool            `json:"stream"`
-	StreamOptions       *streamOptions  `json:"stream_options,omitempty"`
-	MaxTokens           int             `json:"max_tokens,omitempty"`
-	MaxCompletionTokens int             `json:"max_completion_tokens,omitempty"`
-	ReasoningEffort     string          `json:"reasoning_effort,omitempty"` // variant, for models that take it
-	ExtraBody           json.RawMessage `json:"-"`
+	Model           string          `json:"model"`
+	Messages        []chatMessage   `json:"messages"`
+	Tools           []chatTool      `json:"tools,omitempty"`
+	Stream          bool            `json:"stream"`
+	StreamOptions   *streamOptions  `json:"stream_options,omitempty"`
+	MaxTokens       int             `json:"max_tokens,omitempty"`
+	ReasoningEffort string          `json:"reasoning_effort,omitempty"` // variant, for models that take it
+	ExtraBody       json.RawMessage `json:"-"`
 }
 
 type streamOptions struct {
