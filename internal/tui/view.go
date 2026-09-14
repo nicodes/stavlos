@@ -697,6 +697,8 @@ type footerInfo struct {
 	connected bool
 	label     string // selected agent label
 	model     string // selected agent model (provider/id)
+	context   int    // estimated tokens the next model call carries
+	window    int    // the model's context window; 0 hides the bar
 	tokens    int
 	cost      float64
 }
@@ -714,7 +716,31 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
-	return fmtTokens(f.tokens) + " tokens · $" + fmtCost(f.cost)
+	s := fmtTokens(f.tokens) + " tokens · $" + fmtCost(f.cost)
+	if bar := contextBar(f.context, f.window); bar != "" {
+		s = bar + " · " + s
+	}
+	return s
+}
+
+// contextBar draws how full the model's context is as a ten-cell bar with
+// the percentage — what auto-compaction watches (it summarises at 80%).
+// The fill is dim until 70%, warning-coloured from there. "" when the
+// window is unknown.
+func contextBar(context, window int) string {
+	if window <= 0 || context < 0 {
+		return ""
+	}
+	pct := context * 100 / window
+	if pct > 100 {
+		pct = 100
+	}
+	cells := pct / 10 // full only at 100%
+	fill := styleDim
+	if pct >= 70 {
+		fill = styleWarn
+	}
+	return fill.Render(strings.Repeat("▰", cells)) + styleDim.Render(strings.Repeat("▱", 10-cells)) + " " + styleDim.Render(fmt.Sprintf("%d%%", pct))
 }
 
 // turnStats formats the indicator's suffix: "(12s · 1.2k tokens)".
@@ -1445,6 +1471,7 @@ func (m Model) footerRightView() string {
 	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.session.Model}
 	if a := m.selectedAgent(); a != nil {
 		f.label, f.tokens, f.cost = a.Label, a.Tokens, a.CostUSD
+		f.context, f.window = a.Context, a.ContextWindow
 		if a.Model != "" {
 			f.model = a.Model
 		}

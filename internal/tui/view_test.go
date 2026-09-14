@@ -1073,9 +1073,24 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if meta < 0 || strip < 0 {
 		t.Fatalf("no meta row or strip:\n%s", strings.Join(lines, "\n"))
 	}
-	// role and model on the left, tokens and cost on the right, no dots
-	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens · $0.02") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
+	// role and model on the left, tokens and cost on the right, no dots; no
+	// context bar while the window is unknown
+	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens · $0.02") || strings.Contains(row, "▱") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
 		t.Fatalf("meta row: %q", row)
+	}
+	// with a window: the context bar and percentage sit before the tokens
+	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
+	if right := stripANSI(m.footerRightView()); right != "▰▰▰▱▱▱▱▱▱▱ 31% · 2k tokens · $0.02" {
+		t.Fatalf("meta right: %q", right)
+	}
+	if bar := stripANSI(contextBar(190_000, 200_000)); bar != "▰▰▰▰▰▰▰▰▰▱ 95%" {
+		t.Fatalf("bar %q", bar)
+	}
+	if bar := stripANSI(contextBar(250_000, 200_000)); bar != "▰▰▰▰▰▰▰▰▰▰ 100%" {
+		t.Fatalf("bar %q", bar)
+	}
+	if contextBar(5, 0) != "" {
+		t.Fatal("no bar without a window")
 	}
 	if strip < 3 || meta != strip+1 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], "›") || !strings.HasPrefix(lines[strip-3], "─") {
 		t.Fatalf("under the rule come the input, a blank line, the strip, then the meta row:\n%s", strings.Join(lines, "\n"))

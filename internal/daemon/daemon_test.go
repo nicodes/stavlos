@@ -1971,6 +1971,9 @@ func TestManualCompact(t *testing.T) {
 	h.waitFor(event.TurnEnded, root)
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "two")
 	h.waitFor(event.TurnEnded, root)
+	if agents, _ = h.c.Tree(ctx, s.ID); agents[0].Context <= 0 {
+		t.Fatalf("the tree should carry the context estimate after a turn: %+v", agents[0])
+	}
 	status, err := h.c.CompactAgent(ctx, root)
 	if err != nil || status != "compacted" {
 		t.Fatalf("compact: %q %v", status, err)

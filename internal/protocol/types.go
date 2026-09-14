@@ -200,27 +200,29 @@ const (
 )
 
 type AgentInfo struct {
-	ID        string           `json:"id"`
-	Session   string           `json:"session"`
-	Parent    string           `json:"parent,omitempty"`
-	Archetype string           `json:"archetype"`
-	Label     string           `json:"label"`
-	Model     string           `json:"model"`
-	Variant   string           `json:"variant,omitempty"` // model variant (reasoning effort); "" = default
-	Depth     int              `json:"depth"`
-	State     string           `json:"state"` // idle | running | waiting | blocked | finished | killed
-	Turn      int              `json:"turn"`
-	Queued    int              `json:"queued"` // prompts waiting
-	CostUSD   float64          `json:"cost_usd"`
-	Tokens    int              `json:"tokens"`               // input+output total
-	Summary   string           `json:"summary,omitempty"`    // finish summary
-	Status    string           `json:"status,omitempty"`     // finish status
-	LastError string           `json:"last_error,omitempty"` // error that ended the most recent turn, if any
-	Monitors  []MonitorInfo    `json:"monitors,omitempty"`   // this agent's general monitors (not children)
-	Todos     []event.TodoItem `json:"todos,omitempty"`      // this agent\'s todo list, in creation order
-	MCP       []MCPInfo        `json:"mcp,omitempty"`        // this agent\'s MCP servers (the ones its role lists), with state
-	Dirs      []DirInfo        `json:"dirs,omitempty"`       // the agent\'s working directories, session first
-	Awaiting  []string         `json:"awaiting,omitempty"`   // ids of the agents whose answer this one is waiting for (a child's task, an agent_message)
+	ID            string           `json:"id"`
+	Session       string           `json:"session"`
+	Parent        string           `json:"parent,omitempty"`
+	Archetype     string           `json:"archetype"`
+	Label         string           `json:"label"`
+	Model         string           `json:"model"`
+	Variant       string           `json:"variant,omitempty"` // model variant (reasoning effort); "" = default
+	Depth         int              `json:"depth"`
+	State         string           `json:"state"` // idle | running | waiting | blocked | finished | killed
+	Turn          int              `json:"turn"`
+	Queued        int              `json:"queued"` // prompts waiting
+	CostUSD       float64          `json:"cost_usd"`
+	Tokens        int              `json:"tokens"`                   // input+output total
+	Context       int              `json:"context,omitempty"`        // estimated tokens the next model call carries (what compaction measures)
+	ContextWindow int              `json:"context_window,omitempty"` // the model\'s window; 0 when unknown
+	Summary       string           `json:"summary,omitempty"`        // finish summary
+	Status        string           `json:"status,omitempty"`         // finish status
+	LastError     string           `json:"last_error,omitempty"`     // error that ended the most recent turn, if any
+	Monitors      []MonitorInfo    `json:"monitors,omitempty"`       // this agent's general monitors (not children)
+	Todos         []event.TodoItem `json:"todos,omitempty"`          // this agent\'s todo list, in creation order
+	MCP           []MCPInfo        `json:"mcp,omitempty"`            // this agent\'s MCP servers (the ones its role lists), with state
+	Dirs          []DirInfo        `json:"dirs,omitempty"`           // the agent\'s working directories, session first
+	Awaiting      []string         `json:"awaiting,omitempty"`       // ids of the agents whose answer this one is waiting for (a child's task, an agent_message)
 }
 type AgentTreeParams struct {
 	V       int    `json:"v"`

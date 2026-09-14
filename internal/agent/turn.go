@@ -122,6 +122,9 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 				history = project.Project(a.eventsCopy())
 			}
 		}
+		a.mu.Lock()
+		a.ctxTokens, a.ctxWindow = project.EstimateTokens(history, system), info.ContextWindow
+		a.mu.Unlock()
 		if len(history) == 0 || history[len(history)-1].Role != model.RoleUser {
 			history = append(history, model.Message{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "(continue)"}}})
 		}

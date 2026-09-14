@@ -11,6 +11,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/project"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -73,6 +74,8 @@ type Agent struct {
 	wakes       map[string]bool             // ids whose completion is waiting to wake this agent (unmonitor cancels)
 	lastError   string                      // error that ended the most recent turn; cleared when a turn starts
 	compactNext bool                        // /compact arrived mid-turn: compact before the next model call, whatever the size
+	ctxTokens   int                         // estimated size of the projected history + system prompt at the last model call (or after compaction)
+	ctxWindow   int                         // the model\'s context window as of the last model call
 	children    []string
 	done        chan struct{} // closed on kill
 	usage       struct {
@@ -425,6 +428,11 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 	if err := a.compact(ctx, m, len(a.eventsCopy())); err != nil {
 		return "", err
 	}
+	system, _ := a.buildContext()
+	est := project.EstimateTokens(project.Project(a.eventsCopy()), system) // eventsCopy takes a.mu: compute before locking
+	a.mu.Lock()
+	a.ctxTokens = est
+	a.mu.Unlock()
 	return "compacted", nil
 }
 
@@ -493,6 +501,7 @@ func (a *Agent) Info() protocol.AgentInfo {
 		Model: a.modelID, Variant: a.variant, Depth: a.Depth, State: state, Turn: a.turn,
 		Queued:  len(a.prompts) + len(a.steers) + len(a.responses),
 		CostUSD: a.usage.cost, Tokens: a.usage.tokens,
+		Context: a.ctxTokens, ContextWindow: a.ctxWindow,
 	}
 	info.LastError = a.lastError
 	for id := range a.awaiting {
