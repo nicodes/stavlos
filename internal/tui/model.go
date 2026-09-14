@@ -89,18 +89,19 @@ type Model struct {
 	sp    spinner.Model
 
 	width, height int
-	showTree      bool      // right sidebar toggle (/tree, ctrl+b)
-	hideKeys      bool      // the key bar (divider + legend) at the bottom is hidden; /help shows it
-	cancelArmed   time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
-	quitArmed     time.Time // when ctrl+c was last pressed; a second within cancelWindow quits
-	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
-	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
-	sel           selection // mouse text selection (drag to select, release to copy)
-	metaSel       metaPart  // the highlighted part of the meta row while it has focus
-	tabSel        int       // the highlighted tab (index into tabFocuses) while the strip has focus
-	dialogFrom    focus     // what had focus when the open dialog (a tab's or an overlay) was opened; closing returns there
-	details       bool      // expanded tool output (/details)
-	follow        bool      // auto-scroll to bottom
+	showTree      bool            // right sidebar toggle (/tree, ctrl+b)
+	hideKeys      bool            // the key bar (divider + legend) at the bottom is hidden; /help shows it
+	cancelArmed   time.Time       // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
+	quitArmed     time.Time       // when ctrl+c was last pressed; a second within cancelWindow quits
+	hoverFocus    bool            // the chat has focus because the mouse is over it (released when the mouse leaves)
+	hoverFrom     focus           // where focus was before hover took it, restored when the mouse leaves the chat
+	sel           selection       // mouse text selection (drag to select, release to copy)
+	metaSel       metaPart        // the highlighted part of the meta row while it has focus
+	tabSel        int             // the highlighted tab (index into tabFocuses) while the strip has focus
+	dialogFrom    focus           // what had focus when the open dialog (a tab's or an overlay) was opened; closing returns there
+	mcpOpen       map[string]bool // MCP servers whose tool list is expanded in the mcp dialog
+	details       bool            // expanded tool output (/details)
+	follow        bool            // auto-scroll to bottom
 
 	status      string
 	statusErr   bool
@@ -144,6 +145,7 @@ const (
 	focusAgents                  // the agents tab: live children
 	focusAsync                   // the async tab: running bash_async jobs
 	focusTodo                    // the todo tab: the selected agent's todo list
+	focusMCP                     // the mcp tab: the selected agent's MCP servers
 	focusSidebar                 // the agent tree (↑/↓ enter)
 	focusTabs                    // the tab strip: ←/→ highlight a tab, enter opens its dialog
 	focusMeta                    // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
@@ -151,7 +153,7 @@ const (
 
 // tabFocuses are the tabs of the strip under the chat, left to right. They
 // are one stop in the tab cycle; ←/→ move between them.
-var tabFocuses = []focus{focusPermission, focusAgents, focusAsync, focusTodo}
+var tabFocuses = []focus{focusPermission, focusAgents, focusAsync, focusTodo, focusMCP}
 
 // isTab reports whether f is one of the strip's tabs.
 func isTab(f focus) bool {
@@ -459,7 +461,15 @@ func (m *Model) stripShown() bool {
 	if !m.isHome() {
 		return true
 	}
-	return m.currentPrompt() != nil || len(m.liveChildren())+len(m.runningJobs())+len(m.selectedTodos()) > 0
+	return m.currentPrompt() != nil || len(m.liveChildren())+len(m.runningJobs())+len(m.selectedTodos())+len(m.selectedMCP()) > 0
+}
+
+// selectedMCP returns the selected agent's MCP servers (its role's list).
+func (m *Model) selectedMCP() []protocol.MCPInfo {
+	if a := m.selectedAgent(); a != nil {
+		return a.MCP
+	}
+	return nil
 }
 
 // selectedTodos returns the selected agent's todo list.
@@ -606,7 +616,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		}
 	case focusSidebar:
 		m.sbCursor = m.selected
-	case focusAgents, focusAsync, focusTodo:
+	case focusAgents, focusAsync, focusTodo, focusMCP:
 		m.agCursor = 0
 	case focusMeta:
 		m.metaSel = m.metaParts()[0] // always the leftmost part: YOLO while on, else the role
@@ -679,6 +689,35 @@ func (m *Model) todoKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.SelDown), msg.String() == "j":
 		if n > 0 {
 			m.agCursor = (m.agCursor + 1) % n
+		}
+	}
+	return nil
+}
+
+// mcpKey handles keys while the mcp dialog is open: ↑/↓ (or j/k) move over
+// the rows, enter shows or hides a server's tools, esc closes.
+func (m *Model) mcpKey(msg tea.KeyMsg) tea.Cmd {
+	_, owners := mcpRows(m.selectedMCP(), m.mcpOpen, time.Now(), 200)
+	n := len(owners)
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.closeDialog()
+	case key.Matches(msg, keys.SelUp), msg.String() == "k":
+		if n > 0 {
+			m.agCursor = ((m.agCursor-1)%n + n) % n
+		}
+	case key.Matches(msg, keys.SelDown), msg.String() == "j":
+		if n > 0 {
+			m.agCursor = (m.agCursor + 1) % n
+		}
+	case key.Matches(msg, keys.Submit):
+		if n > 0 {
+			if name := owners[m.agCursor%n]; name != "" {
+				if m.mcpOpen == nil {
+					m.mcpOpen = map[string]bool{}
+				}
+				m.mcpOpen[name] = !m.mcpOpen[name]
+			}
 		}
 	}
 	return nil
@@ -822,6 +861,9 @@ func (m *Model) tabRowCount() int {
 		return len(m.runningJobs())
 	case focusTodo:
 		return len(m.selectedTodos())
+	case focusMCP:
+		_, owners := mcpRows(m.selectedMCP(), m.mcpOpen, time.Now(), 200)
+		return len(owners)
 	}
 	return 0
 }
@@ -1297,6 +1339,7 @@ func (m *Model) tabAt(x int) (focus, bool) {
 		{fmt.Sprintf("agents (%d)", len(m.liveChildren())), focusAgents},
 		{fmt.Sprintf("async (%d)", len(m.runningJobs())), focusAsync},
 		{todoLabel(m.selectedTodos()), focusTodo},
+		{mcpLabel(m.selectedMCP()), focusMCP},
 	}
 	x0 := 0
 	for _, l := range labels {
@@ -1468,6 +1511,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.asyncKey(msg)
 	case focusTodo:
 		return m.todoKey(msg)
+	case focusMCP:
+		return m.mcpKey(msg)
 	case focusSidebar:
 		return m.sidebarKey(msg)
 	case focusMeta:

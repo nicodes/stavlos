@@ -939,6 +939,27 @@ func EventLines(ev event.Event) []Line {
 		}
 		return []Line{{Kind: LineDim, Glyph: monitorGlyph(p.Kind), Tone: ToneWorking, Text: "job: " + p.Label}}
 
+	case event.MCPStarted:
+		var p event.MCPStartedPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return []Line{{Kind: LineDim, Glyph: glyphToolMCP, Text: fmt.Sprintf("mcp: %s connected · %d tools", p.Server, len(p.Tools))}}
+
+	case event.MCPFailed:
+		var p event.MCPFailedPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return []Line{{Kind: LineError, Glyph: glyphToolMCP, Tone: ToneError, Text: fmt.Sprintf("mcp: %s failed: %s", p.Server, p.Error)}}
+
+	case event.MCPStopped:
+		var p event.MCPRefPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return []Line{{Kind: LineDim, Glyph: glyphToolMCP, Text: "mcp: " + p.Server + " stopped"}}
+
 	case event.MonitorFired:
 		var p event.MonitorFiredPayload
 		if err := ev.Decode(&p); err != nil {
@@ -1239,6 +1260,12 @@ func toolTitle(name string) string {
 		return "Agent complete"
 	case "agent_response":
 		return "Agent response delivered"
+	}
+	if strings.HasPrefix(name, "mcp__") {
+		// mcp__server__tool reads "server · tool"
+		if parts := strings.SplitN(strings.TrimPrefix(name, "mcp__"), "__", 2); len(parts) == 2 {
+			return parts[0] + " · " + parts[1]
+		}
 	}
 	return titleCase(name)
 }

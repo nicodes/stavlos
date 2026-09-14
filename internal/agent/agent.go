@@ -52,13 +52,14 @@ type Agent struct {
 	modelID    string
 	state      State
 	turn       int
-	prompts    []queued         // Prompt inbox
-	steers     []queued         // Steer inbox
-	responses  []response       // answers from other agents (agent_response), not yet delivered
-	awaiting   map[string]int   // agent id → questions asked of it (agent_message, a child's task); cleared by its next answer
-	todos      []event.TodoItem // the agent\'s todo list, in creation order (todo.changed snapshots)
-	todoSeq    int              // last todo id issued
-	events     []event.Event    // this agent's events (projection cache)
+	prompts    []queued              // Prompt inbox
+	steers     []queued              // Steer inbox
+	responses  []response            // answers from other agents (agent_response), not yet delivered
+	awaiting   map[string]int        // agent id → questions asked of it (agent_message, a child's task); cleared by its next answer
+	todos      []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
+	todoSeq    int                   // last todo id issued
+	mcps       map[string]*mcpServer // MCP servers this agent has started (name → server)
+	events     []event.Event         // this agent's events (projection cache)
 	cancelTurn context.CancelFunc
 	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
 	armed      map[string]bool // ids (children, monitors) whose completion wakes this agent
@@ -211,7 +212,8 @@ func (a *Agent) killNow() {
 	}
 	a.state = StateKilled
 	a.mu.Unlock()
-	a.kill() // cancels monitors too (their ctx derives from a.ctx)
+	a.kill()      // cancels monitors too (their ctx derives from a.ctx)
+	a.stopMCP("") // and the MCP servers it owns
 	a.closeDone()
 	_, _ = a.s.host.Append(context.Background(), event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentKilled,
 		Payload: event.MustPayload(event.AgentRefPayload{ID: a.ID})})
@@ -461,6 +463,7 @@ func (a *Agent) Info() protocol.AgentInfo {
 	}
 	info.LastError = a.lastError
 	info.Todos = append([]event.TodoItem(nil), a.todos...)
+	info.MCP = a.mcpInfoLocked()
 	mons := make([]*Monitor, 0, len(a.monitors))
 	for _, m := range a.monitors {
 		mons = append(mons, m)

@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/model/registry"
@@ -1295,5 +1297,121 @@ func TestRoles(t *testing.T) {
 	agents, _ = h.c.Tree(ctx, s.ID)
 	if agents[0].Archetype != "general" || agents[0].Model != "fake/m1" || agents[0].Variant != "high" {
 		t.Fatalf("after /roles general: %+v", agents[0])
+	}
+}
+
+// TestMain lets the test binary double as a stdio MCP server (one tool,
+// echo) when STAVLOS_TEST_MCP_SERVER is set: the daemon under test starts
+// it as an agent's server.
+func TestMain(m *testing.M) {
+	if os.Getenv("STAVLOS_TEST_MCP_SERVER") == "1" {
+		runStubMCPServer()
+		return
+	}
+	os.Exit(m.Run())
+}
+
+func runStubMCPServer() {
+	srv := mcp.NewServer(&mcp.Implementation{Name: "stub", Version: "1"}, nil)
+	type in struct {
+		Text string `json:"text" jsonschema:"text to echo back"`
+	}
+	mcp.AddTool(srv, &mcp.Tool{Name: "echo", Description: "Echo text back"}, func(ctx context.Context, req *mcp.CallToolRequest, args in) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "echo: " + args.Text + " greeting=" + os.Getenv("GREETING")}}}, nil, nil
+	})
+	_ = srv.Run(context.Background(), &mcp.StdioTransport{})
+}
+
+// TestMCPServersPerAgent: a role's MCP servers start with the agent's first
+// turn, their tools are offered as mcp__<server>__<tool> and run, a server
+// that is not defined is reported as failed, env references expand, the
+// tree shows every server's state, and a role change stops servers the
+// new role does not list.
+func TestMCPServersPerAgent(t *testing.T) {
+	setupConfig(t)
+	t.Setenv("STAVLOS_TEST_GREETING", "hello")
+	g := os.Getenv("STAVLOS_CONFIG_DIR")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := fmt.Sprintf(`{"model":"fake/m1","rootAgent":"mcpuser","mcp":{"echo":{"command":%q,"env":{"STAVLOS_TEST_MCP_SERVER":"1","GREETING":"${env:STAVLOS_TEST_GREETING}"}}},"policy":{"mcp__echo__*":"allow"}}`, exe)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(cfg), 0o644)
+	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
+	os.WriteFile(filepath.Join(g, "roles", "mcpuser.md"), []byte("---\ndescription: Uses MCP\nmcp: [echo, missing]\ntools: [read]\n---\nYou use tools.\n"), 0o644)
+
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			found := false
+			for _, d := range req.Tools {
+				if d.Name == "mcp__echo__echo" {
+					found = true
+					if !strings.Contains(d.Description, "[echo]") || !strings.Contains(string(d.Schema), "text") {
+						t.Errorf("tool def %+v", d)
+					}
+				}
+			}
+			if !found || !strings.Contains(req.System, "# MCP tools") {
+				t.Errorf("the echo tool should be offered: tools=%d system has MCP section=%v", len(req.Tools), strings.Contains(req.System, "# MCP tools"))
+			}
+			return call("c1", "mcp__echo__echo", `{"text":"hi"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || last.Content != "echo: hi greeting=hello" {
+				t.Errorf("mcp tool result: %+v", last)
+			}
+			return text("done")
+		},
+		func(model.Request) model.Response { return text("switched") },
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, err := h.c.CreateSession(ctx, work, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	// before the first turn the servers are listed but pending
+	if len(agents[0].MCP) != 2 || agents[0].MCP[0].Name != "echo" || agents[0].MCP[0].State != "pending" {
+		t.Fatalf("pending servers %+v", agents[0].MCP)
+	}
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	e := h.waitFor(event.MCPStarted, root)
+	var sp event.MCPStartedPayload
+	_ = e.Decode(&sp)
+	if sp.Server != "echo" || len(sp.Tools) != 1 || sp.Tools[0] != "mcp__echo__echo" {
+		t.Fatalf("mcp.started %+v", sp)
+	}
+	e = h.waitFor(event.MCPFailed, root)
+	var fp event.MCPFailedPayload
+	_ = e.Decode(&fp)
+	if fp.Server != "missing" || !strings.Contains(fp.Error, "not defined") {
+		t.Fatalf("mcp.failed %+v", fp)
+	}
+	h.waitFor(event.TurnEnded, root)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	byName := map[string]protocol.MCPInfo{}
+	for _, m := range agents[0].MCP {
+		byName[m.Name] = m
+	}
+	if byName["echo"].State != "connected" || len(byName["echo"].Tools) != 1 || byName["missing"].State != "failed" {
+		t.Fatalf("tree mcp %+v", agents[0].MCP)
+	}
+	// a role without MCP: the next turn stops the server
+	if err := h.c.SetAgentRole(ctx, root, "general"); err != nil {
+		t.Fatal(err)
+	}
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "again")
+	h.waitFor(event.MCPStopped, root)
+	h.waitFor(event.TurnEnded, root)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents[0].MCP) != 0 {
+		t.Fatalf("servers should be gone after the role change: %+v", agents[0].MCP)
 	}
 }

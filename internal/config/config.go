@@ -53,9 +53,19 @@ type Compaction struct {
 type MCP struct {
 	Command string            `json:"command,omitempty"`
 	Args    []string          `json:"args,omitempty"`
-	Env     map[string]string `json:"env,omitempty"`
-	URL     string            `json:"url,omitempty"`
+	Env     map[string]string `json:"env,omitempty"` // values may reference the daemon's environment as ${env:NAME}
+	URL     string            `json:"url,omitempty"` // parsed, not yet connected: stdio servers only in v1
 }
+
+// ExpandEnv replaces ${env:NAME} references in s with the daemon's
+// environment, so config files carry references, never secrets.
+func ExpandEnv(s string) string {
+	return envRef.ReplaceAllStringFunc(s, func(m string) string {
+		return os.Getenv(m[len("${env:") : len(m)-1])
+	})
+}
+
+var envRef = regexp.MustCompile(`\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // Preset is a role definition from roles/<name>.md (PRD §10.3). The word
 // "role" is what users see; "preset" and "archetype" are the same thing in

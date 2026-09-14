@@ -185,6 +185,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		_, _ = a.record(bg, event.ToolCallFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied})
 	}
 	t, ok := a.s.tools[c.Name]
+	if !ok {
+		t, ok = a.mcpTool(c.Name) // an MCP server's tool, owned by this agent
+	}
 	if !ok || !hasDef(defs, c.Name) {
 		finish(fmt.Sprintf("unknown tool %q", c.Name), true, false, false)
 		return
@@ -377,6 +380,15 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 		seen[n] = true
 		if t, ok := a.s.tools[n]; ok {
 			defs = append(defs, t.Def())
+		}
+	}
+	// The role's MCP servers: started here (their process is this agent's),
+	// their tools offered as mcp__<server>__<tool>.
+	if len(a.preset.MCP) > 0 || a.hasMCP() {
+		a.ensureMCP(a.ctx, cfg) // also stops servers a new role no longer lists
+		if mdefs := a.mcpDefs(); len(mdefs) > 0 {
+			sb.WriteString("\n# MCP tools\nTools named mcp__<server>__<tool> come from MCP servers this role runs; their descriptions are the servers' own.\n")
+			defs = append(defs, mdefs...)
 		}
 	}
 	return sb.String(), defs

@@ -34,6 +34,10 @@ const (
 
 	TodoChanged Type = "todo.changed" // TodoPayload: the agent\'s todo list after a change (a full snapshot)
 
+	MCPStarted Type = "mcp.started" // MCPStartedPayload: an agent\'s MCP server is connected and its tools listed
+	MCPFailed  Type = "mcp.failed"  // MCPFailedPayload: it could not be started or was lost
+	MCPStopped Type = "mcp.stopped" // MCPRefPayload: stopped (role change, kill)
+
 	PromptQueued  Type = "prompt.queued"  // TextPayload
 	SteerReceived Type = "steer.received" // TextPayload
 
@@ -164,6 +168,22 @@ type TodoItem struct {
 // one restores the list.
 type TodoPayload struct {
 	Items []TodoItem `json:"items"`
+}
+
+// MCPStartedPayload lists the tools an agent's MCP server offers, by their
+// model-facing names (mcp__<server>__<tool>).
+type MCPStartedPayload struct {
+	Server string   `json:"server"`
+	Tools  []string `json:"tools"`
+}
+
+type MCPFailedPayload struct {
+	Server string `json:"server"`
+	Error  string `json:"error"`
+}
+
+type MCPRefPayload struct {
+	Server string `json:"server"`
 }
 
 // MonitorStartedPayload describes a general monitor. Kind: "command" |

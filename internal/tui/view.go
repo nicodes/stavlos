@@ -1026,6 +1026,8 @@ func (m Model) tabDialogTitle() string {
 		return fmt.Sprintf("Async (%d)", len(m.runningJobs()))
 	case focusTodo:
 		return "Todo " + todoCount(m.selectedTodos())
+	case focusMCP:
+		return "MCP " + mcpCount(m.selectedMCP())
 	}
 	n := len(m.prompts)
 	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
@@ -1072,6 +1074,13 @@ func (m Model) tabBodyLines(width int) []string {
 			return []string{styleDim.Render("  no todo items")}
 		}
 		return m.cursorRows(todoRows(items, width-2))
+	case focusMCP:
+		items := m.selectedMCP()
+		if len(items) == 0 {
+			return []string{styleDim.Render("  no mcp servers")}
+		}
+		rows, _ := mcpRows(items, m.mcpOpen, time.Now(), width-2)
+		return m.cursorRows(rows)
 	case focusPermission:
 		p := m.currentPrompt()
 		if p == nil {
@@ -1127,6 +1136,7 @@ func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo,
 		tab(fmt.Sprintf("agents (%d)", len(kids)), on(focusAgents)),
 		tab(fmt.Sprintf("async (%d)", len(jobs)), on(focusAsync)),
 		tab(todoLabel(m.selectedTodos()), on(focusTodo)),
+		tab(mcpLabel(m.selectedMCP()), on(focusMCP)),
 	}
 	return strings.Join(tabs, styleDim.Render(" · "))
 }
@@ -1470,6 +1480,7 @@ const (
 	glyphToolMonitors = "$" // async jobs are shell commands
 	glyphToolAgents   = "⑂"
 	glyphToolTodo     = "◇" // todo_add, todo_update
+	glyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
 )
 
 // toolGlyph returns the glyph for a tool name and the gap after it.
@@ -1481,6 +1492,8 @@ func toolGlyph(tool string) (string, string) {
 		return glyphToolShell, " "
 	case strings.HasPrefix(tool, "todo_"):
 		return glyphToolTodo, " "
+	case strings.HasPrefix(tool, "mcp__"):
+		return glyphToolMCP, " "
 	}
 	return glyphToolFiles, " "
 }
@@ -1523,6 +1536,74 @@ func todoRows(items []event.TodoItem, width int) []string {
 		rows = append(rows, ansi.Truncate("  "+row, width, "…"))
 	}
 	return rows
+}
+
+// mcpCount is "(connected/listed)" for an agent's MCP servers, "(0)" when
+// its role lists none.
+func mcpCount(items []protocol.MCPInfo) string {
+	if len(items) == 0 {
+		return "(0)"
+	}
+	up := 0
+	for _, it := range items {
+		if it.State == "connected" {
+			up++
+		}
+	}
+	return fmt.Sprintf("(%d/%d)", up, len(items))
+}
+
+// mcpLabel is the strip's mcp tab label.
+func mcpLabel(items []protocol.MCPInfo) string { return "mcp " + mcpCount(items) }
+
+// mcpRows renders an agent's MCP servers, one row each: a state glyph (●
+// connected, ◐ starting, ○ pending, × failed or stopped), the name in bold,
+// then the tool count and uptime, or the error. A server in open shows its
+// tools as indented rows under it. owners names the server behind each row
+// ("" for a tool row), so enter can toggle the right one.
+func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, width int) (rows, owners []string) {
+	for _, it := range items {
+		var glyph string
+		switch it.State {
+		case "connected":
+			glyph = styleOvGood.Render("●")
+		case "starting":
+			glyph = styleWarn.Render("◐")
+		case "failed", "stopped":
+			glyph = styleError.Render("×")
+		default:
+			glyph = styleDim.Render("○")
+		}
+		row := glyph + " " + styleBold.Render(it.Name)
+		var meta []string
+		switch it.State {
+		case "connected":
+			meta = append(meta, fmt.Sprintf("%d tools", len(it.Tools)))
+			if t, err := time.Parse(time.RFC3339, it.Started); err == nil && !t.IsZero() {
+				meta = append(meta, fmtElapsed(now.Sub(t)))
+			}
+		case "failed", "stopped":
+			if it.Error != "" {
+				meta = append(meta, it.Error)
+			}
+		case "pending":
+			meta = append(meta, "starts at the next turn")
+		default:
+			meta = append(meta, it.State)
+		}
+		if len(meta) > 0 {
+			row += "  " + styleDim.Render(strings.Join(meta, " · "))
+		}
+		rows = append(rows, ansi.Truncate("  "+row, width, "…"))
+		owners = append(owners, it.Name)
+		if open[it.Name] {
+			for _, tool := range it.Tools {
+				rows = append(rows, ansi.Truncate("      "+styleDim.Render(strings.TrimPrefix(tool, "mcp__"+it.Name+"__")), width, "…"))
+				owners = append(owners, "")
+			}
+		}
+	}
+	return rows, owners
 }
 
 // monitorGlyph is the shell prompt for every monitor kind.
