@@ -24,8 +24,8 @@ func TestBuildLogo(t *testing.T) {
 		t.Fatalf("want 3 rows, got %d", len(rows))
 	}
 	w := ansi.StringWidth(rows[0])
-	if w != 4*3 {
-		t.Fatalf("width: got %d, want %d", w, 4*3)
+	if w != 3*3+4 { // s, t, a are 3 wide; the v is 4
+		t.Fatalf("width: got %d, want %d", w, 3*3+4)
 	}
 	for i, r := range rows {
 		if ansi.StringWidth(r) != w {
@@ -35,10 +35,10 @@ func TestBuildLogo(t *testing.T) {
 			t.Errorf("row %d has glyphs outside the double-line set: %q", i, r)
 		}
 	}
-	// the v is an upsilon with a low fork: full-height arms, a nub of stem
+	// the classic v: legs that meet in a flat foot
 	v := logoGlyphs['v']
-	if v[0] != "╦ ╦" || v[1] != "║ ║" || v[2] != "╚╦╝" {
-		t.Fatalf("upsilon %q", v)
+	if v[0] != "╦  ╦" || v[1] != "╚╗╔╝" || v[2] != " ╚╝ " {
+		t.Fatalf("v %q", v)
 	}
 	// Unknown letters keep the grid aligned.
 	for _, r := range buildLogo("s?s") {
