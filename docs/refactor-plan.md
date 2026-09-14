@@ -209,7 +209,7 @@ tests that pin current behaviour first.
 
 ### Phase 8 — TUI  [L]
 
-8.1 Item-based `Transcript`: `items []item{lines, kind, running, tone}` with id→item maps; no index
+8.1 ✅ Item-based `Transcript`: `items []item{lines, kind, running, tone}` with id→item maps; no index
     shifting; `itemRange` O(1); fixes the `promptLine` misplacement bug.
 8.2 Per-item render cache keyed by (width, details, expanded, cursor); stream buffer rendered
     separately; spinner/compaction indicator as a footer line so ticks never re-render the
