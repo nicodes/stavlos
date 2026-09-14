@@ -117,3 +117,47 @@ func TestApplyPatchInsertionAndEOF(t *testing.T) {
 		t.Fatalf("%q", b)
 	}
 }
+
+// TestApplyPatchWritesAtomically: a move keeps the file's permissions and
+// refuses an existing target; a write that fails midway is rolled back and
+// nothing is deleted.
+func TestApplyPatchWritesAtomically(t *testing.T) {
+	dir := t.TempDir()
+	env := &Env{Dir: dir}
+	tool := patchTool{}
+	run := func(patch string) Result {
+		in, _ := json.Marshal(map[string]string{"patch": patch})
+		return tool.Run(context.Background(), in, env)
+	}
+	os.WriteFile(filepath.Join(dir, "run.sh"), []byte("#!/bin/sh\necho hi\n"), 0o755)
+	os.WriteFile(filepath.Join(dir, "taken.txt"), []byte("x\n"), 0o644)
+	if r := run("*** Begin Patch\n*** Update File: run.sh\n*** Move to: taken.txt\n-echo hi\n+echo yo\n*** End Patch"); !r.IsError || !strings.Contains(r.Output, "already exists") {
+		t.Fatalf("move onto an existing file: %+v", r)
+	}
+	if r := run("*** Begin Patch\n*** Update File: run.sh\n*** Move to: bin/run.sh\n-echo hi\n+echo yo\n*** End Patch"); r.IsError {
+		t.Fatal(r.Output)
+	}
+	fi, err := os.Stat(filepath.Join(dir, "bin", "run.sh"))
+	if err != nil || fi.Mode().Perm() != 0o755 {
+		t.Fatalf("moved file: %v %v", fi, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "run.sh")); err == nil {
+		t.Fatal("the old path should be gone")
+	}
+	// A second file that cannot be written rolls the first back and deletes nothing.
+	os.MkdirAll(filepath.Join(dir, "ro"), 0o555)
+	t.Cleanup(func() { os.Chmod(filepath.Join(dir, "ro"), 0o755) })
+	r := run("*** Begin Patch\n*** Update File: taken.txt\n-x\n+y\n*** Delete File: bin/run.sh\n*** Add File: ro/new.txt\n+n\n*** End Patch")
+	if !r.IsError {
+		t.Fatalf("write into a read-only directory should fail: %+v", r)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "taken.txt")); string(b) != "x\n" {
+		t.Fatalf("rolled back content %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "bin", "run.sh")); err != nil {
+		t.Fatal("a delete ran although a write failed")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "taken.txt.stavlos-tmp")); err == nil {
+		t.Fatal("temporary file left behind")
+	}
+}

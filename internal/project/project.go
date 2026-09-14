@@ -4,6 +4,7 @@ package project
 import (
 	"encoding/json"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
@@ -226,6 +227,9 @@ func Transcript(msgs []model.Message) string {
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) { // never cut a character in half
+		n--
 	}
 	return s[:n] + "…"
 }

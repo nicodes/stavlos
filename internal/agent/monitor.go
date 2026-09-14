@@ -229,11 +229,7 @@ func monitorText(r event.MonitorFiredPayload) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Job %q (%s): %s", r.Label, r.ID, r.Summary)
 	if r.Output != "" {
-		out := r.Output
-		if len(out) > 32*1024 {
-			out = out[:16*1024] + "\n… [truncated] …\n" + out[len(out)-16*1024:]
-		}
-		sb.WriteString("\n\n" + out)
+		sb.WriteString("\n\n" + tools.Clip(r.Output, 32*1024))
 	}
 	return sb.String()
 }
