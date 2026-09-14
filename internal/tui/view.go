@@ -653,7 +653,8 @@ func promptBoxWidth(width int) int {
 // sel is the part highlighted while the row has keyboard focus (metaNone
 // otherwise).
 // nameStyle tints the "label (role)" part (the role's colour, or plain).
-func metaLine(label, role, model, variant string, queued int, yolo bool, sel metaPart, nameStyle lipgloss.Style) string {
+// modeTag is "AUTO" or "YOLO" (the session's permission mode), "" for ask.
+func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) string {
 	pick := func(part metaPart, text string, st lipgloss.Style) string {
 		if part == sel {
 			return styleBoxTitleFocus.Render(text)
@@ -661,8 +662,12 @@ func metaLine(label, role, model, variant string, queued int, yolo bool, sel met
 		return st.Render(text)
 	}
 	s := ""
-	if yolo {
-		s = pick(metaYolo, "YOLO", styleWarn) + " · "
+	if modeTag != "" {
+		st := styleWarn // YOLO: nothing asks
+		if modeTag == "AUTO" {
+			st = styleAccent // AUTO: only the boundary asks
+		}
+		s = pick(metaYolo, modeTag, st) + " · "
 	}
 	name := label
 	if role != "" {
@@ -809,7 +814,7 @@ func (m Model) metaRow(width int) string {
 	if r := m.roleInfo(role); r != nil {
 		nameStyle = roleStyle(r.Color)
 	}
-	left := metaLine(label, role, model, variant, queued, m.session.Yolo, sel, nameStyle)
+	left := metaLine(label, role, model, variant, queued, m.modeTag(), sel, nameStyle)
 	right := m.footerRightView()
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {

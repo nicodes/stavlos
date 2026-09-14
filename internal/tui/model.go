@@ -538,6 +538,44 @@ func (m *Model) cycleFocus(delta int) tea.Cmd {
 	return m.setFocus(order[((i+delta)%n+n)%n])
 }
 
+// toggleMode is /auto or /yolo: no argument toggles between that mode and
+// ask, "on"/"off" set it.
+func (m *Model) toggleMode(mode, arg string) tea.Cmd {
+	on := m.session.Mode != mode
+	switch strings.ToLower(arg) {
+	case "on", "true", "1":
+		on = true
+	case "off", "false", "0":
+		on = false
+	case "":
+	default:
+		return m.setStatus("usage: /"+mode+" [on|off]", true)
+	}
+	if !on {
+		mode = protocol.ModeAsk
+	}
+	return setModeCmd(m.ctx, m.c, m.sessionID, mode)
+}
+
+// openMode is /mode: the three permission modes, the current one marked.
+func (m *Model) openMode() tea.Cmd {
+	o := newOverlay(ovMode, overlayList, "Permission mode")
+	cur := m.session.Mode
+	if cur == "" {
+		cur = protocol.ModeAsk
+	}
+	var items []overlayItem
+	for _, mode := range []string{protocol.ModeAsk, protocol.ModeAuto, protocol.ModeYolo} {
+		hint := modeDesc(mode)
+		if mode == cur {
+			hint += "  · current"
+		}
+		items = append(items, overlayItem{id: mode, label: mode, hint: hint})
+	}
+	o.setItems(items)
+	return m.openOverlay(o)
+}
+
 // closeDialog leaves an open tab dialog for whatever had focus when it was
 // opened (the strip, the input, the chat…), or the input when that is no
 // longer a stop. Back on the strip, the closed tab stays highlighted.
@@ -1181,22 +1219,35 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 	return nil
 }
 
-// metaParts lists the meta row's parts in order, YOLO only while it is on.
+// metaParts lists the meta row's parts in order, the mode tag only while
+// the mode is not ask.
 func (m *Model) metaParts() []metaPart {
 	parts := []metaPart{}
-	if m.session.Yolo {
+	if m.modeTag() != "" {
 		parts = append(parts, metaYolo)
 	}
 	return append(parts, metaRole, metaModel, metaVariant)
 }
 
+// modeTag is the meta row's tag for the session's permission mode: "AUTO"
+// or "YOLO", "" in ask mode.
+func (m *Model) modeTag() string {
+	switch m.session.Mode {
+	case protocol.ModeAuto:
+		return "AUTO"
+	case protocol.ModeYolo:
+		return "YOLO"
+	}
+	return ""
+}
+
 // metaAction is what a part of the meta row does when picked, by click or
-// enter: YOLO turns yolo off; the role, model and variant open their
-// dialogs.
+// enter: the mode tag goes back to ask; the role, model and variant open
+// their dialogs.
 func (m *Model) metaAction(part metaPart) tea.Cmd {
 	switch part {
 	case metaYolo:
-		return setYoloCmd(m.ctx, m.c, m.sessionID, false)
+		return setModeCmd(m.ctx, m.c, m.sessionID, protocol.ModeAsk)
 	case metaRole:
 		return rolesCmd(m.ctx, m.c, m.sessionID)
 	case metaModel:
@@ -1274,7 +1325,7 @@ type metaPart int
 
 const (
 	metaNone    metaPart = iota
-	metaYolo             // the YOLO tag: click turns yolo off
+	metaYolo             // the AUTO/YOLO mode tag: click goes back to ask
 	metaRole             // "label (role)": click opens /roles
 	metaModel            // the model: click opens /models
 	metaVariant          // the variant: click opens /variants
@@ -1291,7 +1342,7 @@ func (m *Model) metaHit(x int) metaPart {
 		}
 	}
 	x0 := 0
-	if m.session.Yolo {
+	if m.modeTag() != "" {
 		if x < 4 {
 			return metaYolo
 		}
@@ -1843,18 +1894,10 @@ func (m *Model) command(text string) tea.Cmd {
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
 	case "/sessions", "/resume", "/session":
 		return sessionsCmd(m.ctx, m.c, m.session.Dir, false)
-	case "/yolo":
-		on := !m.session.Yolo
-		switch strings.ToLower(rest) {
-		case "on", "true", "1":
-			on = true
-		case "off", "false", "0":
-			on = false
-		case "":
-		default:
-			return m.setStatus("usage: /yolo [on|off]", true)
-		}
-		return setYoloCmd(m.ctx, m.c, m.sessionID, on)
+	case "/mode":
+		return m.openMode()
+	case "/yolo", "/auto":
+		return m.toggleMode(name[1:], rest)
 	case "/variants", "/variant":
 		if c := needAgent(); c != nil {
 			return c
@@ -1944,10 +1987,24 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		if ev.Decode(&p) == nil {
 			m.session.Model = p.Model
 		}
-	case event.SessionYoloChanged:
+	case event.SessionYoloChanged: // legacy logs
 		var p event.YoloPayload
 		if ev.Decode(&p) == nil {
-			m.session.Yolo = p.On
+			m.session.Mode = protocol.ModeAsk
+			if p.On {
+				m.session.Mode = protocol.ModeYolo
+			}
+		}
+		for _, a := range m.agents {
+			m.transcript(a.ID).Apply(ev)
+		}
+		if !m.loading {
+			m.refreshViewport()
+		}
+	case event.SessionModeChanged:
+		var p event.ModePayload
+		if ev.Decode(&p) == nil {
+			m.session.Mode = p.Mode
 		}
 		// A session-wide switch with no agent of its own: note it in every
 		// agent's chat, like model and role changes.
@@ -2488,6 +2545,12 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 			return m.setStatus("no agent selected", true)
 		}
 		return tea.Batch(m.closeOverlay(), pickRoleCmd(m.ctx, m.c, agent, it.id))
+	case ovMode:
+		it := o.selected()
+		if it == nil {
+			return nil
+		}
+		return tea.Batch(m.closeOverlay(), setModeCmd(m.ctx, m.c, m.sessionID, it.id))
 	case ovSessions:
 		it := o.selected()
 		if it == nil {

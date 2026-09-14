@@ -272,15 +272,23 @@ func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.
 	}
 }
 
-func setYoloCmd(ctx context.Context, c *client.Client, session string, on bool) tea.Cmd {
+// modeDesc is what each permission mode does, for the /mode picker, the
+// status line and the chat.
+func modeDesc(mode string) string {
+	switch mode {
+	case protocol.ModeAuto:
+		return "asks only outside the agent's directories"
+	case protocol.ModeYolo:
+		return "every permission is approved, directories included"
+	}
+	return "every permission is asked"
+}
+
+func setModeCmd(ctx context.Context, c *client.Client, session, mode string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)
 		defer cancel()
-		what := "yolo off: permissions are asked again"
-		if on {
-			what = "yolo on: every permission is approved for this session"
-		}
-		return resultMsg{what, c.SetSessionYolo(ctx, session, on)}
+		return resultMsg{"mode " + mode + ": " + modeDesc(mode), c.SetSessionMode(ctx, session, mode)}
 	}
 }
 

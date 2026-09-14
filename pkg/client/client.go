@@ -209,9 +209,9 @@ func (c *Client) SetSessionModel(ctx context.Context, id, modelID string) error 
 	return c.Call(ctx, protocol.MSessionSetModel, protocol.SessionSetModelParams{ID: id, Model: modelID}, nil)
 }
 
-// SetSessionYolo switches session-wide auto-approval of permission prompts.
-func (c *Client) SetSessionYolo(ctx context.Context, id string, on bool) error {
-	return c.Call(ctx, protocol.MSessionSetYolo, protocol.SessionSetYoloParams{V: protocol.Version, ID: id, On: on}, nil)
+// SetSessionMode sets the session's permission mode: ask, auto or yolo.
+func (c *Client) SetSessionMode(ctx context.Context, id, mode string) error {
+	return c.Call(ctx, protocol.MSessionSetMode, protocol.SessionSetModeParams{V: protocol.Version, ID: id, Mode: mode}, nil)
 }
 
 func (c *Client) Tree(ctx context.Context, session string) ([]protocol.AgentInfo, error) {

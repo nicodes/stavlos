@@ -221,8 +221,8 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		d.rememberModel(s, p.Model)
 		return map[string]bool{"ok": true}, nil
 
-	case protocol.MSessionSetYolo:
-		var p protocol.SessionSetYoloParams
+	case protocol.MSessionSetMode:
+		var p protocol.SessionSetModeParams
 		if e := decode(&p); e != nil {
 			return nil, e
 		}
@@ -230,12 +230,17 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		if err != nil {
 			return nil, perr(protocol.ErrNotFound, err)
 		}
-		if err := s.SetYolo(ctx, p.On); err != nil {
-			return nil, perr(protocol.ErrInternal, err)
+		if err := s.SetMode(ctx, p.Mode); err != nil {
+			return nil, perr(protocol.ErrInvalidParams, err)
 		}
-		if p.On {
-			// Anything already waiting is allowed too, so the agents move.
+		// Anything already waiting that the new mode would have allowed is
+		// allowed now, so the agents move: yolo takes every permission
+		// prompt, auto only the ones that stay inside the agent's directories.
+		switch p.Mode {
+		case protocol.ModeYolo:
 			d.esc.AnswerAll(s.ID, "permission", "allow", "yolo")
+		case protocol.ModeAuto:
+			d.esc.AnswerWhere(s.ID, "permission", "allow", "auto", func(pi protocol.PromptInfo) bool { return pi.Dir == "" })
 		}
 		return map[string]bool{"ok": true}, nil
 

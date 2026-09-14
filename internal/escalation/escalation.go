@@ -217,10 +217,16 @@ func (m *Manager) Reply(id, client, answer string) error {
 // claims (used when a session switches to yolo: waiting permissions are
 // allowed on the spot). Returns how many were answered.
 func (m *Manager) AnswerAll(session, kind, answer, client string) int {
+	return m.AnswerWhere(session, kind, answer, client, nil)
+}
+
+// AnswerWhere answers the session's open prompts of one kind that keep
+// admits (nil = all of them).
+func (m *Manager) AnswerWhere(session, kind, answer, client string, keep func(protocol.PromptInfo) bool) int {
 	m.mu.Lock()
 	var ids []string
 	for id, p := range m.pend {
-		if !p.done && p.info.Session == session && p.info.Kind == kind {
+		if !p.done && p.info.Session == session && p.info.Kind == kind && (keep == nil || keep(p.info)) {
 			ids = append(ids, id)
 		}
 	}

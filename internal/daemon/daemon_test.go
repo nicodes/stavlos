@@ -856,14 +856,14 @@ func TestYolo(t *testing.T) {
 		t.Fatalf("one prompt should be waiting: %+v", ps)
 	}
 	// yolo on: the waiting prompt is approved and logged
-	if err := h.c.SetSessionYolo(ctx, s.ID, true); err != nil {
+	if err := h.c.SetSessionMode(ctx, s.ID, "yolo"); err != nil {
 		t.Fatal(err)
 	}
-	e := h.waitFor(event.SessionYoloChanged, "")
-	var yp event.YoloPayload
-	_ = e.Decode(&yp)
-	if !yp.On {
-		t.Fatalf("%+v", yp)
+	e := h.waitFor(event.SessionModeChanged, "")
+	var mp event.ModePayload
+	_ = e.Decode(&mp)
+	if mp.Mode != "yolo" {
+		t.Fatalf("%+v", mp)
 	}
 	var te event.TurnEndedPayload
 	for te.Turn != 1 {
@@ -877,7 +877,7 @@ func TestYolo(t *testing.T) {
 		t.Fatalf("prompt queue should be drained: %+v", ps)
 	}
 	rc, _ := h.c.Reconcile(ctx, s.ID)
-	if !rc.Session.Yolo {
+	if rc.Session.Mode != "yolo" {
 		t.Fatalf("session info should show yolo: %+v", rc.Session)
 	}
 
@@ -900,13 +900,100 @@ func TestYolo(t *testing.T) {
 			}
 		}
 	}
-	// off again
-	if err := h.c.SetSessionYolo(ctx, s.ID, false); err != nil {
+	// back to ask
+	if err := h.c.SetSessionMode(ctx, s.ID, "ask"); err != nil {
 		t.Fatal(err)
 	}
 	rc, _ = h.c.Reconcile(ctx, s.ID)
-	if rc.Session.Yolo {
-		t.Fatalf("yolo should be off: %+v", rc.Session)
+	if rc.Session.Mode != "ask" {
+		t.Fatalf("mode should be ask: %+v", rc.Session)
+	}
+	if err := h.c.SetSessionMode(ctx, s.ID, "turbo"); err == nil {
+		t.Fatal("an unknown mode should be rejected")
+	}
+}
+
+// TestAutoMode: in auto, policy asks inside the agent's directories are
+// allowed without a prompt, a call outside still asks (and switching to
+// auto does not approve a waiting boundary prompt), deny still denies.
+func TestAutoMode(t *testing.T) {
+	g := t.TempDir()
+	t.Setenv("STAVLOS_CONFIG_DIR", g)
+	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"bash":{"rm*":"deny","*":"ask"}}}`), 0o644)
+	work := t.TempDir()
+	outside := t.TempDir()
+	os.WriteFile(filepath.Join(outside, "f.txt"), []byte("x"), 0o644)
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		// turn 1: an inside command (ask by policy) and an outside read wait
+		func(model.Request) model.Response { return call("c1", "bash", `{"command":"touch inside"}`) },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError {
+				t.Errorf("inside command should be allowed once auto is on: %+v", last)
+			}
+			return call("c2", "read", `{"path":"`+outside+`/f.txt"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !last.IsError || !strings.Contains(last.Content, "denied") {
+				t.Errorf("the boundary prompt was denied by hand: %+v", last)
+			}
+			return call("c3", "bash", `{"command":"rm -rf nothing"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !last.IsError || !strings.Contains(last.Content, "Denied by policy") {
+				t.Errorf("deny should hold under auto: %+v", last)
+			}
+			return text("one")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	h.waitFor(event.PromptRequested, root) // the inside command waits in ask mode
+	if err := h.c.SetSessionMode(ctx, s.ID, "auto"); err != nil {
+		t.Fatal(err)
+	}
+	// auto approves the waiting inside command; the outside read then raises
+	// a boundary prompt that auto does not approve
+	e := h.waitFor(event.PromptRequested, root)
+	var pr event.PromptRequestedPayload
+	_ = e.Decode(&pr)
+	if pr.Tool != "read" || !strings.Contains(pr.Question, "outside its directories") {
+		t.Fatalf("expected a boundary prompt: %+v", pr)
+	}
+	pending := h.d.esc.Pending(s.ID)
+	if len(pending) != 1 || pending[0].Dir == "" {
+		t.Fatalf("pending %+v", pending)
+	}
+	// switching to auto again (already auto) or asking for auto must not approve it
+	_ = h.c.SetSessionMode(ctx, s.ID, "auto")
+	if len(h.d.esc.Pending(s.ID)) != 1 {
+		t.Fatal("auto must not approve a boundary prompt")
+	}
+	_ = h.c.ClaimPrompt(ctx, pending[0].ID)
+	if err := h.c.ReplyPrompt(ctx, pending[0].ID, "deny"); err != nil {
+		t.Fatal(err)
+	}
+	var te event.TurnEndedPayload
+	for te.Turn != 1 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	if _, err := os.Stat(filepath.Join(work, "inside")); err != nil {
+		t.Fatal("the inside command should have run under auto")
+	}
+	rc, _ := h.c.Reconcile(ctx, s.ID)
+	if rc.Session.Mode != "auto" {
+		t.Fatalf("%+v", rc.Session)
 	}
 }
 
