@@ -214,7 +214,7 @@ tests that pin current behaviour first.
 8.2 ✅ (the indicator stays in the viewport content; with rows cached, a tick only re-joins them) Per-item render cache keyed by (width, details, expanded, cursor); stream buffer rendered
     separately; spinner/compaction indicator as a footer line so ticks never re-render the
     transcript. Fixes P3.
-8.3 Renderers return geometry (`span` lists); one `hit()` replaces `metaHit`, `tabAt`,
+8.3 ✅ (meta row, tab strip and tab dialogs; overlays already hit-test drawn rows; `layout()`/`keyBarView` left as they are: they never render the chat, and caching them in the value-typed Model would go stale in View) Renderers return geometry (`span` lists); one `hit()` replaces `metaHit`, `tabAt`,
     `tabDialogHit`, `itemAt`, `sidebarClick`'s re-render; `layout()` only on geometry changes;
     `keyBarView` computed once per Update. Makes permission/question option clicks work.
 8.4 Generic `listDialog` component for the six tabs, sidebar and overlay: cursor/wrap/filter/empty

@@ -1171,11 +1171,7 @@ func (m *Model) dialogClick(x, y int) (tea.Cmd, bool) {
 		return nil, false
 	}
 	if h := m.tabDialogHit(x, y); h.rowOK {
-		m.agCursor = h.row
-		if m.focus == focusAsync {
-			return m.asyncKey(tea.KeyMsg{Type: tea.KeySpace}), true // a click selects like space
-		}
-		return nil, true
+		return m.pickTabRow(h.row, true), true
 	}
 	return nil, false
 }
@@ -1189,8 +1185,53 @@ func (m *Model) dialogHover(x, y int) {
 		return
 	}
 	if h := m.tabDialogHit(x, y); h.rowOK {
-		m.agCursor = h.row
+		m.pickTabRow(h.row, false)
 	}
+}
+
+// pickTabRow moves the open tab dialog's cursor to row, as ↑/↓ would, and
+// with choose acts on it as space would: a permission answer, a question
+// option toggled (or the typed answer opened), an awaited agent selected.
+// While a text row is open (a denial reason, a path, a typed answer) the
+// list does not follow the mouse.
+func (m *Model) pickTabRow(row int, choose bool) tea.Cmd {
+	space := tea.KeyMsg{Type: tea.KeySpace}
+	switch m.focus {
+	case focusPermission:
+		p := m.currentPrompt()
+		if p == nil {
+			return nil
+		}
+		if m.permFor != p.ID {
+			m.permFor, m.permSel, m.permEdit = p.ID, 0, ""
+		}
+		if m.permEdit != "" {
+			return nil
+		}
+		m.permSel = row
+		if choose {
+			return m.permissionKey(space)
+		}
+	case focusQuestions:
+		p := m.currentQuestion()
+		if p == nil {
+			return nil
+		}
+		m.q.bind(p)
+		if m.q.typing {
+			return nil
+		}
+		m.q.sel = row
+		if choose {
+			return m.questionsKey(space)
+		}
+	default:
+		m.agCursor = row
+		if choose && m.focus == focusAsync {
+			return m.asyncKey(space)
+		}
+	}
+	return nil
 }
 
 // tabHit is the body row a screen position lands on inside a tab dialog.
@@ -1199,49 +1240,22 @@ type tabHit struct {
 	rowOK bool
 }
 
-// tabDialogHit maps a screen position to the open tab dialog, using the
-// same geometry as View and composite: the box is centred in the body;
-// inside the border come the title, the hint line, the rule, then the rows.
+// tabDialogHit maps a screen position to the open tab dialog's rows, using
+// the geometry the dialog was drawn with: the box is centred in the body,
+// and the row under each line inside the border comes from tabDialogBox.
 func (m *Model) tabDialogHit(x, y int) tabHit {
-	var h tabHit
-	box := m.tabDialog(m.width)
-	boxLines := strings.Split(box, "\n")
+	box, rowAt := m.tabDialogBox(m.width)
+	height := strings.Count(box, "\n") + 1
 	bw := lipgloss.Width(box)
-	x0 := (m.width - bw) / 2
-	if x0 < 0 {
-		x0 = 0
+	x0 := max((m.width-bw)/2, 0)
+	y0 := max((m.bodyHeight()-height)/2, 0)
+	if x < x0 || x >= x0+bw || y <= y0 || y >= y0+height-1 {
+		return tabHit{} // outside, or on the border
 	}
-	y0 := (m.bodyHeight() - len(boxLines)) / 2
-	if y0 < 0 {
-		y0 = 0
+	if i := y - y0 - 1; i < len(rowAt) && rowAt[i] >= 0 {
+		return tabHit{row: rowAt[i], rowOK: true}
 	}
-	if x < x0 || x >= x0+bw || y <= y0 || y >= y0+len(boxLines)-1 {
-		return h // outside, or on the border
-	}
-	if i := y - y0 - 1 - tabDialogHeader; i >= 0 && i < m.tabRowCount() {
-		h.row, h.rowOK = i, true
-	}
-	return h
-}
-
-// tabRowCount is how many selectable rows the focused tab shows.
-func (m *Model) tabRowCount() int {
-	switch m.focus {
-	case focusAsync:
-		return len(m.awaitedAgents()) + len(m.runningJobs())
-	case focusTodo:
-		return len(m.selectedTodos())
-	case focusMCP:
-		_, owners := mcpRows(m.selectedMCP(), m.mcpOpen, time.Now(), 200)
-		return len(owners)
-	case focusDirs:
-		return len(m.selectedDirs())
-	case focusQuestions:
-		if p := m.currentQuestion(); p != nil && m.q.idx < len(p.Questions) {
-			return len(p.Questions[m.q.idx].Options) + 1 // plus "something else"
-		}
-	}
-	return 0
+	return tabHit{}
 }
 
 // mainX maps a screen column to the chat column for the rows the sidebar
@@ -1651,50 +1665,11 @@ const (
 	metaVariant          // the variant: click opens /variants
 )
 
-// metaHit maps an x position on the meta row to its part, following the
-// layout metaLine draws: [YOLO · ]label (role) · model · variant.
+// metaHit maps an x position on the meta row to the part drawn there.
 func (m *Model) metaHit(x int) metaPart {
-	label, role, model, variant := "agent", "", m.session.Model, ""
-	if a := m.selectedAgent(); a != nil {
-		label, role, variant = a.Label, a.Archetype, a.Variant
-		if a.Model != "" {
-			model = a.Model
-		}
-	}
-	x0 := 0
-	if m.modeTag() != "" {
-		if x < 4 {
-			return metaYolo
-		}
-		x0 = 4 + 3
-	}
-	name := label
-	if role != "" {
-		name = fmt.Sprintf("%s (%s)", label, role)
-	}
-	if x < x0 {
-		return metaNone
-	}
-	if x < x0+ansi.StringWidth(name) {
-		return metaRole
-	}
-	x0 += ansi.StringWidth(name) + 3
-	if model == "" {
-		return metaModel // "no model — /models" fills the rest
-	}
-	if x < x0 {
-		return metaNone
-	}
-	short, _ := splitModel(model) // drawn without its provider
-	if x < x0+ansi.StringWidth(short) {
-		return metaModel
-	}
-	x0 += ansi.StringWidth(short) + 3
-	if variant == "" {
-		variant = "default"
-	}
-	if x >= x0 && x < x0+ansi.StringWidth(variant) {
-		return metaVariant
+	_, spans := m.metaLeft()
+	if part, ok := hitSpan(spans, x); ok {
+		return part
 	}
 	return metaNone
 }
@@ -1721,19 +1696,10 @@ func (m *Model) rows() rowLayout {
 	return lay
 }
 
-// tabAt maps an x position on the strip to the tab label under it. The
-// labels are laid out as sectionTabs draws them: permission, agents, async,
-// separated by " · ".
+// tabAt maps an x position on the strip to the tab label drawn there.
 func (m *Model) tabAt(x int) (focus, bool) {
-	x0 := 0
-	for i, text := range m.tabTexts() {
-		w := ansi.StringWidth(text)
-		if x >= x0 && x < x0+w {
-			return tabFocuses[i], true
-		}
-		x0 += w + 3 // " · "
-	}
-	return 0, false
+	_, spans := m.tabLabels(m.currentPrompt())
+	return hitSpan(spans, x)
 }
 
 // itemAtRow maps a viewport content row to the chat item drawn there.
