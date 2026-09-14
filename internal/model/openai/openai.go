@@ -1,5 +1,7 @@
-// Package openai implements model.Provider for the OpenAI Chat Completions
-// API and its many compatible servers (PRD §8.2) using net/http only.
+// Package openai implements model.Provider for the Chat Completions wire
+// protocol with a rotating bearer token. The registry uses it for the Grok
+// (xAI) subscription; the ChatGPT subscription speaks the Responses
+// protocol (internal/model/codex).
 package openai
 
 import (
@@ -16,25 +18,13 @@ const defaultMaxTokens = 16000
 type provider struct {
 	name    string
 	baseURL string
-	apiKey  string
-	token   model.TokenSource // when set, wins over apiKey and is called per request
+	token   model.TokenSource // called per request, so a rotated token is picked up at once
 	http    *http.Client
 }
 
-// New returns a provider named name that speaks Chat Completions at
-// baseURL (e.g. "https://api.openai.com/v1"). apiKey may be empty for
-// local servers such as Ollama or LM Studio.
-func New(name, baseURL, apiKey string) model.Provider {
-	return &provider{
-		name:    name,
-		baseURL: strings.TrimRight(baseURL, "/"),
-		apiKey:  apiKey,
-		http:    stream.NewHTTPClient(),
-	}
-}
-
-// NewWithToken is New with a bearer token fetched per request from src,
-// for subscription logins whose access token rotates (PRD §8.4).
+// NewWithToken returns a provider named name that speaks Chat Completions
+// at baseURL with a bearer token fetched per request from src (a
+// subscription login whose access token rotates, PRD §8.4).
 func NewWithToken(name, baseURL string, src model.TokenSource) model.Provider {
 	return &provider{
 		name:    name,
@@ -63,10 +53,4 @@ func (p *provider) Open(modelID string) (model.Model, error) {
 type client struct {
 	p  *provider
 	id string
-}
-
-// usesMaxCompletionTokens reports whether the endpoint wants the newer
-// "max_completion_tokens" field instead of "max_tokens".
-func (p *provider) usesMaxCompletionTokens() bool {
-	return strings.Contains(p.baseURL, "api.openai.com")
 }

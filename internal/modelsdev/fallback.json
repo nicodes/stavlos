@@ -1,259 +1,236 @@
 {
- "anthropic": {
-  "id": "anthropic",
-  "env": [
-   "ANTHROPIC_API_KEY"
-  ],
-  "npm": "@ai-sdk/anthropic",
-  "name": "Anthropic",
-  "models": {
-   "claude-fable-5-1": {
-    "id": "claude-fable-5-1",
-    "name": "Claude Fable 5.1",
-    "limit": {
-     "context": 1000000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 10,
-     "output": 50,
-     "cache_read": 0.25,
-     "cache_write": 12.5
-    }
-   },
-   "claude-fable-5": {
-    "id": "claude-fable-5",
-    "name": "Claude Fable 5",
-    "limit": {
-     "context": 1000000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 10,
-     "output": 50,
-     "cache_read": 1,
-     "cache_write": 12.5
-    }
-   },
-   "claude-opus-5": {
-    "id": "claude-opus-5",
-    "name": "Claude Opus 5",
-    "limit": {
-     "context": 1000000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 5,
-     "output": 25,
-     "cache_read": 0.5,
-     "cache_write": 6.25
-    }
-   },
-   "claude-sonnet-5": {
-    "id": "claude-sonnet-5",
-    "name": "Claude Sonnet 5",
-    "limit": {
-     "context": 1000000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 2,
-     "output": 10,
-     "cache_read": 0.2,
-     "cache_write": 2.5
-    }
-   },
-   "claude-opus-4-8": {
-    "id": "claude-opus-4-8",
-    "name": "Claude Opus 4.8",
-    "limit": {
-     "context": 1000000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 5,
-     "output": 25,
-     "cache_read": 0.5,
-     "cache_write": 6.25
-    }
-   },
-   "claude-opus-4-7": {
-    "id": "claude-opus-4-7",
-    "name": "Claude Opus 4.7",
-    "limit": {
-     "context": 1000000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 5,
-     "output": 25,
-     "cache_read": 0.5,
-     "cache_write": 6.25
-    }
-   },
-   "claude-opus-4-6": {
-    "id": "claude-opus-4-6",
-    "name": "Claude Opus 4.6",
-    "limit": {
-     "context": 1000000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 5,
-     "output": 25,
-     "cache_read": 0.5,
-     "cache_write": 6.25
-    }
-   },
-   "claude-sonnet-4-6": {
-    "id": "claude-sonnet-4-6",
-    "name": "Claude Sonnet 4.6",
-    "limit": {
-     "context": 1000000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 3,
-     "output": 15,
-     "cache_read": 0.3,
-     "cache_write": 3.75
-    }
-   },
-   "claude-haiku-4-5": {
-    "id": "claude-haiku-4-5",
-    "name": "Claude Haiku 4.5 (latest)",
-    "limit": {
-     "context": 200000,
-     "output": 64000
-    },
-    "cost": {
-     "input": 1,
-     "output": 5,
-     "cache_read": 0.1,
-     "cache_write": 1.25
-    }
-   }
-  }
- },
  "openai": {
-  "id": "openai",
-  "env": [
-   "OPENAI_API_KEY"
-  ],
-  "npm": "@ai-sdk/openai",
-  "name": "OpenAI",
   "models": {
-   "gpt-5.5": {
-    "id": "gpt-5.5",
-    "name": "GPT-5.5",
-    "limit": {
-     "context": 1050000,
-     "input": 922000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 5,
-     "output": 30,
-     "cache_read": 0.5,
-     "tiers": [
-      {
-       "input": 10,
-       "output": 45,
-       "cache_read": 1,
-       "tier": {
-        "type": "context",
-        "size": 272000
-       }
-      }
-     ],
-     "context_over_200k": {
-      "input": 10,
-      "output": 45,
-      "cache_read": 1
-     }
-    }
-   },
-   "gpt-5.2": {
-    "id": "gpt-5.2",
-    "name": "GPT-5.2",
-    "limit": {
-     "context": 400000,
-     "input": 272000,
-     "output": 128000
-    },
-    "cost": {
-     "input": 1.75,
-     "output": 14,
-     "cache_read": 0.175
-    }
-   },
    "gpt-5": {
     "id": "gpt-5",
-    "name": "GPT-5",
     "limit": {
      "context": 400000,
-     "input": 272000,
      "output": 128000
     },
-    "cost": {
-     "input": 1.25,
-     "output": 10,
-     "cache_read": 0.125
-    }
+    "name": "GPT-5"
    },
    "gpt-5-mini": {
     "id": "gpt-5-mini",
-    "name": "GPT-5 Mini",
     "limit": {
      "context": 400000,
-     "input": 272000,
      "output": 128000
     },
-    "cost": {
-     "input": 0.25,
-     "output": 2,
-     "cache_read": 0.025
-    }
+    "name": "GPT-5 Mini"
    },
    "gpt-5-nano": {
     "id": "gpt-5-nano",
-    "name": "GPT-5 Nano",
     "limit": {
      "context": 400000,
-     "input": 272000,
      "output": 128000
     },
-    "cost": {
-     "input": 0.05,
-     "output": 0.4,
-     "cache_read": 0.005
-    }
+    "name": "GPT-5 Nano"
    },
-   "gpt-4.1": {
-    "id": "gpt-4.1",
-    "name": "GPT-4.1",
+   "gpt-5.1": {
+    "id": "gpt-5.1",
     "limit": {
-     "context": 1047576,
-     "output": 32768
+     "context": 400000,
+     "output": 128000
     },
-    "cost": {
-     "input": 2,
-     "output": 8,
-     "cache_read": 0.5
-    }
+    "name": "GPT-5.1"
    },
-   "gpt-4o": {
-    "id": "gpt-4o",
-    "name": "GPT-4o",
+   "gpt-5.2": {
+    "id": "gpt-5.2",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5.2"
+   },
+   "gpt-5.2-chat-latest": {
+    "id": "gpt-5.2-chat-latest",
     "limit": {
      "context": 128000,
      "output": 16384
     },
-    "cost": {
-     "input": 2.5,
-     "output": 10,
-     "cache_read": 1.25
-    }
+    "name": "GPT-5.2 Chat"
+   },
+   "gpt-5.3-chat-latest": {
+    "id": "gpt-5.3-chat-latest",
+    "limit": {
+     "context": 128000,
+     "output": 16384
+    },
+    "name": "GPT-5.3 Chat (latest)"
+   },
+   "gpt-5.3-codex": {
+    "id": "gpt-5.3-codex",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5.3 Codex"
+   },
+   "gpt-5.3-codex-spark": {
+    "id": "gpt-5.3-codex-spark",
+    "limit": {
+     "context": 128000,
+     "output": 32000
+    },
+    "name": "GPT-5.3 Codex Spark"
+   },
+   "gpt-5.4": {
+    "id": "gpt-5.4",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.4"
+   },
+   "gpt-5.4-mini": {
+    "id": "gpt-5.4-mini",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5.4 mini"
+   },
+   "gpt-5.4-nano": {
+    "id": "gpt-5.4-nano",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5.4 nano"
+   },
+   "gpt-5.5": {
+    "id": "gpt-5.5",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.5"
+   },
+   "gpt-5.6": {
+    "id": "gpt-5.6",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.6"
+   },
+   "gpt-5.6-luna": {
+    "id": "gpt-5.6-luna",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.6 Luna"
+   },
+   "gpt-5.6-sol": {
+    "id": "gpt-5.6-sol",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.6 Sol"
+   },
+   "gpt-5.6-terra": {
+    "id": "gpt-5.6-terra",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.6 Terra"
+   }
+  }
+ },
+ "xai": {
+  "models": {
+   "grok-4.20-0309-non-reasoning": {
+    "id": "grok-4.20-0309-non-reasoning",
+    "limit": {
+     "context": 1000000,
+     "output": 30000
+    },
+    "name": "Grok 4.20 (Non-Reasoning)"
+   },
+   "grok-4.20-0309-reasoning": {
+    "id": "grok-4.20-0309-reasoning",
+    "limit": {
+     "context": 1000000,
+     "output": 30000
+    },
+    "name": "Grok 4.20 (Reasoning)"
+   },
+   "grok-4.20-multi-agent-0309": {
+    "id": "grok-4.20-multi-agent-0309",
+    "limit": {
+     "context": 1000000,
+     "output": 30000
+    },
+    "name": "Grok 4.20 Multi-Agent"
+   },
+   "grok-4.3": {
+    "id": "grok-4.3",
+    "limit": {
+     "context": 1000000,
+     "output": 30000
+    },
+    "name": "Grok 4.3"
+   },
+   "grok-4.5": {
+    "id": "grok-4.5",
+    "limit": {
+     "context": 500000,
+     "output": 500000
+    },
+    "name": "Grok 4.5"
+   },
+   "grok-4.6": {
+    "id": "grok-4.6",
+    "limit": {
+     "context": 500000,
+     "output": 500000
+    },
+    "name": "Grok 4.6"
+   },
+   "grok-build-0.1": {
+    "id": "grok-build-0.1",
+    "limit": {
+     "context": 256000,
+     "output": 256000
+    },
+    "name": "Grok Build 0.1"
+   },
+   "grok-imagine-image": {
+    "id": "grok-imagine-image",
+    "limit": {
+     "context": 16000
+    },
+    "name": "Grok Imagine Image"
+   },
+   "grok-imagine-image-2.0": {
+    "id": "grok-imagine-image-2.0",
+    "limit": {
+     "context": 64000
+    },
+    "name": "Grok Imagine Image 2.0"
+   },
+   "grok-imagine-image-quality": {
+    "id": "grok-imagine-image-quality",
+    "limit": {
+     "context": 16000
+    },
+    "name": "Grok Imagine Image Quality"
+   },
+   "grok-imagine-video": {
+    "id": "grok-imagine-video",
+    "limit": {
+     "context": 1024
+    },
+    "name": "Grok Imagine Video"
+   },
+   "grok-imagine-video-1.5": {
+    "id": "grok-imagine-video-1.5",
+    "limit": {
+     "context": 1024
+    },
+    "name": "Grok Imagine Video 1.5"
    }
   }
  }

@@ -1,8 +1,7 @@
-// Package auth is the credential store (PRD §8.4, roadmap item pulled into
-// v1): provider API keys entered through /provider or `stavlos auth login`,
-// kept in <data dir>/auth.json with mode 0600, never in project config.
-// Environment variables still work and take precedence, so nothing here
-// forces a user who prefers exported keys to change anything.
+// Package auth is the credential store (PRD §8.4): the OAuth tokens of the
+// subscription logins (ChatGPT, Grok) made through /providers or
+// `stavlos auth login`, kept in <data dir>/auth.json with mode 0600, never
+// in project config. There are no API keys and no environment variables.
 package auth
 
 import (
@@ -18,13 +17,10 @@ import (
 	"time"
 )
 
-// Credential is one stored credential. Type is "oauth" for subscription
-// logins (ChatGPT, Grok) and "api" for API keys.
+// Credential is one stored subscription login. Type is "oauth".
 type Credential struct {
-	Type     string            `json:"type"`
-	Key      string            `json:"key,omitempty"`
-	Metadata map[string]string `json:"metadata,omitempty"`
-	Added    string            `json:"added,omitempty"`
+	Type  string `json:"type"`
+	Added string `json:"added,omitempty"`
 
 	// oauth
 	Access    string `json:"access,omitempty"`
@@ -107,11 +103,7 @@ func (s *Store) Set(provider string, c Credential) error {
 		return err
 	}
 	if c.Type == "" {
-		if c.Access != "" {
-			c.Type = "oauth"
-		} else {
-			c.Type = "api"
-		}
+		c.Type = "oauth"
 	}
 	if c.Added == "" {
 		c.Added = time.Now().UTC().Format(time.RFC3339)
@@ -147,29 +139,3 @@ func (s *Store) Providers() []string {
 }
 
 func norm(p string) string { return strings.TrimRight(strings.TrimSpace(p), "/") }
-
-// Source says where a key came from.
-type Source string
-
-const (
-	SourceNone  Source = ""
-	SourceStore Source = "auth.json"
-	SourceEnv   Source = "env"
-)
-
-// Resolve returns the key for a provider: the store first, then the first
-// set env var from envVars. The returned string names the source (the env
-// var name when from the environment).
-func (s *Store) Resolve(provider string, envVars []string) (key string, source Source, via string) {
-	if s != nil {
-		if c, ok := s.Get(provider); ok && c.Key != "" {
-			return c.Key, SourceStore, s.path
-		}
-	}
-	for _, n := range envVars {
-		if v := os.Getenv(n); v != "" {
-			return v, SourceEnv, n
-		}
-	}
-	return "", SourceNone, ""
-}

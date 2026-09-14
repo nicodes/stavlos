@@ -52,7 +52,7 @@ func TestCompleteStream(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := New("test", srv.URL+"/v1/", "sk-test")
+	p := NewWithToken("test", srv.URL+"/v1/", token("sk-test"))
 	m, err := p.Open("some-model")
 	if err != nil {
 		t.Fatal(err)
@@ -88,8 +88,8 @@ func TestCompleteStream(t *testing.T) {
 	if !gotReq.Stream || gotReq.StreamOptions == nil || !gotReq.StreamOptions.IncludeUsage {
 		t.Errorf("stream flags = %v %+v", gotReq.Stream, gotReq.StreamOptions)
 	}
-	if gotReq.MaxTokens != defaultMaxTokens || gotReq.MaxCompletionTokens != 0 {
-		t.Errorf("max tokens = %d / %d", gotReq.MaxTokens, gotReq.MaxCompletionTokens)
+	if gotReq.MaxTokens != defaultMaxTokens {
+		t.Errorf("max tokens = %d", gotReq.MaxTokens)
 	}
 	wantRoles := []string{"system", "user", "assistant", "tool", "user"}
 	if len(gotReq.Messages) != len(wantRoles) {
@@ -157,7 +157,7 @@ func TestCompleteHTTPError(t *testing.T) {
 		_, _ = io.WriteString(w, `{"error":{"message":"bad key","type":"invalid_request_error"}}`)
 	}))
 	defer srv.Close()
-	m, _ := New("x", srv.URL, "").Open("m")
+	m, _ := NewWithToken("x", srv.URL, token("t")).Open("m")
 	_, err := m.Complete(context.Background(), model.Request{Model: "m"}, nil)
 	if err == nil || !strings.Contains(err.Error(), "401") || !strings.Contains(err.Error(), "bad key") {
 		t.Errorf("err = %v", err)
@@ -178,7 +178,7 @@ func TestCompleteCancel(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 
-	m, _ := New("x", srv.URL, "").Open("m")
+	m, _ := NewWithToken("x", srv.URL, token("t")).Open("m")
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	var resp model.Response
@@ -204,15 +204,6 @@ func TestCompleteCancel(t *testing.T) {
 	}
 }
 
-func TestMaxCompletionTokensForOpenAI(t *testing.T) {
-	p := New("openai", "https://api.openai.com/v1", "k").(*provider)
-	body, err := p.buildBody("gpt-5", model.Request{MaxTokens: 42})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got map[string]any
-	_ = json.Unmarshal(body, &got)
-	if got["max_completion_tokens"] != float64(42) || got["max_tokens"] != nil {
-		t.Errorf("body = %s", body)
-	}
+func token(access string) model.TokenSource {
+	return func(context.Context) (model.Token, error) { return model.Token{Access: access}, nil }
 }

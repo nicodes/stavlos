@@ -16,19 +16,11 @@ func TestParseFixture(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, want := c.Providers(), []string{"anthropic", "ollama-cloud"}; !reflect.DeepEqual(got, want) {
-		t.Errorf("Providers() = %v, want %v", got, want)
+	if got := c.Models("ollama-cloud"); !reflect.DeepEqual(got, []string{"free-model", "priced"}) {
+		t.Errorf("Models(ollama-cloud) = %v", got)
 	}
-
-	p, ok := c.Provider("ollama-cloud")
-	if !ok {
-		t.Fatal("ollama-cloud missing")
-	}
-	if p.API != "https://ollama.com/v1" || p.NPM != "@ai-sdk/openai-compatible" || !reflect.DeepEqual(p.EnvVars, []string{"OLLAMA_API_KEY"}) {
-		t.Errorf("ProviderInfo = %+v", p)
-	}
-	if _, ok := c.Provider("nope"); ok {
-		t.Error("unknown provider reported present")
+	if got := c.Models("nope"); got != nil {
+		t.Errorf("unknown provider has models: %v", got)
 	}
 
 	info, ok := c.Model("anthropic", "claude-sonnet-5")
@@ -58,13 +50,13 @@ func TestFallbackParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{"anthropic", "openai"} {
-		if _, ok := c.Provider(p); !ok {
+	for _, p := range []string{"openai", "xai"} {
+		if len(c.Models(p)) == 0 {
 			t.Errorf("fallback lacks %s", p)
 		}
 	}
-	if info, ok := c.Model("anthropic", "claude-sonnet-5"); !ok || info.InputPrice == 0 {
-		t.Errorf("fallback claude-sonnet-5 = %+v ok=%v", info, ok)
+	if info, ok := c.Model("openai", "gpt-5.4"); !ok || info.ContextWindow == 0 {
+		t.Errorf("fallback gpt-5.4 = %+v ok=%v", info, ok)
 	}
 }
 
