@@ -123,7 +123,7 @@ tests that pin current behaviour first.
 3.3 Decide the fate of the `escalated` action: add `event.PromptEscalated` or drop the record call.
 3.4 Enable the `exhaustive` linter on the new enums in the gate.
 
-### Phase 4 — Tools and policy structure  [M]
+### Phase 4 — Tools and policy structure  [M]  ✅ done 2026-09-14 (4.1–4.7; 4.3 covered by toolname)
 
 4.1 `policy.Subject{Kind: Command|Path|URL|ID|Text, Value}`: tools normalise before policy sees the
     argument; `PolicyArg` becomes `Subject`.
