@@ -9,7 +9,7 @@
 //	stavlos trust [dir]     review and confirm a project's .stavlos/ layer
 //	stavlos tree <session>  print the agent tree
 //	stavlos send|steer|cancel|kill <agent> [text]
-//	stavlos auth login      connect a provider (keys go to auth.json, never the environment)
+//	stavlos auth login      sign in to a subscription (tokens go to auth.json)
 //	stavlos plugin ...      (roadmap)
 package main
 
@@ -26,6 +26,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/nicodes/stavlos/internal/config"
 
 	"github.com/nicodes/stavlos/internal/buildid"
 	"github.com/nicodes/stavlos/internal/daemon"
@@ -48,188 +50,225 @@ func run(args []string) error {
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		cmd, args = args[0], args[1:]
 	}
-	switch cmd {
-	case "", "new":
-		fs := flag.NewFlagSet("new", flag.ContinueOnError)
-		modelID := fs.String("model", "", "provider/model-id for this session")
-		root := fs.String("root", "", "root archetype (default from config)")
-		dir := fs.String("dir", "", "working directory (default: cwd)")
-		noTUI := fs.Bool("no-tui", false, "create the session and print its id without opening the TUI")
-		if err := fs.Parse(args); err != nil {
-			return err
-		}
-		c, err := connect(ctx, true)
-		if err != nil {
-			return err
-		}
-		defer c.Close()
-		d := cwd(*dir)
-		// A session only counts once someone has prompted it: if the
-		// directory's newest session is still untouched, reuse it instead
-		// of leaving another empty one behind.
-		var s protocol.SessionInfo
-		if list, lerr := c.Sessions(ctx, d, false); lerr == nil && len(list) > 0 && list[0].Title == "" && *modelID == "" && *root == "" {
-			s, err = c.ResumeSession(ctx, list[0].ID)
-		} else {
-			s, err = c.CreateSession(ctx, d, *modelID, *root)
-		}
-		if err != nil {
-			return err
-		}
-		if *noTUI {
-			fmt.Println(s.ID)
-			return nil
-		}
-		return tui.Run(ctx, c, s.ID)
-
-	case "resume":
-		c, err := connect(ctx, true)
-		if err != nil {
-			return err
-		}
-		defer c.Close()
-		id := ""
-		if len(args) > 0 {
-			id = args[0]
-		} else {
-			list, err := c.Sessions(ctx, cwd(""), false)
-			if err != nil {
-				return err
-			}
-			if len(list) == 0 {
-				return errors.New("no sessions for this directory; run `stavlos` to start one")
-			}
-			id = list[0].ID
-		}
-		s, err := c.ResumeSession(ctx, id)
-		if err != nil {
-			return err
-		}
-		return tui.Run(ctx, c, s.ID)
-
-	case "sessions":
-		c, err := connect(ctx, false)
-		if err != nil {
-			return err
-		}
-		defer c.Close()
-		list, err := c.Sessions(ctx, "", true)
-		if err != nil {
-			return err
-		}
-		for _, s := range list {
-			flag := ""
-			if s.Archived {
-				flag = " (archived)"
-			}
-			fmt.Printf("%s  %-40s %-30s live=%d cost=$%.4f seq=%d%s\n", s.ID, s.Dir, s.Model, s.Live, s.CostUSD, s.Seq, flag)
-		}
-		return nil
-
-	case "daemon":
-		fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
-		socket := fs.String("socket", paths.Socket(), "unix socket path")
-		dataDir := fs.String("data-dir", paths.DataDir(), "data directory")
-		if err := fs.Parse(args); err != nil {
-			return err
-		}
-		err := daemon.Main(ctx, daemon.Options{Socket: *socket, DataDir: *dataDir})
-		if errors.Is(err, daemon.ErrAlreadyRunning) {
-			return fmt.Errorf("%v; connect to it with `stavlos`, or stop it first", err)
-		}
-		return err
-
-	case "status":
-		c, err := connect(ctx, false)
-		if err != nil {
-			return err
-		}
-		defer c.Close()
-		st, err := c.Status(ctx)
-		if err != nil {
-			return err
-		}
-		b, _ := json.MarshalIndent(st, "", "  ")
-		fmt.Println(string(b))
-		return nil
-
-	case "init":
-		return initConfig(args)
-
-	case "auth", "provider", "connect":
-		return authCmd(ctx, args)
-
-	case "trust":
-		c, err := connect(ctx, true)
-		if err != nil {
-			return err
-		}
-		defer c.Close()
-		d := cwd("")
-		if len(args) > 0 {
-			d = cwd(args[0])
-		}
-		st, err := c.TrustStatus(ctx, d)
-		if err != nil {
-			return err
-		}
-		if !st.Pending {
-			fmt.Println("nothing pending for", d)
-			return nil
-		}
-		fmt.Printf("Project configuration in %s is not yet trusted. It can start MCP servers, tighten policy, add roles and skills, and instruct agents.\nFiles:\n", d)
-		for _, f := range st.Files {
-			fmt.Println("  ", f)
-		}
-		fmt.Print("Trust it? [y/N] ")
-		line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-		ok := strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "y")
-		if err := c.TrustReply(ctx, d, st.Hash, ok); err != nil {
-			return err
-		}
-		if ok {
-			fmt.Println("trusted", st.Hash)
-		}
-		return nil
-
-	case "tree":
-		if len(args) < 1 {
-			return errors.New("usage: stavlos tree <session>")
-		}
-		c, err := connect(ctx, false)
-		if err != nil {
-			return err
-		}
-		defer c.Close()
-		agents, err := c.Tree(ctx, args[0])
-		if err != nil {
-			return err
-		}
-		for _, a := range agents {
-			fmt.Printf("%s%s  %s (%s) %s turn=%d $%.4f %s\n", strings.Repeat("  ", a.Depth), a.ID, a.Label, a.Archetype, a.State, a.Turn, a.CostUSD, a.Model)
-		}
-		return nil
-
-	case "send", "steer", "cancel", "kill":
-		if len(args) < 1 {
-			return fmt.Errorf("usage: stavlos %s <agent> [text]", cmd)
-		}
-		c, err := connect(ctx, false)
-		if err != nil {
-			return err
-		}
-		defer c.Close()
-		kind := map[string]protocol.Kind{"send": protocol.KindPrompt, "steer": protocol.KindSteer, "cancel": protocol.KindCancel, "kill": protocol.KindKill}[cmd]
-		return c.Send(ctx, args[0], kind, strings.Join(args[1:], " "))
-
-	case "plugin":
-		return errors.New("plugin install is a roadmap item; in-tree providers: anthropic, and every OpenAI-compatible provider listed on models.dev (ollama, lmstudio included)")
-
-	case "help", "-h", "--help":
-		fmt.Print(usage)
-		return nil
+	if f, ok := subcommands[cmd]; ok {
+		return f(ctx, cmd, args)
 	}
 	return fmt.Errorf("unknown command %q\n%s", cmd, usage)
+}
+
+// subcommands maps each command word to its handler; "" starts a session.
+var subcommands = map[string]func(ctx context.Context, cmd string, args []string) error{
+	"":         cmdNew,
+	"new":      cmdNew,
+	"resume":   cmdResume,
+	"sessions": cmdSessions,
+	"daemon":   cmdDaemon,
+	"status":   cmdStatus,
+	"init":     func(_ context.Context, _ string, args []string) error { return initConfig(args) },
+	"auth":     cmdAuth,
+	"provider": cmdAuth,
+	"connect":  cmdAuth,
+	"trust":    cmdTrust,
+	"tree":     cmdTree,
+	"send":     cmdSend,
+	"steer":    cmdSend,
+	"cancel":   cmdSend,
+	"kill":     cmdSend,
+	"plugin":   cmdPlugin,
+	"help":     cmdHelp,
+	"-h":       cmdHelp,
+	"--help":   cmdHelp,
+}
+
+// cmdNew starts a session in a directory (reusing its newest session while
+// that one was never prompted) and opens the TUI.
+func cmdNew(ctx context.Context, _ string, args []string) error {
+	fs := flag.NewFlagSet("new", flag.ContinueOnError)
+	modelID := fs.String("model", "", "provider/model-id for this session")
+	root := fs.String("root", "", "root archetype (default from config)")
+	dir := fs.String("dir", "", "working directory (default: cwd)")
+	noTUI := fs.Bool("no-tui", false, "create the session and print its id without opening the TUI")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	c, err := connect(ctx, true)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	d := cwd(*dir)
+	// A session only counts once someone has prompted it: if the
+	// directory's newest session is still untouched, reuse it instead of
+	// leaving another empty one behind.
+	var s protocol.SessionInfo
+	if list, lerr := c.Sessions(ctx, d, false); lerr == nil && len(list) > 0 && list[0].Title == "" && *modelID == "" && *root == "" {
+		s, err = c.ResumeSession(ctx, list[0].ID)
+	} else {
+		s, err = c.CreateSession(ctx, d, *modelID, *root)
+	}
+	if err != nil {
+		return err
+	}
+	if *noTUI {
+		fmt.Println(s.ID)
+		return nil
+	}
+	return tui.Run(ctx, c, s.ID)
+}
+
+// cmdResume reattaches to a session (the directory's newest by default).
+func cmdResume(ctx context.Context, _ string, args []string) error {
+	c, err := connect(ctx, true)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	id := ""
+	if len(args) > 0 {
+		id = args[0]
+	} else {
+		list, err := c.Sessions(ctx, cwd(""), false)
+		if err != nil {
+			return err
+		}
+		if len(list) == 0 {
+			return errors.New("no sessions for this directory; run `stavlos` to start one")
+		}
+		id = list[0].ID
+	}
+	s, err := c.ResumeSession(ctx, id)
+	if err != nil {
+		return err
+	}
+	return tui.Run(ctx, c, s.ID)
+}
+
+func cmdSessions(ctx context.Context, _ string, _ []string) error {
+	c, err := connect(ctx, false)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	list, err := c.Sessions(ctx, "", true)
+	if err != nil {
+		return err
+	}
+	for _, s := range list {
+		archived := ""
+		if s.Archived {
+			archived = " (archived)"
+		}
+		fmt.Printf("%s  %-40s %-30s live=%d cost=$%.4f seq=%d%s\n", s.ID, s.Dir, s.Model, s.Live, s.CostUSD, s.Seq, archived)
+	}
+	return nil
+}
+
+func cmdDaemon(ctx context.Context, _ string, args []string) error {
+	fs := flag.NewFlagSet("daemon", flag.ContinueOnError)
+	socket := fs.String("socket", paths.Socket(), "unix socket path")
+	dataDir := fs.String("data-dir", paths.DataDir(), "data directory")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	err := daemon.Main(ctx, daemon.Options{Socket: *socket, DataDir: *dataDir})
+	if errors.Is(err, daemon.ErrAlreadyRunning) {
+		return fmt.Errorf("%v; connect to it with `stavlos`, or stop it first", err)
+	}
+	return err
+}
+
+func cmdStatus(ctx context.Context, _ string, _ []string) error {
+	c, err := connect(ctx, false)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	st, err := c.Status(ctx)
+	if err != nil {
+		return err
+	}
+	b, _ := json.MarshalIndent(st, "", "  ")
+	fmt.Println(string(b))
+	return nil
+}
+
+func cmdAuth(ctx context.Context, _ string, args []string) error { return authCmd(ctx, args) }
+
+// cmdTrust shows a project's pending .stavlos/ layer and records the answer.
+func cmdTrust(ctx context.Context, _ string, args []string) error {
+	c, err := connect(ctx, true)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	d := cwd("")
+	if len(args) > 0 {
+		d = cwd(args[0])
+	}
+	st, err := c.TrustStatus(ctx, d)
+	if err != nil {
+		return err
+	}
+	if !st.Pending {
+		fmt.Println("nothing pending for", d)
+		return nil
+	}
+	fmt.Printf("Project configuration in %s is not yet trusted. It can start MCP servers, tighten policy, add roles and skills, and instruct agents.\nFiles:\n", d)
+	for _, f := range st.Files {
+		fmt.Println("  ", f)
+	}
+	fmt.Print("Trust it? [y/N] ")
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	ok := strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "y")
+	if err := c.TrustReply(ctx, d, st.Hash, ok); err != nil {
+		return err
+	}
+	if ok {
+		fmt.Println("trusted", st.Hash)
+	}
+	return nil
+}
+
+func cmdTree(ctx context.Context, _ string, args []string) error {
+	if len(args) < 1 {
+		return errors.New("usage: stavlos tree <session>")
+	}
+	c, err := connect(ctx, false)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	agents, err := c.Tree(ctx, args[0])
+	if err != nil {
+		return err
+	}
+	for _, a := range agents {
+		fmt.Printf("%s%s  %s (%s) %s turn=%d $%.4f %s\n", strings.Repeat("  ", a.Depth), a.ID, a.Label, a.Archetype, a.State, a.Turn, a.CostUSD, a.Model)
+	}
+	return nil
+}
+
+// cmdSend delivers a prompt, steer, cancel or kill to an agent.
+func cmdSend(ctx context.Context, cmd string, args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("usage: stavlos %s <agent> [text]", cmd)
+	}
+	c, err := connect(ctx, false)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+	kind := map[string]protocol.Kind{"send": protocol.KindPrompt, "steer": protocol.KindSteer, "cancel": protocol.KindCancel, "kill": protocol.KindKill}[cmd]
+	return c.Send(ctx, args[0], kind, strings.Join(args[1:], " "))
+}
+
+func cmdPlugin(context.Context, string, []string) error {
+	return errors.New("plugins are a roadmap item (PRD §11); Stavlos serves the ChatGPT (openai) and Grok (xai) subscriptions: see `stavlos auth login`")
+}
+
+func cmdHelp(context.Context, string, []string) error {
+	fmt.Print(usage)
+	return nil
 }
 
 const usage = `usage:
@@ -357,13 +396,13 @@ func startDaemon() error {
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "started stavlosd (pid %d, log %s)\n", cmd.Process.Pid, logf.Name())
+	fmt.Fprintf(os.Stderr, "started the daemon (pid %d, log %s)\n", cmd.Process.Pid, logf.Name())
 	return cmd.Process.Release()
 }
 
 func initConfig(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ContinueOnError)
-	modelID := fs.String("model", "anthropic/claude-sonnet-5", "default model")
+	modelID := fs.String("model", "", "default model, such as openai/gpt-5.4 (leave it out to pick one with /models)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -372,32 +411,41 @@ func initConfig(args []string) error {
 	if _, err := os.Stat(p); err == nil {
 		return fmt.Errorf("%s already exists", p)
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "agents"), 0o755); err != nil {
+	for _, sub := range []string{"roles", "skills"} {
+		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
+			return err
+		}
+	}
+	b, err := json.MarshalIndent(starterConfig(*modelID), "", "  ")
+	if err != nil {
 		return err
 	}
-	_ = os.MkdirAll(filepath.Join(dir, "skills"), 0o755)
-	content := fmt.Sprintf(`{
-  // Global Stavlos configuration. See docs/stavlos-prd.md §10.
-  "model": %q,
-  "rootAgent": "coder",
-  "limits": { "maxDepth": 3, "maxAgents": 6 },
-  "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
-  // web_search backend (brave, tavily or exa) — leave out to keep web_search unconfigured
-  // "search": { "provider": "brave", "apiKey": "${env:BRAVE_API_KEY}" },
-  // commands and MCP servers run without STAVLOS_* and credential-looking variables; list the ones a build needs
-  // "env": { "pass": ["GITHUB_TOKEN"] },
-  "policy": {
-    // read-only commands (grep, rg, find, ls, git status/log/diff, …) are allowed by the built-in defaults
-    "shell": { "git push*": "ask", "rm -rf*": "deny" },
-    "apply_patch": { "**": "ask" },
-    "read":  "allow"
-  }
-}
-`, *modelID)
-	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+	if err := os.WriteFile(p, append(b, '\n'), 0o600); err != nil {
 		return err
 	}
 	fmt.Println("wrote", p)
-	fmt.Println("run `stavlos` in a project directory; it will ask you to connect a provider on first use (or run `stavlos auth login` now)")
+	fmt.Println(`next:
+  - run stavlos in a project directory, then /providers to sign in and /models to pick a model (or run stavlos auth login now)
+  - add roles as roles/<name>.md next to stavlos.json (docs/stavlos-prd.md §10.3)
+  - for web_search on your own quota, add "search": {"provider": "brave", "apiKey": "${env:BRAVE_API_KEY}"}
+  - commands run without credential-looking variables; list what a build needs under "env": {"pass": ["GITHUB_TOKEN"]}`)
 	return nil
+}
+
+// starterConfig is the global config stavlos init writes: the defaults
+// spelled out, so the file shows where each setting lives. It is marshalled
+// from config.File, so it always loads.
+func starterConfig(model string) config.File {
+	return config.File{
+		Model:      model,
+		Limits:     &config.Limits{MaxDepth: 3, MaxAgents: 6},
+		Escalation: &config.Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: "deny"},
+		// Read-only commands (grep, rg, find, ls, git status/log/diff, …)
+		// are allowed by the built-in defaults.
+		Policy: map[string]any{
+			"shell":       map[string]any{"git push*": "ask", "rm -rf*": "deny"},
+			"apply_patch": map[string]any{"**": "ask"},
+			"read":        "allow",
+		},
+	}
 }
