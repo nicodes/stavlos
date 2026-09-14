@@ -52,15 +52,15 @@ M ≈ 2–4 commits, L ≈ 5+ commits.
 The core is only tested through the daemon integration suite. Every later phase needs unit-level
 tests that pin current behaviour first.
 
-1.1 `internal/agent`: a `fakeHost` (in-memory `Append`/`Read`/`Prompt`) and a fake `model.Provider`
+1.1 ✅ `internal/agent`: a `fakeHost` (in-memory `Append`/`Read`/`Prompt`) and a fake `model.Provider`
     so an `Agent`/`Session` can be driven without the daemon. Table tests for `runTool` verdicts
     (policy × mode × remembered allows × boundary), turn loop end reasons, mailbox semantics.
-1.2 Replay round-trip test: drive a session, capture events, `Recover` into a fresh session, compare
+1.2 ✅ Replay round-trip test: drive a session, capture events, `Recover` into a fresh session, compare
     `Info()` trees. This is the regression guard for M1.
-1.3 `project`: golden tests for `Project` (dangling tool_use repair, compaction cut, ordering).
-1.4 Snapshot test of every tool's `Def().Schema` (guards the schema-from-struct change in 4.4).
-1.5 De-flake `TestChildResponseWakesParent` (wait on the child's `TurnEnded`, not the tree read).
-1.6 Add `-race` to the gate for `internal/agent` and `internal/daemon`. (The detector passes today; gate = vet, gofmt, `go test -race` on those two, then `go test ./...` three times. staticcheck joins the gate once Phase 9 removes the 15 dead symbols.)
+1.3 ✅ `project`: golden tests for `Project` (dangling tool_use repair, compaction cut, ordering).
+1.4 ✅ Snapshot test of every tool's `Def().Schema` (guards the schema-from-struct change in 4.4).
+1.5 ✅ De-flake `TestChildResponseWakesParent` (wait on the child's `TurnEnded`, not the tree read).
+1.6 ✅ Add `-race` to the gate for `internal/agent` and `internal/daemon`. (The detector passes today; gate = vet, gofmt, `go test -race` on those two, then `go test ./...` three times. staticcheck joins the gate once Phase 9 removes the 15 dead symbols.)
     Found on the way: a recovered agent with a pending wake (response, lost job) was never signalled — fixed.
 
 ### Phase 2 — Security fixes (small, behaviour-changing, each its own commit)  [M]  ✅ done 2026-09-14 (2.1–2.15, one commit each)
@@ -113,54 +113,54 @@ tests that pin current behaviour first.
 
 ### Phase 3 — Shared vocabulary  [M]  ✅ done 2026-09-14 (3.1–3.4)
 
-3.1 Typed constants in the leaf packages, replacing every literal switch:
+3.1 ✅ Typed constants in the leaf packages, replacing every literal switch:
     `protocol.AgentState` (idle/running/blocked/waiting/killed) + `RollUp` → `SessionState`;
     `PromptKind`, `PromptAction`, `AnswerValue`; `MonitorState`, `MCPState`; `event.TodoStatus`,
     `TurnReason`, `MessageKind`, `Source{Kind,ID}` helpers. `agent.State` becomes an alias.
-3.2 `internal/toolname`: typed tool-name constants, `Canonical()` mapping every legacy spelling
+3.2 ✅ `internal/toolname`: typed tool-name constants, `Canonical()` mapping every legacy spelling
     (`bash`, `bash_async`, `spawn`, `write`, `edit`, …) once at TUI ingress. `config`, `tools`,
     `agent`, `protocol`, `tui` all use it; the four legacy shims in the TUI collapse to one.
-3.3 Decide the fate of the `escalated` action: add `event.PromptEscalated` or drop the record call.
-3.4 Enable the `exhaustive` linter on the new enums in the gate.
+3.3 ✅ Decide the fate of the `escalated` action: add `event.PromptEscalated` or drop the record call.
+3.4 ✅ Enable the `exhaustive` linter on the new enums in the gate.
 
 ### Phase 4 — Tools and policy structure  [M]  ✅ done 2026-09-14 (4.1–4.7; 4.3 covered by toolname)
 
-4.1 `policy.Subject{Kind: Command|Path|URL|ID|Text, Value}`: tools normalise before policy sees the
+4.1 ✅ `policy.Subject{Kind: Command|Path|URL|ID|Text, Value}`: tools normalise before policy sees the
     argument; `PolicyArg` becomes `Subject`.
-4.2 Break `tools → config`: move `config.Skill` to `tools`; `tools.ChildStatus`/`MonitorStatus`
+4.2 ✅ Break `tools → config`: move `config.Skill` to `tools`; `tools.ChildStatus`/`MonitorStatus`
     become `protocol.AgentInfo`+`You` / `protocol.MonitorInfo`; `tools.Artifact = event.Artifact`.
-4.3 Tool registry: one entry per tool `{Name, Def, Subject, Group, ImpliedBy}`; `Builtin`,
+4.3 ✅ Tool registry: one entry per tool `{Name, Def, Subject, Group, ImpliedBy}`; `Builtin`,
     `DefaultTools`, presets, `toolGroup`, the five `*Names` slices and the system-prompt tool list
     all iterate it.
-4.4 Schema-from-struct: `tools.SchemaOf[T]()` from tagged input structs (guarded by 1.4); removes
+4.4 ✅ Schema-from-struct: `tools.SchemaOf[T]()` from tagged input structs (guarded by 1.4); removes
     the triple declaration and untagged case-insensitive decoding.
-4.5 Split `web.go` into `web/fetch.go`, `web/markdown.go` (byte-buffer converter, stop at cap,
+4.5 ✅ Split `web.go` into `web/fetch.go`, `web/markdown.go` (byte-buffer converter, stop at cap,
     O(n) flush), `web/search.go` (`Provider` interface; SSE parsed per event; output clipped).
-4.6 `apply_patch`: per-file atomic via temp+rename with rollback, preserve mode on move, refuse
+4.6 ✅ `apply_patch`: per-file atomic via temp+rename with rollback, preserve mode on move, refuse
     overwriting move targets, honest description. `read` stops appending at the cap; `Limit` capped.
     `partialWriter` stops streaming after adoption. Rune-safe truncation helper everywhere.
-4.7 web_search default: see decision D3.
+4.7 ✅ web_search default: see decision D3.
 
 ### Phase 5 — Agent core  [L]  ✅ done 2026-09-14 (5.1 as targeted replay fixes guarded by the round-trip test; 5.2 as roleView snapshots rather than a command channel; 5.3–5.7)
 
-5.1 **One reducer**: `(*Agent).apply(event)` / `(*Session).apply(event)`; live path = `Append` then
+5.1 ✅ **One reducer**: `(*Agent).apply(event)` / `(*Session).apply(event)`; live path = `Append` then
     `apply`; `Recover` = replay + `abortOpenTurns` + `reportLostJobs`. Log resolved target ids
     (`AgentAsked`), log `MonitorDisarmed`, log which queued prompt a turn consumed. Fixes M1.
     Guarded by 1.2.
-5.2 **Actor**: `run()` drains a `cmds chan func()` between steps; `Compact`, `SetRole`, `SetModel`,
+5.2 ✅ **Actor**: `run()` drains a `cmds chan func()` between steps; `Compact`, `SetRole`, `SetModel`,
     `SetVariant`, `AddDir`, `RemoveDir`, `deliverResponse`, `fireMonitor` post closures; read-only
     `atomic.Pointer[agentView]` snapshot for `Info()`/`Status`/`Busy`. `a.mu` shrinks to the inbox.
     Fixes M2 and the lock-order hazards.
-5.3 Split `turn.go`: `turn.go` (loop + `step`), `permission.go` (`permits`, `decide`), `escalate.go`,
+5.3 ✅ Split `turn.go`: `turn.go` (loop + `step`), `permission.go` (`permits`, `decide`), `escalate.go`,
     `prompt.go` (system prompt sections, `toolNames`, `toolDefs`; `ensureMCP` moved to step start),
     `compact.go`. `runTurn`/`runTool`/`buildContext` each under 60 lines.
-5.4 Incremental `project.Projector` owned by the agent (cached history, invalidated in `record`,
+5.4 ✅ Incremental `project.Projector` owned by the agent (cached history, invalidated in `record`,
     events before `Compacted.ToSeq` dropped from memory); one token estimate per step, preferring
     last real `Usage` and counting tool schemas and signatures.
-5.5 Log-write failures: sticky `a.logErr` checked at each step boundary → turn ends with `error`.
-5.6 Persist session allows across restart by replaying `PromptAnswered` into `permits`
+5.5 ✅ Log-write failures: sticky `a.logErr` checked at each step boundary → turn ends with `error`.
+5.6 ✅ Persist session allows across restart by replaying `PromptAnswered` into `permits`
     (paired with 2.3 so Deny still wins). See decision D4.
-5.7 Delete dead members: `yieldFlag`, child `armed`/`IsArmed`, `hasMonitor`, monitor
+5.7 ✅ Delete dead members: `yieldFlag`, child `armed`/`IsArmed`, `hasMonitor`, monitor
     `Kind watch|timer`/`Glob`/`Seconds`, `var _ =` import pins, `mode == ""` special case.
 
 ### Phase 6 — Daemon, protocol, event log  [L]
@@ -178,12 +178,12 @@ tests that pin current behaviour first.
     `internal/eventlog` holds SQLite; reader and writer pools; in-memory `lastSeq`; `AppendBatch`
     (fork in one tx); `sessions` gets `title`, `model`, `state`, `last_seq` columns so
     `session.list` is one query; drop the duplicate index; `payload` stays JSON.
-6.5 `pkg/client`: `Options{CallTimeout}`, non-blocking notifications with a `Lagged` signal,
+6.5 ◐ (partial: pending-map cleanup on write error, a 4096 notification buffer and the envelope version are done; the Reconnector is deferred while the TUI still quits on disconnect) `pkg/client`: `Options{CallTimeout}`, non-blocking notifications with a `Lagged` signal,
     `Reconnector` (dial with backoff, re-attach, resubscribe from last seq), one `ReplyPrompt`
     taking the params struct, pending-map cleanup on write error, `Notification` type.
 6.6 One `daemon.Main(ctx, Options)` ✅; delete `cmd/stavlosd` (see D2); `client.Connect` launcher
     moved out of `cmd/stavlos` and unit-tested; `replaceStale` refuses when agents are live unless
-    `--restart-daemon`; `buildid` computed eagerly and passed to the child via env.
+    `--restart-daemon`; `buildid` computed eagerly and passed to the child via env. (Not done: refusing the restart while agents are live; recovered idle agents would always block it.)
 6.7 Escalation: `Reply(id, client, Answer)` only ✅; trust prompt gets per-prompt timeouts (no
     default-deny after 3 min); `Trust()` uses `AnswerWhere`.
 
@@ -231,14 +231,14 @@ tests that pin current behaviour first.
 
 ### Phase 9 — Cleanup and docs  [S]
 
-9.1 `stavlos init`: model default empty, create `roles/`, config via `config.File` marshal; fix
+9.1 ✅ `stavlos init`: model default empty, create `roles/`, config via `config.File` marshal; fix
     the `plugin` message.
-9.2 README: split the 4.7k-char paragraph into sections; add missing commands; drop the
+9.2 ✅ README: split the 4.7k-char paragraph into sections; add missing commands; drop the
     "/providers to paste a key" line. PRD: remove `agent_finish`/`spawn`/`write`/`edit`, fix §6.4
     table, §8.4 vs §10.7 contradiction, socket path, `agents/` → `roles/`, `$schema` claim, and
     mark plugin/Discord/fork as post-v1 or implement fork in the TUI.
-9.3 Delete the stale 23 MB `./stavlosd` binary from the working tree.
-9.4 Memory/notes updated; `gocyclo -over 30` and `staticcheck` clean added to the gate.
+9.3 ✅ (the binary was already gone, and `/stavlosd` is gitignored) Delete the stale 23 MB `./stavlosd` binary from the working tree.
+9.4 ✅ (`scripts/check.sh` runs every gate; staticcheck and gocyclo are module tools) Memory/notes updated; `gocyclo -over 30` and `staticcheck` clean added to the gate.
 
 ---
 

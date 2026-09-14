@@ -133,4 +133,6 @@ go run ./cmd/stavlos      # the client re-executes itself as the daemon
 go test ./...
 ```
 
+`scripts/check.sh` runs the whole gate a change must pass: gofmt, vet, the exhaustive-switch lint, staticcheck, a cyclomatic-complexity bound of 30, the race detector on the concurrent packages, and the suite three times.
+
 The client checks the daemon's build id on connect and restarts it when the daemon was built from older code, so editing and re-running with `go run` just works. Set `STAVLOS_KEEP_DAEMON=1` to skip that. Daemon output is in `~/.local/share/stavlos/stavlosd.log`.
