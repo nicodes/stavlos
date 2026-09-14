@@ -750,6 +750,7 @@ func (m Model) View() string {
 		main = m.sessionView(m.width, mainH)
 	}
 	if m.ov != nil {
+		m.ov.hints = m.keyHints() // the dialog's own keys, shown whatever the key bar setting
 		main = composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
 	} else if isTab(m.focus) {
 		main = composite(main, m.width, mainH, m.tabDialog(m.width))
@@ -1018,6 +1019,9 @@ func (m Model) tabDialog(bodyWidth int) string {
 	for _, l := range m.tabBodyLines(inner) {
 		lines = append(lines, ansi.Truncate(l, inner, "…"))
 	}
+	if f := dialogHintLine(m.keyHints(), inner); f != "" {
+		lines = append(lines, "", f)
+	}
 	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
 }
 
@@ -1233,7 +1237,10 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 		}
 	}
 	if p.Dir != "" {
-		lines = append(lines, styleWarn.Render("outside its directories")+styleDim.Render(" · a adds "+shortHome(p.Dir)))
+		lines = append(lines, styleWarn.Render("outside its directories")+styleDim.Render(" · a adds "+shortHome(p.Dir)+" · e edits it first"))
+		if m.promptDir {
+			lines = append(lines, "", styleDim.Render("directory to add"), m.dirInput.View())
+		}
 	}
 	switch {
 	case p.ClaimedBy != "" && !m.claimedByUs[p.ID]:

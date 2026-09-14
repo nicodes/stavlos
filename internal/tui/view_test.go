@@ -308,7 +308,7 @@ func TestMonitorRows(t *testing.T) {
 		t.Fatalf("the strip stays one line with a tab open:\n%s", view)
 	}
 	// the dialog: title (with esc: close), a blank line, one row per job, inside the border
-	if view := stripANSI(m.tabDialog(100)); strings.Count(view, "\n") != 6 || !strings.Contains(view, "Async (3)") || !strings.Contains(view, "esc: close") || !strings.Contains(view, "go test") || !strings.Contains(view, "cooldown") {
+	if view := stripANSI(m.tabDialog(100)); strings.Count(view, "\n") != 8 || !strings.Contains(view, "Async (3)") || !strings.Contains(view, "esc: close") || !strings.Contains(view, "go test") || !strings.Contains(view, "cooldown") {
 		t.Fatalf("async dialog:\n%s", view)
 	}
 	m.focus = focusInput
@@ -909,21 +909,21 @@ func TestSectionTabStrip(t *testing.T) {
 	v = stripANSI(m.tabDialog(100))
 	lines := strings.Split(v, "\n")
 	// border, title, blank, one row, border
-	if len(lines) != 5 || !strings.Contains(lines[1], "Agents (1)") || !strings.HasSuffix(strings.TrimRight(lines[1], " │"), "esc: close") || strings.Contains(lines[1], "permission") || strings.TrimSpace(strings.Trim(lines[2], "│")) != "" || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "scout") {
+	if len(lines) != 7 || !strings.Contains(lines[1], "Agents (1)") || !strings.HasSuffix(strings.TrimRight(lines[1], " │"), "esc: close") || strings.Contains(lines[1], "permission") || strings.TrimSpace(strings.Trim(lines[2], "│")) != "" || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "scout") {
 		t.Fatalf("agents dialog:\n%s", v)
 	}
 	// async focused: the job row
 	m.focus = focusAsync
 	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 5 || !strings.Contains(lines[1], "Async (1)") || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "go test") || strings.Contains(v, "scout") {
+	if len(lines) != 7 || !strings.Contains(lines[1], "Async (1)") || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "go test") || strings.Contains(v, "scout") {
 		t.Fatalf("async dialog:\n%s", v)
 	}
 	// permission focused: the tool row over its command
 	m.focus = focusPermission
 	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 5 || !strings.Contains(lines[1], "Permission (1)") || !strings.HasPrefix(lines[3], "│ $ coder (coder)  make test") || strings.Contains(v, "scout") {
+	if len(lines) != 7 || !strings.Contains(lines[1], "Permission (1)") || !strings.HasPrefix(lines[3], "│ $ coder (coder)  make test") || strings.Contains(v, "scout") {
 		t.Fatalf("permission dialog:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
@@ -1267,7 +1267,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	dv := stripANSI(m.tabDialog(120))
 	lines := strings.Split(dv, "\n")
 	// border, title, blank, four rows, border
-	if len(lines) != 8 || !strings.Contains(lines[1], "Todo (2/4)") || !strings.Contains(lines[1], "esc: close") {
+	if len(lines) != 10 || !strings.Contains(lines[1], "Todo (2/4)") || !strings.Contains(lines[1], "esc: close") {
 		t.Fatalf("todo dialog:\n%s", dv)
 	}
 	for i, want := range []string{"● Read the code", "◐ Fix the bug", "○ Run the tests", "× Write docs"} {
@@ -2121,14 +2121,14 @@ func TestMCPTabAndDialog(t *testing.T) {
 	dv := stripANSI(m.tabDialog(120))
 	lines := strings.Split(dv, "\n")
 	// border, title, blank, three rows, border
-	if len(lines) != 7 || !strings.Contains(lines[1], "MCP (1/3)") || !strings.Contains(lines[3], "● github  2 tools · 2h00m") || !strings.Contains(lines[4], "× docs  spawn npx: not found") || !strings.Contains(lines[5], "○ linear  starts at the next turn") {
+	if len(lines) != 9 || !strings.Contains(lines[1], "MCP (1/3)") || !strings.Contains(lines[3], "● github  2 tools · 2h00m") || !strings.Contains(lines[4], "× docs  spawn npx: not found") || !strings.Contains(lines[5], "○ linear  starts at the next turn") {
 		t.Fatalf("mcp dialog:\n%s", dv)
 	}
 	// enter on a server lists its tools under it (short names), enter again folds them
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
 	dv = stripANSI(m.tabDialog(120))
 	lines = strings.Split(dv, "\n")
-	if len(lines) != 9 || !strings.Contains(lines[4], "get_issue") || !strings.Contains(lines[5], "create_issue") || strings.Contains(lines[4], "mcp__") {
+	if len(lines) != 11 || !strings.Contains(lines[4], "get_issue") || !strings.Contains(lines[5], "create_issue") || strings.Contains(lines[4], "mcp__") {
 		t.Fatalf("expanded server:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter}) // a tool row: enter does nothing
@@ -2136,7 +2136,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatal("enter on a tool row should not toggle anything")
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.mcpOpen["github"] || strings.Count(stripANSI(m.tabDialog(120)), "\n") != 6 {
+	if m.mcpOpen["github"] || strings.Count(stripANSI(m.tabDialog(120)), "\n") != 8 {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
@@ -2177,7 +2177,10 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	}
 	dv := stripANSI(m.tabDialog(120))
 	lines := strings.Split(dv, "\n")
-	if len(lines) != 7 || !strings.Contains(lines[1], "Dirs (3)") || !strings.Contains(lines[3], "◆ /repo  session") || !strings.Contains(lines[4], "/srv/shared  role") || !strings.Contains(lines[5], "/tmp/build  human") {
+	if !strings.Contains(dv, "a add directory · enter edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
+		t.Fatalf("dirs dialog should carry its own hints (without esc):\n%s", dv)
+	}
+	if len(lines) != 9 || !strings.Contains(lines[1], "Dirs (3)") || !strings.Contains(lines[3], "◆ /repo  session") || !strings.Contains(lines[4], "/srv/shared  role") || !strings.Contains(lines[5], "/tmp/build  human") {
 		t.Fatalf("dirs dialog:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
@@ -2226,9 +2229,28 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 		t.Fatalf("boundary prompt body:\n%s", body)
 	}
 	hs := m.keyHints()
-	if hs[1].key != "a" || hs[1].desc != "allow + add directory" {
+	if hs[1].key != "a" || hs[1].desc != "allow + add directory" || hs[2].key != "e" {
 		t.Fatalf("hints %+v", hs)
 	}
+	// e edits the offered directory before it is added; esc cancels the
+	// edit only; enter answers with the edited path
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	if !m.promptDir || m.dirInput.Value() != "/etc" || !m.dirInput.Focused() {
+		t.Fatalf("edit: %v %q", m.promptDir, m.dirInput.Value())
+	}
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "directory to add") || !strings.Contains(body, "› /etc") {
+		t.Fatalf("edit field:\n%s", body)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.promptDir || m.focus != focusPermission {
+		t.Fatalf("esc should cancel the edit only: %v %v", m.promptDir, m.focus)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	press(&m, tea.KeyMsg{Type: tea.KeyBackspace}, tea.KeyMsg{Type: tea.KeyBackspace}, tea.KeyMsg{Type: tea.KeyBackspace})
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptDir || m.promptBusy != "p" || !m.claimedByUs["p"] {
+		t.Fatalf("enter should answer with the edited directory: cmd=%v busy=%q", cmd != nil, m.promptBusy)
+	}
+	m.promptBusy = ""
 	// the chat notes an added directory
 	tr := m.transcript("a")
 	tr.Apply(event.Event{Agent: "a", Type: event.AgentDirAdded, Payload: event.MustPayload(event.DirAddedPayload{Dir: "/etc", Source: "human"})})

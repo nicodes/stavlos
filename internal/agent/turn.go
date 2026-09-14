@@ -251,7 +251,11 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 			a.s.allowAlways[key] = true
 			a.s.mu.Unlock()
 			if boundary != "" {
-				_ = a.addDir(bg, boundary, "human")
+				dir := boundary
+				if strings.TrimSpace(ans.Dir) != "" {
+					dir = resolveDir(a.s.Dir, ans.Dir) // the human edited the offered directory
+				}
+				_ = a.addDir(bg, dir, "human")
 			}
 		case ans.Value == "allow":
 		default:

@@ -117,6 +117,7 @@ type Model struct {
 	promptInput textinput.Model // answer field of a question prompt
 	dirInput    textinput.Model // path field of the dirs dialog while adding or editing
 	dirEdit     string          // "" | "add" | the path being replaced
+	promptDir   bool            // the permission dialog is editing the directory a boundary prompt offers
 	sbCursor    int
 	palIdx      int               // highlighted row in the "/" command palette
 	agCursor    int               // highlighted row in the agents/async tab while it has focus
@@ -644,6 +645,10 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	m.focus = f
 	if prev == focusDirs && f != focusDirs {
 		m.dirEdit = "" // leaving the dirs dialog drops a half-typed edit
+		m.dirInput.Blur()
+	}
+	if prev == focusPermission && f != focusPermission {
+		m.promptDir = false
 		m.dirInput.Blur()
 	}
 	if isTab(f) && !isTab(prev) {
@@ -1806,12 +1811,40 @@ func isAlias(c Command, typed string) bool {
 // a permission (y/n a trust prompt); a question takes typing into its own
 // field and enter submits it; esc closes the dialog.
 func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
-	if key.Matches(msg, keys.Clear) {
+	if key.Matches(msg, keys.Clear) && !m.promptDir {
 		return m.closeDialog()
 	}
 	p := m.currentPrompt()
 	if p == nil { // empty dialog: nothing to answer
 		return nil
+	}
+	// A boundary prompt's directory can be edited before it is added: e
+	// opens the field prefilled, enter allows and adds what was typed, esc
+	// cancels the edit.
+	if m.promptDir {
+		switch {
+		case key.Matches(msg, keys.OvClose):
+			m.promptDir = false
+			m.dirInput.Blur()
+			return nil
+		case key.Matches(msg, keys.Submit):
+			dir := strings.TrimSpace(m.dirInput.Value())
+			if dir == "" {
+				return nil
+			}
+			m.promptDir = false
+			m.dirInput.Blur()
+			return m.answerPromptDir(p, dir)
+		}
+		var cmd tea.Cmd
+		m.dirInput, cmd = m.dirInput.Update(msg)
+		return cmd
+	}
+	if p.Kind == "permission" && p.Dir != "" && msg.String() == "e" {
+		m.promptDir = true
+		m.dirInput.SetValue(p.Dir)
+		m.dirInput.CursorEnd()
+		return m.dirInput.Focus()
 	}
 	if p.Kind == "question" {
 		if key.Matches(msg, keys.Submit) {
@@ -2241,6 +2274,20 @@ func (m *Model) answerPrompt(p *protocol.PromptInfo, answer string) tea.Cmd {
 		return trustReplyCmd(m.ctx, m.c, p.ID, t.Dir, t.Hash, answer == "allow")
 	}
 	return answerPromptCmd(m.ctx, m.c, p.ID, answer)
+}
+
+// answerPromptDir is allow_always on a boundary prompt with an edited
+// directory: the call runs and that directory joins the agent's set.
+func (m *Model) answerPromptDir(p *protocol.PromptInfo, dir string) tea.Cmd {
+	if m.promptBusy == p.ID {
+		return m.setStatus("answer in flight…", false)
+	}
+	if p.ClaimedBy != "" && !m.claimedByUs[p.ID] {
+		return m.setStatus("claimed by another client", true)
+	}
+	m.promptBusy = p.ID
+	m.claimedByUs[p.ID] = true
+	return answerPromptDirCmd(m.ctx, m.c, p.ID, dir)
 }
 
 // --- agents / selection ---

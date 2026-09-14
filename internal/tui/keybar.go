@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // keyHint is one entry of the key legend: what to press, what it does.
@@ -52,7 +53,10 @@ func (m Model) keyHints() []keyHint {
 				return []keyHint{{"type + enter", "answer"}, {"1-9", "pick an option"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			default:
 				if p.Dir != "" {
-					return []keyHint{{"y", "allow once"}, {"a", "allow + add directory"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
+					if m.promptDir {
+						return []keyHint{{"enter", "allow + add this directory"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
+					}
+					return []keyHint{{"y", "allow once"}, {"a", "allow + add directory"}, {"e", "edit the directory"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 				}
 				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			}
@@ -78,6 +82,25 @@ func (m Model) keyHints() []keyHint {
 	hs := []keyHint{{"enter", "send"}, {"ctrl+j", "newline"}, {"↑/↓", "history"}, {"/", "commands"}}
 	hs = append(hs, tab...)
 	return append(hs, keyHint{"esc esc", "cancel turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"ctrl+c", "quit"})
+}
+
+// dialogHintLine is the footer every dialog carries whatever the key bar
+// setting: the keys that act inside it, "key desc · key desc", dim. esc,
+// tab and ctrl+c are left out (esc is on the title line; the other two are
+// not the dialog's own).
+func dialogHintLine(hints []keyHint, width int) string {
+	var parts []string
+	for _, h := range hints {
+		switch h.key {
+		case "esc", "tab", "ctrl+c":
+			continue
+		}
+		parts = append(parts, styleKey.Render(h.key)+" "+styleDim.Render(h.desc))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return ansi.Truncate(strings.Join(parts, styleDim.Render(" · ")), width, "…")
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at
