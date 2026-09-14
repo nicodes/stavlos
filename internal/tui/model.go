@@ -2996,18 +2996,19 @@ func (m *Model) layout() {
 // refreshViewport re-renders the selected transcript into the viewport,
 // marking the cursor item while the chat has focus.
 func (m *Model) refreshViewport() {
-	var lines []Line
-	if t := m.transcripts[m.selectedID()]; t != nil {
-		lines = t.All()
+	t := m.transcripts[m.selectedID()]
+	n := 0
+	if t != nil {
+		n = t.Items()
 	}
-	if n := itemCount(lines); m.chatCursor >= n {
+	if m.chatCursor >= n {
 		m.chatCursor = n - 1
 	}
 	if m.chatCursor < 0 {
 		m.chatCursor = 0
 	}
 	working, waiting, verb, stats, active := false, false, "", "", ""
-	if t := m.transcripts[m.selectedID()]; t != nil && t.InTurn() {
+	if t != nil && t.InTurn() {
 		working, verb = true, t.TurnVerb()
 		stats = turnStats(t.TurnStats(time.Now()))
 		active = m.activeTodo()
@@ -3018,7 +3019,7 @@ func (m *Model) refreshViewport() {
 			break
 		}
 	}
-	content, rows := renderAll(lines, RenderOpts{
+	opts := RenderOpts{
 		Width:    m.vp.Width,
 		Details:  m.details,
 		Spinner:  m.sp.View(),
@@ -3032,7 +3033,14 @@ func (m *Model) refreshViewport() {
 		Focused:  m.focus == focusChat,
 
 		CompactFrame: compactFrame(time.Now()),
-	})
+	}
+	var content string
+	var rows map[int]rowRange
+	if t != nil {
+		content, rows = t.Render(opts) // unchanged items come from the transcript's render cache
+	} else {
+		content, rows = renderAll(nil, opts)
+	}
 	m.itemRows = rows
 	m.vp.SetContent(content)
 	if m.follow {

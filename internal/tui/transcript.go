@@ -142,9 +142,12 @@ func (r lineRef) after(o lineRef) bool {
 }
 
 type Transcript struct {
-	items [][]Line // committed lines by item; items[i][j].Item == i
-	flat  []Line   // items flattened for rendering; nil when stale
-	start []int    // start[i]: index of items[i]'s first line in flat
+	items   [][]Line // committed lines by item; items[i][j].Item == i
+	revs    []uint64 // revs[i] changes whenever items[i] does (render cache key)
+	version uint64   // source of revisions
+	flat    []Line   // items flattened; nil when stale
+	start   []int    // start[i]: index of items[i]'s first line in flat
+	cache   renderCache
 
 	calls      map[string]lineRef   // tool call id → its LineTool line
 	prompts    map[string]int       // prompt id → item of the tool call it gates
@@ -367,13 +370,21 @@ func (t *Transcript) valid(r lineRef) bool {
 }
 
 // line returns the committed line at r for modification (nil if r is not
-// valid); the flattened view is rebuilt on the next read.
+// valid); the item is marked changed.
 func (t *Transcript) line(r lineRef) *Line {
 	if !t.valid(r) {
 		return nil
 	}
-	t.flat = nil
+	t.touch(r.item)
 	return &t.items[r.item][r.off]
+}
+
+// touch records that item changed: the flattened view is rebuilt on the
+// next read and the item is rendered afresh.
+func (t *Transcript) touch(item int) {
+	t.version++
+	t.revs[item] = t.version
+	t.flat = nil
 }
 
 // find returns the first of refs whose line satisfies ok.
@@ -402,6 +413,8 @@ func (t *Transcript) appendItem(lines []Line) []lineRef {
 			refs = append(refs, lineRef{i, j})
 		}
 		t.items = append(t.items, run)
+		t.version++
+		t.revs = append(t.revs, t.version)
 		if t.flat != nil {
 			t.start = append(t.start, len(t.flat))
 			t.flat = append(t.flat, run...)
@@ -422,7 +435,7 @@ func (t *Transcript) insertIntoItem(item int, lines []Line) []lineRef {
 		refs = append(refs, lineRef{item, len(t.items[item]) + j})
 	}
 	t.items[item] = append(t.items[item], lines...)
-	t.flat = nil
+	t.touch(item)
 	return refs
 }
 
@@ -437,7 +450,7 @@ func (t *Transcript) replaceItem(item int, lines []Line) {
 		lines[j].Item = item
 	}
 	t.items[item] = lines
-	t.flat = nil
+	t.touch(item)
 }
 
 // committed is every committed line in item order.
@@ -651,7 +664,7 @@ func (t *Transcript) stopRunning() {
 		for j := range t.items[i] {
 			if t.items[i][j].Running {
 				t.items[i][j].Running = false
-				t.flat = nil
+				t.touch(i)
 			}
 		}
 	}
@@ -704,22 +717,32 @@ func (t *Transcript) Notice(lines ...string) {
 }
 
 // All returns the committed lines followed by the live streaming buffer.
-// Buffer lines belong to the in-progress item: the running tool call when
-// the buffer continues one, otherwise a new item after the committed ones.
 // The slice must not be modified.
 func (t *Transcript) All() []Line {
-	lines := t.committed()
-	if len(t.stream) == 0 {
+	lines, tail := t.committed(), t.tail()
+	if len(tail) == 0 {
 		return lines
+	}
+	return append(slices.Clip(lines), tail...)
+}
+
+// tail renders the live streaming buffer as lines. They belong to the
+// in-progress item: the running tool call when the buffer continues one,
+// otherwise new items after the committed ones.
+func (t *Transcript) tail() []Line {
+	if len(t.stream) == 0 {
+		return nil
 	}
 	next := len(t.items)
 	item := next
-	if n := len(lines); n > 0 && lines[n-1].Kind == LineTool && lines[n-1].Running {
-		item = lines[n-1].Item
+	if next > 0 {
+		if last := t.items[next-1]; len(last) > 0 {
+			if l := last[len(last)-1]; l.Kind == LineTool && l.Running {
+				item = next - 1
+			}
+		}
 	}
-	out := make([]Line, 0, len(lines)+8)
-	out = append(out, lines...)
-	start := len(out)
+	var out []Line
 	for _, s := range t.stream {
 		switch s.kind {
 		case LineStream:
@@ -735,8 +758,8 @@ func (t *Transcript) All() []Line {
 		}
 	}
 	cur := item
-	for i := start; i < len(out); i++ {
-		if i > start && (out[i].Kind == LineThink) != (out[i-1].Kind == LineThink) && !(cur == item && item != next) {
+	for i := range out {
+		if i > 0 && (out[i].Kind == LineThink) != (out[i-1].Kind == LineThink) && !(cur == item && item != next) {
 			cur++
 		}
 		out[i].Item = cur
@@ -747,10 +770,10 @@ func (t *Transcript) All() []Line {
 // Items is the number of items All() spans (committed plus the in-progress
 // one when the streaming buffer starts a new item).
 func (t *Transcript) Items() int {
-	if len(t.stream) == 0 {
-		return len(t.items)
+	if tail := t.tail(); len(tail) > 0 {
+		return max(len(t.items), tail[len(tail)-1].Item+1)
 	}
-	return itemCount(t.All())
+	return len(t.items)
 }
 
 // ItemRange returns the first and last index into All() of item i, or

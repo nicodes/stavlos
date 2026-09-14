@@ -3,13 +3,15 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/toolname"
-	"strconv"
-	"strings"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -158,80 +160,100 @@ func Render(lines []Line, o RenderOpts) string {
 }
 
 // renderAll is Render plus, for every item, the rendered rows it occupies
-// (so the model can scroll the cursor item into view).
+// (so the model can scroll the cursor item into view). Items are
+// contiguous runs of lines.
 func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
-	folds := o.folds(lines)
-	spaced := spacedItems(lines)
-
-	// Pass 1: render each visible line into rows, tagged with its item.
-	type row struct {
-		item  int
-		text  string
-		blank bool
+	var parts []itemRows
+	for start := 0; start < len(lines); {
+		end := start + 1
+		for end < len(lines) && lines[end].Item == lines[start].Item {
+			end++
+		}
+		parts = append(parts, renderChatItem(lines[start:end], o))
+		start = end
 	}
-	var out []row
+	return assemble(parts, o)
+}
+
+// itemRows is one item rendered: its rows, and whether it gets a blank row
+// of spacing above and below.
+type itemRows struct {
+	item   int
+	rows   []string
+	spaced bool
+}
+
+// renderChatItem renders the lines of one item: the details toggle, folding
+// and the cursor highlight apply; blank lines are dropped (assemble spaces
+// items uniformly).
+func renderChatItem(lines []Line, o RenderOpts) itemRows {
+	r := itemRows{item: lines[0].Item, spaced: isSpaced(lines)}
+	f, folded := o.folds(lines)[r.item]
+	cur := o.Focused && r.item == o.Cursor
 	for i, l := range lines {
-		if !o.showLine(l) {
-			continue
-		}
-		f, folded := folds[l.Item]
-		if folded && !f.show[i] {
-			continue
-		}
-		cur := o.Focused && l.Item == o.Cursor
-		if l.Kind == LineBlank {
-			// Blank lines inside items are dropped; spacing is applied
-			// per item below so it is uniform whether folded or not.
+		if !o.showLine(l) || l.Kind == LineBlank || folded && !f.show[i] {
 			continue
 		}
 		if folded && f.hidden > 0 && i == f.last {
 			l.Suffix = strings.TrimSpace(l.Suffix + fmt.Sprintf(" +%d", f.hidden))
 		}
-		text := renderLine(l, o, cur)
-		for _, part := range strings.Split(text, "\n") {
+		for _, part := range strings.Split(renderLine(l, o, cur), "\n") {
 			if cur {
 				part = highlightRow(part, o.Width)
 			}
-			out = append(out, row{item: l.Item, text: part})
+			r.rows = append(r.rows, part)
 		}
 	}
+	return r
+}
 
-	// Pass 2: a blank row above and below spaced items (user inputs,
-	// thinking, assistant responses), never doubled, none at the very top.
+// assemble joins rendered items: a blank row above and below spaced items
+// (user inputs, thinking, assistant responses), never doubled, none at the
+// very top; then the ephemeral turn indicator.
+func assemble(parts []itemRows, o RenderOpts) (string, map[int]rowRange) {
+	lastPart := -1
+	for i, p := range parts {
+		if len(p.rows) > 0 {
+			lastPart = i
+		}
+	}
 	var b strings.Builder
 	rows := map[int]rowRange{}
 	n := 0
 	lastBlank := true // suppress a leading blank
-	emit := func(r row) {
-		if r.blank && lastBlank {
+	emit := func(item int, text string, blank bool) {
+		if blank && lastBlank {
 			return
 		}
 		if n > 0 {
 			b.WriteByte('\n')
 		}
-		// The cursor's gutter mark spans the item's own rows only, never
-		// the blank spacing rows above and below it.
-		b.WriteString(r.text)
-		if !r.blank {
-			if rr, ok := rows[r.item]; ok {
+		b.WriteString(text)
+		// The cursor's highlight spans the item's own rows only, never the
+		// blank spacing rows above and below it.
+		if !blank {
+			if rr, ok := rows[item]; ok {
 				rr.last = n
-				rows[r.item] = rr
+				rows[item] = rr
 			} else {
-				rows[r.item] = rowRange{n, n}
+				rows[item] = rowRange{n, n}
 			}
 		}
 		n++
-		lastBlank = r.blank
+		lastBlank = blank
 	}
-	for i, r := range out {
-		startOfItem := i == 0 || out[i-1].item != r.item
-		endOfItem := i == len(out)-1 || out[i+1].item != r.item
-		if startOfItem && spaced[r.item] {
-			emit(row{item: r.item, blank: true})
+	for i, p := range parts {
+		if len(p.rows) == 0 {
+			continue
 		}
-		emit(r)
-		if endOfItem && spaced[r.item] && i != len(out)-1 {
-			emit(row{item: r.item, blank: true})
+		if p.spaced {
+			emit(p.item, "", true)
+		}
+		for _, row := range p.rows {
+			emit(p.item, row, false)
+		}
+		if p.spaced && i != lastPart {
+			emit(p.item, "", true)
 		}
 	}
 	// The ephemeral turn indicator: not an item (no cursor, no fold), gone
@@ -260,6 +282,97 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 	return b.String(), rows
 }
 
+// renderCache keeps each committed item's rows between renders of one
+// transcript. An entry is reused while the item's revision and the options
+// that shape it are unchanged, so a streamed token or a spinner frame
+// renders only the live tail, not the whole chat.
+type renderCache struct {
+	entries []cachedItem
+	misses  int // items rendered rather than reused (tests)
+}
+
+type cachedItem struct {
+	ok       bool
+	animated bool // holds the running compaction's rule: the frame matters
+	key      renderKey
+	rows     itemRows
+}
+
+// renderEpoch invalidates every render cache when a package-level
+// rendering hook is swapped (tests replace highlightRow).
+var renderEpoch uint64
+
+type renderKey struct {
+	epoch                   uint64
+	rev                     uint64
+	width                   int
+	details, noFold, cursor bool
+	expanded                int8 // per-item override: 0 none, 1 collapsed, 2 expanded
+	frame                   int
+}
+
+// Render renders the transcript like renderAll(t.All(), o), reusing the
+// rows of committed items that have not changed.
+func (t *Transcript) Render(o RenderOpts) (string, map[int]rowRange) {
+	c := &t.cache
+	if len(c.entries) > len(t.items) {
+		c.entries = c.entries[:len(t.items)]
+	}
+	for len(c.entries) < len(t.items) {
+		c.entries = append(c.entries, cachedItem{})
+	}
+	tail := t.tail()
+	extended := -1 // the committed item the live buffer continues (a running call)
+	if len(tail) > 0 && tail[0].Item < len(t.items) {
+		extended = tail[0].Item
+	}
+	parts := make([]itemRows, 0, len(t.items)+2)
+	for i, lines := range t.items {
+		if len(lines) == 0 {
+			continue
+		}
+		if i == extended {
+			k := 0
+			for k < len(tail) && tail[k].Item == i {
+				k++
+			}
+			parts = append(parts, renderChatItem(append(slices.Clip(lines), tail[:k]...), o))
+			tail = tail[k:]
+			continue
+		}
+		key := renderKey{epoch: renderEpoch, rev: t.revs[i], width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i}
+		if v, ok := o.Expanded[i]; ok {
+			key.expanded = 1
+			if v {
+				key.expanded = 2
+			}
+		}
+		e := &c.entries[i]
+		if e.ok && e.animated {
+			key.frame = o.CompactFrame
+		}
+		if !e.ok || e.key != key {
+			e.animated = slices.ContainsFunc(lines, func(l Line) bool { return l.Kind == LineRule && l.Text == GlyphCompacting })
+			key.frame = 0
+			if e.animated {
+				key.frame = o.CompactFrame
+			}
+			e.ok, e.key, e.rows = true, key, renderChatItem(lines, o)
+			c.misses++
+		}
+		parts = append(parts, e.rows)
+	}
+	for start := 0; start < len(tail); {
+		end := start + 1
+		for end < len(tail) && tail[end].Item == tail[start].Item {
+			end++
+		}
+		parts = append(parts, renderChatItem(tail[start:end], o))
+		start = end
+	}
+	return assemble(parts, o)
+}
+
 // highlightRow paints one row of the item under the chat cursor: a
 // background across the full width, keeping the row's own colours (the
 // background is re-asserted after every reset inside the row). It is a
@@ -283,21 +396,20 @@ func sgrPrefix(st lipgloss.Style) string {
 	return strings.TrimSuffix(r, " ")
 }
 
-// spacedItems marks the items that get breathing room: user inputs,
+// isSpaced reports whether an item gets breathing room: user inputs,
 // thinking, and assistant responses.
-func spacedItems(lines []Line) map[int]bool {
-	out := map[int]bool{}
+func isSpaced(lines []Line) bool {
 	for _, l := range lines {
 		switch {
 		case l.Block == BlockUser || l.Block == BlockSteer:
-			out[l.Item] = true
+			return true
 		case l.Kind == LineThink:
-			out[l.Item] = true
+			return true
 		case (l.Kind == LineText || l.Kind == LineHeading || l.Kind == LineCode || l.Kind == LineStream) && l.Block == BlockNone:
-			out[l.Item] = true
+			return true
 		}
 	}
-	return out
+	return false
 }
 
 // fold describes a collapsed item: which line indices to show (one when

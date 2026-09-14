@@ -384,7 +384,11 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 	// the cursor is a row background (a visible marker here), never an arrow
 	prev := highlightRow
 	highlightRow = func(s string, _ int) string { return gutterMark + s }
-	t.Cleanup(func() { highlightRow = prev })
+	renderEpoch++
+	t.Cleanup(func() {
+		highlightRow = prev
+		renderEpoch++
+	})
 	rows := m.treeRows(30)
 	if !strings.HasPrefix(rows[2], gutterMark) || strings.Contains(rows[0], gutterMark) || strings.Contains(strings.Join(rows, ""), "▶") || strings.Contains(strings.Join(rows, ""), "▸") {
 		t.Fatalf("cursor row: %q", rows)
