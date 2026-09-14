@@ -7,61 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nicodes/stavlos/internal/tui/format"
-
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/toolname"
+	"github.com/nicodes/stavlos/internal/tui/format"
+	"github.com/nicodes/stavlos/internal/tui/theme"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-)
-
-// --- palette (the single place colors live) ---
-
-var (
-	colAccent  = lipgloss.AdaptiveColor{Light: "#3B6FD9", Dark: "#5B8DEF"}
-	colMuted   = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#8A8F98"}
-	colSuccess = lipgloss.AdaptiveColor{Light: "#1F8F4E", Dark: "#3DD68C"}
-	colWarning = lipgloss.AdaptiveColor{Light: "#B45309", Dark: "#F5A524"}
-	colError   = lipgloss.AdaptiveColor{Light: "#C0392B", Dark: "#F26D6D"}
-	colBlocked = lipgloss.AdaptiveColor{Light: "#9333EA", Dark: "#C084FC"}
-	colBorder  = colMuted
-	colSelBg   = lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#2A2F3A"} // chat cursor row background
-	colYellow  = lipgloss.AdaptiveColor{Light: "#A16207", Dark: "#FACC15"}
-	colPink    = lipgloss.AdaptiveColor{Light: "#BE185D", Dark: "#F472B6"}
-	colCyan    = lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#22D3EE"}
-	colInputBg = lipgloss.AdaptiveColor{Light: "#F3F4F6", Dark: "#1C2129"} // the message input's background
-
-	styleDim      = lipgloss.NewStyle().Foreground(colMuted)
-	styleKey      = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
-	styleWorking  = lipgloss.NewStyle().Foreground(colWarning)
-	styleBold     = lipgloss.NewStyle().Bold(true)
-	styleAccent   = lipgloss.NewStyle().Foreground(colAccent)
-	styleNotice   = lipgloss.NewStyle().Foreground(colMuted).Italic(true)
-	styleTool     = lipgloss.NewStyle().Foreground(colMuted)
-	styleToolName = lipgloss.NewStyle().Foreground(colMuted).Bold(true)
-	styleToolOut  = lipgloss.NewStyle().Foreground(colMuted)
-	styleFinished = lipgloss.NewStyle().Foreground(colSuccess).Bold(true)
-	styleRule     = lipgloss.NewStyle().Foreground(colBorder)
-	styleError    = lipgloss.NewStyle().Foreground(colError)
-	styleWarn     = lipgloss.NewStyle().Foreground(colWarning)
-	styleRunning  = lipgloss.NewStyle().Foreground(colWarning) // spinner colour outside the chat
-
-	styleLogoMuted  = lipgloss.NewStyle().Foreground(colMuted)
-	styleLogoBright = lipgloss.NewStyle().Bold(true)
-
-	styleStatusOK      = lipgloss.NewStyle().Foreground(colSuccess)
-	styleStatusErr     = lipgloss.NewStyle().Foreground(colError).Bold(true)
-	styleSelected      = lipgloss.NewStyle().Bold(true)
-	styleSep           = lipgloss.NewStyle().Foreground(colBorder)
-	styleBoxTitleFocus = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
-	styleCursorRow     = lipgloss.NewStyle().Background(colSelBg) // chat cursor: the item's rows get this background
-	styleSelection     = lipgloss.NewStyle().Reverse(true)        // mouse text selection
-
-	styleBorderMuted = lipgloss.NewStyle().Foreground(colMuted)
-	styleBorderUser  = lipgloss.NewStyle().Foreground(colAccent) // the input prompt while it has focus
 )
 
 // agentOutcome collapses an agent's fields into the state the sidebar
@@ -84,9 +38,9 @@ func agentOutcome(a protocol.AgentInfo) string {
 func agentDot(a protocol.AgentInfo) string {
 	switch agentOutcome(a) {
 	case "error":
-		return lipgloss.NewStyle().Foreground(colError).Render("●")
+		return lipgloss.NewStyle().Foreground(theme.ColError).Render("●")
 	case "complete":
-		return lipgloss.NewStyle().Foreground(colMuted).Render("●")
+		return lipgloss.NewStyle().Foreground(theme.ColMuted).Render("●")
 	}
 	return stateDot(agentOutcome(a))
 }
@@ -97,11 +51,11 @@ func agentDot(a protocol.AgentInfo) string {
 func stateDot(state string) string {
 	switch state {
 	case "working":
-		return lipgloss.NewStyle().Foreground(colWarning).Render("●")
+		return lipgloss.NewStyle().Foreground(theme.ColWarning).Render("●")
 	case "waiting":
-		return lipgloss.NewStyle().Foreground(colWarning).Render("◐")
+		return lipgloss.NewStyle().Foreground(theme.ColWarning).Render("◐")
 	}
-	return lipgloss.NewStyle().Foreground(colMuted).Render("○")
+	return lipgloss.NewStyle().Foreground(theme.ColMuted).Render("○")
 }
 
 // blockStyle colours a message block's text; blocks carry no border so the
@@ -109,15 +63,15 @@ func stateDot(state string) string {
 func blockStyle(k BlockKind) lipgloss.Style {
 	switch k {
 	case BlockUser:
-		return lipgloss.NewStyle().Foreground(colAccent)
+		return lipgloss.NewStyle().Foreground(theme.ColAccent)
 	case BlockSteer:
-		return lipgloss.NewStyle().Foreground(colWarning)
+		return lipgloss.NewStyle().Foreground(theme.ColWarning)
 	case BlockChild:
-		return lipgloss.NewStyle().Foreground(colMuted)
+		return lipgloss.NewStyle().Foreground(theme.ColMuted)
 	case BlockError:
-		return lipgloss.NewStyle().Foreground(colError)
+		return lipgloss.NewStyle().Foreground(theme.ColError)
 	case BlockFinished:
-		return lipgloss.NewStyle().Foreground(colSuccess)
+		return lipgloss.NewStyle().Foreground(theme.ColSuccess)
 	}
 	return lipgloss.NewStyle()
 }
@@ -265,19 +219,19 @@ func assemble(parts []itemRows, o RenderOpts) (string, map[int]rowRange) {
 		}
 		// Gutter + leader, like every chat line.
 		if o.Waiting {
-			b.WriteString(styleWarn.Render("!") + " " + styleWarn.Render("permission requested"))
+			b.WriteString(theme.StyleWarn.Render("!") + " " + theme.StyleWarn.Render("permission requested"))
 		} else {
 			verb := o.Verb
 			if verb == "" {
 				verb = "working"
 			}
-			b.WriteString(o.Spinner + " " + styleDim.Render(verb+"…"))
+			b.WriteString(o.Spinner + " " + theme.StyleDim.Render(verb+"…"))
 			if o.Active != "" {
-				b.WriteString(styleDim.Render(" · " + o.Active))
+				b.WriteString(theme.StyleDim.Render(" · " + o.Active))
 			}
 		}
 		if o.Stats != "" {
-			b.WriteString(" " + styleDim.Render(o.Stats))
+			b.WriteString(" " + theme.StyleDim.Render(o.Stats))
 		}
 	}
 	return b.String(), rows
@@ -383,7 +337,7 @@ var highlightRow = func(s string, width int) string {
 	if pad < 0 {
 		pad = 0
 	}
-	bg := sgrPrefix(styleCursorRow)
+	bg := sgrPrefix(theme.StyleCursorRow)
 	if bg == "" { // no colour profile
 		return s + strings.Repeat(" ", pad)
 	}
@@ -531,46 +485,46 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 	case LineText, LineStream:
 		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), lipgloss.NewStyle()) }
 	case LineHeading:
-		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), styleBold) }
+		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), theme.StyleBold) }
 	case LineCode:
 		leader = " "
-		style = styleDim.Render
+		style = theme.StyleDim.Render
 	case LineDim, LineLabel, LineThink:
-		style = styleDim.Render
+		style = theme.StyleDim.Render
 	case LineModel:
-		glyph = styleDim.Render("· ")
-		style = styleDim.Render
+		glyph = theme.StyleDim.Render("· ")
+		style = theme.StyleDim.Render
 	case LineNotice:
-		style = styleNotice.Render
+		style = theme.StyleNotice.Render
 	case LineTool:
 		g, gap := toolGlyph(l.tool)
 		switch {
 		case l.Running || l.Tone == ToneWorking:
-			glyph = styleWorking.Render(g) + gap // in progress: the glyph, yellow
+			glyph = theme.StyleWorking.Render(g) + gap // in progress: the glyph, yellow
 		case l.Err || l.Tone == ToneError:
-			glyph = styleError.Render(g) + gap // same glyph, red, on failure
+			glyph = theme.StyleError.Render(g) + gap // same glyph, red, on failure
 		default:
-			glyph = styleTool.Render(g) + gap
+			glyph = theme.StyleTool.Render(g) + gap
 		}
 		style = renderToolText
 	case LineToolOut:
 		leader = "  " // under the tool name (after "◆ ")
-		style = styleToolOut.Render
+		style = theme.StyleToolOut.Render
 	case LineToolNote:
 		leader = "  "
-		style = styleDim.Render
+		style = theme.StyleDim.Render
 	case LineFinished:
-		style = styleFinished.Render
+		style = theme.StyleFinished.Render
 		if l.Tone == ToneError {
-			style = styleError.Render
+			style = theme.StyleError.Render
 		}
 	case LineRule:
 		if l.Text == GlyphCompacting {
-			return gutter + centerText(styleRule.Render("┄┄ compacting ")+compactSweep(o.CompactFrame)+styleRule.Render(" ┄┄"), o.Width)
+			return gutter + centerText(theme.StyleRule.Render("┄┄ compacting ")+compactSweep(o.CompactFrame)+theme.StyleRule.Render(" ┄┄"), o.Width)
 		}
-		return gutter + centerText(styleRule.Render(l.Text), o.Width)
+		return gutter + centerText(theme.StyleRule.Render(l.Text), o.Width)
 	case LineError:
-		style = styleError.Render
+		style = theme.StyleError.Render
 	default:
 		style = func(s ...string) string { return strings.Join(s, "") }
 	}
@@ -583,7 +537,7 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 		gs := glyphStyle(l)
 		gap := " "
 		if l.Running && l.Kind != LineTool {
-			glyph = styleWorking.Render(l.Glyph) + gap
+			glyph = theme.StyleWorking.Render(l.Glyph) + gap
 		} else {
 			glyph = gs.Render(l.Glyph) + gap
 		}
@@ -632,14 +586,14 @@ func renderToolText(strs ...string) string {
 	if i := strings.Index(s, "  "); i >= 0 {
 		name, rest = s[:i], s[i:]
 	}
-	out := styleToolName.Render(name)
+	out := theme.StyleToolName.Render(name)
 	if rest == "" {
 		return out
 	}
 	if i := strings.LastIndex(rest, " ("); i >= 0 && strings.HasSuffix(rest, ")") {
-		return out + styleTool.Render(rest[:i]) + styleDim.Render(rest[i:])
+		return out + theme.StyleTool.Render(rest[:i]) + theme.StyleDim.Render(rest[i:])
 	}
-	return out + styleTool.Render(rest)
+	return out + theme.StyleTool.Render(rest)
 }
 
 // inlineMarkdown renders **bold** spans; unbalanced markers are left as-is.
@@ -724,12 +678,12 @@ func buildLogo(word string) [5]string {
 // plain fallback when the terminal is narrower than logoMinWidth.
 func logoLines(width int) []string {
 	if width < logoMinWidth {
-		return []string{styleLogoMuted.Render("stav") + styleLogoBright.Render("los")}
+		return []string{theme.StyleLogoMuted.Render("stav") + theme.StyleLogoBright.Render("los")}
 	}
 	a, b := buildLogo("stav"), buildLogo("los")
 	out := make([]string, 5)
 	for i := range out {
-		out[i] = styleLogoMuted.Render(a[i]) + " " + styleLogoBright.Render(b[i])
+		out[i] = theme.StyleLogoMuted.Render(a[i]) + " " + theme.StyleLogoBright.Render(b[i])
 	}
 	return out
 }
@@ -796,7 +750,7 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 	x := 0
 	part := func(p metaPart, text string, st lipgloss.Style) {
 		if p == sel {
-			st = styleBoxTitleFocus
+			st = theme.StyleBoxTitleFocus
 		}
 		w := ansi.StringWidth(text)
 		spans = append(spans, span[metaPart]{x, x + w, p})
@@ -808,9 +762,9 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 		x += 3
 	}
 	if modeTag != "" {
-		st := styleWarn // YOLO: nothing asks
+		st := theme.StyleWarn // YOLO: nothing asks
 		if modeTag == "AUTO" {
-			st = styleAccent // AUTO: only the boundary asks
+			st = theme.StyleAccent // AUTO: only the boundary asks
 		}
 		part(metaYolo, modeTag, st)
 		sep()
@@ -822,7 +776,7 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 	part(metaRole, name, nameStyle)
 	sep()
 	if model == "" {
-		part(metaModel, "no model — /models", styleWarn)
+		part(metaModel, "no model — /models", theme.StyleWarn)
 		return b.String(), spans
 	}
 	short, _ := splitModel(model) // just the model id; the provider is in /models
@@ -833,7 +787,7 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 	sep()
 	part(metaVariant, variant, lipgloss.NewStyle())
 	if queued > 0 {
-		b.WriteString(styleDim.Render(fmt.Sprintf(" · %d queued", queued)))
+		b.WriteString(theme.StyleDim.Render(fmt.Sprintf(" · %d queued", queued)))
 	}
 	return b.String(), spans
 }
@@ -877,7 +831,7 @@ type footerInfo struct {
 func footerRight(f footerInfo) string {
 	switch {
 	case !f.connected:
-		return styleBold.Render("Get started") + " " + styleDim.Render("/providers")
+		return theme.StyleBold.Render("Get started") + " " + theme.StyleDim.Render("/providers")
 	case f.home:
 		return ""
 	}
@@ -899,9 +853,9 @@ func contextBar(context, window int) string {
 	if pct > 100 {
 		pct = 100
 	}
-	st := styleDim
+	st := theme.StyleDim
 	if pct >= 70 {
-		st = styleWarn
+		st = theme.StyleWarn
 	}
 	return st.Render(fmt.Sprintf("%d%% of %s", pct, format.Tokens(window)))
 }
@@ -915,9 +869,9 @@ func compactSweep(frame int) string {
 	var b strings.Builder
 	for i := 0; i < cells; i++ {
 		if i >= pos-seg && i < pos {
-			b.WriteString(styleWarn.Render("▰"))
+			b.WriteString(theme.StyleWarn.Render("▰"))
 		} else {
-			b.WriteString(styleDim.Render("▱"))
+			b.WriteString(theme.StyleDim.Render("▱"))
 		}
 	}
 	return b.String()
@@ -1045,7 +999,7 @@ const tagline = "Giddy up!"
 
 // styleTagline: a terminal cannot draw the tagline larger, so it is bold in
 // the logo's bright tone to read as a heading rather than a caption.
-var styleTagline = lipgloss.NewStyle().Bold(true).Foreground(colAccent)
+var styleTagline = lipgloss.NewStyle().Bold(true).Foreground(theme.ColAccent)
 
 // homeLayout is the logo screen's stack of lines and where things sit in
 // it, shared by the renderer and the mouse.
@@ -1086,7 +1040,7 @@ func (m Model) homeLines(width, height int) homeLayout {
 		}
 	}
 	// The directory the session will work in, dim, above the meta row.
-	add(styleDim.Render(format.ShortHome(m.session.Dir)), boxW)
+	add(theme.StyleDim.Render(format.ShortHome(m.session.Dir)), boxW)
 	add(m.metaRow(boxW), boxW)
 	lay.top = (height - len(lay.lines)) / 2
 	if lay.top < 0 {
@@ -1118,13 +1072,13 @@ func (m Model) sessionView(width, height int) string {
 	top := padLines(m.vp.View()+"\n"+m.statusLine(cw), cw)
 	if m.sidebarVisible() {
 		h := m.vp.Height + 1
-		sep := styleSep.Render(strings.TrimSuffix(strings.Repeat("│ \n", h), "\n")) // a space keeps the chat off the line
-		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top)     // the sidebar sits on the left
+		sep := theme.StyleSep.Render(strings.TrimSuffix(strings.Repeat("│ \n", h), "\n")) // a space keeps the chat off the line
+		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top)           // the sidebar sits on the left
 	}
 	// Under the rule: the palette (while open) and the input, a blank line,
 	// then the tab strip and the meta row (mode tag, role, model, variant,
 	// usage).
-	parts := []string{top, styleRule.Render(strings.Repeat("─", width))}
+	parts := []string{top, theme.StyleRule.Render(strings.Repeat("─", width))}
 	if pv := m.paletteViewFor(width); pv != "" {
 		parts = append(parts, pv)
 	}
@@ -1162,13 +1116,13 @@ func (m Model) sidebarHeader(width int) []string {
 	}
 	usage := format.Tokens(m.totalTokens()) + " tokens · $" + format.Cost(m.totalCost())
 	return []string{
-		styleAccent.Bold(true).Render("Stavlos"),
+		theme.StyleAccent.Bold(true).Render("Stavlos"),
 		"",
-		styleDim.Render(format.Trunc(dir, width)),
-		styleDim.Render(format.Trunc(usage, width)),
-		styleDim.Render(format.Trunc(m.swarmLine(), width)),
+		theme.StyleDim.Render(format.Trunc(dir, width)),
+		theme.StyleDim.Render(format.Trunc(usage, width)),
+		theme.StyleDim.Render(format.Trunc(m.swarmLine(), width)),
 		"",
-		styleBold.Render("agents") + m.sidebarFocusHint(),
+		theme.StyleBold.Render("agents") + m.sidebarFocusHint(),
 	}
 }
 
@@ -1201,7 +1155,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	}
 	// The heading sits at the left edge like "agents"; the cursor on it is
 	// the row background, as everywhere in the sidebar.
-	headRow := styleBold.Render(head)
+	headRow := theme.StyleBold.Render(head)
 	if focused && m.sbCursor == na {
 		headRow = highlightRow(headRow, width)
 	}
@@ -1210,7 +1164,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		return rows, items
 	}
 	if len(m.navSessions) == 0 {
-		return append(rows, styleDim.Render("    (no other sessions here)")), append(items, -1)
+		return append(rows, theme.StyleDim.Render("    (no other sessions here)")), append(items, -1)
 	}
 	for k, s := range m.navSessions {
 		age := ""
@@ -1229,7 +1183,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		if gap < 1 {
 			gap = 1
 		}
-		row := "  " + stateDot(string(s.State)) + " " + styleDim.Render(title) + strings.Repeat(" ", gap) + styleDim.Render(age)
+		row := "  " + stateDot(string(s.State)) + " " + theme.StyleDim.Render(title) + strings.Repeat(" ", gap) + theme.StyleDim.Render(age)
 		if focused && m.sbCursor == na+1+k {
 			row = highlightRow(row, width)
 		}
@@ -1307,7 +1261,7 @@ func (m Model) treeRows(width int) []string {
 		// space before it whenever it is not empty.
 		right, rightW := "", 0
 		if b := m.needsHuman(a.ID); b != "" {
-			right, rightW = styleWarn.Render(b), 1
+			right, rightW = theme.StyleWarn.Render(b), 1
 		}
 		if a.CostUSD > 0 {
 			c := "$" + format.Cost(a.CostUSD)
@@ -1315,7 +1269,7 @@ func (m Model) treeRows(width int) []string {
 				right += " "
 				rightW++
 			}
-			right += styleDim.Render(c)
+			right += theme.StyleDim.Render(c)
 			rightW += len([]rune(c))
 		}
 		// indent + dot + " " is two columns plus the indent; the text gets
@@ -1341,11 +1295,11 @@ func (m Model) treeRows(width int) []string {
 		}
 		switch {
 		case i == m.selected:
-			text = roleStyle(tint).Inherit(styleSelected).Render(text)
+			text = roleStyle(tint).Inherit(theme.StyleSelected).Render(text)
 		case tint != "":
 			text = roleStyle(tint).Render(text)
 		default:
-			text = styleDim.Render(text)
+			text = theme.StyleDim.Render(text)
 		}
 		gap := width - len([]rune(indent)) - 2 - textW - rightW
 		if gap < 1 && rightW > 0 {
@@ -1361,7 +1315,7 @@ func (m Model) treeRows(width int) []string {
 		rows = append(rows, row)
 	}
 	if len(rows) == 0 {
-		rows = append(rows, styleDim.Render("  (no agents)"))
+		rows = append(rows, theme.StyleDim.Render("  (no agents)"))
 	}
 	return rows
 }
@@ -1408,7 +1362,7 @@ func (m Model) tabDialogBox(bodyWidth int) (string, []int) {
 			rows = append(rows, -1)
 		}
 	}
-	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n")), rows
+	return theme.StyleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n")), rows
 }
 
 // tabDialogTitle is the open tab's title with its count; a prompt dialog
@@ -1495,7 +1449,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		}
 		return lines, rows
 	}
-	note := func(text string) ([]string, []int) { return rowsAt([]string{styleDim.Render(text)}, -1, 0) }
+	note := func(text string) ([]string, []int) { return rowsAt([]string{theme.StyleDim.Render(text)}, -1, 0) }
 	switch m.focus {
 	case focusAsync:
 		// what the selected agent is waiting on: the agents whose answer it
@@ -1530,7 +1484,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		var rows []string
 		n := 0
 		if len(items) == 0 {
-			rows = []string{styleDim.Render("  no directories")}
+			rows = []string{theme.StyleDim.Render("  no directories")}
 		} else {
 			rows = m.cursorRows(dirRows(items, width-2))
 			n = len(rows)
@@ -1540,7 +1494,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 			if m.dirEdit != "add" {
 				label = "replace " + format.ShortHome(m.dirEdit)
 			}
-			rows = append(rows, "", styleDim.Render(label), m.dirInput.View())
+			rows = append(rows, "", theme.StyleDim.Render(label), m.dirInput.View())
 		}
 		return rowsAt(rows, 0, n)
 	case focusPermission:
@@ -1587,11 +1541,11 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) (lines []string,
 	for i, l := range qlines {
 		if i == len(qlines)-1 && p.Agent != "" {
 			if k := strings.LastIndex(l, "  "+m.agentWhoLabel(p.Agent)); k >= 0 {
-				lines = append(lines, styleBold.Render(l[:k])+"  "+styleDim.Render(m.agentWhoLabel(p.Agent)))
+				lines = append(lines, theme.StyleBold.Render(l[:k])+"  "+theme.StyleDim.Render(m.agentWhoLabel(p.Agent)))
 				continue
 			}
 		}
-		lines = append(lines, styleBold.Render(l))
+		lines = append(lines, theme.StyleBold.Render(l))
 	}
 	lines = append(lines, "")
 	// The checklist: every option, then a last row for a typed answer.
@@ -1599,32 +1553,32 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) (lines []string,
 	for i, o := range cur.Options {
 		marker := "  "
 		if i == q.sel && !q.typing {
-			marker = styleOvMarker.Render("▸") + " "
+			marker = theme.StyleOvMarker.Render("▸") + " "
 		}
-		mark := styleDim.Render("□")
+		mark := theme.StyleDim.Render("□")
 		if q.marks[i] {
-			mark = styleAccent.Render("■")
+			mark = theme.StyleAccent.Render("■")
 		}
 		row := marker + mark + " " + o.Label
 		if o.Description != "" {
-			row += "  " + styleDim.Render(o.Description)
+			row += "  " + theme.StyleDim.Render(o.Description)
 		}
 		lines = append(lines, ansi.Truncate(row, width, "…"))
 	}
 	marker := "  "
 	if q.sel == len(cur.Options) && !q.typing {
-		marker = styleOvMarker.Render("▸") + " "
+		marker = theme.StyleOvMarker.Render("▸") + " "
 	}
 	switch {
 	case q.typing:
-		lines = append(lines, marker+styleAccent.Render("■")+" "+m.promptInput.View())
+		lines = append(lines, marker+theme.StyleAccent.Render("■")+" "+m.promptInput.View())
 	case strings.TrimSpace(q.custom) != "":
-		lines = append(lines, ansi.Truncate(marker+styleAccent.Render("■")+" "+q.custom, width, "…"))
+		lines = append(lines, ansi.Truncate(marker+theme.StyleAccent.Render("■")+" "+q.custom, width, "…"))
 	default:
-		lines = append(lines, marker+styleDim.Render("□ something else…"))
+		lines = append(lines, marker+theme.StyleDim.Render("□ something else…"))
 	}
 	if done := answered(q.answers); done > 0 && done < len(p.Questions) {
-		lines = append(lines, "", styleDim.Render(fmt.Sprintf("%d of %d answered · ←/→ to review", done, len(p.Questions))))
+		lines = append(lines, "", theme.StyleDim.Render(fmt.Sprintf("%d of %d answered · ←/→ to review", done, len(p.Questions))))
 	}
 	return lines, optStart, n
 }
@@ -1669,16 +1623,16 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, []span[focus]) {
 		x += w + 3 // " · "
 		switch {
 		case on(f):
-			tabs[i] = styleBoxTitleFocus.Render(label)
+			tabs[i] = theme.StyleBoxTitleFocus.Render(label)
 		// An unfocused permission or questions tab with something waiting is
 		// warning-coloured so it stands out until someone opens it.
 		case f == focusPermission && perms > 0, f == focusQuestions && questions > 0:
-			tabs[i] = styleWarn.Render(label)
+			tabs[i] = theme.StyleWarn.Render(label)
 		default:
-			tabs[i] = styleDim.Render(label)
+			tabs[i] = theme.StyleDim.Render(label)
 		}
 	}
-	return strings.Join(tabs, styleDim.Render(" · ")), spans
+	return strings.Join(tabs, theme.StyleDim.Render(" · ")), spans
 }
 
 // cursorRows puts the ▸ marker (as in every dialog) on the row under
@@ -1687,7 +1641,7 @@ func (m Model) cursorRows(rows []string) []string {
 	for i := range rows {
 		marker := "  "
 		if i == m.agCursor%len(rows) {
-			marker = styleOvMarker.Render("▸") + " "
+			marker = theme.StyleOvMarker.Render("▸") + " "
 		}
 		rows[i] = marker + strings.TrimPrefix(rows[i], "  ")
 	}
@@ -1716,9 +1670,9 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 			Files []string `json:"files"`
 		}
 		_ = json.Unmarshal(p.Input, &t)
-		head := styleWorking.Render("◆") + " " + format.ShortHome(t.Dir)
+		head := theme.StyleWorking.Render("◆") + " " + format.ShortHome(t.Dir)
 		if who != "" {
-			head += "  " + styleDim.Render(who)
+			head += "  " + theme.StyleDim.Render(who)
 		}
 		lines = append(lines, head)
 		for i, f := range t.Files {
@@ -1730,7 +1684,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 		}
 	default:
 		g, gap := toolGlyph(p.Tool)
-		head := styleWorking.Render(g) + gap
+		head := theme.StyleWorking.Render(g) + gap
 		// Controls in the subject are shown, not stripped: a command that
 		// tried to erase part of itself from the screen reads as "^[".
 		arg := textsafe.Visible(fullToolArg(p.Tool, p.Input))
@@ -1758,7 +1712,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 			}
 			if i == len(rows)-1 && who != "" {
 				if k := strings.LastIndex(l, "  "+who); k >= 0 {
-					l = l[:k] + "  " + styleDim.Render(who)
+					l = l[:k] + "  " + theme.StyleDim.Render(who)
 				}
 			}
 			if i == 0 {
@@ -1768,7 +1722,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 			}
 		}
 		if p.Dir != "" {
-			lines = append(lines, styleWarn.Render("outside its directories")+styleDim.Render(" · "+format.ShortHome(p.Dir)))
+			lines = append(lines, theme.StyleWarn.Render("outside its directories")+theme.StyleDim.Render(" · "+format.ShortHome(p.Dir)))
 		}
 	}
 	lines = append(lines, "")
@@ -1777,29 +1731,29 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 	for i, o := range permOptions(p) {
 		marker := "  "
 		if i == sel && m.permEdit == "" {
-			marker = styleOvMarker.Render("▸") + " "
+			marker = theme.StyleOvMarker.Render("▸") + " "
 		}
-		mark := styleDim.Render("○")
+		mark := theme.StyleDim.Render("○")
 		if i == sel {
-			mark = styleAccent.Render("●")
+			mark = theme.StyleAccent.Render("●")
 		}
 		row := marker + mark + " " + o.label
 		if o.desc != "" {
-			row += "  " + styleDim.Render(o.desc)
+			row += "  " + theme.StyleDim.Render(o.desc)
 		}
 		lines = append(lines, ansi.Truncate(row, width, "…"))
 	}
 	switch m.permEdit {
 	case "dir":
-		lines = append(lines, "", styleDim.Render("directory to add"), m.dirInput.View())
+		lines = append(lines, "", theme.StyleDim.Render("directory to add"), m.dirInput.View())
 	case "deny":
-		lines = append(lines, "", styleDim.Render("deny · a reason the agent will read, or leave it empty"), m.dirInput.View())
+		lines = append(lines, "", theme.StyleDim.Render("deny · a reason the agent will read, or leave it empty"), m.dirInput.View())
 	}
 	switch {
 	case p.ClaimedBy != "" && !m.claimedByUs[p.ID]:
-		lines = append(lines, styleStatusErr.Render("claimed by another client"))
+		lines = append(lines, theme.StyleStatusErr.Render("claimed by another client"))
 	case m.promptBusy == p.ID:
-		lines = append(lines, styleDim.Render("answering…"))
+		lines = append(lines, theme.StyleDim.Render("answering…"))
 	}
 	return lines, optStart
 }
@@ -1853,11 +1807,11 @@ func (m Model) statusLine(width int) string {
 	var s string
 	switch {
 	case m.status != "" && m.statusErr:
-		s = styleStatusErr.Render(m.status)
+		s = theme.StyleStatusErr.Render(m.status)
 	case m.status != "":
-		s = styleStatusOK.Render(m.status)
+		s = theme.StyleStatusOK.Render(m.status)
 	case m.loading:
-		s = styleDim.Render("replaying events…")
+		s = theme.StyleDim.Render("replaying events…")
 	default:
 		return ""
 	}
@@ -1897,8 +1851,8 @@ func (m Model) connected() bool {
 
 // roleColors maps a role's colour name to the theme colour it tints with.
 var roleColors = map[string]lipgloss.AdaptiveColor{
-	"red": colError, "blue": colAccent, "green": colSuccess, "yellow": colYellow,
-	"purple": colBlocked, "orange": colWarning, "pink": colPink, "cyan": colCyan,
+	"red": theme.ColError, "blue": theme.ColAccent, "green": theme.ColSuccess, "yellow": theme.ColYellow,
+	"purple": theme.ColBlocked, "orange": theme.ColWarning, "pink": theme.ColPink, "cyan": theme.ColCyan,
 }
 
 // roleStyle is a foreground style for a role colour name; plain for "" or
@@ -1935,7 +1889,7 @@ func agentRows(agents []protocol.AgentInfo, spawned map[string]time.Time, last m
 			row += "  " + format.Trunc(s, snippetChars)
 		}
 		if len(meta) > 0 {
-			row += "  " + styleDim.Render(strings.Join(meta, " · "))
+			row += "  " + theme.StyleDim.Render(strings.Join(meta, " · "))
 		}
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
@@ -2014,7 +1968,7 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 		}
 		label := mo.Label
 		if who != "" {
-			label = styleBold.Render(who) + "  " + mo.Label
+			label = theme.StyleBold.Render(who) + "  " + mo.Label
 		}
 		var meta []string // the kind is always "command" now, so it is not shown
 		if mo.Progress != "" {
@@ -2025,7 +1979,7 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 		}
 		row := "  " + label
 		if len(meta) > 0 {
-			row += "  " + styleDim.Render(strings.Join(meta, " · "))
+			row += "  " + theme.StyleDim.Render(strings.Join(meta, " · "))
 		}
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
@@ -2086,13 +2040,13 @@ func todoRows(items []event.TodoItem, width int) []string {
 		var row string
 		switch it.Status {
 		case event.TodoInProgress:
-			row = styleWarn.Render("◐") + " " + styleBold.Render(it.Text)
+			row = theme.StyleWarn.Render("◐") + " " + theme.StyleBold.Render(it.Text)
 		case event.TodoDone:
-			row = styleDim.Render("● " + it.Text)
+			row = theme.StyleDim.Render("● " + it.Text)
 		case event.TodoCancelled:
-			row = styleDim.Render("× " + it.Text)
+			row = theme.StyleDim.Render("× " + it.Text)
 		default:
-			row = styleDim.Render("○") + " " + it.Text
+			row = theme.StyleDim.Render("○") + " " + it.Text
 		}
 		rows = append(rows, ansi.Truncate("  "+row, width, "…"))
 	}
@@ -2105,7 +2059,7 @@ func todoRows(items []event.TodoItem, width int) []string {
 func dirRows(items []protocol.DirInfo, width int) []string {
 	rows := make([]string, 0, len(items))
 	for _, d := range items {
-		row := "  " + styleBold.Render(format.ShortHome(d.Path)) + "  " + styleDim.Render(d.Source)
+		row := "  " + theme.StyleBold.Render(format.ShortHome(d.Path)) + "  " + theme.StyleDim.Render(d.Source)
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows
@@ -2136,15 +2090,15 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 		var glyph string
 		switch it.State {
 		case protocol.MCPConnected:
-			glyph = styleOvGood.Render("●")
+			glyph = theme.StyleOvGood.Render("●")
 		case protocol.MCPStarting:
-			glyph = styleWarn.Render("◐")
+			glyph = theme.StyleWarn.Render("◐")
 		case protocol.MCPFailed, protocol.MCPStopped:
-			glyph = styleError.Render("×")
+			glyph = theme.StyleError.Render("×")
 		default:
-			glyph = styleDim.Render("○")
+			glyph = theme.StyleDim.Render("○")
 		}
-		row := glyph + " " + styleBold.Render(it.Name)
+		row := glyph + " " + theme.StyleBold.Render(it.Name)
 		var meta []string
 		switch it.State {
 		case protocol.MCPConnected:
@@ -2162,13 +2116,13 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 			meta = append(meta, string(it.State))
 		}
 		if len(meta) > 0 {
-			row += "  " + styleDim.Render(strings.Join(meta, " · "))
+			row += "  " + theme.StyleDim.Render(strings.Join(meta, " · "))
 		}
 		rows = append(rows, ansi.Truncate("  "+row, width, "…"))
 		owners = append(owners, it.Name)
 		if open[it.Name] {
 			for _, tool := range it.Tools {
-				rows = append(rows, ansi.Truncate("      "+styleDim.Render(strings.TrimPrefix(tool, "mcp__"+it.Name+"__")), width, "…"))
+				rows = append(rows, ansi.Truncate("      "+theme.StyleDim.Render(strings.TrimPrefix(tool, "mcp__"+it.Name+"__")), width, "…"))
 				owners = append(owners, "")
 			}
 		}
@@ -2179,7 +2133,7 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 // sidebarFocusHint marks the agent list as focused.
 func (m Model) sidebarFocusHint() string {
 	if m.focus == focusSidebar && m.sidebarVisible() {
-		return styleDim.Render("  ↑/↓ enter")
+		return theme.StyleDim.Render("  ↑/↓ enter")
 	}
 	return ""
 }
@@ -2188,21 +2142,21 @@ func (m Model) sidebarFocusHint() string {
 func glyphStyle(l Line) lipgloss.Style {
 	switch l.Tone {
 	case ToneWorking:
-		return styleWorking
+		return theme.StyleWorking
 	case ToneError:
-		return styleError
+		return theme.StyleError
 	}
 	switch {
 	case l.Kind == LineFinished:
-		return styleFinished
+		return theme.StyleFinished
 	case l.Kind == LineError:
-		return styleError
+		return theme.StyleError
 	case l.Block != BlockNone:
 		return blockStyle(l.Block)
 	case l.Kind == LineNotice:
-		return styleNotice
+		return theme.StyleNotice
 	}
-	return styleDim
+	return theme.StyleDim
 }
 
 // paletteViewFor is the "/" command dropdown when the input is typing a

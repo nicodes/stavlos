@@ -8,13 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nicodes/stavlos/internal/tui/format"
-
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/toolname"
+	"github.com/nicodes/stavlos/internal/tui/format"
 )
 
 // LineKind selects the style a transcript line is rendered with.

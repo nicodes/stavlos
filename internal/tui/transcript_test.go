@@ -10,6 +10,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/theme"
 )
 
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
@@ -272,10 +273,10 @@ func TestAssistantMarkdownAndErrors(t *testing.T) {
 		}
 	}
 	// Balanced markers are consumed; unbalanced ones are left alone.
-	if got := stripANSI(inlineMarkdown("a **b** c", styleDim)); got != "a b c" {
+	if got := stripANSI(inlineMarkdown("a **b** c", theme.StyleDim)); got != "a b c" {
 		t.Fatalf("inline bold: %q", got)
 	}
-	if got := stripANSI(inlineMarkdown("a **b c", styleDim)); got != "a **b c" {
+	if got := stripANSI(inlineMarkdown("a **b c", theme.StyleDim)); got != "a **b c" {
 		t.Fatalf("unbalanced: %q", got)
 	}
 }

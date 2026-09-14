@@ -6,6 +6,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/nicodes/stavlos/internal/tui/theme"
 )
 
 // Command is one slash command the input understands. The registry drives
@@ -98,7 +100,7 @@ func paletteView(matches []Command, idx, width int) string {
 		c := matches[i]
 		left := c.Name
 		if c.Args != "" {
-			left += " " + styleDim.Render(c.Args)
+			left += " " + theme.StyleDim.Render(c.Args)
 		}
 		pad := nameW - len([]rune(c.Name+" "+c.Args))
 		if c.Args == "" {
@@ -108,18 +110,18 @@ func paletteView(matches []Command, idx, width int) string {
 			pad = 0
 		}
 		marker := "  "
-		nameStyle := styleAccent
+		nameStyle := theme.StyleAccent
 		if i == idx {
-			marker = styleAccent.Render("▸") + " "
-			nameStyle = styleAccent.Bold(true)
+			marker = theme.StyleAccent.Render("▸") + " "
+			nameStyle = theme.StyleAccent.Bold(true)
 		}
-		row := marker + nameStyle.Render(strings.Split(left, " ")[0]) + strings.TrimPrefix(left, strings.Split(left, " ")[0]) + strings.Repeat(" ", pad+2) + styleDim.Render(c.Desc)
+		row := marker + nameStyle.Render(strings.Split(left, " ")[0]) + strings.TrimPrefix(left, strings.Split(left, " ")[0]) + strings.Repeat(" ", pad+2) + theme.StyleDim.Render(c.Desc)
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	if len(matches) > paletteMax {
-		rows = append(rows, styleDim.Render(fmt.Sprintf("  … %d of %d · ↑/↓ move · tab complete · enter run", idx+1, len(matches))))
+		rows = append(rows, theme.StyleDim.Render(fmt.Sprintf("  … %d of %d · ↑/↓ move · tab complete · enter run", idx+1, len(matches))))
 	} else {
-		rows = append(rows, styleDim.Render("  ↑/↓ move · tab complete · enter run · esc clear"))
+		rows = append(rows, theme.StyleDim.Render("  ↑/↓ move · tab complete · enter run · esc clear"))
 	}
 	return lipgloss.NewStyle().Width(width).Render(strings.Join(rows, "\n"))
 }

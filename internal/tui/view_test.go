@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nicodes/stavlos/internal/tui/format"
-
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -18,6 +16,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/format"
 )
 
 func TestBuildLogo(t *testing.T) {

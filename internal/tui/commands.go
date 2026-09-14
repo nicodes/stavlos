@@ -13,12 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nicodes/stavlos/internal/tui/format"
-
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/pkg/client"
 )
 

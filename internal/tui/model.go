@@ -12,8 +12,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/nicodes/stavlos/internal/tui/format"
-
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
@@ -26,6 +24,8 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
+	"github.com/nicodes/stavlos/internal/tui/format"
+	"github.com/nicodes/stavlos/internal/tui/theme"
 	"github.com/nicodes/stavlos/pkg/client"
 )
 
@@ -273,14 +273,14 @@ func newInputArea() textarea.Model {
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"))
 	// A subtle background makes the input stand out from the chat above
 	// and the meta row below; every part of the block shares it.
-	bg := lipgloss.NewStyle().Background(colInputBg)
+	bg := lipgloss.NewStyle().Background(theme.ColInputBg)
 	ta.FocusedStyle.Base, ta.BlurredStyle.Base = bg, bg
 	ta.FocusedStyle.CursorLine, ta.BlurredStyle.CursorLine = bg, bg
 	ta.FocusedStyle.EndOfBuffer, ta.BlurredStyle.EndOfBuffer = bg, bg
 	ta.FocusedStyle.Text, ta.BlurredStyle.Text = bg, bg
-	ta.FocusedStyle.Placeholder, ta.BlurredStyle.Placeholder = styleDim.Background(colInputBg), styleDim.Background(colInputBg)
+	ta.FocusedStyle.Placeholder, ta.BlurredStyle.Placeholder = theme.StyleDim.Background(theme.ColInputBg), theme.StyleDim.Background(theme.ColInputBg)
 	// The prompt chevron carries the focus colour (there is no box border).
-	ta.FocusedStyle.Prompt, ta.BlurredStyle.Prompt = styleBorderUser.Background(colInputBg), styleBorderMuted.Background(colInputBg)
+	ta.FocusedStyle.Prompt, ta.BlurredStyle.Prompt = theme.StyleBorderUser.Background(theme.ColInputBg), theme.StyleBorderMuted.Background(theme.ColInputBg)
 	return ta
 }
 
@@ -297,7 +297,7 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 	vp.KeyMap.Left = key.NewBinding()
 	vp.KeyMap.Right = key.NewBinding()
 
-	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(styleRunning))
+	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(theme.StyleRunning))
 
 	pi := textinput.New()
 	pi.Prompt = "› "
@@ -1357,7 +1357,7 @@ func (m Model) highlightSelection(frame string) string {
 		if to < w {
 			right = ansi.Cut(line, to, w)
 		}
-		lines[y] = left + styleSelection.Render(mid) + right
+		lines[y] = left + theme.StyleSelection.Render(mid) + right
 	}
 	return strings.Join(lines, "\n")
 }
@@ -1458,7 +1458,7 @@ func (m Model) inputView() string {
 	}
 	// The background spans the whole input width, not just the text: pad
 	// every row out to the box in the same colour.
-	bg := lipgloss.NewStyle().Background(colInputBg)
+	bg := lipgloss.NewStyle().Background(theme.ColInputBg)
 	width := m.boxWidth()
 	for i, l := range lines {
 		if pad := width - ansi.StringWidth(l); pad > 0 {

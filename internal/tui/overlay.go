@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nicodes/stavlos/internal/tui/format"
-
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -21,6 +19,8 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/format"
+	"github.com/nicodes/stavlos/internal/tui/theme"
 )
 
 const (
@@ -81,16 +81,6 @@ type overlay struct {
 
 	hints []keyHint // the footer's key hints, set by the model before each render
 }
-
-var (
-	styleOvBox    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(colAccent).Padding(0, 1)
-	styleOvTitle  = lipgloss.NewStyle().Bold(true)
-	styleOvGood   = lipgloss.NewStyle().Foreground(colSuccess)
-	styleOvCur    = lipgloss.NewStyle().Bold(true)
-	styleOvMarker = lipgloss.NewStyle().Foreground(colAccent)
-	styleOvURL    = lipgloss.NewStyle().Foreground(colAccent).Bold(true)
-	styleOvCode   = lipgloss.NewStyle().Bold(true)
-)
 
 const (
 	loginWaitingText = "waiting for you to finish signing in…"
@@ -246,7 +236,7 @@ func (o *overlay) view(bodyWidth int, spinner string) string {
 		lines = append(lines, f...)
 	}
 	// Width covers padding but not the border: inner content + 2 padding + 2 border = w.
-	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
+	return theme.StyleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
 }
 
 // loginLines renders the device-code instructions: URL, spaced code, the
@@ -259,8 +249,8 @@ func (o *overlay) loginLines(inner int, spinner string) []string {
 	var out []string
 	if l.url == "" && l.err == "" {
 		return append(out,
-			styleRunning.Render(spinner)+" "+loginStartText,
-			styleDim.Render("esc cancel"),
+			theme.StyleRunning.Render(spinner)+" "+loginStartText,
+			theme.StyleDim.Render("esc cancel"),
 		)
 	}
 	if l.url != "" {
@@ -270,27 +260,27 @@ func (o *overlay) loginLines(inner int, spinner string) []string {
 			out = append(out, "Open this URL on any device:")
 		}
 		for _, u := range strings.Split(ansi.Hardwrap(l.url, inner-2, true), "\n") {
-			out = append(out, "  "+styleOvURL.Render(u))
+			out = append(out, "  "+theme.StyleOvURL.Render(u))
 		}
 		if !l.browser {
 			out = append(out, "and enter the code:")
-			out = append(out, "  "+styleOvCode.Render(format.Trunc(spacedCode(l.code), inner-2)))
+			out = append(out, "  "+theme.StyleOvCode.Render(format.Trunc(spacedCode(l.code), inner-2)))
 		}
 		if ins := strings.TrimSpace(l.instructions); ins != "" {
 			for _, s := range strings.Split(ansi.Wrap(ins, inner, ""), "\n") {
-				out = append(out, styleDim.Render(s))
+				out = append(out, theme.StyleDim.Render(s))
 			}
 		}
 	}
 	if l.err != "" {
 		for _, s := range strings.Split(ansi.Wrap(l.err, inner, ""), "\n") {
-			out = append(out, styleStatusErr.Render(s))
+			out = append(out, theme.StyleStatusErr.Render(s))
 		}
-		return append(out, styleDim.Render(loginKeysError))
+		return append(out, theme.StyleDim.Render(loginKeysError))
 	}
 	return append(out,
-		styleRunning.Render(spinner)+" "+loginWaitingText,
-		styleDim.Render(loginKeysWaiting),
+		theme.StyleRunning.Render(spinner)+" "+loginWaitingText,
+		theme.StyleDim.Render(loginKeysWaiting),
 	)
 }
 
@@ -310,11 +300,11 @@ func dialogTitle(title string, width int) string {
 	const hint = "esc: close"
 	avail := width - len(hint) - 2
 	if avail < 4 {
-		return styleOvTitle.Render(format.Trunc(title, width))
+		return theme.StyleOvTitle.Render(format.Trunc(title, width))
 	}
 	t := format.Trunc(title, avail)
 	pad := width - len([]rune(t)) - len(hint)
-	return styleOvTitle.Render(t) + strings.Repeat(" ", pad) + styleDim.Render(hint)
+	return theme.StyleOvTitle.Render(t) + strings.Repeat(" ", pad) + theme.StyleDim.Render(hint)
 }
 
 func (o *overlay) listLines(inner int) []string {
@@ -322,13 +312,13 @@ func (o *overlay) listLines(inner int) []string {
 		if len(o.items) == 0 {
 			if o.empty != "" {
 				if o.bad {
-					return []string{styleStatusErr.Render("  " + ansi.Truncate(o.empty, inner-2, "…"))}
+					return []string{theme.StyleStatusErr.Render("  " + ansi.Truncate(o.empty, inner-2, "…"))}
 				}
-				return []string{styleDim.Render("  " + ansi.Truncate(o.empty, inner-2, "…"))}
+				return []string{theme.StyleDim.Render("  " + ansi.Truncate(o.empty, inner-2, "…"))}
 			}
-			return []string{styleDim.Render("  (nothing to list)")}
+			return []string{theme.StyleDim.Render("  (nothing to list)")}
 		}
-		return []string{styleDim.Render("  no match")}
+		return []string{theme.StyleDim.Render("  no match")}
 	}
 	o.clampOffset()
 	end := o.offset + overlayMaxRows
@@ -337,13 +327,13 @@ func (o *overlay) listLines(inner int) []string {
 	}
 	var out []string
 	if o.offset > 0 {
-		out = append(out, styleDim.Render(fmt.Sprintf("  ↑ %d more", o.offset)))
+		out = append(out, theme.StyleDim.Render(fmt.Sprintf("  ↑ %d more", o.offset)))
 	}
 	for i := o.offset; i < end; i++ {
 		out = append(out, renderItem(o.shown[i], i == o.cursor, inner))
 	}
 	if rest := len(o.shown) - end; rest > 0 {
-		out = append(out, styleDim.Render(fmt.Sprintf("  ↓ %d more", rest)))
+		out = append(out, theme.StyleDim.Render(fmt.Sprintf("  ↓ %d more", rest)))
 	}
 	return out
 }
@@ -397,7 +387,7 @@ func (o *overlay) itemAt(x, y, bodyWidth, bodyHeight int, spinner string) (int, 
 func renderItem(it overlayItem, cur bool, width int) string {
 	marker := "  "
 	if cur {
-		marker = styleOvMarker.Render("▸") + " "
+		marker = theme.StyleOvMarker.Render("▸") + " "
 	}
 	avail := width - 2
 	label, sub, hint := it.label, it.sub, it.hint
@@ -429,18 +419,18 @@ func renderItem(it overlayItem, cur bool, width int) string {
 	b.WriteString(marker)
 	switch {
 	case it.dim:
-		b.WriteString(styleDim.Render(label + sub))
+		b.WriteString(theme.StyleDim.Render(label + sub))
 	case cur:
-		b.WriteString(styleOvCur.Render(label) + styleDim.Render(sub))
+		b.WriteString(theme.StyleOvCur.Render(label) + theme.StyleDim.Render(sub))
 	default:
-		b.WriteString(label + styleDim.Render(sub))
+		b.WriteString(label + theme.StyleDim.Render(sub))
 	}
 	if hint != "" {
 		b.WriteString(strings.Repeat(" ", pad))
 		if it.good {
-			b.WriteString(styleOvGood.Render(hint))
+			b.WriteString(theme.StyleOvGood.Render(hint))
 		} else {
-			b.WriteString(styleDim.Render(hint))
+			b.WriteString(theme.StyleDim.Render(hint))
 		}
 	}
 	return b.String()
