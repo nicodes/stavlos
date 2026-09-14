@@ -59,10 +59,3 @@ func cleanSessions(ss []protocol.SessionInfo) []protocol.SessionInfo {
 	}
 	return ss
 }
-
-func cleanLines(lines []Line) []Line {
-	for i := range lines {
-		lines[i].Text, lines[i].Suffix = textsafe.Clean(lines[i].Text), textsafe.Clean(lines[i].Suffix)
-	}
-	return lines
-}

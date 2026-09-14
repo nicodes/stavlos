@@ -27,7 +27,7 @@ func TestBindSessionStartsOver(t *testing.T) {
 	info := protocol.SessionInfo{ID: "next", Dir: "/x"}
 	m.bindSession(info)
 	want := newSessionState("next", info)
-	want.itemRows = m.itemRows // drawn by the refresh inside bindSession
+	want.itemRows, want.renders = m.itemRows, m.renders // drawn by the refresh inside bindSession
 	if !reflect.DeepEqual(m.sessionState, want) {
 		t.Fatalf("session state after bind:\n%+v\nwant\n%+v", m.sessionState, want)
 	}

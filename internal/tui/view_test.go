@@ -17,6 +17,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/format"
+	"github.com/nicodes/stavlos/internal/tui/transcript"
 )
 
 func TestBuildLogo(t *testing.T) {
@@ -1178,17 +1179,17 @@ func TestTurnIndicatorFollowsPrompts(t *testing.T) {
 	m.showTree = false
 	m.transcript("a").Apply(event.Event{Seq: 1, Agent: "a", Type: event.TurnStarted, Time: time.Now(), Payload: event.MustPayload(event.TurnPayload{Turn: 1})})
 	m.refreshViewport()
-	if v := stripANSI(m.View()); !strings.Contains(v, turnVerbs[0]+"…") || strings.Contains(v, "permission requested") {
+	if v := stripANSI(m.View()); !strings.Contains(v, transcript.TurnVerbs[0]+"…") || strings.Contains(v, "permission requested") {
 		t.Fatalf("mid-turn:\n%s", v)
 	}
 	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}})
-	if v := stripANSI(m.View()); !strings.Contains(v, "! permission requested") || strings.Contains(v, turnVerbs[0]+"…") {
+	if v := stripANSI(m.View()); !strings.Contains(v, "! permission requested") || strings.Contains(v, transcript.TurnVerbs[0]+"…") {
 		t.Fatalf("waiting on a permission:\n%s", v)
 	}
 	// a prompt for another agent does not change the selected agent's indicator
 	m.applyPromptNotification(protocol.PromptNotification{Action: "answered", Prompt: protocol.PromptInfo{ID: "p", Agent: "a"}})
 	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "q", Kind: "permission", Agent: "b", Tool: "shell"}})
-	if v := stripANSI(m.View()); !strings.Contains(v, turnVerbs[0]+"…") || strings.Contains(v, "permission requested") {
+	if v := stripANSI(m.View()); !strings.Contains(v, transcript.TurnVerbs[0]+"…") || strings.Contains(v, "permission requested") {
 		t.Fatalf("after the answer:\n%s", v)
 	}
 }
@@ -1236,34 +1237,34 @@ func TestParentAgentCreateLineFollowsChildEvents(t *testing.T) {
 	m.applyEvent(ev(2, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Input: json.RawMessage(`{"archetype":"explorer","label":"scout","task":"look"}`)}))
 	m.applyEvent(ev(3, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a", Archetype: "explorer", Label: "scout", Model: "fake/m1", Depth: 1}))
 	m.applyEvent(ev(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Output: "spawned scout (explorer) as c1"}))
-	tone := func() Tone {
+	tone := func() transcript.Tone {
 		for _, l := range m.transcript("a").All() {
-			if l.Kind == LineTool && l.tool == "agent_create" {
+			if l.Kind == transcript.LineTool && l.Tool == "agent_create" {
 				return l.Tone
 			}
 		}
 		t.Fatal("no agent_create line in the parent's chat")
-		return ToneNone
+		return transcript.ToneNone
 	}
-	if tone() != ToneWorking {
+	if tone() != transcript.ToneWorking {
 		t.Fatalf("child running: tone %v", tone())
 	}
 	m.applyEvent(ev(5, "c1", event.TurnStarted, event.TurnPayload{Turn: 1}))
-	if tone() != ToneWorking {
+	if tone() != transcript.ToneWorking {
 		t.Fatalf("child mid-turn: tone %v", tone())
 	}
 	m.applyEvent(ev(6, "c1", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}))
-	if tone() != ToneNone {
+	if tone() != transcript.ToneNone {
 		t.Fatalf("child idle after answering: tone %v", tone())
 	}
 	m.applyEvent(ev(7, "c1", event.AgentKilled, event.AgentRefPayload{ID: "c1"}))
-	if tone() != ToneError {
+	if tone() != transcript.ToneError {
 		t.Fatalf("child killed: tone %v", tone())
 	}
 }
 
 func TestLastSnippet(t *testing.T) {
-	tr := NewTranscript()
+	tr := transcript.NewTranscript()
 	mk := func(seq int64, typ event.Type, p any) event.Event {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
@@ -1451,13 +1452,13 @@ func TestTodoTabAndDialog(t *testing.T) {
 		t.Fatalf("indicator should carry the in-progress item:\n%s", v)
 	}
 	// chat lines for the tools
-	if got := toolArg("todo_update", []byte(`{"id":"t2","status":"done"}`)); got != "t2 → done" {
+	if got := transcript.ToolArg("todo_update", []byte(`{"id":"t2","status":"done"}`)); got != "t2 → done" {
 		t.Fatalf("todo_update arg %q", got)
 	}
-	if got := toolArg("todo_add", []byte(`{"text":"Run the tests"}`)); got != "Run the tests" {
+	if got := transcript.ToolArg("todo_add", []byte(`{"text":"Run the tests"}`)); got != "Run the tests" {
 		t.Fatalf("todo_add arg %q", got)
 	}
-	if g, _ := toolGlyph("todo_add"); g != glyphToolTodo {
+	if g, _ := transcript.ToolGlyph("todo_add"); g != transcript.GlyphToolTodo {
 		t.Fatalf("todo glyph %q", g)
 	}
 }
@@ -2476,10 +2477,10 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("esc should return to the strip on mcp: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// chat: tool names and server events
-	if got := toolTitle("mcp__github__create_issue"); got != "github · create_issue" {
+	if got := transcript.ToolTitle("mcp__github__create_issue"); got != "github · create_issue" {
 		t.Fatalf("title %q", got)
 	}
-	if g, _ := toolGlyph("mcp__github__create_issue"); g != glyphToolMCP {
+	if g, _ := transcript.ToolGlyph("mcp__github__create_issue"); g != transcript.GlyphToolMCP {
 		t.Fatalf("glyph %q", g)
 	}
 	tr := m.transcript("a")
@@ -2865,7 +2866,7 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 		t.Fatalf("after the answer: focus=%v", m.focus)
 	}
 	// chat: the tool call line names the headers
-	if got := toolArg("ask_user", []byte(`{"questions":[{"question":"Which backend?"},{"question":"Call it?"}]}`)); got != "Which backend? · Call it?" {
+	if got := transcript.ToolArg("ask_user", []byte(`{"questions":[{"question":"Which backend?"},{"question":"Call it?"}]}`)); got != "Which backend? · Call it?" {
 		t.Fatalf("ask_user arg %q", got)
 	}
 }
