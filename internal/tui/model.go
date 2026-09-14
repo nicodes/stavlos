@@ -105,8 +105,7 @@ type Model struct {
 	status      string
 	statusErr   bool
 	statusToken int
-	compacting  map[string]time.Time // agents whose compaction is running (a bar above the divider), by id
-	compactTick bool                 // the compaction animation tick is scheduled
+	compactTick bool // the compaction animation tick is scheduled (a transcript has a running compaction)
 
 	// Keyboard focus (tab / shift+tab cycle the sections). The chat cursor
 	// walks transcript items; expanded holds per-item tool output overrides
@@ -331,7 +330,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, placeholderTickCmd())
 
 	case compactTickMsg:
-		if len(m.compacting) > 0 {
+		if m.anyCompacting() {
+			if t := m.transcripts[m.selectedID()]; t != nil && t.Compacting() {
+				m.refreshViewport()
+			}
 			cmds = append(cmds, compactTickCmd())
 		} else {
 			m.compactTick = false
@@ -2382,32 +2384,10 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 			}
 			m.histIdx = len(m.history)
 		}
-	case event.CompactionStarted:
-		if !m.loading {
-			if m.compacting == nil {
-				m.compacting = map[string]time.Time{}
-			}
-			m.compacting[ev.Agent] = ev.Time
-			if !m.compactTick {
-				m.compactTick = true
-				cmds = append(cmds, compactTickCmd())
-			}
-		}
-	case event.Compacted:
-		delete(m.compacting, ev.Agent)
-		var p event.CompactedPayload
-		if !m.loading && ev.Decode(&p) == nil && ev.Agent == m.selectedID() {
-			text := "compacted"
-			if p.Before > 0 && p.After > 0 {
-				text = fmt.Sprintf("compacted: %s → %s tokens", fmtTokens(p.Before), fmtTokens(p.After))
-			}
-			cmds = append(cmds, m.setStatus(text, false))
-		}
-	case event.CompactionFailed:
-		delete(m.compacting, ev.Agent)
-		var p event.CompactionPayload
-		if !m.loading && ev.Decode(&p) == nil && ev.Agent == m.selectedID() {
-			cmds = append(cmds, m.setStatus("compaction failed: "+p.Error, true))
+	case event.CompactionStarted: // the chat item's bar animates until the result lands
+		if !m.loading && !m.compactTick {
+			m.compactTick = true
+			cmds = append(cmds, compactTickCmd())
 		}
 	case event.SessionModelChanged:
 		var p event.ModelChangedPayload
@@ -2487,8 +2467,22 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		m.loading = false
 		m.refreshViewport()
 		cmds = append(cmds, m.markTreeDirty())
+		if m.anyCompacting() && !m.compactTick { // a compaction was running when we attached
+			m.compactTick = true
+			cmds = append(cmds, compactTickCmd())
+		}
 	}
 	return tea.Batch(cmds...)
+}
+
+// anyCompacting reports whether some agent's chat shows a running compaction.
+func (m *Model) anyCompacting() bool {
+	for _, t := range m.transcripts {
+		if t.Compacting() {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Model) markTreeDirty() tea.Cmd {
@@ -2931,6 +2925,8 @@ func (m *Model) refreshViewport() {
 		Expanded: m.expanded[m.selectedID()],
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,
+
+		CompactFrame: compactFrame(time.Now()),
 	})
 	m.itemRows = rows
 	m.vp.SetContent(content)

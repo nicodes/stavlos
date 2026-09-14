@@ -99,6 +99,9 @@ const (
 	GlyphAnswer    = "?" // the user's answer (same mark as the question)
 	GlyphFailed    = "✗" // a failed finish
 	GlyphCompacted = "┄┄ compacted ┄┄"
+	// GlyphCompacting marks the rule of a compaction still running; Render
+	// draws the sweeping bar into it.
+	GlyphCompacting = "┄┄ compacting ┄┄"
 )
 
 const (
@@ -128,21 +131,22 @@ var ShowThinking = false
 type Transcript struct {
 	Lines []Line
 
-	calls      map[string]int    // tool call id → index of its LineTool
-	prompts    map[string]int    // prompt id → item of the tool call it gates
-	promptLine map[string]int    // prompt id → index of its "?" line (tone flips on answer)
-	monitors   map[string]int    // monitor id → index of its "started" line
-	children   map[string]int    // child agent id → index of the agent_create line that spawned it
-	askTarget  map[string]string // agent_message call id → the agent it asked (until the call finishes)
-	asks       map[string][]int  // agent id → indices of agent_message lines still waiting for its answer
-	monKinds   map[string]string // monitor id → kind, for the glyph on later events
-	items      int               // committed items so far
-	streamTurn int
-	stream     []streamSeg
-	turn       bool      // a turn is in progress (TurnStarted seen, not yet ended)
-	turnStart  time.Time // when the current turn began
-	turnTokens int       // input + output tokens used so far this turn
-	turnVerb   string    // the indicator's verb for this turn ("Galloping")
+	calls       map[string]int    // tool call id → index of its LineTool
+	prompts     map[string]int    // prompt id → item of the tool call it gates
+	promptLine  map[string]int    // prompt id → index of its "?" line (tone flips on answer)
+	monitors    map[string]int    // monitor id → index of its "started" line
+	children    map[string]int    // child agent id → index of the agent_create line that spawned it
+	askTarget   map[string]string // agent_message call id → the agent it asked (until the call finishes)
+	asks        map[string][]int  // agent id → indices of agent_message lines still waiting for its answer
+	monKinds    map[string]string // monitor id → kind, for the glyph on later events
+	items       int               // committed items so far
+	streamTurn  int
+	stream      []streamSeg
+	turn        bool      // a turn is in progress (TurnStarted seen, not yet ended)
+	turnStart   time.Time // when the current turn began
+	turnTokens  int       // input + output tokens used so far this turn
+	turnVerb    string    // the indicator's verb for this turn ("Galloping")
+	compactItem int       // item of the running compaction's rule (replaced by the result), -1 when none
 }
 
 // turnVerbs are the horse-flavoured labels the turn indicator cycles
@@ -174,7 +178,7 @@ func (t *Transcript) TurnStats(now time.Time) (time.Duration, int) {
 
 // NewTranscript returns an empty transcript.
 func NewTranscript() *Transcript {
-	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}, promptLine: map[string]int{}, monitors: map[string]int{}, monKinds: map[string]string{}, children: map[string]int{}, askTarget: map[string]string{}, asks: map[string][]int{}}
+	return &Transcript{calls: map[string]int{}, prompts: map[string]int{}, promptLine: map[string]int{}, monitors: map[string]int{}, monKinds: map[string]string{}, children: map[string]int{}, askTarget: map[string]string{}, asks: map[string][]int{}, compactItem: -1}
 }
 
 // Apply appends the rendering of ev. An assistant.message (or the end of a
@@ -182,6 +186,24 @@ func NewTranscript() *Transcript {
 // the matching tool line in place.
 func (t *Transcript) Apply(ev event.Event) {
 	item := t.items // a new item, unless the lines extend an earlier one
+	// A compaction is one chat item: the rule with the sweeping bar while
+	// it runs, replaced in place by the result (or by a note when it
+	// failed, or when the turn ended without one — the daemon died).
+	switch ev.Type {
+	case event.CompactionStarted:
+		t.compactItem = item
+	case event.Compacted, event.CompactionFailed:
+		if t.compactItem >= 0 {
+			t.replaceItem(t.compactItem, EventLines(ev))
+			t.compactItem = -1
+			return
+		}
+	case event.TurnEnded, event.TurnAborted:
+		if t.compactItem >= 0 {
+			t.replaceItem(t.compactItem, []Line{{Kind: LineBlank}, {Kind: LineDim, Text: "compaction interrupted"}, {Kind: LineBlank}})
+			t.compactItem = -1
+		}
+	}
 	switch ev.Type {
 	case event.ToolCallStarted:
 		var p event.ToolStartedPayload
@@ -423,6 +445,63 @@ func (t *Transcript) openCallItem(name string) (int, bool) {
 		}
 	}
 	return item, best >= 0
+}
+
+// Compacting reports whether a compaction rule is waiting for its result.
+func (t *Transcript) Compacting() bool { return t.compactItem >= 0 }
+
+// replaceItem swaps every line of item for lines, in place; tracked indices
+// after the item shift by the size difference.
+func (t *Transcript) replaceItem(item int, lines []Line) {
+	first, last := itemRange(t.Lines, item)
+	if first < 0 {
+		return
+	}
+	for i := range lines {
+		lines[i].Item = item
+	}
+	delta := len(lines) - (last - first + 1)
+	out := make([]Line, 0, len(t.Lines)+delta)
+	out = append(out, t.Lines[:first]...)
+	out = append(out, lines...)
+	out = append(out, t.Lines[last+1:]...)
+	t.Lines = out
+	t.shiftIndices(last+1, delta)
+}
+
+// shiftIndices moves every tracked line index at or past at by delta.
+func (t *Transcript) shiftIndices(at, delta int) {
+	if delta == 0 {
+		return
+	}
+	for id, idx := range t.calls {
+		if idx >= at {
+			t.calls[id] = idx + delta
+		}
+	}
+	for id, idx := range t.promptLine {
+		if idx >= at {
+			t.promptLine[id] = idx + delta
+		}
+	}
+	for id, idx := range t.monitors {
+		if idx >= at {
+			t.monitors[id] = idx + delta
+		}
+	}
+	for id, idx := range t.children {
+		if idx >= at {
+			t.children[id] = idx + delta
+		}
+	}
+	for id, idxs := range t.asks {
+		for k, idx := range idxs {
+			if idx >= at {
+				idxs[k] = idx + delta
+			}
+		}
+		t.asks[id] = idxs
+	}
 }
 
 // insertIntoItem places lines immediately after the last line of item so
@@ -990,6 +1069,16 @@ func EventLines(ev event.Event) []Line {
 			return decodeErr(ev, err)
 		}
 		return monitorStoppedLines("", p.Reason)
+
+	case event.CompactionStarted:
+		return []Line{{Kind: LineBlank}, {Kind: LineRule, Text: GlyphCompacting}, {Kind: LineBlank}}
+
+	case event.CompactionFailed:
+		var p event.CompactionPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return []Line{{Kind: LineBlank}, {Kind: LineDim, Text: "compaction failed: " + p.Error}, {Kind: LineBlank}}
 
 	case event.Compacted:
 		var p event.CompactedPayload

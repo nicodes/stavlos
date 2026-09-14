@@ -1089,35 +1089,48 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if contextBar(5, 0) != "" {
 		t.Fatal("no context figure without a window")
 	}
-	// a running compaction shows a sweeping bar above the divider for the
-	// selected agent; the Compacted event replaces it with the shrink
+	// a running compaction is a chat item: a rule with a sweeping bar, which
+	// the result replaces in place; the status line is not involved
 	now := time.Now()
+	m.status = ""
 	m.applyEvent(event.Event{Seq: 50, Agent: "a", Type: event.CompactionStarted, Time: now, Payload: event.MustPayload(event.CompactionPayload{Before: 84_000})})
-	if !m.compactTick || m.compacting["a"] != now {
-		t.Fatalf("compaction should be tracked: tick=%v %v", m.compactTick, m.compacting)
+	tr := m.transcript("a")
+	if !m.compactTick || !tr.Compacting() || m.status != "" {
+		t.Fatalf("compaction should be tracked in the chat: tick=%v compacting=%v status=%q", m.compactTick, tr.Compacting(), m.status)
 	}
-	if sl := stripANSI(m.statusLine(100)); !strings.HasPrefix(sl, "compacting ") || strings.Count(sl, "▰")+strings.Count(sl, "▱") != 10 {
-		t.Fatalf("status line while compacting: %q", sl)
+	m.refreshViewport()
+	v := stripANSI(m.vp.View())
+	if !strings.Contains(v, "┄┄ compacting ") || strings.Count(v, "▰")+strings.Count(v, "▱") != 10 || strings.Contains(stripANSI(m.statusLine(100)), "compact") {
+		t.Fatalf("chat while compacting:\n%s", v)
 	}
-	if a, b := stripANSI(compactingBar(0)), stripANSI(compactingBar(5*compactTickPeriod)); a == b {
+	if a, b := stripANSI(compactSweep(0)), stripANSI(compactSweep(5)); a == b {
 		t.Fatalf("the bar should move: %q %q", a, b)
 	}
+	before := len(tr.Lines)
 	m.applyEvent(event.Event{Seq: 51, Agent: "a", Type: event.Compacted, Time: now, Payload: event.MustPayload(event.CompactedPayload{FromSeq: 1, ToSeq: 40, Summary: "S", Before: 84_000, After: 12_000})})
-	if len(m.compacting) != 0 || m.status != "compacted: 84k → 12k tokens" || m.statusErr {
-		t.Fatalf("after compaction: %v %q", m.compacting, m.status)
+	m.refreshViewport()
+	v = stripANSI(m.vp.View())
+	if tr.Compacting() || m.status != "" || strings.Contains(v, "compacting") || !strings.Contains(v, "┄┄ compacted 84k → 12k tokens ┄┄") {
+		t.Fatalf("the result should replace the bar in the chat: status=%q\n%s", m.status, v)
 	}
-	if sl := stripANSI(m.statusLine(100)); sl != "compacted: 84k → 12k tokens" {
-		t.Fatalf("status line after compaction: %q", sl)
+	if len(tr.Lines) != before+1 { // blank, rule, summary, blank replaced blank, rule, blank
+		t.Fatalf("the result should take the bar's item: %d → %d lines", before, len(tr.Lines))
 	}
+	// a failure replaces the bar with a note; an ended turn with no result
+	// marks it interrupted
 	m.applyEvent(event.Event{Seq: 52, Agent: "a", Type: event.CompactionStarted, Time: now, Payload: event.MustPayload(event.CompactionPayload{Before: 84_000})})
 	m.applyEvent(event.Event{Seq: 53, Agent: "a", Type: event.CompactionFailed, Time: now, Payload: event.MustPayload(event.CompactionPayload{Before: 84_000, Error: "boom"})})
-	if len(m.compacting) != 0 || m.status != "compaction failed: boom" || !m.statusErr {
-		t.Fatalf("after a failed compaction: %v %q", m.compacting, m.status)
-	}
-	// the chat rule names the shrink
+	m.applyEvent(event.Event{Seq: 54, Agent: "a", Type: event.CompactionStarted, Time: now, Payload: event.MustPayload(event.CompactionPayload{Before: 84_000})})
+	m.applyEvent(event.Event{Seq: 55, Agent: "a", Type: event.TurnEnded, Time: now, Payload: event.MustPayload(event.TurnEndedPayload{Turn: 1, Reason: "error"})})
 	m.refreshViewport()
-	if v := stripANSI(m.vp.View()); !strings.Contains(v, "┄┄ compacted 84k → 12k tokens ┄┄") {
-		t.Fatalf("chat rule:\n%s", v)
+	v = stripANSI(m.vp.View())
+	if tr.Compacting() || !strings.Contains(v, "compaction failed: boom") || !strings.Contains(v, "compaction interrupted") || strings.Contains(v, "compacting ") {
+		t.Fatalf("failed and interrupted compactions:\n%s", v)
+	}
+	// the tick stops once nothing is compacting
+	nm, _ := m.Update(compactTickMsg{})
+	if nm.(Model).compactTick {
+		t.Fatal("the tick should stop when no chat is compacting")
 	}
 	if strip < 3 || meta != strip+1 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], "›") || !strings.HasPrefix(lines[strip-3], "─") {
 		t.Fatalf("under the rule come the input, a blank line, the strip, then the meta row:\n%s", strings.Join(lines, "\n"))
