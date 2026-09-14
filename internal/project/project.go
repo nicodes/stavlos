@@ -202,7 +202,7 @@ func EstimateTokens(msgs []model.Message, system string, tools []model.ToolDef) 
 	n := len(system)
 	for _, m := range msgs {
 		for _, b := range m.Blocks {
-			n += len(b.Text) + len(b.Content) + len(b.Input) + len(b.Signature)/2 + 8
+			n += len(b.Text) + len(b.Content) + len(b.Input) + len(b.Opaque)/2 + 8
 		}
 	}
 	for _, t := range tools {

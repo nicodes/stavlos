@@ -197,7 +197,8 @@ tests that pin current behaviour first.
     total-bytes cap; one `http.Client` constructor.
 7.3 ✅ Registry subscription table (id, display, flow, open, allow, variants) replacing the scattered
     switches; providers built once; `Status.Models` memoised; `auth.Store` mtime-cached.
-7.4 `model.Capabilities{SupportsMaxTokens, ReplaysReasoning, Variants}`; compaction prompt says
+7.4 ✅ (as `Info.Capabilities{IgnoresMaxTokens}` via `model.Capable`; ReplaysReasoning dropped as nothing
+    would read it; Variants stays its own interface) `model.Capabilities{SupportsMaxTokens, ReplaysReasoning, Variants}`; compaction prompt says
     "at most N words" where max tokens is unsupported. `Block.ProviderID`/`Opaque` instead of
     smuggling through `ID`/`Signature`.
 7.5 ✅ (Register/KindPlugin kept: the daemon test harness registers a fake provider) Delete dead API-key era: `model/anthropic` + SDK dep (see D1 decision), `auth.Resolve/Source*/

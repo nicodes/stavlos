@@ -444,11 +444,11 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 	if modelID == "" {
 		return "", errors.New(ErrNoModel)
 	}
-	m, _, err := a.s.host.Resolve(modelID)
+	m, info, err := a.s.host.Resolve(modelID)
 	if err != nil {
 		return "", err
 	}
-	if err := a.compact(ctx, m, len(a.eventsCopy())); err != nil {
+	if err := a.compact(ctx, m, info, len(a.eventsCopy())); err != nil {
 		return "", err
 	}
 	system, defs := a.buildContext(a.role(), a.s.Config())

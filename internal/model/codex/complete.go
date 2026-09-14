@@ -327,10 +327,10 @@ func (it *item) block() (model.Block, bool) {
 			return model.Block{}, false
 		}
 		return model.Block{
-			Type:      model.BlockThinking,
-			ID:        it.id,
-			Text:      it.text.String(),
-			Signature: it.signature,
+			Type:       model.BlockThinking,
+			ProviderID: it.id,
+			Text:       it.text.String(),
+			Opaque:     it.signature,
 		}, true
 	case "function_call":
 		if it.name == "" && it.id == "" {

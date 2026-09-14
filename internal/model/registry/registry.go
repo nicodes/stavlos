@@ -405,6 +405,9 @@ func (r *Registry) Resolve(full string) (model.Model, model.Info, error) {
 			info = subscriptionInfo(info)
 		}
 	}
+	if c, ok := p.(model.Capable); ok {
+		info.Capabilities = c.Capabilities(id)
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if m, ok := r.opened[full]; ok {
