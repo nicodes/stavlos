@@ -461,7 +461,9 @@ func (d *Daemon) Trust(ctx context.Context, dir, hash string, trust bool) error 
 		if trust {
 			ans = protocol.AnswerAllow
 		}
-		_ = d.esc.Reply(pid, "trust.reply", ans)
+		// Settle the open prompt even if a client had claimed it: the
+		// decision has been made.
+		_ = d.esc.Resolve(pid, "trust.reply", escalation.Answer{Value: ans})
 	}
 	if !trust {
 		return nil

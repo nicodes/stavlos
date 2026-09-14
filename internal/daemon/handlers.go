@@ -269,7 +269,7 @@ var handlers = map[string]handler{
 		return okResult, nil
 	}),
 	protocol.MPromptReply: typed(func(_ context.Context, c *conn, p protocol.PromptReplyParams) (any, error) {
-		if err := c.d.esc.ReplyAll(p.ID, c.cl.id, p.Answer, p.Dir, p.Reason, p.Answers); err != nil {
+		if err := c.d.esc.Reply(p.ID, c.cl.id, escalation.Answer{Value: p.Answer, Dir: p.Dir, Reason: p.Reason, Answers: p.Answers}); err != nil {
 			return nil, promptErr(err)
 		}
 		return okResult, nil

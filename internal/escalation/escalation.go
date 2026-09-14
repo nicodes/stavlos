@@ -5,7 +5,6 @@ package escalation
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sync"
 	"time"
@@ -85,8 +84,11 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo) Answer 
 
 	claimT := time.NewTimer(m.cfg.ClaimTimeout)
 	answerT := time.NewTimer(m.cfg.AnswerTimeout)
-	if info.Kind == protocol.PromptQuestion {
-		answerT.Stop() // a question has no sensible default: it waits until answered or withdrawn
+	if info.Kind == protocol.PromptQuestion || info.Kind == protocol.PromptTrust {
+		// No sensible default for either: a question waits until answered
+		// or withdrawn, and trusting a project is never decided by a timer
+		// (it would also be asked again at the next resume).
+		answerT.Stop()
 	}
 	defer claimT.Stop()
 	defer answerT.Stop()
@@ -196,24 +198,10 @@ func (m *Manager) Claim(id, client string) error {
 }
 
 // Reply answers a prompt. Only the claimant may reply; an unclaimed prompt
-// is implicitly claimed by the replier.
-func (m *Manager) Reply(id, client, answer string) error {
-	return m.ReplyFull(id, client, answer, "", "")
-}
-
-// ReplyFull is Reply with the optional extras: an edited directory for a
-// boundary prompt, a reason for a deny.
-func (m *Manager) ReplyFull(id, client, answer, dir, reason string) error {
-	return m.ReplyAll(id, client, answer, dir, reason, nil)
-}
-
-// ReplyAnswers is ReplyFull plus the answers of a question batch.
-func (m *Manager) ReplyAnswers(id, client, answer, dir, reason string, answers []string) error {
-	return m.ReplyAll(id, client, answer, dir, reason, answers)
-}
-
-// ReplyAll carries every optional extra a reply may have.
-func (m *Manager) ReplyAll(id, client, answer, dir, reason string, answers []string) error {
+// is implicitly claimed by the replier. a carries the value and whatever
+// the prompt's kind needs with it (a directory, a reason, a question
+// batch's answers); its Client is set to client.
+func (m *Manager) Reply(id, client string, a Answer) error {
 	m.mu.Lock()
 	p, ok := m.pend[id]
 	if !ok || p.done {
@@ -227,10 +215,29 @@ func (m *Manager) ReplyAll(id, client, answer, dir, reason string, answers []str
 	p.info.ClaimedBy = client
 	info := p.info
 	m.mu.Unlock()
-	if !m.finish(id, Answer{Value: answer, Dir: dir, Reason: reason, Answers: answers, Client: client}) {
+	return m.answer(id, info, client, a)
+}
+
+// Resolve answers a prompt whatever claims it: the daemon settling a prompt
+// through another path (a trust decision made with trust.reply).
+func (m *Manager) Resolve(id, client string, a Answer) error {
+	m.mu.Lock()
+	p, ok := m.pend[id]
+	if !ok || p.done {
+		m.mu.Unlock()
 		return ErrLate
 	}
-	m.record(protocol.ActionAnswered, info, answer, client)
+	info := p.info
+	m.mu.Unlock()
+	return m.answer(id, info, client, a)
+}
+
+func (m *Manager) answer(id string, info protocol.PromptInfo, client string, a Answer) error {
+	a.Client = client
+	if !m.finish(id, a) {
+		return ErrLate
+	}
+	m.record(protocol.ActionAnswered, info, a.Value, client)
 	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionAnswered, Prompt: info}, m.tiersFor(info))
 	return nil
 }
@@ -285,10 +292,4 @@ func (m *Manager) Pending(session string) []protocol.PromptInfo {
 		}
 	}
 	return out
-}
-
-// PermissionInput is the Input payload of a permission prompt.
-func PermissionInput(tool string, input json.RawMessage) json.RawMessage {
-	b, _ := json.Marshal(map[string]any{"tool": tool, "input": input})
-	return b
 }
