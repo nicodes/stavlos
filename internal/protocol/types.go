@@ -219,6 +219,7 @@ type AgentInfo struct {
 	Todos     []event.TodoItem `json:"todos,omitempty"`      // this agent\'s todo list, in creation order
 	MCP       []MCPInfo        `json:"mcp,omitempty"`        // this agent\'s MCP servers (the ones its role lists), with state
 	Dirs      []DirInfo        `json:"dirs,omitempty"`       // the agent\'s working directories, session first
+	Awaiting  []string         `json:"awaiting,omitempty"`   // ids of the agents whose answer this one is waiting for (a child's task, an agent_message)
 }
 type AgentTreeParams struct {
 	V       int    `json:"v"`

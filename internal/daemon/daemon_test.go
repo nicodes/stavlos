@@ -460,8 +460,8 @@ func TestChildResponseWakesParent(t *testing.T) {
 		t.Fatalf("%+v", te)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
-	if len(agents) != 2 || agents[0].State != "waiting" {
-		t.Fatalf("parent idle with a question out should read waiting: %+v", agents)
+	if len(agents) != 2 || agents[0].State != "waiting" || len(agents[0].Awaiting) != 1 || agents[0].Awaiting[0] != agents[1].ID {
+		t.Fatalf("parent idle with a question out should read waiting on the child: %+v", agents)
 	}
 	close(release)
 	e = h.waitFor(event.TurnEnded, root)
