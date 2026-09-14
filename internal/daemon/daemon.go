@@ -174,7 +174,11 @@ func (d *Daemon) recordPrompt(action string, info protocol.PromptInfo, answer, c
 	var payload any
 	switch action {
 	case "requested":
-		t, payload = event.PromptRequested, event.PromptRequestedPayload{ID: info.ID, Kind: info.Kind, Tool: info.Tool, Input: info.Input, Question: info.Question, Options: info.Options}
+		rp := event.PromptRequestedPayload{ID: info.ID, Kind: info.Kind, Tool: info.Tool, Input: info.Input, Question: info.Question, Options: info.Options}
+		if len(info.Questions) > 0 {
+			rp.Questions, _ = json.Marshal(info.Questions)
+		}
+		t, payload = event.PromptRequested, rp
 	case "claimed":
 		t, payload = event.PromptClaimed, event.PromptRefPayload{ID: info.ID, Client: clientID}
 	case "answered":

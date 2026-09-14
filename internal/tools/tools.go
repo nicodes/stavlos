@@ -10,6 +10,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/protocol"
 )
 
 // Result is a tool's output.
@@ -27,7 +28,15 @@ type Env struct {
 	Partial   func(string)            // receives streamed partial output (bash); may be nil
 	MaxOutput int                     // truncate tool output beyond this many bytes (0 = 32k)
 	Mon       Monitors                // general monitors (background commands, watches, timers); nil if unavailable
-	Todo      Todos                   // the agent\'s todo list; nil if the preset does not include "todo"
+	Todo      Todos                   // the agent's todo list; nil if the preset does not include "todo"
+	Ask       Asker                   // raises a question batch to the human and waits; nil in tests without a runtime
+}
+
+// Asker is implemented by the agent runtime: it blocks the turn on a
+// question prompt (kind "question") until the human answers or the turn
+// is cancelled. Answers come back one per question, in order.
+type Asker interface {
+	Ask(ctx context.Context, questions []protocol.Question) ([]string, error)
 }
 
 // Monitors is implemented by the agent runtime: sources other than children
@@ -112,7 +121,7 @@ func Builtin() Set {
 		bashTool{}, readTool{}, patchTool{}, skillTool{}, responseTool{},
 		spawnTool{}, messageTool{}, cancelTool{}, statusTool{},
 		bashAsyncTool{}, bashKillTool{},
-		todoAddTool{}, todoUpdateTool{},
+		todoAddTool{}, todoUpdateTool{}, askTool{},
 	} {
 		s[t.Def().Name] = t
 	}
@@ -130,6 +139,10 @@ var MessagingNames = []string{"agent_message", "agent_response", "agent_status"}
 
 // AsyncNames are offered to every agent that has bash.
 var AsyncNames = []string{"bash_async", "bash_async_kill"}
+
+// AskNames are offered to every agent: asking the human is never a role
+// choice.
+var AskNames = []string{"ask_user"}
 
 // TodoNames are the tools implied by "todo" in a preset's tool list.
 var TodoNames = []string{"todo_add", "todo_update"}

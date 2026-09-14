@@ -288,7 +288,23 @@ type PromptInfo struct {
 	ClaimedBy string          `json:"claimed_by,omitempty"`
 	Escalated bool            `json:"escalated"` // visible to fallback tier
 	Created   string          `json:"created"`
-	Dir       string          `json:"dir,omitempty"` // a boundary prompt: the call reaches outside the agent's directories; "allow_always" adds this one
+	Dir       string          `json:"dir,omitempty"`       // a boundary prompt: the call reaches outside the agent's directories; "allow_always" adds this one
+	Questions []Question      `json:"questions,omitempty"` // kind question: the batch an ask_user call raised, answered together
+}
+
+// Question is one entry of an ask_user batch. Options may be empty (free
+// text only); typed text is always accepted as well. Multi allows several
+// picks, joined with ", " in the answer.
+type Question struct {
+	Header   string           `json:"header"`
+	Question string           `json:"question"`
+	Options  []QuestionOption `json:"options,omitempty"`
+	Multi    bool             `json:"multi,omitempty"`
+}
+
+type QuestionOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
 }
 type PromptListParams struct {
 	V       int    `json:"v"`
@@ -307,6 +323,9 @@ type PromptReplyParams struct {
 	Answer string `json:"answer"`           // allow | deny | allow_always | text
 	Dir    string `json:"dir,omitempty"`    // boundary prompt + allow_always: add this directory instead of the offered one
 	Reason string `json:"reason,omitempty"` // deny: an optional note the agent sees in its tool result
+	// Answers answers a question batch, one entry per question in order
+	// (a picked label, several joined with ", ", or typed text).
+	Answers []string `json:"answers,omitempty"`
 }
 
 type TrustStatusParams struct {

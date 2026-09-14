@@ -44,13 +44,16 @@ func (m Model) keyHints() []keyHint {
 		return []keyHint{{"←/→", "choose"}, {"space", "open"}, {"enter", "input"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusChat:
 		return []keyHint{{"↑/↓", "item"}, {"space", "expand/collapse tool"}, {"pgup/pgdn", "page"}, {"tab", "next section"}, {"enter", "input"}, {"esc", "input"}, {"ctrl+c", "quit"}}
+	case focusQuestions:
+		if m.q.typing {
+			return []keyHint{{"enter", "answer"}, {"esc", "back to the options"}, {"ctrl+c", "quit"}}
+		}
+		return []keyHint{{"↑/↓", "option"}, {"space", "pick"}, {"enter", "confirm · next"}, {"←/→", "question"}, {"type", "other answer"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusPermission:
 		if p := m.currentPrompt(); p != nil {
 			switch p.Kind {
 			case "trust":
 				return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
-			case "question":
-				return []keyHint{{"type + enter", "answer"}, {"1-9", "pick an option"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			default:
 				if m.promptDeny {
 					return []keyHint{{"enter", "deny"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}

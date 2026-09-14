@@ -240,6 +240,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "bash_async", Pattern: "*", Verb: policy.Ask},
 		policy.Rule{Tool: "bash_async_kill", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "todo_add", Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: "ask_user", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "todo_update", Pattern: "*", Verb: policy.Allow},
 		// Read-only shell commands are allowed by default so searching and
 		// looking around never prompts; anything that writes still asks.

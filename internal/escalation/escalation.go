@@ -15,9 +15,10 @@ import (
 
 // Answer is the outcome of a prompt.
 type Answer struct {
-	Value     string // allow | deny | allow_always | free text
-	Dir       string // boundary prompts: the directory to add with allow_always, when the human edited it
-	Reason    string // deny: the human's optional note, passed to the agent
+	Value     string   // allow | deny | allow_always | free text
+	Dir       string   // boundary prompts: the directory to add with allow_always, when the human edited it
+	Reason    string   // deny: the human's optional note, passed to the agent
+	Answers   []string // question batches: one answer per question, in order
 	Client    string
 	Defaulted bool
 	Withdrawn bool
@@ -84,6 +85,9 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo) Answer 
 
 	claimT := time.NewTimer(m.cfg.ClaimTimeout)
 	answerT := time.NewTimer(m.cfg.AnswerTimeout)
+	if info.Kind == "question" {
+		answerT.Stop() // a question has no sensible default: it waits until answered or withdrawn
+	}
 	defer claimT.Stop()
 	defer answerT.Stop()
 	expiry := time.NewTicker(10 * time.Second)
@@ -200,6 +204,11 @@ func (m *Manager) Reply(id, client, answer string) error {
 // ReplyFull is Reply with the optional extras: an edited directory for a
 // boundary prompt, a reason for a deny.
 func (m *Manager) ReplyFull(id, client, answer, dir, reason string) error {
+	return m.ReplyAnswers(id, client, answer, dir, reason, nil)
+}
+
+// ReplyAnswers is ReplyFull plus the answers of a question batch.
+func (m *Manager) ReplyAnswers(id, client, answer, dir, reason string, answers []string) error {
 	m.mu.Lock()
 	p, ok := m.pend[id]
 	if !ok || p.done {
@@ -213,7 +222,7 @@ func (m *Manager) ReplyFull(id, client, answer, dir, reason string) error {
 	p.info.ClaimedBy = client
 	info := p.info
 	m.mu.Unlock()
-	if !m.finish(id, Answer{Value: answer, Dir: dir, Reason: reason, Client: client}) {
+	if !m.finish(id, Answer{Value: answer, Dir: dir, Reason: reason, Answers: answers, Client: client}) {
 		return ErrLate
 	}
 	m.record("answered", info, answer, client)

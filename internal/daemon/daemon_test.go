@@ -1789,3 +1789,74 @@ func TestDenyReasonReachesTheAgent(t *testing.T) {
 	}
 	h.waitFor(event.TurnEnded, root)
 }
+
+// TestAskUser: ask_user raises one question prompt for the batch, the
+// answers come back as "header: answer" lines, and a cancel withdraws it.
+func TestAskUser(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			has := false
+			for _, d := range req.Tools {
+				if d.Name == "ask_user" {
+					has = true
+				}
+			}
+			if !has || !strings.Contains(req.System, "# Asking the human") {
+				t.Errorf("ask_user should be offered to every agent")
+			}
+			return call("c1", "ask_user", `{"questions":[{"header":"Backend","question":"Which backend?","options":[{"label":"Postgres","description":"in use"},{"label":"SQLite"}]},{"header":"Name","question":"Call it?"}]}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || last.Content != "Backend: Postgres\nName: stavlos" {
+				t.Errorf("answers: %+v", last)
+			}
+			return call("c2", "ask_user", `{"questions":[{"header":"Again","question":"Sure?"}]}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !last.IsError || !strings.Contains(last.Content, "withdrawn") {
+				t.Errorf("a cancelled question should come back withdrawn: %+v", last)
+			}
+			return text("ok")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	e := h.waitFor(event.PromptRequested, root)
+	var pr event.PromptRequestedPayload
+	_ = e.Decode(&pr)
+	if pr.Kind != "question" || pr.Tool != "ask_user" || !strings.Contains(string(pr.Questions), "Postgres") {
+		t.Fatalf("prompt %+v", pr)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].State != "blocked" {
+		t.Fatalf("an asking agent is blocked: %+v", agents[0].State)
+	}
+	p := h.d.esc.Pending(s.ID)[0]
+	if len(p.Questions) != 2 || p.Questions[0].Options[0].Label != "Postgres" {
+		t.Fatalf("pending %+v", p)
+	}
+	_ = h.c.ClaimPrompt(ctx, p.ID)
+	if err := h.c.AnswerQuestions(ctx, p.ID, []string{"Postgres", "stavlos"}); err != nil {
+		t.Fatal(err)
+	}
+	// the second question is cancelled instead of answered
+	h.waitFor(event.PromptRequested, root)
+	_ = h.c.Send(ctx, root, protocol.KindCancel, "")
+	h.waitFor(event.PromptWithdrawn, root)
+	var te event.TurnEndedPayload
+	for te.Turn != 1 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+}
