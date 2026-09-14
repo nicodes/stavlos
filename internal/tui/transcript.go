@@ -1211,6 +1211,17 @@ func toolArg(name string, raw json.RawMessage) string {
 		return str("id")
 	case "skill":
 		return str("name")
+	case "todo_add":
+		return str("text")
+	case "todo_update":
+		out := str("id")
+		if st := str("status"); st != "" {
+			out += " → " + st
+		}
+		if tx := str("text"); tx != "" {
+			out += "  " + tx
+		}
+		return out
 	case "agent_finish": // legacy
 		return str("status")
 	case "agent_response":

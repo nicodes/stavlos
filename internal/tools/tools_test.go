@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nicodes/stavlos/internal/event"
 )
 
 func TestFileToolsAndBash(t *testing.T) {
@@ -64,5 +66,60 @@ func TestBashDefaultTimeout(t *testing.T) {
 	}
 	if !strings.Contains(string(bashTool{}.Def().Schema), "default 180, max 1800") {
 		t.Fatalf("bash schema does not advertise the default: %s", bashTool{}.Def().Schema)
+	}
+}
+
+// fakeTodos is an in-memory tools.Todos.
+type fakeTodos struct{ items []event.TodoItem }
+
+func (f *fakeTodos) Add(text string) (string, error) {
+	id := "t" + string(rune('0'+len(f.items)+1))
+	f.items = append(f.items, event.TodoItem{ID: id, Text: text, Status: "pending"})
+	return id, nil
+}
+func (f *fakeTodos) Update(id, status, text string) error {
+	for i := range f.items {
+		if f.items[i].ID == id {
+			if status != "" {
+				f.items[i].Status = status
+			}
+			if text != "" {
+				f.items[i].Text = text
+			}
+			return nil
+		}
+	}
+	return os.ErrNotExist
+}
+func (f *fakeTodos) List() []event.TodoItem { return f.items }
+
+func TestTodoTools(t *testing.T) {
+	ts := Builtin()
+	ctx := context.Background()
+	// unavailable without a list (the preset has no "todo")
+	if r := ts["todo_add"].Run(ctx, json.RawMessage(`{"text":"x"}`), &Env{}); !r.IsError || !strings.Contains(r.Output, "not available") {
+		t.Fatalf("no list: %+v", r)
+	}
+	f := &fakeTodos{}
+	env := &Env{Todo: f}
+	r := ts["todo_add"].Run(ctx, json.RawMessage(`{"text":"  Run the tests "}`), env)
+	if r.IsError || r.Output != "added t1: Run the tests" || len(f.items) != 1 {
+		t.Fatalf("add: %+v %+v", r, f.items)
+	}
+	if r := ts["todo_add"].Run(ctx, json.RawMessage(`{"text":"  "}`), env); !r.IsError {
+		t.Fatalf("empty text should fail: %+v", r)
+	}
+	if r := ts["todo_update"].Run(ctx, json.RawMessage(`{"id":"t1","status":"doing"}`), env); !r.IsError || !strings.Contains(r.Output, "pending, in_progress, done, cancelled") {
+		t.Fatalf("bad status: %+v", r)
+	}
+	if r := ts["todo_update"].Run(ctx, json.RawMessage(`{"id":"t1"}`), env); !r.IsError {
+		t.Fatalf("nothing to change should fail: %+v", r)
+	}
+	r = ts["todo_update"].Run(ctx, json.RawMessage(`{"id":"t1","status":"in_progress","text":"Run all the tests"}`), env)
+	if r.IsError || r.Output != "updated t1 → in_progress" || f.items[0].Status != "in_progress" || f.items[0].Text != "Run all the tests" {
+		t.Fatalf("update: %+v %+v", r, f.items)
+	}
+	if r := ts["todo_update"].Run(ctx, json.RawMessage(`{"id":"t9","status":"done"}`), env); !r.IsError {
+		t.Fatalf("unknown id should fail: %+v", r)
 	}
 }

@@ -135,6 +135,12 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 					pendingResponses[e.Agent] = q[1:]
 				}
 			}
+		case event.TodoChanged:
+			if a, ok := s.agents[e.Agent]; ok {
+				var p event.TodoPayload
+				_ = e.Decode(&p)
+				a.restoreTodos(p.Items)
+			}
 		case event.MonitorStarted:
 			var p event.MonitorStartedPayload
 			_ = e.Decode(&p)

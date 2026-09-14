@@ -51,11 +51,13 @@ type Agent struct {
 	modelID    string
 	state      State
 	turn       int
-	prompts    []queued       // Prompt inbox
-	steers     []queued       // Steer inbox
-	responses  []response     // answers from other agents (agent_response), not yet delivered
-	awaiting   map[string]int // agent id → questions asked of it (agent_message, a child's task); cleared by its next answer
-	events     []event.Event  // this agent's events (projection cache)
+	prompts    []queued         // Prompt inbox
+	steers     []queued         // Steer inbox
+	responses  []response       // answers from other agents (agent_response), not yet delivered
+	awaiting   map[string]int   // agent id → questions asked of it (agent_message, a child's task); cleared by its next answer
+	todos      []event.TodoItem // the agent\'s todo list, in creation order (todo.changed snapshots)
+	todoSeq    int              // last todo id issued
+	events     []event.Event    // this agent's events (projection cache)
 	cancelTurn context.CancelFunc
 	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
 	armed      map[string]bool // ids (children, monitors) whose completion wakes this agent
@@ -409,6 +411,7 @@ func (a *Agent) Info() protocol.AgentInfo {
 		CostUSD: a.usage.cost, Tokens: a.usage.tokens,
 	}
 	info.LastError = a.lastError
+	info.Todos = append([]event.TodoItem(nil), a.todos...)
 	mons := make([]*Monitor, 0, len(a.monitors))
 	for _, m := range a.monitors {
 		mons = append(mons, m)

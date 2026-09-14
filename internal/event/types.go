@@ -32,6 +32,8 @@ const (
 	MonitorFired    Type = "monitor.fired"    // MonitorFiredPayload: it completed / detected a change / elapsed
 	MonitorStopped  Type = "monitor.stopped"  // MonitorRefPayload: stopped before firing (unmonitor stop, kill, restart)
 
+	TodoChanged Type = "todo.changed" // TodoPayload: the agent\'s todo list after a change (a full snapshot)
+
 	PromptQueued  Type = "prompt.queued"  // TextPayload
 	SteerReceived Type = "steer.received" // TextPayload
 
@@ -148,6 +150,20 @@ type TextPayload struct {
 // MonitorPayload lists child ids whose finish wakes (or no longer wakes) the agent.
 type MonitorPayload struct {
 	IDs []string `json:"ids"`
+}
+
+// TodoItem is one entry of an agent's todo list. Status is pending,
+// in_progress, done or cancelled.
+type TodoItem struct {
+	ID     string `json:"id"`
+	Text   string `json:"text"`
+	Status string `json:"status"`
+}
+
+// TodoPayload is the whole todo list after a change; replaying the last
+// one restores the list.
+type TodoPayload struct {
+	Items []TodoItem `json:"items"`
 }
 
 // MonitorStartedPayload describes a general monitor. Kind: "command" |

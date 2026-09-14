@@ -1053,3 +1053,81 @@ func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
 		t.Fatalf("one answer should settle both prompts; parent still %s", agents[0].State)
 	}
 }
+
+func TestTodoListLogsProjectsAndRecovers(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	data := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			if !strings.Contains(req.System, "# Todo list") || !strings.Contains(req.System, "(empty)") {
+				t.Errorf("system prompt should carry an empty todo section:\n%s", req.System)
+			}
+			return call("c1", "todo_add", `{"text":"Read the code"}`)
+		},
+		func(model.Request) model.Response { return call("c2", "todo_add", `{"text":"Fix the bug"}`) },
+		func(model.Request) model.Response {
+			return call("c3", "todo_update", `{"id":"t1","status":"in_progress"}`)
+		},
+		func(req model.Request) model.Response {
+			// the list is projected into the system prompt at every call
+			for _, want := range []string{"- t1 [in_progress] Read the code", "- t2 [pending] Fix the bug"} {
+				if !strings.Contains(req.System, want) {
+					t.Errorf("system prompt lacks %q:\n%s", want, req.System)
+				}
+			}
+			return text("planned")
+		},
+	}
+	h := newHarness(t, data, fm)
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	h.waitFor(event.TurnEnded, root)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	todos := agents[0].Todos
+	if len(todos) != 2 || todos[0].ID != "t1" || todos[0].Status != "in_progress" || todos[1].Text != "Fix the bug" || todos[1].Status != "pending" {
+		t.Fatalf("todos %+v", todos)
+	}
+	evs, _ := h.d.Log.Read(ctx, s.ID, 1, 0)
+	changed := 0
+	for _, e := range evs {
+		if e.Type == event.TodoChanged {
+			changed++
+		}
+	}
+	if changed != 3 {
+		t.Fatalf("expected three todo.changed events, got %d", changed)
+	}
+	h.close()
+
+	// restart: the list is replayed and ids continue past it
+	fm2 := &fakeModel{}
+	fm2.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response { return call("c4", "todo_add", `{"text":"Run the tests"}`) },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !strings.Contains(last.Content, "added t3") {
+				t.Errorf("ids should continue after recovery: %+v", last)
+			}
+			return text("ok")
+		},
+	}
+	h2 := newHarness(t, data, fm2)
+	defer h2.close()
+	_ = h2.c.Subscribe(ctx, s.ID, evs[len(evs)-1].Seq+1) // live only; no replay of the old turn
+	agents, _ = h2.c.Tree(ctx, s.ID)
+	if len(agents[0].Todos) != 2 || agents[0].Todos[0].Status != "in_progress" {
+		t.Fatalf("recovered todos %+v", agents[0].Todos)
+	}
+	_ = h2.c.Send(ctx, root, protocol.KindPrompt, "more")
+	h2.waitFor(event.TurnEnded, root)
+	agents, _ = h2.c.Tree(ctx, s.ID)
+	if len(agents[0].Todos) != 3 || agents[0].Todos[2].ID != "t3" {
+		t.Fatalf("todos after recovery %+v", agents[0].Todos)
+	}
+}

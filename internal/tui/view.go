@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"strconv"
 	"strings"
@@ -117,6 +118,7 @@ type RenderOpts struct {
 	Working  bool   // a turn is in progress: append the ephemeral indicator line
 	Waiting  bool   // …and it is blocked on a permission: "! permission requested" instead
 	Verb     string // the indicator's label ("Galloping"); "working" when empty
+	Active   string // the in-progress todo item, shown after the verb, or ""
 	Stats    string // "(12s · 1.2k tokens)" shown after the indicator, or ""
 	Expanded map[int]bool
 	Cursor   int
@@ -231,6 +233,9 @@ func renderAll(lines []Line, o RenderOpts) (string, map[int]rowRange) {
 				verb = "working"
 			}
 			b.WriteString(o.Spinner + " " + styleDim.Render(verb+"…"))
+			if o.Active != "" {
+				b.WriteString(styleDim.Render(" · " + o.Active))
+			}
 		}
 		if o.Stats != "" {
 			b.WriteString(" " + styleDim.Render(o.Stats))
@@ -1005,6 +1010,8 @@ func (m Model) tabDialogTitle() string {
 		return fmt.Sprintf("Agents (%d)", len(m.liveChildren()))
 	case focusAsync:
 		return fmt.Sprintf("Async (%d)", len(m.runningJobs()))
+	case focusTodo:
+		return "Todo " + todoCount(m.selectedTodos())
 	}
 	n := len(m.prompts)
 	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
@@ -1045,6 +1052,12 @@ func (m Model) tabBodyLines(width int) []string {
 			owner, role = a.Label, a.Archetype
 		}
 		return m.cursorRows(monitorRows(jobs, owner, role, time.Now(), width-2))
+	case focusTodo:
+		items := m.selectedTodos()
+		if len(items) == 0 {
+			return []string{styleDim.Render("  no todo items")}
+		}
+		return m.cursorRows(todoRows(items, width-2))
 	case focusPermission:
 		p := m.currentPrompt()
 		if p == nil {
@@ -1099,6 +1112,7 @@ func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo,
 		permTab,
 		tab(fmt.Sprintf("agents (%d)", len(kids)), on(focusAgents)),
 		tab(fmt.Sprintf("async (%d)", len(jobs)), on(focusAsync)),
+		tab(todoLabel(m.selectedTodos()), on(focusTodo)),
 	}
 	return strings.Join(tabs, styleDim.Render(" · "))
 }
@@ -1424,6 +1438,7 @@ const (
 	glyphToolShell    = "$" // bash, bash_async, bash_async_kill: the shell prompt
 	glyphToolMonitors = "$" // async jobs are shell commands
 	glyphToolAgents   = "⑂"
+	glyphToolTodo     = "◇" // todo_add, todo_update
 )
 
 // toolGlyph returns the glyph for a tool name and the gap after it.
@@ -1433,8 +1448,50 @@ func toolGlyph(tool string) (string, string) {
 		return glyphToolAgents, " "
 	case tool == "bash" || tool == "bash_async" || tool == "bash_async_kill":
 		return glyphToolShell, " "
+	case strings.HasPrefix(tool, "todo_"):
+		return glyphToolTodo, " "
 	}
 	return glyphToolFiles, " "
+}
+
+// todoCount is "(done/total)" for a todo list, "(0)" when empty; done
+// counts finished and cancelled items.
+func todoCount(items []event.TodoItem) string {
+	if len(items) == 0 {
+		return "(0)"
+	}
+	done := 0
+	for _, it := range items {
+		if it.Status == "done" || it.Status == "cancelled" {
+			done++
+		}
+	}
+	return fmt.Sprintf("(%d/%d)", done, len(items))
+}
+
+// todoLabel is the strip's todo tab label.
+func todoLabel(items []event.TodoItem) string { return "todo " + todoCount(items) }
+
+// todoRows renders a todo list, one row per item: a status glyph (○
+// pending, ◐ in progress, ● done, × cancelled) and the text; the item in
+// progress is bold, finished ones dim.
+func todoRows(items []event.TodoItem, width int) []string {
+	rows := make([]string, 0, len(items))
+	for _, it := range items {
+		var row string
+		switch it.Status {
+		case "in_progress":
+			row = styleWarn.Render("◐") + " " + styleBold.Render(it.Text)
+		case "done":
+			row = styleDim.Render("● " + it.Text)
+		case "cancelled":
+			row = styleDim.Render("× " + it.Text)
+		default:
+			row = styleDim.Render("○") + " " + it.Text
+		}
+		rows = append(rows, ansi.Truncate("  "+row, width, "…"))
+	}
+	return rows
 }
 
 // monitorGlyph is the shell prompt for every monitor kind.
