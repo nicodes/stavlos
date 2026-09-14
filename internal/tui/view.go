@@ -1474,34 +1474,6 @@ func (m Model) connected() bool {
 	return true
 }
 
-// agentGlyph is the fork, coloured by the agent's lifecycle like the chat:
-// yellow working, red errored, grey complete, dim otherwise.
-func agentGlyph(a protocol.AgentInfo) string {
-	switch agentOutcome(a) {
-	case "working":
-		return styleWorking.Render(glyphToolAgents)
-	case "error":
-		return styleError.Render(glyphToolAgents)
-	case "waiting":
-		return styleWorking.Render(glyphToolAgents) // idle, but a question or job is outstanding
-	case "complete":
-		return styleDim.Render(glyphToolAgents)
-	}
-	return styleTool.Render(glyphToolAgents)
-}
-
-// jobGlyph is the clock, yellow while the job runs, red if it errored or
-// was lost, dim otherwise.
-func jobGlyph(j protocol.MonitorInfo) string {
-	switch j.State {
-	case "running", "":
-		return styleWorking.Render(glyphToolMonitors)
-	case "lost", "stopped":
-		return styleError.Render(glyphToolMonitors)
-	}
-	return styleDim.Render(glyphToolMonitors)
-}
-
 // roleColors maps a role's colour name to the theme colour it tints with.
 var roleColors = map[string]lipgloss.AdaptiveColor{
 	"red": colError, "blue": colAccent, "green": colSuccess, "yellow": colYellow,
@@ -1528,8 +1500,10 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 		if a.Parent != parent || a.State == "killed" {
 			continue
 		}
-		lead := agentGlyph(a)
-		var meta []string // the state shows in the glyph's colour (orange working, red error, plain idle)
+		var meta []string // the state first when it says something (working, waiting, error), then cost and age
+		if o := agentOutcome(a); o != "idle" && o != "complete" {
+			meta = append(meta, o)
+		}
 		if a.CostUSD > 0 {
 			meta = append(meta, "$"+fmtCost(a.CostUSD))
 		}
@@ -1537,7 +1511,7 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 			meta = append(meta, fmtElapsed(now.Sub(t)))
 		}
 		text := fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
-		row := "  " + lead + " " + roleStyle(tint[a.Archetype]).Bold(true).Render(text)
+		row := "  " + roleStyle(tint[a.Archetype]).Bold(true).Render(text)
 		if s := last[a.ID]; s != "" {
 			row += "  " + truncRunes(s, snippetChars)
 		}
@@ -1605,11 +1579,8 @@ func lastSnippet(t *Transcript) string {
 }
 
 // monitorRows is the pure part of monitorsView: one row per running
-// monitor with its kind glyph, bold label, a spinner for commands still
-// running, and dim meta (progress, elapsed).
-// Each row reads like an agent row, then the job: "$ coder (coder)  go
-// test  42 lines · 1m15s" — the owning agent in bold with its role, the
-// job's label, and dim progress/elapsed.
+// monitor: the owning agent in bold with its role, the job's label, and
+// dim meta (progress, elapsed): "coder (coder)  go test  42 lines · 1m15s".
 func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now time.Time, width int) []string {
 	var rows []string
 	for _, mo := range monitors {
@@ -1617,7 +1588,6 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 		case "fired", "stopped", "lost":
 			continue
 		}
-		lead := jobGlyph(mo) + monitorGlyphGap(mo.Kind)
 		who := owner
 		if ownerRole != "" {
 			who = fmt.Sprintf("%s (%s)", owner, ownerRole)
@@ -1633,7 +1603,7 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 		if t, err := time.Parse(time.RFC3339, mo.Started); err == nil && !t.IsZero() {
 			meta = append(meta, fmtElapsed(now.Sub(t)))
 		}
-		row := "  " + lead + label
+		row := "  " + label
 		if len(meta) > 0 {
 			row += "  " + styleDim.Render(strings.Join(meta, " · "))
 		}
@@ -1792,11 +1762,6 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 
 // monitorGlyph is the shell prompt for every monitor kind.
 func monitorGlyph(kind string) string { return glyphToolMonitors }
-
-// monitorGlyphGap is the spacing after a kind glyph.
-func monitorGlyphGap(kind string) string {
-	return " "
-}
 
 // fmtElapsed renders a duration as 12s, 1m05s, 1h02m.
 func fmtElapsed(d time.Duration) string {

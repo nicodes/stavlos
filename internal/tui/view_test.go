@@ -219,7 +219,7 @@ func TestAgentRows(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
-	if !strings.Contains(rows[0], "scout (explorer)  Running the tests now, hold on while I l…  ") || !strings.Contains(rows[0], "1m15s") || !strings.Contains(rows[0], "⑂") {
+	if !strings.Contains(rows[0], "scout (explorer)  Running the tests now, hold on while I l…  ") || !strings.Contains(rows[0], "working · ") || !strings.Contains(rows[0], "1m15s") || strings.Contains(rows[0], "⑂") {
 		t.Fatalf("%q", rows[0])
 	}
 	if strings.Contains(rows[0], "wakes parent") {
@@ -271,8 +271,8 @@ func TestMonitorRows(t *testing.T) {
 	for i, r := range rows {
 		plain[i] = stripANSI(r)
 	}
-	// command: glyph, bold label, kind, progress, elapsed
-	if !strings.HasPrefix(plain[0], "  $") || !strings.Contains(plain[0], "coder (coder)  go test") {
+	// command: owner in bold, the job, progress, elapsed — no glyph
+	if !strings.HasPrefix(plain[0], "  coder (coder)  go test") {
 		t.Fatalf("command row: %q", plain[0])
 	}
 	for _, want := range []string{"42 lines", "1m15s"} {
@@ -281,11 +281,11 @@ func TestMonitorRows(t *testing.T) {
 		}
 	}
 	// a second running job: no wake tag, elapsed
-	if !strings.HasPrefix(plain[1], "  $ coder (coder)  src changes") || !strings.HasSuffix(strings.TrimRight(plain[1], " "), "coder (coder)  src changes  3s") {
+	if !strings.HasPrefix(plain[1], "  coder (coder)  src changes") || !strings.HasSuffix(strings.TrimRight(plain[1], " "), "coder (coder)  src changes  3s") {
 		t.Fatalf("second job row: %q", plain[1])
 	}
 	// progress and hours elapsed
-	if !strings.HasPrefix(plain[2], "  $ coder (coder)  cooldown") || !strings.Contains(plain[2], "3m left · 2h00m") {
+	if !strings.HasPrefix(plain[2], "  coder (coder)  cooldown") || !strings.Contains(plain[2], "3m left · 2h00m") {
 		t.Fatalf("third job row: %q", plain[2])
 	}
 	// a bad Started stamp just drops the elapsed field
