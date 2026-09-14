@@ -88,67 +88,90 @@ func (patchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if len(ops) == 0 {
 		return errf("patch: no file sections")
 	}
-	// Stage every change first so a failure leaves nothing half-applied:
-	// every file is read and every hunk applied in memory before a byte is
-	// written.
-	type staged struct {
-		path    string
-		content string
-		mode    os.FileMode
-		prev    []byte // what was there (nil for a new file), for rollback
-		delete  bool
+	plan, err := stagePatch(ops, env)
+	if err != nil {
+		return errf("patch: %v", err)
 	}
-	var plan []staged
+	if err := writeStaged(plan); err != nil {
+		return errf("patch: %v", err)
+	}
+	return Result{Output: patchSummary(ops)}
+}
+
+// stagedFile is one change of a patch, computed in memory before any write.
+type stagedFile struct {
+	path    string
+	content string
+	mode    os.FileMode
+	prev    []byte // what was there (nil for a new file), for rollback
+	delete  bool
+}
+
+// stagePatch reads every file and applies every hunk in memory, so a
+// failure leaves nothing half-applied.
+func stagePatch(ops []patchOp, env *Env) ([]stagedFile, error) {
+	var plan []stagedFile
 	for _, op := range ops {
 		abs := resolve(env, op.path)
 		switch op.kind {
 		case "add":
 			if _, err := os.Lstat(abs); err == nil {
-				return errf("patch: %s already exists (delete it first to replace it)", op.path)
+				return nil, fmt.Errorf("%s already exists (delete it first to replace it)", op.path)
 			}
-			plan = append(plan, staged{path: abs, content: strings.Join(op.added, "\n") + "\n", mode: 0o644})
+			plan = append(plan, stagedFile{path: abs, content: strings.Join(op.added, "\n") + "\n", mode: 0o644})
 		case "delete":
 			fi, err := os.Lstat(abs)
 			if err != nil {
-				return errf("patch: %s: %v", op.path, err)
+				return nil, fmt.Errorf("%s: %v", op.path, err)
 			}
 			if fi.IsDir() {
-				return errf("patch: %s is a directory", op.path)
+				return nil, fmt.Errorf("%s is a directory", op.path)
 			}
-			plan = append(plan, staged{path: abs, delete: true})
+			plan = append(plan, stagedFile{path: abs, delete: true})
 		case "update":
-			fi, err := os.Stat(abs)
+			staged, err := stageUpdate(op, abs, env)
 			if err != nil {
-				return errf("patch: %s: %v", op.path, err)
+				return nil, err
 			}
-			b, err := os.ReadFile(abs)
-			if err != nil {
-				return errf("patch: %s: %v", op.path, err)
-			}
-			out, err := applyHunks(string(b), op.hunks)
-			if err != nil {
-				return errf("patch: %s: %v", op.path, err)
-			}
-			if op.moveTo != "" {
-				to := resolve(env, op.moveTo)
-				if _, err := os.Lstat(to); err == nil {
-					return errf("patch: cannot move %s to %s: it already exists", op.path, op.moveTo)
-				}
-				plan = append(plan, staged{path: abs, delete: true})
-				plan = append(plan, staged{path: to, content: out, mode: fi.Mode().Perm()})
-			} else {
-				plan = append(plan, staged{path: abs, content: out, mode: fi.Mode().Perm(), prev: b})
-			}
+			plan = append(plan, staged...)
 		}
 	}
-	// Writes first, each through a temporary file renamed into place so a
-	// reader never sees a half-written file; deletions last, so a failed
-	// write never costs a file. A failure rolls the writes back.
-	var done []staged
+	return plan, nil
+}
+
+// stageUpdate applies an update section's hunks, and its move, in memory.
+func stageUpdate(op patchOp, abs string, env *Env) ([]stagedFile, error) {
+	fi, err := os.Stat(abs)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", op.path, err)
+	}
+	b, err := os.ReadFile(abs)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", op.path, err)
+	}
+	out, err := applyHunks(string(b), op.hunks)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", op.path, err)
+	}
+	if op.moveTo == "" {
+		return []stagedFile{{path: abs, content: out, mode: fi.Mode().Perm(), prev: b}}, nil
+	}
+	to := resolve(env, op.moveTo)
+	if _, err := os.Lstat(to); err == nil {
+		return nil, fmt.Errorf("cannot move %s to %s: it already exists", op.path, op.moveTo)
+	}
+	return []stagedFile{{path: abs, delete: true}, {path: to, content: out, mode: fi.Mode().Perm()}}, nil
+}
+
+// writeStaged writes a staged patch: each file through a temporary file
+// renamed into place, so a reader never sees a half-written file, and the
+// deletions last, so a failed write never costs a file. A failed write
+// rolls back the writes before it.
+func writeStaged(plan []stagedFile) error {
+	var done []stagedFile
 	rollback := func() {
 		for i := len(done) - 1; i >= 0; i-- {
-			st := done[i]
-			if st.prev == nil {
+			if st := done[i]; st.prev == nil {
 				_ = os.Remove(st.path)
 			} else {
 				_ = os.WriteFile(st.path, st.prev, st.mode)
@@ -159,29 +182,41 @@ func (patchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		if st.delete {
 			continue
 		}
-		if err := os.MkdirAll(filepath.Dir(st.path), 0o755); err != nil {
+		if err := writeAtomic(st); err != nil {
 			rollback()
-			return errf("patch: %v", err)
-		}
-		tmp := st.path + ".stavlos-tmp"
-		if err := os.WriteFile(tmp, []byte(st.content), st.mode); err != nil {
-			rollback()
-			return errf("patch: %v", err)
-		}
-		if err := os.Rename(tmp, st.path); err != nil {
-			_ = os.Remove(tmp)
-			rollback()
-			return errf("patch: %v", err)
+			return err
 		}
 		done = append(done, st)
 	}
 	for _, st := range plan {
 		if st.delete {
 			if err := os.Remove(st.path); err != nil {
-				return errf("patch: %v (the other changes were applied)", err)
+				return fmt.Errorf("%v (the other changes were applied)", err)
 			}
 		}
 	}
+	return nil
+}
+
+// writeAtomic writes one staged file through a temporary file renamed into
+// place.
+func writeAtomic(st stagedFile) error {
+	if err := os.MkdirAll(filepath.Dir(st.path), 0o755); err != nil {
+		return err
+	}
+	tmp := st.path + ".stavlos-tmp"
+	if err := os.WriteFile(tmp, []byte(st.content), st.mode); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, st.path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
+}
+
+// patchSummary is the result text: one line per file section.
+func patchSummary(ops []patchOp) string {
 	var sb strings.Builder
 	for _, op := range ops {
 		switch {
@@ -195,7 +230,7 @@ func (patchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 			fmt.Fprintf(&sb, "deleted %s\n", op.path)
 		}
 	}
-	return Result{Output: strings.TrimRight(sb.String(), "\n")}
+	return strings.TrimRight(sb.String(), "\n")
 }
 
 // --- grammar ---
@@ -220,8 +255,28 @@ type hunkLine struct {
 }
 
 func parsePatch(text string) ([]patchOp, error) {
-	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
-	// tolerate leading/trailing whitespace lines and a missing Begin marker
+	body, err := patchBody(strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n"))
+	if err != nil {
+		return nil, err
+	}
+	var p patchParser
+	for _, l := range body {
+		if err := p.line(l); err != nil {
+			return nil, err
+		}
+	}
+	p.flushHunk()
+	for i := range p.ops {
+		if p.ops[i].kind == "update" && len(p.ops[i].hunks) == 0 && p.ops[i].moveTo == "" {
+			return nil, fmt.Errorf("update file %s has no hunks", p.ops[i].path)
+		}
+	}
+	return p.ops, nil
+}
+
+// patchBody is the lines between the Begin and End markers, which may carry
+// surrounding whitespace.
+func patchBody(lines []string) ([]string, error) {
 	start, end := -1, -1
 	for i, l := range lines {
 		t := strings.TrimSpace(l)
@@ -238,88 +293,95 @@ func parsePatch(text string) ([]patchOp, error) {
 	if end < 0 || end < start {
 		return nil, errors.New("missing \"*** End Patch\"")
 	}
-	body := lines[start+1 : end]
-	var ops []patchOp
-	var cur *patchOp
-	var h *hunk
-	flushHunk := func() {
-		if cur != nil && h != nil && len(h.lines) > 0 {
-			cur.hunks = append(cur.hunks, *h)
-		}
-		h = nil
+	return lines[start+1 : end], nil
+}
+
+// patchParser collects file sections and hunks line by line.
+type patchParser struct {
+	ops []patchOp
+	cur *patchOp // the open section: the last of ops
+	h   *hunk    // the open hunk of cur
+}
+
+func (p *patchParser) flushHunk() {
+	if p.cur != nil && p.h != nil && len(p.h.lines) > 0 {
+		p.cur.hunks = append(p.cur.hunks, *p.h)
 	}
-	for _, l := range body {
+	p.h = nil
+}
+
+// open starts a file section (closing the open hunk first: cur must not
+// outlive the append).
+func (p *patchParser) open(kind, path string) {
+	p.flushHunk()
+	p.ops = append(p.ops, patchOp{kind: kind, path: strings.TrimSpace(path)})
+	p.cur = &p.ops[len(p.ops)-1]
+}
+
+// line takes one line of the patch body.
+func (p *patchParser) line(l string) error {
+	switch {
+	case strings.HasPrefix(l, "*** Add File: "):
+		p.open("add", strings.TrimPrefix(l, "*** Add File: "))
+	case strings.HasPrefix(l, "*** Delete File: "):
+		p.open("delete", strings.TrimPrefix(l, "*** Delete File: "))
+	case strings.HasPrefix(l, "*** Update File: "):
+		p.open("update", strings.TrimPrefix(l, "*** Update File: "))
+	case strings.HasPrefix(l, "*** Move to: "):
+		if p.cur == nil || p.cur.kind != "update" {
+			return errors.New("\"*** Move to:\" must follow an Update File header")
+		}
+		p.cur.moveTo = strings.TrimSpace(strings.TrimPrefix(l, "*** Move to: "))
+	case strings.TrimSpace(l) == "*** End of File":
+		if p.h != nil {
+			p.h.eof = true
+		}
+	case strings.HasPrefix(l, "@@"):
+		if p.cur == nil || p.cur.kind != "update" {
+			return errors.New("hunk outside an Update File section")
+		}
+		p.flushHunk()
+		p.h = &hunk{anchor: strings.TrimSpace(strings.TrimPrefix(l, "@@"))}
+	default:
+		return p.content(l)
+	}
+	return nil
+}
+
+// content takes a line inside a file section.
+func (p *patchParser) content(l string) error {
+	if p.cur == nil {
+		if strings.TrimSpace(l) == "" {
+			return nil
+		}
+		return fmt.Errorf("unexpected line before any file header: %q", l)
+	}
+	switch p.cur.kind {
+	case "add":
+		if strings.HasPrefix(l, "+") {
+			p.cur.added = append(p.cur.added, l[1:])
+		} else if strings.TrimSpace(l) != "" {
+			return fmt.Errorf("add file %s: line must start with '+': %q", p.cur.path, l)
+		}
+	case "update":
+		if p.h == nil {
+			p.h = &hunk{}
+		}
 		switch {
-		case strings.HasPrefix(l, "*** Add File: "):
-			flushHunk()
-			ops = append(ops, patchOp{kind: "add", path: strings.TrimSpace(strings.TrimPrefix(l, "*** Add File: "))})
-			cur = &ops[len(ops)-1]
-		case strings.HasPrefix(l, "*** Delete File: "):
-			flushHunk()
-			ops = append(ops, patchOp{kind: "delete", path: strings.TrimSpace(strings.TrimPrefix(l, "*** Delete File: "))})
-			cur = &ops[len(ops)-1]
-		case strings.HasPrefix(l, "*** Update File: "):
-			flushHunk()
-			ops = append(ops, patchOp{kind: "update", path: strings.TrimSpace(strings.TrimPrefix(l, "*** Update File: "))})
-			cur = &ops[len(ops)-1]
-		case strings.HasPrefix(l, "*** Move to: "):
-			if cur == nil || cur.kind != "update" {
-				return nil, errors.New("\"*** Move to:\" must follow an Update File header")
-			}
-			cur.moveTo = strings.TrimSpace(strings.TrimPrefix(l, "*** Move to: "))
-		case strings.TrimSpace(l) == "*** End of File":
-			if h != nil {
-				h.eof = true
-			}
-		case strings.HasPrefix(l, "@@"):
-			if cur == nil || cur.kind != "update" {
-				return nil, errors.New("hunk outside an Update File section")
-			}
-			flushHunk()
-			h = &hunk{anchor: strings.TrimSpace(strings.TrimPrefix(l, "@@"))}
+		case l == "":
+			p.h.lines = append(p.h.lines, hunkLine{' ', ""})
+		case l[0] == ' ' || l[0] == '-' || l[0] == '+':
+			p.h.lines = append(p.h.lines, hunkLine{l[0], l[1:]})
 		default:
-			if cur == nil {
-				if strings.TrimSpace(l) == "" {
-					continue
-				}
-				return nil, fmt.Errorf("unexpected line before any file header: %q", l)
-			}
-			switch cur.kind {
-			case "add":
-				if strings.HasPrefix(l, "+") {
-					cur.added = append(cur.added, l[1:])
-				} else if strings.TrimSpace(l) != "" {
-					return nil, fmt.Errorf("add file %s: line must start with '+': %q", cur.path, l)
-				}
-			case "update":
-				if h == nil {
-					h = &hunk{}
-				}
-				if l == "" {
-					h.lines = append(h.lines, hunkLine{' ', ""})
-					continue
-				}
-				switch l[0] {
-				case ' ', '-', '+':
-					h.lines = append(h.lines, hunkLine{l[0], l[1:]})
-				default:
-					// lenient: treat an unprefixed line as context
-					h.lines = append(h.lines, hunkLine{' ', l})
-				}
-			case "delete":
-				if strings.TrimSpace(l) != "" {
-					return nil, fmt.Errorf("delete file %s: unexpected content", cur.path)
-				}
-			}
+			// lenient: treat an unprefixed line as context
+			p.h.lines = append(p.h.lines, hunkLine{' ', l})
+		}
+	case "delete":
+		if strings.TrimSpace(l) != "" {
+			return fmt.Errorf("delete file %s: unexpected content", p.cur.path)
 		}
 	}
-	flushHunk()
-	for i := range ops {
-		if ops[i].kind == "update" && len(ops[i].hunks) == 0 && ops[i].moveTo == "" {
-			return nil, fmt.Errorf("update file %s has no hunks", ops[i].path)
-		}
-	}
-	return ops, nil
+	return nil
 }
 
 // --- applying ---

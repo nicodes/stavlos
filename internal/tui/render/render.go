@@ -407,83 +407,33 @@ func (o Options) showLine(l transcript.Line) bool {
 	return !((l.Vis == transcript.VisCollapsed && details) || (l.Vis == transcript.VisExpanded && !details))
 }
 
-// renderLine draws one logical line: the gutter (cursor marker or space),
-// a leader (block border or indent), an optional glyph, and the wrapped,
-// styled text.
+// renderLine draws one logical line: a leader (block border or indent), an
+// optional glyph, and the wrapped, styled text. The cursor highlight is
+// applied by renderChatItem.
 func renderLine(l transcript.Line, o Options, cursor bool) string {
-	// No gutter column and no margin: chat rows start at the same column as
-	// the strip and the input below; the cursor is a background highlight
-	// applied by renderAll.
-	gutter := ""
-	leader := ""
-	glyph := ""
-	text := l.Text
-	var style func(...string) string
-
-	switch l.Kind {
-	case transcript.LineText, transcript.LineStream:
-		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), lipgloss.NewStyle()) }
-	case transcript.LineHeading:
-		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), theme.StyleBold) }
-	case transcript.LineCode:
-		leader = " "
-		style = theme.StyleDim.Render
-	case transcript.LineDim, transcript.LineLabel, transcript.LineThink:
-		style = theme.StyleDim.Render
-	case transcript.LineModel:
-		glyph = theme.StyleDim.Render("· ")
-		style = theme.StyleDim.Render
-	case transcript.LineNotice:
-		style = theme.StyleNotice.Render
-	case transcript.LineTool:
-		g, gap := transcript.ToolGlyph(l.Tool)
-		switch {
-		case l.Running || l.Tone == transcript.ToneWorking:
-			glyph = theme.StyleWorking.Render(g) + gap // in progress: the glyph, yellow
-		case l.Err || l.Tone == transcript.ToneError:
-			glyph = theme.StyleError.Render(g) + gap // same glyph, red, on failure
-		default:
-			glyph = theme.StyleTool.Render(g) + gap
-		}
-		style = renderToolText
-	case transcript.LineToolOut:
-		leader = "  " // under the tool name (after "◆ ")
-		style = theme.StyleToolOut.Render
-	case transcript.LineToolNote:
-		leader = "  "
-		style = theme.StyleDim.Render
-	case transcript.LineFinished:
-		style = theme.StyleFinished.Render
-		if l.Tone == transcript.ToneError {
-			style = theme.StyleError.Render
-		}
-	case transcript.LineRule:
+	if l.Kind == transcript.LineRule {
 		if l.Text == transcript.GlyphCompacting {
-			return gutter + centerText(theme.StyleRule.Render("┄┄ compacting ")+CompactSweep(o.CompactFrame)+theme.StyleRule.Render(" ┄┄"), o.Width)
+			return centerText(theme.StyleRule.Render("┄┄ compacting ")+CompactSweep(o.CompactFrame)+theme.StyleRule.Render(" ┄┄"), o.Width)
 		}
-		return gutter + centerText(theme.StyleRule.Render(l.Text), o.Width)
-	case transcript.LineError:
-		style = theme.StyleError.Render
-	default:
-		style = func(s ...string) string { return strings.Join(s, "") }
+		return centerText(theme.StyleRule.Render(l.Text), o.Width)
 	}
+	leader, glyph, style := kindStyle(l)
+	text := l.Text
 	if l.Suffix != "" {
 		text += " " + l.Suffix
 	}
 	// A line's own glyph, coloured by lifecycle: yellow in progress, red on
 	// error or termination, otherwise the glyph's natural colour.
 	if l.Glyph != "" {
-		gs := glyphStyle(l)
-		gap := " "
 		if l.Running && l.Kind != transcript.LineTool {
-			glyph = theme.StyleWorking.Render(l.Glyph) + gap
+			glyph = theme.StyleWorking.Render(l.Glyph) + " "
 		} else {
-			glyph = gs.Render(l.Glyph) + gap
+			glyph = glyphStyle(l).Render(l.Glyph) + " "
 		}
 	}
 	if l.Block != transcript.BlockNone && (l.Kind == transcript.LineText || l.Kind == transcript.LineLabel) {
 		bs := blockStyle(l.Block)
-		style = func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), bs) }
+		style = markdownStyle(bs)
 		// User prompts and steers read like a shell: "› text" on the first
 		// line, later lines indented to align under it.
 		if l.Kind == transcript.LineText && (l.Block == transcript.BlockUser || l.Block == transcript.BlockSteer) {
@@ -501,20 +451,70 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 	if o.Width > 0 && avail >= 10 {
 		parts = strings.Split(ansi.Wrap(text, avail, ""), "\n")
 	}
-	cont := gutter + leader + strings.Repeat(" ", glyphW)
+	cont := leader + strings.Repeat(" ", glyphW)
 	var b strings.Builder
 	for i, p := range parts {
 		if i > 0 {
 			b.WriteByte('\n')
 			b.WriteString(cont)
 		} else {
-			b.WriteString(gutter)
 			b.WriteString(leader)
 			b.WriteString(glyph)
 		}
 		b.WriteString(style(p))
 	}
 	return b.String()
+}
+
+// kindStyle is how a line of l's kind is drawn: its leader (an indent), a
+// glyph of its kind, and the style of its text.
+func kindStyle(l transcript.Line) (leader, glyph string, style func(...string) string) {
+	switch l.Kind {
+	case transcript.LineText, transcript.LineStream:
+		return "", "", markdownStyle(lipgloss.NewStyle())
+	case transcript.LineHeading:
+		return "", "", markdownStyle(theme.StyleBold)
+	case transcript.LineCode:
+		return " ", "", theme.StyleDim.Render
+	case transcript.LineDim, transcript.LineLabel, transcript.LineThink:
+		return "", "", theme.StyleDim.Render
+	case transcript.LineModel:
+		return "", theme.StyleDim.Render("· "), theme.StyleDim.Render
+	case transcript.LineNotice:
+		return "", "", theme.StyleNotice.Render
+	case transcript.LineTool:
+		return "", toolLineGlyph(l), renderToolText
+	case transcript.LineToolOut:
+		return "  ", "", theme.StyleToolOut.Render // under the tool name (after "◆ ")
+	case transcript.LineToolNote:
+		return "  ", "", theme.StyleDim.Render
+	case transcript.LineFinished:
+		if l.Tone == transcript.ToneError {
+			return "", "", theme.StyleError.Render
+		}
+		return "", "", theme.StyleFinished.Render
+	case transcript.LineError:
+		return "", "", theme.StyleError.Render
+	}
+	return "", "", func(s ...string) string { return strings.Join(s, "") }
+}
+
+// markdownStyle renders **bold** spans over base.
+func markdownStyle(base lipgloss.Style) func(...string) string {
+	return func(s ...string) string { return inlineMarkdown(strings.Join(s, ""), base) }
+}
+
+// toolLineGlyph is a tool call's glyph in the colour of its state, and the
+// gap after it.
+func toolLineGlyph(l transcript.Line) string {
+	g, gap := transcript.ToolGlyph(l.Tool)
+	switch {
+	case l.Running || l.Tone == transcript.ToneWorking:
+		return theme.StyleWorking.Render(g) + gap // in progress: the glyph, yellow
+	case l.Err || l.Tone == transcript.ToneError:
+		return theme.StyleError.Render(g) + gap // same glyph, red, on failure
+	}
+	return theme.StyleTool.Render(g) + gap
 }
 
 // renderToolText styles "Bash  git status (cancelled)": bold name, muted

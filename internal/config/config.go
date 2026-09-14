@@ -382,71 +382,17 @@ func (e *Effective) applyFile(f File, layer string) error {
 	if f.RootAgent != "" {
 		e.RootAgent = f.RootAgent
 	}
-	if f.Limits != nil {
-		if f.Limits.MaxDepth < 0 || f.Limits.MaxAgents < 0 {
-			return errors.New("limits: maxDepth and maxAgents must be positive")
-		}
-		if f.Limits.MaxDepth > 0 {
-			e.Limits.MaxDepth = f.Limits.MaxDepth
-		}
-		if f.Limits.MaxAgents > 0 {
-			e.Limits.MaxAgents = f.Limits.MaxAgents
-		}
+	if err := e.applyLimits(f.Limits); err != nil {
+		return err
 	}
-	if f.Escalation != nil {
-		if f.Escalation.ClaimTimeout != "" {
-			d, err := time.ParseDuration(f.Escalation.ClaimTimeout)
-			if err != nil || d <= 0 {
-				return fmt.Errorf("escalation.claimTimeout %q: want a duration such as 30s", f.Escalation.ClaimTimeout)
-			}
-			e.Escalation.ClaimTimeout = d
-		}
-		if f.Escalation.AnswerTimeout != "" {
-			d, err := time.ParseDuration(f.Escalation.AnswerTimeout)
-			if err != nil || d <= 0 {
-				return fmt.Errorf("escalation.answerTimeout %q: want a duration such as 3m", f.Escalation.AnswerTimeout)
-			}
-			e.Escalation.AnswerTimeout = d
-		}
-		if f.Escalation.Default != "" {
-			v := policy.Verb(f.Escalation.Default)
-			if v != policy.Allow && v != policy.Deny {
-				return fmt.Errorf("escalation.default %q: allow or deny", f.Escalation.Default)
-			}
-			e.Escalation.Default = v
-		}
+	if err := e.applyEscalation(f.Escalation); err != nil {
+		return err
 	}
-	if f.Compaction != nil {
-		if f.Compaction.Threshold != 0 {
-			if f.Compaction.Threshold <= 0 || f.Compaction.Threshold > 1 {
-				return fmt.Errorf("compaction.threshold %v: a fraction of the context window between 0 and 1", f.Compaction.Threshold)
-			}
-			e.Compaction.Threshold = f.Compaction.Threshold
-		}
-		if f.Compaction.MaxToolOutput != "" {
-			n, err := parseSize(f.Compaction.MaxToolOutput)
-			if err != nil {
-				return fmt.Errorf("compaction.maxToolOutput: %v", err)
-			}
-			e.Compaction.MaxToolOutput = n
-		}
+	if err := e.applyCompaction(f.Compaction); err != nil {
+		return err
 	}
-	if f.Search != nil {
-		if f.Search.Provider != "" {
-			p := strings.ToLower(f.Search.Provider)
-			switch p {
-			case "brave", "tavily", "exa":
-			default:
-				return fmt.Errorf("search.provider %q: brave, tavily or exa", f.Search.Provider)
-			}
-			e.Search.Provider = p
-		}
-		if f.Search.APIKey != "" {
-			if !strings.Contains(f.Search.APIKey, "${env:") {
-				fmt.Fprintf(os.Stderr, "stavlos: search.apiKey is written into the %s config; prefer \"${env:NAME}\" so the key stays in the environment\n", layer)
-			}
-			e.Search.APIKey = ExpandEnv(f.Search.APIKey)
-		}
+	if err := e.applySearch(f.Search, layer); err != nil {
+		return err
 	}
 	for k, v := range f.MCP {
 		e.MCP[k] = v
@@ -468,6 +414,92 @@ func (e *Effective) applyFile(f File, layer string) error {
 		e.Policy = e.Policy.With(rules)
 	} else {
 		e.Policy = policy.Layer(e.Policy.Base().Merge(rules), e.Policy.Overlays()...)
+	}
+	return nil
+}
+
+func (e *Effective) applyLimits(l *Limits) error {
+	if l == nil {
+		return nil
+	}
+	if l.MaxDepth < 0 || l.MaxAgents < 0 {
+		return errors.New("limits: maxDepth and maxAgents must be positive")
+	}
+	if l.MaxDepth > 0 {
+		e.Limits.MaxDepth = l.MaxDepth
+	}
+	if l.MaxAgents > 0 {
+		e.Limits.MaxAgents = l.MaxAgents
+	}
+	return nil
+}
+
+func (e *Effective) applyEscalation(x *Escalation) error {
+	if x == nil {
+		return nil
+	}
+	if x.ClaimTimeout != "" {
+		d, err := time.ParseDuration(x.ClaimTimeout)
+		if err != nil || d <= 0 {
+			return fmt.Errorf("escalation.claimTimeout %q: want a duration such as 30s", x.ClaimTimeout)
+		}
+		e.Escalation.ClaimTimeout = d
+	}
+	if x.AnswerTimeout != "" {
+		d, err := time.ParseDuration(x.AnswerTimeout)
+		if err != nil || d <= 0 {
+			return fmt.Errorf("escalation.answerTimeout %q: want a duration such as 3m", x.AnswerTimeout)
+		}
+		e.Escalation.AnswerTimeout = d
+	}
+	if x.Default != "" {
+		v := policy.Verb(x.Default)
+		if v != policy.Allow && v != policy.Deny {
+			return fmt.Errorf("escalation.default %q: allow or deny", x.Default)
+		}
+		e.Escalation.Default = v
+	}
+	return nil
+}
+
+func (e *Effective) applyCompaction(c *Compaction) error {
+	if c == nil {
+		return nil
+	}
+	if c.Threshold != 0 {
+		if c.Threshold <= 0 || c.Threshold > 1 {
+			return fmt.Errorf("compaction.threshold %v: a fraction of the context window between 0 and 1", c.Threshold)
+		}
+		e.Compaction.Threshold = c.Threshold
+	}
+	if c.MaxToolOutput != "" {
+		n, err := parseSize(c.MaxToolOutput)
+		if err != nil {
+			return fmt.Errorf("compaction.maxToolOutput: %v", err)
+		}
+		e.Compaction.MaxToolOutput = n
+	}
+	return nil
+}
+
+func (e *Effective) applySearch(s *Search, layer string) error {
+	if s == nil {
+		return nil
+	}
+	if s.Provider != "" {
+		p := strings.ToLower(s.Provider)
+		switch p {
+		case "brave", "tavily", "exa":
+		default:
+			return fmt.Errorf("search.provider %q: brave, tavily or exa", s.Provider)
+		}
+		e.Search.Provider = p
+	}
+	if s.APIKey != "" {
+		if !strings.Contains(s.APIKey, "${env:") {
+			fmt.Fprintf(os.Stderr, "stavlos: search.apiKey is written into the %s config; prefer \"${env:NAME}\" so the key stays in the environment\n", layer)
+		}
+		e.Search.APIKey = ExpandEnv(s.APIKey)
 	}
 	return nil
 }
