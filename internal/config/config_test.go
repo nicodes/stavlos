@@ -24,11 +24,11 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{
   // comment
   "model": "anthropic/claude-sonnet-5",
-  "policy": { "bash": { "*": "allow", "git push*": "ask" }, },
+  "policy": { "shell": { "*": "allow", "git push*": "ask" }, },
 }`), 0o644)
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".stavlos", "roles"), 0o755)
-	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{"policy":{"bash":{"git push*":"allow","curl*":"deny"}}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{"policy":{"shell":{"git push*":"allow","curl*":"deny"}}}`), 0o644)
 	os.WriteFile(filepath.Join(dir, ".stavlos", "roles", "reviewer.md"), []byte("---\ndescription: reviews\nmodels: [openai/gpt-5-mini]\ntools: [read]\n---\nYou review.\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("Use light models."), 0o644)
 
@@ -45,7 +45,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if e.AgentsMD != "" {
 		t.Fatal("untrusted AGENTS.md loaded")
 	}
-	if e.Policy.Decide("bash", "curl x") != policy.Allow {
+	if e.Policy.Decide("shell", "curl x") != policy.Allow {
 		t.Fatal("untrusted project policy applied")
 	}
 
@@ -66,10 +66,10 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if e.AgentsMD != "Use light models." {
 		t.Fatal("AGENTS.md")
 	}
-	if e.Policy.Decide("bash", "git push x") != policy.Ask {
+	if e.Policy.Decide("shell", "git push x") != policy.Ask {
 		t.Fatal("project loosened git push")
 	}
-	if e.Policy.Decide("bash", "curl x") != policy.Deny {
+	if e.Policy.Decide("shell", "curl x") != policy.Deny {
 		t.Fatal("project tighten lost")
 	}
 	if _, ok := e.Presets["general"]; !ok {
@@ -84,12 +84,12 @@ func TestReadOnlyBashAllowedByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cmd := range []string{"grep -rn foo .", "rg foo", "find . -name '*.go'", "ls -la", "git status", "git log --oneline", "cat go.mod"} {
-		if v := e.Policy.Decide("bash", cmd); v != policy.Allow {
+		if v := e.Policy.Decide("shell", cmd); v != policy.Allow {
 			t.Errorf("%q: %s, want allow", cmd, v)
 		}
 	}
 	for _, cmd := range []string{"rm -rf x", "git push origin main", "go test ./...", "grepx"} {
-		if v := e.Policy.Decide("bash", cmd); v == policy.Allow {
+		if v := e.Policy.Decide("shell", cmd); v == policy.Allow {
 			t.Errorf("%q should not be allowed by default", cmd)
 		}
 	}
@@ -122,7 +122,7 @@ models:
   - id: openai/gpt-5.1-codex-mini
   - xai/grok-4-fast
 tools:
-  bash:
+  shell:
     "git push*": deny
     "*": ask
   read: allow
@@ -143,11 +143,11 @@ You review.
 	if len(p.Models) != 3 || p.Models[0].ID != "openai/gpt-5.1-codex" || len(p.Models[0].Variants) != 2 || p.Models[2].ID != "xai/grok-4-fast" || p.Models[2].Variants != nil {
 		t.Fatalf("models %+v", p.Models)
 	}
-	if strings.Join(p.Tools, ",") != "bash,read,todo" {
+	if strings.Join(p.Tools, ",") != "shell,read,todo" {
 		t.Fatalf("tools %v", p.Tools)
 	}
 	pol := p.PresetPolicy()
-	if pol.Decide("bash", "git push origin") != policy.Deny || pol.Decide("bash_async", "git push origin") != policy.Deny || pol.Decide("bash", "ls") != policy.Ask || pol.Decide("read", "x") != policy.Allow {
+	if pol.Decide("shell", "git push origin") != policy.Deny || pol.Decide("shell", "git push origin") != policy.Deny || pol.Decide("shell", "ls") != policy.Ask || pol.Decide("read", "x") != policy.Allow {
 		t.Fatalf("rules %+v", pol.Rules())
 	}
 	// whitelist helpers
@@ -179,9 +179,9 @@ You review.
 		"badmode":  "---\ndescription: d\nmode: sometimes\n---\nx",
 		"badcolor": "---\ndescription: d\ncolor: teal\n---\nx",
 		"oldmodel": "---\ndescription: d\nmodel: openai/gpt-5\n---\nx",
-		"oldpol":   "---\ndescription: d\npolicy:\n  bash: deny\n---\nx",
+		"oldpol":   "---\ndescription: d\npolicy:\n  shell: deny\n---\nx",
 		"hidden":   "---\ndescription: d\nhidden: true\n---\nx",
-		"badverb":  "---\ndescription: d\ntools:\n  bash: maybe\n---\nx",
+		"badverb":  "---\ndescription: d\ntools:\n  shell: maybe\n---\nx",
 		"badtools": "---\ndescription: d\ntools: 3\n---\nx",
 	} {
 		if _, err := ReadPreset(write(name, body)); err == nil {
@@ -198,12 +198,12 @@ func TestRoleRulesOnlyTighten(t *testing.T) {
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
 	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1"}`), 0o644)
-	// read is allowed by default: a role may not turn it into allow-everything for bash
-	os.WriteFile(filepath.Join(g, "roles", "loose.md"), []byte("---\ndescription: d\ntools:\n  bash:\n    \"rm *\": allow\n---\nx"), 0o644)
+	// read is allowed by default: a role may not turn it into allow-everything for shell
+	os.WriteFile(filepath.Join(g, "roles", "loose.md"), []byte("---\ndescription: d\ntools:\n  shell:\n    \"rm *\": allow\n---\nx"), 0o644)
 	if _, err := Load(t.TempDir(), noTrust{}); err == nil || !strings.Contains(err.Error(), "loosens") {
 		t.Fatalf("a loosening role rule should be a config error: %v", err)
 	}
-	os.WriteFile(filepath.Join(g, "roles", "loose.md"), []byte("---\ndescription: d\ntools:\n  bash:\n    \"rm *\": deny\n  read: ask\n---\nx"), 0o644)
+	os.WriteFile(filepath.Join(g, "roles", "loose.md"), []byte("---\ndescription: d\ntools:\n  shell:\n    \"rm *\": deny\n  read: ask\n---\nx"), 0o644)
 	e, err := Load(t.TempDir(), noTrust{})
 	if err != nil {
 		t.Fatal(err)
@@ -223,7 +223,7 @@ func TestExampleCoderRoleParses(t *testing.T) {
 	if p.Name != "coder" || p.Mode != ModeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
 		t.Fatalf("%+v", p)
 	}
-	if strings.Join(p.Tools, ",") != "bash,read,apply_patch,skill,todo" || p.PresetPolicy().Decide("bash", "git push origin main") != policy.Deny {
+	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo" || p.PresetPolicy().Decide("shell", "git push origin main") != policy.Deny {
 		t.Fatalf("tools %v rules %+v", p.Tools, p.PresetPolicy().Rules())
 	}
 }

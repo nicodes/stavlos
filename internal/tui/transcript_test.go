@@ -62,8 +62,8 @@ func TestBuildTranscript(t *testing.T) {
 		mk(1, "a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Archetype: "coder", Label: "root", Model: "anthropic/claude-x"}),
 		mk(2, "a1", event.TurnStarted, event.TurnPayload{Turn: 1}),
 		mk(3, "a1", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "hello\nworld"}),
-		mk(4, "a1", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command": "sleep 100"}`)}),
-		mk(5, "a1", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "partial\n", Cancelled: true}),
+		mk(4, "a1", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command": "sleep 100"}`)}),
+		mk(5, "a1", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "partial\n", Cancelled: true}),
 		mk(6, "a1", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "anthropic/claude-x", StopReason: "end_turn", Blocks: []model.Block{
 			{Type: model.BlockThinking},
 			{Type: model.BlockText, Text: "Done."},
@@ -75,7 +75,7 @@ func TestBuildTranscript(t *testing.T) {
 	assertSubsequence(t, got, []string{
 		"› hello",
 		"  world",
-		"$ Bash  sleep 100 (cancelled)",
+		"$ Shell  sleep 100 (cancelled)",
 		"  partial",
 		"◌ thinking…",
 		"Done.",
@@ -160,13 +160,13 @@ func TestToolLine(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"bash", `{"command":"git status"}`, "Bash  git status"},
-		{"bash", `{"command":"ls\nfoo"}`, "Bash  ls foo"},
+		{"shell", `{"command":"git status"}`, "Shell  git status"},
+		{"shell", `{"command":"ls\nfoo"}`, "Shell  ls foo"},
 		{"read", `{"path":"internal/agent/turn.go","offset":1}`, "Read  internal/agent/turn.go"},
 		{"edit", `{"path":"file.go","old_string":"a","new_string":"b"}`, "Edit  file.go"},
 		{"write", `{"path":"x.go","content":"..."}`, "Write  x.go"},
-		{"bash_async", `{"command":"go test ./..."}`, "Bash async  go test ./..."},
-		{"bash_async_kill", `{"id":"m1"}`, "Bash async kill  m1"},
+		{"shell", `{"command":"go test ./..."}`, "Shell  go test ./..."},
+		{"shell_kill", `{"id":"m1"}`, "Shell kill  m1"},
 		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
 		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`, "Agent create  scout (explorer)"},
 		{"agent_message", `{"id":"ag_1","text":"go"}`, "Agent message  ag_1"},
@@ -175,15 +175,15 @@ func TestToolLine(t *testing.T) {
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
 		{"agent_finish", `{"status":"success","summary":"x"}`, "Agent complete  success"},
 		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
-		{"bash", ``, "Bash"},
+		{"shell", ``, "Shell"},
 	}
 	for _, c := range cases {
 		if got := toolLine(c.name, json.RawMessage(c.input)); got != c.want {
 			t.Errorf("toolLine(%s, %s) = %q, want %q", c.name, c.input, got, c.want)
 		}
 	}
-	long := toolLine("bash", json.RawMessage(`{"command":"`+strings.Repeat("x", 150)+`"}`))
-	if !strings.HasSuffix(long, "…") || len([]rune(long)) > len([]rune("Bash  "))+maxArgChars+1 {
+	long := toolLine("shell", json.RawMessage(`{"command":"`+strings.Repeat("x", 150)+`"}`))
+	if !strings.HasSuffix(long, "…") || len([]rune(long)) > len([]rune("Shell  "))+maxArgChars+1 {
 		t.Fatalf("args not truncated: %q", long)
 	}
 }
@@ -289,10 +289,10 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Thinking: "hmm"})
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Text: "Hel"})
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Text: "lo"})
-	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash"})
+	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "shell"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"› hi", "◌ thinking…", "Hello", "$ Bash"})
+	assertSubsequence(t, got, []string{"› hi", "◌ thinking…", "Hello", "$ Shell"})
 	if !tr.Streaming() || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -307,7 +307,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	got = renderLines(tr.All())
 	assertSubsequence(t, got, []string{"◌ one", "Hello"})
 	for _, g := range got {
-		if g == "$ Bash" || g == "◌ thinking…" || g == "two" {
+		if g == "$ Shell" || g == "◌ thinking…" || g == "two" {
 			t.Fatalf("stale stream line %q", g)
 		}
 	}
@@ -315,18 +315,18 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 
 func TestStreamingToolOutputCollapses(t *testing.T) {
 	tr := NewTranscript()
-	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"make"}`)}))
+	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"make"}`)}))
 	for i := 0; i < 5; i++ {
-		tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "bash", Text: "out\n"})
+		tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "shell", Text: "out\n"})
 	}
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"$ Bash  make", "  out", "  … +2 lines"})
+	assertSubsequence(t, got, []string{"$ Shell  make", "  out", "  … +2 lines"})
 	if count(got, "  out") != maxOutputCollapsed {
 		t.Fatalf("live output should be collapsed:\n%s", strings.Join(got, "\n"))
 	}
-	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "final"}))
+	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "final"}))
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"$ Bash  make", "  final"})
+	assertSubsequence(t, got, []string{"$ Shell  make", "  final"})
 	if count(got, "  out") != 0 {
 		t.Fatal("live output should be replaced by the final output")
 	}
@@ -337,8 +337,8 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 	evs := []event.Event{
 		mk(1, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look"}),
 		mk(2, "c1", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "hello\nworld"}),
-		mk(3, "c1", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "k1", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}),
-		mk(4, "c1", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "k1", Name: "bash", Output: "a\nb\nc\nd\ne"}),
+		mk(3, "c1", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "k1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}),
+		mk(4, "c1", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "k1", Name: "shell", Output: "a\nb\nc\nd\ne"}),
 		mk(5, "c1", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "p/m", StopReason: "end_turn", Blocks: []model.Block{{Type: model.BlockText, Text: "Done."}}}),
 		mk(6, "c1", event.AgentFinished, event.AgentFinishedPayload{Summary: "ok", Status: "success"}),
 	}
@@ -408,8 +408,8 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	markCursorForTest(t)
 	tr := NewTranscript()
 	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}))
-	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "bash", Output: strings.TrimRight(strings.Repeat("x\n", 6), "\n")}))
+	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("x\n", 6), "\n")}))
 	lines := tr.All()
 
 	plain := renderWith(lines, RenderOpts{Width: 80, NoFold: true})
@@ -419,7 +419,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 		}
 	}
 	got := renderWith(lines, RenderOpts{Width: 80, Cursor: 1, Focused: true})
-	if !contains(got, gutterMark+"$ Bash  ls") || !contains(got, gutterMark+"  x") || contains(got, gutterMark+"│  hi") {
+	if !contains(got, gutterMark+"$ Shell  ls") || !contains(got, gutterMark+"  x") || contains(got, gutterMark+"│  hi") {
 		t.Fatalf("cursor marks only item 1:\n%s", strings.Join(got, "\n"))
 	}
 	if !contains(got, "› hi") {
@@ -452,10 +452,10 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 	}
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
 	tr.Apply(mk(2, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "run it"}))
-	tr.Apply(mk(3, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"make test"}`)}))
-	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "bash"}))
+	tr.Apply(mk(3, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"make test"}`)}))
+	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
 	tr.Apply(mk(5, event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
-	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "ok\nall passed"}))
+	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "ok\nall passed"}))
 	tr.Apply(mk(7, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "done"}}}))
 
 	lines := tr.All()
@@ -553,10 +553,10 @@ func TestFoldingToOneLine(t *testing.T) {
 	}
 	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "line one\nline two"}))
 	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockThinking, Text: "first thought\nsecond thought"}}}))
-	tr.Apply(mk(3, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "bash"}))
+	tr.Apply(mk(3, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
 	tr.Apply(mk(5, event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
-	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash", Output: "a\nb\nc\nd\ne"}))
+	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a\nb\nc\nd\ne"}))
 	tr.Apply(mk(7, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "child_finished", Text: "Child agent \"scout\"finished.\n\nfound it"}))
 	tr.Apply(mk(8, event.AssistantMessage, event.AssistantMessagePayload{Turn: 2, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "final answer\nwith two lines"}}}))
 	lines := tr.All()
@@ -592,7 +592,7 @@ func TestFoldingToOneLine(t *testing.T) {
 	}
 	toolRows := 0
 	for _, l := range plain {
-		if strings.Contains(l, "Bash") {
+		if strings.Contains(l, "Shell") {
 			toolRows++
 			if !strings.Contains(l, "+") {
 				t.Fatalf("folded tool row lacks +N: %q", l)
@@ -611,7 +611,7 @@ func TestFoldingToOneLine(t *testing.T) {
 	}
 	toolPrev := 0
 	for _, l := range prev {
-		if strings.Contains(l, "Bash") || strings.Contains(l, "permission") || strings.Contains(l, "allow") || strings.HasPrefix(strings.TrimLeft(l, "▍ "), "a") {
+		if strings.Contains(l, "Shell") || strings.Contains(l, "permission") || strings.Contains(l, "allow") || strings.HasPrefix(strings.TrimLeft(l, "▍ "), "a") {
 			toolPrev++
 		}
 	}
@@ -702,10 +702,10 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	if errFired.Item != timerStart.Item {
 		t.Fatalf("error fired: %+v (timer item %d)", errFired, timerStart.Item)
 	}
-	// the monitor_fired user message is a muted block labelled "bash async result"
+	// the monitor_fired user message is a muted block labelled "job result"
 	var label Line
 	for _, l := range lines {
-		if l.Kind == LineLabel && l.Text == "bash async result" {
+		if l.Kind == LineLabel && l.Text == "job result" {
 			label = l
 		}
 	}
@@ -742,7 +742,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	// the block label never becomes the folded line
 	for _, l := range plain {
-		if strings.TrimSpace(l) == "bash async result" {
+		if strings.TrimSpace(l) == "job result" {
 			t.Fatalf("folded to the label line:\n%s", joined)
 		}
 	}
@@ -792,9 +792,9 @@ func TestAsyncJobJoinsItsCallLine(t *testing.T) {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
 	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "run the tests"}))
-	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "bash_async", Input: json.RawMessage(`{"command":"go test ./..."}`)}))
+	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"go test ./..."}`)}))
 	tr.Apply(mk(3, event.MonitorStarted, event.MonitorStartedPayload{ID: "m1", Kind: "command", Label: "go test ./...", Spec: "go test ./..."}))
-	tr.Apply(mk(4, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "bash_async", Output: "started job m1"}))
+	tr.Apply(mk(4, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "started job m1"}))
 	tr.Apply(mk(5, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "waiting"}}}))
 	lines := tr.All()
 	call := -1
@@ -928,7 +928,7 @@ func TestCursorMarkSkipsSpacingRows(t *testing.T) {
 	lines := []Line{
 		{Kind: LineText, Block: BlockUser, Lead: true, Text: "hi", Item: 0},
 		{Kind: LineText, Text: "Hello there", Item: 1},
-		{Kind: LineTool, Text: "Bash  ls", Item: 2, tool: "bash"},
+		{Kind: LineTool, Text: "Shell  ls", Item: 2, tool: "shell"},
 	}
 	for cursor := 0; cursor < 3; cursor++ {
 		out, _ := renderAll(lines, RenderOpts{Width: 60, NoFold: true, Focused: true, Cursor: cursor})
@@ -977,8 +977,8 @@ func TestAgentCreateLineTracksChild(t *testing.T) {
 		t.Fatalf("while the child runs the line should be working: %v", line().Tone)
 	}
 	// more lines after it do not lose the tie
-	tr.Apply(mk(4, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c2", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(5, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c2", Name: "bash", Output: "ok"}))
+	tr.Apply(mk(4, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c2", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(5, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c2", Name: "shell", Output: "ok"}))
 	tr.ChildState("x1", "idle")
 	if line().Tone != ToneNone {
 		t.Fatalf("once the child idles the line should be grey: %v", line().Tone)

@@ -534,7 +534,7 @@ func TestTabCyclesFocus(t *testing.T) {
 	}
 
 	// Pending prompt: strip (highlighting permission) → meta → chat → input.
-	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
 	if m.focus != focusInput {
 		t.Fatal("a new prompt must not steal focus")
 	}
@@ -563,7 +563,7 @@ func TestTabCyclesFocus(t *testing.T) {
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	m.agents[0].Monitors = nil
-	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
 	press(&m, tab, tea.KeyMsg{Type: tea.KeySpace}) // input → strip → the permission dialog
 	if m.focus != focusPermission {
 		t.Fatalf("tab enter from input: %v", m.focus)
@@ -603,7 +603,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	y := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}
 	space := tea.KeyMsg{Type: tea.KeySpace}
 	m := sessionModel()
-	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
 
 	// Input focus: y is typed, the prompt is untouched.
 	if cmd := press(&m, y); m.promptBusy != "" || m.claimedByUs["p"] || m.input.Value() != "y" {
@@ -688,7 +688,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 func TestPermissionDialogOptions(t *testing.T) {
 	m := sessionModel()
 	m.agents[0].Archetype = "general"
-	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":"go test ./... -run TestRoles"}`)}}
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"go test ./... -run TestRoles"}`)}}
 	m.setFocus(focusPermission)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
 	want := []string{
@@ -722,7 +722,7 @@ func TestPermissionDialogOptions(t *testing.T) {
 	// a compound command and a non-shell tool offer no prefix row; a new
 	// prompt starts at the top again
 	m.promptBusy = ""
-	m.prompts = []protocol.PromptInfo{{ID: "p2", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":"go test && rm -rf x"}`)}}
+	m.prompts = []protocol.PromptInfo{{ID: "p2", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"go test && rm -rf x"}`)}}
 	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); strings.Contains(body, "for this session  every") || !strings.Contains(body, "▸ ● Allow once") {
 		t.Fatalf("compound command:\n%s", body)
 	}
@@ -742,8 +742,8 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	for i := 0; i < 8; i++ {
 		tr.Apply(mk(int64(i+1), "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "msg " + string(rune('A'+i))}))
 	}
-	tr.Apply(mk(9, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(10, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "bash", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
+	tr.Apply(mk(9, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(10, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
 	m.height = 20 // a viewport smaller than the transcript so the cursor has to scroll
 	m.layout()
 	m.refreshViewport()
@@ -762,7 +762,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 		}
 		return ""
 	}
-	if got := marked(); !strings.HasPrefix(got, "$ Bash") {
+	if got := marked(); !strings.HasPrefix(got, "$ Shell") {
 		t.Fatalf("last item should be marked: %q", got)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
@@ -878,7 +878,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running"},
 		{ID: "c2", Parent: "root", Label: "checks", Archetype: "tester", State: "idle"},
 	}
-	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "bash", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
+	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
 
 	// unfocused: one strip line, counts only
 	sv := stripANSI(m.sectionsView(100))
@@ -952,7 +952,7 @@ func TestSectionTabStrip(t *testing.T) {
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "working"},
 	}
 	m.selected = 0
-	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "bash", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
+	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
 
 	// unfocused: all three titles on one line, counts only
 	v := stripANSI(m.sectionsView(100))
@@ -1028,7 +1028,7 @@ func TestSessionViewFillsHeight(t *testing.T) {
 func TestPermissionShowsWholeCommand(t *testing.T) {
 	m := sessionModel()
 	long := "for f in $(ls /very/long/path/to/somewhere/deep/in/the/tree); do echo processing \"$f\" && sleep 1 && rm -f \"$f\".bak; done"
-	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":` + strconv.Quote(long+"\necho second line") + `}`)}}
+	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":` + strconv.Quote(long+"\necho second line") + `}`)}}
 	m.focus = focusPermission
 	v := stripANSI(strings.Join(m.tabBodyLines(52), "\n"))
 	// every line fits the width, nothing is elided, and the newline is kept
@@ -1091,13 +1091,13 @@ func TestTurnIndicatorFollowsPrompts(t *testing.T) {
 	if v := stripANSI(m.View()); !strings.Contains(v, turnVerbs[0]+"…") || strings.Contains(v, "permission requested") {
 		t.Fatalf("mid-turn:\n%s", v)
 	}
-	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}})
+	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}})
 	if v := stripANSI(m.View()); !strings.Contains(v, "! permission requested") || strings.Contains(v, turnVerbs[0]+"…") {
 		t.Fatalf("waiting on a permission:\n%s", v)
 	}
 	// a prompt for another agent does not change the selected agent's indicator
 	m.applyPromptNotification(protocol.PromptNotification{Action: "answered", Prompt: protocol.PromptInfo{ID: "p", Agent: "a"}})
-	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "q", Kind: "permission", Agent: "b", Tool: "bash"}})
+	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "q", Kind: "permission", Agent: "b", Tool: "shell"}})
 	if v := stripANSI(m.View()); !strings.Contains(v, turnVerbs[0]+"…") || strings.Contains(v, "permission requested") {
 		t.Fatalf("after the answer:\n%s", v)
 	}
@@ -1105,7 +1105,7 @@ func TestTurnIndicatorFollowsPrompts(t *testing.T) {
 
 func TestFirstPermissionOpensItsTabWhenIdle(t *testing.T) {
 	req := func(id string) protocol.PromptNotification {
-		return protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: id, Kind: "permission", Agent: "a", Tool: "bash"}}
+		return protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: id, Kind: "permission", Agent: "a", Tool: "shell"}}
 	}
 	// idle input: the first prompt opens the permission tab
 	m := sessionModel()
@@ -1184,8 +1184,8 @@ func TestLastSnippet(t *testing.T) {
 	if got := lastSnippet(tr); got != "look around" {
 		t.Fatalf("prompt: %q", got)
 	}
-	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"ls -la"}`)}))
-	if got := lastSnippet(tr); got != "Bash  ls -la" {
+	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls -la"}`)}))
+	if got := lastSnippet(tr); got != "Shell  ls -la" {
 		t.Fatalf("tool: %q", got)
 	}
 	tr.Apply(mk(3, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "Found **three** files.\n"}}}))
@@ -1198,9 +1198,9 @@ func TestLastSnippet(t *testing.T) {
 		t.Fatalf("multi-line message should start at its beginning: %q", got)
 	}
 	// a tool call with output: the call line comes first
-	tr.Apply(mk(5, event.ToolCallStarted, event.ToolStartedPayload{CallID: "c2", Name: "bash", Input: json.RawMessage(`{"command":"go test"}`)}))
-	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c2", Name: "bash", Output: "ok\nPASS"}))
-	if got := lastSnippet(tr); !strings.HasPrefix(got, "Bash  go test") {
+	tr.Apply(mk(5, event.ToolCallStarted, event.ToolStartedPayload{CallID: "c2", Name: "shell", Input: json.RawMessage(`{"command":"go test"}`)}))
+	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c2", Name: "shell", Output: "ok\nPASS"}))
+	if got := lastSnippet(tr); !strings.HasPrefix(got, "Shell  go test") {
 		t.Fatalf("tool item should start with the call: %q", got)
 	}
 }
@@ -1538,8 +1538,8 @@ func TestMouseClickTogglesItem(t *testing.T) {
 	m := sessionModel()
 	m.showTree = false
 	tr := m.transcript("a")
-	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "bash", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
+	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
 	m.width, m.height = 100, 40
 	m.layout()
 	m.refreshViewport()
@@ -2478,7 +2478,7 @@ func TestArrowsMoveWithinTheDraftBeforeHistory(t *testing.T) {
 
 func TestDenyTakesAnOptionalReason(t *testing.T) {
 	m := sessionModel()
-	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":"rm x"}`)}}
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"rm x"}`)}}
 	m.setFocus(focusPermission)
 	up, space := tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeySpace}
 	press(&m, up, space) // Deny is the last row
@@ -2506,7 +2506,7 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 	}
 	// and without one
 	m.promptBusy = ""
-	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "permission", Tool: "bash", Agent: "a"}}
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "permission", Tool: "shell", Agent: "a"}}
 	press(&m, up, space)
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q" {
 		t.Fatalf("enter on an empty reason should still deny: cmd=%v busy=%q", cmd != nil, m.promptBusy)

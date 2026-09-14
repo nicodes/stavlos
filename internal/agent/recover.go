@@ -69,7 +69,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				arch = cfg.RootAgent
 				preset, ok = cfg.Presets[arch]
 				if !ok {
-					preset = config.Preset{Name: p.Archetype, Description: "(preset no longer exists)", Tools: []string{"read", "bash"}, Loop: "default"}
+					preset = config.Preset{Name: p.Archetype, Description: "(preset no longer exists)", Tools: []string{"read", "shell"}, Loop: "default"}
 					arch = p.Archetype
 				}
 			}

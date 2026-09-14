@@ -170,7 +170,7 @@ func setupConfig(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
 	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"bash":{"echo*":"allow","*":"ask"},"bash_async":{"echo*":"allow"},"write":"allow"}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"shell":{"echo*":"allow","*":"ask"},"write":"allow"}}`), 0o644)
 }
 
 func TestEndToEnd(t *testing.T) {
@@ -178,14 +178,14 @@ func TestEndToEnd(t *testing.T) {
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
-		// turn 1: allowed bash, then ask-gated bash, then text
-		func(model.Request) model.Response { return call("c1", "bash", `{"command":"echo hello"}`) },
+		// turn 1: an allowed command, then an ask-gated one, then text
+		func(model.Request) model.Response { return call("c1", "shell", `{"command":"echo hello"}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1]
 			if last.Blocks[0].Type != model.BlockToolResult || !strings.Contains(last.Blocks[0].Content, "hello") {
 				t.Errorf("tool result not fed back: %+v", last)
 			}
-			return call("c2", "bash", `{"command":"touch gated"}`)
+			return call("c2", "shell", `{"command":"touch gated"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1]
@@ -242,7 +242,7 @@ func TestEndToEnd(t *testing.T) {
 	h.waitFor(event.ToolCallFinished, root) // echo hello (allowed)
 	h.waitFor(event.PromptRequested, root)
 	ps, err := h.c.Prompts(ctx, s.ID)
-	if err != nil || len(ps) != 1 || ps[0].Tool != "bash" {
+	if err != nil || len(ps) != 1 || ps[0].Tool != "shell" {
 		t.Fatalf("prompts %v %v", ps, err)
 	}
 	if err := h.c.ClaimPrompt(ctx, ps[0].ID); err != nil {
@@ -313,7 +313,7 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	data := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
-		func(model.Request) model.Response { return call("c1", "bash", `{"command":"echo start; sleep 20"}`) },
+		func(model.Request) model.Response { return call("c1", "shell", `{"command":"echo start; sleep 20"}`) },
 	}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
@@ -477,18 +477,18 @@ func TestChildResponseWakesParent(t *testing.T) {
 	}
 }
 
-func TestBashAsyncWakes(t *testing.T) {
+func TestShellBackgroundWakes(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return call("c1", "bash_async", `{"command":"echo one; sleep 0.3; echo two; exit 3"}`)
+			return call("c1", "shell", `{"command":"echo one; sleep 0.3; echo two; exit 3","background":true}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if !strings.Contains(last.Content, "started job m") {
-				t.Errorf("bash_async result: %+v", last)
+				t.Errorf("background shell result: %+v", last)
 			}
 			return text("started, carrying on")
 		},
@@ -540,23 +540,101 @@ func TestBashAsyncWakes(t *testing.T) {
 	}
 }
 
-func TestBashKillStopsJob(t *testing.T) {
+// TestShellOutlivesWaitBecomesJob: a command still running when the wait
+// window closes continues as a job; the call returns the id and the output
+// so far, the async tab shows the job, and its exit wakes the agent.
+func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return call("c1", "bash_async", `{"command":"echo start; sleep 30"}`)
+			return call("c1", "shell", `{"command":"echo early; sleep 2; echo late; exit 2","wait":1}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || !strings.Contains(last.Content, "still running after 1s; continuing as job m") || !strings.Contains(last.Content, "output so far:\nearly") {
+				t.Errorf("handover result: %+v", last)
+			}
+			return text("carrying on")
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks
+			txt := last[len(last)-1].Text
+			if !strings.Contains(txt, "exited 2") || !strings.Contains(txt, "early\nlate") {
+				t.Errorf("job wake text: %q", txt)
+			}
+			return text("noted")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
+	h.waitFor(event.MonitorStarted, root)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Label != "echo early; sleep 2; echo late; exit 2" {
+		t.Fatalf("monitors in tree: %+v", agents[0].Monitors)
+	}
+	e := h.waitFor(event.MonitorFired, root)
+	var mf event.MonitorFiredPayload
+	_ = e.Decode(&mf)
+	if mf.ExitCode != 2 || !mf.IsError || mf.Output != "early\nlate\n" {
+		t.Fatalf("%+v", mf)
+	}
+	var te event.TurnEndedPayload
+	for te.Turn != 2 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	// a quick command stays inline: no job, one turn
+	fm2 := &fakeModel{}
+	fm2.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response { return call("c1", "shell", `{"command":"echo quick"}`) },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || last.Content != "quick\n" {
+				t.Errorf("inline result: %+v", last)
+			}
+			return text("done")
+		},
+	}
+	h2 := newHarness(t, t.TempDir(), fm2)
+	defer h2.close()
+	s2, _ := h2.c.CreateSession(ctx, work, "", "")
+	_ = h2.c.Subscribe(ctx, s2.ID, 0)
+	agents, _ = h2.c.Tree(ctx, s2.ID)
+	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "run it")
+	h2.waitFor(event.TurnEnded, agents[0].ID)
+	evs, _ := h2.d.Log.Read(ctx, s2.ID, 1, 0)
+	for _, e := range evs {
+		if e.Type == event.MonitorStarted {
+			t.Fatal("a quick command must not become a job")
+		}
+	}
+}
+
+func TestShellKillStopsJob(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			return call("c1", "shell", `{"command":"echo start; sleep 30","background":true}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			id := strings.TrimSpace(strings.TrimPrefix(strings.Split(last.Content, ";")[0], "started job "))
-			return call("c2", "bash_async_kill", `{"id":"`+id+`"}`)
+			return call("c2", "shell_kill", `{"id":"`+id+`"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if !strings.Contains(last.Content, "stopped job m") {
-				t.Errorf("bash_async_kill result: %+v", last)
+				t.Errorf("shell_kill result: %+v", last)
 			}
 			return text("killed it")
 		},
@@ -586,7 +664,7 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	// Only "general" ships built in; a user preset comes from agents/<name>.md.
 	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "roles")
 	_ = os.MkdirAll(agentsDir, 0o755)
-	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools: [read, bash]\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
+	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools: [read, shell]\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
@@ -816,12 +894,12 @@ func TestYolo(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
 	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"bash":{"echo*":"allow","rm*":"deny","*":"ask"}}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"shell":{"echo*":"allow","rm*":"deny","*":"ask"}}}`), 0o644)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		// turn 1: an ask-gated command waits for a prompt
-		func(model.Request) model.Response { return call("c1", "bash", `{"command":"touch first"}`) },
+		func(model.Request) model.Response { return call("c1", "shell", `{"command":"touch first"}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if last.IsError {
@@ -830,13 +908,13 @@ func TestYolo(t *testing.T) {
 			return text("one")
 		},
 		// turn 2: yolo is on, no prompt; a denied command stays denied
-		func(model.Request) model.Response { return call("c2", "bash", `{"command":"touch second"}`) },
+		func(model.Request) model.Response { return call("c2", "shell", `{"command":"touch second"}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if last.IsError {
 				t.Errorf("second call should run without a prompt: %+v", last)
 			}
-			return call("c3", "bash", `{"command":"rm -rf nothing"}`)
+			return call("c3", "shell", `{"command":"rm -rf nothing"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
@@ -899,7 +977,7 @@ func TestYolo(t *testing.T) {
 		if ev.Type == event.PromptRequested {
 			var p event.PromptRequestedPayload
 			_ = ev.Decode(&p)
-			if p.Tool == "bash" && strings.Contains(string(p.Input), "second") {
+			if p.Tool == "shell" && strings.Contains(string(p.Input), "second") {
 				t.Fatal("no prompt should be raised in yolo")
 			}
 		}
@@ -924,14 +1002,14 @@ func TestAutoMode(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
 	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"bash":{"rm*":"deny","*":"ask"}}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"shell":{"rm*":"deny","*":"ask"}}}`), 0o644)
 	work := t.TempDir()
 	outside := t.TempDir()
 	os.WriteFile(filepath.Join(outside, "f.txt"), []byte("x"), 0o644)
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		// turn 1: an inside command (ask by policy) and an outside read wait
-		func(model.Request) model.Response { return call("c1", "bash", `{"command":"touch inside"}`) },
+		func(model.Request) model.Response { return call("c1", "shell", `{"command":"touch inside"}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if last.IsError {
@@ -944,7 +1022,7 @@ func TestAutoMode(t *testing.T) {
 			if !last.IsError || !strings.Contains(last.Content, "denied") {
 				t.Errorf("the boundary prompt was denied by hand: %+v", last)
 			}
-			return call("c3", "bash", `{"command":"rm -rf nothing"}`)
+			return call("c3", "shell", `{"command":"rm -rf nothing"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
@@ -1038,7 +1116,7 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "roles")
 	_ = os.MkdirAll(agentsDir, 0o755)
 	presetFile := filepath.Join(agentsDir, "coder.md")
-	os.WriteFile(presetFile, []byte("---\ndescription: Old coder\ntools: [read, bash]\n---\nYou are the old coder.\n"), 0o644)
+	os.WriteFile(presetFile, []byte("---\ndescription: Old coder\ntools: [read, shell]\n---\nYou are the old coder.\n"), 0o644)
 	work := t.TempDir()
 	data := t.TempDir()
 	fm := &fakeModel{}
@@ -1751,13 +1829,13 @@ func TestDenyReasonReachesTheAgent(t *testing.T) {
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
-		func(model.Request) model.Response { return call("c1", "bash", `{"command":"touch a"}`) },
+		func(model.Request) model.Response { return call("c1", "shell", `{"command":"touch a"}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if !last.IsError || last.Content != "Permission denied by the user: use apply_patch instead" {
 				t.Errorf("deny with reason: %+v", last)
 			}
-			return call("c2", "bash", `{"command":"touch b"}`)
+			return call("c2", "shell", `{"command":"touch b"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
@@ -1798,18 +1876,18 @@ func TestAllowPrefix(t *testing.T) {
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
-		func(model.Request) model.Response { return call("c1", "bash", `{"command":"touch one"}`) },
+		func(model.Request) model.Response { return call("c1", "shell", `{"command":"touch one"}`) },
 		func(req model.Request) model.Response {
 			if last := req.Messages[len(req.Messages)-1].Blocks[0]; last.IsError {
 				t.Errorf("first touch: %+v", last)
 			}
-			return call("c2", "bash", `{"command":"touch two words"}`)
+			return call("c2", "shell", `{"command":"touch two words"}`)
 		},
 		func(req model.Request) model.Response {
 			if last := req.Messages[len(req.Messages)-1].Blocks[0]; last.IsError {
 				t.Errorf("covered touch should run without asking: %+v", last)
 			}
-			return call("c3", "bash", `{"command":"touch three; touch four"}`)
+			return call("c3", "shell", `{"command":"touch three; touch four"}`)
 		},
 		func(req model.Request) model.Response {
 			if last := req.Messages[len(req.Messages)-1].Blocks[0]; !last.IsError || !strings.Contains(last.Content, "denied") {

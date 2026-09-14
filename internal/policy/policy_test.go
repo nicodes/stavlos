@@ -4,9 +4,9 @@ import "testing"
 
 func TestDecide(t *testing.T) {
 	s := New(
-		Rule{"bash", "git push*", Ask},
-		Rule{"bash", "rm -rf*", Deny},
-		Rule{"bash", "*", Allow},
+		Rule{"shell", "git push*", Ask},
+		Rule{"shell", "rm -rf*", Deny},
+		Rule{"shell", "*", Allow},
 		Rule{"edit", "src/**", Allow},
 		Rule{"edit", "**", Ask},
 		Rule{"read", "*", Allow},
@@ -17,10 +17,10 @@ func TestDecide(t *testing.T) {
 		tool, arg string
 		want      Verb
 	}{
-		{"bash", "ls -la", Allow},
-		{"bash", "git push origin main", Ask},
-		{"bash", "rm -rf /", Deny},
-		{"bash", "rm -r -f /", Allow}, // documented limitation
+		{"shell", "ls -la", Allow},
+		{"shell", "git push origin main", Ask},
+		{"shell", "rm -rf /", Deny},
+		{"shell", "rm -r -f /", Allow}, // documented limitation
 		{"edit", "src/a/b.go", Allow},
 		{"edit", "docs/x.md", Ask},
 		{"read", "/etc/passwd", Allow},
@@ -36,13 +36,13 @@ func TestDecide(t *testing.T) {
 }
 
 func TestTighten(t *testing.T) {
-	g := New(Rule{"bash", "*", Allow}, Rule{"bash", "git push*", Ask})
-	p := New(Rule{"bash", "git push*", Allow}, Rule{"bash", "curl*", Deny})
+	g := New(Rule{"shell", "*", Allow}, Rule{"shell", "git push*", Ask})
+	p := New(Rule{"shell", "git push*", Allow}, Rule{"shell", "curl*", Deny})
 	s := g.Tighten(p)
-	if s.Decide("bash", "git push x") != Ask {
+	if s.Decide("shell", "git push x") != Ask {
 		t.Error("project loosened global")
 	}
-	if s.Decide("bash", "curl x") != Deny {
+	if s.Decide("shell", "curl x") != Deny {
 		t.Error("project tighten ignored")
 	}
 }

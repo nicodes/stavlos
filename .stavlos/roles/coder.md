@@ -16,11 +16,10 @@ models:
 
 # Which tools the role has and how each is gated. A tool not listed is never
 # offered. Rules only tighten the layered policy (allow → ask → deny); a
-# loosening entry is a config error. bash rules also cover bash_async; todo
-# covers todo_add and todo_update. The agent tools exist through spawn and the
+# loosening entry is a config error. todo covers todo_add and todo_update. The agent tools exist through spawn and the
 # messaging set; list one here only to re-gate it.
 tools:
-  bash:
+  shell:
     "git push*": deny
     "rm -rf*": deny
   read: allow
