@@ -118,6 +118,7 @@ type Model struct {
 	dirInput    textinput.Model // path field of the dirs dialog while adding or editing
 	dirEdit     string          // "" | "add" | the path being replaced
 	promptDir   bool            // the permission dialog is editing the directory a boundary prompt offers
+	promptDeny  bool            // the permission dialog is taking an optional reason for a deny
 	sbCursor    int
 	palIdx      int               // highlighted row in the "/" command palette
 	agCursor    int               // highlighted row in the agents/async tab while it has focus
@@ -567,7 +568,7 @@ func (m *Model) cycleFocus(delta int) tea.Cmd {
 // the question answer, the dirs path field, or a boundary prompt's edited
 // directory. Enter submits there and space types a space.
 func (m *Model) textEntry() bool {
-	if m.promptDir || (m.focus == focusDirs && m.dirEdit != "") {
+	if m.promptDir || m.promptDeny || (m.focus == focusDirs && m.dirEdit != "") {
 		return true
 	}
 	if m.focus == focusPermission {
@@ -691,7 +692,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		m.dirInput.Blur()
 	}
 	if prev == focusPermission && f != focusPermission {
-		m.promptDir = false
+		m.promptDir, m.promptDeny = false, false
 		m.dirInput.Blur()
 	}
 	if isTab(f) && !isTab(prev) {
@@ -847,6 +848,7 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 	case msg.String() == "a":
 		m.dirEdit = "add"
 		m.dirInput.SetValue("")
+		m.dirInput.Placeholder = "path (absolute, ~, or relative to the session directory)"
 		return m.dirInput.Focus()
 	case key.Matches(msg, keys.Select):
 		d := cur()
@@ -1872,7 +1874,7 @@ func isAlias(c Command, typed string) bool {
 // a permission (y/n a trust prompt); a question takes typing into its own
 // field and enter submits it; esc closes the dialog.
 func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
-	if key.Matches(msg, keys.Clear) && !m.promptDir {
+	if key.Matches(msg, keys.Clear) && !m.promptDir && !m.promptDeny {
 		return m.closeDialog()
 	}
 	p := m.currentPrompt()
@@ -1907,6 +1909,30 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 		m.dirInput.CursorEnd()
 		return m.dirInput.Focus()
 	}
+	// n opens a field for an optional reason; enter denies with whatever is
+	// there (nothing is fine), esc cancels.
+	if m.promptDeny {
+		switch {
+		case key.Matches(msg, keys.OvClose):
+			m.promptDeny = false
+			m.dirInput.Blur()
+			return nil
+		case key.Matches(msg, keys.Submit):
+			reason := strings.TrimSpace(m.dirInput.Value())
+			m.promptDeny = false
+			m.dirInput.Blur()
+			return m.denyPrompt(p, reason)
+		}
+		var cmd tea.Cmd
+		m.dirInput, cmd = m.dirInput.Update(msg)
+		return cmd
+	}
+	if p.Kind == "permission" && key.Matches(msg, keys.No) { // trust and questions keep their direct answers
+		m.promptDeny = true
+		m.dirInput.SetValue("")
+		m.dirInput.Placeholder = "why not? (optional) · enter denies"
+		return m.dirInput.Focus()
+	}
 	if p.Kind == "question" {
 		if key.Matches(msg, keys.Submit) {
 			text := strings.TrimSpace(m.promptInput.Value())
@@ -1926,7 +1952,7 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.Yes):
 		return m.answerPrompt(p, "allow")
-	case key.Matches(msg, keys.No):
+	case key.Matches(msg, keys.No): // trust: a plain deny
 		return m.answerPrompt(p, "deny")
 	case key.Matches(msg, keys.Always) && p.Kind != "trust":
 		return m.answerPrompt(p, "allow_always")
@@ -2335,6 +2361,22 @@ func (m *Model) answerPrompt(p *protocol.PromptInfo, answer string) tea.Cmd {
 		return trustReplyCmd(m.ctx, m.c, p.ID, t.Dir, t.Hash, answer == "allow")
 	}
 	return answerPromptCmd(m.ctx, m.c, p.ID, answer)
+}
+
+// denyPrompt denies a permission, passing the human's reason (may be empty).
+func (m *Model) denyPrompt(p *protocol.PromptInfo, reason string) tea.Cmd {
+	if p.Kind == "trust" {
+		return m.answerPrompt(p, "deny") // trust has its own reply; no reason field
+	}
+	if m.promptBusy == p.ID {
+		return m.setStatus("answer in flight…", false)
+	}
+	if p.ClaimedBy != "" && !m.claimedByUs[p.ID] {
+		return m.setStatus("claimed by another client", true)
+	}
+	m.promptBusy = p.ID
+	m.claimedByUs[p.ID] = true
+	return denyPromptCmd(m.ctx, m.c, p.ID, reason)
 }
 
 // answerPromptDir is allow_always on a boundary prompt with an edited

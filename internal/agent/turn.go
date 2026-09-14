@@ -260,6 +260,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		case ans.Value == "allow":
 		default:
 			why := "Permission denied by the user."
+			if r := strings.TrimSpace(ans.Reason); r != "" {
+				why = "Permission denied by the user: " + r
+			}
 			if ans.Defaulted {
 				why = "Permission denied: nobody answered the prompt and the headless default is deny."
 			}

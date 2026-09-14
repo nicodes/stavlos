@@ -2410,3 +2410,39 @@ func TestArrowsMoveWithinTheDraftBeforeHistory(t *testing.T) {
 		t.Fatalf("↑ on the first wrapped row should walk history: %q", m.input.Value())
 	}
 }
+
+func TestDenyTakesAnOptionalReason(t *testing.T) {
+	m := sessionModel()
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":"rm x"}`)}}
+	m.setFocus(focusPermission)
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if !m.promptDeny || m.promptBusy != "" || !m.dirInput.Focused() {
+		t.Fatalf("n should open the reason field, not deny yet: deny=%v busy=%q", m.promptDeny, m.promptBusy)
+	}
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "deny · a reason") {
+		t.Fatalf("body:\n%s", body)
+	}
+	if hs := m.keyHints(); hs[0].key != "enter" || hs[0].desc != "deny" {
+		t.Fatalf("hints %+v", hs)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.promptDeny || m.focus != focusPermission {
+		t.Fatalf("esc should cancel the field only: %v %v", m.promptDeny, m.focus)
+	}
+	// with a reason
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("use")}, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("git")})
+	if m.dirInput.Value() != "use git" {
+		t.Fatalf("typed reason %q", m.dirInput.Value())
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptDeny || m.promptBusy != "p" || !m.claimedByUs["p"] {
+		t.Fatalf("enter should deny: cmd=%v busy=%q", cmd != nil, m.promptBusy)
+	}
+	// and without one
+	m.promptBusy = ""
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "permission", Tool: "bash", Agent: "a"}}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q" {
+		t.Fatalf("enter on an empty reason should still deny: cmd=%v busy=%q", cmd != nil, m.promptBusy)
+	}
+}
