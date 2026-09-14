@@ -1008,7 +1008,7 @@ func (m Model) treeRows(width int) []string {
 // with their counts (always shown, "(0)" when empty). The body of whichever tab has
 // focus is a dialog (tabDialog), not an inline block.
 func (m Model) sectionsView(width int) string {
-	return m.sectionTabs(m.awaitedAgents(), m.runningJobs(), m.currentPrompt(), width)
+	return m.sectionTabs(m.currentPrompt(), width)
 }
 
 // tabDialogHeader is how many lines precede the rows in a tab dialog: the
@@ -1078,8 +1078,7 @@ func (m Model) tabTexts() []string {
 	return []string{
 		permKind + " " + permCount,
 		"questions " + qCount,
-		fmt.Sprintf("agents %d", len(m.awaitedAgents())),
-		fmt.Sprintf("async %d", len(m.runningJobs())),
+		fmt.Sprintf("async %d", len(m.awaitedAgents())+len(m.runningJobs())),
 		"todo " + todoCount(m.selectedTodos()),
 		"mcp " + mcpCount(m.selectedMCP()),
 		fmt.Sprintf("dirs %d", len(m.selectedDirs())),
@@ -1102,22 +1101,20 @@ func dialogWidth(bodyWidth int) int {
 // tabBodyLines is the focused tab's rows, laid out for width columns.
 func (m Model) tabBodyLines(width int) []string {
 	switch m.focus {
-	case focusAgents:
-		waiting := m.awaitedAgents()
-		if len(waiting) == 0 {
-			return []string{styleDim.Render("  not waiting on any agent")}
-		}
-		return m.cursorRows(agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2))
 	case focusAsync:
-		jobs := m.runningJobs()
-		if len(jobs) == 0 {
-			return []string{styleDim.Render("  no async jobs running")}
+		// what the selected agent is waiting on: the agents whose answer it
+		// expects, then its running jobs
+		waiting, jobs := m.awaitedAgents(), m.runningJobs()
+		if len(waiting)+len(jobs) == 0 {
+			return []string{styleDim.Render("  not waiting on anything")}
 		}
 		owner, role := "", ""
 		if a := m.selectedAgent(); a != nil {
 			owner, role = a.Label, a.Archetype
 		}
-		return m.cursorRows(monitorRows(jobs, owner, role, time.Now(), width-2))
+		rows := agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2)
+		rows = append(rows, monitorRows(jobs, owner, role, time.Now(), width-2)...)
+		return m.cursorRows(rows)
 	case focusTodo:
 		items := m.selectedTodos()
 		if len(items) == 0 {
@@ -1243,14 +1240,14 @@ func answered(answers []string) int {
 // sectionTabs is the one-line strip: the tabs with their counts, the
 // highlighted one in accent, the rest dim (except a permission tab with
 // prompts waiting, which is warning orange). Key hints live in the key bar.
-func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo, width int) string {
-	return ansi.Truncate(m.tabLabels(kids, jobs, p), width, "…") // the session directory lives in the dirs tab
+func (m Model) sectionTabs(p *protocol.PromptInfo, width int) string {
+	return ansi.Truncate(m.tabLabels(p), width, "…") // the session directory lives in the dirs tab
 }
 
 // tabLabels is "permission (n) · agents (n) · async (n)": the highlighted
 // tab (while the strip has focus) or the open one (while its dialog is up)
 // in accent, the rest dim.
-func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo) string {
+func (m Model) tabLabels(p *protocol.PromptInfo) string {
 	on := func(f focus) bool {
 		if m.focus == focusTabs {
 			return tabFocuses[m.tabSel] == f

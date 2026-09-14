@@ -240,23 +240,23 @@ func TestAgentRows(t *testing.T) {
 		t.Fatalf("%s", got)
 	}
 
-	// The agents tab counts only what the selected agent waits on, and
-	// lists them once focused.
+	// The async tab counts what the selected agent waits on (agents and
+	// jobs), and lists them once focused.
 	m := sessionModel()
 	m.spawned = spawned
 	m.agents = agents
 	m.selected = 0
 	view := stripANSI(m.sectionsView(100))
-	if !strings.Contains(view, "agents 2") || strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
-		t.Fatalf("collapsed agents tab should only count:\n%s", view)
+	if !strings.Contains(view, "async 2") || strings.Contains(view, "agents") || strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
+		t.Fatalf("collapsed async tab should only count:\n%s", view)
 	}
-	m.focus = focusAgents
+	m.focus = focusAsync
 	if view = stripANSI(m.sectionsView(100)); strings.Contains(view, "scout") {
 		t.Fatalf("the strip never lists agents:\n%s", view)
 	}
 	view = stripANSI(m.tabDialog(100))
 	if !strings.Contains(view, "scout") || strings.Contains(view, "grandchild") || !strings.HasPrefix(view, "╭") {
-		t.Fatalf("agents dialog:\n%s", view)
+		t.Fatalf("async dialog:\n%s", view)
 	}
 }
 
@@ -477,22 +477,22 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.tabSel != 0 {
 		t.Fatalf("left at the edge: sel=%d", m.tabSel)
 	}
-	press(&m, right, right, right, right, right, right)
+	press(&m, right, right, right, right, right)
 	press(&m, right) // already rightmost (dirs): stays
-	if m.focus != focusTabs || m.tabSel != 6 {
-		t.Fatalf("right x7: focus=%v sel=%d", m.focus, m.tabSel)
+	if m.focus != focusTabs || m.tabSel != 5 {
+		t.Fatalf("right x6: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, left, left, left, left)
+	press(&m, left, left, left)
 	if m.tabSel != 2 {
-		t.Fatalf("left x4: sel=%d", m.tabSel)
+		t.Fatalf("left x3: sel=%d", m.tabSel)
 	}
 	// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
-	if dv := stripANSI(m.tabDialog(100)); m.focus != focusAgents || !strings.Contains(dv, "Agents 0") || !strings.Contains(dv, "not waiting on any agent") || strings.Contains(dv, "permission") {
+	if dv := stripANSI(m.tabDialog(100)); m.focus != focusAsync || !strings.Contains(dv, "Async 0") || !strings.Contains(dv, "not waiting on anything") || strings.Contains(dv, "permission") {
 		t.Fatalf("enter: focus=%v\n%s", m.focus, dv)
 	}
 	press(&m, right)
-	if m.focus != focusAgents {
+	if m.focus != focusAsync {
 		t.Fatalf("→ inside a dialog should do nothing: focus=%v", m.focus)
 	}
 	// esc returns to where the dialog was opened from: the strip, with the
@@ -887,7 +887,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 
 	// unfocused: one strip line, counts only
 	sv := stripANSI(m.sectionsView(100))
-	if strings.Count(sv, "\n") != 0 || !strings.Contains(sv, "agents 2") || !strings.Contains(sv, "async 0") || !strings.Contains(sv, "permission 1/1") ||
+	if strings.Count(sv, "\n") != 0 || !strings.Contains(sv, "async 2") || strings.Contains(sv, "agents") || !strings.Contains(sv, "permission 1/1") ||
 		strings.Contains(sv, "scout") || strings.Contains(sv, "checks") || strings.Contains(sv, "make test") || strings.Contains(sv, "tab to") {
 		t.Fatalf("collapsed strip should only count:\n%s", sv)
 	}
@@ -917,24 +917,24 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if full := stripANSI(m.View()); !strings.Contains(full, "make test") || !strings.Contains(full, "╭") {
 		t.Fatalf("the dialog should render in the view:\n%s", full)
 	}
-	// esc returns to the strip (permission still highlighted); → enter opens agents
+	// esc returns to the strip (permission still highlighted); →→ space opens async
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.focus != focusTabs || m.tabSel != 0 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // past questions to agents
-	if m.focus != focusAgents {
+	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // past questions to async
+	if m.focus != focusAsync {
 		t.Fatalf("focus %v", m.focus)
 	}
-	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "Agents 2") || !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
-		t.Fatalf("agents dialog:\n%s", dv)
+	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "Async 2") || !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
+		t.Fatalf("async dialog:\n%s", dv)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // strip (agents) → async
-	if m.focus != focusAsync || !strings.Contains(stripANSI(m.tabDialog(100)), "no async jobs running") {
-		t.Fatalf("async: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // strip (async) → todo
+	if m.focus != focusTodo {
+		t.Fatalf("todo: focus=%v", m.focus)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeySpace}) // strip (async) → agents for the selection test
-	if m.focus != focusAgents {
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeySpace}) // strip (todo) → async for the selection test
+	if m.focus != focusAsync {
 		t.Fatalf("focus %v", m.focus)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
@@ -944,9 +944,9 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if m.selectedID() != "c2" || m.focus != focusInput {
 		t.Fatalf("enter should select the child under the cursor: %s focus %v", m.selectedID(), m.focus)
 	}
-	// now the selected agent waits on nobody: the tab stays, reading 0
-	if v := stripANSI(m.sectionsView(100)); !strings.Contains(v, "agents 0") {
-		t.Fatalf("empty agents tab:\n%s", v)
+	// now the selected agent waits on nothing: the tab stays, reading 0
+	if v := stripANSI(m.sectionsView(100)); !strings.Contains(v, "async 0") {
+		t.Fatalf("empty async tab:\n%s", v)
 	}
 }
 
@@ -961,28 +961,26 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: all three titles on one line, counts only
 	v := stripANSI(m.sectionsView(100))
-	if strings.Count(v, "\n") != 0 || !strings.Contains(v, "permission 1/1 · questions 0 · agents 1 · async 1") ||
+	if strings.Count(v, "\n") != 0 || !strings.Contains(v, "permission 1/1 · questions 0 · async 2 · todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
-	// agents focused: the strip is unchanged; the dialog has its own title,
-	// a blank line, then its rows
-	m.focus = focusAgents
+	// async focused: the strip is unchanged; the dialog has its own title,
+	// a blank line, then the awaited agent's row over the job's row
+	m.focus = focusAsync
 	if sv := stripANSI(m.sectionsView(100)); strings.Count(sv, "\n") != 0 || strings.Contains(sv, "scout") {
-		t.Fatalf("strip with agents focused:\n%s", sv)
+		t.Fatalf("strip with async focused:\n%s", sv)
 	}
 	v = stripANSI(m.tabDialog(100))
 	lines := strings.Split(v, "\n")
-	// border, title, blank, one row, border
-	if len(lines) != 7 || !strings.Contains(lines[1], "Agents 1") || !strings.HasSuffix(strings.TrimRight(lines[1], " │"), "esc: close") || strings.Contains(lines[1], "permission") || strings.TrimSpace(strings.Trim(lines[2], "│")) != "" || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "scout") {
-		t.Fatalf("agents dialog:\n%s", v)
-	}
-	// async focused: the job row
-	m.focus = focusAsync
-	v = stripANSI(m.tabDialog(100))
-	lines = strings.Split(v, "\n")
-	if len(lines) != 7 || !strings.Contains(lines[1], "Async 1") || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "go test") || strings.Contains(v, "scout") {
+	// border, title, blank, two rows, hints, border
+	if len(lines) != 8 || !strings.Contains(lines[1], "Async 2") || !strings.HasSuffix(strings.TrimRight(lines[1], " │"), "esc: close") || strings.Contains(lines[1], "permission") || strings.TrimSpace(strings.Trim(lines[2], "│")) != "" || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "scout") || strings.Contains(lines[3], "go test") || !strings.Contains(lines[4], "coder (coder)  go test") {
 		t.Fatalf("async dialog:\n%s", v)
+	}
+	// space on the job row selects nothing and keeps the dialog
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
+	if m.focus != focusAsync || m.selectedID() != "root" {
+		t.Fatalf("space on a job row: focus=%v selected=%s", m.focus, m.selectedID())
 	}
 	// permission focused: the tool row over its command
 	m.focus = focusPermission
@@ -1002,7 +1000,7 @@ func TestSectionTabStrip(t *testing.T) {
 func TestSessionViewFillsHeight(t *testing.T) {
 	m := sessionModel()
 	m.showTree = false
-	for _, f := range []focus{focusInput, focusAgents, focusAsync, focusPermission} {
+	for _, f := range []focus{focusInput, focusAsync, focusPermission} {
 		m.focus = f
 		m.width, m.height = 100, 30
 		m.layout()
@@ -1325,7 +1323,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	// tab → strip, → x3 lands on todo, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusTodo {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -1348,13 +1346,13 @@ func TestTodoTabAndDialog(t *testing.T) {
 		t.Fatalf("↓ should move the cursor: %d", m.agCursor)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 4 {
+	if m.focus != focusTabs || m.tabSel != 3 {
 		t.Fatalf("esc should return to the strip on todo: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// clicking the todo label on the strip opens the dialog
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	lay := m.rows()
-	x := len("permission 0 · questions 0 · agents 0 · async 0 · ") + 1
+	x := len("permission 0 · questions 0 · async 0 · ") + 1
 	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.strip, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.strip, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
@@ -1593,11 +1591,11 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 		m = nm.(Model)
 	}
 	lay := m.rows()
-	// the strip sits right under the rule; "agents 2" starts after "permission 0 · questions 0 · "
+	// the strip sits right under the rule; "async 2" starts after "permission 0 · questions 0 · "
 	agentsX := len("permission 0 · questions 0") + 3 + 1
 	click(agentsX, lay.strip)
-	if m.focus != focusAgents {
-		t.Fatalf("clicking the agents label should open the agents tab: %v", m.focus)
+	if m.focus != focusAsync {
+		t.Fatalf("clicking the async label should open the async tab: %v", m.focus)
 	}
 	// the dialog's rows: hovering one moves the cursor, clicking selects
 	// that agent like enter and closes the dialog
@@ -1612,7 +1610,7 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	}
 	x, y := rowAt("checks")
 	move(x, y)
-	if m.agCursor != 1 || m.focus != focusAgents {
+	if m.agCursor != 1 || m.focus != focusAsync {
 		t.Fatalf("hovering the second agent row should move the cursor: %d focus=%v", m.agCursor, m.focus)
 	}
 	click(x, y)
@@ -1622,8 +1620,8 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	m.selected = 0
 	// the strip labels still open dialogs directly while one is up
 	click(agentsX, lay.strip)
-	click(agentsX+len("agents 2")+3, lay.strip) // "async 0"
-	if m.focus != focusAsync {
+	click(agentsX+len("async 2")+3, lay.strip) // "todo 0"
+	if m.focus != focusTodo {
 		t.Fatalf("clicking a strip label should open that tab's dialog: %v", m.focus)
 	}
 	// clicking the input focuses it (and closes the dialog)
@@ -2186,7 +2184,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 	// tab → strip, → x4 lands on mcp, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusMCP {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2212,7 +2210,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 5 {
+	if m.focus != focusTabs || m.tabSel != 4 {
 		t.Fatalf("esc should return to the strip on mcp: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// chat: tool names and server events
@@ -2243,7 +2241,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	}
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusDirs {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2290,7 +2288,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 		t.Fatalf("the session row must not be editable: %q %q", m.dirEdit, m.status)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 6 {
+	if m.focus != focusTabs || m.tabSel != 5 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// a boundary prompt says so and offers the directory
@@ -2521,7 +2519,7 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 func TestQuestionsTabAndDialog(t *testing.T) {
 	m := sessionModel()
 	m.agents[0].Archetype = "general"
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "permission 0 · questions 0 · agents") {
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "permission 0 · questions 0 · async") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user", Questions: []protocol.Question{
