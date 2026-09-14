@@ -102,12 +102,24 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 		}
 		system, defs := a.buildContext()
 		history := project.Project(a.eventsCopy())
-		if info.ContextWindow > 0 {
-			cfg := a.s.Config()
-			if project.EstimateTokens(history, system) > int(float64(info.ContextWindow)*cfg.Compaction.Threshold) {
-				if err := a.compact(turnCtx, m, system); err == nil {
-					history = project.Project(a.eventsCopy())
-				}
+		// Compaction before the call: asked for (/compact while busy: every
+		// completed turn), or the history is past the threshold (the older
+		// two thirds).
+		a.mu.Lock()
+		wanted := a.compactNext
+		a.compactNext = false
+		a.mu.Unlock()
+		n := len(a.eventsCopy())
+		target := -1
+		switch {
+		case wanted:
+			target = n
+		case info.ContextWindow > 0 && project.EstimateTokens(history, system) > int(float64(info.ContextWindow)*a.s.Config().Compaction.Threshold):
+			target = n * 2 / 3
+		}
+		if target >= 0 {
+			if err := a.compact(turnCtx, m, target); err == nil {
+				history = project.Project(a.eventsCopy())
 			}
 		}
 		if len(history) == 0 || history[len(history)-1].Role != model.RoleUser {
@@ -447,13 +459,13 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	return sb.String(), defs
 }
 
-// compact summarises older turns (PRD §4.3). It picks the turn boundary
-// nearest two thirds through the agent's events, summarises everything up
-// to it with the model, and logs a Compacted event.
-func (a *Agent) compact(ctx context.Context, m model.Model, system string) error {
+// compact summarises older turns (PRD §4.3). It picks the last turn
+// boundary at or before index target in the agent's events (two thirds of
+// the way for auto-compaction, the end for /compact), summarises everything
+// up to it with the model, and logs a Compacted event.
+func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
 	evs := a.eventsCopy()
 	cut := -1
-	target := len(evs) * 2 / 3
 	for i, e := range evs {
 		if e.Type == event.TurnEnded && i <= target {
 			cut = i

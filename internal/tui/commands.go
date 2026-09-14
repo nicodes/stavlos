@@ -365,6 +365,22 @@ func setModeCmd(ctx context.Context, c *client.Client, session, mode string) tea
 	}
 }
 
+// compactCmd is /compact. Summarising takes a model call, so it gets a
+// longer timeout than the usual RPC.
+func compactCmd(ctx context.Context, c *client.Client, agent string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		defer cancel()
+		status, err := c.CompactAgent(ctx, agent)
+		switch status {
+		case "queued":
+			return resultMsg{"compaction queued: the agent is mid-turn and compacts before its next model call", err}
+		default:
+			return resultMsg{"compacted: earlier turns are now a summary", err}
+		}
+	}
+}
+
 // copyCmd puts text on the clipboard: an OSC 52 sequence to the terminal
 // (what the TUI can always reach), plus wl-copy, xclip or pbcopy when one
 // is installed, so terminals that ignore OSC 52 still get it.

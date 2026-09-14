@@ -331,6 +331,21 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		}
 		return map[string]bool{"ok": true}, nil
 
+	case protocol.MAgentCompact:
+		var p protocol.AgentCompactParams
+		if e := decode(&p); e != nil {
+			return nil, e
+		}
+		_, a, err := d.agentSession(p.Agent)
+		if err != nil {
+			return nil, perr(protocol.ErrNotFound, err)
+		}
+		status, err := a.Compact(ctx)
+		if err != nil {
+			return nil, perr(protocol.ErrInvalidParams, err)
+		}
+		return protocol.AgentCompactResult{Status: status}, nil
+
 	case protocol.MAgentAddDir, protocol.MAgentRemoveDir:
 		var p protocol.AgentDirParams
 		if e := decode(&p); e != nil {

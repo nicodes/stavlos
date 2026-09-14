@@ -307,6 +307,15 @@ func (c *Client) SetAgentVariant(ctx context.Context, agent, variant string) err
 
 // AddAgentDir puts a directory in an agent's working set; RemoveAgentDir
 // takes one out (the session directory cannot be removed).
+// CompactAgent is /compact: "compacted" when the agent summarised its
+// completed turns now, "queued" when it was mid-turn and will before its
+// next model call.
+func (c *Client) CompactAgent(ctx context.Context, agent string) (string, error) {
+	var r protocol.AgentCompactResult
+	err := c.Call(ctx, protocol.MAgentCompact, protocol.AgentCompactParams{V: protocol.Version, Agent: agent}, &r)
+	return r.Status, err
+}
+
 func (c *Client) AddAgentDir(ctx context.Context, agent, dir string) error {
 	return c.Call(ctx, protocol.MAgentAddDir, protocol.AgentDirParams{V: protocol.Version, Agent: agent, Dir: dir}, nil)
 }
