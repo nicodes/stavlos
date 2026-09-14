@@ -69,8 +69,7 @@ type Agent struct {
 	removedDirs map[string]bool       // directories the human took out (role ones stay hidden while listed)
 	events      []event.Event         // this agent's events (projection cache)
 	cancelTurn  context.CancelFunc
-	yieldFlag   bool            // set by the monitor tool: end the turn after this batch
-	armed       map[string]bool // ids (children, monitors) whose completion wakes this agent
+	armed       map[string]bool // job ids whose exit wakes this agent
 	monitors    map[string]*Monitor
 	monDone     []event.MonitorFiredPayload // fired monitors not yet delivered
 	wakes       map[string]bool             // ids whose completion is waiting to wake this agent (unmonitor cancels)
@@ -287,21 +286,6 @@ func (a *Agent) waitingOn() bool {
 	return false
 }
 
-// hasMonitor reports whether id is one of this agent's running monitors.
-func (a *Agent) hasMonitor(id string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	_, ok := a.monitors[id]
-	return ok
-}
-
-// IsArmed reports whether this agent will be woken when child id finishes.
-func (a *Agent) IsArmed(id string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.armed[id]
-}
-
 func (a *Agent) addChild(id string) {
 	a.mu.Lock()
 	a.children = append(a.children, id)
@@ -404,6 +388,28 @@ func (a *Agent) Preset() config.Preset {
 	return a.preset
 }
 
+// LabelNow is the agent's label as of now (SetRole may change it).
+func (a *Agent) LabelNow() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.Label
+}
+
+// roleView is what one step of a turn needs to know about the agent's
+// role and place, read once under the lock: SetRole and the turn loop
+// run on different goroutines, and a step must see one consistent role.
+type roleView struct {
+	preset           config.Preset
+	label, archetype string
+	turn             int
+}
+
+func (a *Agent) role() roleView {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return roleView{preset: a.preset, label: a.Label, archetype: a.Archetype, turn: a.turn}
+}
+
 // SetRole switches the agent's preset in place. The system prompt, tool
 // list, skills, and spawn list change at the next model call; the label
 // follows when it was just the old role's name.
@@ -440,7 +446,7 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 	if err := a.compact(ctx, m, len(a.eventsCopy())); err != nil {
 		return "", err
 	}
-	system, _ := a.buildContext()
+	system, _ := a.buildContext(a.role())
 	est := project.EstimateTokens(project.Project(a.eventsCopy()), system) // eventsCopy takes a.mu: compute before locking
 	a.mu.Lock()
 	a.ctxTokens = est

@@ -51,16 +51,13 @@ type Session struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	permits  permits // the human's session-scoped allows (exact calls, prefixes); they answer asks, never denies
-	mode     string  // permission mode: "" or ask (every ask prompts) | auto (asks inside the agent's dirs are allowed) | yolo (every ask is allowed)
+	mode     string  // permission mode: ask (every ask prompts) | auto (asks inside the agent's dirs are allowed) | yolo (every ask is allowed)
 }
 
 // Mode reports the session's permission mode (protocol.ModeAsk by default).
 func (s *Session) Mode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.mode == "" {
-		return protocol.ModeAsk
-	}
 	return s.mode
 }
 
@@ -77,7 +74,7 @@ func (s *Session) SetMode(ctx context.Context, mode string) error {
 		return fmt.Errorf("unknown mode %q: ask, auto or yolo", mode)
 	}
 	s.mu.Lock()
-	changed := s.mode != mode && !(s.mode == "" && mode == protocol.ModeAsk)
+	changed := s.mode != mode
 	s.mode = mode
 	s.mu.Unlock()
 	if !changed {
@@ -112,6 +109,7 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, rootArch str
 		host: host, tools: tools.Builtin(),
 		cfg: cfg, model: modelID, rootArch: rootArch,
 		agents: map[string]*Agent{}, ctx: ctx, cancel: cancel,
+		mode: protocol.ModeAsk,
 	}
 }
 
@@ -400,8 +398,8 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		}
 		parent = p
 		depth = p.Depth + 1
-		if !contains(parent.preset.Spawn, archetype) {
-			return nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", parent.Archetype, archetype, parent.preset.Spawn)
+		if pp := parent.Preset(); !contains(pp.Spawn, archetype) {
+			return nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", pp.Name, archetype, pp.Spawn)
 		}
 		if !preset.CanBeSubagent() {
 			return nil, fmt.Errorf("role %q is primary-only: it cannot be spawned", archetype)
@@ -565,7 +563,7 @@ func (s *Session) canSpawn(p *Agent) (bool, string) {
 	if s.Busy() >= cfg.Limits.MaxAgents {
 		return false, fmt.Sprintf("max busy agents %d reached (idle children do not count; kill ones you no longer need)", cfg.Limits.MaxAgents)
 	}
-	if len(p.preset.Spawn) == 0 {
+	if len(p.Preset().Spawn) == 0 {
 		return false, "this archetype cannot spawn"
 	}
 	return true, ""

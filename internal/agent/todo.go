@@ -20,7 +20,7 @@ func (a *Agent) todosAPI() tools.Todos { return todosAPI{a: a} }
 // todoAPIIfEnabled is the list for the tool env, nil when the preset does
 // not include "todo" (the tools then report themselves unavailable).
 func (a *Agent) todoAPIIfEnabled() tools.Todos {
-	if contains(a.preset.Tools, toolname.GroupTodo) {
+	if contains(a.Preset().Tools, toolname.GroupTodo) {
 		return a.todosAPI()
 	}
 	return nil

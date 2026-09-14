@@ -289,7 +289,7 @@ func (a *Agent) mcpTool(name string) (tools.Tool, bool) {
 	defer a.mu.Unlock()
 	for _, s := range a.mcps {
 		if t, ok := s.tools[name]; ok && s.state == protocol.MCPConnected {
-			return mcpTool{server: s, tool: t, name: name}, true
+			return mcpTool{server: s.name, session: s.session, tool: t, name: name}, true
 		}
 	}
 	return nil, false
@@ -321,11 +321,14 @@ func (a *Agent) mcpInfoLocked() []protocol.MCPInfo {
 	return out
 }
 
-// mcpTool adapts one server tool to the tools.Tool interface.
+// mcpTool adapts one server tool to the tools.Tool interface. It carries
+// the session it was resolved with (under the agent's lock): a server that
+// exits meanwhile fails the call instead of racing the field.
 type mcpTool struct {
-	server *mcpServer
-	tool   *mcp.Tool
-	name   string
+	server  string
+	session *mcp.ClientSession
+	tool    *mcp.Tool
+	name    string
 }
 
 func (t mcpTool) Def() model.ToolDef {
@@ -344,9 +347,9 @@ func (t mcpTool) Subject(in json.RawMessage) policy.Subject {
 }
 
 func (t mcpTool) Run(ctx context.Context, in json.RawMessage, env *tools.Env) tools.Result {
-	sess := t.server.session
+	sess := t.session
 	if sess == nil {
-		return tools.Result{Output: fmt.Sprintf("MCP server %s is not connected", t.server.name), IsError: true}
+		return tools.Result{Output: fmt.Sprintf("MCP server %s is not connected", t.server), IsError: true}
 	}
 	cctx, cancel := context.WithTimeout(ctx, mcpCallTimeout)
 	defer cancel()
