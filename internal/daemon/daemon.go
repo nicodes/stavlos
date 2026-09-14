@@ -47,15 +47,22 @@ type Daemon struct {
 	clients      map[string]*client
 	trustPrompts map[string]string // dir → prompt id
 	trust        *trustStore
+	lock         *os.File // the data directory's lock, held until Close
 }
 
-// New opens the log and registry and recovers sessions.
+// New locks the data directory, opens the log and registry and recovers
+// sessions. A second daemon on the same directory gets ErrAlreadyRunning.
 func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, error) {
-	lg, err := event.Open(filepath.Join(dataDir, "events.db"))
+	lock, err := lockDataDir(dataDir)
 	if err != nil {
 		return nil, err
 	}
-	d := &Daemon{Log: lg, Registry: reg, DataDir: dataDir, sessions: map[string]*agent.Session{}, clients: map[string]*client{}, trustPrompts: map[string]string{}, logins: map[string]*pendingLogin{}}
+	lg, err := event.Open(filepath.Join(dataDir, "events.db"))
+	if err != nil {
+		lock.Close()
+		return nil, err
+	}
+	d := &Daemon{Log: lg, Registry: reg, DataDir: dataDir, lock: lock, sessions: map[string]*agent.Session{}, clients: map[string]*client{}, trustPrompts: map[string]string{}, logins: map[string]*pendingLogin{}}
 	d.trust = &trustStore{log: lg}
 	if err := d.trust.load(ctx); err != nil {
 		return nil, err
@@ -76,7 +83,7 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 	return d, nil
 }
 
-// Close stops sessions and the log.
+// Close stops sessions and the log and releases the data directory.
 func (d *Daemon) Close() {
 	d.mu.Lock()
 	for _, s := range d.sessions {
@@ -84,6 +91,9 @@ func (d *Daemon) Close() {
 	}
 	d.mu.Unlock()
 	d.Log.Close()
+	if d.lock != nil {
+		d.lock.Close() // releases the flock
+	}
 }
 
 func (d *Daemon) recover(ctx context.Context) error {

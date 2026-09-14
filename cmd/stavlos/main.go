@@ -371,6 +371,9 @@ func runDaemon(ctx context.Context, socket, dataDir string) error {
 		return fmt.Errorf("model registry: %w", err)
 	}
 	d, err := daemon.New(ctx, dataDir, reg)
+	if errors.Is(err, daemon.ErrAlreadyRunning) {
+		return fmt.Errorf("%v; connect to it with `stavlos`, or stop it first", err)
+	}
 	if err != nil {
 		return err
 	}
