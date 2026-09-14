@@ -2176,8 +2176,8 @@ func TestSidebarNav(t *testing.T) {
 	m.session.Dir = "/home/x/Work/proj"
 	m.session.Created = time.Now().Add(-12 * time.Minute).UTC().Format(time.RFC3339)
 	m.agents = []protocol.AgentInfo{
-		{ID: "a", Label: "main", Archetype: "general", State: "waiting", Awaiting: []string{"b", "c"}, CostUSD: 0.20},
-		{ID: "b", Parent: "a", Depth: 1, Label: "world-politics", Archetype: "general", State: "blocked", CostUSD: 0.05},
+		{ID: "a", Label: "main", Archetype: "general", State: "waiting", Awaiting: []string{"b", "c"}, CostUSD: 0.20, Tokens: 1200},
+		{ID: "b", Parent: "a", Depth: 1, Label: "world-politics", Archetype: "general", State: "blocked", CostUSD: 0.05, Tokens: 300},
 		{ID: "c", Parent: "a", Depth: 1, Label: "business", Archetype: "general", State: "running"},
 		{ID: "d", Parent: "a", Depth: 1, Label: "asker", Archetype: "general", State: "blocked"},
 	}
@@ -2189,7 +2189,7 @@ func TestSidebarNav(t *testing.T) {
 	m.layout()
 	sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 	header := len(m.sidebarHeader(sidebarWidth - 1))
-	if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || !strings.HasPrefix(sb[1], "/home/x/Work/proj") || !strings.HasPrefix(sb[2], "$0.25 · 12m") || !strings.HasPrefix(sb[3], "3 working · 1 waiting") || !strings.HasPrefix(sb[4], "2 need you") || strings.TrimSpace(sb[5]) != "" || !strings.HasPrefix(sb[6], "agents") {
+	if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" || !strings.HasPrefix(sb[6], "agents") || strings.Contains(strings.Join(sb, "\n"), "need you") {
 		t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:7], "\n"))
 	}
 	rows := m.treeRows(sidebarWidth - 1)
@@ -2234,8 +2234,7 @@ func TestSidebarNav(t *testing.T) {
 	if hs := m.keyHints(); hs[2].key != "n" {
 		t.Fatalf("hints %+v", hs)
 	}
-	// a click on a tree row selects that agent (rows start after the header,
-	// which lost its need-you line with the prompts)
+	// a click on a tree row selects that agent (rows start after the header)
 	m.setFocus(focusInput)
 	header = len(m.sidebarHeader(sidebarWidth - 1))
 	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
@@ -2313,10 +2312,9 @@ func TestSidebarNav(t *testing.T) {
 	}
 	m.prompts = nil
 	m.setFocus(focusInput)
-	// the swarm line reads idle when nothing is happening, and the need-you
-	// line disappears with the prompts (the header shrinks by a row)
+	// the swarm line reads idle when nothing is happening
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "general", State: "idle"}}
-	if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 6 {
+	if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 7 {
 		t.Fatalf("idle swarm line: %q header %d", sl, len(m.sidebarHeader(sidebarWidth-1)))
 	}
 }

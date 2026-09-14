@@ -2937,6 +2937,15 @@ func (m *Model) notice(lines ...string) {
 	m.refreshViewport()
 }
 
+// totalTokens sums every agent's tokens for the session rollup.
+func (m *Model) totalTokens() int {
+	n := 0
+	for _, a := range m.agents {
+		n += a.Tokens
+	}
+	return n
+}
+
 func (m *Model) totalCost() float64 {
 	var c float64
 	for _, a := range m.agents {
