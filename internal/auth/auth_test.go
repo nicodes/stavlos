@@ -36,3 +36,38 @@ func TestStoreRoundTrip(t *testing.T) {
 		t.Fatalf("removing a missing credential: %v", err)
 	}
 }
+
+// TestStoreSeesOtherWriters: the in-memory copy is dropped when another
+// process rewrites the file, and no temporary files are left behind.
+func TestStoreSeesOtherWriters(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "auth.json")
+	a, b := Open(p), Open(p)
+	if err := a.Set("openai", Credential{Access: "one", Refresh: "r"}); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := b.Get("openai"); c.Access != "one" {
+		t.Fatalf("b before: %+v", c)
+	}
+	if err := a.Set("openai", Credential{Access: "two-longer", Refresh: "r"}); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := b.Get("openai"); c.Access != "two-longer" {
+		t.Fatalf("b after: %+v", c)
+	}
+	all, _ := b.All()
+	all["xai"] = Credential{}
+	if _, ok := b.Get("xai"); ok {
+		t.Fatal("All must return a copy")
+	}
+	if err := os.WriteFile(p, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := a.Get("openai"); ok {
+		t.Fatal("a missed an external rewrite")
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 {
+		t.Fatalf("files left: %v", entries)
+	}
+}
