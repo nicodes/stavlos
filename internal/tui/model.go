@@ -2066,7 +2066,7 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 		{"allow", "Allow once", ""},
 		{"always", "Allow for this session", what},
 	}
-	if pre := protocol.ToolPrefix(p.Tool, fullToolArg(p.Tool, p.Input)); pre != "" {
+	if pre := p.Prefix; pre != "" {
 		desc := "every command starting with it"
 		if p.Tool == "web_fetch" {
 			desc = "every page on this host"
@@ -2148,7 +2148,7 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 		case "always", "add":
 			return m.answerPrompt(p, "allow_always")
 		case "prefix":
-			return m.answerPromptPrefix(p, protocol.ToolPrefix(p.Tool, fullToolArg(p.Tool, p.Input)))
+			return m.answerPromptPrefix(p)
 		case "skip":
 			return m.answerPrompt(p, "deny")
 		case "add_other":
@@ -2662,8 +2662,8 @@ func (m *Model) denyPrompt(p *protocol.PromptInfo, reason string) tea.Cmd {
 
 // answerPromptPrefix allows the call and every command of the tool that
 // starts with prefix for the rest of the session.
-func (m *Model) answerPromptPrefix(p *protocol.PromptInfo, prefix string) tea.Cmd {
-	if prefix == "" {
+func (m *Model) answerPromptPrefix(p *protocol.PromptInfo) tea.Cmd {
+	if p.Prefix == "" {
 		return m.answerPrompt(p, "allow_always")
 	}
 	if m.promptBusy == p.ID {
@@ -2674,7 +2674,7 @@ func (m *Model) answerPromptPrefix(p *protocol.PromptInfo, prefix string) tea.Cm
 	}
 	m.promptBusy = p.ID
 	m.claimedByUs[p.ID] = true
-	return allowPromptPrefixCmd(m.ctx, m.c, p.ID, prefix)
+	return allowPromptPrefixCmd(m.ctx, m.c, p.ID)
 }
 
 // answerPromptDir is allow_always on a boundary prompt with an edited

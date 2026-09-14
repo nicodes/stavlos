@@ -1931,7 +1931,10 @@ func TestAllowPrefix(t *testing.T) {
 	h.waitFor(event.PromptRequested, root)
 	p := h.d.esc.Pending(s.ID)[0]
 	_ = h.c.ClaimPrompt(ctx, p.ID)
-	if err := h.c.AllowPromptPrefix(ctx, p.ID, "touch"); err != nil {
+	if p.Prefix != "touch" {
+		t.Fatalf("prompt prefix %q", p.Prefix)
+	}
+	if err := h.c.AllowPromptPrefix(ctx, p.ID); err != nil {
 		t.Fatal(err)
 	}
 	// the second echo runs without a prompt; the chained one asks

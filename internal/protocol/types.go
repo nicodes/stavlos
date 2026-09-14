@@ -301,6 +301,7 @@ type PromptInfo struct {
 	Escalated bool            `json:"escalated"` // visible to fallback tier
 	Created   string          `json:"created"`
 	Dir       string          `json:"dir,omitempty"`       // a boundary prompt: the call reaches outside the agent's directories; "allow_always" adds this one
+	Prefix    string          `json:"prefix,omitempty"`    // what "allow_prefix" would remember for this call (a command prefix, a host); "" when the call has none
 	Questions []Question      `json:"questions,omitempty"` // kind question: the batch an ask_user call raised, answered together
 }
 
@@ -333,7 +334,6 @@ type PromptReplyParams struct {
 	Answer string `json:"answer"`           // allow | deny | allow_always | text
 	Dir    string `json:"dir,omitempty"`    // boundary prompt + allow_always: add this directory instead of the offered one
 	Reason string `json:"reason,omitempty"` // deny: an optional note the agent sees in its tool result
-	Prefix string `json:"prefix,omitempty"` // allow_prefix: allow every command starting with this for the session
 	// Answers answers a question batch, one entry per question in order
 	// (a picked label, several joined with ", ", or typed text).
 	Answers []string `json:"answers,omitempty"`

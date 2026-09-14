@@ -266,9 +266,11 @@ func (c *Client) AnswerQuestions(ctx context.Context, id string, answers []strin
 }
 
 // AllowPromptPrefix allows a permission and, for the rest of the session,
-// every command of the same tool that starts with prefix.
-func (c *Client) AllowPromptPrefix(ctx context.Context, id, prefix string) error {
-	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: "allow_prefix", Prefix: prefix}, nil)
+// every call the prompt's prefix covers (PromptInfo.Prefix: a command
+// prefix for shell, a host for web_fetch). The daemon derives the prefix
+// from the call itself; a prompt without one behaves like allow_always.
+func (c *Client) AllowPromptPrefix(ctx context.Context, id string) error {
+	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: "allow_prefix"}, nil)
 }
 
 // DenyPrompt denies a permission with an optional reason the agent will read.

@@ -18,7 +18,6 @@ type Answer struct {
 	Value     string   // allow | deny | allow_always | free text
 	Dir       string   // boundary prompts: the directory to add with allow_always, when the human edited it
 	Reason    string   // deny: the human's optional note, passed to the agent
-	Prefix    string   // allow_prefix: the command prefix to allow for the session
 	Answers   []string // question batches: one answer per question, in order
 	Client    string
 	Defaulted bool
@@ -205,16 +204,16 @@ func (m *Manager) Reply(id, client, answer string) error {
 // ReplyFull is Reply with the optional extras: an edited directory for a
 // boundary prompt, a reason for a deny.
 func (m *Manager) ReplyFull(id, client, answer, dir, reason string) error {
-	return m.ReplyAll(id, client, answer, dir, reason, "", nil)
+	return m.ReplyAll(id, client, answer, dir, reason, nil)
 }
 
 // ReplyAnswers is ReplyFull plus the answers of a question batch.
 func (m *Manager) ReplyAnswers(id, client, answer, dir, reason string, answers []string) error {
-	return m.ReplyAll(id, client, answer, dir, reason, "", answers)
+	return m.ReplyAll(id, client, answer, dir, reason, answers)
 }
 
 // ReplyAll carries every optional extra a reply may have.
-func (m *Manager) ReplyAll(id, client, answer, dir, reason, prefix string, answers []string) error {
+func (m *Manager) ReplyAll(id, client, answer, dir, reason string, answers []string) error {
 	m.mu.Lock()
 	p, ok := m.pend[id]
 	if !ok || p.done {
@@ -228,7 +227,7 @@ func (m *Manager) ReplyAll(id, client, answer, dir, reason, prefix string, answe
 	p.info.ClaimedBy = client
 	info := p.info
 	m.mu.Unlock()
-	if !m.finish(id, Answer{Value: answer, Dir: dir, Reason: reason, Prefix: prefix, Answers: answers, Client: client}) {
+	if !m.finish(id, Answer{Value: answer, Dir: dir, Reason: reason, Answers: answers, Client: client}) {
 		return ErrLate
 	}
 	m.record("answered", info, answer, client)

@@ -40,18 +40,17 @@ type Session struct {
 	host  Host
 	tools tools.Set
 
-	mu          sync.RWMutex
-	cfg         *config.Effective
-	model       string // session-selected model
-	rootArch    string
-	agents      map[string]*Agent
-	order       []string // spawn order
-	archived    bool
-	ctx         context.Context
-	cancel      context.CancelFunc
-	allowAlways map[string]bool     // "tool\x00arg" remembered allows (session-scoped)
-	allowPrefix map[string][]string // tool → command prefixes allowed for the session ("go test")
-	mode        string              // permission mode: "" or ask (every ask prompts) | auto (asks inside the agent's dirs are allowed) | yolo (every ask is allowed)
+	mu       sync.RWMutex
+	cfg      *config.Effective
+	model    string // session-selected model
+	rootArch string
+	agents   map[string]*Agent
+	order    []string // spawn order
+	archived bool
+	ctx      context.Context
+	cancel   context.CancelFunc
+	permits  permits // the human's session-scoped allows (exact calls, prefixes); they answer asks, never denies
+	mode     string  // permission mode: "" or ask (every ask prompts) | auto (asks inside the agent's dirs are allowed) | yolo (every ask is allowed)
 }
 
 // Mode reports the session's permission mode (protocol.ModeAsk by default).
@@ -112,8 +111,6 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, rootArch str
 		host: host, tools: tools.Builtin(),
 		cfg: cfg, model: modelID, rootArch: rootArch,
 		agents: map[string]*Agent{}, ctx: ctx, cancel: cancel,
-		allowAlways: map[string]bool{},
-		allowPrefix: map[string][]string{},
 	}
 }
 
