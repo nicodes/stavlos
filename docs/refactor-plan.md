@@ -65,16 +65,16 @@ tests that pin current behaviour first.
 
 ### Phase 2 — Security fixes (small, behaviour-changing, each its own commit)  [M]
 
-2.1 **`internal/shellcmd`** (replaces `protocol/prefix.go`): POSIX-ish tokenizer (`Words`), refuses
+2.1 **`internal/shellcmd`** ✅ (replaces `protocol/prefix.go`): POSIX-ish tokenizer (`Words`), refuses
     unquoted `; | & \n`, backticks, `$(`, `$((`, `<(`, `>(`, and all redirections; `Prefix` refuses
     wrappers/interpreters (`bash sh env xargs sudo eval exec time nohup nice timeout watch python
     node perl…`), env assignments, and flag-first two-word tools; token-based `Covers`.
     Policy: for `shell`, an `Allow` from a *pattern* rule is downgraded to `Ask` when the command is
     not simple. Deny always wins. Fixes S1.
-2.2 **`policy.Layered`**: sound layering by construction — decision is the max rank across layers;
+2.2 **`policy.Layered`** ✅: sound layering by construction — decision is the max rank across layers;
     delete `Tighten`, `samplePath`, `checkTightening`, `samplePattern`. Computed once per config
     change, not per tool call. Fixes S2.
-2.3 **`session.permits`** type owning `allowAlways`/`allowPrefix`: remembered allows only downgrade
+2.3 **`session.permits`** ✅ type owning `allowAlways`/`allowPrefix`: remembered allows only downgrade
     `Ask`, never `Deny`. Server derives the canonical prefix from the prompt's own arg and puts it on
     `PromptInfo.Prefix`; the client displays it instead of recomputing (drop client-supplied
     `Prefix`). Fixes S3 and the trusted-verbatim prefix.

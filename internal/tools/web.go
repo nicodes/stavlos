@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"strings"
@@ -49,12 +50,22 @@ func (webFetchTool) Def() model.ToolDef {
 		}, "url")}
 }
 
+// PolicyArg is the URL as it will be fetched: lower-case host, https, no
+// credentials, fragment or default port, a GitHub blob rewritten to the raw
+// file. Policy, session allows and the fetch itself see one string, so a
+// host rule cannot be dodged by spelling. An unparseable URL is matched as
+// written (the fetch then fails on it anyway).
 func (webFetchTool) PolicyArg(in json.RawMessage) string {
 	var a struct {
 		URL string `json:"url"`
 	}
 	_ = decode(in, &a)
-	return strings.TrimSpace(a.URL)
+	raw := strings.TrimSpace(a.URL)
+	u, err := parseWebURL(raw)
+	if err != nil {
+		return raw
+	}
+	return u.String()
 }
 
 func (webFetchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
@@ -132,19 +143,18 @@ func fetchPage(ctx context.Context, raw string) (webPage, error) {
 	}
 	webCacheMu.Unlock()
 
-	client := &http.Client{
-		Timeout:   webTimeout,
-		Transport: webTransport(),
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 5 {
-				return errors.New("too many redirects")
-			}
-			if !strings.EqualFold(req.URL.Hostname(), u.Hostname()) {
-				return errRedirectAway{req.URL.String()}
-			}
-			return nil
-		},
-	}
+	client := webClient(func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 5 {
+			return errors.New("too many redirects")
+		}
+		if !strings.EqualFold(req.URL.Hostname(), u.Hostname()) {
+			return errRedirectAway{req.URL.String()}
+		}
+		if req.URL.Scheme != "https" {
+			return fmt.Errorf("redirects to plain http (%s), which web_fetch does not follow", req.URL)
+		}
+		return nil
+	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, key, nil)
 	if err != nil {
 		return webPage{}, err
@@ -242,6 +252,10 @@ func parseWebURL(raw string) (*url.URL, error) {
 	}
 	u.User = nil
 	u.Fragment = ""
+	u.Host = strings.ToLower(u.Host)
+	if u.Port() == "443" {
+		u.Host = u.Hostname()
+	}
 	// A file viewed on GitHub is mostly chrome: fetch the raw file instead.
 	if strings.EqualFold(u.Hostname(), "github.com") {
 		if parts := strings.SplitN(strings.TrimPrefix(u.Path, "/"), "/", 5); len(parts) == 5 && parts[2] == "blob" {
@@ -250,6 +264,19 @@ func parseWebURL(raw string) (*url.URL, error) {
 		}
 	}
 	return u, nil
+}
+
+// webClient is the one HTTP client every web tool uses: the address-checked
+// transport, the tool timeout, and a redirect policy (nil refuses every
+// redirect, which is right for API calls: a search backend has no business
+// sending the agent elsewhere).
+func webClient(redirect func(*http.Request, []*http.Request) error) *http.Client {
+	if redirect == nil {
+		redirect = func(req *http.Request, _ []*http.Request) error {
+			return fmt.Errorf("redirect to %s refused", req.URL)
+		}
+	}
+	return &http.Client{Timeout: webTimeout, Transport: webTransport(), CheckRedirect: redirect}
 }
 
 // webTransport dials with a check on the resolved address: private,
@@ -262,8 +289,8 @@ func webTransport() *http.Transport {
 		if err != nil {
 			return err
 		}
-		ip := net.ParseIP(host)
-		if ip == nil {
+		ip, err := netip.ParseAddr(host)
+		if err != nil {
 			return fmt.Errorf("unexpected address %q", address)
 		}
 		if !localWebAllowed() && !publicIP(ip) {
@@ -283,9 +310,33 @@ var webTransportHook func(*http.Transport)
 
 func localWebAllowed() bool { return os.Getenv("STAVLOS_WEB_ALLOW_LOCAL") != "" }
 
-// publicIP reports whether ip is routable on the public internet.
-func publicIP(ip net.IP) bool {
-	return !(ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() || ip.IsInterfaceLocalMulticast())
+// nonPublic lists every range that is not routable on the public internet
+// (IANA special-purpose registries), so a name that resolves into one is
+// refused at dial time whatever it looked like on the page.
+var nonPublic = func() []netip.Prefix {
+	var out []netip.Prefix
+	for _, s := range []string{
+		"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12",
+		"192.0.0.0/24", "192.0.2.0/24", "192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24",
+		"203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4",
+		"::/128", "::1/128", "64:ff9b::/96", "64:ff9b:1::/48", "100::/64", "2001::/23", "2001:db8::/32",
+		"fc00::/7", "fe80::/10", "ff00::/8",
+	} {
+		out = append(out, netip.MustParsePrefix(s))
+	}
+	return out
+}()
+
+// publicIP reports whether ip is routable on the public internet. An
+// IPv4-mapped IPv6 address is judged as the IPv4 address it carries.
+func publicIP(ip netip.Addr) bool {
+	ip = ip.Unmap()
+	for _, p := range nonPublic {
+		if p.Contains(ip) {
+			return false
+		}
+	}
+	return true
 }
 
 func looksLikeHTML(b []byte) bool {
@@ -737,7 +788,7 @@ func webSearch(ctx context.Context, cfg SearchConfig, query string, n int) ([]se
 		return nil, err
 	}
 	req.Header.Set("User-Agent", webUserAgent)
-	resp, err := (&http.Client{Timeout: webTimeout}).Do(req)
+	resp, err := webClient(nil).Do(req) // the address check applies; a redirect (which would carry the key along) is refused
 	if err != nil {
 		return nil, fmt.Errorf("%s search: %v", cfg.Provider, unwrapURLError(err))
 	}
