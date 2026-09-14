@@ -127,12 +127,12 @@ func TestTodoTools(t *testing.T) {
 
 func TestAskUserNeedsOptions(t *testing.T) {
 	ts := Builtin()
-	r := ts["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"header":"h","question":"q?"}]}`), &Env{Ask: fakeAsker{}})
+	r := ts["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"question":"q?"}]}`), &Env{Ask: fakeAsker{}})
 	if !r.IsError || !strings.Contains(r.Output, "at least one option") {
 		t.Fatalf("options are required: %+v", r)
 	}
-	r = ts["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"header":"h","question":"q?","options":[{"label":"a"},{"label":"b"}]}]}`), &Env{Ask: fakeAsker{}})
-	if r.IsError || r.Output != "h: a, b, typed" {
+	r = ts["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"question":"q?","options":[{"label":"a"},{"label":"b"}]}]}`), &Env{Ask: fakeAsker{}})
+	if r.IsError || r.Output != "q? → a, b, typed" {
 		t.Fatalf("answers: %+v", r)
 	}
 }

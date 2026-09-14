@@ -19,14 +19,14 @@ func (a *Agent) askAPI() tools.Asker { return askAPI{a: a} }
 
 func (k askAPI) Ask(ctx context.Context, qs []protocol.Question) ([]string, error) {
 	a := k.a
-	heads := make([]string, 0, len(qs))
+	texts := make([]string, 0, len(qs))
 	for _, q := range qs {
-		heads = append(heads, q.Header)
+		texts = append(texts, q.Question)
 	}
 	a.setState(StateBlocked)
 	ans := a.s.host.Prompt(ctx, protocol.PromptInfo{
 		ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: "question", Tool: "ask_user",
-		Question:  fmt.Sprintf("%s asks: %s", a.Label, strings.Join(heads, ", ")),
+		Question:  fmt.Sprintf("%s asks: %s", a.Label, strings.Join(texts, " | ")),
 		Questions: qs,
 	})
 	a.setState(StateRunning)
