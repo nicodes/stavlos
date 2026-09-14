@@ -314,6 +314,9 @@ func connect(ctx context.Context, autostart bool) (*client.Client, error) {
 func attach(ctx context.Context, c *client.Client) (*client.Client, error) {
 	if _, err := c.Attach(ctx, fmt.Sprintf("tui:%d", os.Getpid()), protocol.TierInteractive); err != nil {
 		c.Close()
+		if isVersionError(err) && os.Getenv("STAVLOS_KEEP_DAEMON") == "" {
+			return replaceIncompatible(ctx, err)
+		}
 		return nil, err
 	}
 	if fresh, err := replaceStale(ctx, c); err != nil {
@@ -324,9 +327,43 @@ func attach(ctx context.Context, c *client.Client) (*client.Client, error) {
 	return c, nil
 }
 
-// replaceStale shuts down a daemon built from different code than this
-// client (typical after editing and re-running with `go run`) and starts a
-// new one from this binary. Returns nil, nil when the daemon is current.
+// isVersionError reports whether the daemon refused this client's protocol
+// version.
+func isVersionError(err error) bool {
+	var pe *protocol.Error
+	return errors.As(err, &pe) && pe.Code == protocol.ErrVersion
+}
+
+// replaceIncompatible stops a daemon that refuses this client's protocol
+// version and starts one from this binary. Such a daemon was built before a
+// protocol change and cannot answer daemon.status or daemon.shutdown either,
+// so it is found as the process serving the socket and sent SIGTERM.
+func replaceIncompatible(ctx context.Context, cause error) (*client.Client, error) {
+	sock := paths.Socket()
+	pid, err := socketPeerPID(sock)
+	if err != nil {
+		return nil, fmt.Errorf("%v; stop the running daemon and run stavlos again (finding it: %v)", cause, err)
+	}
+	fmt.Fprintf(os.Stderr, "daemon (pid %d) speaks an older protocol; restarting it\n", pid)
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		return nil, fmt.Errorf("%v; stopping daemon pid %d: %v", cause, pid, err)
+	}
+	if !waitExit(pid, 10*time.Second) {
+		return nil, fmt.Errorf("%v; daemon pid %d did not exit after SIGTERM", cause, pid)
+	}
+	return restartDaemon(ctx, sock)
+}
+
+// waitExit waits up to d for process pid to be gone.
+func waitExit(pid int, d time.Duration) bool {
+	for deadline := time.Now().Add(d); time.Now().Before(deadline); time.Sleep(100 * time.Millisecond) {
+		if errors.Is(syscall.Kill(pid, 0), syscall.ESRCH) {
+			return true
+		}
+	}
+	return false
+}
+
 func replaceStale(ctx context.Context, c *client.Client) (*client.Client, error) {
 	st, err := c.Status(ctx)
 	if err != nil {
@@ -351,10 +388,16 @@ func replaceStale(ctx context.Context, c *client.Client) (*client.Client, error)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	return restartDaemon(ctx, sock)
+}
+
+// restartDaemon starts a daemon from this binary once the old one is gone
+// and attaches to it.
+func restartDaemon(ctx context.Context, sock string) (*client.Client, error) {
 	if err := startDaemon(); err != nil {
 		return nil, err
 	}
-	deadline = time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		time.Sleep(150 * time.Millisecond)
 		nc, err := client.Dial(sock)
