@@ -430,7 +430,10 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 			return nil, e
 		}
 		if err := d.Trust(ctx, p.Dir, p.Hash, p.Trust); err != nil {
-			return nil, perr(protocol.ErrInternal, err)
+			if errors.Is(err, errTrustChanged) {
+				return nil, perr(protocol.ErrConflict, err)
+			}
+			return nil, perr(protocol.ErrInvalidParams, err)
 		}
 		return map[string]bool{"ok": true}, nil
 

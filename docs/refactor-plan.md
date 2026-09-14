@@ -78,16 +78,16 @@ tests that pin current behaviour first.
     `Ask`, never `Deny`. Server derives the canonical prefix from the prompt's own arg and puts it on
     `PromptInfo.Prefix`; the client displays it instead of recomputing (drop client-supplied
     `Prefix`). Fixes S3 and the trusted-verbatim prefix.
-2.4 **web_fetch canonical subject**: `PolicyArg` returns the normalised URL (lower-cased host, https,
+2.4 **web_fetch canonical subject** ✅: `PolicyArg` returns the normalised URL (lower-cased host, https,
     no userinfo, blob→raw applied) so policy, session allows, and the fetch see one string.
     `CheckRedirect` requires https on same-host hops. `publicIP` via `netip` prefixes incl.
     0.0.0.0/8, 100.64/10, 198.18/15, 240/4, 64:ff9b::/96. Search calls use the same SSRF-safe
     client and refuse redirects. Fixes S4.
-2.5 **`config.LoadGlobal`**: defaults + global layer only; used by daemon startup and the recovery
+2.5 **`config.LoadGlobal`** ✅: defaults + global layer only; used by daemon startup and the recovery
     fallback. Delete the `os.TempDir()` trick. Fixes S5.
 2.6 **`internal/textsafe`**: strip ESC/OSC/C0 (except `\n\t`) from every daemon string the TUI
     draws; permission dialog renders hidden bytes visibly as `^[`. Fixes S6.
-2.7 **`internal/proc`**: one process launcher (bash -c, Setpgid, SIGKILL pgid, WaitDelay, tail-capped
+2.7 **`internal/proc`** ✅: one process launcher (bash -c, Setpgid, SIGKILL pgid, WaitDelay, tail-capped
     buffer, scrubbed env minus `STAVLOS_*`, provider key names, `*_API_KEY|TOKEN|SECRET|PASSWORD`).
     Used by shell tool, monitors (`StartCommand` deleted; `background:true` = start + adopt at wait
     0) and MCP. Fixes S7 and removes the duplicate runner.
