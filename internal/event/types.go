@@ -183,12 +183,21 @@ type MonitorPayload struct {
 	IDs []string `json:"ids"`
 }
 
-// TodoItem is one entry of an agent's todo list. Status is pending,
-// in_progress, done or cancelled.
+// TodoStatus is where a todo item stands.
+type TodoStatus string
+
+const (
+	TodoPending    TodoStatus = "pending"
+	TodoInProgress TodoStatus = "in_progress"
+	TodoDone       TodoStatus = "done"
+	TodoCancelled  TodoStatus = "cancelled"
+)
+
+// TodoItem is one entry of an agent's todo list.
 type TodoItem struct {
-	ID     string `json:"id"`
-	Text   string `json:"text"`
-	Status string `json:"status"`
+	ID     string     `json:"id"`
+	Text   string     `json:"text"`
+	Status TodoStatus `json:"status"`
 }
 
 // TodoPayload is the whole todo list after a change; replaying the last
@@ -244,12 +253,21 @@ type TurnPayload struct {
 	Turn int `json:"turn"`
 }
 
-// UserMessagePayload is the model-visible input to a model call. Kind is
-// "prompt" (one or more coalesced prompts), "steer", or "child_finished".
+// MessageKind says where a user message came from.
+type MessageKind string
+
+const (
+	MsgPrompt        MessageKind = "prompt"         // one or more coalesced prompts (a steer to an idle agent reads as one)
+	MsgSteer         MessageKind = "steer"          // delivered mid-turn at a model-call boundary
+	MsgAgentResponse MessageKind = "agent_response" // another agent's answer, from the mailbox
+	MsgMonitorFired  MessageKind = "monitor_fired"  // a background job's exit, from the mailbox
+)
+
+// UserMessagePayload is the model-visible input to a model call.
 type UserMessagePayload struct {
-	Turn int    `json:"turn"`
-	Kind string `json:"kind"`
-	Text string `json:"text"`
+	Turn int         `json:"turn"`
+	Kind MessageKind `json:"kind"`
+	Text string      `json:"text"`
 	// From names the sending agent ("scout (a1b2c3d4)") when a prompt or
 	// steer came from another agent in the session; empty for humans.
 	From string `json:"from,omitempty"`
@@ -279,11 +297,20 @@ type ToolFinishedPayload struct {
 	Denied    bool   `json:"denied,omitempty"`
 }
 
-// TurnEndedPayload.Reason: "end_turn" | "cancelled" | "error" | "finished" | "max_tokens"
+// TurnReason says why a turn ended.
+type TurnReason string
+
+const (
+	ReasonEndTurn   TurnReason = "end_turn"
+	ReasonCancelled TurnReason = "cancelled"
+	ReasonError     TurnReason = "error" // Error carries the message
+	ReasonMaxTokens TurnReason = "max_tokens"
+)
+
 type TurnEndedPayload struct {
-	Turn   int    `json:"turn"`
-	Reason string `json:"reason"`
-	Error  string `json:"error,omitempty"`
+	Turn   int        `json:"turn"`
+	Reason TurnReason `json:"reason"`
+	Error  string     `json:"error,omitempty"`
 }
 
 // PromptRequestedPayload.Kind: "permission" | "question" | "trust"

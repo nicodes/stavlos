@@ -64,13 +64,13 @@ var (
 // colours: "working", "error", "complete", or "idle".
 func agentOutcome(a protocol.AgentInfo) string {
 	switch {
-	case a.State == "running" || a.State == "blocked":
+	case a.State.Busy():
 		return "working"
 	case a.LastError != "":
 		return "error"
-	case a.State == "waiting":
+	case a.State == protocol.AgentWaiting:
 		return "waiting"
-	case a.State == "killed":
+	case a.State == protocol.AgentKilled:
 		return "complete"
 	}
 	return "idle"
@@ -1083,7 +1083,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		if gap < 1 {
 			gap = 1
 		}
-		row := "  " + stateDot(s.State) + " " + styleDim.Render(title) + strings.Repeat(" ", gap) + styleDim.Render(age)
+		row := "  " + stateDot(string(s.State)) + " " + styleDim.Render(title) + strings.Repeat(" ", gap) + styleDim.Render(age)
 		if focused && m.sbCursor == na+1+k {
 			row = highlightRow(row, width)
 		}
@@ -1273,9 +1273,9 @@ func (m Model) tabDialogTitle() string {
 // read done/total and connected/listed; the rest are plain counts.
 func (m Model) tabTexts() []string {
 	perms, questions := m.promptCounts()
-	permKind := "permission"
-	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
-		permKind = p.Kind // "trust"
+	permKind := string(protocol.PromptPermission)
+	if p := m.currentPrompt(); p != nil && p.Kind != protocol.PromptPermission {
+		permKind = string(p.Kind) // "trust"
 	}
 	permCount := "0"
 	if perms > 0 {
@@ -1811,7 +1811,7 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 	var rows []string
 	for _, mo := range monitors {
 		switch mo.State {
-		case "fired", "stopped", "lost":
+		case protocol.MonitorFired, protocol.MonitorStopped, protocol.MonitorLost:
 			continue
 		}
 		who := owner
@@ -1877,7 +1877,7 @@ func todoCount(items []event.TodoItem) string {
 	}
 	done := 0
 	for _, it := range items {
-		if it.Status == "done" || it.Status == "cancelled" {
+		if it.Status == event.TodoDone || it.Status == event.TodoCancelled {
 			done++
 		}
 	}
@@ -1895,11 +1895,11 @@ func todoRows(items []event.TodoItem, width int) []string {
 	for _, it := range items {
 		var row string
 		switch it.Status {
-		case "in_progress":
+		case event.TodoInProgress:
 			row = styleWarn.Render("◐") + " " + styleBold.Render(it.Text)
-		case "done":
+		case event.TodoDone:
 			row = styleDim.Render("● " + it.Text)
-		case "cancelled":
+		case event.TodoCancelled:
 			row = styleDim.Render("× " + it.Text)
 		default:
 			row = styleDim.Render("○") + " " + it.Text
@@ -1929,7 +1929,7 @@ func mcpCount(items []protocol.MCPInfo) string {
 	}
 	up := 0
 	for _, it := range items {
-		if it.State == "connected" {
+		if it.State == protocol.MCPConnected {
 			up++
 		}
 	}
@@ -1948,11 +1948,11 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 	for _, it := range items {
 		var glyph string
 		switch it.State {
-		case "connected":
+		case protocol.MCPConnected:
 			glyph = styleOvGood.Render("●")
-		case "starting":
+		case protocol.MCPStarting:
 			glyph = styleWarn.Render("◐")
-		case "failed", "stopped":
+		case protocol.MCPFailed, protocol.MCPStopped:
 			glyph = styleError.Render("×")
 		default:
 			glyph = styleDim.Render("○")
@@ -1960,19 +1960,19 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 		row := glyph + " " + styleBold.Render(it.Name)
 		var meta []string
 		switch it.State {
-		case "connected":
+		case protocol.MCPConnected:
 			meta = append(meta, fmt.Sprintf("%d tools", len(it.Tools)))
 			if t, err := time.Parse(time.RFC3339, it.Started); err == nil && !t.IsZero() {
 				meta = append(meta, fmtElapsed(now.Sub(t)))
 			}
-		case "failed", "stopped":
+		case protocol.MCPFailed, protocol.MCPStopped:
 			if it.Error != "" {
 				meta = append(meta, it.Error)
 			}
-		case "pending":
+		case protocol.MCPPending:
 			meta = append(meta, "starts at the next turn")
 		default:
-			meta = append(meta, it.State)
+			meta = append(meta, string(it.State))
 		}
 		if len(meta) > 0 {
 			row += "  " + styleDim.Render(strings.Join(meta, " · "))

@@ -178,26 +178,26 @@ func (d *Daemon) notifyPrompt(n protocol.PromptNotification, tiers []protocol.Ti
 	}
 }
 
-func (d *Daemon) recordPrompt(action string, info protocol.PromptInfo, answer, clientID string) {
+func (d *Daemon) recordPrompt(action protocol.PromptAction, info protocol.PromptInfo, answer, clientID string) {
 	if info.Session == "" {
 		return
 	}
 	var t event.Type
 	var payload any
 	switch action {
-	case "requested":
-		rp := event.PromptRequestedPayload{ID: info.ID, Kind: info.Kind, Tool: info.Tool, Input: info.Input, Question: info.Question, Options: info.Options}
+	case protocol.ActionRequested:
+		rp := event.PromptRequestedPayload{ID: info.ID, Kind: string(info.Kind), Tool: info.Tool, Input: info.Input, Question: info.Question, Options: info.Options}
 		if len(info.Questions) > 0 {
 			rp.Questions, _ = json.Marshal(info.Questions)
 		}
 		t, payload = event.PromptRequested, rp
-	case "claimed":
+	case protocol.ActionClaimed:
 		t, payload = event.PromptClaimed, event.PromptRefPayload{ID: info.ID, Client: clientID}
-	case "answered":
+	case protocol.ActionAnswered:
 		t, payload = event.PromptAnswered, event.PromptAnsweredPayload{ID: info.ID, Answer: answer, Client: clientID}
-	case "withdrawn":
+	case protocol.ActionWithdrawn:
 		t, payload = event.PromptWithdrawn, event.PromptRefPayload{ID: info.ID}
-	case "defaulted":
+	case protocol.ActionDefaulted:
 		t, payload = event.PromptDefaulted, event.PromptAnsweredPayload{ID: info.ID, Answer: answer}
 	default:
 		return
@@ -444,14 +444,14 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Session) {
 	go func() {
 		input, _ := json.Marshal(map[string]any{"dir": s.Dir, "hash": cfg.TrustHash, "files": cfg.TrustFiles})
 		ans := d.esc.Request(context.Background(), protocol.PromptInfo{
-			ID: id, Session: s.ID, Kind: "trust", Input: input,
+			ID: id, Session: s.ID, Kind: protocol.PromptTrust, Input: input,
 			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, presets, skills and AGENTS.md.", s.Dir),
 			Options:  []string{"trust", "skip"},
 		})
 		d.mu.Lock()
 		delete(d.trustPrompts, s.Dir)
 		d.mu.Unlock()
-		if ans.Value == "allow" || ans.Value == "trust" || ans.Value == "allow_always" {
+		if ans.Value == protocol.AnswerAllow || ans.Value == protocol.AnswerAllowAlways {
 			_ = d.Trust(context.Background(), s.Dir, cfg.TrustHash, true)
 		}
 	}()
@@ -484,9 +484,9 @@ func (d *Daemon) Trust(ctx context.Context, dir, hash string, trust bool) error 
 	pid := d.trustPrompts[dir]
 	d.mu.RUnlock()
 	if pid != "" {
-		ans := "deny"
+		ans := protocol.AnswerDeny
 		if trust {
-			ans = "allow"
+			ans = protocol.AnswerAllow
 		}
 		_ = d.esc.Reply(pid, "trust.reply", ans)
 	}

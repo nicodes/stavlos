@@ -141,7 +141,7 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 		for _, d := range in.Dirs {
 			dirs = append(dirs, d.Path)
 		}
-		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller, Dirs: dirs})
+		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: c.Label, Archetype: c.Archetype, State: string(in.State), Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller, Dirs: dirs})
 	}
 	return out, nil
 }

@@ -25,7 +25,7 @@ func (k askAPI) Ask(ctx context.Context, qs []protocol.Question) ([]string, erro
 	}
 	a.setState(StateBlocked)
 	ans := a.s.host.Prompt(ctx, protocol.PromptInfo{
-		ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: "question", Tool: "ask_user",
+		ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: protocol.PromptQuestion, Tool: "ask_user",
 		Question:  fmt.Sprintf("%s asks: %s", a.Label, strings.Join(texts, " | ")),
 		Questions: qs,
 	})
@@ -33,7 +33,7 @@ func (k askAPI) Ask(ctx context.Context, qs []protocol.Question) ([]string, erro
 	if ans.Withdrawn {
 		return nil, fmt.Errorf("the question was withdrawn before it was answered")
 	}
-	if len(ans.Answers) == 0 && ans.Value != "" && ans.Value != "answered" {
+	if len(ans.Answers) == 0 && ans.Value != "" && ans.Value != protocol.AnswerAnswered {
 		// A single free-text reply (an older client): it answers the first question.
 		return []string{ans.Value}, nil
 	}

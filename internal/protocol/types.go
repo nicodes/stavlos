@@ -81,6 +81,97 @@ const (
 	KindKill   Kind = "kill"
 )
 
+// AgentState is what an agent is doing (AgentInfo.State).
+type AgentState string
+
+const (
+	AgentIdle    AgentState = "idle"
+	AgentRunning AgentState = "running"
+	AgentBlocked AgentState = "blocked" // in a turn, waiting on a permission or a question
+	AgentWaiting AgentState = "waiting" // idle, but expecting an answer from an agent or a job's exit
+	AgentKilled  AgentState = "killed"
+)
+
+// Busy reports whether the agent is in a turn.
+func (s AgentState) Busy() bool { return s == AgentRunning || s == AgentBlocked }
+
+// SessionState rolls a session's agents up (SessionInfo.State): working
+// while any agent is in a turn, waiting while any expects an answer, idle
+// otherwise.
+type SessionState string
+
+const (
+	SessionIdle    SessionState = "idle"
+	SessionWaiting SessionState = "waiting"
+	SessionWorking SessionState = "working"
+)
+
+// RollUp is the session state for a set of agent states.
+func RollUp(states []AgentState) SessionState {
+	out := SessionIdle
+	for _, st := range states {
+		switch {
+		case st.Busy():
+			return SessionWorking
+		case st == AgentWaiting:
+			out = SessionWaiting
+		}
+	}
+	return out
+}
+
+// PromptKind says what a prompt asks (PromptInfo.Kind).
+type PromptKind string
+
+const (
+	PromptPermission PromptKind = "permission" // may this tool call run
+	PromptQuestion   PromptKind = "question"   // an ask_user batch
+	PromptTrust      PromptKind = "trust"      // trust a project's configuration
+)
+
+// PromptAction is what happened to a prompt (PromptNotification.Action).
+type PromptAction string
+
+const (
+	ActionRequested PromptAction = "requested"
+	ActionEscalated PromptAction = "escalated" // unclaimed past the claim timeout: shown to the fallback tier too
+	ActionClaimed   PromptAction = "claimed"
+	ActionAnswered  PromptAction = "answered"
+	ActionWithdrawn PromptAction = "withdrawn" // the asking turn ended first
+	ActionDefaulted PromptAction = "defaulted" // nobody answered: the headless default applied
+)
+
+// Answer values on prompt.reply. The field stays a string because a
+// question's reply may carry text; these are the fixed ones.
+const (
+	AnswerAllow       = "allow"
+	AnswerDeny        = "deny"
+	AnswerAllowAlways = "allow_always" // this exact call, for the session
+	AnswerAllowPrefix = "allow_prefix" // every call the prompt's prefix covers, for the session
+	AnswerAnswered    = "answered"     // a question batch: the answers are in Answers
+)
+
+// MonitorState is a background job's state (MonitorInfo.State).
+type MonitorState string
+
+const (
+	MonitorRunning MonitorState = "running"
+	MonitorFired   MonitorState = "fired"
+	MonitorStopped MonitorState = "stopped"
+	MonitorLost    MonitorState = "lost" // the daemon restarted while it ran
+)
+
+// MCPState is an agent's MCP server's state (MCPInfo.State).
+type MCPState string
+
+const (
+	MCPPending   MCPState = "pending" // listed by the role, not started yet
+	MCPStarting  MCPState = "starting"
+	MCPConnected MCPState = "connected"
+	MCPFailed    MCPState = "failed"
+	MCPStopped   MCPState = "stopped"
+)
+
 // --- JSON-RPC framing ---
 
 type Request struct {
@@ -143,19 +234,19 @@ type DaemonStatusResult struct {
 }
 
 type SessionInfo struct {
-	ID           string  `json:"id"`
-	Dir          string  `json:"dir"`
-	Model        string  `json:"model"`
-	RootAgent    string  `json:"root_agent"`
-	Created      string  `json:"created"`
-	Archived     bool    `json:"archived"`
-	Seq          int64   `json:"seq"` // latest per-session sequence
-	Live         int     `json:"live_agents"`
-	CostUSD      float64 `json:"cost_usd"`
-	TrustPending bool    `json:"trust_pending"`
-	Mode         string  `json:"mode"`            // permission mode: ask | auto | yolo
-	State        string  `json:"state,omitempty"` // working (an agent runs) | waiting (one expects an answer) | idle; "" for a session not in memory
-	Title        string  `json:"title,omitempty"` // the first human prompt, for pickers
+	ID           string       `json:"id"`
+	Dir          string       `json:"dir"`
+	Model        string       `json:"model"`
+	RootAgent    string       `json:"root_agent"`
+	Created      string       `json:"created"`
+	Archived     bool         `json:"archived"`
+	Seq          int64        `json:"seq"` // latest per-session sequence
+	Live         int          `json:"live_agents"`
+	CostUSD      float64      `json:"cost_usd"`
+	TrustPending bool         `json:"trust_pending"`
+	Mode         string       `json:"mode"`            // permission mode: ask | auto | yolo
+	State        SessionState `json:"state,omitempty"` // working (an agent runs) | waiting (one expects an answer) | idle; "" for a session not in memory
+	Title        string       `json:"title,omitempty"` // the first human prompt, for pickers
 }
 
 type SessionListParams struct {
@@ -209,7 +300,7 @@ type AgentInfo struct {
 	Model         string           `json:"model"`
 	Variant       string           `json:"variant,omitempty"` // model variant (reasoning effort); "" = default
 	Depth         int              `json:"depth"`
-	State         string           `json:"state"` // idle | running | waiting | blocked | finished | killed
+	State         AgentState       `json:"state"` // idle | running | waiting | blocked | finished | killed
 	Turn          int              `json:"turn"`
 	Queued        int              `json:"queued"` // prompts waiting
 	CostUSD       float64          `json:"cost_usd"`
@@ -292,7 +383,7 @@ type PromptInfo struct {
 	ID        string          `json:"id"`
 	Session   string          `json:"session"`
 	Agent     string          `json:"agent,omitempty"`
-	Kind      string          `json:"kind"` // permission | question | trust
+	Kind      PromptKind      `json:"kind"` // permission | question | trust
 	Tool      string          `json:"tool,omitempty"`
 	Input     json.RawMessage `json:"input,omitempty"`
 	Question  string          `json:"question,omitempty"`
@@ -489,8 +580,8 @@ type StreamNotification struct {
 // PromptNotification announces, updates, or withdraws a prompt.
 // Action: "requested" | "claimed" | "answered" | "withdrawn" | "defaulted" | "escalated"
 type PromptNotification struct {
-	Action string     `json:"action"`
-	Prompt PromptInfo `json:"prompt"`
+	Action PromptAction `json:"action"`
+	Prompt PromptInfo   `json:"prompt"`
 }
 
 // MonitorInfo is a general monitor owned by an agent: a background command,
@@ -507,19 +598,19 @@ type DirInfo struct {
 // failed | stopped.
 type MCPInfo struct {
 	Name    string   `json:"name"`
-	State   string   `json:"state"`
+	State   MCPState `json:"state"`
 	Error   string   `json:"error,omitempty"`
 	Tools   []string `json:"tools,omitempty"` // model-facing names
 	Started string   `json:"started,omitempty"`
 }
 
 type MonitorInfo struct {
-	ID       string `json:"id"`
-	Agent    string `json:"agent"`
-	Kind     string `json:"kind"`  // command | watch | timer
-	Label    string `json:"label"` // human-facing
-	Spec     string `json:"spec"`  // command line / path / duration
-	State    string `json:"state"` // running | fired | stopped | lost
-	Started  string `json:"started"`
-	Progress string `json:"progress,omitempty"` // e.g. "42 lines", "3m left"
+	ID       string       `json:"id"`
+	Agent    string       `json:"agent"`
+	Kind     string       `json:"kind"`  // command | watch | timer
+	Label    string       `json:"label"` // human-facing
+	Spec     string       `json:"spec"`  // command line / path / duration
+	State    MonitorState `json:"state"` // running | fired | stopped | lost
+	Started  string       `json:"started"`
+	Progress string       `json:"progress,omitempty"` // e.g. "42 lines", "3m left"
 }

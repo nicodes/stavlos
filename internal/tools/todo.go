@@ -19,11 +19,19 @@ type Todos interface {
 }
 
 // TodoStatuses are the states a todo item moves through.
-var TodoStatuses = []string{"pending", "in_progress", "done", "cancelled"}
+var TodoStatuses = []event.TodoStatus{event.TodoPending, event.TodoInProgress, event.TodoDone, event.TodoCancelled}
+
+func todoStatusNames() string {
+	names := make([]string, 0, len(TodoStatuses))
+	for _, s := range TodoStatuses {
+		names = append(names, string(s))
+	}
+	return strings.Join(names, ", ")
+}
 
 func validTodoStatus(s string) bool {
 	for _, v := range TodoStatuses {
-		if v == s {
+		if string(v) == s {
 			return true
 		}
 	}
@@ -84,7 +92,7 @@ func (todoUpdateTool) Run(ctx context.Context, in json.RawMessage, env *Env) Res
 		return errf("%v", err)
 	}
 	if a.Status != "" && !validTodoStatus(a.Status) {
-		return errf("status must be one of %s", strings.Join(TodoStatuses, ", "))
+		return errf("status must be one of %s", todoStatusNames())
 	}
 	if a.Status == "" && strings.TrimSpace(a.Text) == "" {
 		return errf("nothing to change: give a status, a text, or both")

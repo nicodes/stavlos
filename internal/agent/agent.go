@@ -15,14 +15,16 @@ import (
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
-// State of an agent.
-type State string
+// State of an agent: the wire vocabulary (protocol.AgentState). The agent
+// itself is never "waiting"; Info derives that from idle plus an
+// outstanding question or job.
+type State = protocol.AgentState
 
 const (
-	StateIdle    State = "idle"
-	StateRunning State = "running"
-	StateBlocked State = "blocked" // awaiting a permission/question answer
-	StateKilled  State = "killed"
+	StateIdle    = protocol.AgentIdle
+	StateRunning = protocol.AgentRunning
+	StateBlocked = protocol.AgentBlocked // awaiting a permission/question answer
+	StateKilled  = protocol.AgentKilled
 )
 
 type queued struct {
@@ -151,19 +153,19 @@ func (a *Agent) takeInputs() []event.UserMessagePayload {
 	a.wakes = map[string]bool{}
 	var in []event.UserMessagePayload
 	for _, q := range a.prompts {
-		in = append(in, event.UserMessagePayload{Kind: "prompt", Text: q.text, From: a.s.senderLabel(q.source)})
+		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source)})
 	}
 	a.prompts = nil
 	for _, q := range a.steers { // idle: a steer is just a prompt, and reads as one
-		in = append(in, event.UserMessagePayload{Kind: "prompt", Text: q.text, From: a.s.senderLabel(q.source)})
+		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source)})
 	}
 	a.steers = nil
 	for _, r := range a.responses {
-		in = append(in, event.UserMessagePayload{Kind: "agent_response", Text: r.text, From: r.label})
+		in = append(in, event.UserMessagePayload{Kind: event.MsgAgentResponse, Text: r.text, From: r.label})
 	}
 	a.responses = nil
 	for _, r := range a.monDone {
-		in = append(in, event.UserMessagePayload{Kind: "monitor_fired", Text: monitorText(r)})
+		in = append(in, event.UserMessagePayload{Kind: event.MsgMonitorFired, Text: monitorText(r)})
 	}
 	a.monDone = nil
 	return in
@@ -278,7 +280,7 @@ func (a *Agent) waitingOn() bool {
 		return true
 	}
 	for _, m := range a.monitors {
-		if m.state == "running" {
+		if m.state == protocol.MonitorRunning {
 			return true
 		}
 	}
@@ -508,9 +510,9 @@ func (a *Agent) Done() <-chan struct{} { return a.done }
 func (a *Agent) Info() protocol.AgentInfo {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	state := string(a.state)
+	state := a.state
 	if a.state == StateIdle && a.waitingOn() {
-		state = "waiting" // idle, but a question or a job is outstanding
+		state = protocol.AgentWaiting // idle, but a question or a job is outstanding
 	}
 	info := protocol.AgentInfo{
 		ID: a.ID, Session: a.s.ID, Parent: a.Parent, Archetype: a.Archetype, Label: a.Label,
