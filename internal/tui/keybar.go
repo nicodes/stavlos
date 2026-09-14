@@ -25,27 +25,29 @@ func (m Model) keyHints() []keyHint {
 	}
 	switch m.focus {
 	case focusAgents:
-		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"←/→", "switch tab"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusAsync:
-		return []keyHint{{"↑/↓", "move"}, {"←/→", "switch tab"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusSidebar:
 		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
 	case focusMeta:
 		return []keyHint{{"←/→", "choose"}, {"enter", "open (YOLO: turn off)"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+	case focusTabs:
+		return []keyHint{{"←/→", "choose"}, {"enter", "open"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusChat:
 		return []keyHint{{"↑/↓", "item"}, {"enter", "expand/collapse tool"}, {"pgup/pgdn", "page"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
 	case focusPermission:
 		if p := m.currentPrompt(); p != nil {
 			switch p.Kind {
 			case "trust":
-				return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"←/→", "switch tab"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
+				return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			case "question":
 				return []keyHint{{"type + enter", "answer"}, {"1-9", "pick an option"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			default:
-				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"←/→", "switch tab"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
+				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			}
 		}
-		return []keyHint{{"←/→", "switch tab"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	}
 	// Input focus. The tab hint appears only when there is somewhere to go;
 	// a waiting permission already shows in the tab strip, so it is not

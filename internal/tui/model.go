@@ -96,6 +96,7 @@ type Model struct {
 	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
 	sel           selection // mouse text selection (drag to select, release to copy)
 	metaSel       metaPart  // the highlighted part of the meta row while it has focus
+	tabSel        int       // the highlighted tab (index into tabFocuses) while the strip has focus
 	details       bool      // expanded tool output (/details)
 	follow        bool      // auto-scroll to bottom
 
@@ -141,7 +142,7 @@ const (
 	focusAgents                  // the agents tab: live children
 	focusAsync                   // the async tab: running bash_async jobs
 	focusSidebar                 // the agent tree (↑/↓ enter)
-	focusTabs                    // placeholder in focusOrder for the tab strip as a whole
+	focusTabs                    // the tab strip: ←/→ highlight a tab, enter opens its dialog
 	focusMeta                    // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
 )
 
@@ -477,7 +478,7 @@ func (m *Model) runningJobs() []protocol.MonitorInfo {
 }
 
 // cycleFocus moves focus delta steps (+1 tab, -1 shift+tab) through
-// focusOrder, wrapping around. Landing on the strip opens defaultTab.
+// focusOrder, wrapping around. An open tab dialog counts as the strip.
 func (m *Model) cycleFocus(delta int) tea.Cmd {
 	order := m.focusOrder()
 	cur := m.focus
@@ -491,49 +492,42 @@ func (m *Model) cycleFocus(delta int) tea.Cmd {
 		}
 	}
 	n := len(order)
-	next := order[((i+delta)%n+n)%n]
-	if next == focusTabs {
-		next = m.defaultTab()
-	}
-	return m.setFocus(next)
+	return m.setFocus(order[((i+delta)%n+n)%n])
 }
 
-// defaultTab is the tab that opens when the strip gains focus: the first,
+// defaultTab is the tab highlighted when the strip gains focus: the first,
 // left to right, with anything in it, or permission when all are empty.
-func (m *Model) defaultTab() focus {
+func (m *Model) defaultTab() int {
 	switch {
 	case m.currentPrompt() != nil:
-		return focusPermission
+		return 0
 	case len(m.liveChildren()) > 0:
-		return focusAgents
+		return 1
 	case len(m.runningJobs()) > 0:
-		return focusAsync
+		return 2
 	}
-	return focusPermission
+	return 0
 }
 
-// tabArrow handles ←/→ while a tab has focus: move to the neighbouring
-// tab (no wrap). Reports whether the key was consumed.
-func (m *Model) tabArrow(msg tea.KeyMsg) (tea.Cmd, bool) {
-	delta := 0
+// tabsKey handles keys while the strip has focus: ←/→ move the highlight
+// (no wrap), enter opens the highlighted tab's dialog, esc returns to the
+// input.
+func (m *Model) tabsKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.setFocus(focusInput)
 	case key.Matches(msg, keys.TabLeft):
-		delta = -1
-	case key.Matches(msg, keys.TabRight):
-		delta = 1
-	default:
-		return nil, false
-	}
-	for i, t := range tabFocuses {
-		if t == m.focus {
-			j := i + delta
-			if j >= 0 && j < len(tabFocuses) {
-				return m.setFocus(tabFocuses[j]), true
-			}
-			return nil, true
+		if m.tabSel > 0 {
+			m.tabSel--
 		}
+	case key.Matches(msg, keys.TabRight):
+		if m.tabSel < len(tabFocuses)-1 {
+			m.tabSel++
+		}
+	case key.Matches(msg, keys.Submit):
+		return m.setFocus(tabFocuses[m.tabSel])
 	}
-	return nil, false
+	return nil
 }
 
 // setFocus moves keyboard focus to f. Entering the chat suspends
@@ -573,6 +567,8 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		if !m.metaHas(m.metaSel) {
 			m.metaSel = metaRole
 		}
+	case focusTabs:
+		m.tabSel = m.defaultTab()
 	}
 	return nil
 }
@@ -581,9 +577,6 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 // over the live children, enter selects the child under the cursor and
 // returns to the input, esc returns without changing the selection.
 func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
-	if cmd, ok := m.tabArrow(msg); ok {
-		return cmd
-	}
 	kids := m.liveChildren()
 	n := len(kids)
 	switch {
@@ -613,9 +606,6 @@ func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
 // asyncKey handles keys while the async tab has focus: ↑/↓ (or j/k) move
 // over the running jobs (informational only), esc returns to the input.
 func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
-	if cmd, ok := m.tabArrow(msg); ok {
-		return cmd
-	}
 	n := len(m.runningJobs())
 	switch {
 	case key.Matches(msg, keys.OvClose):
@@ -693,9 +683,9 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 }
 
 // dialogClick is a click while a dialog is open, in screen coordinates: on
-// an overlay row it selects and submits; on the tab dialog a title label
-// switches tabs and a body row moves the cursor (and, for agents, selects
-// the agent like enter). hit reports whether the click landed on something.
+// an overlay row it selects and submits; on a tab dialog row it moves the
+// cursor (and, for agents, selects the agent like enter). hit reports
+// whether the click landed on something.
 func (m *Model) dialogClick(x, y int) (tea.Cmd, bool) {
 	if m.ov != nil {
 		if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), m.sp.View()); ok {
@@ -707,11 +697,7 @@ func (m *Model) dialogClick(x, y int) (tea.Cmd, bool) {
 	if !isTab(m.focus) {
 		return nil, false
 	}
-	h := m.tabDialogHit(x, y)
-	switch {
-	case h.tabOK:
-		return m.setFocus(h.tab), true
-	case h.rowOK:
+	if h := m.tabDialogHit(x, y); h.rowOK {
 		m.agCursor = h.row
 		if m.focus == focusAgents {
 			return m.agentsKey(tea.KeyMsg{Type: tea.KeyEnter}), true
@@ -734,18 +720,15 @@ func (m *Model) dialogHover(x, y int) {
 	}
 }
 
-// tabHit is what a screen position lands on inside the tab dialog: a tab
-// label on its title line, or one of its body rows.
+// tabHit is the body row a screen position lands on inside a tab dialog.
 type tabHit struct {
-	tab          focus
-	row          int
-	tabOK, rowOK bool
+	row   int
+	rowOK bool
 }
 
-// tabDialogHit maps a screen position to the tab dialog, using the same
-// geometry as View and composite: the box is centred in the body; inside
-// the border and padding come the title (the tab labels), the rule, then
-// the rows.
+// tabDialogHit maps a screen position to the open tab dialog, using the
+// same geometry as View and composite: the box is centred in the body;
+// inside the border come the title, the hint line, the rule, then the rows.
 func (m *Model) tabDialogHit(x, y int) tabHit {
 	var h tabHit
 	box := m.tabDialog(m.width)
@@ -762,15 +745,8 @@ func (m *Model) tabDialogHit(x, y int) tabHit {
 	if x < x0 || x >= x0+bw || y <= y0 || y >= y0+len(boxLines)-1 {
 		return h // outside, or on the border
 	}
-	switch row := y - y0 - 1; {
-	case row == 0:
-		if f, ok := m.tabAt(x - x0 - 2); ok { // border + padding
-			h.tab, h.tabOK = f, true
-		}
-	case row >= 2:
-		if i := row - 2; i < m.tabRowCount() {
-			h.row, h.rowOK = i, true
-		}
+	if i := y - y0 - 1 - tabDialogHeader; i >= 0 && i < m.tabRowCount() {
+		h.row, h.rowOK = i, true
 	}
 	return h
 }
@@ -1438,6 +1414,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.sidebarKey(msg)
 	case focusMeta:
 		return m.metaKey(msg)
+	case focusTabs:
+		return m.tabsKey(msg)
 	case focusChat:
 		return m.chatKey(msg)
 	case focusPermission:
@@ -1562,13 +1540,7 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 		return m.setFocus(focusInput)
 	}
 	p := m.currentPrompt()
-	// ←/→ switch tabs, except while typing an answer (the field owns them).
-	if p == nil || p.Kind != "question" {
-		if cmd, ok := m.tabArrow(msg); ok {
-			return cmd
-		}
-	}
-	if p == nil { // empty tab: nothing to answer
+	if p == nil { // empty dialog: nothing to answer
 		return nil
 	}
 	if p.Kind == "question" {

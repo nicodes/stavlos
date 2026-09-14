@@ -976,19 +976,48 @@ func (m Model) sectionsView(width int) string {
 	return m.sectionTabs(m.liveChildren(), m.runningJobs(), m.currentPrompt(), width)
 }
 
-// tabDialog is the box drawn over the chat while a tab has focus: the tab
-// labels as its title (the open one in accent), a rule, then the tab's rows
-// (the pending prompt, the live children, the running jobs) or a note that
-// it is empty. Same width rules as the other dialogs.
+// tabDialogHeader is how many lines precede the rows in a tab dialog: the
+// title, the hint line and the rule.
+const tabDialogHeader = 3
+
+// tabDialog is the dialog of the open tab, drawn over the chat like every
+// other dialog: its title and count, a hint line, a rule, then its rows (the
+// pending prompt, the live children, the running jobs) or a note that it is
+// empty. Each tab has its own; nothing switches between them from inside.
 func (m Model) tabDialog(bodyWidth int) string {
 	w := dialogWidth(bodyWidth)
 	inner := w - 4 // border + padding
-	lines := []string{ansi.Truncate(m.tabLabels(m.liveChildren(), m.runningJobs(), m.currentPrompt()), inner, "…")}
-	lines = append(lines, styleRule.Render(strings.Repeat("─", inner)))
+	title, info := m.tabDialogHead()
+	lines := []string{
+		styleOvTitle.Render(truncRunes(title, inner)),
+		styleDim.Render(ansi.Truncate(info, inner, "…")),
+		styleRule.Render(strings.Repeat("─", inner)),
+	}
 	for _, l := range m.tabBodyLines(inner) {
 		lines = append(lines, ansi.Truncate(l, inner, "…"))
 	}
 	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
+}
+
+// tabDialogHead is the open tab's title (with its count) and key hints.
+func (m Model) tabDialogHead() (title, info string) {
+	switch m.focus {
+	case focusAgents:
+		return fmt.Sprintf("Agents (%d)", len(m.liveChildren())), "enter: select agent · esc: close"
+	case focusAsync:
+		return fmt.Sprintf("Async (%d)", len(m.runningJobs())), "esc: close"
+	}
+	n := len(m.prompts)
+	p := m.currentPrompt()
+	switch {
+	case p == nil:
+		return fmt.Sprintf("Permission (%d)", n), "esc: close"
+	case p.Kind == "question":
+		return fmt.Sprintf("Question (%d)", n), "enter: answer · 1-9: pick an option · esc: close"
+	case p.Kind == "trust":
+		return fmt.Sprintf("Trust (%d)", n), "y: trust project config · n: skip · esc: close"
+	}
+	return fmt.Sprintf("Permission (%d)", n), "y: allow once · a: allow for session · n: deny · esc: close"
 }
 
 // dialogWidth is the box width every dialog uses: overlayWidth, narrowed to
@@ -1047,9 +1076,16 @@ func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInf
 	return ansi.Truncate(line, width, "…")
 }
 
-// tabLabels is "permission (n) · agents (n) · async (n)", the focused tab in
-// accent, the rest dim; it heads both the strip and the tab dialog.
+// tabLabels is "permission (n) · agents (n) · async (n)": the highlighted
+// tab (while the strip has focus) or the open one (while its dialog is up)
+// in accent, the rest dim.
 func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo) string {
+	on := func(f focus) bool {
+		if m.focus == focusTabs {
+			return tabFocuses[m.tabSel] == f
+		}
+		return m.focus == f
+	}
 	tab := func(label string, on bool) string {
 		if on {
 			return styleBoxTitleFocus.Render(label)
@@ -1062,14 +1098,14 @@ func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo,
 	}
 	// An unfocused permission tab with prompts waiting is warning-coloured
 	// so it stands out until someone tabs to it.
-	permTab := tab(label, m.focus == focusPermission)
-	if p != nil && m.focus != focusPermission {
+	permTab := tab(label, on(focusPermission))
+	if p != nil && !on(focusPermission) {
 		permTab = styleWarn.Render(label)
 	}
 	tabs := []string{
 		permTab,
-		tab(fmt.Sprintf("agents (%d)", len(kids)), m.focus == focusAgents),
-		tab(fmt.Sprintf("async (%d)", len(jobs)), m.focus == focusAsync),
+		tab(fmt.Sprintf("agents (%d)", len(kids)), on(focusAgents)),
+		tab(fmt.Sprintf("async (%d)", len(jobs)), on(focusAsync)),
 	}
 	return strings.Join(tabs, styleDim.Render(" · "))
 }

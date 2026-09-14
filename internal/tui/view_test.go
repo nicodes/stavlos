@@ -299,8 +299,8 @@ func TestMonitorRows(t *testing.T) {
 	if view := stripANSI(m.sectionsView(100)); strings.Count(view, "\n") != 0 {
 		t.Fatalf("the strip stays one line with a tab open:\n%s", view)
 	}
-	// the dialog: title, rule, one row per job, inside the border
-	if view := stripANSI(m.tabDialog(100)); strings.Count(view, "\n") != 6 || !strings.Contains(view, "go test") || !strings.Contains(view, "cooldown") {
+	// the dialog: title, hint, rule, one row per job, inside the border
+	if view := stripANSI(m.tabDialog(100)); strings.Count(view, "\n") != 7 || !strings.Contains(view, "Async (3)") || !strings.Contains(view, "go test") || !strings.Contains(view, "cooldown") {
 		t.Fatalf("async dialog:\n%s", view)
 	}
 	m.focus = focusInput
@@ -451,44 +451,52 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatal("enter on a meta part should open its dialog")
 	}
 	press(&m, tab)
-	if m.focus != focusPermission || !strings.Contains(stripANSI(m.tabDialog(100)), "no prompts waiting") {
-		t.Fatalf("tab x3: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}) // nothing to answer: ignored
-	if m.focus != focusPermission {
-		t.Fatalf("y on an empty permission tab: focus=%v", m.focus)
+	// the strip: a highlight, no dialog yet
+	if m.focus != focusTabs || m.tabSel != 0 || strings.Contains(m.View(), "╭") {
+		t.Fatalf("tab x3: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, left) // already leftmost: stays
-	if m.focus != focusPermission {
-		t.Fatalf("left at the edge: focus=%v", m.focus)
+	if m.tabSel != 0 {
+		t.Fatalf("left at the edge: sel=%d", m.tabSel)
 	}
 	press(&m, right)
-	if m.focus != focusAgents || !strings.Contains(stripANSI(m.tabDialog(100)), "no subagents running") {
-		t.Fatalf("right: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
-	}
 	press(&m, right)
-	if m.focus != focusAsync || !strings.Contains(stripANSI(m.tabDialog(100)), "no async jobs running") {
-		t.Fatalf("right right: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
-	}
 	press(&m, right) // already rightmost: stays
-	if m.focus != focusAsync {
-		t.Fatalf("right at the edge: focus=%v", m.focus)
+	if m.focus != focusTabs || m.tabSel != 2 {
+		t.Fatalf("right x3: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, left)
+	if m.tabSel != 1 {
+		t.Fatalf("left: sel=%d", m.tabSel)
+	}
+	// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if dv := stripANSI(m.tabDialog(100)); m.focus != focusAgents || !strings.Contains(dv, "Agents (0)") || !strings.Contains(dv, "no subagents running") || strings.Contains(dv, "permission") {
+		t.Fatalf("enter: focus=%v\n%s", m.focus, dv)
+	}
+	press(&m, right)
 	if m.focus != focusAgents {
-		t.Fatalf("left: focus=%v", m.focus)
-	}
-	press(&m, tab) // any tab → input
-	if m.focus != focusInput || !m.follow || !m.input.Focused() {
-		t.Fatalf("tab from a tab: focus=%v follow=%v", m.focus, m.follow)
-	}
-	press(&m, stab)
-	if m.focus != focusPermission {
-		t.Fatalf("shift+tab: focus=%v", m.focus)
+		t.Fatalf("→ inside a dialog should do nothing: focus=%v", m.focus)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.focus != focusInput {
 		t.Fatalf("esc: focus=%v", m.focus)
+	}
+	press(&m, stab)
+	if m.focus != focusTabs {
+		t.Fatalf("shift+tab: focus=%v", m.focus)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter}) // permission dialog, nothing waiting
+	if dv := stripANSI(m.tabDialog(100)); m.focus != focusPermission || !strings.Contains(dv, "Permission (0)") || !strings.Contains(dv, "no prompts waiting") {
+		t.Fatalf("enter on permission: focus=%v\n%s", m.focus, dv)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}) // nothing to answer: ignored
+	if m.focus != focusPermission {
+		t.Fatalf("y on an empty permission dialog: focus=%v", m.focus)
+	}
+	press(&m, tab) // tab from a dialog → input
+	if m.focus != focusInput || !m.follow || !m.input.Focused() {
+		t.Fatalf("tab from a dialog: focus=%v follow=%v", m.focus, m.follow)
 	}
 
 	// Sidebar shown: input → sidebar → chat → meta row → tabs → input.
@@ -499,7 +507,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusSidebar, focusChat, focusMeta, focusPermission, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusSidebar, focusChat, focusMeta, focusTabs, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with sidebar: %v, want %v", seen, want)
 	}
 	// Hiding the sidebar while it has focus falls back to the input.
@@ -510,7 +518,8 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("sidebar hidden: focus=%v", m.focus)
 	}
 
-	// Pending prompt: chat → permission (the first non-empty tab) → input.
+	// Pending prompt: chat → meta → strip (highlighting permission, the
+	// first non-empty tab) → input.
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
 	if m.focus != focusInput {
 		t.Fatal("a new prompt must not steal focus")
@@ -520,30 +529,30 @@ func TestTabCyclesFocus(t *testing.T) {
 		press(&m, tab)
 		seen = append(seen, m.focus)
 	}
-	if want := []focus{focusChat, focusMeta, focusPermission, focusInput}; !equalFocus(seen, want) {
+	if want := []focus{focusChat, focusMeta, focusTabs, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with prompt: %v, want %v", seen, want)
 	}
-	// With a child but no prompt, the strip opens on agents; with only a
-	// job, on async.
+	// With a child but no prompt, the strip highlights agents; with only a
+	// job, async.
 	m.prompts = nil
 	m.agents = append(m.agents, protocol.AgentInfo{ID: "c", Parent: "a", Label: "kid", State: "working"})
 	press(&m, stab)
-	if m.focus != focusAgents {
-		t.Fatalf("first non-empty tab should be agents: %v", m.focus)
+	if m.focus != focusTabs || m.tabSel != 1 {
+		t.Fatalf("first non-empty tab should be agents: %v sel %d", m.focus, m.tabSel)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	m.agents = m.agents[:len(m.agents)-1]
 	m.agents[0].Monitors = []protocol.MonitorInfo{{ID: "j", Kind: "command", Label: "sleep", State: "running"}}
 	press(&m, stab)
-	if m.focus != focusAsync {
-		t.Fatalf("first non-empty tab should be async: %v", m.focus)
+	if m.focus != focusTabs || m.tabSel != 2 {
+		t.Fatalf("first non-empty tab should be async: %v sel %d", m.focus, m.tabSel)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	m.agents[0].Monitors = nil
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
-	press(&m, stab) // input → permission
+	press(&m, stab, tea.KeyMsg{Type: tea.KeyEnter}) // input → strip → the permission dialog
 	if m.focus != focusPermission {
-		t.Fatalf("shift+tab from input: %v", m.focus)
+		t.Fatalf("shift+tab, enter from input: %v", m.focus)
 	}
 	// Answering the prompt elsewhere returns focus to the input.
 	m.removePrompt("p")
@@ -586,7 +595,11 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	m.input.Reset()
 
 	// Permission focus: y answers (claim + reply as one tea.Cmd).
-	press(&m, tea.KeyMsg{Type: tea.KeyShiftTab}) // the strip opens on permission: a prompt waits
+	press(&m, tea.KeyMsg{Type: tea.KeyShiftTab}) // the strip highlights permission: a prompt waits
+	if m.focus != focusTabs || m.tabSel != 0 {
+		t.Fatalf("focus %v sel %d", m.focus, m.tabSel)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.focus != focusPermission {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -801,34 +814,39 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if len(order) != 3 || order[0] != focusMeta || order[1] != focusTabs || order[2] != focusInput {
 		t.Fatalf("order %v", order)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → permission (a prompt waits)
+	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → strip (highlighting permission: a prompt waits)
+	if m.focus != focusTabs || m.tabSel != 0 || strings.Contains(m.View(), "╭") {
+		t.Fatalf("the strip should highlight permission without a dialog: focus=%v sel=%d", m.focus, m.tabSel)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
 	if sv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(sv, "\n") != 0 || strings.Contains(sv, "make test") {
 		t.Fatalf("the strip should stay one line with the permission open: focus=%v\n%s", m.focus, sv)
 	}
-	// the dialog: the tab labels as its title, then the tool row over its command
+	// the dialog: the tool row over its command
 	if body := strings.Join(m.tabBodyLines(60), "\n"); !strings.Contains(stripANSI(body), "$ Bash · coder\n       make test") || strings.Contains(body, "{") {
 		t.Fatalf("permission should open as a tool row over its command:\n%s", stripANSI(body))
 	}
 	dv := stripANSI(m.tabDialog(100))
-	if !strings.HasPrefix(dv, "╭") || !strings.Contains(dv, "permission (1) · agents (2) · async (0)") || !strings.Contains(dv, "make test") {
+	if !strings.HasPrefix(dv, "╭") || !strings.Contains(dv, "Permission (1)") || !strings.Contains(dv, "y: allow once") || !strings.Contains(dv, "make test") || strings.Contains(dv, "agents (") {
 		t.Fatalf("permission dialog:\n%s", dv)
 	}
 	// the dialog is composited into the full view (here over the home screen)
 	if full := stripANSI(m.View()); !strings.Contains(full, "make test") || !strings.Contains(full, "╭") {
 		t.Fatalf("the dialog should render in the view:\n%s", full)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRight}) // permission → agents
+	// esc back to the strip's neighbour: open the agents dialog from the strip
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}
-	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
+	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "Agents (2)") || !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
 		t.Fatalf("agents dialog:\n%s", dv)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRight}) // agents → async
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.focus != focusAsync || !strings.Contains(stripANSI(m.tabDialog(100)), "no async jobs running") {
 		t.Fatalf("async: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyLeft}) // async → agents for the selection test
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter}) // agents again for the selection test
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -858,30 +876,30 @@ func TestSectionTabStrip(t *testing.T) {
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
-	// agents focused: the strip is unchanged; the dialog titles itself with
-	// the same labels, then its rows
+	// agents focused: the strip is unchanged; the dialog has its own title,
+	// a hint line, then its rows
 	m.focus = focusAgents
 	if sv := stripANSI(m.sectionsView(100)); strings.Count(sv, "\n") != 0 || strings.Contains(sv, "scout") {
 		t.Fatalf("strip with agents focused:\n%s", sv)
 	}
 	v = stripANSI(m.tabDialog(100))
 	lines := strings.Split(v, "\n")
-	// border, title, rule, one row, border
-	if len(lines) != 5 || !strings.Contains(lines[1], "permission (1) · agents (1) · async (1)") || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "scout") {
+	// border, title, hint, rule, one row, border
+	if len(lines) != 6 || !strings.Contains(lines[1], "Agents (1)") || strings.Contains(lines[1], "permission") || !strings.Contains(lines[4], "▸") || !strings.Contains(lines[4], "scout") {
 		t.Fatalf("agents dialog:\n%s", v)
 	}
 	// async focused: the job row
 	m.focus = focusAsync
 	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 5 || !strings.Contains(lines[1], "async (1)") || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "go test") || strings.Contains(v, "scout") {
+	if len(lines) != 6 || !strings.Contains(lines[1], "Async (1)") || !strings.Contains(lines[4], "▸") || !strings.Contains(lines[4], "go test") || strings.Contains(v, "scout") {
 		t.Fatalf("async dialog:\n%s", v)
 	}
 	// permission focused: the tool row over its command
 	m.focus = focusPermission
 	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 6 || !strings.Contains(lines[1], "permission (1)") || !strings.Contains(lines[3], "Bash") || !strings.Contains(lines[4], "       make test") || strings.Contains(v, "scout") {
+	if len(lines) != 7 || !strings.Contains(lines[1], "Permission (1)") || !strings.Contains(lines[2], "y: allow once") || !strings.Contains(lines[4], "Bash") || !strings.Contains(lines[5], "       make test") || strings.Contains(v, "scout") {
 		t.Fatalf("permission dialog:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
@@ -1378,12 +1396,11 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 		t.Fatalf("clicking an agent row should select it: %s focus=%v", m.selectedID(), m.focus)
 	}
 	m.selected = 0
-	// a tab label on the dialog's title switches tabs
+	// the strip labels still open dialogs directly while one is up
 	click(agentsX, lay.strip)
-	x, y = rowAt("async (0)")
-	click(x, y)
+	click(agentsX+len("agents (2)")+3, lay.strip) // "async (0)"
 	if m.focus != focusAsync {
-		t.Fatalf("clicking a label on the dialog title should switch tabs: %v", m.focus)
+		t.Fatalf("clicking a strip label should open that tab's dialog: %v", m.focus)
 	}
 	// clicking the input focuses it (and closes the dialog)
 	lay = m.rows()
