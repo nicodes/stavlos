@@ -131,9 +131,10 @@ func (d *Daemon) recover(ctx context.Context) error {
 // --- agent.Host ---
 
 // Append logs an event and fans it out to subscribed clients. Append and
-// broadcast happen under one lock so clients see events in sequence order;
-// otherwise two agents finishing at once could deliver out of order and the
-// per-subscription dedupe would drop the earlier one as stale.
+// broadcast happen under one lock so clients see events in sequence order
+// (two agents finishing at once must not deliver out of order), and so a
+// subscription's handover from replay to live can take the same lock and
+// miss nothing. Delivery only queues: a slow client never holds the lock.
 func (d *Daemon) Append(ctx context.Context, e event.Event) (event.Event, error) {
 	d.appendMu.Lock()
 	defer d.appendMu.Unlock()
@@ -166,9 +167,7 @@ func (f sinkFunc) Notify(n protocol.PromptNotification, tiers []protocol.Tier) {
 
 func (d *Daemon) notifyPrompt(n protocol.PromptNotification, tiers []protocol.Tier) {
 	b, _ := json.Marshal(n)
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	for _, c := range d.clients {
+	for _, c := range d.clientList() {
 		for _, t := range tiers {
 			if c.tier == t {
 				c.notify(protocol.NPrompt, b)
@@ -601,7 +600,7 @@ type client struct {
 
 func (c *client) notify(method string, params json.RawMessage) { c.send(method, params) }
 
-// deliver sends an event once per subscription, in order.
+// deliver sends a live event once per subscription, in order.
 func (c *client) deliver(e event.Event) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -610,14 +609,65 @@ func (c *client) deliver(e event.Event) {
 		return
 	}
 	c.subs[e.Session] = e.Seq
+	c.sendEvent(e)
+}
+
+func (c *client) sendEvent(e event.Event) {
 	b, _ := json.Marshal(protocol.EventNotification{Event: e})
 	c.send(protocol.NEvent, b)
 }
 
-func (d *Daemon) eachSubscribed(session string, fn func(*client)) {
+// subscribe replays a session's events from seq from, then hands the
+// client over to live delivery with nothing missed and nothing twice. The
+// bulk of the replay runs without the append lock; the tail written
+// meanwhile is read and sent under it, and the subscription is registered
+// before the lock is released, so the next live event is the next seq.
+func (d *Daemon) subscribe(ctx context.Context, cl *client, session string, from int64) (int64, error) {
+	if from <= 0 {
+		from = 1
+	}
+	cl.mu.Lock()
+	delete(cl.subs, session) // a re-subscription starts over: no live delivery during the replay
+	cl.mu.Unlock()
+	last := from - 1
+	evs, err := d.Log.Read(ctx, session, from, 0)
+	if err != nil {
+		return 0, err
+	}
+	for _, e := range evs {
+		cl.sendEvent(e)
+		last = e.Seq
+	}
+	d.appendMu.Lock()
+	defer d.appendMu.Unlock()
+	tail, err := d.Log.Read(ctx, session, last+1, 0)
+	if err != nil {
+		return 0, err
+	}
+	for _, e := range tail {
+		cl.sendEvent(e)
+		last = e.Seq
+	}
+	cl.mu.Lock()
+	cl.subs[session] = last
+	cl.mu.Unlock()
+	return last, nil
+}
+
+// clientList snapshots the attached clients, so nothing is sent while the
+// daemon's lock is held.
+func (d *Daemon) clientList() []*client {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+	out := make([]*client, 0, len(d.clients))
 	for _, c := range d.clients {
+		out = append(out, c)
+	}
+	return out
+}
+
+func (d *Daemon) eachSubscribed(session string, fn func(*client)) {
+	for _, c := range d.clientList() {
 		c.mu.Lock()
 		_, ok := c.subs[session]
 		c.mu.Unlock()
