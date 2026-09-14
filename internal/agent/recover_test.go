@@ -210,3 +210,30 @@ func TestRecoverArchivedAndKilled(t *testing.T) {
 		t.Fatalf("archived %v live %d", s3.Archived(), s3.Live())
 	}
 }
+
+// TestRecoverMissingRoleIsReadOnly: an agent whose role vanished from the
+// configuration comes back read-only under its old name, never as the
+// (usually most capable) root role.
+func TestRecoverMissingRoleIsReadOnly(t *testing.T) {
+	roles := map[string]string{"lead": "---\ndescription: Leads\nmode: primary\nspawn: [general]\n---\nYou lead.\n"}
+	s, h := newTestSession(t, testConfig{json: `{"model":"fake/m1","rootAgent":"lead"}`, roles: roles}, &fakeModel{steps: []step{reply(text("hi"))}})
+	runTurn(t, s, h, "go")
+	s.Stop()
+	cfg, _ := loadTestConfig(t, testConfig{}) // the lead role is gone
+	s2, err := Recover(context.Background(), newFakeHost(&fakeModel{}), s.ID, s.Dir, s.Created, cfg, h.all())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s2.Stop)
+	r := s2.Root()
+	in := r.Info()
+	if in.Archetype != "lead" || !strings.Contains(in.LastError, "no longer exists") {
+		t.Fatalf("%+v", in)
+	}
+	if p := r.Preset(); strings.Join(p.Tools, ",") != "read" || len(p.Spawn) != 0 || len(p.MCP) != 0 {
+		t.Fatalf("fallback preset %+v", p)
+	}
+	if ok, _ := s2.canSpawn(r); ok {
+		t.Fatal("a read-only fallback must not spawn")
+	}
+}

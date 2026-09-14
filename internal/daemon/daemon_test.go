@@ -1163,8 +1163,8 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 		for _, d := range req.Tools {
 			offered = append(offered, d.Name)
 		}
-		if !strings.Contains(req.System, "senior software engineer") {
-			t.Errorf("system prompt should be the general preset's: %.80q", req.System)
+		if !strings.Contains(req.System, "role's definition is gone") {
+			t.Errorf("system prompt should say the role is gone: %.80q", req.System)
 		}
 		return text("ok")
 	}}
@@ -1174,14 +1174,22 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	agents, _ = h2.c.Tree(ctx, s.ID)
-	if agents[0].Archetype != "general" {
-		t.Fatalf("root should fall back to general: %+v", agents[0])
+	// Recovery never widens: the agent keeps its archetype name, runs
+	// read-only, and says why.
+	if agents[0].Archetype != "coder" || !strings.Contains(agents[0].LastError, "no longer exists") {
+		t.Fatalf("root should come back read-only under its old name: %+v", agents[0])
 	}
 	_ = h2.c.Subscribe(ctx, s.ID, 0)
 	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "hello")
 	h2.waitFor(event.TurnEnded, agents[0].ID)
-	if !strings.Contains(strings.Join(offered, " "), "agent_create") || !strings.Contains(strings.Join(offered, " "), "apply_patch") {
-		t.Fatalf("the fallback should carry general's tools, got %v", offered)
+	got := " " + strings.Join(offered, " ") + " "
+	for _, gone := range []string{" shell ", " apply_patch ", " agent_create "} {
+		if strings.Contains(got, gone) {
+			t.Fatalf("the fallback must not offer %s, got %v", strings.TrimSpace(gone), offered)
+		}
+	}
+	if !strings.Contains(got, " read ") {
+		t.Fatalf("the fallback should still read, got %v", offered)
 	}
 }
 
