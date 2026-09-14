@@ -282,6 +282,10 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("turn 3 ended %+v", te)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents) == 2 && agents[1].State != "idle" {
+		h.waitFor(event.TurnEnded, agents[1].ID) // the child's own turn may still be closing
+		agents, _ = h.c.Tree(ctx, s.ID)
+	}
 	if len(agents) != 2 || agents[1].State != "idle" || agents[0].CostUSD != 0 {
 		t.Fatalf("tree after (the child stays alive, idle): %+v", agents)
 	}
@@ -1681,5 +1685,61 @@ func TestWorkingDirectories(t *testing.T) {
 		if a.Label == "kid" && (len(a.Dirs) != 2 || a.Dirs[1].Path != shared) {
 			t.Fatalf("recovered child dirs %+v", a.Dirs)
 		}
+	}
+}
+
+// TestBoundaryPromptEditedDir: allow_always with an edited directory adds
+// that directory rather than the offered one.
+func TestBoundaryPromptEditedDir(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	outside := t.TempDir()
+	os.MkdirAll(filepath.Join(outside, "sub"), 0o755)
+	os.WriteFile(filepath.Join(outside, "sub", "f.txt"), []byte("f"), 0o644)
+	os.WriteFile(filepath.Join(outside, "other.txt"), []byte("o"), 0o644)
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response { return call("c1", "read", `{"path":"`+outside+`/sub/f.txt"}`) },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError {
+				t.Errorf("first read: %+v", last)
+			}
+			return call("c2", "read", `{"path":"`+outside+`/other.txt"}`) // covered by the edited (wider) directory: no prompt
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || !strings.Contains(last.Content, "o") {
+				t.Errorf("second read should run without a prompt: %+v", last)
+			}
+			return text("done")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	h.waitFor(event.PromptRequested, root)
+	pending := h.d.esc.Pending(s.ID)
+	if len(pending) != 1 || pending[0].Dir != filepath.Join(outside, "sub") {
+		t.Fatalf("offered dir %+v", pending)
+	}
+	_ = h.c.ClaimPrompt(ctx, pending[0].ID)
+	if err := h.c.ReplyPromptDir(ctx, pending[0].ID, "allow_always", outside); err != nil {
+		t.Fatal(err)
+	}
+	e := h.waitFor(event.AgentDirAdded, root)
+	var dp event.DirAddedPayload
+	_ = e.Decode(&dp)
+	if dp.Dir != outside {
+		t.Fatalf("the edited directory should be added: %+v", dp)
+	}
+	h.waitFor(event.TurnEnded, root)
+	if n := len(h.d.esc.Pending(s.ID)); n != 0 {
+		t.Fatalf("no further prompt expected, %d pending", n)
 	}
 }

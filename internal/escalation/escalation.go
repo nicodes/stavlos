@@ -16,6 +16,7 @@ import (
 // Answer is the outcome of a prompt.
 type Answer struct {
 	Value     string // allow | deny | allow_always | free text
+	Dir       string // boundary prompts: the directory to add with allow_always, when the human edited it
 	Client    string
 	Defaulted bool
 	Withdrawn bool
@@ -192,6 +193,11 @@ func (m *Manager) Claim(id, client string) error {
 // Reply answers a prompt. Only the claimant may reply; an unclaimed prompt
 // is implicitly claimed by the replier.
 func (m *Manager) Reply(id, client, answer string) error {
+	return m.ReplyWithDir(id, client, answer, "")
+}
+
+// ReplyWithDir is Reply with an edited directory for a boundary prompt.
+func (m *Manager) ReplyWithDir(id, client, answer, dir string) error {
 	m.mu.Lock()
 	p, ok := m.pend[id]
 	if !ok || p.done {
@@ -205,7 +211,7 @@ func (m *Manager) Reply(id, client, answer string) error {
 	p.info.ClaimedBy = client
 	info := p.info
 	m.mu.Unlock()
-	if !m.finish(id, Answer{Value: answer, Client: client}) {
+	if !m.finish(id, Answer{Value: answer, Dir: dir, Client: client}) {
 		return ErrLate
 	}
 	m.record("answered", info, answer, client)

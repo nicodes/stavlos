@@ -254,6 +254,12 @@ func (c *Client) ReplyPrompt(ctx context.Context, id, answer string) error {
 	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: answer}, nil)
 }
 
+// ReplyPromptDir answers a boundary prompt with allow_always and a
+// directory of the human's choosing in place of the offered one.
+func (c *Client) ReplyPromptDir(ctx context.Context, id, answer, dir string) error {
+	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: answer, Dir: dir}, nil)
+}
+
 func (c *Client) TrustStatus(ctx context.Context, dir string) (protocol.TrustStatusResult, error) {
 	var r protocol.TrustStatusResult
 	err := c.Call(ctx, protocol.MTrustStatus, protocol.TrustStatusParams{Dir: dir}, &r)

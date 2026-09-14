@@ -304,7 +304,8 @@ type PromptClaimParams struct {
 type PromptReplyParams struct {
 	V      int    `json:"v"`
 	ID     string `json:"id"`
-	Answer string `json:"answer"` // allow | deny | allow_always | text
+	Answer string `json:"answer"`        // allow | deny | allow_always | text
+	Dir    string `json:"dir,omitempty"` // boundary prompt + allow_always: add this directory instead of the offered one
 }
 
 type TrustStatusParams struct {

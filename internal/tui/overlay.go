@@ -76,6 +76,8 @@ type overlay struct {
 	offset int           // first visible row
 
 	login loginState // login mode only
+
+	hints []keyHint // the footer's key hints, set by the model before each render
 }
 
 var (
@@ -236,6 +238,9 @@ func (o *overlay) view(bodyWidth int, spinner string) string {
 		o.input.Width = inner - len([]rune(o.input.Prompt)) - 1
 		lines = append(lines, o.input.View(), "")
 		lines = append(lines, o.listLines(inner)...)
+	}
+	if f := dialogHintLine(o.hints, inner); f != "" {
+		lines = append(lines, "", f)
 	}
 	// Width covers padding but not the border: inner content + 2 padding + 2 border = w.
 	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
