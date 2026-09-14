@@ -226,7 +226,61 @@ type Trust interface {
 // when trust confirms the current hash.
 func Load(dir string, trust Trust) (*Effective, error) {
 	dir, _ = filepath.Abs(dir)
-	e := &Effective{Dir: dir, Presets: map[string]Preset{}, Skills: map[string]Skill{}, MCP: map[string]MCP{}}
+	e, err := LoadGlobal()
+	if err != nil {
+		return nil, err
+	}
+	e.Dir = dir
+
+	// project layer (trust-gated)
+	pdir := paths.ProjectDir(dir)
+	agentsMD := filepath.Join(dir, "AGENTS.md")
+	files, hash, err := ProjectHash(dir)
+	if err != nil {
+		return nil, err
+	}
+	if len(files) > 0 {
+		e.TrustHash = hash
+		e.TrustFiles = files
+		if trust != nil && trust.Trusted(dir, hash) {
+			pf, err := readFile(filepath.Join(pdir, "stavlos.json"))
+			if err != nil {
+				return nil, fmt.Errorf("project config: %w", err)
+			}
+			if len(pf.Plugins) > 0 {
+				fmt.Fprintf(os.Stderr, "stavlos: ignoring plugins in %s (global only)\n", pdir)
+			}
+			e.applyFile(pf, "project")
+			if err := e.loadPresets(filepath.Join(pdir, "roles"), "project"); err != nil {
+				return nil, err
+			}
+			warnOldAgentsDir(filepath.Join(pdir, "agents"))
+			if err := e.loadSkills(filepath.Join(pdir, "skills")); err != nil {
+				return nil, err
+			}
+			if b, err := os.ReadFile(agentsMD); err == nil {
+				e.AgentsMD = string(b)
+			}
+		} else {
+			e.TrustPending = true
+		}
+	}
+
+	// local layer (trusted, never prompts)
+	lf, err := readFile(filepath.Join(pdir, "stavlos.local.json"))
+	if err != nil {
+		return nil, fmt.Errorf("local config: %w", err)
+	}
+	e.applyFile(lf, "local")
+	return e, nil
+}
+
+// LoadGlobal is the daemon-wide configuration: the defaults and the global
+// layer, nothing from any directory. It is what the daemon itself runs on
+// (escalation timers, the fallback for a session whose own config fails to
+// load); Load builds a session's config on top of it.
+func LoadGlobal() (*Effective, error) {
+	e := &Effective{Presets: map[string]Preset{}, Skills: map[string]Skill{}, MCP: map[string]MCP{}}
 
 	// defaults
 	e.Model = ""
@@ -290,47 +344,6 @@ func Load(dir string, trust Trust) (*Effective, error) {
 	if err := e.loadSkills(filepath.Join(gdir, "skills")); err != nil {
 		return nil, err
 	}
-
-	// project layer (trust-gated)
-	pdir := paths.ProjectDir(dir)
-	agentsMD := filepath.Join(dir, "AGENTS.md")
-	files, hash, err := ProjectHash(dir)
-	if err != nil {
-		return nil, err
-	}
-	if len(files) > 0 {
-		e.TrustHash = hash
-		e.TrustFiles = files
-		if trust != nil && trust.Trusted(dir, hash) {
-			pf, err := readFile(filepath.Join(pdir, "stavlos.json"))
-			if err != nil {
-				return nil, fmt.Errorf("project config: %w", err)
-			}
-			if len(pf.Plugins) > 0 {
-				fmt.Fprintf(os.Stderr, "stavlos: ignoring plugins in %s (global only)\n", pdir)
-			}
-			e.applyFile(pf, "project")
-			if err := e.loadPresets(filepath.Join(pdir, "roles"), "project"); err != nil {
-				return nil, err
-			}
-			warnOldAgentsDir(filepath.Join(pdir, "agents"))
-			if err := e.loadSkills(filepath.Join(pdir, "skills")); err != nil {
-				return nil, err
-			}
-			if b, err := os.ReadFile(agentsMD); err == nil {
-				e.AgentsMD = string(b)
-			}
-		} else {
-			e.TrustPending = true
-		}
-	}
-
-	// local layer (trusted, never prompts)
-	lf, err := readFile(filepath.Join(pdir, "stavlos.local.json"))
-	if err != nil {
-		return nil, fmt.Errorf("local config: %w", err)
-	}
-	e.applyFile(lf, "local")
 	return e, nil
 }
 

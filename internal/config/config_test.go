@@ -239,3 +239,31 @@ func TestExampleCoderRoleParses(t *testing.T) {
 		t.Fatalf("tools %v rules %+v", p.Tools, p.PresetPolicy().Rules())
 	}
 }
+
+// TestLoadGlobalReadsNoDirectory: the daemon's own configuration comes from
+// the defaults and the global layer alone. It used to be Load(os.TempDir()),
+// which applied /tmp/.stavlos/stavlos.local.json as a trusted layer.
+func TestLoadGlobalReadsNoDirectory(t *testing.T) {
+	g := t.TempDir()
+	t.Setenv("STAVLOS_CONFIG_DIR", g)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","escalation":{"answerTimeout":"7s"}}`), 0o644)
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	os.MkdirAll(filepath.Join(tmp, ".stavlos"), 0o755)
+	os.WriteFile(filepath.Join(tmp, ".stavlos", "stavlos.local.json"), []byte(`{"escalation":{"default":"allow","answerTimeout":"1s"},"policy":{"shell":"allow"}}`), 0o644)
+	e, err := LoadGlobal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Dir != "" || e.Model != "fake/m1" || e.Escalation.Default != policy.Deny || e.Escalation.AnswerTimeout != 7*time.Second || e.Policy.Decide("shell", "rm x") != policy.Ask {
+		t.Fatalf("%+v", e)
+	}
+	// Load on that directory does apply the local layer: the two are distinct.
+	l, err := Load(tmp, noTrust{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Escalation.Default != policy.Allow || l.Policy.Decide("shell", "rm x") != policy.Allow {
+		t.Fatalf("%+v", l)
+	}
+}

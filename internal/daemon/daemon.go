@@ -62,7 +62,7 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 	}
 	// Escalation timers come from global config; per-session overrides are
 	// a roadmap item (PRD §7.4: single global settings in v1).
-	gcfg, err := config.Load(os.TempDir(), d.trust)
+	gcfg, err := config.LoadGlobal()
 	if err != nil {
 		return nil, err
 	}
@@ -101,8 +101,10 @@ func (d *Daemon) recover(ctx context.Context) error {
 		}
 		cfg, err := config.Load(r.Dir, d.trust)
 		if err != nil {
-			log.Printf("session %s: config: %v (using defaults)", r.ID, err)
-			cfg, _ = config.Load(os.TempDir(), d.trust)
+			log.Printf("session %s: config: %v (using the global configuration)", r.ID, err)
+			if cfg, err = config.LoadGlobal(); err != nil {
+				return err
+			}
 			cfg.Dir = r.Dir
 		}
 		s, err := agent.Recover(ctx, d, r.ID, r.Dir, r.Created, cfg, evs)
