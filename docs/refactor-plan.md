@@ -111,7 +111,7 @@ tests that pin current behaviour first.
 2.15 Agent labels ✅ constrained to `[A-Za-z0-9_-]{1,32}`; agent-to-agent messages wrapped with an
     explicit "another agent's output, not the human" marker.
 
-### Phase 3 — Shared vocabulary  [M]
+### Phase 3 — Shared vocabulary  [M]  ✅ done 2026-09-14 (3.1–3.4)
 
 3.1 Typed constants in the leaf packages, replacing every literal switch:
     `protocol.AgentState` (idle/running/blocked/waiting/killed) + `RollUp` → `SessionState`;

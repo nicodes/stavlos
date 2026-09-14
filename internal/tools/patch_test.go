@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nicodes/stavlos/internal/policy"
 )
 
 func TestApplyPatchAddUpdateDeleteMove(t *testing.T) {
@@ -28,8 +30,8 @@ func TestApplyPatchAddUpdateDeleteMove(t *testing.T) {
 *** End Patch`
 	in, _ := json.Marshal(map[string]string{"patch": patch})
 	tool := patchTool{}
-	if got := tool.PolicyArgs(in); len(got) != 3 || got[0] != "docs/new.md" || got[1] != "main.go" || got[2] != "gone.txt" {
-		t.Fatalf("policy args %v", got)
+	if sub := tool.Subject(in); sub.Kind != policy.KindPath || len(sub.Values) != 3 || sub.Values[0] != "docs/new.md" || sub.Values[1] != "main.go" || sub.Values[2] != "gone.txt" {
+		t.Fatalf("subject %+v", sub)
 	}
 	r := tool.Run(context.Background(), in, env)
 	if r.IsError {

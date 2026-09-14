@@ -9,6 +9,8 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+
+	"github.com/nicodes/stavlos/internal/policy"
 )
 
 const samplePage = `<!doctype html><html><head><title>T</title><style>p{}</style><script>x()</script></head>
@@ -107,8 +109,8 @@ func TestWebFetch(t *testing.T) {
 		`https://github.com/nicodes/stavlos/blob/main/README.md`: "https://raw.githubusercontent.com/nicodes/stavlos/main/README.md",
 		`ftp://x/y`:                                              "ftp://x/y", // unparseable as a fetch: matched as written, then refused
 	} {
-		if got := sh.PolicyArg(json.RawMessage(`{"url":"` + in + `"}`)); got != want {
-			t.Errorf("PolicyArg(%q) = %q want %q", in, got, want)
+		if sub := sh.Subject(json.RawMessage(`{"url":"` + in + `"}`)); sub.Kind != policy.KindURL || sub.Primary() != want {
+			t.Errorf("Subject(%q) = %+v want %q", in, sub, want)
 		}
 	}
 	r := sh.Run(ctx, json.RawMessage(`{"url":"`+srv.URL+`/page"}`), env)
@@ -232,8 +234,8 @@ func TestWebSearch(t *testing.T) {
 
 	ctx := context.Background()
 	ws := Builtin()["web_search"]
-	if ws.PolicyArg(json.RawMessage(`{"query":" go modules "}`)) != "go modules" {
-		t.Fatal("policy arg should be the query")
+	if sub := ws.Subject(json.RawMessage(`{"query":" go modules "}`)); sub.Kind != policy.KindText || sub.Primary() != "go modules" {
+		t.Fatalf("subject should be the query: %+v", sub)
 	}
 	// unconfigured: Exa's keyless MCP endpoint, a JSON-RPC tools/call answered as SSE
 	r0 := ws.Run(ctx, json.RawMessage(`{"query":"bubbletea"}`), &Env{})

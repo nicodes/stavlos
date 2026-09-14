@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -56,8 +57,8 @@ func TestFileToolsAndShell(t *testing.T) {
 	if time.Since(start) > 5*time.Second || !strings.Contains(r.Output, "start") || strings.Contains(r.Output, "never") {
 		t.Fatalf("cancel: %+v after %v", r, time.Since(start))
 	}
-	if ts["shell"].PolicyArg(json.RawMessage(`{"command":"git push"}`)) != "git push" {
-		t.Fatal("policy arg")
+	if sub := ts["shell"].Subject(json.RawMessage(`{"command":"git push"}`)); sub.Kind != policy.KindCommand || sub.Primary() != "git push" {
+		t.Fatalf("subject %+v", sub)
 	}
 	for _, gone := range []string{"bash", "bash_async", "bash_async_kill"} {
 		if _, ok := ts[gone]; ok {
@@ -78,9 +79,8 @@ func (f *fakeMonitors) AdoptCommand(command string, job Job, timeout time.Durati
 	f.specs = append(f.specs, command)
 	return fmt.Sprintf("m%d", len(f.adopted)), nil
 }
-func (f *fakeMonitors) List() []MonitorStatus { return nil }
-func (f *fakeMonitors) Stop(id string) error  { return nil }
-func (f *fakeMonitors) Has(id string) bool    { return false }
+func (f *fakeMonitors) Stop(id string) error { return nil }
+func (f *fakeMonitors) Has(id string) bool   { return false }
 
 // TestShellWaitWindow: a command that exits inside the window returns
 // inline; one that outlives it is handed to the monitors with the output so

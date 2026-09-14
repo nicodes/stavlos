@@ -217,24 +217,25 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		finish(fmt.Sprintf("unknown tool %q", c.Name), true, false, false)
 		return
 	}
-	arg := t.PolicyArg(c.Input)
+	// Policy judges every value of the subject (each path a patch touches)
+	// and the most restrictive decision wins; the prompt names that value.
+	sub := t.Subject(c.Input)
+	arg := sub.Primary()
 	pol := a.policy()
 	verb := pol.Decide(c.Name, arg)
-	if ma, ok := t.(tools.MultiArg); ok { // apply_patch: every path it touches
-		for _, x := range ma.PolicyArgs(c.Input) {
-			if v := pol.Decide(c.Name, x); v.Rank() > verb.Rank() {
-				verb, arg = v, x
-			}
+	for _, x := range sub.Values[min(1, len(sub.Values)):] {
+		if v := pol.Decide(c.Name, x); v.Rank() > verb.Rank() {
+			verb, arg = v, x
 		}
 	}
-	// A shell allow rule speaks for one simple command: "cat *" says
+	// A command allow rule speaks for one simple command: "cat *" says
 	// nothing about "cat x; rm -rf ~" or "cat x > ~/.bashrc". A compound
 	// command asks (auto and yolo then answer as they do for any ask).
-	if c.Name == toolname.Shell && verb == policy.Allow && !shellcmd.Simple(arg) {
+	if sub.Kind == policy.KindCommand && verb == policy.Allow && !shellcmd.Simple(arg) {
 		verb = policy.Ask
 	}
 	// What the human allowed for the session answers an ask, never a deny.
-	if verb == policy.Ask && a.s.permits.covers(c.Name, arg) {
+	if verb == policy.Ask && a.s.permits.covers(c.Name, sub) {
 		verb = policy.Allow
 	}
 	mode := a.s.Mode()
@@ -246,7 +247,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	// The prompt names the directory; "allow_always" adds it to the agent.
 	boundary := ""
 	if verb != policy.Deny {
-		if d := a.outsideDir(c.Name, c.Input, t); d != "" {
+		if d := a.outsideDir(sub); d != "" {
 			boundary = d
 			if mode != protocol.ModeYolo {
 				verb = policy.Ask
@@ -267,7 +268,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		}
 		// The prefix a client may offer to allow is the daemon's to derive
 		// from the call itself; the prompt carries it for display.
-		prefix := protocol.ToolPrefix(c.Name, arg)
+		prefix := prefixFor(sub.Kind, arg)
 		ans := a.s.host.Prompt(turnCtx, protocol.PromptInfo{
 			ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
 			Question: question, Dir: boundary, Prefix: prefix,
@@ -346,11 +347,11 @@ func (a *Agent) policy() *policy.Layered {
 	return a.s.Config().Policy.With(a.preset.PresetPolicy())
 }
 
-func (a *Agent) skills(cfg *config.Effective) map[string]config.Skill {
-	out := map[string]config.Skill{}
+func (a *Agent) skills(cfg *config.Effective) map[string]tools.Skill {
+	out := map[string]tools.Skill{}
 	for _, name := range a.preset.Skills {
 		if sk, ok := cfg.Skills[name]; ok {
-			out[name] = sk
+			out[name] = tools.Skill{Name: sk.Name, Description: sk.Description, Body: sk.Body, Dir: sk.Dir}
 		}
 	}
 	return out

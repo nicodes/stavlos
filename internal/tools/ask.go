@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
@@ -49,13 +50,13 @@ func (askTool) Def() model.ToolDef {
 		}, "questions")}
 }
 
-func (askTool) PolicyArg(in json.RawMessage) string {
+func (askTool) Subject(in json.RawMessage) policy.Subject {
 	qs, _ := parseQuestions(in)
 	texts := make([]string, 0, len(qs))
 	for _, q := range qs {
 		texts = append(texts, q.Question)
 	}
-	return strings.Join(texts, " | ")
+	return policy.Text(strings.Join(texts, " | "))
 }
 
 func (askTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {

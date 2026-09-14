@@ -17,6 +17,7 @@ import (
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/proc"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tools"
@@ -332,14 +333,14 @@ func (t mcpTool) Def() model.ToolDef {
 	return model.ToolDef{Name: t.name, Description: t.tool.Description, Schema: schema}
 }
 
-// PolicyArg is the compact argument JSON, so rules may match on it; most
+// Subject is the compact argument JSON, so rules may match on it; most
 // rules are on the tool name (mcp__github__*).
-func (t mcpTool) PolicyArg(in json.RawMessage) string {
+func (t mcpTool) Subject(in json.RawMessage) policy.Subject {
 	var buf bytes.Buffer
 	if err := json.Compact(&buf, in); err != nil {
-		return string(in)
+		return policy.Text(string(in))
 	}
-	return buf.String()
+	return policy.Text(buf.String())
 }
 
 func (t mcpTool) Run(ctx context.Context, in json.RawMessage, env *tools.Env) tools.Result {

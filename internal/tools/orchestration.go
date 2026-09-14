@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -43,10 +44,10 @@ func (spawnTool) Def() model.ToolDef {
 			"dirs":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Optional directories to grant the child on top of the session directory and its role's own; each must be inside one of yours (agent_status lists them)"},
 		}, "archetype", "label", "task")}
 }
-func (spawnTool) PolicyArg(in json.RawMessage) string {
+func (spawnTool) Subject(in json.RawMessage) policy.Subject {
 	var a struct{ Archetype string }
 	_ = decode(in, &a)
-	return a.Archetype
+	return policy.Text(a.Archetype)
 }
 func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
@@ -80,7 +81,7 @@ func (messageTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.AgentMessage, Description: "Send a message to any other agent in this session (a child, a sibling, or your parent). It reaches the agent at its next step: mid-turn if it is busy, as a new turn if it is idle. The recipient sees it as coming from you and answers with agent_response, which wakes you between turns. agent_status lists every agent and its id.",
 		Schema: schema(map[string]any{"id": prop("string", "Target agent id (any agent in the session)"), "text": prop("string", "Message")}, "id", "text")}
 }
-func (messageTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
+func (messageTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
 		return *r
@@ -101,7 +102,7 @@ func (cancelTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.AgentCancel, Description: "End a child's current turn immediately. The child survives and can be sent new prompts.",
 		Schema: schema(map[string]any{"id": prop("string", "Child agent id")}, "id")}
 }
-func (cancelTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
+func (cancelTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 func (cancelTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
 		return *r
@@ -118,7 +119,7 @@ func (statusTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.AgentStatus, Description: "State, turn count, and cost of one agent, or of every agent in the session (the whole tree, parents before children; your own row is marked).",
 		Schema: schema(map[string]any{"id": prop("string", "Agent id; omit for the whole session")})}
 }
-func (statusTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
+func (statusTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 func (statusTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
 		return *r

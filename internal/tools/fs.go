@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -59,7 +60,7 @@ func (readTool) Def() model.ToolDef {
 			"limit":  prop("integer", "Max lines to return (default 2000)"),
 		}, "path")}
 }
-func (readTool) PolicyArg(in json.RawMessage) string { return pathArg(in) }
+func (readTool) Subject(in json.RawMessage) policy.Subject { return policy.Path(pathArg(in)) }
 func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	var a struct {
 		Path          string `json:"path"`

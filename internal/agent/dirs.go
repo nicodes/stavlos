@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,7 +9,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
-	"github.com/nicodes/stavlos/internal/toolname"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -169,22 +168,16 @@ func (a *Agent) applyDirRemoved(dir string) {
 // outsideDir returns the first directory a tool call reaches outside the
 // working set ("" when it stays inside), as the directory a boundary prompt
 // would add: the path itself when it names a directory, else its parent.
-func (a *Agent) outsideDir(name string, input json.RawMessage, t tools.Tool) string {
+func (a *Agent) outsideDir(sub policy.Subject) string {
 	var paths []string
-	switch name {
-	case toolname.Shell:
-		var in struct{ Command string }
-		_ = json.Unmarshal(input, &in)
-		paths = bashPathCandidates(in.Command, a.s.Dir)
-	case toolname.Read, toolname.ApplyPatch:
-		if ma, ok := t.(tools.MultiArg); ok {
-			paths = ma.PolicyArgs(input)
-		} else {
-			paths = []string{t.PolicyArg(input)}
+	switch sub.Kind {
+	case policy.KindCommand:
+		paths = bashPathCandidates(sub.Primary(), a.s.Dir)
+	case policy.KindPath:
+		for _, p := range sub.Values {
+			paths = append(paths, tools.ResolvePath(a.s.Dir, p)) // as the tool will open it: no ~ or ${env:} for a model's path
 		}
-		for i, p := range paths {
-			paths[i] = tools.ResolvePath(a.s.Dir, p) // as the tool will open it: no ~ or ${env:} for a model's path
-		}
+	case policy.KindText, policy.KindURL, policy.KindID:
 	}
 	for _, p := range paths {
 		if p == "" || a.inDirs(p) {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/proc"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
@@ -37,12 +38,12 @@ func (shellTool) Def() model.ToolDef {
 		}, "command")}
 }
 
-func (shellTool) PolicyArg(in json.RawMessage) string {
+func (shellTool) Subject(in json.RawMessage) policy.Subject {
 	var a struct {
 		Command string `json:"command"`
 	}
 	_ = decode(in, &a)
-	return a.Command
+	return policy.Command(a.Command)
 }
 
 func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
@@ -154,7 +155,7 @@ func (shellKillTool) Def() model.ToolDef {
 		Schema: schema(map[string]any{"id": prop("string", "The job id shell returned")}, "id")}
 }
 
-func (shellKillTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
+func (shellKillTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 
 func (shellKillTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if env.Mon == nil {

@@ -20,6 +20,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -51,12 +52,12 @@ func (webFetchTool) Def() model.ToolDef {
 		}, "url")}
 }
 
-// PolicyArg is the URL as it will be fetched: lower-case host, https, no
+// Subject is the URL as it will be fetched: lower-case host, https, no
 // credentials, fragment or default port, a GitHub blob rewritten to the raw
 // file. Policy, session allows and the fetch itself see one string, so a
 // host rule cannot be dodged by spelling. An unparseable URL is matched as
 // written (the fetch then fails on it anyway).
-func (webFetchTool) PolicyArg(in json.RawMessage) string {
+func (webFetchTool) Subject(in json.RawMessage) policy.Subject {
 	var a struct {
 		URL string `json:"url"`
 	}
@@ -64,9 +65,9 @@ func (webFetchTool) PolicyArg(in json.RawMessage) string {
 	raw := strings.TrimSpace(a.URL)
 	u, err := parseWebURL(raw)
 	if err != nil {
-		return raw
+		return policy.URL(raw)
 	}
-	return u.String()
+	return policy.URL(u.String())
 }
 
 func (webFetchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
@@ -680,12 +681,12 @@ func (webSearchTool) Def() model.ToolDef {
 		}, "query")}
 }
 
-func (webSearchTool) PolicyArg(in json.RawMessage) string {
+func (webSearchTool) Subject(in json.RawMessage) policy.Subject {
 	var a struct {
 		Query string `json:"query"`
 	}
 	_ = decode(in, &a)
-	return strings.TrimSpace(a.Query)
+	return policy.Text(strings.TrimSpace(a.Query))
 }
 
 // searchEndpoints are overridable for tests.
