@@ -434,11 +434,11 @@ func (m *Model) focusOrder() []focus {
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
-	order = append(order, focusMeta) // top to bottom: the meta row sits under the rule
+	order = append(order, focusInput) // top to bottom: under the rule come the input, the meta row, the strip
+	order = append(order, focusMeta)
 	if m.stripShown() {
 		order = append(order, focusTabs)
 	}
-	order = append(order, focusInput)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
 	}
@@ -1213,25 +1213,25 @@ func (m *Model) metaHit(x int) metaPart {
 	return metaNone
 }
 
-// rowLayout is where the session view's pieces sit, in screen rows.
+// rowLayout is where the session view's pieces sit, in screen rows: under
+// the rule come the palette (while open), the input, a blank line, the meta
+// row and the strip.
 type rowLayout struct {
-	strip int // the tab strip line
 	input int // first row of the input (it may span several)
-	meta  int // the meta row (right under the rule)
+	meta  int // the meta row
+	strip int // the tab strip line
 }
 
 // rows derives the row layout the same way sessionView stacks its parts.
 func (m *Model) rows() rowLayout {
-	meta := m.vp.Height + 2 // blank line, then the rule, then the meta row
-	y := meta + 1           // the strip
-	lay := rowLayout{meta: meta, strip: y}
-	if m.sectionsView(m.width) != "" {
-		y += 2 // the strip, then the blank line after it
-	}
+	y := m.vp.Height + 2 // the status line, then the rule
 	if pv := m.paletteViewFor(m.width); pv != "" {
 		y += strings.Count(pv, "\n") + 1
 	}
-	lay.input = y
+	lay := rowLayout{input: y}
+	y += m.inputRows() + 1 // the input, then the blank line under it
+	lay.meta = y
+	lay.strip = y + 1
 	return lay
 }
 
@@ -2174,9 +2174,9 @@ func (m *Model) layout() {
 	m.promptInput.Width = dialogWidth(m.width) - 4 - 2 - len([]rune(m.promptInput.Prompt)) - 1 // inside the tab dialog, under promptBox's indent
 
 	_, kb := m.keyBarView()
-	bodyH := m.height - kb - 2 - (m.inputRows() + 1) // key bar, blank + chat rule, input rows + meta row
+	bodyH := m.height - kb - 2 - (m.inputRows() + 1) // key bar, status line + rule, input rows + meta row
 	if sv := m.sectionsView(m.width); sv != "" {
-		bodyH -= strings.Count(sv, "\n") + 1 + 1 // plus the blank line below
+		bodyH -= strings.Count(sv, "\n") + 1 + 1 // plus the blank line between the input and the meta row
 	}
 	if pv := m.paletteViewFor(m.width); pv != "" {
 		bodyH -= strings.Count(pv, "\n") + 1
