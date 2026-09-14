@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/escalation"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/eventlog"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/model/registry"
 	"github.com/nicodes/stavlos/internal/oauth"
@@ -28,7 +28,7 @@ import (
 
 // Daemon is the stavlosd process state.
 type Daemon struct {
-	Log      *event.Log
+	Log      *eventlog.Log
 	Registry *registry.Registry
 	DataDir  string
 
@@ -57,7 +57,7 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 	if err != nil {
 		return nil, err
 	}
-	lg, err := event.Open(filepath.Join(dataDir, "events.db"))
+	lg, err := eventlog.Open(filepath.Join(dataDir, "events.db"))
 	if err != nil {
 		lock.Close()
 		return nil, err
@@ -248,7 +248,7 @@ func (d *Daemon) CreateSession(ctx context.Context, dir, modelID, root string) (
 	if err := s.Start(ctx); err != nil {
 		return nil, err
 	}
-	if err := d.Log.PutSession(ctx, event.SessionRow{ID: id, Dir: dir, Created: s.Created}); err != nil {
+	if err := d.Log.PutSession(ctx, eventlog.SessionRow{ID: id, Dir: dir, Created: s.Created}); err != nil {
 		return nil, err
 	}
 	d.mu.Lock()
@@ -284,7 +284,7 @@ func (d *Daemon) ForkSession(ctx context.Context, id string, seq int64) (*agent.
 		idmap[a] = n
 		return n
 	}
-	var copied []event.Event
+	copies := make([]event.Event, 0, len(evs))
 	for _, e := range evs {
 		ne := event.Event{Session: nid, Agent: remap(e.Agent), Type: e.Type, Time: e.Time, Payload: e.Payload}
 		switch e.Type {
@@ -304,13 +304,12 @@ func (d *Daemon) ForkSession(ctx context.Context, id string, seq int64) (*agent.
 			p.ID = remap(p.ID)
 			ne.Payload = event.MustPayload(p)
 		}
-		ne, err = d.Log.Append(ctx, ne)
-		if err != nil {
-			return nil, err
-		}
-		copied = append(copied, ne)
+		copies = append(copies, ne)
 	}
-	if err := d.Log.PutSession(ctx, event.SessionRow{ID: nid, Dir: src.Dir, Created: time.Now().UTC()}); err != nil {
+	// The new session's index row and its copied events in one transaction:
+	// a fork that fails leaves nothing behind.
+	copied, err := d.Log.AppendBatch(ctx, copies, &eventlog.SessionRow{ID: nid, Dir: src.Dir, Created: time.Now().UTC()})
+	if err != nil {
 		return nil, err
 	}
 	cfg, err := config.Load(src.Dir, d.trust)
@@ -336,7 +335,7 @@ func (d *Daemon) ArchiveSession(ctx context.Context, id string) error {
 	if err := s.Archive(ctx); err != nil {
 		return err
 	}
-	return d.Log.PutSession(ctx, event.SessionRow{ID: id, Dir: s.Dir, Created: s.Created, Archived: true})
+	return d.Log.PutSession(ctx, eventlog.SessionRow{ID: id, Dir: s.Dir, Created: s.Created, Archived: true})
 }
 
 // SessionList returns infos.
@@ -362,43 +361,16 @@ func (d *Daemon) SessionList(ctx context.Context, dir string, archived bool) ([]
 		} else {
 			info = protocol.SessionInfo{ID: r.ID, Dir: r.Dir, Created: r.Created.Format(time.RFC3339), Archived: r.Archived}
 		}
-		info.Seq, _ = d.Log.LastSeq(ctx, r.ID)
-		info.Title = d.sessionTitle(ctx, r.ID)
+		info.Seq, info.Title = r.LastSeq, r.Title
 		out = append(out, info)
 	}
 	return out, nil
 }
 
-// sessionTitle is the first human prompt of a session (its opening line,
-// trimmed), or "" for a session nobody has spoken to yet.
-func (d *Daemon) sessionTitle(ctx context.Context, id string) string {
-	evs, err := d.Log.Read(ctx, id, 1, 400)
-	if err != nil {
-		return ""
-	}
-	for _, e := range evs {
-		if e.Type != event.PromptQueued && e.Type != event.SteerReceived {
-			continue
-		}
-		var p event.TextPayload
-		if e.Decode(&p) != nil || !strings.HasPrefix(p.Source, "human:") {
-			continue
-		}
-		t := strings.TrimSpace(p.Text)
-		if i := strings.IndexByte(t, '\n'); i >= 0 {
-			t = t[:i]
-		}
-		if t != "" {
-			return t
-		}
-	}
-	return ""
-}
-
 // --- trust (PRD §10.6) ---
 
 type trustStore struct {
-	log *event.Log
+	log *eventlog.Log
 	mu  sync.RWMutex
 	m   map[string]string // dir → hash
 }

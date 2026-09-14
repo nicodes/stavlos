@@ -165,16 +165,16 @@ tests that pin current behaviour first.
 
 ### Phase 6 — Daemon, protocol, event log  [L]
 
-6.1 **`daemon.hub`**: per-client bounded outbound queue + writer goroutine with write deadline;
+6.1 **`daemon.hub`** ✅: per-client bounded outbound queue + writer goroutine with write deadline;
     event JSON marshalled once; overflow → drop client (TUI reconnects and resubscribes from its
     seq). `Append` holds `appendMu` only around the log write + publish enqueue. Fixes P1.
-6.2 Atomic replay→live handover inside `hub.Subscribe`; delete `Log.Subscribe`/`fanout`. Client
+6.2 Atomic replay→live handover ✅ inside `hub.Subscribe`; delete `Log.Subscribe`/`fanout`. Client
     `deliver` never advances past a gap; TUI asserts seq continuity and resyncs. Fixes P2.
-6.3 Handler table replacing the 400-line `dispatch`: `typed[P]` decode helper, domain errors
+6.3 Handler table replacing ✅ the 400-line `dispatch`: `typed[P]` decode helper, domain errors
     (`ErrNotFound`, `ErrInvalid`, `ErrConflict`) wrapped with `%w`, one `toProtocolError`.
     Protocol version moves into the request envelope; the 25 `V int` fields and `withVersion`'s
     triple marshal go away.
-6.4 **Event log restructure** (DB wiped, no migration): `internal/event` becomes pure types,
+6.4 **Event log restructure** ✅ (done with a one-time migration instead of a wipe: PRAGMA user_version 2 adds the title column and backfills it): `internal/event` becomes pure types,
     `internal/eventlog` holds SQLite; reader and writer pools; in-memory `lastSeq`; `AppendBatch`
     (fork in one tx); `sessions` gets `title`, `model`, `state`, `last_seq` columns so
     `session.list` is one query; drop the duplicate index; `payload` stays JSON.
