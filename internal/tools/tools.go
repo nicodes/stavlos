@@ -67,7 +67,9 @@ type Tool interface {
 
 // Orchestrator is implemented by the agent runtime (PRD §6.4).
 type Orchestrator interface {
-	Spawn(ctx context.Context, parent, archetype, label, task, modelID string) (string, error)
+	// Spawn creates a child; dirs are directories to grant it, each of which
+	// must be inside the parent's own working directories.
+	Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (string, error)
 	// Message delivers text to any agent in the session at its next step:
 	// mid-turn if it is busy, as a new turn if it is idle.
 	Message(caller, id, text string) error
@@ -84,15 +86,16 @@ type Orchestrator interface {
 }
 
 type ChildStatus struct {
-	ID        string  `json:"id"`
-	Parent    string  `json:"parent,omitempty"`
-	You       bool    `json:"you,omitempty"` // this row is the caller
-	Label     string  `json:"label"`
-	Archetype string  `json:"archetype"`
-	State     string  `json:"state"`
-	Turn      int     `json:"turn"`
-	CostUSD   float64 `json:"cost_usd"`
-	Summary   string  `json:"summary,omitempty"`
+	ID        string   `json:"id"`
+	Parent    string   `json:"parent,omitempty"`
+	You       bool     `json:"you,omitempty"` // this row is the caller
+	Label     string   `json:"label"`
+	Archetype string   `json:"archetype"`
+	State     string   `json:"state"`
+	Turn      int      `json:"turn"`
+	CostUSD   float64  `json:"cost_usd"`
+	Summary   string   `json:"summary,omitempty"`
+	Dirs      []string `json:"dirs,omitempty"` // working directories (what a parent may grant on)
 }
 
 type Artifact struct {

@@ -496,6 +496,7 @@ mcp: [github]                   # servers from stavlos.json it may reach
 spawn: [explorer]               # roles it may create; omit or empty → cannot spawn
 max_turns: 20                   # subagent only: turns before it must answer; 0 = unlimited
 color: cyan                     # red blue green yellow purple orange pink cyan
+dirs: [../shared-lib, ~/notes]  # working directories besides the session's (relative to it, or absolute)
 ---
 
 You are a careful reviewer…
@@ -506,6 +507,8 @@ You are a careful reviewer…
 **Models and variants.** The whitelist bounds `/models` and `agent.set_model` for any agent in the role. A child inherits its parent's model when the list allows it, otherwise it starts on the list's first plain entry; its variant is inherited only when that model's entry allows it, otherwise it takes the entry's first variant (or the provider default when the entry lists none). `/variants` and `agent.set_variant` are bounded the same way, and switching model or role re-fits the variant. All of it is enforced in the daemon, so a client cannot bypass it.
 
 **Tools and rules.** `tools` decides both presence and gating: a tool not listed is never offered. The map form nests policy rules under each tool (patterns are the same prefix globs as `stavlos.json`); rules on `bash` also cover `bash_async`, `todo` covers `todo_add` and `todo_update`. Roles only tighten the layered policy (allow → ask → deny): a loosening entry is a configuration error at load, never silently ignored. The agent tools exist through `spawn` and the messaging set; listing one only re-gates it.
+
+**Working directories.** Every agent has the session directory. Its role's `dirs` adds more (relative to the session directory, `~` allowed). Its creator may grant it directories at `agent_create` (`dirs: [...]`), each of which must lie inside the creator's own set — access flows down the tree, and only what an agent holds can be handed on. The human may widen one agent by answering `a` on a boundary prompt. A `read`, `apply_patch` or `bash` call that reaches outside the set asks first even when policy allows the tool: the prompt names the directory, `y` allows once, `a` allows and adds that directory to the agent (logged as `agent.dir_added`, replayed on restart; grants are in `agent.spawned`), `/yolo` answers it like any ask. For bash the paths are found by inspecting the command line — absolute and `~` arguments, `cd` and redirect targets, `--flag=path` values — which catches the model's ordinary behaviour and nothing adversarial; a kernel sandbox (bubblewrap, Seatbelt) is the roadmap item that would turn this list into a boundary, with the set as its writable roots. The TUI's `dirs (n)` tab lists an agent's directories with their source (session, role, grant, human); `agent_status` lists them for agents, which is how a parent knows what it may grant.
 
 **Turn limit.** A subagent whose role sets `max_turns` is told, in its system prompt, which turn it is on and that it must answer before the limit. A turn past the limit ends at once with an error, and every agent still waiting on it receives an `agent_response` saying so, so nobody waits forever.
 

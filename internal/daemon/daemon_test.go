@@ -1415,3 +1415,137 @@ func TestMCPServersPerAgent(t *testing.T) {
 		t.Fatalf("servers should be gone after the role change: %+v", agents[0].MCP)
 	}
 }
+
+// TestWorkingDirectories: reads and commands inside the session directory
+// and the role's dirs run without a boundary prompt; a path outside asks
+// (naming the directory) even though read is allowed, and "allow_always"
+// adds that directory to the agent; a child can be granted only
+// directories its parent has; grants and additions survive a restart.
+func TestWorkingDirectories(t *testing.T) {
+	setupConfig(t)
+	g := os.Getenv("STAVLOS_CONFIG_DIR")
+	work := t.TempDir()
+	shared := t.TempDir()
+	outside := t.TempDir()
+	os.WriteFile(filepath.Join(shared, "lib.txt"), []byte("lib"), 0o644)
+	os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("s"), 0o644)
+	os.WriteFile(filepath.Join(work, "in.txt"), []byte("in"), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","rootAgent":"lead"}`), 0o644)
+	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
+	os.WriteFile(filepath.Join(g, "roles", "lead.md"), []byte(fmt.Sprintf("---\ndescription: Leads\ndirs: [%q]\nspawn: [general]\n---\nYou lead.\n", shared)), 0o644)
+
+	data := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			if !strings.Contains(req.System, "Your working directories: "+work+", "+shared) {
+				t.Errorf("system prompt should list the directories:\n%s", req.System)
+			}
+			return call("c1", "read", `{"path":"in.txt"}`) // inside the session dir
+		},
+		func(model.Request) model.Response { return call("c2", "read", `{"path":"`+shared+`/lib.txt"}`) }, // inside a role dir
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || !strings.Contains(last.Content, "lib") {
+				t.Errorf("role dir read: %+v", last)
+			}
+			return call("c3", "read", `{"path":"`+outside+`/secret.txt"}`) // outside: asks
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError || !strings.Contains(last.Content, "s") {
+				t.Errorf("outside read after allow_always: %+v", last)
+			}
+			return call("c4", "read", `{"path":"`+outside+`/secret.txt"}`) // now inside: no prompt
+		},
+		func(model.Request) model.Response {
+			// a grant inside the parent's set works; one outside is refused
+			return call("c5", "agent_create", `{"archetype":"general","label":"kid","task":"x","dirs":["`+shared+`"]}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if last.IsError {
+				t.Errorf("grant inside the parent's set: %+v", last)
+			}
+			return call("c6", "agent_create", `{"archetype":"general","label":"kid2","task":"x","dirs":["/nowhere/else"]}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !last.IsError || !strings.Contains(last.Content, "not inside your directories") {
+				t.Errorf("grant outside the parent's set should fail: %+v", last)
+			}
+			return text("done")
+		},
+	}
+	fm.childSteps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response { return text("child idle") },
+	}
+	h := newHarness(t, data, fm)
+	ctx := context.Background()
+	s, err := h.c.CreateSession(ctx, work, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	if len(agents[0].Dirs) != 2 || agents[0].Dirs[0].Path != work || agents[0].Dirs[0].Source != "session" || agents[0].Dirs[1].Path != shared || agents[0].Dirs[1].Source != "role" {
+		t.Fatalf("dirs %+v", agents[0].Dirs)
+	}
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	// the only prompt is the boundary one, and it names the directory
+	e := h.waitFor(event.PromptRequested, root)
+	var pr event.PromptRequestedPayload
+	_ = e.Decode(&pr)
+	if pr.Tool != "read" || !strings.Contains(pr.Question, "outside its directories") || !strings.Contains(pr.Question, outside) {
+		t.Fatalf("boundary prompt %+v", pr)
+	}
+	pending := h.d.esc.Pending(s.ID)
+	if len(pending) != 1 || pending[0].Dir != outside {
+		t.Fatalf("pending %+v", pending)
+	}
+	if err := h.c.ClaimPrompt(ctx, pending[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.c.ReplyPrompt(ctx, pending[0].ID, "allow_always"); err != nil {
+		t.Fatal(err)
+	}
+	e = h.waitFor(event.AgentDirAdded, root)
+	var dp event.DirAddedPayload
+	_ = e.Decode(&dp)
+	if dp.Dir != outside || dp.Source != "human" {
+		t.Fatalf("dir added %+v", dp)
+	}
+	var te event.TurnEndedPayload
+	for te.Turn != 1 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents[0].Dirs) != 3 || agents[0].Dirs[2].Path != outside || agents[0].Dirs[2].Source != "human" {
+		t.Fatalf("dirs after the answer %+v", agents[0].Dirs)
+	}
+	var kid protocol.AgentInfo
+	for _, a := range agents {
+		if a.Label == "kid" {
+			kid = a
+		}
+	}
+	if kid.ID == "" || len(kid.Dirs) != 2 || kid.Dirs[1].Path != shared || kid.Dirs[1].Source != "grant" {
+		t.Fatalf("child dirs %+v", kid.Dirs)
+	}
+	h.close()
+
+	// restart: grants and human additions come back
+	h2 := newHarness(t, data, &fakeModel{})
+	defer h2.close()
+	agents, _ = h2.c.Tree(ctx, s.ID)
+	if len(agents[0].Dirs) != 3 || agents[0].Dirs[2].Path != outside {
+		t.Fatalf("recovered root dirs %+v", agents[0].Dirs)
+	}
+	for _, a := range agents {
+		if a.Label == "kid" && (len(a.Dirs) != 2 || a.Dirs[1].Path != shared) {
+			t.Fatalf("recovered child dirs %+v", a.Dirs)
+		}
+	}
+}

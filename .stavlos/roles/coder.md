@@ -43,6 +43,10 @@ max_turns: 0
 # Tint for its rows and glyphs in the TUI: red, blue, green, yellow, purple,
 # orange, pink or cyan.
 color: green
+
+# Working directories besides the session's, relative to it or absolute (~ ok).
+# A read, edit or command outside them asks first; "a" adds the directory.
+dirs: []
 ---
 
 You are a senior Go engineer working in the Stavlos repository.

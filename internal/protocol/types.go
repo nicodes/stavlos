@@ -209,6 +209,7 @@ type AgentInfo struct {
 	Monitors  []MonitorInfo    `json:"monitors,omitempty"`   // this agent's general monitors (not children)
 	Todos     []event.TodoItem `json:"todos,omitempty"`      // this agent\'s todo list, in creation order
 	MCP       []MCPInfo        `json:"mcp,omitempty"`        // this agent\'s MCP servers (the ones its role lists), with state
+	Dirs      []DirInfo        `json:"dirs,omitempty"`       // the agent\'s working directories, session first
 }
 type AgentTreeParams struct {
 	V       int    `json:"v"`
@@ -226,12 +227,13 @@ type AgentSendParams struct {
 }
 
 type AgentSpawnParams struct {
-	V         int    `json:"v"`
-	Parent    string `json:"parent"`
-	Archetype string `json:"archetype"`
-	Label     string `json:"label"`
-	Task      string `json:"task"`
-	Model     string `json:"model,omitempty"`
+	V         int      `json:"v"`
+	Parent    string   `json:"parent"`
+	Archetype string   `json:"archetype"`
+	Label     string   `json:"label"`
+	Task      string   `json:"task"`
+	Model     string   `json:"model,omitempty"`
+	Dirs      []string `json:"dirs,omitempty"` // directories to grant, each inside the parent's
 }
 type AgentSpawnResult struct {
 	ID string `json:"id"`
@@ -272,6 +274,7 @@ type PromptInfo struct {
 	ClaimedBy string          `json:"claimed_by,omitempty"`
 	Escalated bool            `json:"escalated"` // visible to fallback tier
 	Created   string          `json:"created"`
+	Dir       string          `json:"dir,omitempty"` // a boundary prompt: the call reaches outside the agent's directories; "allow_always" adds this one
 }
 type PromptListParams struct {
 	V       int    `json:"v"`
@@ -446,6 +449,13 @@ type PromptNotification struct {
 
 // MonitorInfo is a general monitor owned by an agent: a background command,
 // a file watch, or a timer. Children are not monitors; they are agents.
+// DirInfo is one working directory of an agent and where it came from:
+// session | role | grant | human.
+type DirInfo struct {
+	Path   string `json:"path"`
+	Source string `json:"source"`
+}
+
 // MCPInfo is one MCP server an agent's role lists. State: pending (not
 // started yet: it starts at the agent's next turn) | starting | connected |
 // failed | stopped.

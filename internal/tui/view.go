@@ -1029,6 +1029,8 @@ func (m Model) tabDialogTitle() string {
 		return "Todo " + todoCount(m.selectedTodos())
 	case focusMCP:
 		return "MCP " + mcpCount(m.selectedMCP())
+	case focusDirs:
+		return fmt.Sprintf("Dirs (%d)", len(m.selectedDirs()))
 	}
 	n := len(m.prompts)
 	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
@@ -1082,6 +1084,12 @@ func (m Model) tabBodyLines(width int) []string {
 		}
 		rows, _ := mcpRows(items, m.mcpOpen, time.Now(), width-2)
 		return m.cursorRows(rows)
+	case focusDirs:
+		items := m.selectedDirs()
+		if len(items) == 0 {
+			return []string{styleDim.Render("  no directories")}
+		}
+		return m.cursorRows(dirRows(items, width-2))
 	case focusPermission:
 		p := m.currentPrompt()
 		if p == nil {
@@ -1138,6 +1146,7 @@ func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo,
 		tab(fmt.Sprintf("async (%d)", len(jobs)), on(focusAsync)),
 		tab(todoLabel(m.selectedTodos()), on(focusTodo)),
 		tab(mcpLabel(m.selectedMCP()), on(focusMCP)),
+		tab(fmt.Sprintf("dirs (%d)", len(m.selectedDirs())), on(focusDirs)),
 	}
 	return strings.Join(tabs, styleDim.Render(" · "))
 }
@@ -1215,6 +1224,9 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 				lines = append(lines, strings.Repeat(" ", indent)+l)
 			}
 		}
+	}
+	if p.Dir != "" {
+		lines = append(lines, styleWarn.Render("outside its directories")+styleDim.Render(" · a adds "+shortHome(p.Dir)))
 	}
 	switch {
 	case p.ClaimedBy != "" && !m.claimedByUs[p.ID]:
@@ -1535,6 +1547,18 @@ func todoRows(items []event.TodoItem, width int) []string {
 			row = styleDim.Render("○") + " " + it.Text
 		}
 		rows = append(rows, ansi.Truncate("  "+row, width, "…"))
+	}
+	return rows
+}
+
+// dirRows renders an agent's working directories: the path (home
+// abbreviated) in bold, then where it came from (session, role, grant,
+// human) in dim.
+func dirRows(items []protocol.DirInfo, width int) []string {
+	rows := make([]string, 0, len(items))
+	for _, d := range items {
+		row := "  " + styleDim.Render(glyphToolFiles) + " " + styleBold.Render(shortHome(d.Path)) + "  " + styleDim.Render(d.Source)
+		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows
 }

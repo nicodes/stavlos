@@ -286,7 +286,7 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		if err != nil {
 			return nil, perr(protocol.ErrNotFound, err)
 		}
-		id, err := s.SpawnFromClient(ctx, p.Parent, p.Archetype, p.Label, p.Task, p.Model)
+		id, err := s.SpawnFromClient(ctx, p.Parent, p.Archetype, p.Label, p.Task, p.Model, p.Dirs)
 		if err != nil {
 			return nil, perr(protocol.ErrInvalidParams, err)
 		}

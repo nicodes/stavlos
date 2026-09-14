@@ -25,6 +25,7 @@ const (
 	AgentModelChanged   Type = "agent.model_changed"   // ModelChangedPayload
 	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
 	AgentVariantChanged Type = "agent.variant_changed" // VariantChangedPayload: model variant (reasoning effort) switched
+	AgentDirAdded       Type = "agent.dir_added"       // DirAddedPayload: a directory joined the agent\'s working set (a grant at creation, or the human\'s answer)
 
 	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: wake armed for these ids (children or monitors)
 	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
@@ -112,13 +113,22 @@ type VariantChangedPayload struct {
 }
 
 type AgentSpawnedPayload struct {
-	ID        string `json:"id"`
-	Parent    string `json:"parent,omitempty"` // empty for the root
-	Archetype string `json:"archetype"`
-	Label     string `json:"label"`
-	Model     string `json:"model"` // resolved provider/model-id
-	Task      string `json:"task,omitempty"`
-	Depth     int    `json:"depth"`
+	ID        string   `json:"id"`
+	Parent    string   `json:"parent,omitempty"` // empty for the root
+	Archetype string   `json:"archetype"`
+	Label     string   `json:"label"`
+	Model     string   `json:"model"` // resolved provider/model-id
+	Task      string   `json:"task,omitempty"`
+	Depth     int      `json:"depth"`
+	Dirs      []string `json:"dirs,omitempty"` // directories the creator granted, absolute
+}
+
+// DirAddedPayload: Source is "grant" (from the creating agent) or "human"
+// (the answer to a boundary prompt). Role directories are not logged: they
+// follow the role.
+type DirAddedPayload struct {
+	Dir    string `json:"dir"`
+	Source string `json:"source"`
 }
 
 // ResponsePayload is an agent_response delivered to this agent: who sent

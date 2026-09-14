@@ -26,7 +26,7 @@ func (m Model) keyHints() []keyHint {
 	switch m.focus {
 	case focusAgents:
 		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
-	case focusAsync, focusTodo:
+	case focusAsync, focusTodo, focusDirs:
 		return []keyHint{{"↑/↓", "move"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusMCP:
 		return []keyHint{{"↑/↓", "move"}, {"enter", "show/hide tools"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
@@ -46,6 +46,9 @@ func (m Model) keyHints() []keyHint {
 			case "question":
 				return []keyHint{{"type + enter", "answer"}, {"1-9", "pick an option"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			default:
+				if p.Dir != "" {
+					return []keyHint{{"y", "allow once"}, {"a", "allow + add directory"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
+				}
 				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			}
 		}

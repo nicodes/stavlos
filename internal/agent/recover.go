@@ -66,6 +66,9 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				}
 			}
 			a := newAgent(s, p.ID, p.Parent, arch, p.Label, p.Model, p.Depth, preset)
+			for _, d := range p.Dirs {
+				a.extraDirs = append(a.extraDirs, dirEntry{d, "grant"})
+			}
 			if par, ok := s.agents[p.Parent]; ok {
 				a.ctx, a.kill = context.WithCancel(par.ctx)
 				par.children = append(par.children, a.ID)
@@ -103,6 +106,12 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				var p event.VariantChangedPayload
 				_ = e.Decode(&p)
 				a.variant = p.Variant
+			}
+		case event.AgentDirAdded:
+			if a, ok := s.agents[e.Agent]; ok {
+				var p event.DirAddedPayload
+				_ = e.Decode(&p)
+				a.extraDirs = append(a.extraDirs, dirEntry{p.Dir, p.Source})
 			}
 		case event.PromptQueued:
 			var p event.TextPayload
