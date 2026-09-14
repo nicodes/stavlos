@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
@@ -69,5 +70,30 @@ func TestKeyHintsByContext(t *testing.T) {
 	s, n := m.keyBarView()
 	if n != strings.Count(s, "\n")+1 || !strings.Contains(s, "─") {
 		t.Fatalf("keybar %d %q", n, s)
+	}
+}
+
+func TestStepCursor(t *testing.T) {
+	up, down := tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyDown}
+	k := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}
+	j := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}
+	cur := 0
+	if !stepCursor(up, &cur, 3, false) || cur != 2 {
+		t.Fatalf("up from the top wraps to the bottom: %d", cur)
+	}
+	if !stepCursor(down, &cur, 3, false) || cur != 0 {
+		t.Fatalf("down from the bottom wraps to the top: %d", cur)
+	}
+	if stepCursor(j, &cur, 3, false) || cur != 0 {
+		t.Fatalf("j is not a move without letters: %d", cur)
+	}
+	if !stepCursor(j, &cur, 3, true) || cur != 1 || !stepCursor(k, &cur, 3, true) || cur != 0 {
+		t.Fatalf("j/k move with letters: %d", cur)
+	}
+	if !stepCursor(down, &cur, 0, true) || cur != 0 {
+		t.Fatalf("a move over no rows is consumed and changes nothing: %d", cur)
+	}
+	if stepCursor(tea.KeyMsg{Type: tea.KeyEnter}, &cur, 3, true) {
+		t.Fatal("enter is not a move")
 	}
 }

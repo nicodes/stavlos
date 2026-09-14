@@ -781,14 +781,7 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeDialog()
-	case key.Matches(msg, keys.SelUp), msg.String() == "k":
-		if n > 0 {
-			m.agCursor = ((m.agCursor-1)%n + n) % n
-		}
-	case key.Matches(msg, keys.SelDown), msg.String() == "j":
-		if n > 0 {
-			m.agCursor = (m.agCursor + 1) % n
-		}
+	case stepCursor(msg, &m.agCursor, n, true):
 	case key.Matches(msg, keys.Select):
 		if n == 0 || m.agCursor%n >= len(agents) {
 			return nil // a job row: nothing to select
@@ -806,20 +799,7 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 // todoKey handles keys while the todo dialog is open: ↑/↓ (or j/k) move
 // over the items (informational only), esc closes.
 func (m *Model) todoKey(msg tea.KeyMsg) tea.Cmd {
-	n := len(m.selectedTodos())
-	switch {
-	case key.Matches(msg, keys.OvClose):
-		return m.closeDialog()
-	case key.Matches(msg, keys.SelUp), msg.String() == "k":
-		if n > 0 {
-			m.agCursor = ((m.agCursor-1)%n + n) % n
-		}
-	case key.Matches(msg, keys.SelDown), msg.String() == "j":
-		if n > 0 {
-			m.agCursor = (m.agCursor + 1) % n
-		}
-	}
-	return nil
+	return m.listKey(msg, len(m.selectedTodos()))
 }
 
 // dirsKey handles keys in the dirs dialog: ↑/↓ move, a adds a directory,
@@ -861,14 +841,7 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeDialog()
-	case key.Matches(msg, keys.SelUp), msg.String() == "k":
-		if n > 0 {
-			m.agCursor = ((m.agCursor-1)%n + n) % n
-		}
-	case key.Matches(msg, keys.SelDown), msg.String() == "j":
-		if n > 0 {
-			m.agCursor = (m.agCursor + 1) % n
-		}
+	case stepCursor(msg, &m.agCursor, n, true):
 	case msg.String() == "a":
 		m.dirEdit = "add"
 		m.dirInput.SetValue("")
@@ -1004,11 +977,7 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 			m.q.sel, m.q.marks, m.q.custom = 0, map[int]bool{}, ""
 		}
 		return nil
-	case key.Matches(msg, keys.SelUp):
-		m.q.sel = ((m.q.sel-1)%rows + rows) % rows
-		return nil
-	case key.Matches(msg, keys.SelDown):
-		m.q.sel = (m.q.sel + 1) % rows
+	case stepCursor(msg, &m.q.sel, rows, false): // no j/k: letters start the typed answer
 		return nil
 	case key.Matches(msg, keys.Select):
 		if m.q.sel == nopt { // "something else": type it
@@ -1048,20 +1017,35 @@ func (m *Model) answerQuestions(p *protocol.PromptInfo, answers []string) tea.Cm
 	return answerQuestionsCmd(m.ctx, m.c, p.ID, append([]string(nil), answers...))
 }
 
-// listKey is the key handling of a read-only list dialog: ↑/↓ (or j/k)
-// move over n rows, esc closes.
+// wrapIndex brings i into [0, n) cyclically; n must be positive.
+func wrapIndex(i, n int) int { return (i%n + n) % n }
+
+// stepCursor applies ↑/↓ to a cursor over n rows, wrapping at both ends;
+// with letters, k and j move it too (lists with no text field taking the
+// keys). It reports whether the key was a move, even over no rows.
+func stepCursor(msg tea.KeyMsg, cur *int, n int, letters bool) bool {
+	up := key.Matches(msg, keys.SelUp) || letters && msg.String() == "k"
+	down := key.Matches(msg, keys.SelDown) || letters && msg.String() == "j"
+	if !up && !down {
+		return false
+	}
+	if n > 0 {
+		d := 1
+		if up {
+			d = -1
+		}
+		*cur = wrapIndex(*cur+d, n)
+	}
+	return true
+}
+
+// listKey is the key handling of a read-only list dialog (todo): ↑/↓ (or
+// j/k) move over n rows, esc closes.
 func (m *Model) listKey(msg tea.KeyMsg, n int) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeDialog()
-	case key.Matches(msg, keys.SelUp), msg.String() == "k":
-		if n > 0 {
-			m.agCursor = ((m.agCursor-1)%n + n) % n
-		}
-	case key.Matches(msg, keys.SelDown), msg.String() == "j":
-		if n > 0 {
-			m.agCursor = (m.agCursor + 1) % n
-		}
+	case stepCursor(msg, &m.agCursor, n, true):
 	}
 	return nil
 }
@@ -1074,14 +1058,7 @@ func (m *Model) mcpKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeDialog()
-	case key.Matches(msg, keys.SelUp), msg.String() == "k":
-		if n > 0 {
-			m.agCursor = ((m.agCursor-1)%n + n) % n
-		}
-	case key.Matches(msg, keys.SelDown), msg.String() == "j":
-		if n > 0 {
-			m.agCursor = (m.agCursor + 1) % n
-		}
+	case stepCursor(msg, &m.agCursor, n, true):
 	case key.Matches(msg, keys.Select):
 		if n > 0 {
 			if name := owners[m.agCursor%n]; name != "" {
@@ -2099,11 +2076,7 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.Clear):
 		return m.closeDialog()
-	case key.Matches(msg, keys.SelUp):
-		m.permSel = ((m.permSel-1)%n + n) % n
-		return nil
-	case key.Matches(msg, keys.SelDown):
-		m.permSel = (m.permSel + 1) % n
+	case stepCursor(msg, &m.permSel, n, false):
 		return nil
 	case key.Matches(msg, keys.Select):
 		if m.permSel >= n {
@@ -2704,7 +2677,7 @@ func (m *Model) moveSelection(delta int) tea.Cmd {
 	if n == 0 {
 		return nil
 	}
-	m.selected = ((m.selected+delta)%n + n) % n
+	m.selected = wrapIndex(m.selected+delta, n)
 	m.selectionChanged()
 	if !m.sidebarVisible() {
 		return m.setStatusFor("→ "+m.agents[m.selected].Label, false, selectDuration)
@@ -2735,15 +2708,7 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.setFocus(focusInput)
-	case key.Matches(msg, keys.SelUp), msg.String() == "k":
-		if n > 0 {
-			m.sbCursor = ((m.sbCursor-1)%n + n) % n
-		}
-		return nil
-	case key.Matches(msg, keys.SelDown), msg.String() == "j":
-		if n > 0 {
-			m.sbCursor = (m.sbCursor + 1) % n
-		}
+	case stepCursor(msg, &m.sbCursor, n, true):
 		return nil
 	case key.Matches(msg, keys.PageUp):
 		m.vp.PageUp()
