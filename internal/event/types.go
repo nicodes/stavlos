@@ -57,6 +57,7 @@ const (
 	PromptClaimed   Type = "prompt.claimed"   // PromptRefPayload
 	PromptAnswered  Type = "prompt.answered"  // PromptAnsweredPayload
 	PromptWithdrawn Type = "prompt.withdrawn" // PromptRefPayload
+	PermitGranted   Type = "permit.granted"   // PermitPayload: the human allowed a call or a prefix for the rest of the session
 	PromptDefaulted Type = "prompt.defaulted" // PromptAnsweredPayload
 
 	Usage     Type = "usage"     // UsagePayload (PRD §4.4)
@@ -323,6 +324,16 @@ type PromptRequestedPayload struct {
 	Question  string          `json:"question,omitempty"`
 	Options   []string        `json:"options,omitempty"`
 	Questions json.RawMessage `json:"questions,omitempty"` // kind question: the protocol.Question batch, as JSON
+}
+
+// PermitPayload is an allow the human granted for the session: either an
+// exact call (Call, the policy subject it matched) or a prefix (a command
+// prefix, a host) covering every call of the tool it fits. Replayed on
+// recovery, so a restart does not ask again.
+type PermitPayload struct {
+	Tool   string `json:"tool"`
+	Call   string `json:"call,omitempty"`
+	Prefix string `json:"prefix,omitempty"`
 }
 
 type PromptRefPayload struct {
