@@ -1743,3 +1743,49 @@ func TestBoundaryPromptEditedDir(t *testing.T) {
 		t.Fatalf("no further prompt expected, %d pending", n)
 	}
 }
+
+// TestDenyReasonReachesTheAgent: a deny with a reason shows up in the tool
+// result the model reads; without one the plain message stays.
+func TestDenyReasonReachesTheAgent(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response { return call("c1", "bash", `{"command":"touch a"}`) },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !last.IsError || last.Content != "Permission denied by the user: use apply_patch instead" {
+				t.Errorf("deny with reason: %+v", last)
+			}
+			return call("c2", "bash", `{"command":"touch b"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !last.IsError || last.Content != "Permission denied by the user." {
+				t.Errorf("deny without reason: %+v", last)
+			}
+			return text("ok")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	h.waitFor(event.PromptRequested, root)
+	p := h.d.esc.Pending(s.ID)[0]
+	_ = h.c.ClaimPrompt(ctx, p.ID)
+	if err := h.c.DenyPrompt(ctx, p.ID, "use apply_patch instead"); err != nil {
+		t.Fatal(err)
+	}
+	h.waitFor(event.PromptRequested, root)
+	p = h.d.esc.Pending(s.ID)[0]
+	_ = h.c.ClaimPrompt(ctx, p.ID)
+	if err := h.c.DenyPrompt(ctx, p.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	h.waitFor(event.TurnEnded, root)
+}

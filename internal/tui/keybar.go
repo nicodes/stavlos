@@ -52,6 +52,9 @@ func (m Model) keyHints() []keyHint {
 			case "question":
 				return []keyHint{{"type + enter", "answer"}, {"1-9", "pick an option"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			default:
+				if m.promptDeny {
+					return []keyHint{{"enter", "deny"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
+				}
 				if p.Dir != "" {
 					if m.promptDir {
 						return []keyHint{{"enter", "allow + add this directory"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}

@@ -128,6 +128,17 @@ func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.
 
 // answerPromptCmd claims then replies in one step. Claiming happens only
 // here, i.e. only once the user pressed a key (PRD §7.4).
+func denyPromptCmd(ctx context.Context, c *client.Client, id, reason string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		if err := c.ClaimPrompt(ctx, id); err != nil {
+			return promptReplyMsg{id, err}
+		}
+		return promptReplyMsg{id, c.DenyPrompt(ctx, id, reason)}
+	}
+}
+
 func answerPromptDirCmd(ctx context.Context, c *client.Client, id, dir string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)

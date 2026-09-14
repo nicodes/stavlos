@@ -1251,6 +1251,9 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 			lines = append(lines, "", styleDim.Render("directory to add"), m.dirInput.View())
 		}
 	}
+	if m.promptDeny {
+		lines = append(lines, "", styleDim.Render("deny · a reason the agent will read, or leave it empty"), m.dirInput.View())
+	}
 	switch {
 	case p.ClaimedBy != "" && !m.claimedByUs[p.ID]:
 		lines = append(lines, styleStatusErr.Render("claimed by another client"))
