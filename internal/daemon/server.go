@@ -393,7 +393,7 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		if e := decode(&p); e != nil {
 			return nil, e
 		}
-		if err := d.esc.ReplyFull(p.ID, c.cl.id, p.Answer, p.Dir, p.Reason); err != nil {
+		if err := d.esc.ReplyAnswers(p.ID, c.cl.id, p.Answer, p.Dir, p.Reason, p.Answers); err != nil {
 			return nil, perr(promptErrCode(err), err)
 		}
 		return map[string]bool{"ok": true}, nil

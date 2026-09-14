@@ -1048,8 +1048,11 @@ func (m Model) tabDialogTitle() string {
 		return "MCP " + mcpCount(m.selectedMCP())
 	case focusDirs:
 		return fmt.Sprintf("Dirs (%d)", len(m.selectedDirs()))
+	case focusQuestions:
+		_, questions := m.promptCounts()
+		return fmt.Sprintf("Questions (%d)", questions)
 	}
-	n := len(m.prompts)
+	n, _ := m.promptCounts()
 	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
 		return fmt.Sprintf("%s (%d)", strings.ToUpper(p.Kind[:1])+p.Kind[1:], n)
 	}
@@ -1123,8 +1126,82 @@ func (m Model) tabBodyLines(width int) []string {
 			return []string{styleDim.Render("  no prompts waiting")}
 		}
 		return strings.Split(m.promptBox(p, width), "\n")
+	case focusQuestions:
+		p := m.currentQuestion()
+		if p == nil {
+			return []string{styleDim.Render("  no questions waiting")}
+		}
+		return m.questionLines(p, width)
 	}
 	return nil
+}
+
+// questionLines renders the current question of a batch: who asks, "n/m ·
+// Header", the question, the options with the cursor and the picks, then
+// the free-text field.
+func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
+	var lines []string
+	if p.Agent != "" {
+		lines = append(lines, styleDim.Render(m.agentWhoLabel(p.Agent)+" asks"))
+	}
+	q := m.q
+	if q.id != p.ID || len(p.Questions) == 0 {
+		q = questionState{answers: make([]string, len(p.Questions))}
+	}
+	if q.idx >= len(p.Questions) {
+		q.idx = len(p.Questions) - 1
+	}
+	if len(p.Questions) == 0 {
+		return append(lines, strings.Split(p.Question, "\n")...)
+	}
+	cur := p.Questions[q.idx]
+	lines = append(lines, styleBold.Render(fmt.Sprintf("%d/%d · %s", q.idx+1, len(p.Questions), cur.Header)))
+	for _, l := range strings.Split(ansi.Wrap(cur.Question, width, ""), "\n") {
+		lines = append(lines, l)
+	}
+	lines = append(lines, "")
+	for i, o := range cur.Options {
+		marker := "  "
+		if i == q.sel && !q.typing {
+			marker = styleOvMarker.Render("▸") + " "
+		}
+		mark := styleDim.Render("○")
+		if cur.Multi {
+			mark = styleDim.Render("□")
+			if q.marks[i] {
+				mark = styleOvGood.Render("■")
+			}
+		} else if q.answers[q.idx] == o.Label {
+			mark = styleOvGood.Render("●")
+		}
+		row := marker + mark + " " + o.Label
+		if o.Description != "" {
+			row += "  " + styleDim.Render(o.Description)
+		}
+		lines = append(lines, ansi.Truncate(row, width, "…"))
+	}
+	if len(cur.Options) > 0 {
+		lines = append(lines, "")
+	}
+	label := "or type an answer"
+	if len(cur.Options) == 0 {
+		label = "type your answer"
+	}
+	lines = append(lines, styleDim.Render(label), m.promptInput.View())
+	if done := answered(q.answers); done > 0 && done < len(p.Questions) {
+		lines = append(lines, "", styleDim.Render(fmt.Sprintf("%d of %d answered · ←/→ to review", done, len(p.Questions))))
+	}
+	return lines
+}
+
+func answered(answers []string) int {
+	n := 0
+	for _, a := range answers {
+		if a != "" {
+			n++
+		}
+	}
+	return n
 }
 
 // sectionTabs is the one-line strip: the tabs with their counts, the
@@ -1150,9 +1227,10 @@ func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo,
 		}
 		return styleDim.Render(label)
 	}
-	label := fmt.Sprintf("permission (%d)", len(m.prompts))
+	perms, questions := m.promptCounts()
+	label := fmt.Sprintf("permission (%d)", perms)
 	if p != nil && p.Kind != "permission" {
-		label = fmt.Sprintf("%s (%d)", p.Kind, len(m.prompts))
+		label = fmt.Sprintf("%s (%d)", p.Kind, perms)
 	}
 	// An unfocused permission tab with prompts waiting is warning-coloured
 	// so it stands out until someone tabs to it.
@@ -1160,8 +1238,13 @@ func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo,
 	if p != nil && !on(focusPermission) {
 		permTab = styleWarn.Render(label)
 	}
+	qTab := tab(fmt.Sprintf("questions (%d)", questions), on(focusQuestions))
+	if questions > 0 && !on(focusQuestions) {
+		qTab = styleWarn.Render(fmt.Sprintf("questions (%d)", questions)) // someone is waiting on you
+	}
 	tabs := []string{
 		permTab,
+		qTab,
 		tab(fmt.Sprintf("agents (%d)", len(kids)), on(focusAgents)),
 		tab(fmt.Sprintf("async (%d)", len(jobs)), on(focusAsync)),
 		tab(todoLabel(m.selectedTodos()), on(focusTodo)),
@@ -1194,12 +1277,6 @@ func (m Model) cursorRows(rows []string) []string {
 func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 	var lines []string
 	switch p.Kind {
-	case "question":
-		lines = append(lines, strings.Split(strings.TrimRight(p.Question, "\n"), "\n")...)
-		for i, o := range p.Options {
-			lines = append(lines, fmt.Sprintf("  %d) %s", i+1, o))
-		}
-		lines = append(lines, m.promptInput.View())
 	case "trust":
 		var t struct {
 			Dir   string   `json:"dir"`

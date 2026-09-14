@@ -260,6 +260,11 @@ func (c *Client) ReplyPromptDir(ctx context.Context, id, answer, dir string) err
 	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: answer, Dir: dir}, nil)
 }
 
+// AnswerQuestions answers a question batch, one entry per question.
+func (c *Client) AnswerQuestions(ctx context.Context, id string, answers []string) error {
+	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: "answered", Answers: answers}, nil)
+}
+
 // DenyPrompt denies a permission with an optional reason the agent will read.
 func (c *Client) DenyPrompt(ctx context.Context, id, reason string) error {
 	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: "deny", Reason: reason}, nil)

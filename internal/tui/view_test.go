@@ -472,13 +472,13 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.tabSel != 0 {
 		t.Fatalf("left at the edge: sel=%d", m.tabSel)
 	}
-	press(&m, right, right, right, right, right)
+	press(&m, right, right, right, right, right, right)
 	press(&m, right) // already rightmost (dirs): stays
-	if m.focus != focusTabs || m.tabSel != 5 {
-		t.Fatalf("right x6: focus=%v sel=%d", m.focus, m.tabSel)
+	if m.focus != focusTabs || m.tabSel != 6 {
+		t.Fatalf("right x7: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, left, left, left, left)
-	if m.tabSel != 1 {
+	if m.tabSel != 2 {
 		t.Fatalf("left x4: sel=%d", m.tabSel)
 	}
 	// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
@@ -493,10 +493,10 @@ func TestTabCyclesFocus(t *testing.T) {
 	// esc returns to where the dialog was opened from: the strip, with the
 	// closed tab still highlighted
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 1 {
+	if m.focus != focusTabs || m.tabSel != 2 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, left)
+	press(&m, left, left) // past questions to permission
 	press(&m, tea.KeyMsg{Type: tea.KeySpace}) // permission dialog, nothing waiting
 	if dv := stripANSI(m.tabDialog(100)); m.focus != focusPermission || !strings.Contains(dv, "Permission (0)") || !strings.Contains(dv, "no prompts waiting") {
 		t.Fatalf("enter on permission: focus=%v\n%s", m.focus, dv)
@@ -650,15 +650,17 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 		t.Fatal("n should answer a trust prompt")
 	}
 
-	// Questions: typing goes to the box's own field, enter answers.
-	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Question: "which?", Options: []string{"red", "blue"}}}
+	// A question is not a permission: the permission tab ignores it and the
+	// questions dialog takes it (typing goes to its field, enter answers).
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Header: "Colour", Question: "which?"}}}}
 	m.promptBusy = ""
 	m.ensureFocus()
-	if !m.promptInput.Focused() {
-		t.Fatal("question field should take focus")
+	if m.currentPrompt() != nil || m.currentQuestion() == nil {
+		t.Fatal("a question must not sit in the permission queue")
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
-	if m.promptInput.Value() != "2" || m.input.Value() != "" {
+	m.setFocus(focusQuestions)
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("red")})
+	if m.promptInput.Value() != "red" || m.input.Value() != "" {
 		t.Fatalf("typing: field=%q input=%q", m.promptInput.Value(), m.input.Value())
 	}
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q" || m.promptInput.Value() != "" {
@@ -860,7 +862,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if m.focus != focusTabs || m.tabSel != 0 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // past questions to agents
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -899,7 +901,7 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: all three titles on one line, counts only
 	v := stripANSI(m.sectionsView(100))
-	if strings.Count(v, "\n") != 0 || !strings.Contains(v, "permission (1) · agents (1) · async (1)") ||
+	if strings.Count(v, "\n") != 0 || !strings.Contains(v, "permission (1) · questions (0) · agents (1) · async (1)") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
@@ -1263,7 +1265,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	// tab → strip, → x3 lands on todo, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusTodo {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -1286,13 +1288,13 @@ func TestTodoTabAndDialog(t *testing.T) {
 		t.Fatalf("↓ should move the cursor: %d", m.agCursor)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 3 {
+	if m.focus != focusTabs || m.tabSel != 4 {
 		t.Fatalf("esc should return to the strip on todo: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// clicking the todo label on the strip opens the dialog
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	lay := m.rows()
-	x := len("permission (0) · agents (0) · async (0) · ") + 1
+	x := len("permission (0) · questions (0) · agents (0) · async (0) · ") + 1
 	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.strip, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.strip, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
@@ -1531,8 +1533,8 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 		m = nm.(Model)
 	}
 	lay := m.rows()
-	// the strip sits right under the rule; "agents (2)" starts after "permission (0)" + " · "
-	agentsX := len("permission (0)") + 3 + 1
+	// the strip sits right under the rule; "agents (2)" starts after "permission (0) · questions (0) · "
+	agentsX := len("permission (0) · questions (0)") + 3 + 1
 	click(agentsX, lay.strip)
 	if m.focus != focusAgents {
 		t.Fatalf("clicking the agents label should open the agents tab: %v", m.focus)
@@ -2124,7 +2126,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 	// tab → strip, → x4 lands on mcp, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusMCP {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2150,7 +2152,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 4 {
+	if m.focus != focusTabs || m.tabSel != 5 {
 		t.Fatalf("esc should return to the strip on mcp: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// chat: tool names and server events
@@ -2181,7 +2183,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	}
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusDirs {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2228,7 +2230,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 		t.Fatalf("the session row must not be editable: %q %q", m.dirEdit, m.status)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 5 {
+	if m.focus != focusTabs || m.tabSel != 6 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// a boundary prompt names the directory and what a does
@@ -2353,15 +2355,15 @@ func TestEnterReturnsToInputAndSpaceSelects(t *testing.T) {
 	if cmd := press(&m, space); cmd == nil || m.ov != nil {
 		t.Fatalf("space in an overlay should pick the row: cmd=%v ov=%v", cmd != nil, m.ov != nil)
 	}
-	// text fields keep enter: a question's answer, the dirs path field
-	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Question: "which?", Agent: "a"}}
-	m.setFocus(focusPermission)
+	// text fields keep enter: a question's typed answer
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Header: "Name", Question: "which?"}}}}
+	m.setFocus(focusQuestions)
 	typedSpace := tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}} // as a terminal sends it
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}, typedSpace, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
 	if m.promptInput.Value() != "a b" {
 		t.Fatalf("space should type into the answer field: %q", m.promptInput.Value())
 	}
-	if cmd := press(&m, enter); cmd == nil || m.focus != focusPermission {
+	if cmd := press(&m, enter); cmd == nil || m.focus != focusQuestions {
 		t.Fatalf("enter should submit the answer: cmd=%v focus=%v", cmd != nil, m.focus)
 	}
 }
@@ -2444,5 +2446,73 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q" {
 		t.Fatalf("enter on an empty reason should still deny: cmd=%v busy=%q", cmd != nil, m.promptBusy)
+	}
+}
+
+func TestQuestionsTabAndDialog(t *testing.T) {
+	m := sessionModel()
+	m.agents[0].Archetype = "general"
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "permission (0) · questions (0) · agents") {
+		t.Fatalf("strip:\n%s", sv)
+	}
+	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user", Questions: []protocol.Question{
+		{Header: "Backend", Question: "Which backend?", Options: []protocol.QuestionOption{{Label: "Postgres", Description: "what the repo uses"}, {Label: "SQLite"}}},
+		{Header: "Extras", Question: "Which extras?", Multi: true, Options: []protocol.QuestionOption{{Label: "Cache"}, {Label: "Queue"}, {Label: "Search"}}},
+		{Header: "Name", Question: "What should the service be called?"},
+	}}
+	// a new question opens its dialog when the input is idle
+	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: batch})
+	if m.focus != focusQuestions || m.currentPrompt() != nil {
+		t.Fatalf("a question should open the questions dialog: focus=%v", m.focus)
+	}
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "questions (1)") || !strings.Contains(sv, "permission (0)") {
+		t.Fatalf("strip with a question:\n%s", sv)
+	}
+	dv := stripANSI(m.tabDialog(120))
+	for _, want := range []string{"Questions (1)", "coder (general) asks", "1/3 · Backend", "Which backend?", "▸ ○ Postgres  what the repo uses", "○ SQLite", "or type an answer"} {
+		if !strings.Contains(dv, want) {
+			t.Fatalf("dialog lacks %q:\n%s", want, dv)
+		}
+	}
+	// single choice: ↓ then space picks SQLite and moves to question 2
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
+	if m.q.idx != 1 || m.q.answers[0] != "SQLite" {
+		t.Fatalf("after the pick: idx=%d answers=%v", m.q.idx, m.q.answers)
+	}
+	// multi: space toggles, enter confirms the set
+	press(&m, tea.KeyMsg{Type: tea.KeySpace}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "■ Cache") || !strings.Contains(dv, "□ Queue") || !strings.Contains(dv, "■ Search") {
+		t.Fatalf("multi marks:\n%s", dv)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.q.idx != 2 || m.q.answers[1] != "Cache, Search" {
+		t.Fatalf("after the multi confirm: idx=%d answers=%v", m.q.idx, m.q.answers)
+	}
+	// ← goes back to review, → returns
+	press(&m, tea.KeyMsg{Type: tea.KeyLeft})
+	if m.q.idx != 1 {
+		t.Fatalf("← should go back: %d", m.q.idx)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRight})
+	// free text: typing fills the field, enter confirms and, on the last
+	// question, submits the batch
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("stavlos")})
+	if !m.q.typing || m.promptInput.Value() != "stavlos" {
+		t.Fatalf("typing: %v %q", m.q.typing, m.promptInput.Value())
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q1" || !m.claimedByUs["q1"] {
+		t.Fatalf("the last answer should submit the batch: cmd=%v busy=%q", cmd != nil, m.promptBusy)
+	}
+	if strings.Join(m.q.answers, "|") != "SQLite|Cache, Search|stavlos" {
+		t.Fatalf("answers %v", m.q.answers)
+	}
+	// the answered batch leaves; the dialog closes onto where it came from
+	m.applyPromptNotification(protocol.PromptNotification{Action: "answered", Prompt: batch})
+	if m.focus != focusInput || m.currentQuestion() != nil {
+		t.Fatalf("after the answer: focus=%v", m.focus)
+	}
+	// chat: the tool call line names the headers
+	if got := toolArg("ask_user", []byte(`{"questions":[{"header":"Backend"},{"header":"Name"}]}`)); got != "Backend · Name" {
+		t.Fatalf("ask_user arg %q", got)
 	}
 }

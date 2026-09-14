@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -119,6 +118,7 @@ type Model struct {
 	dirEdit     string          // "" | "add" | the path being replaced
 	promptDir   bool            // the permission dialog is editing the directory a boundary prompt offers
 	promptDeny  bool            // the permission dialog is taking an optional reason for a deny
+	q           questionState   // the questions dialog: where the human is in the current batch
 	sbCursor    int
 	palIdx      int               // highlighted row in the "/" command palette
 	agCursor    int               // highlighted row in the agents/async tab while it has focus
@@ -145,7 +145,8 @@ type focus int
 const (
 	focusInput      focus = iota // the text input (typing, enter sends)
 	focusChat                    // the transcript: a cursor walks its items
-	focusPermission              // the permission tab: pending prompt box (y/n/a, question field)
+	focusPermission              // the permission tab: pending permission/trust prompts (y/n/a)
+	focusQuestions               // the questions tab: an ask_user batch, answered one question at a time
 	focusAgents                  // the agents tab: live children
 	focusAsync                   // the async tab: running bash_async jobs
 	focusTodo                    // the todo tab: the selected agent's todo list
@@ -158,7 +159,7 @@ const (
 
 // tabFocuses are the tabs of the strip under the chat, left to right. They
 // are one stop in the tab cycle; ←/→ move between them.
-var tabFocuses = []focus{focusPermission, focusAgents, focusAsync, focusTodo, focusMCP, focusDirs}
+var tabFocuses = []focus{focusPermission, focusQuestions, focusAgents, focusAsync, focusTodo, focusMCP, focusDirs}
 
 // isTab reports whether f is one of the strip's tabs.
 func isTab(f focus) bool {
@@ -571,10 +572,8 @@ func (m *Model) textEntry() bool {
 	if m.promptDir || m.promptDeny || (m.focus == focusDirs && m.dirEdit != "") {
 		return true
 	}
-	if m.focus == focusPermission {
-		if p := m.currentPrompt(); p != nil && p.Kind == "question" {
-			return true
-		}
+	if m.focus == focusQuestions && m.currentQuestion() != nil {
+		return true // enter confirms an answer there
 	}
 	return false
 }
@@ -695,6 +694,10 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		m.promptDir, m.promptDeny = false, false
 		m.dirInput.Blur()
 	}
+	if prev == focusQuestions && f != focusQuestions {
+		m.q.typing = false
+		m.promptInput.Blur()
+	}
 	if isTab(f) && !isTab(prev) {
 		m.dialogFrom = prev // a tab dialog opens: remember where to return on close
 	}
@@ -714,10 +717,8 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		m.chatCursor = m.chatItems() - 1
 		m.refreshViewport()
 		m.scrollToCursor()
-	case focusPermission:
-		if p := m.currentPrompt(); p != nil && p.Kind == "question" {
-			return m.promptInput.Focus()
-		}
+	case focusQuestions:
+		m.q.bind(m.currentQuestion())
 	case focusSidebar:
 		m.sbCursor = m.selected
 	case focusAgents, focusAsync, focusTodo, focusMCP, focusDirs:
@@ -873,6 +874,157 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 		return removeDirCmd(m.ctx, m.c, m.selectedID(), d.Path)
 	}
 	return nil
+}
+
+// questionState is where the human is inside an ask_user batch: which
+// question, which option the cursor is on, the picks so far, and whether
+// the "other" field is being typed into.
+type questionState struct {
+	id      string       // the prompt the state belongs to
+	idx     int          // current question
+	sel     int          // option under the cursor
+	marks   map[int]bool // multi: toggled options of the current question
+	answers []string     // one per question, "" until answered
+	typing  bool         // the free-text field has the keys
+}
+
+// bind resets the state when the batch under the dialog changes.
+func (q *questionState) bind(p *protocol.PromptInfo) {
+	if p == nil {
+		*q = questionState{}
+		return
+	}
+	if q.id == p.ID {
+		return
+	}
+	*q = questionState{id: p.ID, marks: map[int]bool{}, answers: make([]string, len(p.Questions))}
+}
+
+// questionsKey handles keys in the questions dialog. ↑/↓ move over the
+// options, space picks (single: and moves on) or toggles (multi), enter
+// confirms the current question — the highlighted option, the toggled set,
+// or the typed text — and moves on; the last confirmation submits the
+// batch. ←/→ move between questions. Typing goes into the "other" field;
+// esc leaves the field, or closes the dialog (the batch keeps waiting).
+func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
+	p := m.currentQuestion()
+	if p == nil {
+		if key.Matches(msg, keys.OvClose) {
+			return m.closeDialog()
+		}
+		return nil
+	}
+	m.q.bind(p)
+	if m.q.idx >= len(p.Questions) {
+		m.q.idx = len(p.Questions) - 1
+	}
+	cur := p.Questions[m.q.idx]
+	nopt := len(cur.Options)
+	confirm := func(answer string) tea.Cmd {
+		m.q.answers[m.q.idx] = answer
+		m.q.typing = false
+		m.promptInput.Reset()
+		m.promptInput.Blur()
+		if m.q.idx+1 < len(p.Questions) {
+			m.q.idx++
+			m.q.sel = 0
+			m.q.marks = map[int]bool{}
+			return nil
+		}
+		return m.answerQuestions(p, m.q.answers)
+	}
+	if m.q.typing {
+		switch {
+		case key.Matches(msg, keys.OvClose):
+			m.q.typing = false
+			m.promptInput.Blur()
+			return nil
+		case key.Matches(msg, keys.Submit):
+			text := strings.TrimSpace(m.promptInput.Value())
+			if text == "" {
+				return nil
+			}
+			return confirm(text)
+		}
+		var cmd tea.Cmd
+		m.promptInput, cmd = m.promptInput.Update(msg)
+		return cmd
+	}
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.closeDialog()
+	case key.Matches(msg, keys.TabLeft):
+		if m.q.idx > 0 {
+			m.q.idx--
+			m.q.sel, m.q.marks = 0, map[int]bool{}
+		}
+		return nil
+	case key.Matches(msg, keys.TabRight):
+		if m.q.idx+1 < len(p.Questions) {
+			m.q.idx++
+			m.q.sel, m.q.marks = 0, map[int]bool{}
+		}
+		return nil
+	case key.Matches(msg, keys.SelUp):
+		if nopt > 0 {
+			m.q.sel = ((m.q.sel-1)%nopt + nopt) % nopt
+		}
+		return nil
+	case key.Matches(msg, keys.SelDown):
+		if nopt > 0 {
+			m.q.sel = (m.q.sel + 1) % nopt
+		}
+		return nil
+	case key.Matches(msg, keys.Select):
+		if nopt == 0 {
+			m.q.typing = true
+			return m.promptInput.Focus()
+		}
+		if cur.Multi {
+			m.q.marks[m.q.sel] = !m.q.marks[m.q.sel]
+			return nil
+		}
+		return confirm(cur.Options[m.q.sel].Label)
+	case key.Matches(msg, keys.Submit):
+		if cur.Multi {
+			var picked []string
+			for i, o := range cur.Options {
+				if m.q.marks[i] {
+					picked = append(picked, o.Label)
+				}
+			}
+			if len(picked) == 0 {
+				return nil
+			}
+			return confirm(strings.Join(picked, ", "))
+		}
+		if nopt == 0 {
+			m.q.typing = true
+			return m.promptInput.Focus()
+		}
+		return confirm(cur.Options[m.q.sel].Label)
+	case msg.Type == tea.KeyRunes || msg.Type == tea.KeyBackspace:
+		// typing starts the free-text answer
+		m.q.typing = true
+		cmd := m.promptInput.Focus()
+		var cmd2 tea.Cmd
+		m.promptInput, cmd2 = m.promptInput.Update(msg)
+		return tea.Batch(cmd, cmd2)
+	}
+	return nil
+}
+
+// answerQuestions sends a batch's answers.
+func (m *Model) answerQuestions(p *protocol.PromptInfo, answers []string) tea.Cmd {
+	if m.promptBusy == p.ID {
+		return m.setStatus("answer in flight…", false)
+	}
+	if p.ClaimedBy != "" && !m.claimedByUs[p.ID] {
+		return m.setStatus("claimed by another client", true)
+	}
+	m.promptBusy = p.ID
+	m.claimedByUs[p.ID] = true
+	return answerQuestionsCmd(m.ctx, m.c, p.ID, append([]string(nil), answers...))
 }
 
 // listKey is the key handling of a read-only list dialog: ↑/↓ (or j/k)
@@ -1065,6 +1217,10 @@ func (m *Model) tabRowCount() int {
 		return len(owners)
 	case focusDirs:
 		return len(m.selectedDirs())
+	case focusQuestions:
+		if p := m.currentQuestion(); p != nil && m.q.idx < len(p.Questions) {
+			return len(p.Questions[m.q.idx].Options)
+		}
 	}
 	return 0
 }
@@ -1550,15 +1706,17 @@ func (m *Model) rows() rowLayout {
 // labels are laid out as sectionTabs draws them: permission, agents, async,
 // separated by " · ".
 func (m *Model) tabAt(x int) (focus, bool) {
-	perm := fmt.Sprintf("permission (%d)", len(m.prompts))
+	perms, questions := m.promptCounts()
+	perm := fmt.Sprintf("permission (%d)", perms)
 	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
-		perm = fmt.Sprintf("%s (%d)", p.Kind, len(m.prompts))
+		perm = fmt.Sprintf("%s (%d)", p.Kind, perms)
 	}
 	labels := []struct {
 		text string
 		f    focus
 	}{
 		{perm, focusPermission},
+		{fmt.Sprintf("questions (%d)", questions), focusQuestions},
 		{fmt.Sprintf("agents (%d)", len(m.liveChildren())), focusAgents},
 		{fmt.Sprintf("async (%d)", len(m.runningJobs())), focusAsync},
 		{todoLabel(m.selectedTodos()), focusTodo},
@@ -1648,8 +1806,7 @@ func (m *Model) ensureFocus() tea.Cmd {
 // is the prompt at the head of the queue and the box has focus (the queue
 // may advance onto a question while the box already has focus).
 func (m *Model) syncPromptInput() tea.Cmd {
-	p := m.currentPrompt()
-	want := m.focus == focusPermission && p != nil && p.Kind == "question"
+	want := m.focus == focusQuestions && m.currentQuestion() != nil && m.q.typing
 	switch {
 	case want && !m.promptInput.Focused():
 		return m.promptInput.Focus()
@@ -1754,6 +1911,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.chatKey(msg)
 	case focusPermission:
 		return m.permissionKey(msg)
+	case focusQuestions:
+		return m.questionsKey(msg)
 	}
 
 	switch {
@@ -1932,22 +2091,6 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 		m.dirInput.SetValue("")
 		m.dirInput.Placeholder = "why not? (optional) · enter denies"
 		return m.dirInput.Focus()
-	}
-	if p.Kind == "question" {
-		if key.Matches(msg, keys.Submit) {
-			text := strings.TrimSpace(m.promptInput.Value())
-			if text == "" {
-				return nil
-			}
-			m.promptInput.Reset()
-			if n, err := strconv.Atoi(text); err == nil && n >= 1 && n <= len(p.Options) {
-				text = p.Options[n-1]
-			}
-			return m.answerPrompt(p, text)
-		}
-		var cmd tea.Cmd
-		m.promptInput, cmd = m.promptInput.Update(msg)
-		return cmd
 	}
 	switch {
 	case key.Matches(msg, keys.Yes):
@@ -2296,16 +2439,48 @@ func (m *Model) applyPromptNotification(n protocol.PromptNotification) tea.Cmd {
 		m.refreshViewport()
 	}
 	if before == 0 && len(m.prompts) > 0 && m.focus == focusInput && m.ov == nil && strings.TrimSpace(m.input.Value()) == "" {
+		if n.Prompt.Kind == "question" {
+			return m.setFocus(focusQuestions)
+		}
 		return m.setFocus(focusPermission)
+	}
+	if m.focus == focusQuestions {
+		m.q.bind(m.currentQuestion()) // a batch that changed under the dialog resets it
 	}
 	return nil
 }
 
+// currentPrompt is the head of the permission queue: the oldest waiting
+// permission or trust prompt (questions have their own tab and queue).
 func (m *Model) currentPrompt() *protocol.PromptInfo {
-	if len(m.prompts) == 0 {
-		return nil
+	for i := range m.prompts {
+		if m.prompts[i].Kind != "question" {
+			return &m.prompts[i]
+		}
 	}
-	return &m.prompts[0]
+	return nil
+}
+
+// currentQuestion is the oldest waiting ask_user batch.
+func (m *Model) currentQuestion() *protocol.PromptInfo {
+	for i := range m.prompts {
+		if m.prompts[i].Kind == "question" {
+			return &m.prompts[i]
+		}
+	}
+	return nil
+}
+
+// promptCounts is how many permission-ish prompts and question batches wait.
+func (m *Model) promptCounts() (perms, questions int) {
+	for _, p := range m.prompts {
+		if p.Kind == "question" {
+			questions++
+		} else {
+			perms++
+		}
+	}
+	return
 }
 
 func (m *Model) findPrompt(id string) int {
@@ -2329,8 +2504,12 @@ func (m *Model) removePrompt(id string) {
 	if i := m.findPrompt(id); i >= 0 {
 		m.prompts = append(m.prompts[:i], m.prompts[i+1:]...)
 	}
-	if len(m.prompts) == 0 && m.focus == focusPermission {
-		m.closeDialog() // the last prompt was answered: the dialog closes
+	perms, questions := m.promptCounts()
+	if perms == 0 && m.focus == focusPermission {
+		m.closeDialog() // the last permission was answered: the dialog closes
+	}
+	if questions == 0 && m.focus == focusQuestions {
+		m.closeDialog()
 	}
 	delete(m.claimedByUs, id)
 	if m.promptBusy == id {

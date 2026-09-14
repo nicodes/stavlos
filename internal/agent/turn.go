@@ -272,7 +272,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	}
 
 	cfg := a.s.Config()
-	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Mon: a.monitorsAPI(), Todo: a.todoAPIIfEnabled(), MaxOutput: cfg.Compaction.MaxToolOutput,
+	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Mon: a.monitorsAPI(), Todo: a.todoAPIIfEnabled(), Ask: a.askAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
 		Partial: func(s string) {
 			a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
 		}}
@@ -368,8 +368,11 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 		names = append(names, tools.TodoNames...)
 	}
 	// Every agent can message every other agent in its session; a message
-	// reaches its recipient at the next step, even mid-turn.
+	// reaches its recipient at the next step, even mid-turn. Every agent can
+	// ask the human too.
 	names = append(names, tools.MessagingNames...)
+	names = append(names, tools.AskNames...)
+	sb.WriteString("\n# Asking the human\nask_user puts one to four short questions to the human and waits for the answers; use it when several valid approaches exist and guessing would waste work, never for what you can find out yourself. Put the option you would pick first. The human may type an answer instead of picking one.\n")
 	sb.WriteString("\n# Messaging\nagent_message sends a message to any other agent in this session (a child, a sibling, or your parent) by id. It reaches them at their next step, mid-turn if they are busy, so use it for anything they need to know now. A message you receive names its sender and arrives the same way: fold it into what you are doing, and when you have what it asked for answer with agent_response addressed to that agent's id (one call per asker; it wakes them between turns, and you stay alive). Do not re-send a message that is still unanswered. A message from the human is answered in your normal reply, never with agent_response. agent_status lists every agent in the session with its id and state.\n")
 	can, why := a.s.canSpawn(a)
 	if contains(names, "bash") {

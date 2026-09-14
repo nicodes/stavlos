@@ -285,12 +285,13 @@ type TurnEndedPayload struct {
 
 // PromptRequestedPayload.Kind: "permission" | "question" | "trust"
 type PromptRequestedPayload struct {
-	ID       string          `json:"id"`
-	Kind     string          `json:"kind"`
-	Tool     string          `json:"tool,omitempty"`
-	Input    json.RawMessage `json:"input,omitempty"`
-	Question string          `json:"question,omitempty"`
-	Options  []string        `json:"options,omitempty"`
+	ID        string          `json:"id"`
+	Kind      string          `json:"kind"`
+	Tool      string          `json:"tool,omitempty"`
+	Input     json.RawMessage `json:"input,omitempty"`
+	Question  string          `json:"question,omitempty"`
+	Options   []string        `json:"options,omitempty"`
+	Questions json.RawMessage `json:"questions,omitempty"` // kind question: the protocol.Question batch, as JSON
 }
 
 type PromptRefPayload struct {
