@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -2189,4 +2190,26 @@ func TestTrustReplyChecksTheHash(t *testing.T) {
 	if st3, _ := h.c.TrustStatus(ctx, work); st3.Pending {
 		t.Fatal("should be trusted now")
 	}
+}
+
+// TestOneDaemonPerDataDir: the data directory is locked for the daemon's
+// life; a second daemon on it fails at New, and Close releases it.
+func TestOneDaemonPerDataDir(t *testing.T) {
+	setupConfig(t)
+	data := t.TempDir()
+	cat, _ := modelsdev.Parse([]byte(`{"fake":{"id":"fake","env":[],"models":{}}}`))
+	ctx := context.Background()
+	d1, err := New(ctx, data, registry.New(cat))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := New(ctx, data, registry.New(cat)); !errors.Is(err, ErrAlreadyRunning) {
+		t.Fatalf("second daemon: %v", err)
+	}
+	d1.Close()
+	d2, err := New(ctx, data, registry.New(cat))
+	if err != nil {
+		t.Fatalf("after close: %v", err)
+	}
+	d2.Close()
 }

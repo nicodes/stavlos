@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"syscall"
 
 	"github.com/nicodes/stavlos/internal/agent"
 	"github.com/nicodes/stavlos/internal/config"
@@ -24,7 +25,12 @@ func (d *Daemon) Serve(ctx context.Context, socket string) error {
 		return fmt.Errorf("socket path %q is too long for a Unix socket (max ~100 bytes); set STAVLOS_SOCKET to a shorter path", socket)
 	}
 	_ = os.Remove(socket)
+	// The socket is born 0600: Listen creates it with the umask applied,
+	// and the Chmod below would otherwise leave a moment where anyone could
+	// connect. The daemon is single-purpose, so a process-wide umask is fine.
+	old := syscall.Umask(0o077)
 	ln, err := net.Listen("unix", socket)
+	syscall.Umask(old)
 	if err != nil {
 		return err
 	}
@@ -54,7 +60,25 @@ type conn struct {
 	cl  *client
 }
 
+// maxInFlight bounds the requests one connection may have outstanding;
+// maxLine bounds one request (a prompt with a big paste is well under it).
+const (
+	maxInFlight = 64
+	maxLine     = 4 << 20
+)
+
 func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
+	if uc, ok := nc.(*net.UnixConn); ok {
+		if raw, err := uc.SyscallConn(); err != nil || !samePeer(raw) {
+			log.Printf("refused a connection from another user")
+			nc.Close()
+			return
+		}
+	}
+	// Requests run under the connection's context: a client that goes away
+	// mid-login.wait (or mid-anything) takes its work with it.
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	c := &conn{d: d, c: nc, w: bufio.NewWriter(nc)}
 	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.notify}
 	d.addClient(c.cl)
@@ -62,8 +86,9 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
 		d.removeClient(c.cl.id)
 		nc.Close()
 	}()
+	inFlight := make(chan struct{}, maxInFlight)
 	sc := bufio.NewScanner(nc)
-	sc.Buffer(make([]byte, 1<<20), 64<<20)
+	sc.Buffer(make([]byte, 1<<20), maxLine)
 	for sc.Scan() {
 		line := append([]byte(nil), sc.Bytes()...)
 		var req protocol.Request
@@ -71,7 +96,9 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
 			c.reply(nil, nil, &protocol.Error{Code: protocol.ErrParse, Message: err.Error()})
 			continue
 		}
+		inFlight <- struct{}{} // a flood of requests waits its turn instead of spawning without bound
 		go func() {
+			defer func() { <-inFlight }()
 			res, perr := c.dispatch(ctx, req)
 			if req.ID != nil {
 				c.reply(req.ID, res, perr)
