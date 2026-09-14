@@ -1003,34 +1003,26 @@ func (m Model) sidebarView(height int) string {
 	return lipgloss.NewStyle().Width(sidebarWidth).Height(height).MaxHeight(height).Render(strings.Join(rows, "\n"))
 }
 
-// sidebarHeader is what precedes the tree: the app name, the session
-// directory, its cost and age, the swarm state ("3 working · 1 waiting",
-// or "idle"), a warning line while agents need the human ("2 need you"),
-// a blank, and the "agents" heading. The tree's first row follows, which
-// is how a click on the sidebar finds its agent.
+// sidebarHeader is what precedes the tree: the app name, a blank, the
+// session directory, the session's tokens and cost (the rollup of what
+// the meta row shows per agent), the swarm state ("3 working · 1
+// waiting", or "idle"), a blank, and the "agents" heading. The tree's
+// first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	dir := shortHome(m.session.Dir)
 	if dir == "" {
 		dir = "—"
 	}
-	meta := "$" + fmtCost(m.totalCost())
-	if t, err := time.Parse(time.RFC3339, m.session.Created); err == nil && !t.IsZero() {
-		meta += " · " + fmtElapsed(time.Since(t))
-	}
-	rows := []string{
+	usage := fmtTokens(m.totalTokens()) + " tokens · $" + fmtCost(m.totalCost())
+	return []string{
 		styleAccent.Bold(true).Render("Stavlos"),
+		"",
 		styleDim.Render(truncRunes(dir, width)),
-		styleDim.Render(truncRunes(meta, width)),
+		styleDim.Render(truncRunes(usage, width)),
 		styleDim.Render(truncRunes(m.swarmLine(), width)),
+		"",
+		styleBold.Render("agents") + m.sidebarFocusHint(),
 	}
-	if need := m.needCount(); need > 0 {
-		text := fmt.Sprintf("%d need you", need)
-		if need == 1 {
-			text = "1 needs you"
-		}
-		rows = append(rows, styleWarn.Render(text))
-	}
-	return append(rows, "", styleBold.Render("agents")+m.sidebarFocusHint())
 }
 
 // sidebarBody is everything under the header: the agent tree, a blank,
@@ -1132,17 +1124,6 @@ func (m Model) swarmLine() string {
 		return "idle"
 	}
 	return strings.Join(parts, " · ")
-}
-
-// needCount is how many agents have a permission or question pending.
-func (m Model) needCount() int {
-	n := 0
-	for _, a := range m.agents {
-		if m.needsHuman(a.ID) != "" {
-			n++
-		}
-	}
-	return n
 }
 
 // needsHuman is the badge for an agent with a prompt of its own waiting:
