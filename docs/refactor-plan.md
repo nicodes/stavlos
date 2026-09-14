@@ -63,7 +63,7 @@ tests that pin current behaviour first.
 1.6 Add `-race` to the gate for `internal/agent` and `internal/daemon`. (The detector passes today; gate = vet, gofmt, `go test -race` on those two, then `go test ./...` three times. staticcheck joins the gate once Phase 9 removes the 15 dead symbols.)
     Found on the way: a recovered agent with a pending wake (response, lost job) was never signalled — fixed.
 
-### Phase 2 — Security fixes (small, behaviour-changing, each its own commit)  [M]
+### Phase 2 — Security fixes (small, behaviour-changing, each its own commit)  [M]  ✅ done 2026-09-14 (2.1–2.15, one commit each)
 
 2.1 **`internal/shellcmd`** ✅ (replaces `protocol/prefix.go`): POSIX-ish tokenizer (`Words`), refuses
     unquoted `; | & \n`, backticks, `$(`, `$((`, `<(`, `>(`, and all redirections; `Prefix` refuses
@@ -85,30 +85,30 @@ tests that pin current behaviour first.
     client and refuse redirects. Fixes S4.
 2.5 **`config.LoadGlobal`** ✅: defaults + global layer only; used by daemon startup and the recovery
     fallback. Delete the `os.TempDir()` trick. Fixes S5.
-2.6 **`internal/textsafe`**: strip ESC/OSC/C0 (except `\n\t`) from every daemon string the TUI
+2.6 **`internal/textsafe`** ✅: strip ESC/OSC/C0 (except `\n\t`) from every daemon string the TUI
     draws; permission dialog renders hidden bytes visibly as `^[`. Fixes S6.
 2.7 **`internal/proc`** ✅: one process launcher (bash -c, Setpgid, SIGKILL pgid, WaitDelay, tail-capped
     buffer, scrubbed env minus `STAVLOS_*`, provider key names, `*_API_KEY|TOKEN|SECRET|PASSWORD`).
     Used by shell tool, monitors (`StartCommand` deleted; `background:true` = start + adopt at wait
     0) and MCP. Fixes S7 and removes the duplicate runner.
-2.8 Boundary heuristic: `..`-relative arguments and `$`-containing tokens count as candidates
+2.8 Boundary heuristic ✅: `..`-relative arguments and `$`-containing tokens count as candidates
     (auto mode asks). One `tools.ResolvePath` (Clean + EvalSymlinks on the existing prefix) shared
     by `read`, `apply_patch`, `outsideDir`; no `~`/`${env:}` expansion of model-supplied paths.
-2.9 Recovery never widens: an agent whose role vanished gets a minimal read-only preset and a
+2.9 Recovery never widens ✅: an agent whose role vanished gets a minimal read-only preset and a
     visible label suffix, not the root preset.
-2.10 Trust reply goes through `prompt.reply(id)`; daemon derives dir/hash from the prompt it issued,
+2.10 Trust reply goes through ✅ `prompt.reply(id)`; daemon derives dir/hash from the prompt it issued,
     `Abs`+`Clean`s the dir and recomputes the hash.
-2.11 Daemon socket: umask 0077 around `Listen`; flock on `<data>/stavlosd.lock` (second daemon
+2.11 Daemon socket ✅: umask 0077 around `Listen`; flock on `<data>/stavlosd.lock` (second daemon
     refuses instead of stealing the socket); `SO_PEERCRED` uid check; per-connection context so a
     disconnected client's `login.wait` is cancelled; per-connection in-flight cap; 4 MB line max.
-2.12 `/compact` routed through the actor (`compactNext` + signal, maintenance step) so it cannot
+2.12 `/compact` routed ✅ through the actor (`compactNext` + signal, maintenance step) so it cannot
     race the turn loop; rejected on killed agents.
-2.13 Config validation: `DisallowUnknownFields`, invalid policy verbs are errors (like role files
+2.13 Config validation ✅: `DisallowUnknownFields`, invalid policy verbs are errors (like role files
     already are), `stavlos.json` written 0600, warning when `apiKey` is literal.
-2.14 OAuth loopback: `Pending.Close()`, expiry armed at `Start`, daemon sweep closes; state checked
+2.14 OAuth loopback ✅: `Pending.Close()`, expiry armed at `Start`, daemon sweep closes; state checked
     before `error`/`cancel` paths; `html.EscapeString` in the result page; issuer overrides behind
     a dev build tag.
-2.15 Agent labels constrained to `[A-Za-z0-9_-]{1,32}`; agent-to-agent messages wrapped with an
+2.15 Agent labels ✅ constrained to `[A-Za-z0-9_-]{1,32}`; agent-to-agent messages wrapped with an
     explicit "another agent's output, not the human" marker.
 
 ### Phase 3 — Shared vocabulary  [M]
