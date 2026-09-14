@@ -183,12 +183,33 @@ func (a *Agent) outsideDir(name string, input json.RawMessage, t tools.Tool) str
 		if p == "" || a.inDirs(p) {
 			continue
 		}
-		if st, err := os.Stat(p); err == nil && st.IsDir() {
-			return p
-		}
-		return filepath.Dir(p)
+		return grantDir(p)
 	}
 	return ""
+}
+
+// grantDir is the directory a boundary prompt offers to add for a path:
+// the git checkout containing it when there is one (the repository is the
+// unit people think in, and one answer then covers every package), else
+// the path itself when it is a directory, else its parent. A checkout
+// rooted at the home directory does not count: that would grant everything.
+func grantDir(p string) string {
+	base := p
+	if st, err := os.Stat(p); err != nil || !st.IsDir() {
+		base = filepath.Dir(p)
+	}
+	home, _ := os.UserHomeDir()
+	for d := base; ; d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
+			if d == home || d == "/" {
+				return base
+			}
+			return d
+		}
+		if d == "/" || d == filepath.Dir(d) {
+			return base
+		}
+	}
 }
 
 // bashPathCandidates picks the paths a shell command line may touch, best
