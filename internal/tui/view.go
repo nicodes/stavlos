@@ -1037,26 +1037,53 @@ func (m Model) tabDialog(bodyWidth int) string {
 // tabDialogTitle is the open tab's title with its count; a prompt dialog
 // is named after the kind of prompt at the head of the queue.
 func (m Model) tabDialogTitle() string {
-	switch m.focus {
-	case focusAgents:
-		return fmt.Sprintf("Agents (%d)", len(m.liveChildren()))
-	case focusAsync:
-		return fmt.Sprintf("Async (%d)", len(m.runningJobs()))
-	case focusTodo:
-		return "Todo " + todoCount(m.selectedTodos())
-	case focusMCP:
-		return "MCP " + mcpCount(m.selectedMCP())
-	case focusDirs:
-		return fmt.Sprintf("Dirs (%d)", len(m.selectedDirs()))
-	case focusQuestions:
-		_, questions := m.promptCounts()
-		return fmt.Sprintf("Questions (%d)", questions)
+	texts := m.tabTexts()
+	for i, f := range tabFocuses {
+		if f == m.focus {
+			t := texts[i]
+			if strings.HasPrefix(t, "mcp ") {
+				return "MCP" + t[3:]
+			}
+			return strings.ToUpper(t[:1]) + t[1:] // "permission 1/2" → "Permission 1/2"
+		}
 	}
-	n, _ := m.promptCounts()
+	return ""
+}
+
+// tabTexts is the strip's labels in tab order ("name count"); the dialog
+// titles are the same texts capitalised. Counts: permission and questions
+// read position/total while something waits ("1/2": the first of two;
+// "2/3": the second question of three) and "0" otherwise; todo and mcp
+// read done/total and connected/listed; the rest are plain counts.
+func (m Model) tabTexts() []string {
+	perms, questions := m.promptCounts()
+	permKind := "permission"
 	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
-		return fmt.Sprintf("%s (%d)", strings.ToUpper(p.Kind[:1])+p.Kind[1:], n)
+		permKind = p.Kind // "trust"
 	}
-	return fmt.Sprintf("Permission (%d)", n)
+	permCount := "0"
+	if perms > 0 {
+		permCount = fmt.Sprintf("1/%d", perms)
+	}
+	qCount := "0"
+	if p := m.currentQuestion(); p != nil && len(p.Questions) > 0 {
+		at := 1
+		if m.q.id == p.ID {
+			at = m.q.idx + 1
+		}
+		qCount = fmt.Sprintf("%d/%d", at, len(p.Questions))
+	} else if questions > 0 {
+		qCount = fmt.Sprintf("1/%d", questions)
+	}
+	return []string{
+		permKind + " " + permCount,
+		"questions " + qCount,
+		fmt.Sprintf("agents %d", len(m.liveChildren())),
+		fmt.Sprintf("async %d", len(m.runningJobs())),
+		"todo " + todoCount(m.selectedTodos()),
+		"mcp " + mcpCount(m.selectedMCP()),
+		fmt.Sprintf("dirs %d", len(m.selectedDirs())),
+	}
 }
 
 // dialogWidth is the box width every dialog uses: overlayWidth, narrowed to
@@ -1168,7 +1195,7 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 		}
 		mark := styleDim.Render("□")
 		if q.marks[i] {
-			mark = styleOvGood.Render("■")
+			mark = styleAccent.Render("■")
 		}
 		row := marker + mark + " " + o.Label
 		if o.Description != "" {
@@ -1182,9 +1209,9 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 	}
 	switch {
 	case q.typing:
-		lines = append(lines, marker+styleOvGood.Render("■")+" "+m.promptInput.View())
+		lines = append(lines, marker+styleAccent.Render("■")+" "+m.promptInput.View())
 	case strings.TrimSpace(q.custom) != "":
-		lines = append(lines, ansi.Truncate(marker+styleOvGood.Render("■")+" "+q.custom, width, "…"))
+		lines = append(lines, ansi.Truncate(marker+styleAccent.Render("■")+" "+q.custom, width, "…"))
 	default:
 		lines = append(lines, marker+styleDim.Render("□ something else…"))
 	}
@@ -1221,35 +1248,21 @@ func (m Model) tabLabels(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo,
 		}
 		return m.focus == f
 	}
-	tab := func(label string, on bool) string {
-		if on {
-			return styleBoxTitleFocus.Render(label)
-		}
-		return styleDim.Render(label)
-	}
 	perms, questions := m.promptCounts()
-	label := fmt.Sprintf("permission (%d)", perms)
-	if p != nil && p.Kind != "permission" {
-		label = fmt.Sprintf("%s (%d)", p.Kind, perms)
-	}
-	// An unfocused permission tab with prompts waiting is warning-coloured
-	// so it stands out until someone tabs to it.
-	permTab := tab(label, on(focusPermission))
-	if p != nil && !on(focusPermission) {
-		permTab = styleWarn.Render(label)
-	}
-	qTab := tab(fmt.Sprintf("questions (%d)", questions), on(focusQuestions))
-	if questions > 0 && !on(focusQuestions) {
-		qTab = styleWarn.Render(fmt.Sprintf("questions (%d)", questions)) // someone is waiting on you
-	}
-	tabs := []string{
-		permTab,
-		qTab,
-		tab(fmt.Sprintf("agents (%d)", len(kids)), on(focusAgents)),
-		tab(fmt.Sprintf("async (%d)", len(jobs)), on(focusAsync)),
-		tab(todoLabel(m.selectedTodos()), on(focusTodo)),
-		tab(mcpLabel(m.selectedMCP()), on(focusMCP)),
-		tab(fmt.Sprintf("dirs (%d)", len(m.selectedDirs())), on(focusDirs)),
+	texts := m.tabTexts()
+	tabs := make([]string, len(texts))
+	for i, f := range tabFocuses {
+		label := texts[i]
+		switch {
+		case on(f):
+			tabs[i] = styleBoxTitleFocus.Render(label)
+		// An unfocused permission or questions tab with something waiting is
+		// warning-coloured so it stands out until someone opens it.
+		case f == focusPermission && perms > 0, f == focusQuestions && questions > 0:
+			tabs[i] = styleWarn.Render(label)
+		default:
+			tabs[i] = styleDim.Render(label)
+		}
 	}
 	return strings.Join(tabs, styleDim.Render(" · "))
 }
@@ -1614,11 +1627,11 @@ func toolGlyph(tool string) (string, string) {
 	return glyphToolFiles, " "
 }
 
-// todoCount is "(done/total)" for a todo list, "(0)" when empty; done
-// counts finished and cancelled items.
+// todoCount is "done/total" for a todo list, "0" when empty; done counts
+// finished and cancelled items.
 func todoCount(items []event.TodoItem) string {
 	if len(items) == 0 {
-		return "(0)"
+		return "0"
 	}
 	done := 0
 	for _, it := range items {
@@ -1626,7 +1639,7 @@ func todoCount(items []event.TodoItem) string {
 			done++
 		}
 	}
-	return fmt.Sprintf("(%d/%d)", done, len(items))
+	return fmt.Sprintf("%d/%d", done, len(items))
 }
 
 // todoLabel is the strip's todo tab label.
@@ -1666,11 +1679,11 @@ func dirRows(items []protocol.DirInfo, width int) []string {
 	return rows
 }
 
-// mcpCount is "(connected/listed)" for an agent's MCP servers, "(0)" when
-// its role lists none.
+// mcpCount is "connected/listed" for an agent's MCP servers, "0" when its
+// role lists none.
 func mcpCount(items []protocol.MCPInfo) string {
 	if len(items) == 0 {
-		return "(0)"
+		return "0"
 	}
 	up := 0
 	for _, it := range items {
@@ -1678,7 +1691,7 @@ func mcpCount(items []protocol.MCPInfo) string {
 			up++
 		}
 	}
-	return fmt.Sprintf("(%d/%d)", up, len(items))
+	return fmt.Sprintf("%d/%d", up, len(items))
 }
 
 // mcpLabel is the strip's mcp tab label.
