@@ -1019,8 +1019,9 @@ func (m Model) tabDialog(bodyWidth int) string {
 	for _, l := range m.tabBodyLines(inner) {
 		lines = append(lines, ansi.Truncate(l, inner, "…"))
 	}
-	if f := dialogHintLine(m.keyHints(), inner); f != "" {
-		lines = append(lines, "", f)
+	if f := dialogHintLines(m.keyHints(), inner); len(f) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, f...)
 	}
 	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
 }

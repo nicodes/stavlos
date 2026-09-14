@@ -2260,3 +2260,28 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 		t.Fatalf("chat:\n%s", v)
 	}
 }
+
+func TestDialogHintsWrap(t *testing.T) {
+	hints := []keyHint{{"y", "allow once"}, {"a", "allow + add directory"}, {"e", "edit the directory"}, {"n", "deny"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+	lines := dialogHintLines(hints, 30)
+	joined := stripANSI(strings.Join(lines, "\n"))
+	for _, want := range []string{"y allow once", "a allow + add directory", "e edit the directory", "n deny"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("hint %q lost:\n%s", want, joined)
+		}
+	}
+	if strings.Contains(joined, "esc") || strings.Contains(joined, "tab") || strings.Contains(joined, "…") {
+		t.Fatalf("esc/tab/ctrl+c are not the dialog's own, and nothing should be cut:\n%s", joined)
+	}
+	for _, l := range lines {
+		if ansi.StringWidth(l) > 30 {
+			t.Fatalf("line wider than the dialog: %q", stripANSI(l))
+		}
+	}
+	if len(lines) < 2 {
+		t.Fatalf("hints should wrap at 30 columns: %d line(s)", len(lines))
+	}
+	if got := dialogHintLines(hints, 200); len(got) != 1 {
+		t.Fatalf("wide dialog: one line, got %d", len(got))
+	}
+}
