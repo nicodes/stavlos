@@ -10,6 +10,7 @@ import (
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/toolname"
+	"github.com/nicodes/stavlos/internal/tui/dialog"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/render"
 	"github.com/nicodes/stavlos/internal/tui/theme"
@@ -314,9 +315,9 @@ func (m Model) View() string {
 	}
 	if m.ov != nil {
 		m.ov.hints = m.keyHints() // the dialog's own keys, shown whatever the key bar setting
-		main = composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
+		main = dialog.Composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
 	} else if isTab(m.focus) {
-		main = composite(main, m.width, mainH, m.tabDialog(m.width))
+		main = dialog.Composite(main, m.width, mainH, m.tabDialog(m.width))
 	}
 	frame := main
 	if kb > 0 {
@@ -747,9 +748,9 @@ func (m Model) tabDialog(bodyWidth int) string {
 // tabDialogBox is tabDialog plus, for every line inside the border (the
 // title is line 0), the selectable row drawn there or -1.
 func (m Model) tabDialogBox(bodyWidth int) (string, []int) {
-	w := dialogWidth(bodyWidth)
+	w := dialog.Width(bodyWidth)
 	inner := w - 4 // border + padding
-	lines := []string{dialogTitle(m.tabDialogTitle(), inner), ""}
+	lines := []string{dialog.Title(m.tabDialogTitle(), inner), ""}
 	rows := []int{-1, -1}
 	body, bodyRows := m.tabBodyRows(inner)
 	for i, l := range body {
@@ -762,14 +763,14 @@ func (m Model) tabDialogBox(bodyWidth int) (string, []int) {
 			}
 		}
 	}
-	if f := dialogHintLines(m.keyHints(), inner); len(f) > 0 {
+	if f := dialog.HintLines(m.keyHints(), inner); len(f) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, f...)
 		for range len(f) + 1 {
 			rows = append(rows, -1)
 		}
 	}
-	return theme.StyleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n")), rows
+	return dialog.Box(inner, lines), rows
 }
 
 // tabDialogTitle is the open tab's title with its count; a prompt dialog
@@ -821,19 +822,6 @@ func (m Model) tabTexts() []string {
 		"mcp " + mcpCount(m.selectedMCP()),
 		fmt.Sprintf("dirs %d", len(m.selectedDirs())),
 	}
-}
-
-// dialogWidth is the box width every dialog uses: overlayWidth, narrowed to
-// fit the body with a margin, never under 24.
-func dialogWidth(bodyWidth int) int {
-	w := overlayWidth
-	if w > bodyWidth-4 {
-		w = bodyWidth - 4
-	}
-	if w < 24 {
-		w = 24
-	}
-	return w
 }
 
 // tabBodyLines is the focused tab's body, laid out for width columns.

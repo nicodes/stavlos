@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/dialog"
 )
 
 func ids(items []overlayItem) []string {
@@ -173,8 +174,8 @@ func TestLoginOverlayView(t *testing.T) {
 		}
 	}
 	for _, l := range strings.Split(v, "\n") {
-		if w := len([]rune(l)); w > overlayWidth {
-			t.Errorf("line wider than %d: %q", overlayWidth, l)
+		if w := len([]rune(l)); w > dialog.MaxWidth {
+			t.Errorf("line wider than %d: %q", dialog.MaxWidth, l)
 		}
 	}
 
@@ -207,8 +208,8 @@ func TestLoginOverlayView(t *testing.T) {
 		t.Fatalf("long URL should survive wrapping:\n%s", v)
 	}
 	for _, l := range strings.Split(v, "\n") {
-		if w := len([]rune(l)); w > overlayWidth {
-			t.Errorf("line wider than %d: %q", overlayWidth, l)
+		if w := len([]rune(l)); w > dialog.MaxWidth {
+			t.Errorf("line wider than %d: %q", dialog.MaxWidth, l)
 		}
 	}
 }
@@ -233,8 +234,8 @@ func TestOverlayViewListsAndPages(t *testing.T) {
 		t.Fatalf("after page:\n%s", v)
 	}
 	for _, l := range strings.Split(v, "\n") {
-		if w := len([]rune(l)); w > overlayWidth {
-			t.Errorf("line wider than %d: %q", overlayWidth, l)
+		if w := len([]rune(l)); w > dialog.MaxWidth {
+			t.Errorf("line wider than %d: %q", dialog.MaxWidth, l)
 		}
 	}
 }
@@ -242,7 +243,7 @@ func TestOverlayViewListsAndPages(t *testing.T) {
 func TestCompositeKeepsWidth(t *testing.T) {
 	base := strings.TrimSuffix(strings.Repeat(strings.Repeat("x", 80)+"\n", 12), "\n")
 	box := "+--+\n|ab|\n+--+"
-	out := composite(base, 80, 12, box)
+	out := dialog.Composite(base, 80, 12, box)
 	lines := strings.Split(out, "\n")
 	if len(lines) != 12 {
 		t.Fatalf("got %d lines", len(lines))

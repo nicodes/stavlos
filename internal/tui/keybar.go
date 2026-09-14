@@ -4,129 +4,95 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 
+	"github.com/nicodes/stavlos/internal/tui/dialog"
 	"github.com/nicodes/stavlos/internal/tui/theme"
 )
 
-// keyHint is one entry of the key legend: what to press, what it does.
-type keyHint struct{ key, desc string }
-
 // keyHints returns the legend for the current state, most useful first.
-func (m Model) keyHints() []keyHint {
+// hint is one key bar entry: what to press, what it does.
+func hint(key, desc string) dialog.Hint { return dialog.Hint{Key: key, Desc: desc} }
+
+func (m Model) keyHints() []dialog.Hint {
 	switch {
 	case m.ov != nil && m.ov.mode == overlayLogin:
-		h := []keyHint{{"o", "open in browser"}, {"esc", "cancel sign-in"}}
+		h := []dialog.Hint{hint("o", "open in browser"), hint("esc", "cancel sign-in")}
 		if m.ov.login.err != "" {
-			h = append([]keyHint{{"enter", "retry"}}, h...)
+			h = append([]dialog.Hint{hint("enter", "retry")}, h...)
 		}
 		return h
 	case m.ov != nil && m.ov.kind == ovModels:
-		return []keyHint{{"space", "set for this agent"}, {"ctrl+s", "set session default"}, {"↑/↓", "move"}, {"type", "filter"}, {"pgup/pgdn", "page"}, {"enter", "input"}, {"esc", "close"}}
+		return []dialog.Hint{hint("space", "set for this agent"), hint("ctrl+s", "set session default"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("enter", "input"), hint("esc", "close")}
 	case m.ov != nil:
-		return []keyHint{{"space", "select"}, {"↑/↓", "move"}, {"type", "filter"}, {"pgup/pgdn", "page"}, {"enter", "input"}, {"esc", "close"}}
+		return []dialog.Hint{hint("space", "select"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("enter", "input"), hint("esc", "close")}
 	}
 	switch m.focus {
 	case focusAsync:
-		return []keyHint{{"↑/↓", "move"}, {"space", "select agent"}, {"enter", "input"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("space", "select agent"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusTodo:
-		return []keyHint{{"↑/↓", "move"}, {"enter", "input"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusDirs:
 		if m.dirEdit != "" {
-			return []keyHint{{"enter", "save"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
+			return []dialog.Hint{hint("enter", "save"), hint("esc", "cancel"), hint("ctrl+c", "quit")}
 		}
-		return []keyHint{{"↑/↓", "move"}, {"a", "add directory"}, {"space", "edit"}, {"ctrl+d", "remove"}, {"enter", "input"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("a", "add directory"), hint("space", "edit"), hint("ctrl+d", "remove"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusMCP:
-		return []keyHint{{"↑/↓", "move"}, {"space", "show/hide tools"}, {"enter", "input"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("space", "show/hide tools"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusSidebar:
-		return []keyHint{{"↑/↓", "move"}, {"space", "select · fold/unfold · resume"}, {"n", "next agent needing you"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("space", "select · fold/unfold · resume"), hint("n", "next agent needing you"), hint("enter", "input"), hint("tab", "next section"), hint("esc", "back to input"), hint("ctrl+b", "close sidebar"), hint("pgup/pgdn", "scroll"), hint("ctrl+c", "quit")}
 	case focusMeta:
-		return []keyHint{{"←/→", "choose"}, {"space", "open (mode tag: back to ask)"}, {"enter", "input"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("←/→", "choose"), hint("space", "open (mode tag: back to ask)"), hint("enter", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusTabs:
-		return []keyHint{{"←/→", "choose"}, {"space", "open"}, {"enter", "input"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("←/→", "choose"), hint("space", "open"), hint("enter", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusChat:
-		return []keyHint{{"↑/↓", "item"}, {"space", "expand/collapse tool"}, {"pgup/pgdn", "page"}, {"tab", "next section"}, {"enter", "input"}, {"esc", "input"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("↑/↓", "item"), hint("space", "expand/collapse tool"), hint("pgup/pgdn", "page"), hint("tab", "next section"), hint("enter", "input"), hint("esc", "input"), hint("ctrl+c", "quit")}
 	case focusQuestions:
 		if m.q.typing {
-			return []keyHint{{"enter", "answer"}, {"esc", "back to the options"}, {"ctrl+c", "quit"}}
+			return []dialog.Hint{hint("enter", "answer"), hint("esc", "back to the options"), hint("ctrl+c", "quit")}
 		}
-		return []keyHint{{"↑/↓", "option"}, {"space", "toggle"}, {"enter", "confirm · next"}, {"←/→", "question"}, {"type", "something else"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("↑/↓", "option"), hint("space", "toggle"), hint("enter", "confirm · next"), hint("←/→", "question"), hint("type", "something else"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusPermission:
 		if p := m.currentPrompt(); p != nil {
 			switch m.permEdit {
 			case "deny":
-				return []keyHint{{"enter", "deny"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
+				return []dialog.Hint{hint("enter", "deny"), hint("esc", "cancel"), hint("ctrl+c", "quit")}
 			case "dir":
-				return []keyHint{{"enter", "allow + add this directory"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
+				return []dialog.Hint{hint("enter", "allow + add this directory"), hint("esc", "cancel"), hint("ctrl+c", "quit")}
 			}
-			return []keyHint{{"↑/↓", "option"}, {"space", "choose"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
+			return []dialog.Hint{hint("↑/↓", "option"), hint("space", "choose"), hint("enter", "input"), hint("tab", "next section"), hint("esc", "close"), hint("ctrl+c", "quit")}
 		}
-		return []keyHint{{"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []dialog.Hint{hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	}
 	// Input focus. The tab hint appears only when there is somewhere to go;
 	// a waiting permission already shows in the tab strip, so it is not
 	// repeated here.
-	var tab []keyHint
+	var tab []dialog.Hint
 	if len(m.focusOrder()) > 1 {
-		tab = []keyHint{{"tab", "next section"}}
+		tab = []dialog.Hint{hint("tab", "next section")}
 	}
 	tree := "show sidebar"
 	if m.showTree {
 		tree = "hide sidebar"
 	}
 	if m.isHome() {
-		hs := []keyHint{{"enter", "send"}, {"ctrl+j", "newline"}, {"↑/↓", "history"}, {"/", "commands"}}
+		hs := []dialog.Hint{hint("enter", "send"), hint("ctrl+j", "newline"), hint("↑/↓", "history"), hint("/", "commands")}
 		hs = append(hs, tab...)
-		return append(hs, keyHint{"ctrl+n/p", "agents"}, keyHint{"ctrl+b", tree}, keyHint{"ctrl+c", "quit"})
+		return append(hs, hint("ctrl+n/p", "agents"), hint("ctrl+b", tree), hint("ctrl+c", "quit"))
 	}
-	hs := []keyHint{{"enter", "send"}, {"ctrl+j", "newline"}, {"↑/↓", "history"}, {"/", "commands"}}
+	hs := []dialog.Hint{hint("enter", "send"), hint("ctrl+j", "newline"), hint("↑/↓", "history"), hint("/", "commands")}
 	hs = append(hs, tab...)
-	return append(hs, keyHint{"esc esc", "cancel turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"ctrl+c", "quit"})
-}
-
-// dialogHintLines is the footer every dialog carries whatever the key bar
-// setting: the keys that act inside it, "key desc · key desc", dim,
-// wrapped onto as many lines as they need so none is cut. esc, tab and
-// ctrl+c are left out (esc is on the title line; the other two are not
-// the dialog's own).
-func dialogHintLines(hints []keyHint, width int) []string {
-	var cells []string
-	for _, h := range hints {
-		switch h.key {
-		case "esc", "tab", "ctrl+c":
-			continue
-		}
-		cells = append(cells, theme.StyleKey.Render(h.key)+" "+theme.StyleDim.Render(h.desc))
-	}
-	if len(cells) == 0 {
-		return nil
-	}
-	sep := theme.StyleDim.Render(" · ")
-	var lines []string
-	var line string
-	for _, c := range cells {
-		switch {
-		case line == "":
-			line = c
-		case lipgloss.Width(line)+3+lipgloss.Width(c) <= width:
-			line += sep + c
-		default:
-			lines = append(lines, line)
-			line = c
-		}
-	}
-	return append(lines, ansi.Truncate(line, width, "…"))
+	return append(hs, hint("esc esc", "cancel turn"), hint("ctrl+n/p", "agents"), hint("pgup/pgdn", "scroll"), hint("ctrl+b", tree), hint("ctrl+c", "quit"))
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at
 // most width columns, at most maxRows rows (later hints are dropped).
-func keyBarLines(hints []keyHint, width, maxRows int) []string {
+func keyBarLines(hints []dialog.Hint, width, maxRows int) []string {
 	const sep = "   "
 	var rows []string
 	var row []string
 	rowW := 0
 	for _, h := range hints {
-		cell := theme.StyleKey.Render(h.key) + " " + theme.StyleDim.Render(h.desc)
+		cell := theme.StyleKey.Render(h.Key) + " " + theme.StyleDim.Render(h.Desc)
 		cw := lipgloss.Width(cell)
 		if rowW > 0 && rowW+len(sep)+cw > width {
 			rows = append(rows, strings.Join(row, sep))
