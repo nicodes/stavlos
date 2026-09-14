@@ -1119,7 +1119,7 @@ func (m Model) cursorRows(rows []string) []string {
 // promptBox renders the head of the prompt queue as the body of the
 // permission dialog: a permission is one row in the async tab's style,
 // "$ name (role)  command", with the whole argument (the command, path or
-// files) wrapped under the command's start — it is what the user is
+// files) wrapped onto indented continuation lines — it is what the user is
 // approving, so it is never cut; a question shows its text, options and
 // answer field; trust shows the directory and files. Key hints live in the
 // key bar, so only a status line (claimed, answering) is added.
@@ -1160,19 +1160,18 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 		if arg == "" {
 			arg = toolTitle(p.Tool)
 		}
-		// Continuation lines align under the command; a very long head
-		// falls back to a small indent so the command keeps its room.
-		indent := lipgloss.Width(head)
-		if indent > width/2 {
-			indent = 4
-		}
+		// Continuation lines are indented once from the dialog's left edge.
+		// The first line shares its row with the head, so the text is
+		// wrapped with the head's width reserved in front of it.
+		const indent = 2
 		wrapW := width - indent
 		if wrapW < 20 {
 			wrapW = 20
 		}
-		for i, l := range strings.Split(ansi.Hardwrap(arg, wrapW, true), "\n") {
+		reserve := strings.Repeat(" ", max(lipgloss.Width(head)-indent, 0))
+		for i, l := range strings.Split(ansi.Hardwrap(reserve+arg, wrapW, true), "\n") {
 			if i == 0 {
-				lines = append(lines, head+l)
+				lines = append(lines, head+strings.TrimPrefix(l, reserve))
 			} else {
 				lines = append(lines, strings.Repeat(" ", indent)+l)
 			}

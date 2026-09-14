@@ -967,13 +967,13 @@ func TestPermissionShowsWholeCommand(t *testing.T) {
 			t.Fatalf("line %q too wide or elided:\n%s", l, v)
 		}
 	}
-	joined := strings.ReplaceAll(strings.ReplaceAll(v, "\n         ", ""), "\n", "")
+	joined := strings.ReplaceAll(strings.ReplaceAll(v, "\n  ", ""), "\n", "")
 	for _, want := range []string{"rm -f \"$f\".bak; done", "echo second line"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q:\n%s", want, v)
 		}
 	}
-	if !strings.Contains(v, "\n         echo second line") {
+	if !strings.Contains(v, "\n  echo second line") {
 		t.Fatalf("newline in the command should start a new row:\n%s", v)
 	}
 }
