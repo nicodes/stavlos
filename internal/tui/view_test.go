@@ -478,14 +478,13 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.focus != focusAgents {
 		t.Fatalf("→ inside a dialog should do nothing: focus=%v", m.focus)
 	}
+	// esc returns to where the dialog was opened from: the strip, with the
+	// closed tab still highlighted
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusInput {
-		t.Fatalf("esc: focus=%v", m.focus)
+	if m.focus != focusTabs || m.tabSel != 1 {
+		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, stab)
-	if m.focus != focusTabs {
-		t.Fatalf("shift+tab: focus=%v", m.focus)
-	}
+	press(&m, left)
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter}) // permission dialog, nothing waiting
 	if dv := stripANSI(m.tabDialog(100)); m.focus != focusPermission || !strings.Contains(dv, "Permission (0)") || !strings.Contains(dv, "no prompts waiting") {
 		t.Fatalf("enter on permission: focus=%v\n%s", m.focus, dv)
@@ -554,12 +553,14 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.focus != focusPermission {
 		t.Fatalf("shift+tab, enter from input: %v", m.focus)
 	}
-	// Answering the prompt elsewhere returns focus to the input.
+	// Answering the prompt elsewhere closes the dialog back onto the strip
+	// it was opened from.
 	m.removePrompt("p")
 	m.ensureFocus()
-	if m.focus != focusInput {
-		t.Fatalf("prompt gone: focus=%v", m.focus)
+	if m.focus != focusTabs || m.tabSel != 0 {
+		t.Fatalf("prompt gone: focus=%v sel=%d", m.focus, m.tabSel)
 	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // strip → input
 	// Tab never cycles agents any more; ctrl+n still does.
 	press(&m, tab, tab)
 	if m.selected != 0 {
@@ -649,7 +650,11 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 		t.Fatalf("enter: busy=%q field=%q", m.promptBusy, m.promptInput.Value())
 	}
 	// Enter in the input focus sends a prompt, it never answers a question.
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // the dialog closes back onto the strip it was opened from
+	if m.focus != focusTabs {
+		t.Fatalf("esc should return to the strip: %v", m.focus)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // strip → input
 	m.promptBusy = ""
 	m.input.SetValue("hello agent")
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -834,25 +839,29 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if full := stripANSI(m.View()); !strings.Contains(full, "make test") || !strings.Contains(full, "╭") {
 		t.Fatalf("the dialog should render in the view:\n%s", full)
 	}
-	// esc back to the strip's neighbour: open the agents dialog from the strip
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter})
+	// esc returns to the strip (permission still highlighted); → enter opens agents
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.focus != focusTabs || m.tabSel != 0 {
+		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}
 	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "Agents (2)") || !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
 		t.Fatalf("agents dialog:\n%s", dv)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter}) // strip (agents) → async
 	if m.focus != focusAsync || !strings.Contains(stripANSI(m.tabDialog(100)), "no async jobs running") {
 		t.Fatalf("async: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter}) // agents again for the selection test
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeyEnter}) // strip (async) → agents for the selection test
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.selectedID() != "c2" || m.focus != focusInput {
+	if m.selectedID() != "c2" || m.focus != focusTabs {
 		t.Fatalf("enter should select the child under the cursor: %s focus %v", m.selectedID(), m.focus)
 	}
 	// now the selected agent has no children: the tab stays, reading (0)
@@ -1175,6 +1184,27 @@ func TestEscTwiceCancelsTheTurn(t *testing.T) {
 	m.cancelArmed = time.Time{}
 	if cmd := press(&m, esc); cmd != nil || !m.cancelArmed.IsZero() {
 		t.Fatal("esc on an idle agent should be inert")
+	}
+}
+
+func TestOverlayClosesBackToItsOrigin(t *testing.T) {
+	m := sessionModel()
+	// opened from the meta row: closing leaves the meta row focused, the input blurred
+	m.setFocus(focusMeta)
+	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles", ""))
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.ov != nil || m.focus != focusMeta || m.input.Focused() {
+		t.Fatalf("meta origin: ov=%v focus=%v input=%v", m.ov != nil, m.focus, m.input.Focused())
+	}
+	// opened from the input: closing refocuses the input
+	m.setFocus(focusInput)
+	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles", ""))
+	if m.input.Focused() {
+		t.Fatal("an open overlay should blur the input")
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.ov != nil || m.focus != focusInput || !m.input.Focused() {
+		t.Fatalf("input origin: ov=%v focus=%v input=%v", m.ov != nil, m.focus, m.input.Focused())
 	}
 }
 

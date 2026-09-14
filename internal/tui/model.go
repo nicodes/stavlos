@@ -97,6 +97,7 @@ type Model struct {
 	sel           selection // mouse text selection (drag to select, release to copy)
 	metaSel       metaPart  // the highlighted part of the meta row while it has focus
 	tabSel        int       // the highlighted tab (index into tabFocuses) while the strip has focus
+	dialogFrom    focus     // what had focus when the open dialog (a tab's or an overlay) was opened; closing returns there
 	details       bool      // expanded tool output (/details)
 	follow        bool      // auto-scroll to bottom
 
@@ -509,6 +510,36 @@ func (m *Model) defaultTab() int {
 	return 0
 }
 
+// closeDialog leaves an open tab dialog for whatever had focus when it was
+// opened (the strip, the input, the chat…), or the input when that is no
+// longer a stop. Back on the strip, the closed tab stays highlighted.
+func (m *Model) closeDialog() tea.Cmd {
+	closed := m.focus
+	from := m.dialogFrom
+	if isTab(from) || !m.focusAvailable(from) {
+		from = focusInput
+	}
+	cmd := m.setFocus(from)
+	if from == focusTabs {
+		for i, t := range tabFocuses {
+			if t == closed {
+				m.tabSel = i
+			}
+		}
+	}
+	return cmd
+}
+
+// focusAvailable reports whether f is a stop in the current focus order.
+func (m *Model) focusAvailable(f focus) bool {
+	for _, g := range m.focusOrder() {
+		if g == f {
+			return true
+		}
+	}
+	return false
+}
+
 // tabsKey handles keys while the strip has focus: ←/→ move the highlight
 // (no wrap), enter opens the highlighted tab's dialog, esc returns to the
 // input.
@@ -539,6 +570,9 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	}
 	prev := m.focus
 	m.focus = f
+	if isTab(f) && !isTab(prev) {
+		m.dialogFrom = prev // a tab dialog opens: remember where to return on close
+	}
 	m.hoverFocus = false // keyboard focus changes always win over hover
 	m.input.Blur()
 	m.promptInput.Blur()
@@ -573,15 +607,15 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	return nil
 }
 
-// agentsKey handles keys while the agents tab has focus: ↑/↓ (or j/k) move
+// agentsKey handles keys while the agents dialog is open: ↑/↓ (or j/k) move
 // over the live children, enter selects the child under the cursor and
-// returns to the input, esc returns without changing the selection.
+// closes, esc closes without changing the selection.
 func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
 	kids := m.liveChildren()
 	n := len(kids)
 	switch {
 	case key.Matches(msg, keys.OvClose):
-		return m.setFocus(focusInput)
+		return m.closeDialog()
 	case key.Matches(msg, keys.SelUp), msg.String() == "k":
 		if n > 0 {
 			m.agCursor = ((m.agCursor-1)%n + n) % n
@@ -598,18 +632,18 @@ func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
 				m.refreshViewport()
 			}
 		}
-		return m.setFocus(focusInput)
+		return m.closeDialog()
 	}
 	return nil
 }
 
-// asyncKey handles keys while the async tab has focus: ↑/↓ (or j/k) move
-// over the running jobs (informational only), esc returns to the input.
+// asyncKey handles keys while the async dialog is open: ↑/↓ (or j/k) move
+// over the running jobs (informational only), esc closes.
 func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 	n := len(m.runningJobs())
 	switch {
 	case key.Matches(msg, keys.OvClose):
-		return m.setFocus(focusInput)
+		return m.closeDialog()
 	case key.Matches(msg, keys.SelUp), msg.String() == "k":
 		if n > 0 {
 			m.agCursor = ((m.agCursor-1)%n + n) % n
@@ -1534,10 +1568,10 @@ func isAlias(c Command, typed string) bool {
 
 // permissionKey handles keys while the prompt box has focus: y/n/a answer
 // a permission (y/n a trust prompt); a question takes typing into its own
-// field and enter submits it; esc returns to the input.
+// field and enter submits it; esc closes the dialog.
 func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 	if key.Matches(msg, keys.Clear) {
-		return m.setFocus(focusInput)
+		return m.closeDialog()
 	}
 	p := m.currentPrompt()
 	if p == nil { // empty dialog: nothing to answer
@@ -1932,7 +1966,7 @@ func (m *Model) removePrompt(id string) {
 		m.prompts = append(m.prompts[:i], m.prompts[i+1:]...)
 	}
 	if len(m.prompts) == 0 && m.focus == focusPermission {
-		m.setFocus(focusInput) // the last prompt was answered: back to typing
+		m.closeDialog() // the last prompt was answered: the dialog closes
 	}
 	delete(m.claimedByUs, id)
 	if m.promptBusy == id {
@@ -2236,14 +2270,30 @@ func (m *Model) openOverlay(o *overlay) tea.Cmd {
 	if m.ov != nil && m.ov.mode == overlayLogin && o.mode != overlayLogin {
 		m.login.reset()
 	}
+	if m.ov == nil {
+		m.dialogFrom = m.focus // one overlay replacing another keeps the original origin
+	}
 	m.ov = o
 	m.input.Blur()
 	return o.input.Focus()
 }
 
+// closeOverlay drops the overlay and gives focus back to what had it when
+// the overlay opened (the input, the meta row…). The section's focus was
+// never changed by the overlay; only the blurred input needs refocusing.
 func (m *Model) closeOverlay() tea.Cmd {
 	m.ov = nil
-	return m.input.Focus()
+	from := m.dialogFrom
+	if isTab(from) || !m.focusAvailable(from) {
+		from = focusInput
+	}
+	if from != m.focus {
+		return m.setFocus(from)
+	}
+	if from == focusInput {
+		return m.input.Focus()
+	}
+	return nil
 }
 
 // overlayKey routes a key while an overlay is open.
