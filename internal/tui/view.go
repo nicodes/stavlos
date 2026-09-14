@@ -2041,8 +2041,6 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 	return rows
 }
 
-// monitorGlyph is the single-width marker for a monitor kind: $ command,
-// (the gear is used for every kind; ⏱ draws two cells wide in many terminals).
 // Tool-call glyphs by group: the gear for files, shell and finish; the
 // clock for monitors; the fork for agent tools.
 const (
@@ -2087,9 +2085,6 @@ func todoCount(items []event.TodoItem) string {
 	}
 	return fmt.Sprintf("%d/%d", done, len(items))
 }
-
-// todoLabel is the strip's todo tab label.
-func todoLabel(items []event.TodoItem) string { return "todo " + todoCount(items) }
 
 // todoRows renders a todo list, one row per item: a status glyph (○
 // pending, ◐ in progress, ● done, × cancelled) and the text; the item in
@@ -2140,9 +2135,6 @@ func mcpCount(items []protocol.MCPInfo) string {
 	return fmt.Sprintf("%d/%d", up, len(items))
 }
 
-// mcpLabel is the strip's mcp tab label.
-func mcpLabel(items []protocol.MCPInfo) string { return "mcp " + mcpCount(items) }
-
 // mcpRows renders an agent's MCP servers, one row each: a state glyph (●
 // connected, ◐ starting, ○ pending, × failed or stopped), the name in bold,
 // then the tool count and uptime, or the error. A server in open shows its
@@ -2192,9 +2184,6 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 	}
 	return rows, owners
 }
-
-// monitorGlyph is the shell prompt for every monitor kind.
-func monitorGlyph(kind string) string { return glyphToolMonitors }
 
 // fmtElapsed renders a duration as 12s, 1m05s, 1h02m.
 func fmtElapsed(d time.Duration) string {

@@ -30,10 +30,6 @@ func TestPaletteMatches(t *testing.T) {
 	if !strings.Contains(view, "▸ /providers") || !strings.Contains(view, "/queue <text>") || !strings.Contains(view, "tab complete") {
 		t.Fatalf("view:\n%s", view)
 	}
-	help := helpLines()
-	if !strings.Contains(strings.Join(help, "\n"), "/models") {
-		t.Fatalf("help generated from the registry:\n%s", strings.Join(help, "\n"))
-	}
 }
 
 func TestPaletteKeys(t *testing.T) {

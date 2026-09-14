@@ -1881,6 +1881,14 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.questionsKey(msg)
 	}
 
+	return m.inputKey(msg)
+}
+
+// inputKey handles keys while the input has focus: paging the chat, ↑/↓
+// through the "/" palette or the prompt history, esc to clear (or cancel a
+// busy turn), tab to complete a command, enter to run or send; anything
+// else edits the text.
+func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.PageUp):
 		m.vp.PageUp()
@@ -2862,13 +2870,6 @@ func (m *Model) transcript(id string) *Transcript {
 		m.transcripts[id] = t
 	}
 	return t
-}
-
-// notice appends local lines to the selected transcript (help, presets).
-func (m *Model) notice(lines ...string) {
-	m.transcript(m.selectedID()).Notice(lines...)
-	m.follow = true
-	m.refreshViewport()
 }
 
 // totalTokens sums every agent's tokens for the session rollup.

@@ -530,17 +530,6 @@ func (t *Transcript) settleMonitor(id string, tone Tone, lines []Line) {
 	t.insertIntoItem(r.item, lines)
 }
 
-// monitorKindFromText recovers the kind from a monitor wake message
-// ("Monitor "x" (command, m…): …").
-func monitorKindFromText(text string) string {
-	for _, k := range []string{"command", "watch", "timer"} {
-		if strings.Contains(text, "("+k+", ") {
-			return k
-		}
-	}
-	return "command"
-}
-
 // lastUntiedCall returns the most recent call line of tool that no entry
 // of tied already claims.
 func (t *Transcript) lastUntiedCall(tool string, tied map[string]lineRef) (lineRef, bool) {
@@ -703,19 +692,6 @@ func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 	}
 }
 
-// Notice appends a local (non-event) notice, e.g. /help output, as one item.
-func (t *Transcript) Notice(lines ...string) {
-	ls := make([]Line, 0, len(lines))
-	for i, l := range lines {
-		ln := Line{Kind: LineNotice, Text: l}
-		if i == 0 {
-			ln.Glyph = GlyphNotice
-		}
-		ls = append(ls, ln)
-	}
-	t.appendItem(ls)
-}
-
 // All returns the committed lines followed by the live streaming buffer.
 // The slice must not be modified.
 func (t *Transcript) All() []Line {
@@ -776,20 +752,6 @@ func (t *Transcript) Items() int {
 	return len(t.items)
 }
 
-// ItemRange returns the first and last index into All() of item i, or
-// (-1, -1) when there is no such item. Items are contiguous: tool output is
-// nested under its call even when other events landed in between.
-func (t *Transcript) ItemRange(i int) (first, last int) {
-	if len(t.stream) > 0 && i >= len(t.items)-1 {
-		return itemRange(t.All(), i) // the buffer may extend or follow the last item
-	}
-	if i < 0 || i >= len(t.items) || len(t.items[i]) == 0 {
-		return -1, -1
-	}
-	t.committed()
-	return t.start[i], t.start[i] + len(t.items[i]) - 1
-}
-
 func itemCount(lines []Line) int {
 	n := 0
 	for _, l := range lines {
@@ -824,9 +786,6 @@ func itemIsTool(lines []Line, item int) bool {
 	return false
 }
 
-// Streaming reports whether a live buffer is being shown.
-func (t *Transcript) Streaming() bool { return len(t.stream) > 0 }
-
 // Empty reports whether nothing at all would be shown (the home state).
 func (t *Transcript) Empty() bool { return len(t.items) == 0 && len(t.stream) == 0 }
 
@@ -843,24 +802,30 @@ func (t *Transcript) Running() bool {
 	return false
 }
 
-// Build folds a full event sequence into lines. Pure; used by tests.
-func Build(evs []event.Event) []Line {
-	t := NewTranscript()
-	for _, ev := range evs {
-		t.Apply(ev)
-	}
-	return t.All()
-}
-
-// EventLines renders a single event. Unknown or silent event types (usage,
+// EventLines renders a single event. Types without a renderer (usage,
 // turn.started, prompt.queued, …) yield no lines.
 func EventLines(ev event.Event) []Line {
-	switch ev.Type {
-	case event.AgentSpawned:
-		var p event.AgentSpawnedPayload
+	if render, ok := eventRenderers[ev.Type]; ok {
+		return render(ev)
+	}
+	return nil
+}
+
+// decoded adapts a renderer of payload P: a payload that does not decode
+// renders as an error line.
+func decoded[P any](render func(P) []Line) func(event.Event) []Line {
+	return func(ev event.Event) []Line {
+		var p P
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
+		return render(p)
+	}
+}
+
+// eventRenderers draws each chat-visible event type.
+var eventRenderers = map[event.Type]func(event.Event) []Line{
+	event.AgentSpawned: decoded(func(p event.AgentSpawnedPayload) []Line {
 		if p.Parent == "" {
 			return nil // the root's own spawn is not a message; keeps the home state empty
 		}
@@ -869,12 +834,9 @@ func EventLines(ev event.Event) []Line {
 			lines = append(lines, blockWith(BlockChild, "task", p.Task, GlyphTask)...)
 		}
 		return lines
+	}),
 
-	case event.UserMessage:
-		var p event.UserMessagePayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.UserMessage: decoded(func(p event.UserMessagePayload) []Line {
 		switch p.Kind {
 		case event.MsgPrompt, "":
 			if p.From != "" {
@@ -903,16 +865,13 @@ func EventLines(ev event.Event) []Line {
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case event.MsgMonitorFired:
-			return blockWith(BlockChild, "job result", p.Text, monitorGlyph("command"))
+			return blockWith(BlockChild, "job result", p.Text, glyphToolMonitors)
 		default:
 			return block(BlockUser, string(p.Kind), p.Text)
 		}
+	}),
 
-	case event.AssistantMessage:
-		var p event.AssistantMessagePayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.AssistantMessage: decoded(func(p event.AssistantMessagePayload) []Line {
 		var lines []Line
 		hasText := false
 		for _, b := range p.Blocks {
@@ -937,12 +896,9 @@ func EventLines(ev event.Event) []Line {
 			lines = append(lines, Line{Kind: LineBlank})
 		}
 		return lines
+	}),
 
-	case event.ToolCallStarted:
-		var p event.ToolStartedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.ToolCallStarted: decoded(func(p event.ToolStartedPayload) []Line {
 		p.Name = toolname.Canonical(p.Name) // logs from before a rename read as the current tool
 		if p.Name == toolname.AgentResponse {
 			// The message itself is the interesting part: show it under the
@@ -953,22 +909,16 @@ func EventLines(ev event.Event) []Line {
 			return append(lines, outputLines(strings.TrimRight(in.Text, "\n"))...)
 		}
 		return []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID, tool: p.Name}}
+	}),
 
-	case event.ToolCallFinished:
-		var p event.ToolFinishedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.ToolCallFinished: decoded(func(p event.ToolFinishedPayload) []Line {
 		if toolname.Canonical(p.Name) == toolname.AgentResponse && !p.IsError {
 			return nil // the message already sits under the call; "response delivered" adds nothing
 		}
 		return outputLines(strings.TrimRight(p.Output, "\n"))
+	}),
 
-	case event.TurnEnded:
-		var p event.TurnEndedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.TurnEnded: decoded(func(p event.TurnEndedPayload) []Line {
 		switch p.Reason {
 		case event.ReasonCancelled:
 			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn cancelled"}, {Kind: LineBlank}}
@@ -984,15 +934,13 @@ func EventLines(ev event.Event) []Line {
 			// the reply speaks for itself
 		}
 		return nil
+	}),
 
-	case event.TurnAborted:
+	event.TurnAborted: func(event.Event) []Line {
 		return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn aborted (daemon restart)"}, {Kind: LineBlank}}
+	},
 
-	case event.AgentFinished:
-		var p event.AgentFinishedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.AgentFinished: decoded(func(p event.AgentFinishedPayload) []Line {
 		head := Line{Kind: LineFinished, Text: "finished · " + p.Status, Block: BlockFinished, Glyph: GlyphFinished}
 		switch p.Status {
 		case "failure":
@@ -1014,119 +962,79 @@ func EventLines(ev event.Event) []Line {
 			lines = append(lines, Line{Kind: LineDim, Text: s, Block: BlockFinished})
 		}
 		return append(lines, Line{Kind: LineBlank})
+	}),
 
-	case event.AgentKilled:
+	event.AgentKilled: func(event.Event) []Line {
 		return errorBlockWith("killed", GlyphKilled)
+	},
 
-	case event.AgentRoleChanged:
-		var p event.RoleChangedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.AgentRoleChanged: decoded(func(p event.RoleChangedPayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "role → " + p.Role}}
+	}),
 
-	case event.AgentModelChanged:
-		var p event.ModelChangedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.AgentModelChanged: decoded(func(p event.ModelChangedPayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "model → " + p.Model}}
+	}),
 
-	case event.SessionYoloChanged: // legacy logs
-		var p event.YoloPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.SessionYoloChanged: decoded(func(p event.YoloPayload) []Line { // legacy logs
 		mode := protocol.ModeAsk
 		if p.On {
 			mode = protocol.ModeYolo
 		}
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + mode + " · " + modeDesc(mode)}}
+	}),
 
-	case event.SessionModeChanged:
-		var p event.ModePayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.SessionModeChanged: decoded(func(p event.ModePayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + p.Mode + " · " + modeDesc(p.Mode)}}
+	}),
 
-	case event.AgentVariantChanged:
-		var p event.VariantChangedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.AgentVariantChanged: decoded(func(p event.VariantChangedPayload) []Line {
 		v := p.Variant
 		if v == "" {
 			v = "default"
 		}
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "variant → " + v}}
+	}),
 
-	case event.MonitorStarted:
-		var p event.MonitorStartedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
-		return []Line{{Kind: LineDim, Glyph: monitorGlyph(p.Kind), Tone: ToneWorking, Text: "job: " + p.Label}}
+	event.MonitorStarted: decoded(func(p event.MonitorStartedPayload) []Line {
+		return []Line{{Kind: LineDim, Glyph: glyphToolMonitors, Tone: ToneWorking, Text: "job: " + p.Label}}
+	}),
 
-	case event.MCPStarted:
-		var p event.MCPStartedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.MCPStarted: decoded(func(p event.MCPStartedPayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: glyphToolMCP, Text: fmt.Sprintf("mcp: %s connected · %d tools", p.Server, len(p.Tools))}}
+	}),
 
-	case event.MCPFailed:
-		var p event.MCPFailedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.MCPFailed: decoded(func(p event.MCPFailedPayload) []Line {
 		return []Line{{Kind: LineError, Glyph: glyphToolMCP, Tone: ToneError, Text: fmt.Sprintf("mcp: %s failed: %s", p.Server, p.Error)}}
+	}),
 
-	case event.AgentDirAdded:
-		var p event.DirAddedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.AgentDirAdded: decoded(func(p event.DirAddedPayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: glyphToolFiles, Text: fmt.Sprintf("dirs: + %s (%s)", shortHome(p.Dir), p.Source)}}
+	}),
 
-	case event.MCPStopped:
-		var p event.MCPRefPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.MCPStopped: decoded(func(p event.MCPRefPayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: glyphToolMCP, Text: "mcp: " + p.Server + " stopped"}}
+	}),
 
-	case event.MonitorFired:
-		var p event.MonitorFiredPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.MonitorFired: decoded(func(p event.MonitorFiredPayload) []Line {
 		return monitorFiredLines(p)
+	}),
 
-	case event.MonitorStopped:
-		// Without the transcript's id → kind memory the glyph defaults to ◆;
-		// Transcript.Apply looks it up.
-		var p event.MonitorRefPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	// Without the transcript's id → kind memory the kind is unknown here;
+	// Transcript.Apply looks it up.
+	event.MonitorStopped: decoded(func(p event.MonitorRefPayload) []Line {
 		return monitorStoppedLines("", p.Reason)
+	}),
 
-	case event.CompactionStarted:
+	event.CompactionStarted: func(event.Event) []Line {
 		return []Line{{Kind: LineBlank}, {Kind: LineRule, Text: GlyphCompacting}, {Kind: LineBlank}}
+	},
 
-	case event.CompactionFailed:
-		var p event.CompactionPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.CompactionFailed: decoded(func(p event.CompactionPayload) []Line {
 		return []Line{{Kind: LineBlank}, {Kind: LineDim, Text: "compaction failed: " + p.Error}, {Kind: LineBlank}}
+	}),
 
-	case event.Compacted:
-		var p event.CompactedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.Compacted: decoded(func(p event.CompactedPayload) []Line {
 		rule := GlyphCompacted
 		if p.Before > 0 && p.After > 0 {
 			rule = fmt.Sprintf("┄┄ compacted %s → %s tokens ┄┄", fmtTokens(p.Before), fmtTokens(p.After))
@@ -1136,12 +1044,9 @@ func EventLines(ev event.Event) []Line {
 			lines = append(lines, truncLines(s, maxSummaryLine, LineDim)...)
 		}
 		return append(lines, Line{Kind: LineBlank})
+	}),
 
-	case event.PromptRequested:
-		var p event.PromptRequestedPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.PromptRequested: decoded(func(p event.PromptRequestedPayload) []Line {
 		switch p.Kind {
 		case "question":
 			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "question: " + firstLine(p.Question)}}
@@ -1150,29 +1055,23 @@ func EventLines(ev event.Event) []Line {
 		default:
 			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "permission: " + p.Tool}}
 		}
+	}),
 
-	case event.PromptAnswered:
-		var p event.PromptAnsweredPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.PromptAnswered: decoded(func(p event.PromptAnsweredPayload) []Line {
 		ln := Line{Kind: LineNotice, Glyph: GlyphAnswer, Text: "answered: " + firstLine(p.Answer)}
 		if strings.HasPrefix(strings.ToLower(p.Answer), "deny") {
 			ln.Tone = ToneError
 		}
 		return []Line{ln}
+	}),
 
-	case event.PromptDefaulted:
-		var p event.PromptAnsweredPayload
-		if err := ev.Decode(&p); err != nil {
-			return decodeErr(ev, err)
-		}
+	event.PromptDefaulted: decoded(func(p event.PromptAnsweredPayload) []Line {
 		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: "defaulted: " + firstLine(p.Answer)}}
+	}),
 
-	case event.PromptWithdrawn:
+	event.PromptWithdrawn: func(event.Event) []Line {
 		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: "prompt withdrawn"}}
-	}
-	return nil
+	},
 }
 
 // --- helpers ---
@@ -1181,19 +1080,10 @@ func decodeErr(ev event.Event, err error) []Line {
 	return []Line{{Kind: LineError, Text: fmt.Sprintf("(bad %s payload: %v)", ev.Type, err)}}
 }
 
-// monitorKindWord is the word after the glyph in a monitor.started notice.
-func monitorKindWord(kind string) string {
-	switch kind {
-	case "watch", "timer":
-		return kind
-	}
-	return "background"
-}
-
 // monitorFiredLines renders "<glyph> <summary>" (red on error) followed by
 // the output collapsed like tool output.
 func monitorFiredLines(p event.MonitorFiredPayload) []Line {
-	head := Line{Kind: LineDim, Glyph: monitorGlyph(p.Kind)}
+	head := Line{Kind: LineDim, Glyph: glyphToolMonitors}
 	if p.IsError {
 		head.Tone = ToneError
 	}
@@ -1212,7 +1102,7 @@ func monitorStoppedLines(kind, reason string) []Line {
 	if reason = strings.TrimSpace(reason); reason != "" {
 		text += " (" + reason + ")"
 	}
-	return []Line{{Kind: LineDim, Glyph: monitorGlyph(kind), Tone: ToneError, Text: text}}
+	return []Line{{Kind: LineDim, Glyph: glyphToolMonitors, Tone: ToneError, Text: text}}
 }
 
 // block renders text as a left-bordered block (blank line before and after)
@@ -1496,18 +1386,6 @@ func outputLines(out string) []Line {
 		lines = append(lines, Line{Kind: LineToolOut, Text: fmt.Sprintf("… +%d lines", total-maxOutputExpanded), Vis: VisExpanded})
 	}
 	return lines
-}
-
-// prettyJSON indents raw JSON for display, falling back to the raw text.
-func prettyJSON(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
-	}
-	var buf bytes.Buffer
-	if err := json.Indent(&buf, raw, "", "  "); err != nil {
-		return string(raw)
-	}
-	return buf.String()
 }
 
 // patchFiles summarises the files an apply_patch touches: "a.go, b.md" or
