@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
 	"net/url"
@@ -78,6 +79,8 @@ type browserLogin struct {
 	redirect string
 	done     chan browserResult
 	once     sync.Once
+	stopOnce sync.Once
+	expire   *time.Timer
 }
 
 type browserResult struct {
@@ -104,9 +107,17 @@ func (c *ChatGPT) startBrowser(ctx context.Context) (*Pending, error) {
 
 	bl := &browserLogin{verifier: verifier, state: state, redirect: redirect, done: make(chan browserResult, 1)}
 	mux := http.NewServeMux()
+	// Every path checks the state first: a request without it is some other
+	// page in the browser (an <img src="http://localhost:1455/…">), and it
+	// gets an error page while the real sign-in stays pending.
 	mux.HandleFunc("/auth/callback", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if q.Get("state") != bl.state {
+			w.WriteHeader(400)
+			fmt.Fprint(w, page("Sign-in failed", "state mismatch: this is not the sign-in Stavlos is waiting for"))
+			return
+		}
 		if e := q.Get("error"); e != "" {
 			msg := q.Get("error_description")
 			if msg == "" {
@@ -123,21 +134,26 @@ func (c *ChatGPT) startBrowser(ctx context.Context) (*Pending, error) {
 			bl.finish(browserResult{err: errors.New("missing authorization code")})
 			return
 		}
-		if q.Get("state") != bl.state {
-			w.WriteHeader(400)
-			fmt.Fprint(w, page("Sign-in failed", "state mismatch"))
-			bl.finish(browserResult{err: errors.New("state mismatch (possible CSRF); start the login again")})
-			return
-		}
 		fmt.Fprint(w, page("Signed in", "You can close this tab and return to Stavlos."))
 		bl.finish(browserResult{code: code})
 	})
 	mux.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") != bl.state {
+			w.WriteHeader(400)
+			fmt.Fprint(w, "state mismatch")
+			return
+		}
 		bl.finish(browserResult{err: errors.New("login cancelled")})
 		fmt.Fprint(w, "cancelled")
 	})
-	bl.srv = &http.Server{Handler: mux}
+	bl.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go bl.srv.Serve(ln)
+	// The port is released when the sign-in expires, whether or not anyone
+	// is waiting on it: an abandoned login must not block the next one.
+	bl.expire = time.AfterFunc(10*time.Minute, func() {
+		bl.finish(browserResult{err: ErrExpired})
+		bl.shutdown()
+	})
 
 	params := url.Values{
 		"response_type":              {"code"},
@@ -162,13 +178,21 @@ func (b *browserLogin) finish(r browserResult) {
 	b.once.Do(func() { b.done <- r })
 }
 
-func (c *ChatGPT) waitBrowser(ctx context.Context, p *Pending) (Tokens, error) {
-	bl := p.browser
-	defer func() {
+// shutdown closes the loopback server (once) and releases its port.
+func (b *browserLogin) shutdown() {
+	b.stopOnce.Do(func() {
+		if b.expire != nil {
+			b.expire.Stop()
+		}
 		sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = bl.srv.Shutdown(sctx)
-	}()
+		_ = b.srv.Shutdown(sctx)
+	})
+}
+
+func (c *ChatGPT) waitBrowser(ctx context.Context, p *Pending) (Tokens, error) {
+	bl := p.browser
+	defer bl.shutdown()
 	timer := time.NewTimer(p.ExpiresIn)
 	defer timer.Stop()
 	select {
@@ -185,6 +209,7 @@ func (c *ChatGPT) waitBrowser(ctx context.Context, p *Pending) (Tokens, error) {
 }
 
 func page(title, body string) string {
+	title, body = html.EscapeString(title), html.EscapeString(body)
 	return "<!doctype html><meta charset=utf-8><title>Stavlos · " + title + "</title>" +
 		"<body style=\"font-family:system-ui;background:#111;color:#eee;display:grid;place-items:center;height:100vh;margin:0\">" +
 		"<div style=\"text-align:center\"><h1 style=\"font-weight:600\">" + title + "</h1><p style=\"color:#aaa\">" + body + "</p></div>"

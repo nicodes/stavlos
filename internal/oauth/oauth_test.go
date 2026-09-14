@@ -191,40 +191,26 @@ func TestChatGPTBrowserFlow(t *testing.T) {
 		done <- tok
 	}()
 	time.Sleep(50 * time.Millisecond)
-	// wrong state is rejected, then the real callback lands
-	resp, err := http.Get("http://127.0.0.1:18455/auth/callback?code=x&state=bad")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 400 {
-		t.Fatalf("bad state status %d", resp.StatusCode)
+	// A request with the wrong state (some other page in the browser) gets
+	// an error page and changes nothing: no cancel, no abort. So does
+	// /cancel without the state. Then the real callback lands.
+	for _, bad := range []string{"/auth/callback?code=x&state=bad", "/auth/callback?error=access_denied&error_description=%3Cb%3Ex", "/cancel"} {
+		resp, err := http.Get("http://127.0.0.1:18455" + bad)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != 400 || strings.Contains(string(body), "<b>") {
+			t.Fatalf("%s: status %d body %s", bad, resp.StatusCode, body)
+		}
 	}
 	select {
 	case err := <-errc:
-		if !strings.Contains(err.Error(), "state mismatch") {
-			t.Fatal(err)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("no error after bad state")
+		t.Fatalf("a stray request aborted the login: %v", err)
+	case <-time.After(200 * time.Millisecond):
 	}
-	// start over and succeed
-	p, err = f.Start(context.Background(), MethodBrowser)
-	if err != nil {
-		t.Fatal(err)
-	}
-	u, _ = url.Parse(p.URL)
-	state = u.Query().Get("state")
-	go func() {
-		tok, err := f.Wait(context.Background(), p)
-		if err != nil {
-			errc <- err
-			return
-		}
-		done <- tok
-	}()
-	time.Sleep(50 * time.Millisecond)
-	resp, err = http.Get("http://127.0.0.1:18455/auth/callback?code=c0de&state=" + url.QueryEscape(state))
+	resp, err := http.Get("http://127.0.0.1:18455/auth/callback?code=c0de&state=" + url.QueryEscape(state))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -247,5 +233,20 @@ func TestChatGPTBrowserFlow(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	if _, err := net.Dial("tcp", "127.0.0.1:18455"); err == nil {
 		t.Fatal("port still open")
+	}
+	// A login nobody waits on releases the port when closed.
+	p, err = f.Start(context.Background(), MethodBrowser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Close()
+	time.Sleep(50 * time.Millisecond)
+	if _, err := net.Dial("tcp", "127.0.0.1:18455"); err == nil {
+		t.Fatal("port still open after Close")
+	}
+	if _, err := f.Start(context.Background(), MethodBrowser); err != nil {
+		t.Fatalf("start after close: %v", err)
+	} else {
+		(&Pending{}).Close() // nil browser: no-op
 	}
 }

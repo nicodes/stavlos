@@ -531,8 +531,9 @@ func (d *Daemon) LoginStart(ctx context.Context, provider, method string) (proto
 	}
 	id := agent.NewID("l")
 	d.loginMu.Lock()
-	for k, v := range d.logins { // drop stale ones
+	for k, v := range d.logins { // drop stale ones, releasing their loopback port
 		if time.Since(v.started) > 30*time.Minute {
+			v.pending.Close()
 			delete(d.logins, k)
 		}
 	}
@@ -556,6 +557,7 @@ func (d *Daemon) LoginWait(ctx context.Context, id string) (registry.Status, err
 	tok, err := f.Wait(ctx, pl.pending)
 	if err != nil {
 		if ctx.Err() == nil { // terminal failure: forget it
+			pl.pending.Close()
 			d.loginMu.Lock()
 			delete(d.logins, id)
 			d.loginMu.Unlock()
