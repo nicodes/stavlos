@@ -559,31 +559,30 @@ func padLines(s string, width int) string {
 
 // --- logo ---
 
-// logoGlyphs are 4-row block letters, 4 cells wide, for the logo.
-var logoGlyphs = map[rune][4]string{
-	's': {"▄▀▀▀", "▀▀▀▄", "▄  █", "▀▀▀▀"},
-	't': {"▀▀█▀", "  █ ", "  █ ", "  ▀ "},
-	'a': {"▄▀▀▄", "█▄▄█", "█  █", "▀  ▀"},
-	'v': {"█  █", "█  █", "▀▄▄▀", " ▀▀ "},
-	'l': {"█   ", "█   ", "█   ", "▀▀▀▀"},
-	'o': {"▄▀▀▄", "█  █", "█  █", "▀▀▀▀"},
+// logoGlyphs are 3-row double-line letters, 3 cells wide, for the logo.
+// Stavlos is Greek (ΣΤΑΥΛΟΣ), so the v is an upsilon: two arms the full
+// height and the stem only a nub at the foot, so it does not read as a y.
+var logoGlyphs = map[rune][3]string{
+	's': {"╔═╗", "╚═╗", "╚═╝"},
+	't': {"╔╦╗", " ║ ", " ╩ "},
+	'a': {"╔═╗", "╠═╣", "╩ ╩"},
+	'v': {"╦ ╦", "║ ║", "╚╦╝"},
+	'l': {"╦  ", "║  ", "╩═╝"},
+	'o': {"╔═╗", "║ ║", "╚═╝"},
 }
 
-const logoMinWidth = 50
+const logoMinWidth = 30
 
-// buildLogo lays out word as 4 rows of block glyphs separated by one space.
-// Unknown letters render as blank cells so every row has the same width.
-func buildLogo(word string) [4]string {
-	var rows [4]string
-	for i, r := range word {
+// buildLogo lays out word as 3 rows of glyphs, letters touching. Unknown
+// letters render as blank cells so every row has the same width.
+func buildLogo(word string) [3]string {
+	var rows [3]string
+	for _, r := range word {
 		g, ok := logoGlyphs[r]
 		if !ok {
-			g = [4]string{"    ", "    ", "    ", "    "}
+			g = [3]string{"   ", "   ", "   "}
 		}
 		for k := range rows {
-			if i > 0 {
-				rows[k] += " "
-			}
 			rows[k] += g[k]
 		}
 	}
@@ -597,9 +596,9 @@ func logoLines(width int) []string {
 		return []string{styleLogoMuted.Render("stav") + styleLogoBright.Render("los")}
 	}
 	a, b := buildLogo("stav"), buildLogo("los")
-	out := make([]string, 4)
+	out := make([]string, 3)
 	for i := range out {
-		out[i] = styleLogoMuted.Render(a[i]) + "  " + styleLogoBright.Render(b[i])
+		out[i] = styleLogoMuted.Render(a[i]) + styleLogoBright.Render(b[i])
 	}
 	return out
 }
