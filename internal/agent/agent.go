@@ -74,6 +74,7 @@ type Agent struct {
 	monDone     []event.MonitorFiredPayload // fired monitors not yet delivered
 	wakes       map[string]bool             // ids whose completion is waiting to wake this agent (unmonitor cancels)
 	lastError   string                      // error that ended the most recent turn; cleared when a turn starts
+	logErr      error                       // a log write that failed: the history is no longer the truth, so the turn ends at its next step
 	compactNext bool                        // /compact arrived mid-turn: compact before the next model call, whatever the size
 	compacting  bool                        // a compaction is running (manual or automatic): no second one starts meanwhile
 	ctxTokens   int                         // estimated size of the projected history + system prompt at the last model call (or after compaction)
@@ -553,6 +554,9 @@ func (a *Agent) Info() protocol.AgentInfo {
 }
 
 // record appends an event for this agent and caches it for projection.
+// The log is the source of truth: when a write fails the in-memory history
+// and the log have parted, so the failure is kept and the turn ends at its
+// next step rather than carrying on from a history nobody can replay.
 func (a *Agent) record(ctx context.Context, t event.Type, payload any) (event.Event, error) {
 	e := event.Event{Session: a.s.ID, Agent: a.ID, Type: t}
 	if payload != nil {
@@ -560,12 +564,26 @@ func (a *Agent) record(ctx context.Context, t event.Type, payload any) (event.Ev
 	}
 	e, err := a.s.host.Append(ctx, e)
 	if err != nil {
+		a.mu.Lock()
+		if a.logErr == nil {
+			a.logErr = fmt.Errorf("event log: %s: %w", t, err)
+		}
+		a.mu.Unlock()
 		return e, err
 	}
 	a.mu.Lock()
 	a.events = append(a.events, e)
 	a.mu.Unlock()
 	return e, nil
+}
+
+// takeLogErr returns and clears the first log failure since the last call.
+func (a *Agent) takeLogErr() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	err := a.logErr
+	a.logErr = nil
+	return err
 }
 
 func (a *Agent) eventsCopy() []event.Event {

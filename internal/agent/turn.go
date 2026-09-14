@@ -93,6 +93,9 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 	if t.ctx.Err() != nil {
 		return event.ReasonCancelled, "", true
 	}
+	if err := a.takeLogErr(); err != nil {
+		return event.ReasonError, err.Error(), true
+	}
 	t.injectSteers()
 
 	modelID := a.ModelID()
