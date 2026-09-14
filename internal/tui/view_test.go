@@ -2365,3 +2365,48 @@ func TestEnterReturnsToInputAndSpaceSelects(t *testing.T) {
 		t.Fatalf("enter should submit the answer: cmd=%v focus=%v", cmd != nil, m.focus)
 	}
 }
+
+func TestArrowsMoveWithinTheDraftBeforeHistory(t *testing.T) {
+	m := sessionModel()
+	m.pushHistory("older message")
+	up := tea.KeyMsg{Type: tea.KeyUp}
+	down := tea.KeyMsg{Type: tea.KeyDown}
+	// three logical lines, cursor on the last: two ↑ stay inside, the third
+	// walks history
+	m.input.SetValue("one\ntwo\nthree")
+	m.input.CursorEnd()
+	press(&m, up)
+	if m.input.Value() != "one\ntwo\nthree" || m.input.Line() != 1 {
+		t.Fatalf("first ↑ should move up a line: line=%d value=%q", m.input.Line(), m.input.Value())
+	}
+	press(&m, up)
+	if m.input.Line() != 0 {
+		t.Fatalf("second ↑ should reach the top line: %d", m.input.Line())
+	}
+	press(&m, up)
+	if m.input.Value() != "older message" {
+		t.Fatalf("↑ on the top line should walk history: %q", m.input.Value())
+	}
+	press(&m, down)
+	if m.input.Value() != "one\ntwo\nthree" {
+		t.Fatalf("↓ past the end of history should restore the draft: %q", m.input.Value())
+	}
+	// a single long line wrapped over several rows behaves the same way
+	m.input.SetValue(strings.Repeat("word ", 60)) // wraps well past one row in a 120-column box
+	m.input.CursorEnd()
+	m.layout()
+	if m.input.LineInfo().RowOffset == 0 {
+		t.Fatal("setup: the cursor should sit on a wrapped row below the first")
+	}
+	press(&m, up)
+	if m.input.Value() == "older message" {
+		t.Fatal("↑ on a wrapped row should move up within the line, not walk history")
+	}
+	for i := 0; i < 5 && m.input.LineInfo().RowOffset > 0; i++ {
+		press(&m, up)
+	}
+	press(&m, up)
+	if m.input.Value() != "older message" {
+		t.Fatalf("↑ on the first wrapped row should walk history: %q", m.input.Value())
+	}
+}
