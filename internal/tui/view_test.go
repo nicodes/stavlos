@@ -20,24 +20,29 @@ import (
 
 func TestBuildLogo(t *testing.T) {
 	rows := buildLogo("stav")
-	if len(rows) != 4 {
-		t.Fatalf("want 4 rows, got %d", len(rows))
+	if len(rows) != 3 {
+		t.Fatalf("want 3 rows, got %d", len(rows))
 	}
 	w := ansi.StringWidth(rows[0])
-	if w != 4*4+3 {
-		t.Fatalf("width: got %d, want %d", w, 4*4+3)
+	if w != 4*3 {
+		t.Fatalf("width: got %d, want %d", w, 4*3)
 	}
 	for i, r := range rows {
 		if ansi.StringWidth(r) != w {
 			t.Errorf("row %d width %d != %d: %q", i, ansi.StringWidth(r), w, r)
 		}
-		if strings.Trim(r, "▀▄█ ") != "" {
-			t.Errorf("row %d has non-block glyphs: %q", i, r)
+		if strings.Trim(r, "╔╗╚╝╦╩╠╣║═ ") != "" {
+			t.Errorf("row %d has glyphs outside the double-line set: %q", i, r)
 		}
+	}
+	// the v is an upsilon with a low fork: full-height arms, a nub of stem
+	v := logoGlyphs['v']
+	if v[0] != "╦ ╦" || v[1] != "║ ║" || v[2] != "╚╦╝" {
+		t.Fatalf("upsilon %q", v)
 	}
 	// Unknown letters keep the grid aligned.
 	for _, r := range buildLogo("s?s") {
-		if ansi.StringWidth(r) != 4*3+2 {
+		if ansi.StringWidth(r) != 3*3 {
 			t.Errorf("unknown glyph broke alignment: %q", r)
 		}
 	}
@@ -45,8 +50,8 @@ func TestBuildLogo(t *testing.T) {
 
 func TestLogoLines(t *testing.T) {
 	big := logoLines(80)
-	if len(big) != 4 {
-		t.Fatalf("want 4 rows, got %d", len(big))
+	if len(big) != 3 {
+		t.Fatalf("want 3 rows, got %d", len(big))
 	}
 	w := ansi.StringWidth(big[0])
 	for i, r := range big {
@@ -149,7 +154,7 @@ func TestHomeAndSessionViews(t *testing.T) {
 		t.Fatalf("home view must fill the window: %d lines", len(lines))
 	}
 	plain := stripANSI(home)
-	if !strings.Contains(plain, "▀") || strings.Contains(plain, "sign in with ChatGPT or Grok") || !strings.Contains(plain, "Get started /providers") {
+	if !strings.Contains(plain, "╔═╗╔╦╗") || strings.Contains(plain, "sign in with ChatGPT or Grok") || !strings.Contains(plain, "Get started /providers") {
 		t.Fatalf("home view:\n%s", plain)
 	}
 	if strings.Contains(plain, "session ") {
