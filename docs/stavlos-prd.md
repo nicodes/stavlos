@@ -131,7 +131,7 @@ Each session owns:
 - its own live-agent budget (§6.5)
 - its own model selection, which children inherit by default (§8.3)
 
-Sessions survive client disconnects and daemon restarts (§4.3). They can be listed, resumed, forked from any per-session sequence offset, and archived.
+Sessions survive client disconnects and daemon restarts (§4.3). They can be listed, resumed, forked from any per-session sequence offset, and archived. Fork and archive are protocol operations; the TUI lists and resumes sessions but does not fork or archive them yet.
 
 ---
 
@@ -160,7 +160,7 @@ flowchart TD
     end
 ```
 
-Humans and orchestrating agents write the same envelope kinds into the same inboxes. Spawning is asynchronous: `spawn` returns immediately, and the child's `agent_finish` comes back as a `ChildFinished` envelope. Two sessions on the same directory would be two of these boxes side by side, each with its own budget and its own Discord channel.
+Humans and orchestrating agents write the same envelope kinds into the same inboxes. Creating a child is asynchronous: `agent_create` returns immediately, and the child's `agent_response` wakes its parent. Two sessions on the same directory would be two of these boxes side by side, each with its own budget and its own Discord channel.
 
 ### 6.1 The actor
 
@@ -231,6 +231,7 @@ Available to any agent whose preset permits them:
 | `agent_message(id, text)` | Deliver a `Steer` to any agent in the session: at its next step, mid-turn if busy, a new turn if idle |
 | `agent_response(to, text)` | Answer an agent that messaged you; wakes it between turns |
 | `agent_cancel(id)` | Deliver a `Cancel` to one of your children |
+| `agent_status(id?)` | State and usage (§4.4) of one agent, or the whole session tree |
 
 There is no wait tool. A parent that has nothing to do until a child answers simply ends its turn; the child's `agent_response` wakes it. Models were unreliable with an explicit "wait" tool (calling it at odd moments), and the turn ending naturally is the same thing.
 
@@ -241,17 +242,16 @@ There is no wait tool. A parent that has nothing to do until a child answers sim
 **MCP servers** are agent-level. A role's `mcp:` list names servers defined under `mcp` in `stavlos.json` (stdio: `command`, `args`, `env` with `${env:NAME}` references; `url` is parsed but not connected in v1). An agent starts its own process for each listed server at its first turn, over the official Go SDK (dual-era: the 2026-07-28 per-request protocol and the older `initialize` handshake), lists the tools once, and offers them to the model as `mcp__<server>__<tool>` (characters outside `[A-Za-z0-9_-]` become `_`, since the ChatGPT backend accepts nothing else) with the server's own descriptions. Calls go through policy like every tool (default ask; `mcp__github__*: allow` in `stavlos.json` or under a role's `tools`), through the same permission dialog, and are clipped like shell output. Nothing is shared between agents: a stateful server (a browser, a filesystem view) belongs to one agent, dies with it, and is stopped when a role change drops it from the list. Start-up, failure and stop are logged (`mcp.started` with the tool names, `mcp.failed`, `mcp.stopped`); a server that fails is skipped and the turn goes on without it; a server that exits is reported and started again at the next turn. Processes die with the daemon and are not restarted on recovery until the agent next runs. In the TUI, a fifth strip tab, `mcp (connected/listed)`, opens a dialog listing the selected agent's servers with their state, tool count and uptime; enter on a server shows its tools.
 
 **Todo list.** An agent whose preset lists `todo` gets `todo_add(text)` and `todo_update(id, status?, text?)`: a per-agent plan with items in `pending`, `in_progress`, `done` or `cancelled`. Every change is logged as `todo.changed` with the whole list, so recovery replays the last one and every client shows the same list; the current list is projected into the system prompt at every model call, so there is no read tool and the plan survives compaction. The tool descriptions carry the rules the field has converged on: three or more steps, exactly one item in progress, done only when verified, a new item for a blocker. It exists for the human watching: the TUI's "todo" tab counts done over total, its dialog lists the items with status glyphs, and the turn indicator names the item in progress. Newer models plan well without it (Claude Code, Codex and Gemini have all turned theirs off by default), so it is a preset choice, on in `general`.
-| `agent_status(id?)` | State and usage (§4.4) of one agent, or the whole session tree |
 
 **Messaging and answering are session-wide, lifecycle is parent-only.** Every agent has `agent_message`, `agent_response` and `agent_status`: a message may address any agent in the same session — a child, a sibling, or the caller's parent — and the recipient sees who sent it (`from` on the logged message, `[message from agent …]` in the model's history). `agent_cancel` works only on the caller's own children: cancelling an agent someone else created would surprise its parent. "Same tree" means same session; agents never reach across sessions.
 
-`label` is **required** on spawn. It is the human-facing name in thread titles, pickers, and webhook identities. Optional labels produce unusable UI.
+`label` is **required** on `agent_create`. It is the human-facing name in thread titles, pickers, and webhook identities. Optional labels produce unusable UI.
 
 `model` is optional. When given, it overrides the child's preset default (§8.3). This lets an orchestrator make its own cost/capability decisions — "use a light model for the easy tasks, a heavy one for the hard tasks" — from instructions in `AGENTS.md` or its preset.
 
 ### 6.5 Limits
 
-Two independent guards. Both are enforced primarily by removing `spawn` from the tool list at the next model call, so the model is never invited to do something it can't. The tool list is fixed for the duration of a model call, so a `spawn` that races the cap within a turn returns an error naming the limit; that is the fallback, not the mechanism.
+Two independent guards. Both are enforced primarily by removing `agent_create` from the tool list at the next model call, so the model is never invited to do something it can't. The tool list is fixed for the duration of a model call, so an `agent_create` that races the cap within a turn returns an error naming the limit; that is the fallback, not the mechanism.
 
 - **Depth.** Configurable, default 3. Harnesses without this guard have produced documented cases of 18 levels of agents re-dispatching to each other with only the deepest doing real work.
 - **Fan-out.** A per-session cap on live agents, default 6. Every session gets its own budget: six agents with two sessions running means twelve live agents on the machine. There is no global cap in v1.
@@ -285,7 +285,9 @@ Requirements:
 
 Implementation note: Bubble Tea's update loop is single-threaded. Daemon events arrive via `p.Send()` from a goroutine reading the event stream. Keep that boundary clean — TUIs that call business logic from `Update` become untestable.
 
-### 7.3 Discord
+### 7.3 Discord (post-v1)
+
+Not in v1. The design below is kept so the protocol keeps serving it.
 
 **Structure.** Guild = workspace. **Channel = session.** Thread = subagent. The session's root agent lives in the channel; each spawned subagent gets a thread. A session is bound to a directory, so two channels can drive two independent sessions on the same directory. `/session new <dir>` creates a channel and binds it; `/session attach <id>` binds a channel to an existing session.
 
@@ -343,22 +345,22 @@ Stavlos serves two providers, both through the user's own subscription rather th
 | `openai` (ChatGPT Plus/Pro) | Codex sign-in at `auth.openai.com`: browser (PKCE, callback on `localhost:1455`) by default, or headless device code (needs "Device code authorization for Codex" enabled in ChatGPT's Security settings) | OpenAI Responses API at the Codex backend (`chatgpt.com/backend-api/codex/responses`), bearer token plus account-id header |
 | `xai` (SuperGrok) | Grok CLI device-code login at `auth.x.ai` (RFC 8628) | Chat Completions at `api.x.ai/v1` with a bearer token |
 
-Both use the official CLIs' public client ids, the same arrangement opencode uses. An OpenAI-compatible Chat Completions adapter and an Anthropic Messages adapter exist in-tree for future providers and plugins but are not offered in the picker. `Model` is an interface; exotic providers arrive as `go-plugin` binaries (§11).
+Both use the official CLIs' public client ids, the same arrangement opencode uses. The Chat Completions adapter behind Grok is generic enough for other compatible providers. `Model` is an interface; other providers are meant to arrive as `go-plugin` binaries (§11, post-v1).
 
 ### 8.3 Resolution
 
 Model IDs are `provider/model-id`. When an agent starts, its model is resolved in this order, first match wins:
 
-1. The `model` argument to `spawn`, if the parent supplied one
-2. The `model` field in the agent's preset, if set
+1. The `model` argument to `agent_create`, if the parent supplied one
+2. The first entry of the role's `models` list, if set
 3. The parent's active model (for the root agent: the session's selected model)
 4. Global config
 
-Example: global config says `anthropic/claude-sonnet-5`; the user switches the session to `anthropic/claude-opus-5`; the root spawns a `tester` whose preset says `openai/gpt-5-mini`. The tester runs on `gpt-5-mini`. If the preset had no `model` field, it would run on `opus` — the parent's active model, not the global default. A child that inherits the global default while its parent is running something else is a real bug in existing harnesses; cover it in tests.
+Example: global config says `openai/gpt-5.4`; the user switches the session to `openai/gpt-5.5`; the root creates a `tester` whose role lists `xai/grok-4`. The tester runs on `grok-4`. If the role listed no models, it would run on `gpt-5.5` — the parent's active model, not the global default. A child that inherits the global default while its parent is running something else is a real bug in existing harnesses; cover it in tests.
 
-Resolution happens **once, at spawn**. Switching a session's or a parent's model afterwards does not touch running children; to change a child's model, address the child directly with the model-switch command (§9). Live-linking would make a child's behaviour change under it mid-task with no event in its own history to explain why.
+Resolution happens **once, when the agent is created**. Switching a session's or a parent's model afterwards does not touch running children; to change a child's model, address the child directly with the model-switch command (§9). Live-linking would make a child's behaviour change under it mid-task with no event in its own history to explain why.
 
-The `provider` prefix is looked up in the provider map (§11.4). An unknown prefix fails at session start with the command needed to install the missing plugin.
+The `provider` prefix is looked up in the provider map (§11.4). An unknown prefix fails with an error naming the supported providers; plugins, which would add more, are post-v1.
 
 ### 8.4 Credentials
 
@@ -372,7 +374,7 @@ A session always starts, model or no model: the TUI opens, and a turn with no mo
 
 The most important artifact in the project.
 
-**Transport.** Newline-delimited JSON-RPC 2.0 over a Unix domain socket in the daemon's data directory. The event stream is a subscription: the client sends one request naming a session and a per-session offset, and receives events as server-to-client notifications until it unsubscribes or disconnects. The choice is deliberate: any language can speak it, `nc` can debug it, and no code generation is required. TCP is a roadmap item for multi-machine operation; the daemon binds only the socket in v1. Every request carries a protocol version, and the daemon rejects versions it does not serve with the range it does. The socket lives under `$XDG_RUNTIME_DIR` when set (else the data directory), is created 0600 with the umask narrowed around the listen so it is never briefly open, and every connection is checked with `SO_PEERCRED` to come from the daemon's own user. The data directory carries an advisory lock (`stavlosd.lock`) for the daemon's life, so a second daemon on the same `events.db` fails at startup instead of stealing the socket. Each connection runs its requests under its own context (a client that disconnects takes its `login.wait` with it), may have 64 requests in flight, and may send lines up to 4 MB.
+**Transport.** Newline-delimited JSON-RPC 2.0 over a Unix domain socket (its location is below). The event stream is a subscription: the client sends one request naming a session and a per-session offset, and receives events as server-to-client notifications until it unsubscribes or disconnects. The choice is deliberate: any language can speak it, `nc` can debug it, and no code generation is required. TCP is a roadmap item for multi-machine operation; the daemon binds only the socket in v1. Every request carries a protocol version, and the daemon rejects versions it does not serve with the range it does. The socket lives under `$XDG_RUNTIME_DIR` when set (else the data directory), is created 0600 with the umask narrowed around the listen so it is never briefly open, and every connection is checked with `SO_PEERCRED` to come from the daemon's own user. The data directory carries an advisory lock (`stavlosd.lock`) for the daemon's life, so a second daemon on the same `events.db` fails at startup instead of stealing the socket. Each connection runs its requests under its own context (a client that disconnects takes its `login.wait` with it), may have 64 requests in flight, and may send lines up to 4 MB.
 
 **Documentation.** The protocol specification is a v1 deliverable in its own right (§14): a message-by-message reference sufficient for a third party to write a client without reading the Go source.
 
@@ -381,7 +383,7 @@ It must carry:
 - Session list, create, resume, fork, archive; directory binding
 - Agent tree with parent links, labels, archetypes, and live status
 - All control envelopes (`Prompt`, `Steer`, `Cancel`, `Kill`), addressed to any agent by ID
-- `spawn` with preset, label, task, and optional model
+- `agent.spawn`: a child created by a client, with role, label, task, and optional model
 - Permission and question requests, claim, withdrawal, **and their replies**; the client's escalation tier at attach (§7.4)
 - Trust prompts for project configuration (§10.6) and their replies
 - Model and preset switching for a session or agent
@@ -422,8 +424,8 @@ Three layers with one layout. Global is yours and trusted. Project is the team's
   .stavlos/
     stavlos.json              # committed
     stavlos.local.json        # gitignored
-    agents/
-      reviewer.md             # one preset per file; filename = archetype
+    roles/
+      reviewer.md             # one role per file; filename = role name
       tester.md
     skills/
       go-conventions/
@@ -435,11 +437,10 @@ Three layers with one layout. Global is yours and trusted. Project is the team's
 
 ### 10.2 `stavlos.json`
 
-JSONC with a `$schema` for editor validation. Every key is optional; anything omitted falls through to the next layer, then to built-in defaults. `stavlos.local.json` has the identical schema. Loading is strict: an unknown key, a verb other than allow/ask/deny, a malformed duration, size, threshold or provider is an error that names the entry, never a silent default — a misspelt deny rule must not disarm itself. `stavlos.json` is written 0600 because it may hold a search key; `${env:NAME}` is preferred and a literal key draws a warning.
+JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Every key is optional; anything omitted falls through to the next layer, then to built-in defaults. `stavlos.local.json` has the identical schema. Loading is strict: an unknown key, a verb other than allow/ask/deny, a malformed duration, size, threshold or provider is an error that names the entry, never a silent default — a misspelt deny rule must not disarm itself. `stavlos.json` is written 0600 because it may hold a search key; `${env:NAME}` is preferred and a literal key draws a warning.
 
 ```jsonc
 {
-  "$schema": "https://stavlos.dev/schema/v1/stavlos.json",
 
   "model": "anthropic/claude-sonnet-5",   // default for root sessions here
   "rootAgent": "general",                 // preset a new session's root uses
@@ -538,13 +539,15 @@ Project-level policy can only **tighten** global policy, never loosen it, even o
 ### 10.7 Deliberately not in `.stavlos/`
 
 - Plugin binaries or plugin references — global only (§11)
-- Credentials — `${env:NAME}` references only; provider credentials are environment variables in v1 (§8.4)
+- Credentials — subscription logins live in the daemon's data directory (§8.4); a search key in `stavlos.json` should be an `${env:NAME}` reference
 - The Discord allowlist — global, CLI-only
 - Session state, logs, caches — the daemon's data directory, never the project
 
 ---
 
-## 11. Plugins
+## 11. Plugins (post-v1)
+
+Not in v1: providers are in-tree and `stavlos plugin` reports it is a roadmap item. The design below is kept for when plugins land.
 
 ```mermaid
 flowchart LR
@@ -627,11 +630,10 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 
 **In:**
 
-- `stavlosd` with event log, scheduler, agent tree, projector (cancelled-turn repair, compaction)
+- The daemon (`stavlos daemon`) with event log, scheduler, agent tree, projector (cancelled-turn repair, compaction)
 - Protocol (server + Go client) and the protocol specification document
 - Bubble Tea TUI
-- Discord service
-- Codex (ChatGPT) and Grok adapters, `go-plugin` model seam, `stavlos plugin install`, lockfile, models.dev metadata
+- Codex (ChatGPT) and Grok adapters, models.dev metadata
 - MCP client
 - Three-layer configuration with trust gate; skills, presets, declarative policy
 - Built-in tools: `shell` (the one command tool, also for searching: read-only commands such as `grep`, `rg`, `find`, `ls`, and `git status`/`log`/`diff` are allowed by default; a command outliving the wait window continues as a background job) and `shell_kill`, `web_fetch` and `web_search` (§6.5), `todo_add` and `todo_update` (a per-agent plan, for presets that list `todo`), `read`, `apply_patch` (the Codex patch grammar: add, update with context-anchored hunks, delete, move; several files per patch, applied atomically), `skill`, the conversation set every agent has (`agent_message`, `agent_response`, `agent_status`), `ask_user` (one to four questions to the human, each its text and one to four options; every question is a checklist — the human may pick several and always has a last row for typing something else — so the model never adds an "Other"; one blocking prompt of kind `question` per call that never falls to the headless default and that no permission mode answers; the answers return as "question → answer" lines, picks joined with ", "), and the lifecycle set for presets that spawn (`agent_create`, `agent_cancel`)
@@ -642,6 +644,9 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 
 **Out (roadmap):**
 
+- Discord service (§7.3)
+- `go-plugin` model seam, `stavlos plugin install` and its lockfile (§11)
+- Session fork and archive in the TUI (the protocol and daemon support both)
 - `go-plugin` for `Loop` and `Store`
 - Project-level plugins
 - Starlark policy
@@ -650,7 +655,7 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - Web UI
 - Daemon-enforced sandboxing
 - Global (cross-session) agent and cost caps
-- Per-project credential scoping; OAuth-style provider logins
+- Per-project credential scoping
 - Multi-machine daemons (TCP transport for the protocol)
 
 ---
@@ -667,14 +672,17 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 
 v1 is done when:
 
+- Two sessions on the same directory run concurrently without interfering
+- A session that has been compacted resumes correctly after a daemon restart
+- A daemon killed while an agent is mid-tool-call restarts with every agent idle and every history coherent
+- Cloning a repository with a hostile `.stavlos/` starts no process and loosens no permission until the user confirms
+- A third party can write a working client in a language that isn't Go, using only the protocol docs
+
+With the Discord service and plugins (post-v1), also:
+
 - A user can spawn three parallel coders from the TUI, walk away, and steer one from Discord on a phone
 - A subagent blocked on a permission prompt escalates to Discord and can be answered there
 - A subagent cancelled mid-tool-call from Discord can be resumed from the TUI and continues with coherent context
 - Killing a subtree from either frontend leaves consistent state in both
-- Two sessions on the same directory run concurrently without interfering
-- A session that has been compacted resumes correctly after a daemon restart
-- A daemon killed while an agent is mid-tool-call restarts with every agent idle and every history coherent
 - A permission prompt raised while an unattended TUI is attached still reaches Discord
-- Cloning a repository with a hostile `.stavlos/` starts no process and loosens no permission until the user confirms
-- A third party can write a working client in a language that isn't Go, using only the protocol docs
 - Adding a model provider requires no changes to Stavlos itself
