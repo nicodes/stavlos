@@ -697,7 +697,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 func TestPermissionDialogOptions(t *testing.T) {
 	m := sessionModel()
 	m.agents[0].Archetype = "general"
-	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"go test ./... -run TestRoles"}`)}}
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"go test ./... -run TestRoles"}`), Prefix: "go test"}}
 	m.setFocus(focusPermission)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
 	want := []string{
@@ -728,8 +728,9 @@ func TestPermissionDialogOptions(t *testing.T) {
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || m.promptBusy != "p" {
 		t.Fatalf("space on the prefix row: cmd=%v busy=%q", cmd != nil, m.promptBusy)
 	}
-	// a compound command and a non-shell tool offer no prefix row; a new
-	// prompt starts at the top again
+	// a prompt without a prefix (the daemon derives it: a compound command,
+	// a non-shell tool) offers no prefix row; a new prompt starts at the top
+	// again
 	m.promptBusy = ""
 	m.prompts = []protocol.PromptInfo{{ID: "p2", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"go test && rm -rf x"}`)}}
 	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); strings.Contains(body, "for this session  every") || !strings.Contains(body, "▸ ● Allow once") {
@@ -743,7 +744,7 @@ func TestPermissionDialogOptions(t *testing.T) {
 		t.Fatalf("options %+v", permOptions(&m.prompts[0]))
 	}
 	// web_fetch: the subject is the URL, the prefix row is the host
-	m.prompts = []protocol.PromptInfo{{ID: "p4", Kind: "permission", Tool: "web_fetch", Agent: "a", Input: []byte(`{"url":"https://pkg.go.dev/net/http"}`)}}
+	m.prompts = []protocol.PromptInfo{{ID: "p4", Kind: "permission", Tool: "web_fetch", Agent: "a", Input: []byte(`{"url":"https://pkg.go.dev/net/http"}`), Prefix: "pkg.go.dev"}}
 	body = stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
 	for _, w := range []string{"↗ https://pkg.go.dev/net/http  coder (general)", "○ Allow for this session  this exact URL", "○ Allow pkg.go.dev for this session  every page on this host"} {
 		if !strings.Contains(body, w) {
@@ -969,7 +970,7 @@ func TestSectionTabStrip(t *testing.T) {
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "working"},
 	}
 	m.selected = 0
-	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
+	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`), Prefix: "make test"}}
 
 	// unfocused: all three titles on one line, counts only
 	v := stripANSI(m.sectionsView(100))

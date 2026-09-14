@@ -226,16 +226,8 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	if c.Name == "shell" && verb == policy.Allow && !shellcmd.Simple(arg) {
 		verb = policy.Ask
 	}
-	key := c.Name + "\x00" + arg
-	a.s.mu.RLock()
-	always := a.s.allowAlways[key]
-	for _, pre := range a.s.allowPrefix[c.Name] { // "go test" covers "go test ./...", never "go test; rm"
-		if protocol.ToolPrefixCovers(c.Name, pre, arg) {
-			always = true
-		}
-	}
-	a.s.mu.RUnlock()
-	if always {
+	// What the human allowed for the session answers an ask, never a deny.
+	if verb == policy.Ask && a.s.permits.covers(c.Name, arg) {
 		verb = policy.Allow
 	}
 	mode := a.s.Mode()
@@ -264,30 +256,29 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		if boundary != "" {
 			question = fmt.Sprintf("%s wants to run %s outside its directories (%s)", a.Label, c.Name, boundary)
 		}
+		// The prefix a client may offer to allow is the daemon's to derive
+		// from the call itself; the prompt carries it for display.
+		prefix := protocol.ToolPrefix(c.Name, arg)
 		ans := a.s.host.Prompt(turnCtx, protocol.PromptInfo{
 			ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: "permission", Tool: c.Name, Input: c.Input,
-			Question: question, Dir: boundary,
+			Question: question, Dir: boundary, Prefix: prefix,
 		})
 		a.setState(StateRunning)
+		switch ans.Value {
+		case "allow_prefix":
+			if prefix != "" {
+				a.s.permits.rememberPrefix(c.Name, prefix)
+			} else {
+				a.s.permits.rememberCall(c.Name, arg)
+			}
+		case "allow_always":
+			a.s.permits.rememberCall(c.Name, arg)
+		}
 		switch {
 		case ans.Withdrawn:
 			finish("", true, true, false)
 			return
-		case ans.Value == "allow_prefix" && strings.TrimSpace(ans.Prefix) != "":
-			a.s.mu.Lock()
-			a.s.allowPrefix[c.Name] = append(a.s.allowPrefix[c.Name], strings.TrimSpace(ans.Prefix))
-			a.s.mu.Unlock()
-			if boundary != "" {
-				dir := boundary
-				if strings.TrimSpace(ans.Dir) != "" {
-					dir = resolveDir(a.s.Dir, ans.Dir)
-				}
-				_ = a.addDir(bg, dir, "human")
-			}
-		case ans.Value == "allow_always":
-			a.s.mu.Lock()
-			a.s.allowAlways[key] = true
-			a.s.mu.Unlock()
+		case ans.Value == "allow_prefix", ans.Value == "allow_always":
 			if boundary != "" {
 				dir := boundary
 				if strings.TrimSpace(ans.Dir) != "" {

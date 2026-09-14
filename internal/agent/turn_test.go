@@ -128,17 +128,54 @@ func TestRememberedAllows(t *testing.T) {
 			reply(text("ok")),
 		}}
 		s, h := newTestSession(t, testConfig{}, fm)
-		h.answerWith(escalation.Answer{Value: "allow_prefix", Prefix: "make test"}, escalation.Answer{Value: "deny"})
+		h.answerWith(escalation.Answer{Value: "allow_prefix"}, escalation.Answer{Value: "deny"})
 		runTurn(t, s, h, "go")
-		var asked []string
+		var asked, prefixes []string
 		for _, p := range h.prompts {
 			var in struct{ Command string }
 			_ = protocolInput(p, &in)
 			asked = append(asked, in.Command)
+			prefixes = append(prefixes, p.Prefix)
 		}
 		want := []string{"make test", "make test; touch x", "make build"}
 		if strings.Join(asked, "|") != strings.Join(want, "|") {
 			t.Fatalf("asked %v want %v", asked, want)
+		}
+		// The daemon derives the prefix and shows it on the prompt.
+		if strings.Join(prefixes, "|") != "make test||make build" {
+			t.Fatalf("prompt prefixes %q", prefixes)
+		}
+	})
+	t.Run("a remembered prefix never beats a deny rule", func(t *testing.T) {
+		fm := &fakeModel{steps: []step{
+			reply(call("c1", "shell", `{"command":"git push origin"}`)),
+			reply(call("c2", "shell", `{"command":"git push --force origin"}`)),
+			reply(call("c3", "shell", `{"command":"git push origin main"}`)),
+			reply(text("ok")),
+		}}
+		s, h := newTestSession(t, testConfig{json: `{"model":"fake/m1","policy":{"shell":{"git push --force*":"deny","*":"ask"}}}`}, fm)
+		h.answerWith(escalation.Answer{Value: "allow_prefix"})
+		runTurn(t, s, h, "go")
+		if n := h.promptCount(); n != 1 {
+			t.Fatalf("prompts: %d", n)
+		}
+		fin := finished(h, s.Root().ID)
+		if fin[0].Denied || !fin[1].Denied || !strings.Contains(fin[1].Output, "Denied by policy") || fin[2].Denied {
+			t.Fatalf("%+v", fin)
+		}
+	})
+	t.Run("allow_prefix on a call without a prefix remembers the call", func(t *testing.T) {
+		fm := &fakeModel{steps: []step{
+			reply(call("c1", "shell", `{"command":"echo a; echo b"}`)),
+			reply(call("c2", "shell", `{"command":"echo a; echo b"}`)),
+			reply(call("c3", "shell", `{"command":"echo a; echo c"}`)),
+			reply(text("ok")),
+		}}
+		s, h := newTestSession(t, testConfig{}, fm)
+		h.answerWith(escalation.Answer{Value: "allow_prefix"}, escalation.Answer{Value: "deny"})
+		runTurn(t, s, h, "go")
+		if n := h.promptCount(); n != 2 || h.prompts[0].Prefix != "" {
+			t.Fatalf("prompts: %d prefix %q", n, h.prompts[0].Prefix)
 		}
 	})
 }
