@@ -463,6 +463,9 @@ func TestChildResponseWakesParent(t *testing.T) {
 	if len(agents) != 2 || agents[0].State != "waiting" || len(agents[0].Awaiting) != 1 || agents[0].Awaiting[0] != agents[1].ID {
 		t.Fatalf("parent idle with a question out should read waiting on the child: %+v", agents)
 	}
+	if list, _ := h.c.Sessions(ctx, work, false); len(list) != 1 || list[0].State != "working" { // the child still runs
+		t.Fatalf("session state while a child works: %+v", list)
+	}
 	close(release)
 	e = h.waitFor(event.TurnEnded, root)
 	_ = e.Decode(&te)

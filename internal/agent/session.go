@@ -310,7 +310,23 @@ func (s *Session) Info() protocol.SessionInfo {
 		ID: s.ID, Dir: s.Dir, Model: s.Model(), RootAgent: s.rootArch,
 		Created: s.Created.Format(time.RFC3339), Archived: s.Archived(),
 		Live: s.Live(), CostUSD: s.Cost(), TrustPending: cfg.TrustPending, Mode: s.Mode(),
+		State: s.state(),
 	}
+}
+
+// state sums the agents up: working while any agent runs (or is blocked
+// on a prompt), waiting while any expects an answer, idle otherwise.
+func (s *Session) state() string {
+	out := "idle"
+	for _, a := range s.Agents() {
+		switch a.Info().State {
+		case "running", "blocked":
+			return "working"
+		case "waiting":
+			out = "waiting"
+		}
+	}
+	return out
 }
 
 // Presets lists archetypes.
