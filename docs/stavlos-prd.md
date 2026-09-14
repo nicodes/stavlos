@@ -442,7 +442,7 @@ JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Ever
 ```jsonc
 {
 
-  "model": "anthropic/claude-sonnet-5",   // default for root sessions here
+  "model": "openai/gpt-5.4",   // default for root sessions here
   "rootAgent": "general",                 // preset a new session's root uses
 
   "limits":     { "maxDepth": 3, "maxAgents": 6 },

@@ -187,43 +187,39 @@ func Match(pattern, s string) bool {
 
 func matchSegments(p, s string) bool {
 	// Expand "**" into a regexp-free recursive matcher.
-	for {
-		i := strings.Index(p, "**")
-		if i < 0 {
-			ok, _ := path.Match(p, s)
-			return ok
-		}
-		head := p[:i]
-		tail := strings.TrimPrefix(p[i+2:], "/")
-		// head must match a prefix of s ending at a boundary
-		if head != "" {
-			hl := literalPrefix(head)
-			if hl == len(head) {
-				if !strings.HasPrefix(s, head) {
-					return false
+	i := strings.Index(p, "**")
+	if i < 0 {
+		ok, _ := path.Match(p, s)
+		return ok
+	}
+	head := p[:i]
+	tail := strings.TrimPrefix(p[i+2:], "/")
+	// head must match a prefix of s ending at a boundary
+	if head != "" {
+		if literalPrefix(head) != len(head) {
+			// head contains single-char wildcards: try all split points
+			for j := 0; j <= len(s); j++ {
+				if ok, _ := path.Match(head, s[:j]); ok && matchSegments("**/"+tail, s[j:]) {
+					return true
 				}
-				s = s[len(head):]
-			} else {
-				// head contains single-char wildcards: try all split points
-				for j := 0; j <= len(s); j++ {
-					if ok, _ := path.Match(head, s[:j]); ok && matchSegments("**/"+tail, s[j:]) {
-						return true
-					}
-				}
-				return false
 			}
+			return false
 		}
-		if tail == "" {
+		if !strings.HasPrefix(s, head) {
+			return false
+		}
+		s = s[len(head):]
+	}
+	if tail == "" {
+		return true
+	}
+	// try every suffix of s for the tail
+	for j := 0; j <= len(s); j++ {
+		if matchSegments(tail, s[j:]) {
 			return true
 		}
-		// try every suffix of s for the tail
-		for j := 0; j <= len(s); j++ {
-			if matchSegments(tail, s[j:]) {
-				return true
-			}
-		}
-		return false
 	}
+	return false
 }
 
 // Sorted returns rules sorted for display.
