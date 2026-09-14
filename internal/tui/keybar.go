@@ -20,35 +20,35 @@ func (m Model) keyHints() []keyHint {
 		}
 		return h
 	case m.ov != nil && m.ov.kind == ovModels:
-		return []keyHint{{"enter", "set for this agent"}, {"ctrl+s", "set session default"}, {"↑/↓", "move"}, {"type", "filter"}, {"pgup/pgdn", "page"}, {"esc", "close"}}
+		return []keyHint{{"space", "set for this agent"}, {"ctrl+s", "set session default"}, {"↑/↓", "move"}, {"type", "filter"}, {"pgup/pgdn", "page"}, {"enter", "input"}, {"esc", "close"}}
 	case m.ov != nil:
-		return []keyHint{{"enter", "select"}, {"↑/↓", "move"}, {"type", "filter"}, {"pgup/pgdn", "page"}, {"esc", "close"}}
+		return []keyHint{{"space", "select"}, {"↑/↓", "move"}, {"type", "filter"}, {"pgup/pgdn", "page"}, {"enter", "input"}, {"esc", "close"}}
 	}
 	switch m.focus {
 	case focusAgents:
-		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"space", "select agent"}, {"enter", "input"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusAsync, focusTodo:
-		return []keyHint{{"↑/↓", "move"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"enter", "input"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusDirs:
 		if m.dirEdit != "" {
 			return []keyHint{{"enter", "save"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
 		}
-		return []keyHint{{"↑/↓", "move"}, {"a", "add directory"}, {"enter", "edit"}, {"ctrl+d", "remove"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"a", "add directory"}, {"space", "edit"}, {"ctrl+d", "remove"}, {"enter", "input"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusMCP:
-		return []keyHint{{"↑/↓", "move"}, {"enter", "show/hide tools"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"space", "show/hide tools"}, {"enter", "input"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusSidebar:
-		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"space", "select agent"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
 	case focusMeta:
-		return []keyHint{{"←/→", "choose"}, {"enter", "open (mode tag: back to ask)"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"←/→", "choose"}, {"space", "open (mode tag: back to ask)"}, {"enter", "input"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusTabs:
-		return []keyHint{{"←/→", "choose"}, {"enter", "open"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"←/→", "choose"}, {"space", "open"}, {"enter", "input"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusChat:
-		return []keyHint{{"↑/↓", "item"}, {"enter", "expand/collapse tool"}, {"pgup/pgdn", "page"}, {"tab", "next section"}, {"esc", "input"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "item"}, {"space", "expand/collapse tool"}, {"pgup/pgdn", "page"}, {"tab", "next section"}, {"enter", "input"}, {"esc", "input"}, {"ctrl+c", "quit"}}
 	case focusPermission:
 		if p := m.currentPrompt(); p != nil {
 			switch p.Kind {
 			case "trust":
-				return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
+				return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			case "question":
 				return []keyHint{{"type + enter", "answer"}, {"1-9", "pick an option"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			default:
@@ -56,9 +56,9 @@ func (m Model) keyHints() []keyHint {
 					if m.promptDir {
 						return []keyHint{{"enter", "allow + add this directory"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
 					}
-					return []keyHint{{"y", "allow once"}, {"a", "allow + add directory"}, {"e", "edit the directory"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
+					return []keyHint{{"y", "allow once"}, {"a", "allow + add directory"}, {"e", "edit the directory"}, {"n", "deny"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 				}
-				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
+				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 			}
 		}
 		return []keyHint{{"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}

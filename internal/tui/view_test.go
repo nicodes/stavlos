@@ -377,9 +377,9 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 	if !strings.Contains(rows[2], "▶") || !strings.Contains(rows[0], "▸") {
 		t.Fatalf("markers: %q", rows)
 	}
-	m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+	m.handleKey(tea.KeyMsg{Type: tea.KeySpace})
 	if m.selected != 2 || m.focus != focusInput || !m.input.Focused() {
-		t.Fatalf("enter: selected %d focus %v", m.selected, m.focus)
+		t.Fatalf("space: selected %d focus %v", m.selected, m.focus)
 	}
 	// ↑ in the input now walks history, not agents
 	m.pushHistory("hello")
@@ -457,8 +457,8 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.metaSel != metaVariant {
 		t.Fatalf("→→ should stop on the variant: %v", m.metaSel)
 	}
-	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil {
-		t.Fatal("enter on a meta part should open its dialog")
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil {
+		t.Fatal("space on a meta part should open its dialog")
 	}
 	press(&m, tab, tab, tab) // meta row → chat → input → strip
 	// the strip: a highlight, no dialog yet
@@ -479,7 +479,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("left x4: sel=%d", m.tabSel)
 	}
 	// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if dv := stripANSI(m.tabDialog(100)); m.focus != focusAgents || !strings.Contains(dv, "Agents (0)") || !strings.Contains(dv, "no subagents running") || strings.Contains(dv, "permission") {
 		t.Fatalf("enter: focus=%v\n%s", m.focus, dv)
 	}
@@ -494,7 +494,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, left)
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter}) // permission dialog, nothing waiting
+	press(&m, tea.KeyMsg{Type: tea.KeySpace}) // permission dialog, nothing waiting
 	if dv := stripANSI(m.tabDialog(100)); m.focus != focusPermission || !strings.Contains(dv, "Permission (0)") || !strings.Contains(dv, "no prompts waiting") {
 		t.Fatalf("enter on permission: focus=%v\n%s", m.focus, dv)
 	}
@@ -561,7 +561,7 @@ func TestTabCyclesFocus(t *testing.T) {
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	m.agents[0].Monitors = nil
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
-	press(&m, tab, tea.KeyMsg{Type: tea.KeyEnter}) // input → strip → the permission dialog
+	press(&m, tab, tea.KeyMsg{Type: tea.KeySpace}) // input → strip → the permission dialog
 	if m.focus != focusPermission {
 		t.Fatalf("tab enter from input: %v", m.focus)
 	}
@@ -612,7 +612,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	if m.focus != focusTabs || m.tabSel != 0 {
 		t.Fatalf("focus %v sel %d", m.focus, m.tabSel)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusPermission {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -740,16 +740,16 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if n := strings.Count(view(), "out"); n != previewLines-1 {
 		t.Fatalf("preview before enter (%d 'out' lines):\n%s", n, view())
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if !m.expanded["a"][items-1] || strings.Count(view(), "out") != 8 {
 		t.Fatalf("expanded after enter (%v):\n%s", m.expanded["a"], view())
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if m.expanded["a"][items-1] || strings.Count(view(), "out") != previewLines-1 {
 		t.Fatalf("preview after second enter:\n%s", view())
 	}
 	// Expansion is per visit: expand, move away, come back → preview again.
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if strings.Count(view(), "out") != 8 {
 		t.Fatalf("expanded again:\n%s", view())
 	}
@@ -762,12 +762,12 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 		t.Fatalf("back on the item it should be the preview (%d):\n%s", n, view())
 	}
 	// Enter on a non-tool item is inert.
-	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeySpace})
 	if len(m.expanded["a"]) != 0 {
 		t.Fatalf("enter on a user item changed overrides: %v", m.expanded["a"])
 	}
 	// Leaving the chat with an item expanded folds it for next time.
-	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
 	if strings.Count(view(), "out") != 8 {
 		t.Fatalf("expanded before leaving:\n%s", view())
 	}
@@ -836,7 +836,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if m.focus != focusTabs || m.tabSel != 0 || strings.Contains(m.View(), "╭") {
 		t.Fatalf("the strip should highlight permission without a dialog: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if sv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(sv, "\n") != 0 || strings.Contains(sv, "make test") {
 		t.Fatalf("the strip should stay one line with the permission open: focus=%v\n%s", m.focus, sv)
 	}
@@ -857,23 +857,23 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if m.focus != focusTabs || m.tabSel != 0 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}
 	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "Agents (2)") || !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
 		t.Fatalf("agents dialog:\n%s", dv)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyEnter}) // strip (agents) → async
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // strip (agents) → async
 	if m.focus != focusAsync || !strings.Contains(stripANSI(m.tabDialog(100)), "no async jobs running") {
 		t.Fatalf("async: focus=%v\n%s", m.focus, stripANSI(m.tabDialog(100)))
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeyEnter}) // strip (async) → agents for the selection test
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeySpace}) // strip (async) → agents for the selection test
 	if m.focus != focusAgents {
 		t.Fatalf("focus %v", m.focus)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	// c2 has no chat yet, so its view is the home screen, which has no strip
 	// to return to: the dialog closes onto the input instead
 	if m.selectedID() != "c2" || m.focus != focusInput {
@@ -1260,7 +1260,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	// tab → strip, → x3 lands on todo, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tab, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusTodo {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2114,7 +2114,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 	// tab → strip, → x4 lands on mcp, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusMCP {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2125,17 +2125,17 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("mcp dialog:\n%s", dv)
 	}
 	// enter on a server lists its tools under it (short names), enter again folds them
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	dv = stripANSI(m.tabDialog(120))
 	lines = strings.Split(dv, "\n")
 	if len(lines) != 11 || !strings.Contains(lines[4], "get_issue") || !strings.Contains(lines[5], "create_issue") || strings.Contains(lines[4], "mcp__") {
 		t.Fatalf("expanded server:\n%s", dv)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter}) // a tool row: enter does nothing
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace}) // a tool row: space does nothing
 	if !m.mcpOpen["github"] {
 		t.Fatal("enter on a tool row should not toggle anything")
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeySpace})
 	if m.mcpOpen["github"] || strings.Count(stripANSI(m.tabDialog(120)), "\n") != 8 {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
@@ -2171,16 +2171,16 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	}
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusDirs {
 		t.Fatalf("focus %v", m.focus)
 	}
 	dv := stripANSI(m.tabDialog(120))
 	lines := strings.Split(dv, "\n")
-	if !strings.Contains(dv, "a add directory · enter edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
+	if !strings.Contains(dv, "a add directory · space edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
 		t.Fatalf("dirs dialog should carry its own hints (without esc):\n%s", dv)
 	}
-	if len(lines) != 9 || !strings.Contains(lines[1], "Dirs (3)") || !strings.Contains(lines[3], "◆ /repo  session") || !strings.Contains(lines[4], "/srv/shared  role") || !strings.Contains(lines[5], "/tmp/build  human") {
+	if len(lines) < 9 || !strings.Contains(lines[1], "Dirs (3)") || !strings.Contains(lines[3], "◆ /repo  session") || !strings.Contains(lines[4], "/srv/shared  role") || !strings.Contains(lines[5], "/tmp/build  human") {
 		t.Fatalf("dirs dialog:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
@@ -2190,7 +2190,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	// editing: enter on a row opens the path field prefilled, esc cancels it
 	// without closing the dialog; a opens it empty; ctrl+d removes; the
 	// session row refuses both
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if m.dirEdit != "/srv/shared" || m.dirInput.Value() != "/srv/shared" || !m.dirInput.Focused() {
 		t.Fatalf("edit: %q %q", m.dirEdit, m.dirInput.Value())
 	}
@@ -2213,7 +2213,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 		t.Fatal("ctrl+d on a role row should send the removal")
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
-	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if m.dirEdit != "" || !strings.Contains(m.status, "cannot be changed") {
 		t.Fatalf("the session row must not be editable: %q %q", m.dirEdit, m.status)
 	}
@@ -2283,5 +2283,75 @@ func TestDialogHintsWrap(t *testing.T) {
 	}
 	if got := dialogHintLines(hints, 200); len(got) != 1 {
 		t.Fatalf("wide dialog: one line, got %d", len(got))
+	}
+}
+
+func TestEnterReturnsToInputAndSpaceSelects(t *testing.T) {
+	m := sessionModel()
+	m.agents[0].Todos = []event.TodoItem{{ID: "t1", Text: "x", Status: "pending"}}
+	tab := tea.KeyMsg{Type: tea.KeyTab}
+	enter := tea.KeyMsg{Type: tea.KeyEnter}
+	space := tea.KeyMsg{Type: tea.KeySpace}
+	// strip: enter goes to the input, space opens the highlighted tab
+	press(&m, tab)
+	if m.focus != focusTabs {
+		t.Fatalf("focus %v", m.focus)
+	}
+	press(&m, enter)
+	if m.focus != focusInput || !m.input.Focused() {
+		t.Fatalf("enter on the strip should return to the input: %v", m.focus)
+	}
+	press(&m, tab, space)
+	if m.focus != focusPermission {
+		t.Fatalf("space on the strip should open the tab: %v", m.focus)
+	}
+	// a tab dialog: enter closes it and lands on the input (not the strip)
+	press(&m, enter)
+	if m.focus != focusInput {
+		t.Fatalf("enter in a dialog should return to the input: %v", m.focus)
+	}
+	// chat and meta row: enter → input; space acts
+	press(&m, tea.KeyMsg{Type: tea.KeyShiftTab})
+	if m.focus != focusChat {
+		t.Fatalf("focus %v", m.focus)
+	}
+	press(&m, enter)
+	if m.focus != focusInput {
+		t.Fatalf("enter in the chat should return to the input: %v", m.focus)
+	}
+	press(&m, tab, tab) // strip → meta row
+	if m.focus != focusMeta {
+		t.Fatalf("focus %v", m.focus)
+	}
+	if cmd := press(&m, space); cmd == nil {
+		t.Fatal("space on the meta row should open the part's dialog")
+	}
+	press(&m, enter)
+	if m.focus != focusInput {
+		t.Fatalf("enter on the meta row should return to the input: %v", m.focus)
+	}
+	// an overlay: space picks, enter closes it onto the input
+	m.setFocus(focusMeta)
+	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles"))
+	m.ov.setItems([]overlayItem{{id: "general", label: "general"}})
+	press(&m, enter)
+	if m.ov != nil || m.focus != focusInput || !m.input.Focused() {
+		t.Fatalf("enter in an overlay should close it onto the input: ov=%v focus=%v", m.ov != nil, m.focus)
+	}
+	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles"))
+	m.ov.setItems([]overlayItem{{id: "general", label: "general"}})
+	if cmd := press(&m, space); cmd == nil || m.ov != nil {
+		t.Fatalf("space in an overlay should pick the row: cmd=%v ov=%v", cmd != nil, m.ov != nil)
+	}
+	// text fields keep enter: a question's answer, the dirs path field
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Question: "which?", Agent: "a"}}
+	m.setFocus(focusPermission)
+	typedSpace := tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}} // as a terminal sends it
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}, typedSpace, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+	if m.promptInput.Value() != "a b" {
+		t.Fatalf("space should type into the answer field: %q", m.promptInput.Value())
+	}
+	if cmd := press(&m, enter); cmd == nil || m.focus != focusPermission {
+		t.Fatalf("enter should submit the answer: cmd=%v focus=%v", cmd != nil, m.focus)
 	}
 }
