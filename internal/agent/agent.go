@@ -446,7 +446,7 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 	if err := a.compact(ctx, m, len(a.eventsCopy())); err != nil {
 		return "", err
 	}
-	system, _ := a.buildContext(a.role())
+	system, _ := a.buildContext(a.role(), a.s.Config())
 	est := project.EstimateTokens(project.Project(a.eventsCopy()), system) // eventsCopy takes a.mu: compute before locking
 	a.mu.Lock()
 	a.ctxTokens = est
