@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/policy"
 )
@@ -274,5 +276,27 @@ func TestWebSearch(t *testing.T) {
 	searchEndpoints["brave"] = srv.URL + "/brave"
 	if r = ws.Run(ctx, json.RawMessage(`{"query":"go"}`), &Env{Search: SearchConfig{Provider: "brave", APIKey: "k"}}); !r.IsError || !strings.Contains(r.Output, "private or local address") {
 		t.Fatalf("local backend: %+v", r)
+	}
+}
+
+// TestHTMLToMarkdownScales: the converter appends and trims in place, so a
+// page of tens of thousands of blocks converts in linear time, and it stops
+// reading once the page cap is passed.
+func TestHTMLToMarkdownScales(t *testing.T) {
+	var sb strings.Builder
+	sb.WriteString("<html><body><main>")
+	for i := 0; i < 40000; i++ {
+		sb.WriteString("<div><p>para ")
+		sb.WriteString(strconv.Itoa(i))
+		sb.WriteString(" text   </p><ul><li>a</li><li>b</li></ul></div>")
+	}
+	sb.WriteString("</main></body></html>")
+	start := time.Now()
+	md := htmlToMarkdown([]byte(sb.String()), nil)
+	if d := time.Since(start); d > 2*time.Second {
+		t.Fatalf("conversion took %v", d)
+	}
+	if len(md) > mdOverflow || !strings.Contains(md, "para 0 text\n\n- a\n- b") {
+		t.Fatalf("len %d head %q", len(md), md[:min(80, len(md))])
 	}
 }
