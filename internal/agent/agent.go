@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/nicodes/stavlos/internal/config"
@@ -337,6 +338,9 @@ func (a *Agent) SetVariant(ctx context.Context, v string) error {
 			return fmt.Errorf("unknown variant %q for %s (see /variants)", v, a.ModelID())
 		}
 	}
+	if p := a.Preset(); !p.AllowsVariant(a.ModelID(), v) {
+		return fmt.Errorf("role %s does not allow variant %q for %s (allowed: %s)", p.Name, v, a.ModelID(), strings.Join(p.DefaultVariantList(a.ModelID()), ", "))
+	}
 	a.mu.Lock()
 	a.variant = v
 	a.mu.Unlock()
@@ -345,17 +349,45 @@ func (a *Agent) SetVariant(ctx context.Context, v string) error {
 	return err
 }
 
-// SetModel switches the agent's model at its next model call.
+// SetModel switches the agent's model at its next model call. The role's
+// whitelist applies, and the variant is re-fitted to the new model.
 func (a *Agent) SetModel(ctx context.Context, id string) error {
 	if err := a.s.host.CheckModel(id); err != nil {
 		return err
 	}
+	if p := a.Preset(); !p.AllowsModel(id) {
+		return fmt.Errorf("role %s does not allow model %s (allowed: %s)", p.Name, id, modelList(p))
+	}
+	return a.setModelAndVariant(ctx, id, fitVariant(a.Preset(), id, a.Variant()))
+}
+
+// setModelAndVariant installs a model (and the variant that goes with it),
+// logging each change.
+func (a *Agent) setModelAndVariant(ctx context.Context, id, variant string) error {
 	a.mu.Lock()
-	a.modelID = id
+	prevModel, prevVariant := a.modelID, a.variant
+	a.modelID, a.variant = id, variant
 	a.mu.Unlock()
-	_, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentModelChanged,
-		Payload: event.MustPayload(event.ModelChangedPayload{Model: id})})
-	return err
+	if id != prevModel {
+		if _, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentModelChanged,
+			Payload: event.MustPayload(event.ModelChangedPayload{Model: id})}); err != nil {
+			return err
+		}
+	}
+	if variant != prevVariant {
+		if _, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentVariantChanged,
+			Payload: event.MustPayload(event.VariantChangedPayload{Variant: variant})}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Preset returns the role the agent runs as.
+func (a *Agent) Preset() config.Preset {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.preset
 }
 
 // SetRole switches the agent's preset in place. The system prompt, tool
@@ -365,6 +397,23 @@ func (a *Agent) SetRole(ctx context.Context, role string) error {
 	preset, ok := a.s.Config().Presets[role]
 	if !ok {
 		return fmt.Errorf("unknown role %q (see /roles)", role)
+	}
+	switch {
+	case a.Parent == "" && !preset.CanBePrimary():
+		return fmt.Errorf("role %q is subagent-only: the main agent cannot take it", role)
+	case a.Parent != "" && !preset.CanBeSubagent():
+		return fmt.Errorf("role %q is primary-only: a subagent cannot take it", role)
+	}
+	// The agent's model and variant must fit the new role: keep them when
+	// allowed, else move to the role's defaults.
+	modelID := a.ModelID()
+	if !preset.AllowsModel(modelID) {
+		if d := preset.DefaultModel(); d != "" {
+			modelID = d
+		}
+	}
+	if err := a.setModelAndVariant(ctx, modelID, fitVariant(preset, modelID, a.Variant())); err != nil {
+		return err
 	}
 	a.mu.Lock()
 	if a.Label == a.Archetype {

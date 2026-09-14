@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,9 +27,9 @@ func TestLoadLayersAndTrust(t *testing.T) {
   "policy": { "bash": { "*": "allow", "git push*": "ask" }, },
 }`), 0o644)
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".stavlos", "agents"), 0o755)
+	os.MkdirAll(filepath.Join(dir, ".stavlos", "roles"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{"policy":{"bash":{"git push*":"allow","curl*":"deny"}}}`), 0o644)
-	os.WriteFile(filepath.Join(dir, ".stavlos", "agents", "reviewer.md"), []byte("---\ndescription: reviews\nmodel: openai/gpt-5-mini\ntools: [read]\n---\nYou review.\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".stavlos", "roles", "reviewer.md"), []byte("---\ndescription: reviews\nmodels: [openai/gpt-5-mini]\ntools: [read]\n---\nYou review.\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("Use light models."), 0o644)
 
 	e, err := Load(dir, noTrust{})
@@ -59,7 +60,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 		t.Fatalf("model %q root %q", e.Model, e.RootAgent)
 	}
 	p, ok := e.Presets["reviewer"]
-	if !ok || p.Model != "openai/gpt-5-mini" || p.Body != "You review." || p.Layer != "project" {
+	if !ok || len(p.Models) != 1 || p.Models[0].ID != "openai/gpt-5-mini" || p.Body != "You review." || p.Layer != "project" || p.Mode != ModeAll {
 		t.Fatalf("preset %+v", p)
 	}
 	if e.AgentsMD != "Use light models." {
@@ -102,5 +103,126 @@ func TestDefaultEscalationAnswerTimeout(t *testing.T) {
 	}
 	if e.Escalation.AnswerTimeout != 3*time.Minute {
 		t.Fatalf("default answer timeout = %s, want 3m", e.Escalation.AnswerTimeout)
+	}
+}
+
+func TestReadRoleFile(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		path := filepath.Join(dir, name+".md")
+		os.WriteFile(path, []byte(body), 0o644)
+		return path
+	}
+	p, err := ReadPreset(write("reviewer", `---
+description: Reviews a diff
+mode: subagent
+models:
+  - id: openai/gpt-5.1-codex
+    variants: [medium, high]
+  - id: openai/gpt-5.1-codex-mini
+  - xai/grok-4-fast
+tools:
+  bash:
+    "git push*": deny
+    "*": ask
+  read: allow
+  todo:
+spawn: [explorer]
+max_turns: 20
+color: cyan
+---
+You review.
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Name != "reviewer" || p.Mode != ModeSubagent || p.MaxTurns != 20 || p.Color != "cyan" || p.Body != "You review." {
+		t.Fatalf("%+v", p)
+	}
+	if len(p.Models) != 3 || p.Models[0].ID != "openai/gpt-5.1-codex" || len(p.Models[0].Variants) != 2 || p.Models[2].ID != "xai/grok-4-fast" || p.Models[2].Variants != nil {
+		t.Fatalf("models %+v", p.Models)
+	}
+	if strings.Join(p.Tools, ",") != "bash,read,todo" {
+		t.Fatalf("tools %v", p.Tools)
+	}
+	pol := p.PresetPolicy()
+	if pol.Decide("bash", "git push origin") != policy.Deny || pol.Decide("bash_async", "git push origin") != policy.Deny || pol.Decide("bash", "ls") != policy.Ask || pol.Decide("read", "x") != policy.Allow {
+		t.Fatalf("rules %+v", pol.Rules())
+	}
+	// whitelist helpers
+	if !p.AllowsModel("openai/gpt-5.1-codex") || p.AllowsModel("openai/gpt-4") || p.DefaultModel() != "openai/gpt-5.1-codex" {
+		t.Fatal("model whitelist")
+	}
+	if !p.AllowsVariant("openai/gpt-5.1-codex", "high") || p.AllowsVariant("openai/gpt-5.1-codex", "low") || p.AllowsVariant("openai/gpt-5.1-codex", "") || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" {
+		t.Fatal("variant whitelist")
+	}
+	if !p.AllowsVariant("xai/grok-4-fast", "anything") || p.DefaultVariant("xai/grok-4-fast") != "" {
+		t.Fatal("a model without variants allows any")
+	}
+	if !p.CanBeSubagent() || p.CanBePrimary() {
+		t.Fatal("mode")
+	}
+	// a glob entry admits its models but is no default
+	g, _ := ReadPreset(write("any", "---\ndescription: d\nmodels: [openai/*]\n---\nbody"))
+	if !g.AllowsModel("openai/gpt-5") || g.AllowsModel("xai/grok") || g.DefaultModel() != "" {
+		t.Fatalf("glob %+v", g.Models)
+	}
+	// minimal: description and body; everything else inherits
+	m, err := ReadPreset(write("explainer", "---\ndescription: Explains code\n---\nYou explain."))
+	if err != nil || m.Mode != ModeAll || len(m.Models) != 0 || strings.Join(m.Tools, ",") != strings.Join(DefaultTools, ",") || m.PresetPolicy().Rules() != nil {
+		t.Fatalf("minimal %+v %v", m, err)
+	}
+	// errors name the problem
+	for name, body := range map[string]string{
+		"nodesc":   "---\nmode: all\n---\nx",
+		"badmode":  "---\ndescription: d\nmode: sometimes\n---\nx",
+		"badcolor": "---\ndescription: d\ncolor: teal\n---\nx",
+		"oldmodel": "---\ndescription: d\nmodel: openai/gpt-5\n---\nx",
+		"oldpol":   "---\ndescription: d\npolicy:\n  bash: deny\n---\nx",
+		"hidden":   "---\ndescription: d\nhidden: true\n---\nx",
+		"badverb":  "---\ndescription: d\ntools:\n  bash: maybe\n---\nx",
+		"badtools": "---\ndescription: d\ntools: 3\n---\nx",
+	} {
+		if _, err := ReadPreset(write(name, body)); err == nil {
+			t.Errorf("%s should fail to parse", name)
+		}
+	}
+	if _, err := ReadPreset(write("oldmodel", "---\ndescription: d\nmodel: x\n---\nx")); err == nil || !strings.Contains(err.Error(), "models:") {
+		t.Fatalf("the model: error should point at models: %v", err)
+	}
+}
+
+func TestRoleRulesOnlyTighten(t *testing.T) {
+	g := t.TempDir()
+	t.Setenv("STAVLOS_CONFIG_DIR", g)
+	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1"}`), 0o644)
+	// read is allowed by default: a role may not turn it into allow-everything for bash
+	os.WriteFile(filepath.Join(g, "roles", "loose.md"), []byte("---\ndescription: d\ntools:\n  bash:\n    \"rm *\": allow\n---\nx"), 0o644)
+	if _, err := Load(t.TempDir(), noTrust{}); err == nil || !strings.Contains(err.Error(), "loosens") {
+		t.Fatalf("a loosening role rule should be a config error: %v", err)
+	}
+	os.WriteFile(filepath.Join(g, "roles", "loose.md"), []byte("---\ndescription: d\ntools:\n  bash:\n    \"rm *\": deny\n  read: ask\n---\nx"), 0o644)
+	e, err := Load(t.TempDir(), noTrust{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Presets["loose"].Mode != ModeAll {
+		t.Fatalf("%+v", e.Presets["loose"])
+	}
+}
+
+// The repository's own example role must keep parsing: it is what the
+// docs point users at.
+func TestExampleCoderRoleParses(t *testing.T) {
+	p, err := ReadPreset(filepath.Join("..", "..", ".stavlos", "roles", "coder.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Name != "coder" || p.Mode != ModeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
+		t.Fatalf("%+v", p)
+	}
+	if strings.Join(p.Tools, ",") != "bash,read,apply_patch,skill,todo" || p.PresetPolicy().Decide("bash", "git push origin main") != policy.Deny {
+		t.Fatalf("tools %v rules %+v", p.Tools, p.PresetPolicy().Rules())
 	}
 }

@@ -241,6 +241,18 @@ func modelsCmd(ctx context.Context, c *client.Client) tea.Cmd {
 type rolesMsg struct {
 	roles []protocol.PresetInfo
 	err   error
+	quiet bool // refresh the cached roles without opening the picker
+}
+
+// presetsCmd refreshes the cached roles (for filtering the models and
+// variants dialogs and for role colours) without opening a dialog.
+func presetsCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		rs, err := c.Presets(ctx, session)
+		return rolesMsg{roles: rs, err: err, quiet: true}
+	}
 }
 
 func rolesCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
@@ -248,7 +260,7 @@ func rolesCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
 		ctx, cancel := withTimeout(ctx)
 		defer cancel()
 		rs, err := c.Presets(ctx, session)
-		return rolesMsg{rs, err}
+		return rolesMsg{roles: rs, err: err}
 	}
 }
 

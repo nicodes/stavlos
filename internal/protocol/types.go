@@ -325,10 +325,20 @@ type PresetsParams struct {
 	Session string `json:"session"`
 }
 type PresetInfo struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Model       string   `json:"model,omitempty"`
-	Spawn       []string `json:"spawn,omitempty"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Mode        string      `json:"mode"`             // primary | subagent | all
+	Models      []ModelSpec `json:"models,omitempty"` // whitelist, first is the default; empty = any
+	Spawn       []string    `json:"spawn,omitempty"`
+	Color       string      `json:"color,omitempty"`
+	MaxTurns    int         `json:"max_turns,omitempty"`
+}
+
+// ModelSpec is one whitelist entry: a model id (glob allowed) and the
+// variants allowed for it (empty = any the provider offers).
+type ModelSpec struct {
+	ID       string   `json:"id"`
+	Variants []string `json:"variants,omitempty"`
 }
 type PresetsResult struct {
 	Presets []PresetInfo `json:"presets"`

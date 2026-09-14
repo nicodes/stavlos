@@ -24,6 +24,9 @@ var (
 	colBlocked = lipgloss.AdaptiveColor{Light: "#9333EA", Dark: "#C084FC"}
 	colBorder  = colMuted
 	colSelBg   = lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#2A2F3A"} // chat cursor row background
+	colYellow  = lipgloss.AdaptiveColor{Light: "#A16207", Dark: "#FACC15"}
+	colPink    = lipgloss.AdaptiveColor{Light: "#BE185D", Dark: "#F472B6"}
+	colCyan    = lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#22D3EE"}
 	colInputBg = lipgloss.AdaptiveColor{Light: "#F3F4F6", Dark: "#1C2129"} // the message input's background
 
 	styleDim      = lipgloss.NewStyle().Foreground(colMuted)
@@ -649,7 +652,8 @@ func promptBoxWidth(width int) int {
 // warning-coloured YOLO tag while the session auto-approves.
 // sel is the part highlighted while the row has keyboard focus (metaNone
 // otherwise).
-func metaLine(label, role, model, variant string, queued int, yolo bool, sel metaPart) string {
+// nameStyle tints the "label (role)" part (the role's colour, or plain).
+func metaLine(label, role, model, variant string, queued int, yolo bool, sel metaPart, nameStyle lipgloss.Style) string {
 	pick := func(part metaPart, text string, st lipgloss.Style) string {
 		if part == sel {
 			return styleBoxTitleFocus.Render(text)
@@ -664,7 +668,7 @@ func metaLine(label, role, model, variant string, queued int, yolo bool, sel met
 	if role != "" {
 		name = fmt.Sprintf("%s (%s)", label, role)
 	}
-	s += pick(metaRole, name, lipgloss.NewStyle()) + " · "
+	s += pick(metaRole, name, nameStyle) + " · "
 	if model == "" {
 		return s + pick(metaModel, "no model — /models", styleWarn)
 	}
@@ -801,7 +805,11 @@ func (m Model) metaRow(width int) string {
 	if m.focus == focusMeta {
 		sel = m.metaSel
 	}
-	left := metaLine(label, role, model, variant, queued, m.session.Yolo, sel)
+	nameStyle := lipgloss.NewStyle()
+	if r := m.roleInfo(role); r != nil {
+		nameStyle = roleStyle(r.Color)
+	}
+	left := metaLine(label, role, model, variant, queued, m.session.Yolo, sel, nameStyle)
 	right := m.footerRightView()
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {
@@ -958,11 +966,17 @@ func (m Model) treeRows(width int) []string {
 			label = "error"
 		}
 		text := truncRunes(fmt.Sprintf("%s (%s) · %s", a.Label, a.Archetype, label), avail)
+		tint := ""
+		if r := m.roleInfo(a.Archetype); r != nil {
+			tint = r.Color
+		}
 		switch {
 		case focused && i == m.sbCursor:
-			text = styleBold.Render(text)
+			text = roleStyle(tint).Bold(true).Render(text)
 		case i == m.selected:
-			text = styleSelected.Render(text)
+			text = roleStyle(tint).Inherit(styleSelected).Render(text)
+		case tint != "":
+			text = roleStyle(tint).Render(text)
 		default:
 			text = styleDim.Render(text)
 		}
@@ -1041,7 +1055,7 @@ func (m Model) tabBodyLines(width int) []string {
 		if len(kids) == 0 {
 			return []string{styleDim.Render("  no subagents running")}
 		}
-		return m.cursorRows(agentRows(m.agents, m.selectedID(), m.spawned, m.lastLines(), time.Now(), width-2))
+		return m.cursorRows(agentRows(m.agents, m.selectedID(), m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2))
 	case focusAsync:
 		jobs := m.runningJobs()
 		if len(jobs) == 0 {
@@ -1306,10 +1320,27 @@ func jobGlyph(j protocol.MonitorInfo) string {
 	return styleDim.Render(glyphToolMonitors)
 }
 
+// roleColors maps a role's colour name to the theme colour it tints with.
+var roleColors = map[string]lipgloss.AdaptiveColor{
+	"red": colError, "blue": colAccent, "green": colSuccess, "yellow": colYellow,
+	"purple": colBlocked, "orange": colWarning, "pink": colPink, "cyan": colCyan,
+}
+
+// roleStyle is a foreground style for a role colour name; plain for "" or
+// an unknown name.
+func roleStyle(name string) lipgloss.Style {
+	if c, ok := roleColors[name]; ok {
+		return lipgloss.NewStyle().Foreground(c)
+	}
+	return lipgloss.NewStyle()
+}
+
 // agentRows is the pure part of agentsView.
 // last maps an agent id to a snippet of the latest line in its chat; it
 // sits between the name and the meta, like the job on an async row.
-func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, last map[string]string, now time.Time, width int) []string {
+// tint maps a role name to its colour name; a tinted role colours its
+// "label (role)" text.
+func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]time.Time, last map[string]string, tint map[string]string, now time.Time, width int) []string {
 	var rows []string
 	for _, a := range agents {
 		if a.Parent != parent || a.State == "killed" {
@@ -1324,7 +1355,7 @@ func agentRows(agents []protocol.AgentInfo, parent string, spawned map[string]ti
 			meta = append(meta, fmtElapsed(now.Sub(t)))
 		}
 		text := fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
-		row := "  " + lead + " " + styleBold.Render(text)
+		row := "  " + lead + " " + roleStyle(tint[a.Archetype]).Bold(true).Render(text)
 		if s := last[a.ID]; s != "" {
 			row += "  " + truncRunes(s, snippetChars)
 		}
