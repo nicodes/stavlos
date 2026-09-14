@@ -833,7 +833,7 @@ func (m Model) metaRow(width int) string {
 }
 
 // tagline sits under the logo on the home screen.
-const tagline = "Saddle up."
+const tagline = "Giddy up!"
 
 // homeLayout is the logo screen's stack of lines and where things sit in
 // it, shared by the renderer and the mouse.
@@ -861,7 +861,8 @@ func (m Model) homeLines(width, height int) homeLayout {
 	add(strings.Join(logo, "\n"), lipgloss.Width(logo[0]))
 	lay.lines = append(lay.lines, "")
 	add(styleDim.Render(tagline), lipgloss.Width(tagline))
-	add(m.statusLine(boxW), boxW) // status messages sit above the input, as in a session
+	lay.lines = append(lay.lines, "") // air between the tagline and the input
+	add(m.statusLine(boxW), boxW)     // status messages sit above the input, as in a session
 	if pv := m.paletteViewFor(boxW); pv != "" {
 		add(pv, boxW)
 	}

@@ -1246,6 +1246,15 @@ func (m Model) inputView() string {
 	if n := m.inputRows(); len(lines) > n {
 		lines = lines[:n]
 	}
+	// The background spans the whole input width, not just the text: pad
+	// every row out to the box in the same colour.
+	bg := lipgloss.NewStyle().Background(colInputBg)
+	width := m.boxWidth()
+	for i, l := range lines {
+		if pad := width - ansi.StringWidth(l); pad > 0 {
+			lines[i] = l + bg.Render(strings.Repeat(" ", pad))
+		}
+	}
 	return strings.Join(lines, "\n")
 }
 
