@@ -19,12 +19,12 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/dialog"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/theme"
 )
 
 const (
-	overlayWidth   = 70
 	overlayMaxRows = 10
 )
 
@@ -79,7 +79,7 @@ type overlay struct {
 
 	login loginState // login mode only
 
-	hints []keyHint // the footer's key hints, set by the model before each render
+	hints []dialog.Hint // the footer's key hints, set by the model before each render
 }
 
 const (
@@ -219,10 +219,10 @@ func (o *overlay) handleNav(msg tea.KeyMsg) bool {
 // view renders the box at min(overlayWidth, bodyWidth-4). spinner is the
 // current spinner glyph (login mode).
 func (o *overlay) view(bodyWidth int, spinner string) string {
-	w := dialogWidth(bodyWidth)
+	w := dialog.Width(bodyWidth)
 	inner := w - 4 // border + padding
 
-	lines := []string{dialogTitle(o.title, inner)}
+	lines := []string{dialog.Title(o.title, inner)}
 	switch o.mode {
 	case overlayLogin:
 		lines = append(lines, o.loginLines(inner, spinner)...)
@@ -231,12 +231,12 @@ func (o *overlay) view(bodyWidth int, spinner string) string {
 		lines = append(lines, o.input.View(), "")
 		lines = append(lines, o.listLines(inner)...)
 	}
-	if f := dialogHintLines(o.hints, inner); len(f) > 0 {
+	if f := dialog.HintLines(o.hints, inner); len(f) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, f...)
 	}
 	// Width covers padding but not the border: inner content + 2 padding + 2 border = w.
-	return theme.StyleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
+	return dialog.Box(inner, lines)
 }
 
 // loginLines renders the device-code instructions: URL, spaced code, the
@@ -292,19 +292,6 @@ func spacedCode(code string) string {
 		parts[i] = string(c)
 	}
 	return strings.Join(parts, " ")
-}
-
-// dialogTitle is the first line of every dialog: the bold title on the
-// left, a dim "esc: close" on the right, within width columns.
-func dialogTitle(title string, width int) string {
-	const hint = "esc: close"
-	avail := width - len(hint) - 2
-	if avail < 4 {
-		return theme.StyleOvTitle.Render(format.Trunc(title, width))
-	}
-	t := format.Trunc(title, avail)
-	pad := width - len([]rune(t)) - len(hint)
-	return theme.StyleOvTitle.Render(t) + strings.Repeat(" ", pad) + theme.StyleDim.Render(hint)
 }
 
 func (o *overlay) listLines(inner int) []string {
@@ -434,41 +421,6 @@ func renderItem(it overlayItem, cur bool, width int) string {
 		}
 	}
 	return b.String()
-}
-
-// composite draws box centered over base (a bodyWidth×bodyHeight block).
-func composite(base string, bodyWidth, bodyHeight int, box string) string {
-	baseLines := strings.Split(base, "\n")
-	for len(baseLines) < bodyHeight {
-		baseLines = append(baseLines, "")
-	}
-	boxLines := strings.Split(box, "\n")
-	bw := lipgloss.Width(box)
-	x := (bodyWidth - bw) / 2
-	if x < 0 {
-		x = 0
-	}
-	y := (bodyHeight - len(boxLines)) / 2
-	if y < 0 {
-		y = 0
-	}
-	for i, bl := range boxLines {
-		row := y + i
-		if row >= len(baseLines) {
-			break
-		}
-		orig := baseLines[row]
-		left := ansi.Truncate(orig, x, "")
-		if lw := ansi.StringWidth(left); lw < x {
-			left += strings.Repeat(" ", x-lw)
-		}
-		right := ""
-		if ansi.StringWidth(orig) > x+bw {
-			right = ansi.Cut(orig, x+bw, bodyWidth)
-		}
-		baseLines[row] = left + bl + right
-	}
-	return strings.Join(baseLines[:bodyHeight], "\n")
 }
 
 // --- item builders (pure; tested) ---

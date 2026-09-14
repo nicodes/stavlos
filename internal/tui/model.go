@@ -24,6 +24,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
+	"github.com/nicodes/stavlos/internal/tui/dialog"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/render"
 	"github.com/nicodes/stavlos/internal/tui/theme"
@@ -2913,9 +2914,9 @@ func (m *Model) layout() {
 	}
 	boxW := m.boxWidth()
 	m.input.SetWidth(boxW)
-	m.input.SetHeight(m.inputCap())                                                            // the textarea is always cap tall; the view trims to the rows used
-	m.promptInput.Width = dialogWidth(m.width) - 4 - 2 - len([]rune(m.promptInput.Prompt)) - 1 // inside the tab dialog, under promptBox's indent
-	m.dirInput.Width = dialogWidth(m.width) - 4 - 2 - len([]rune(m.dirInput.Prompt)) - 1
+	m.input.SetHeight(m.inputCap())                                                             // the textarea is always cap tall; the view trims to the rows used
+	m.promptInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.promptInput.Prompt)) - 1 // inside the tab dialog, under promptBox's indent
+	m.dirInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.dirInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
 	bodyH := m.height - kb - 2 - (m.inputRows() + 1) // key bar, status line + rule, input rows + meta row

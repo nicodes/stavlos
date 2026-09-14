@@ -7,10 +7,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/dialog"
 )
 
 func TestKeyBarLinesWrap(t *testing.T) {
-	hints := []keyHint{{"enter", "send"}, {"tab", "agents"}, {"ctrl+b", "sidebar"}, {"ctrl+c", "quit"}}
+	hints := []dialog.Hint{hint("enter", "send"), hint("tab", "agents"), hint("ctrl+b", "sidebar"), hint("ctrl+c", "quit")}
 	rows := keyBarLines(hints, 30, 2)
 	if len(rows) != 2 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
@@ -30,9 +31,9 @@ func TestKeyBarLinesWrap(t *testing.T) {
 
 func TestKeyHintsByContext(t *testing.T) {
 	m := Model{width: 100, height: 30, sessionState: newSessionState("", protocol.SessionInfo{})}
-	has := func(hs []keyHint, key string) bool {
+	has := func(hs []dialog.Hint, key string) bool {
 		for _, h := range hs {
-			if h.key == key {
+			if h.Key == key {
 				return true
 			}
 		}
@@ -64,7 +65,7 @@ func TestKeyHintsByContext(t *testing.T) {
 		t.Fatalf("login: %+v", hs)
 	}
 	m.ov.setLoginError("boom")
-	if hs := m.keyHints(); hs[0].key != "enter" {
+	if hs := m.keyHints(); hs[0].Key != "enter" {
 		t.Fatalf("login error: %+v", hs)
 	}
 	s, n := m.keyBarView()

@@ -16,6 +16,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/dialog"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/render"
 	"github.com/nicodes/stavlos/internal/tui/transcript"
@@ -656,7 +657,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	}
 	m.focus = focusPermission
 	hs := m.keyHints()
-	if hs[0].key != "↑/↓" || hs[1].key != "space" || hs[1].desc != "choose" {
+	if hs[0].Key != "↑/↓" || hs[1].Key != "space" || hs[1].Desc != "choose" {
 		t.Fatalf("permission hints: %+v", hs)
 	}
 
@@ -872,7 +873,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if m.focus != focusInput || !m.follow || !m.vp.AtBottom() || strings.Contains(stripANSI(m.vp.View()), render.GutterMark) {
 		t.Fatalf("leave chat: focus=%v follow=%v bottom=%v", m.focus, m.follow, m.vp.AtBottom())
 	}
-	if hs := m.keyHints(); hs[4].key != "tab" || hs[4].desc != "next section" {
+	if hs := m.keyHints(); hs[4].Key != "tab" || hs[4].Desc != "next section" {
 		t.Fatalf("input hints: %+v", hs)
 	}
 }
@@ -2231,7 +2232,7 @@ func TestSidebarNav(t *testing.T) {
 		if m.selectedID() != "b" || !strings.Contains(m.status, "no agent is waiting") {
 			t.Fatalf("n with nothing pending: %s %q", m.selectedID(), m.status)
 		}
-		if hs := m.keyHints(); hs[2].key != "n" {
+		if hs := m.keyHints(); hs[2].Key != "n" {
 			t.Fatalf("hints %+v", hs)
 		}
 	})
@@ -2567,7 +2568,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "directory to add") || !strings.Contains(body, "› /etc") || strings.Contains(body, "▸") {
 		t.Fatalf("edit field:\n%s", body)
 	}
-	if hs := m.keyHints(); hs[0].key != "enter" || hs[0].desc != "allow + add this directory" {
+	if hs := m.keyHints(); hs[0].Key != "enter" || hs[0].Desc != "allow + add this directory" {
 		t.Fatalf("hints %+v", hs)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
@@ -2598,8 +2599,8 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 }
 
 func TestDialogHintsWrap(t *testing.T) {
-	hints := []keyHint{{"↑/↓", "option"}, {"space", "choose"}, {"a", "add directory"}, {"ctrl+d", "remove"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
-	lines := dialogHintLines(hints, 30)
+	hints := []dialog.Hint{hint("↑/↓", "option"), hint("space", "choose"), hint("a", "add directory"), hint("ctrl+d", "remove"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+	lines := dialog.HintLines(hints, 30)
 	joined := stripANSI(strings.Join(lines, "\n"))
 	for _, want := range []string{"↑/↓ option", "space choose", "a add directory", "ctrl+d remove"} {
 		if !strings.Contains(joined, want) {
@@ -2617,7 +2618,7 @@ func TestDialogHintsWrap(t *testing.T) {
 	if len(lines) < 2 {
 		t.Fatalf("hints should wrap at 30 columns: %d line(s)", len(lines))
 	}
-	if got := dialogHintLines(hints, 200); len(got) != 1 {
+	if got := dialog.HintLines(hints, 200); len(got) != 1 {
 		t.Fatalf("wide dialog: one line, got %d", len(got))
 	}
 }
@@ -2749,7 +2750,7 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "deny · a reason") || !strings.Contains(body, "  ● Deny") {
 		t.Fatalf("body:\n%s", body)
 	}
-	if hs := m.keyHints(); hs[0].key != "enter" || hs[0].desc != "deny" {
+	if hs := m.keyHints(); hs[0].Key != "enter" || hs[0].Desc != "deny" {
 		t.Fatalf("hints %+v", hs)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
