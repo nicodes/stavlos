@@ -1639,14 +1639,43 @@ func TestWorkingDirectories(t *testing.T) {
 	if kid.ID == "" || len(kid.Dirs) != 2 || kid.Dirs[1].Path != shared || kid.Dirs[1].Source != "grant" {
 		t.Fatalf("child dirs %+v", kid.Dirs)
 	}
+	// the human edits the set: add, remove (a role directory hides, the
+	// session directory refuses), and a relative path resolves
+	extra := t.TempDir()
+	if err := h.c.AddAgentDir(ctx, root, extra); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.c.AddAgentDir(ctx, root, "sub/dir"); err != nil { // inside the session dir: already covered, a no-op
+		t.Fatal(err)
+	}
+	if err := h.c.RemoveAgentDir(ctx, root, shared); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.c.RemoveAgentDir(ctx, root, work); err == nil || !strings.Contains(err.Error(), "session directory") {
+		t.Fatalf("removing the session directory: %v", err)
+	}
+	if err := h.c.RemoveAgentDir(ctx, root, "/never/there"); err == nil {
+		t.Fatal("removing an unknown directory should fail")
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	paths := func(ds []protocol.DirInfo) string {
+		var out []string
+		for _, d := range ds {
+			out = append(out, d.Path+":"+d.Source)
+		}
+		return strings.Join(out, " ")
+	}
+	if got := paths(agents[0].Dirs); got != work+":session "+outside+":human "+extra+":human" {
+		t.Fatalf("edited dirs: %s", got)
+	}
 	h.close()
 
-	// restart: grants and human additions come back
+	// restart: grants, additions and removals come back
 	h2 := newHarness(t, data, &fakeModel{})
 	defer h2.close()
 	agents, _ = h2.c.Tree(ctx, s.ID)
-	if len(agents[0].Dirs) != 3 || agents[0].Dirs[2].Path != outside {
-		t.Fatalf("recovered root dirs %+v", agents[0].Dirs)
+	if got := paths(agents[0].Dirs); got != work+":session "+outside+":human "+extra+":human" {
+		t.Fatalf("recovered root dirs: %s", got)
 	}
 	for _, a := range agents {
 		if a.Label == "kid" && (len(a.Dirs) != 2 || a.Dirs[1].Path != shared) {

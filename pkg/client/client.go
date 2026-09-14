@@ -283,6 +283,15 @@ func (c *Client) SetAgentVariant(ctx context.Context, agent, variant string) err
 	return c.Call(ctx, protocol.MAgentSetVariant, protocol.AgentSetVariantParams{V: protocol.Version, Agent: agent, Variant: variant}, nil)
 }
 
+// AddAgentDir puts a directory in an agent's working set; RemoveAgentDir
+// takes one out (the session directory cannot be removed).
+func (c *Client) AddAgentDir(ctx context.Context, agent, dir string) error {
+	return c.Call(ctx, protocol.MAgentAddDir, protocol.AgentDirParams{V: protocol.Version, Agent: agent, Dir: dir}, nil)
+}
+func (c *Client) RemoveAgentDir(ctx context.Context, agent, dir string) error {
+	return c.Call(ctx, protocol.MAgentRemoveDir, protocol.AgentDirParams{V: protocol.Version, Agent: agent, Dir: dir}, nil)
+}
+
 // Variants lists the variant names a model offers.
 func (c *Client) Variants(ctx context.Context, modelID string) ([]string, error) {
 	var r protocol.VariantsResult

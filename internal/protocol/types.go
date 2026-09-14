@@ -34,6 +34,8 @@ const (
 	MAgentSetModel   = "agent.set_model"
 	MAgentSetRole    = "agent.set_role"    // switch an agent's preset in place
 	MAgentSetVariant = "agent.set_variant" // switch an agent's model variant (reasoning effort)
+	MAgentAddDir     = "agent.add_dir"     // put a directory in an agent's working set
+	MAgentRemoveDir  = "agent.remove_dir"  // take one out (never the session directory)
 	MVariants        = "variants"          // variant names a model offers
 
 	MPromptList  = "prompt.list"
@@ -254,6 +256,11 @@ type AgentSetRoleParams struct {
 	V     int    `json:"v"`
 	Agent string `json:"agent"`
 	Role  string `json:"role"` // preset name
+}
+type AgentDirParams struct {
+	V     int    `json:"v"`
+	Agent string `json:"agent"`
+	Dir   string `json:"dir"` // absolute, ~ or relative to the session directory
 }
 type AgentSetVariantParams struct {
 	V       int    `json:"v"`

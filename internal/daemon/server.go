@@ -331,6 +331,25 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		}
 		return map[string]bool{"ok": true}, nil
 
+	case protocol.MAgentAddDir, protocol.MAgentRemoveDir:
+		var p protocol.AgentDirParams
+		if e := decode(&p); e != nil {
+			return nil, e
+		}
+		_, a, err := d.agentSession(p.Agent)
+		if err != nil {
+			return nil, perr(protocol.ErrNotFound, err)
+		}
+		if req.Method == protocol.MAgentAddDir {
+			err = a.AddDir(ctx, p.Dir)
+		} else {
+			err = a.RemoveDir(ctx, p.Dir)
+		}
+		if err != nil {
+			return nil, perr(protocol.ErrInvalidParams, err)
+		}
+		return map[string]bool{"ok": true}, nil
+
 	case protocol.MAgentSetVariant:
 		var p protocol.AgentSetVariantParams
 		if e := decode(&p); e != nil {

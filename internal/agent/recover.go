@@ -119,7 +119,13 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			if a, ok := s.agents[e.Agent]; ok {
 				var p event.DirAddedPayload
 				_ = e.Decode(&p)
-				a.extraDirs = append(a.extraDirs, dirEntry{p.Dir, p.Source})
+				a.applyDirAdded(p.Dir, p.Source)
+			}
+		case event.AgentDirRemoved:
+			if a, ok := s.agents[e.Agent]; ok {
+				var p event.DirRefPayload
+				_ = e.Decode(&p)
+				a.applyDirRemoved(p.Dir)
 			}
 		case event.PromptQueued:
 			var p event.TextPayload

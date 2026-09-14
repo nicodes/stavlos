@@ -115,6 +115,8 @@ type Model struct {
 	expanded    map[string]map[int]bool
 	itemRows    map[int]rowRange
 	promptInput textinput.Model // answer field of a question prompt
+	dirInput    textinput.Model // path field of the dirs dialog while adding or editing
+	dirEdit     string          // "" | "add" | the path being replaced
 	sbCursor    int
 	palIdx      int               // highlighted row in the "/" command palette
 	agCursor    int               // highlighted row in the agents/async tab while it has focus
@@ -244,6 +246,9 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 	pi := textinput.New()
 	pi.Prompt = "› "
 	pi.Placeholder = "answer"
+	di := textinput.New()
+	di.Prompt = "› "
+	di.Placeholder = "path (absolute, ~, or relative to the session directory)"
 
 	return Model{
 		ctx:         ctx,
@@ -255,6 +260,7 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 		vp:          vp,
 		input:       ti,
 		promptInput: pi,
+		dirInput:    di,
 		sp:          sp,
 		hideKeys:    true, // the key bar is off until /help
 		follow:      true,
@@ -636,6 +642,10 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	}
 	prev := m.focus
 	m.focus = f
+	if prev == focusDirs && f != focusDirs {
+		m.dirEdit = "" // leaving the dirs dialog drops a half-typed edit
+		m.dirInput.Blur()
+	}
 	if isTab(f) && !isTab(prev) {
 		m.dialogFrom = prev // a tab dialog opens: remember where to return on close
 	}
@@ -735,6 +745,82 @@ func (m *Model) todoKey(msg tea.KeyMsg) tea.Cmd {
 		if n > 0 {
 			m.agCursor = (m.agCursor + 1) % n
 		}
+	}
+	return nil
+}
+
+// dirsKey handles keys in the dirs dialog: ↑/↓ move, a adds a directory,
+// enter edits the highlighted one (replacing it), ctrl+d removes it; while
+// the path field is open, enter submits and esc cancels the edit. The
+// session directory cannot be changed.
+func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
+	dirs := m.selectedDirs()
+	if m.dirEdit != "" {
+		switch {
+		case key.Matches(msg, keys.OvClose):
+			m.dirEdit = ""
+			m.dirInput.Blur()
+			return nil
+		case key.Matches(msg, keys.Submit):
+			path := strings.TrimSpace(m.dirInput.Value())
+			if path == "" {
+				return nil
+			}
+			edit, agent := m.dirEdit, m.selectedID()
+			m.dirEdit = ""
+			m.dirInput.Blur()
+			if edit == "add" {
+				return addDirCmd(m.ctx, m.c, agent, path)
+			}
+			return replaceDirCmd(m.ctx, m.c, agent, edit, path)
+		}
+		var cmd tea.Cmd
+		m.dirInput, cmd = m.dirInput.Update(msg)
+		return cmd
+	}
+	n := len(dirs)
+	cur := func() *protocol.DirInfo {
+		if n == 0 {
+			return nil
+		}
+		return &dirs[m.agCursor%n]
+	}
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.closeDialog()
+	case key.Matches(msg, keys.SelUp), msg.String() == "k":
+		if n > 0 {
+			m.agCursor = ((m.agCursor-1)%n + n) % n
+		}
+	case key.Matches(msg, keys.SelDown), msg.String() == "j":
+		if n > 0 {
+			m.agCursor = (m.agCursor + 1) % n
+		}
+	case msg.String() == "a":
+		m.dirEdit = "add"
+		m.dirInput.SetValue("")
+		return m.dirInput.Focus()
+	case key.Matches(msg, keys.Submit):
+		d := cur()
+		if d == nil {
+			return nil
+		}
+		if d.Source == "session" {
+			return m.setStatus("the session directory cannot be changed", true)
+		}
+		m.dirEdit = d.Path
+		m.dirInput.SetValue(d.Path)
+		m.dirInput.CursorEnd()
+		return m.dirInput.Focus()
+	case key.Matches(msg, keys.OvRemove):
+		d := cur()
+		if d == nil {
+			return nil
+		}
+		if d.Source == "session" {
+			return m.setStatus("the session directory cannot be removed", true)
+		}
+		return removeDirCmd(m.ctx, m.c, m.selectedID(), d.Path)
 	}
 	return nil
 }
@@ -1593,7 +1679,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case focusMCP:
 		return m.mcpKey(msg)
 	case focusDirs:
-		return m.listKey(msg, len(m.selectedDirs()))
+		return m.dirsKey(msg)
 	case focusSidebar:
 		return m.sidebarKey(msg)
 	case focusMeta:
@@ -2043,7 +2129,9 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	case event.AgentSpawned, event.AgentFinished, event.AgentKilled,
 		event.TurnStarted, event.TurnEnded, event.Usage,
 		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.SessionModelChanged,
-		event.MonitorStarted, event.MonitorFired, event.MonitorStopped:
+		event.MonitorStarted, event.MonitorFired, event.MonitorStopped,
+		event.AgentDirAdded, event.AgentDirRemoved, event.TodoChanged,
+		event.MCPStarted, event.MCPFailed, event.MCPStopped: // the tabs read these off the tree
 		if !m.loading {
 			cmds = append(cmds, m.markTreeDirty())
 		}
@@ -2353,6 +2441,7 @@ func (m *Model) layout() {
 	boxW := m.boxWidth()
 	m.input.SetWidth(boxW)
 	m.promptInput.Width = dialogWidth(m.width) - 4 - 2 - len([]rune(m.promptInput.Prompt)) - 1 // inside the tab dialog, under promptBox's indent
+	m.dirInput.Width = dialogWidth(m.width) - 4 - 2 - len([]rune(m.dirInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
 	bodyH := m.height - kb - 2 - (m.inputRows() + 1) // key bar, status line + rule, input rows + meta row

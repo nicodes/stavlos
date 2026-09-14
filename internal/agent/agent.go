@@ -49,30 +49,31 @@ type Agent struct {
 	kill context.CancelFunc
 	wake chan struct{}
 
-	mu         sync.Mutex
-	modelID    string
-	state      State
-	turn       int
-	prompts    []queued              // Prompt inbox
-	steers     []queued              // Steer inbox
-	responses  []response            // answers from other agents (agent_response), not yet delivered
-	awaiting   map[string]int        // agent id → questions asked of it (agent_message, a child's task); cleared by its next answer
-	todos      []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
-	todoSeq    int                   // last todo id issued
-	mcps       map[string]*mcpServer // MCP servers this agent has started (name → server)
-	mcpIdle    *time.Timer           // stops idle MCP servers (MCPIdleAfter)
-	extraDirs  []dirEntry            // working directories beyond the session\'s and the role\'s: grants and the human\'s answers (logged)
-	events     []event.Event         // this agent's events (projection cache)
-	cancelTurn context.CancelFunc
-	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
-	armed      map[string]bool // ids (children, monitors) whose completion wakes this agent
-	monitors   map[string]*Monitor
-	monDone    []event.MonitorFiredPayload // fired monitors not yet delivered
-	wakes      map[string]bool             // ids whose completion is waiting to wake this agent (unmonitor cancels)
-	lastError  string                      // error that ended the most recent turn; cleared when a turn starts
-	children   []string
-	done       chan struct{} // closed on kill
-	usage      struct {
+	mu          sync.Mutex
+	modelID     string
+	state       State
+	turn        int
+	prompts     []queued              // Prompt inbox
+	steers      []queued              // Steer inbox
+	responses   []response            // answers from other agents (agent_response), not yet delivered
+	awaiting    map[string]int        // agent id → questions asked of it (agent_message, a child's task); cleared by its next answer
+	todos       []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
+	todoSeq     int                   // last todo id issued
+	mcps        map[string]*mcpServer // MCP servers this agent has started (name → server)
+	mcpIdle     *time.Timer           // stops idle MCP servers (MCPIdleAfter)
+	extraDirs   []dirEntry            // working directories beyond the session\'s and the role\'s: grants and the human\'s answers (logged)
+	removedDirs map[string]bool       // directories the human took out (role ones stay hidden while listed)
+	events      []event.Event         // this agent's events (projection cache)
+	cancelTurn  context.CancelFunc
+	yieldFlag   bool            // set by the monitor tool: end the turn after this batch
+	armed       map[string]bool // ids (children, monitors) whose completion wakes this agent
+	monitors    map[string]*Monitor
+	monDone     []event.MonitorFiredPayload // fired monitors not yet delivered
+	wakes       map[string]bool             // ids whose completion is waiting to wake this agent (unmonitor cancels)
+	lastError   string                      // error that ended the most recent turn; cleared when a turn starts
+	children    []string
+	done        chan struct{} // closed on kill
+	usage       struct {
 		tokens int
 		cost   float64
 	}

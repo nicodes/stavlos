@@ -26,8 +26,13 @@ func (m Model) keyHints() []keyHint {
 	switch m.focus {
 	case focusAgents:
 		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
-	case focusAsync, focusTodo, focusDirs:
+	case focusAsync, focusTodo:
 		return []keyHint{{"↑/↓", "move"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+	case focusDirs:
+		if m.dirEdit != "" {
+			return []keyHint{{"enter", "save"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
+		}
+		return []keyHint{{"↑/↓", "move"}, {"a", "add directory"}, {"enter", "edit"}, {"ctrl+d", "remove"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusMCP:
 		return []keyHint{{"↑/↓", "move"}, {"enter", "show/hide tools"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusSidebar:

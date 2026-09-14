@@ -2184,6 +2184,36 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	if m.agCursor != 1 {
 		t.Fatalf("cursor %d", m.agCursor)
 	}
+	// editing: enter on a row opens the path field prefilled, esc cancels it
+	// without closing the dialog; a opens it empty; ctrl+d removes; the
+	// session row refuses both
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.dirEdit != "/srv/shared" || m.dirInput.Value() != "/srv/shared" || !m.dirInput.Focused() {
+		t.Fatalf("edit: %q %q", m.dirEdit, m.dirInput.Value())
+	}
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "replace /srv/shared") || !strings.Contains(dv, "› /srv/shared") {
+		t.Fatalf("edit field:\n%s", dv)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.dirEdit != "" || m.focus != focusDirs {
+		t.Fatalf("esc should cancel the edit only: %q %v", m.dirEdit, m.focus)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	if m.dirEdit != "add" || m.dirInput.Value() != "" {
+		t.Fatalf("add: %q %q", m.dirEdit, m.dirInput.Value())
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("~/x")})
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.dirEdit != "" {
+		t.Fatalf("enter should submit the add: cmd=%v edit=%q", cmd != nil, m.dirEdit)
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyCtrlD}); cmd == nil {
+		t.Fatal("ctrl+d on a role row should send the removal")
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyUp})
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.dirEdit != "" || !strings.Contains(m.status, "cannot be changed") {
+		t.Fatalf("the session row must not be editable: %q %q", m.dirEdit, m.status)
+	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.focus != focusTabs || m.tabSel != 5 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)

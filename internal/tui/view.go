@@ -1090,10 +1090,20 @@ func (m Model) tabBodyLines(width int) []string {
 		return m.cursorRows(rows)
 	case focusDirs:
 		items := m.selectedDirs()
+		var rows []string
 		if len(items) == 0 {
-			return []string{styleDim.Render("  no directories")}
+			rows = []string{styleDim.Render("  no directories")}
+		} else {
+			rows = m.cursorRows(dirRows(items, width-2))
 		}
-		return m.cursorRows(dirRows(items, width-2))
+		if m.dirEdit != "" {
+			label := "add a directory"
+			if m.dirEdit != "add" {
+				label = "replace " + shortHome(m.dirEdit)
+			}
+			rows = append(rows, "", styleDim.Render(label), m.dirInput.View())
+		}
+		return rows
 	case focusPermission:
 		p := m.currentPrompt()
 		if p == nil {
