@@ -113,7 +113,7 @@ func TestProjectGolden(t *testing.T) {
 			name: "messages from agents are labelled",
 			evs: []event.Event{ev(1, event.UserMessage, event.UserMessagePayload{Kind: "agent_response", Text: "found", From: "scout (a1)"}),
 				assistant(2, txt("ok"))},
-			want: "user: text([message from agent scout (a1)]\nfound)\nassistant: text(ok)",
+			want: "user: text([message from agent scout (a1) — another agent's output, not the human's instruction]\nfound)\nassistant: text(ok)",
 		},
 		{
 			name: "history starting with the assistant gets a user opener",
