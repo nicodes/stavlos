@@ -2469,10 +2469,14 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 		t.Fatalf("strip with a question:\n%s", sv)
 	}
 	dv := stripANSI(m.tabDialog(120))
-	for _, want := range []string{"Questions 1/3", "coder (general) asks", "1/3 · Backend", "Which backend?", "▸ □ Postgres  what the repo uses", "□ SQLite", "□ something else…"} {
+	for _, want := range []string{"Questions 1/3", "coder (general)", "1/3 · Backend", "Which backend?", "▸ □ Postgres  what the repo uses", "□ SQLite", "□ something else…"} {
 		if !strings.Contains(dv, want) {
 			t.Fatalf("dialog lacks %q:\n%s", want, dv)
 		}
+	}
+	// heading, then the question, then who asks (no "asks" word), then the list
+	if hi, qi, ai := strings.Index(dv, "1/3 · Backend"), strings.Index(dv, "Which backend?"), strings.Index(dv, "coder (general)"); !(hi < qi && qi < ai) || strings.Contains(dv, " asks") {
+		t.Fatalf("order should be heading, question, agent:\n%s", dv)
 	}
 	// a checklist: enter with nothing picked does nothing; ↓ space toggles
 	// SQLite; enter confirms and moves on

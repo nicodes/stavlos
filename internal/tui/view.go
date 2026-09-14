@@ -1168,9 +1168,6 @@ func (m Model) tabBodyLines(width int) []string {
 // the free-text field.
 func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 	var lines []string
-	if p.Agent != "" {
-		lines = append(lines, styleDim.Render(m.agentWhoLabel(p.Agent)+" asks"))
-	}
 	q := m.q
 	if q.id != p.ID || len(p.Questions) == 0 {
 		q = questionState{answers: make([]string, len(p.Questions))}
@@ -1182,9 +1179,13 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 		return append(lines, strings.Split(p.Question, "\n")...)
 	}
 	cur := p.Questions[q.idx]
+	// The heading, the question, then who is asking; the checklist below.
 	lines = append(lines, styleBold.Render(fmt.Sprintf("%d/%d · %s", q.idx+1, len(p.Questions), cur.Header)))
 	for _, l := range strings.Split(ansi.Wrap(cur.Question, width, ""), "\n") {
 		lines = append(lines, l)
+	}
+	if p.Agent != "" {
+		lines = append(lines, styleDim.Render(m.agentWhoLabel(p.Agent)))
 	}
 	lines = append(lines, "")
 	// The checklist: every option, then a last row for a typed answer.
