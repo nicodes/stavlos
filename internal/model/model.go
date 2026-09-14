@@ -32,8 +32,11 @@ type Block struct {
 	Type BlockType `json:"type"`
 
 	// text / thinking
-	Text      string `json:"text,omitempty"`
-	Signature string `json:"signature,omitempty"` // opaque provider data for thinking blocks
+	Text string `json:"text,omitempty"`
+	// thinking: the provider's own id for the reasoning item and its opaque
+	// (encrypted) content, replayed verbatim on the next call.
+	ProviderID string `json:"provider_id,omitempty"`
+	Opaque     string `json:"opaque,omitempty"`
 
 	// tool_use
 	ID    string          `json:"id,omitempty"`
@@ -118,8 +121,21 @@ type Model interface {
 type Provider interface {
 	// Name is the prefix before the slash in "provider/model-id".
 	Name() string
-	// Open returns a Model for the bare id. Credentials come from env (PRD §8.4).
+	// Open returns a Model for the bare id.
 	Open(modelID string) (Model, error)
+}
+
+// Capabilities are the ways a provider's models depart from the common
+// request shape. The zero value is a model that honours every field.
+type Capabilities struct {
+	// IgnoresMaxTokens: Request.MaxTokens is not sent (the backend rejects
+	// it), so a caller wanting a short answer must ask for one in words.
+	IgnoresMaxTokens bool
+}
+
+// Capable is implemented by providers whose models have Capabilities.
+type Capable interface {
+	Capabilities(modelID string) Capabilities
 }
 
 // Variants is implemented by providers whose models come in flavours
@@ -140,6 +156,7 @@ func Split(full string) (provider, id string, err error) {
 
 // Info is metadata about a model from models.dev (PRD §8.1).
 type Info struct {
+	Capabilities
 	ContextWindow int
 	MaxOutput     int
 	// USD per million tokens.

@@ -130,7 +130,7 @@ func TestProjectGolden(t *testing.T) {
 		},
 		{
 			name: "thinking blocks survive",
-			evs:  []event.Event{user(1, "a"), assistant(2, model.Block{Type: model.BlockThinking, Text: "hm", Signature: "sig"}, txt("b"))},
+			evs:  []event.Event{user(1, "a"), assistant(2, model.Block{Type: model.BlockThinking, Text: "hm", Opaque: "sig"}, txt("b"))},
 			want: "user: text(a)\nassistant: think(hm) text(b)",
 		},
 	}
@@ -154,7 +154,7 @@ func TestEstimateAndTranscript(t *testing.T) {
 	if got := EstimateTokens(h, "sys!", defs); got != 10+(4+12+17+8)/4 {
 		t.Fatalf("estimate with tools %d", got)
 	}
-	sig := Project([]event.Event{user(1, "a"), assistant(2, model.Block{Type: model.BlockThinking, Signature: strings.Repeat("s", 80)}, txt("b"))})
+	sig := Project([]event.Event{user(1, "a"), assistant(2, model.Block{Type: model.BlockThinking, Opaque: strings.Repeat("s", 80)}, txt("b"))})
 	if EstimateTokens(sig, "", nil) <= EstimateTokens(Project([]event.Event{user(1, "a"), assistant(2, txt("b"))}), "", nil) {
 		t.Fatal("a signature should add to the estimate")
 	}

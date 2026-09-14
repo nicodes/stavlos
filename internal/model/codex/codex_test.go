@@ -104,7 +104,7 @@ func TestCompleteStream(t *testing.T) {
 				{Type: model.BlockText, Text: "files"},
 			}},
 			{Role: model.RoleAssistant, Blocks: []model.Block{
-				{Type: model.BlockThinking, ID: "rs_0", Text: "hmm", Signature: "enc0"},
+				{Type: model.BlockThinking, ProviderID: "rs_0", Text: "hmm", Opaque: "enc0"},
 				{Type: model.BlockThinking, Text: "unsigned, must be skipped"},
 				{Type: model.BlockToolUse, ID: "call_0", Name: "bash", Input: json.RawMessage(`{"command":"pwd"}`)},
 			}},
@@ -199,7 +199,7 @@ func TestCompleteStream(t *testing.T) {
 
 	// Response.
 	want := []model.Block{
-		{Type: model.BlockThinking, ID: "rs_1", Text: "Let me think", Signature: "enc1"},
+		{Type: model.BlockThinking, ProviderID: "rs_1", Text: "Let me think", Opaque: "enc1"},
 		{Type: model.BlockText, Text: "Hello world"},
 		{Type: model.BlockToolUse, ID: "call_1", Name: "bash", Input: json.RawMessage(`{"command":"ls"}`)},
 	}
@@ -208,7 +208,7 @@ func TestCompleteStream(t *testing.T) {
 	}
 	for i := range want {
 		g, w := resp.Blocks[i], want[i]
-		if g.Type != w.Type || g.ID != w.ID || g.Text != w.Text || g.Signature != w.Signature ||
+		if g.Type != w.Type || g.ID != w.ID || g.ProviderID != w.ProviderID || g.Text != w.Text || g.Opaque != w.Opaque ||
 			g.Name != w.Name || string(g.Input) != string(w.Input) {
 			t.Errorf("block[%d] = %+v, want %+v", i, g, w)
 		}

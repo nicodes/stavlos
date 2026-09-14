@@ -94,9 +94,8 @@ func buildBody(id string, req model.Request) ([]byte, error) {
 		rr.Reasoning.Effort = req.Variant
 	}
 	// Request.MaxTokens is not forwarded: the ChatGPT Codex backend rejects
-	// max_output_tokens ("Unsupported parameter"), so the model's own limit
-	// applies. Callers that set it (compaction) get a longer answer at
-	// worst.
+	// max_output_tokens ("Unsupported parameter"). The provider reports
+	// IgnoresMaxTokens so callers bound the answer in the prompt instead.
 	return json.Marshal(rr)
 }
 
@@ -146,13 +145,13 @@ func toInput(msgs []model.Message) []inputItem {
 				msgItem.Content = append(msgItem.Content, contentPart{Type: partType, Text: b.Text})
 			case model.BlockThinking:
 				flush()
-				if b.Signature == "" {
+				if b.Opaque == "" {
 					continue
 				}
 				items = append(items, inputItem{
 					Type:             "reasoning",
-					ID:               b.ID,
-					EncryptedContent: b.Signature,
+					ID:               b.ProviderID,
+					EncryptedContent: b.Opaque,
 				})
 			case model.BlockToolUse:
 				flush()

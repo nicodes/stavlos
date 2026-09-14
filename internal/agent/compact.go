@@ -34,7 +34,7 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 			target = n * 2 / 3 // the older two thirds
 		}
 		if target >= 0 {
-			if err := a.compact(turnCtx, m, target); err == nil {
+			if err := a.compact(turnCtx, m, info, target); err == nil {
 				history = a.history()
 				est = project.EstimateTokens(history, system, defs)
 			}
@@ -54,7 +54,7 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 // boundary at or before index target in the agent's events (two thirds of
 // the way for auto-compaction, the end for /compact), summarises everything
 // up to it with the model, and logs a Compacted event.
-func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
+func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, target int) error {
 	evs := a.eventsCopy()
 	cut := -1
 	for i, e := range evs {
@@ -77,14 +77,7 @@ func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
 		_, _ = a.record(context.Background(), event.CompactionFailed, event.CompactionPayload{Before: before, Error: err.Error()})
 		return err
 	}
-	req := model.Request{
-		Model:  bareID(a.ModelID()),
-		System: "You summarise an AI coding agent's conversation so it can continue with less context. Preserve: the task and its current status, decisions made and why, files touched with paths, commands run and their outcomes, open problems, and anything the user asked for. Be concrete and complete; omit pleasantries.",
-		Messages: []model.Message{{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText,
-			Text: "Summarise this transcript:\n\n" + transcript}}}},
-		MaxTokens: 4000,
-	}
-	resp, err := m.Complete(ctx, req, nil)
+	resp, err := m.Complete(ctx, summaryRequest(bareID(a.ModelID()), transcript, info), nil)
 	if err != nil {
 		return fail(err)
 	}
@@ -104,4 +97,28 @@ func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
 	payload.After = project.EstimateTokens(project.Project(append(append([]event.Event{}, evs[:cut+1]...), kept...)), "", nil)
 	_, err = a.record(context.Background(), event.Compacted, payload)
 	return err
+}
+
+// summaryMaxTokens bounds the summary; summaryWords is the same bound in
+// words for models that ignore max tokens.
+const (
+	summaryMaxTokens = 4000
+	summaryWords     = "2,500"
+)
+
+// summaryRequest is the summariser call for transcript.
+func summaryRequest(modelID, transcript string, info model.Info) model.Request {
+	system := "You summarise an AI coding agent's conversation so it can continue with less context. Preserve: the task and its current status, decisions made and why, files touched with paths, commands run and their outcomes, open problems, and anything the user asked for. Be concrete and complete; omit pleasantries."
+	req := model.Request{
+		Model: modelID,
+		Messages: []model.Message{{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText,
+			Text: "Summarise this transcript:\n\n" + transcript}}}},
+	}
+	if info.IgnoresMaxTokens {
+		system += " Keep the summary under " + summaryWords + " words."
+	} else {
+		req.MaxTokens = summaryMaxTokens
+	}
+	req.System = system
+	return req
 }

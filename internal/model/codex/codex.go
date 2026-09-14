@@ -47,6 +47,12 @@ var codexVariants = []string{"low", "medium", "high", "xhigh"}
 // get the same list.
 func (p *provider) Variants(string) []string { return append([]string(nil), codexVariants...) }
 
+// Capabilities implements model.Capable: the backend rejects
+// max_output_tokens.
+func (p *provider) Capabilities(string) model.Capabilities {
+	return model.Capabilities{IgnoresMaxTokens: true}
+}
+
 func (p *provider) Open(modelID string) (model.Model, error) {
 	return &client{p: p, id: modelID}, nil
 }
