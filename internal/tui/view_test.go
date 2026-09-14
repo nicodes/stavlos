@@ -496,7 +496,7 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.focus != focusTabs || m.tabSel != 2 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, left, left) // past questions to permission
+	press(&m, left, left)                     // past questions to permission
 	press(&m, tea.KeyMsg{Type: tea.KeySpace}) // permission dialog, nothing waiting
 	if dv := stripANSI(m.tabDialog(100)); m.focus != focusPermission || !strings.Contains(dv, "Permission (0)") || !strings.Contains(dv, "no prompts waiting") {
 		t.Fatalf("enter on permission: focus=%v\n%s", m.focus, dv)
