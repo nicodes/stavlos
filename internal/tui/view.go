@@ -1042,10 +1042,6 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	focused := m.focus == focusSidebar && m.sidebarVisible()
 	na := len(m.agents)
 	rows, items = append(rows, ""), append(items, -1)
-	marker := "  "
-	if focused && m.sbCursor == na {
-		marker = styleAccent.Render("▶") + " "
-	}
 	head := "sessions"
 	switch {
 	case m.navSessionsOpen:
@@ -1055,7 +1051,13 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	default:
 		head += " ▸"
 	}
-	rows, items = append(rows, marker+styleBold.Render(head)), append(items, na)
+	// The heading sits at the left edge like "agents"; the cursor on it
+	// shows as the accent colour rather than a marker, so it never shifts.
+	headStyle := styleBold
+	if focused && m.sbCursor == na {
+		headStyle = styleAccent.Bold(true)
+	}
+	rows, items = append(rows, headStyle.Render(head)), append(items, na)
 	if !m.navSessionsOpen {
 		return rows, items
 	}
