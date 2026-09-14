@@ -31,111 +31,146 @@ var wrappers = map[string]bool{
 	"ssh": true, "script": true, "screen": true, "tmux": true,
 }
 
-// Words splits cmd into its words the way a POSIX shell would for one
-// simple command: single quotes, double quotes and backslashes group, and
-// the quotes are removed. It reports ok=false when cmd is not one simple
-// command: an unquoted control operator (; | & newline), a redirection
-// (< > >> << &> |&), a subshell or group (parentheses, braces as a word),
-// or a substitution (backticks, $( …), also inside double quotes) makes
-// the command more than what its first words say.
+// Words splits cmd into its words when it is one simple command: single
+// quotes, double quotes and backslashes group, and the quotes are removed.
+// It reports ok=false when cmd is not one simple command: an unquoted
+// control operator (; | & newline), a redirection (< > >> << &> |&), a
+// subshell or group (parentheses, braces as a word), or a substitution
+// (backticks, $( …), also inside double quotes) makes the command more
+// than what its first words say.
 func Words(cmd string) (words []string, ok bool) {
-	var cur strings.Builder
-	inWord := false
-	const (
-		none = iota
-		single
-		double
-	)
-	state := none
-	flush := func() {
-		if inWord {
-			words = append(words, cur.String())
-			cur.Reset()
-			inWord = false
-		}
-	}
-	rs := []rune(cmd)
-	for i := 0; i < len(rs); i++ {
-		r := rs[i]
-		switch state {
-		case single:
-			if r == '\'' {
-				state = none
-			} else {
-				cur.WriteRune(r)
-			}
-		case double:
-			switch r {
-			case '"':
-				state = none
-			case '\\':
-				// In double quotes a backslash escapes only $ " \ ` and
-				// newline; before anything else it is kept.
-				if i+1 < len(rs) && strings.ContainsRune("$\"\\`\n", rs[i+1]) {
-					i++
-					if rs[i] != '\n' {
-						cur.WriteRune(rs[i])
-					}
-				} else {
-					cur.WriteRune(r)
-				}
-			case '`':
-				return nil, false
-			case '$':
-				if i+1 < len(rs) && rs[i+1] == '(' {
-					return nil, false
-				}
-				cur.WriteRune(r)
-			default:
-				cur.WriteRune(r)
-			}
+	w := wordScanner{rs: []rune(cmd)}
+	for ; w.i < len(w.rs); w.i++ {
+		switch w.state {
+		case quoteSingle:
+			w.single()
+			ok = true
+		case quoteDouble:
+			ok = w.double()
 		default:
-			switch r {
-			case ' ', '\t':
-				flush()
-			case '\n', '\r', ';', '|', '&', '<', '>', '(', ')', '`':
-				return nil, false
-			case '\'':
-				state = single
-				inWord = true
-			case '"':
-				state = double
-				inWord = true
-			case '\\':
-				if i+1 < len(rs) {
-					i++
-					if rs[i] == '\n' {
-						flush()
-						continue
-					}
-					cur.WriteRune(rs[i])
-					inWord = true
-				}
-			case '$':
-				if i+1 < len(rs) && rs[i+1] == '(' {
-					return nil, false
-				}
-				cur.WriteRune(r)
-				inWord = true
-			case '{', '}':
-				// A brace as a word of its own is a command group; inside a
-				// word it is brace expansion, which stays one command.
-				if !inWord && (i+1 == len(rs) || rs[i+1] == ' ' || rs[i+1] == '\t') {
-					return nil, false
-				}
-				cur.WriteRune(r)
-				inWord = true
-			default:
-				cur.WriteRune(r)
-				inWord = true
-			}
+			ok = w.bare()
+		}
+		if !ok {
+			return nil, false
 		}
 	}
-	if state != none {
+	if w.state != quoteNone {
 		return nil, false // unterminated quote
 	}
-	flush()
-	return words, true
+	w.flush()
+	return w.words, true
+}
+
+type quoteState int
+
+const (
+	quoteNone quoteState = iota
+	quoteSingle
+	quoteDouble
+)
+
+// wordScanner walks a command line rune by rune for Words.
+type wordScanner struct {
+	rs     []rune
+	i      int
+	state  quoteState
+	cur    strings.Builder
+	inWord bool
+	words  []string
+}
+
+func (w *wordScanner) flush() {
+	if w.inWord {
+		w.words = append(w.words, w.cur.String())
+		w.cur.Reset()
+		w.inWord = false
+	}
+}
+
+// nextIs reports whether the rune after the current one is r.
+func (w *wordScanner) nextIs(r rune) bool { return w.i+1 < len(w.rs) && w.rs[w.i+1] == r }
+
+// single takes a rune inside single quotes.
+func (w *wordScanner) single() {
+	if r := w.rs[w.i]; r == '\'' {
+		w.state = quoteNone
+	} else {
+		w.cur.WriteRune(r)
+	}
+}
+
+// double takes a rune inside double quotes; false when it starts a
+// substitution.
+func (w *wordScanner) double() bool {
+	r := w.rs[w.i]
+	switch r {
+	case '"':
+		w.state = quoteNone
+	case '\\':
+		// In double quotes a backslash escapes only $ " \ ` and newline;
+		// before anything else it is kept.
+		if w.i+1 < len(w.rs) && strings.ContainsRune("$\"\\`\n", w.rs[w.i+1]) {
+			w.i++
+			if w.rs[w.i] != '\n' {
+				w.cur.WriteRune(w.rs[w.i])
+			}
+		} else {
+			w.cur.WriteRune(r)
+		}
+	case '`':
+		return false
+	case '$':
+		if w.nextIs('(') {
+			return false
+		}
+		w.cur.WriteRune(r)
+	default:
+		w.cur.WriteRune(r)
+	}
+	return true
+}
+
+// bare takes an unquoted rune; false when it makes the line more than one
+// simple command.
+func (w *wordScanner) bare() bool {
+	r := w.rs[w.i]
+	switch r {
+	case ' ', '\t':
+		w.flush()
+		return true
+	case '\n', '\r', ';', '|', '&', '<', '>', '(', ')', '`':
+		return false
+	case '\'':
+		w.state = quoteSingle
+	case '"':
+		w.state = quoteDouble
+	case '\\':
+		if w.i+1 >= len(w.rs) {
+			return true
+		}
+		w.i++
+		if w.rs[w.i] == '\n' {
+			w.flush()
+			return true
+		}
+		w.cur.WriteRune(w.rs[w.i])
+	case '$':
+		if w.nextIs('(') {
+			return false
+		}
+		w.cur.WriteRune(r)
+	case '{', '}':
+		// A brace as a word of its own is a command group; inside a word it
+		// is brace expansion, which stays one command.
+		if !w.inWord && (w.i+1 == len(w.rs) || w.rs[w.i+1] == ' ' || w.rs[w.i+1] == '\t') {
+			return false
+		}
+		w.cur.WriteRune(r)
+	default:
+		w.cur.WriteRune(r)
+	}
+	w.inWord = true
+	return true
 }
 
 // Simple reports whether cmd is one simple command (see Words).
