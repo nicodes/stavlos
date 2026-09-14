@@ -211,20 +211,43 @@ func NewTranscript() *Transcript {
 // a turn) replaces the in-progress streaming buffer; tool.call.finished
 // updates the matching tool line and nests the output under it.
 func (t *Transcript) Apply(ev event.Event) {
-	// A compaction is one chat item: the rule with the sweeping bar while
-	// it runs, replaced in place by the result (or by a note when it
-	// failed, or when the turn ended without one — the daemon died).
+	if t.applyCompaction(ev) {
+		return
+	}
+	switch ev.Type {
+	case event.ToolCallStarted, event.ToolCallFinished:
+		if t.applyToolCall(ev) {
+			return
+		}
+	case event.PromptRequested, event.PromptClaimed, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted:
+		if t.applyPrompt(ev) {
+			return
+		}
+	case event.MonitorStarted, event.MonitorFired, event.MonitorStopped:
+		if t.applyMonitor(ev) {
+			return
+		}
+	}
+	t.appendItem(CleanLines(EventLines(ev)))
+	t.afterAppend(ev)
+}
+
+// applyCompaction keeps a compaction as one chat item: the rule with the
+// sweeping bar while it runs, replaced in place by the result (or by a note
+// when it failed, or when the turn ended without one — the daemon died).
+// It reports whether ev was fully handled.
+func (t *Transcript) applyCompaction(ev event.Event) bool {
 	switch ev.Type {
 	case event.CompactionStarted:
 		if refs := t.appendItem(CleanLines(EventLines(ev))); len(refs) > 0 {
 			t.compactItem = refs[0].item
 		}
-		return
+		return true
 	case event.Compacted, event.CompactionFailed:
 		if t.compactItem >= 0 {
 			t.replaceItem(t.compactItem, CleanLines(EventLines(ev)))
 			t.compactItem = -1
-			return
+			return true
 		}
 	case event.TurnEnded, event.TurnAborted:
 		if t.compactItem >= 0 {
@@ -232,111 +255,140 @@ func (t *Transcript) Apply(ev event.Event) {
 			t.compactItem = -1
 		}
 	}
-	switch ev.Type {
-	case event.ToolCallStarted:
+	return false
+}
+
+// applyToolCall tracks a call's line and nests its output under it. It
+// reports whether ev was fully handled.
+func (t *Transcript) applyToolCall(ev event.Event) bool {
+	if ev.Type == event.ToolCallStarted {
 		var p event.ToolStartedPayload
-		if ev.Decode(&p) == nil && p.CallID != "" {
-			if r, ok := t.find(t.appendItem(CleanLines(EventLines(ev))), isToolLine); ok {
-				t.calls[p.CallID] = r
-			}
-			if toolname.Canonical(p.Name) == toolname.AgentMessage {
-				var in struct{ ID string }
-				if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
-					t.askTarget[p.CallID] = in.ID
-				}
-			}
-			return
+		if ev.Decode(&p) != nil || p.CallID == "" {
+			return false
 		}
-	case event.PromptRequested:
+		if r, ok := t.find(t.appendItem(CleanLines(EventLines(ev))), isToolLine); ok {
+			t.calls[p.CallID] = r
+		}
+		if toolname.Canonical(p.Name) == toolname.AgentMessage {
+			var in struct{ ID string }
+			if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
+				t.askTarget[p.CallID] = in.ID
+			}
+		}
+		return true
+	}
+	var p event.ToolFinishedPayload
+	if ev.Decode(&p) != nil {
+		t.stream = nil
+		return false
+	}
+	r, ok := t.calls[p.CallID]
+	t.finishCall(p)
+	t.stream = nil
+	if ok && t.valid(r) {
+		// Output joins the call's item, right under the call, even when
+		// other items (a question, say) were committed while the call ran.
+		t.insertIntoItem(r.item, CleanLines(EventLines(ev)))
+		return true
+	}
+	return false
+}
+
+// applyPrompt nests a permission prompt, and what became of it, under the
+// call it gates, and settles the prompt's "?" line. It reports whether ev
+// was fully handled.
+func (t *Transcript) applyPrompt(ev event.Event) bool {
+	if ev.Type == event.PromptRequested {
 		// A permission prompt belongs to the call it gates: the open call
 		// with the same tool name (the latest one if several).
 		var p event.PromptRequestedPayload
-		if ev.Decode(&p) == nil {
-			lines := CleanLines(EventLines(ev))
-			var refs []lineRef
-			item, gated := t.openCallItem(p.Tool)
-			if p.Kind == "permission" && gated {
-				t.prompts[p.ID] = item
-				refs = t.insertIntoItem(item, nested(lines))
-			} else {
-				refs = t.appendItem(lines)
-			}
-			if r, ok := t.find(refs, isPromptLine); ok {
-				t.promptLine[p.ID] = r
-			}
-			return
+		if ev.Decode(&p) != nil {
+			return false
 		}
-	case event.PromptClaimed, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted:
-		var p event.PromptRefPayload
-		if ev.Decode(&p) == nil {
-			if ev.Type != event.PromptClaimed {
-				t.settlePrompt(p.ID, ev.Type != event.PromptAnswered)
-			}
-			if item, ok := t.prompts[p.ID]; ok {
-				if ev.Type != event.PromptClaimed {
-					delete(t.prompts, p.ID)
-				}
-				t.insertIntoItem(item, nested(CleanLines(EventLines(ev))))
-				return
-			}
+		lines := CleanLines(EventLines(ev))
+		var refs []lineRef
+		if item, gated := t.openCallItem(p.Tool); p.Kind == "permission" && gated {
+			t.prompts[p.ID] = item
+			refs = t.insertIntoItem(item, nested(lines))
+		} else {
+			refs = t.appendItem(lines)
 		}
+		if r, ok := t.find(refs, isPromptLine); ok {
+			t.promptLine[p.ID] = r
+		}
+		return true
+	}
+	var p event.PromptRefPayload
+	if ev.Decode(&p) != nil {
+		return false
+	}
+	if ev.Type != event.PromptClaimed {
+		t.settlePrompt(p.ID, ev.Type != event.PromptAnswered)
+	}
+	item, ok := t.prompts[p.ID]
+	if !ok {
+		return false
+	}
+	if ev.Type != event.PromptClaimed {
+		delete(t.prompts, p.ID)
+	}
+	t.insertIntoItem(item, nested(CleanLines(EventLines(ev))))
+	return true
+}
+
+// applyMonitor ties a background job to the shell call it grew from, or to
+// a notice of its own, and nests its outcome there. It reports whether ev
+// was fully handled.
+func (t *Transcript) applyMonitor(ev event.Event) bool {
+	switch ev.Type {
 	case event.MonitorStarted:
 		var p event.MonitorStartedPayload
-		if ev.Decode(&p) == nil && p.ID != "" {
-			t.monKinds[p.ID] = p.Kind
-			// A job that grew out of a shell call is represented by that
-			// call's own line: it stays yellow while the job runs and the
-			// outcome nests under it. Only a job with no such call gets its
-			// own notice.
-			if r, ok := t.lastUntiedCall(toolname.Shell, t.monitors); ok {
-				t.monitors[p.ID] = r
-				t.line(r).Tone = ToneWorking
-				t.stream = nil
-				return
-			}
-			if r, ok := t.find(t.appendItem(CleanLines(EventLines(ev))), isNotBlank); ok {
-				t.monitors[p.ID] = r
-			}
-			return
+		if ev.Decode(&p) != nil || p.ID == "" {
+			return false
 		}
+		t.monKinds[p.ID] = p.Kind
+		// A job that grew out of a shell call is represented by that call's
+		// own line: it stays yellow while the job runs and the outcome nests
+		// under it. Only a job with no such call gets its own notice.
+		if r, ok := t.lastUntiedCall(toolname.Shell, t.monitors); ok {
+			t.monitors[p.ID] = r
+			t.line(r).Tone = ToneWorking
+			t.stream = nil
+			return true
+		}
+		if r, ok := t.find(t.appendItem(CleanLines(EventLines(ev))), isNotBlank); ok {
+			t.monitors[p.ID] = r
+		}
+		return true
 	case event.MonitorFired:
 		// The outcome joins the "started" notice's item, like tool output
 		// joins its call.
 		var p event.MonitorFiredPayload
-		if ev.Decode(&p) == nil {
-			if p.Kind == "" {
-				p.Kind = t.monKinds[p.ID]
-			}
-			tone := ToneNone
-			if p.IsError {
-				tone = ToneError
-			}
-			t.settleMonitor(p.ID, tone, CleanLines(monitorFiredLines(p)))
-			return
+		if ev.Decode(&p) != nil {
+			return false
 		}
+		if p.Kind == "" {
+			p.Kind = t.monKinds[p.ID]
+		}
+		tone := ToneNone
+		if p.IsError {
+			tone = ToneError
+		}
+		t.settleMonitor(p.ID, tone, CleanLines(monitorFiredLines(p)))
+		return true
 	case event.MonitorStopped:
 		var p event.MonitorRefPayload
-		if ev.Decode(&p) == nil {
-			t.settleMonitor(p.ID, ToneError, CleanLines(monitorStoppedLines(t.monKinds[p.ID], p.Reason)))
-			return
+		if ev.Decode(&p) != nil {
+			return false
 		}
-	case event.ToolCallFinished:
-		var p event.ToolFinishedPayload
-		if ev.Decode(&p) == nil {
-			r, ok := t.calls[p.CallID]
-			t.finishCall(p)
-			t.stream = nil
-			if ok && t.valid(r) {
-				// Output joins the call's item, right under the call, even
-				// when other items (a question, say) were committed while the
-				// call ran.
-				t.insertIntoItem(r.item, CleanLines(EventLines(ev)))
-				return
-			}
-		}
-		t.stream = nil
+		t.settleMonitor(p.ID, ToneError, CleanLines(monitorStoppedLines(t.monKinds[p.ID], p.Reason)))
+		return true
 	}
-	t.appendItem(CleanLines(EventLines(ev)))
+	return false
+}
+
+// afterAppend updates the turn state an event carries once its lines are in.
+func (t *Transcript) afterAppend(ev event.Event) {
 	switch ev.Type {
 	case event.TurnStarted:
 		t.turn, t.turnStart, t.turnTokens = true, ev.Time, 0
