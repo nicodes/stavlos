@@ -157,6 +157,9 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				if q := pendingResponses[e.Agent]; len(q) > 0 {
 					pendingResponses[e.Agent] = q[1:]
 				}
+			case event.MsgMonitorFired:
+				// A job result the turn consumed; open jobs are found from
+				// the monitor events, so nothing to unqueue here.
 			}
 		case event.TodoChanged:
 			if a, ok := s.agents[e.Agent]; ok {

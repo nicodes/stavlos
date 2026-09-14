@@ -1814,6 +1814,7 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 		switch mo.State {
 		case protocol.MonitorFired, protocol.MonitorStopped, protocol.MonitorLost:
 			continue
+		case protocol.MonitorRunning:
 		}
 		who := owner
 		if ownerRole != "" {

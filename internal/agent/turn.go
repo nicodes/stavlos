@@ -254,6 +254,8 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		}
 	}
 	switch verb {
+	case policy.Allow:
+		// runs below
 	case policy.Deny:
 		finish("Denied by policy: "+c.Name+" "+arg, true, false, true)
 		return
