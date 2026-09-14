@@ -217,7 +217,7 @@ tests that pin current behaviour first.
 8.3 ✅ (meta row, tab strip and tab dialogs; overlays already hit-test drawn rows; `layout()`/`keyBarView` left as they are: they never render the chat, and caching them in the value-typed Model would go stale in View) Renderers return geometry (`span` lists); one `hit()` replaces `metaHit`, `tabAt`,
     `tabDialogHit`, `itemAt`, `sidebarClick`'s re-render; `layout()` only on geometry changes;
     `keyBarView` computed once per Update. Makes permission/question option clicks work.
-8.4 Generic `listDialog` component for the six tabs, sidebar and overlay: cursor/wrap/filter/empty
+8.4 ✅ (as one `stepCursor` shared by the tab dialogs, sidebar, permission and questions; todo uses the formerly dead `listKey`; empty notes come from `tabBodyRows`; overlays keep their clamped, filtered, paged movement) Generic `listDialog` component for the six tabs, sidebar and overlay: cursor/wrap/filter/empty
     text; the five `*Key` handlers and the dead `listKey` collapse into it.
 8.5 `Model` split into `sessionState` (zeroed wholesale on bind), `dialogs`, `uiPrefs`; `reply()`
     and `claimThen()` helpers; msg/cmd near-duplicates merged (`sessionsMsg`, `rolesMsg`,
