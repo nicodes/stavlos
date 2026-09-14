@@ -1,8 +1,9 @@
 package tui
 
-// overlay is a modal box drawn over the transcript: in list mode a title,
-// an info line, a search field and a filtered, scrollable list; in login
-// mode the device-code sign-in instructions. While one is open it owns
+// overlay is a modal box drawn over the transcript: in list mode a title
+// (with "esc: close" at the right), a search field, a blank line and a
+// filtered, scrollable list; in login mode the device-code sign-in
+// instructions. While one is open it owns
 // every key; the main input is blurred. It is generic; what a selection
 // means is decided by Model via overlayKind.
 
@@ -63,8 +64,8 @@ type overlay struct {
 	kind  overlayKind
 	mode  overlayMode
 	title string
-	info  string
-	bad   bool // info is an error (red)
+	empty string // shown in place of the list while it has no items ("no sessions here yet")
+	bad   bool   // empty is an error (red)
 
 	input  textinput.Model
 	items  []overlayItem
@@ -89,22 +90,23 @@ var (
 const (
 	loginWaitingText = "waiting for you to finish signing in…"
 	loginStartText   = "starting sign-in…"
-	loginKeysWaiting = "esc cancel · o open in browser"
-	loginKeysError   = "press enter to retry · esc to close"
+	loginKeysWaiting = "o: open in browser"
+	loginKeysError   = "enter: retry"
 )
 
-func newOverlay(kind overlayKind, mode overlayMode, title, info string) *overlay {
+func newOverlay(kind overlayKind, mode overlayMode, title string) *overlay {
 	ti := textinput.New()
 	ti.Prompt = "› "
 	ti.Focus()
 	if mode == overlayList {
 		ti.Placeholder = "search"
 	}
-	return &overlay{kind: kind, mode: mode, title: title, info: info, input: ti}
+	return &overlay{kind: kind, mode: mode, title: title, input: ti}
 }
 
-// setInfo replaces the info line; bad renders it red.
-func (o *overlay) setInfo(text string, bad bool) { o.info, o.bad = text, bad }
+// setEmpty sets what an empty list shows instead of "(nothing to list)";
+// bad renders it red.
+func (o *overlay) setEmpty(text string, bad bool) { o.empty, o.bad = text, bad }
 
 // setItems replaces the list and re-applies the current query.
 func (o *overlay) setItems(items []overlayItem) {
@@ -118,7 +120,7 @@ func (o *overlay) setItems(items []overlayItem) {
 // starting state (no URL yet).
 func (o *overlay) switchLogin(name string) {
 	o.kind, o.mode, o.title = ovProviders, overlayLogin, "Sign in to "+name
-	o.setInfo("", false)
+	o.setEmpty("", false)
 	o.items, o.shown = nil, nil
 	o.cursor, o.offset = 0, 0
 	o.input.Reset()
@@ -225,22 +227,13 @@ func (o *overlay) view(bodyWidth int, spinner string) string {
 	w := dialogWidth(bodyWidth)
 	inner := w - 4 // border + padding
 
-	lines := []string{styleOvTitle.Render(truncRunes(o.title, inner))}
-	if o.info != "" {
-		info := ansi.Truncate(o.info, inner, "…")
-		if o.bad {
-			lines = append(lines, styleStatusErr.Render(info))
-		} else {
-			lines = append(lines, styleDim.Render(info))
-		}
-	}
+	lines := []string{dialogTitle(o.title, inner)}
 	switch o.mode {
 	case overlayLogin:
 		lines = append(lines, o.loginLines(inner, spinner)...)
 	default:
 		o.input.Width = inner - len([]rune(o.input.Prompt)) - 1
-		lines = append(lines, o.input.View())
-		lines = append(lines, styleRule.Render(strings.Repeat("─", inner)))
+		lines = append(lines, o.input.View(), "")
 		lines = append(lines, o.listLines(inner)...)
 	}
 	// Width covers padding but not the border: inner content + 2 padding + 2 border = w.
@@ -302,9 +295,28 @@ func spacedCode(code string) string {
 	return strings.Join(parts, " ")
 }
 
+// dialogTitle is the first line of every dialog: the bold title on the
+// left, a dim "esc: close" on the right, within width columns.
+func dialogTitle(title string, width int) string {
+	const hint = "esc: close"
+	avail := width - len(hint) - 2
+	if avail < 4 {
+		return styleOvTitle.Render(truncRunes(title, width))
+	}
+	t := truncRunes(title, avail)
+	pad := width - len([]rune(t)) - len(hint)
+	return styleOvTitle.Render(t) + strings.Repeat(" ", pad) + styleDim.Render(hint)
+}
+
 func (o *overlay) listLines(inner int) []string {
 	if len(o.shown) == 0 {
 		if len(o.items) == 0 {
+			if o.empty != "" {
+				if o.bad {
+					return []string{styleStatusErr.Render("  " + ansi.Truncate(o.empty, inner-2, "…"))}
+				}
+				return []string{styleDim.Render("  " + ansi.Truncate(o.empty, inner-2, "…"))}
+			}
 			return []string{styleDim.Render("  (nothing to list)")}
 		}
 		return []string{styleDim.Render("  no match")}
@@ -329,9 +341,8 @@ func (o *overlay) listLines(inner int) []string {
 
 // itemAt maps a screen position to the list row drawn there, using the
 // same geometry as view and composite: the box is centred in the body,
-// its content starts inside the border after the title, the info line
-// (if any), the filter input and the rule, then an "↑ more" marker when
-// scrolled.
+// its content starts inside the border after the title, the filter input
+// and the blank line, then an "↑ more" marker when scrolled.
 func (o *overlay) itemAt(x, y, bodyWidth, bodyHeight int, spinner string) (int, bool) {
 	if o.mode != overlayList || len(o.shown) == 0 {
 		return 0, false
@@ -351,11 +362,7 @@ func (o *overlay) itemAt(x, y, bodyWidth, bodyHeight int, spinner string) (int, 
 		return 0, false
 	}
 	row := y - y0 - 1 // top border
-	header := 3       // title, filter input, rule
-	if o.info != "" {
-		header++
-	}
-	row -= header
+	row -= 3          // title, filter input, blank line
 	if o.offset > 0 {
 		if row == 0 {
 			return 0, false // the "↑ more" marker
