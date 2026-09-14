@@ -601,6 +601,7 @@ func equalFocus(a, b []focus) bool {
 
 func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	y := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}
+	space := tea.KeyMsg{Type: tea.KeySpace}
 	m := sessionModel()
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "bash"}}
 
@@ -610,44 +611,45 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	}
 	m.input.Reset()
 
-	// Permission focus: y answers (claim + reply as one tea.Cmd).
+	// Permission focus: letters do nothing; space on the highlighted option
+	// (Allow once at the top) answers (claim + reply as one tea.Cmd).
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}) // input → strip, highlighting permission
 	if m.focus != focusTabs || m.tabSel != 0 {
 		t.Fatalf("focus %v sel %d", m.focus, m.tabSel)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, space)
 	if m.focus != focusPermission {
 		t.Fatalf("focus %v", m.focus)
 	}
-	if cmd := press(&m, y); cmd == nil || m.promptBusy != "p" || !m.claimedByUs["p"] {
+	if cmd := press(&m, y); cmd != nil || m.promptBusy != "" || m.input.Value() != "" {
+		t.Fatalf("y is not a hotkey any more: busy=%q input=%q cmd=%v", m.promptBusy, m.input.Value(), cmd != nil)
+	}
+	if cmd := press(&m, space); cmd == nil || m.promptBusy != "p" || !m.claimedByUs["p"] {
 		t.Fatalf("permission focus: busy=%q claimed=%v cmd=%v", m.promptBusy, m.claimedByUs["p"], cmd != nil)
 	}
-	if m.input.Value() != "" {
-		t.Fatalf("y leaked into the input: %q", m.input.Value())
-	}
-	// The box's hint line tells an unfocused user to tab in first.
 	m.promptBusy = ""
-	if strings.Contains(stripANSI(m.sectionsView(80)), "tab to focus") {
-		t.Fatal("focused box should show the hotkeys directly")
-	}
 	m.focus = focusInput
 	if pv := stripANSI(m.sectionsView(80)); !strings.Contains(pv, "permission 1/1") || strings.Count(pv, "\n") != 0 {
 		t.Fatalf("unfocused prompt should be one strip line: %q", pv)
 	}
 	m.focus = focusPermission
 	hs := m.keyHints()
-	if hs[0].key != "y" || hs[1].key != "a" || hs[2].key != "n" {
+	if hs[0].key != "↑/↓" || hs[1].key != "space" || hs[1].desc != "choose" {
 		t.Fatalf("permission hints: %+v", hs)
 	}
 
-	// Trust prompts: "a" does nothing.
-	m.prompts = []protocol.PromptInfo{{ID: "t", Kind: "trust", Input: []byte(`{"dir":"/x","hash":"h"}`)}}
+	// Trust prompts: two options, trust or not now; the second denies.
+	m.prompts = []protocol.PromptInfo{{ID: "t", Kind: "trust", Input: []byte(`{"dir":"/x","hash":"h","files":["stavlos.json"]}`)}}
 	m.promptBusy = ""
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "◆ /x") || !strings.Contains(body, "  stavlos.json") || !strings.Contains(body, "▸ ● Trust this project's config  until these files change") || !strings.Contains(body, "  ○ Not now  run on the global config only") {
+		t.Fatalf("trust body:\n%s", body)
+	}
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}); cmd != nil || m.promptBusy != "" {
 		t.Fatal("a must not answer a trust prompt")
 	}
-	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}); cmd == nil || m.promptBusy != "t" {
-		t.Fatal("n should answer a trust prompt")
+	press(&m, tea.KeyMsg{Type: tea.KeyDown})
+	if cmd := press(&m, space); cmd == nil || m.promptBusy != "t" {
+		t.Fatal("space on Not now should answer a trust prompt")
 	}
 
 	// A question is not a permission: the permission tab ignores it and the
@@ -677,6 +679,59 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.promptBusy != "" || m.history[len(m.history)-1] != "hello agent" {
 		t.Fatalf("input enter answered the question: busy=%q", m.promptBusy)
+	}
+}
+
+// TestPermissionDialogOptions: the subject line reads "$ command  name
+// (role)", and the options are the fixed set — with a prefix row only for
+// a simple shell command whose prefix can be derived.
+func TestPermissionDialogOptions(t *testing.T) {
+	m := sessionModel()
+	m.agents[0].Archetype = "general"
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":"go test ./... -run TestRoles"}`)}}
+	m.setFocus(focusPermission)
+	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
+	want := []string{
+		"$ go test ./... -run TestRoles  coder (general)",
+		"▸ ● Allow once",
+		"  ○ Allow for this session  this exact command",
+		"  ○ Allow go test for this session  every command starting with it",
+		"  ○ Deny  with an optional reason",
+	}
+	for _, w := range want {
+		if !strings.Contains(body, w) {
+			t.Fatalf("missing %q:\n%s", w, body)
+		}
+	}
+	if strings.Contains(body, "outside") || strings.Contains(body, "add") {
+		t.Fatalf("a plain permission has no directory rows:\n%s", body)
+	}
+	// ↑ wraps to the bottom, ↓ from there to the top; space on the prefix
+	// row sends the prefix allow
+	press(&m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.permSel != 3 {
+		t.Fatalf("sel %d", m.permSel)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown})
+	if m.permSel != 2 || !strings.Contains(stripANSI(strings.Join(m.tabBodyLines(80), "\n")), "▸ ● Allow go test") {
+		t.Fatalf("sel %d", m.permSel)
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || m.promptBusy != "p" {
+		t.Fatalf("space on the prefix row: cmd=%v busy=%q", cmd != nil, m.promptBusy)
+	}
+	// a compound command and a non-shell tool offer no prefix row; a new
+	// prompt starts at the top again
+	m.promptBusy = ""
+	m.prompts = []protocol.PromptInfo{{ID: "p2", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":"go test && rm -rf x"}`)}}
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); strings.Contains(body, "for this session  every") || !strings.Contains(body, "▸ ● Allow once") {
+		t.Fatalf("compound command:\n%s", body)
+	}
+	m.prompts = []protocol.PromptInfo{{ID: "p3", Kind: "permission", Tool: "read", Agent: "a", Input: []byte(`{"path":"/repo/x"}`)}}
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); strings.Contains(body, "every command") || !strings.Contains(body, "Allow for this session  this exact call") {
+		t.Fatalf("read:\n%s", body)
+	}
+	if len(permOptions(&m.prompts[0])) != 3 {
+		t.Fatalf("options %+v", permOptions(&m.prompts[0]))
 	}
 }
 
@@ -845,9 +900,9 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if sv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(sv, "\n") != 0 || strings.Contains(sv, "make test") {
 		t.Fatalf("the strip should stay one line with the permission open: focus=%v\n%s", m.focus, sv)
 	}
-	// the dialog: one row in the async tab's style, "$ name (role)  command"
-	if body := strings.Join(m.tabBodyLines(60), "\n"); stripANSI(body) != "$ coder (coder)  make test" {
-		t.Fatalf("permission should open as a name (role) command row:\n%s", stripANSI(body))
+	// the dialog: the subject row "$ command  name (role)", then the options
+	if body := stripANSI(strings.Join(m.tabBodyLines(60), "\n")); !strings.HasPrefix(body, "$ make test  coder (coder)\n\n▸ ● Allow once\n") {
+		t.Fatalf("permission should open as a command row over its options:\n%s", body)
 	}
 	dv := stripANSI(m.tabDialog(100))
 	if !strings.HasPrefix(dv, "╭") || !strings.Contains(dv, "Permission 1/1") || !strings.Contains(dv, "esc: close") || !strings.Contains(dv, "make test") || strings.Contains(dv, "agents (") {
@@ -928,7 +983,7 @@ func TestSectionTabStrip(t *testing.T) {
 	m.focus = focusPermission
 	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 7 || !strings.Contains(lines[1], "Permission 1/1") || !strings.HasPrefix(lines[3], "│ $ coder (coder)  make test") || strings.Contains(v, "scout") {
+	if len(lines) != 12 || !strings.Contains(lines[1], "Permission 1/1") || !strings.HasPrefix(lines[3], "│ $ make test  coder (coder)") || !strings.HasPrefix(lines[5], "│ ▸ ● Allow once") || strings.Contains(v, "scout") {
 		t.Fatalf("permission dialog:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
@@ -2233,34 +2288,42 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	if m.focus != focusTabs || m.tabSel != 6 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	// a boundary prompt names the directory and what a does
+	// a boundary prompt says so and offers the directory
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "read", Agent: "a", Input: []byte(`{"path":"/etc/hosts"}`), Dir: "/etc"}}
 	m.setFocus(focusPermission)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
-	if !strings.Contains(body, "outside its directories · a adds /etc") {
-		t.Fatalf("boundary prompt body:\n%s", body)
+	for _, w := range []string{"◆ /etc/hosts  coder", "outside its directories · /etc", "▸ ● Allow once", "  ○ Allow and add /etc  the agent keeps the directory for the session", "  ○ Allow and add another directory…  type the path", "  ○ Deny"} {
+		if !strings.Contains(body, w) {
+			t.Fatalf("boundary prompt body missing %q:\n%s", w, body)
+		}
 	}
-	hs := m.keyHints()
-	if hs[1].key != "a" || hs[1].desc != "allow + add directory" || hs[2].key != "e" {
-		t.Fatalf("hints %+v", hs)
+	// "another directory" opens the path row prefilled with the offered
+	// one; esc cancels the row only; enter answers with what was typed
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
+	if m.permEdit != "dir" || m.dirInput.Value() != "/etc" || !m.dirInput.Focused() {
+		t.Fatalf("edit: %q %q", m.permEdit, m.dirInput.Value())
 	}
-	// e edits the offered directory before it is added; esc cancels the
-	// edit only; enter answers with the edited path
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
-	if !m.promptDir || m.dirInput.Value() != "/etc" || !m.dirInput.Focused() {
-		t.Fatalf("edit: %v %q", m.promptDir, m.dirInput.Value())
-	}
-	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "directory to add") || !strings.Contains(body, "› /etc") {
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "directory to add") || !strings.Contains(body, "› /etc") || strings.Contains(body, "▸") {
 		t.Fatalf("edit field:\n%s", body)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.promptDir || m.focus != focusPermission {
-		t.Fatalf("esc should cancel the edit only: %v %v", m.promptDir, m.focus)
+	if hs := m.keyHints(); hs[0].key != "enter" || hs[0].desc != "allow + add this directory" {
+		t.Fatalf("hints %+v", hs)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.permEdit != "" || m.focus != focusPermission || m.permSel != 2 {
+		t.Fatalf("esc should cancel the edit only: %q %v %d", m.permEdit, m.focus, m.permSel)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	press(&m, tea.KeyMsg{Type: tea.KeyBackspace}, tea.KeyMsg{Type: tea.KeyBackspace}, tea.KeyMsg{Type: tea.KeyBackspace})
-	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptDir || m.promptBusy != "p" || !m.claimedByUs["p"] {
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.permEdit != "" || m.promptBusy != "p" || !m.claimedByUs["p"] {
 		t.Fatalf("enter should answer with the edited directory: cmd=%v busy=%q", cmd != nil, m.promptBusy)
+	}
+	// "Allow and add" answers straight away
+	m.promptBusy = ""
+	m.prompts = []protocol.PromptInfo{{ID: "p2", Kind: "permission", Tool: "read", Agent: "a", Input: []byte(`{"path":"/etc/hosts"}`), Dir: "/etc"}}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown})
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || m.promptBusy != "p2" {
+		t.Fatalf("Allow and add: cmd=%v busy=%q", cmd != nil, m.promptBusy)
 	}
 	m.promptBusy = ""
 	// the chat notes an added directory
@@ -2274,10 +2337,10 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 }
 
 func TestDialogHintsWrap(t *testing.T) {
-	hints := []keyHint{{"y", "allow once"}, {"a", "allow + add directory"}, {"e", "edit the directory"}, {"n", "deny"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+	hints := []keyHint{{"↑/↓", "option"}, {"space", "choose"}, {"a", "add directory"}, {"ctrl+d", "remove"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	lines := dialogHintLines(hints, 30)
 	joined := stripANSI(strings.Join(lines, "\n"))
-	for _, want := range []string{"y allow once", "a allow + add directory", "e edit the directory", "n deny"} {
+	for _, want := range []string{"↑/↓ option", "space choose", "a add directory", "ctrl+d remove"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("hint %q lost:\n%s", want, joined)
 		}
@@ -2417,33 +2480,34 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 	m := sessionModel()
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "bash", Agent: "a", Input: []byte(`{"command":"rm x"}`)}}
 	m.setFocus(focusPermission)
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	if !m.promptDeny || m.promptBusy != "" || !m.dirInput.Focused() {
-		t.Fatalf("n should open the reason field, not deny yet: deny=%v busy=%q", m.promptDeny, m.promptBusy)
+	up, space := tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeySpace}
+	press(&m, up, space) // Deny is the last row
+	if m.permEdit != "deny" || m.promptBusy != "" || !m.dirInput.Focused() {
+		t.Fatalf("Deny should open the reason row, not deny yet: edit=%q busy=%q", m.permEdit, m.promptBusy)
 	}
-	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "deny · a reason") {
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "deny · a reason") || !strings.Contains(body, "  ● Deny") {
 		t.Fatalf("body:\n%s", body)
 	}
 	if hs := m.keyHints(); hs[0].key != "enter" || hs[0].desc != "deny" {
 		t.Fatalf("hints %+v", hs)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.promptDeny || m.focus != focusPermission {
-		t.Fatalf("esc should cancel the field only: %v %v", m.promptDeny, m.focus)
+	if m.permEdit != "" || m.focus != focusPermission {
+		t.Fatalf("esc should cancel the row only: %q %v", m.permEdit, m.focus)
 	}
 	// with a reason
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	press(&m, space)
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("use")}, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}}, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("git")})
 	if m.dirInput.Value() != "use git" {
 		t.Fatalf("typed reason %q", m.dirInput.Value())
 	}
-	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptDeny || m.promptBusy != "p" || !m.claimedByUs["p"] {
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.permEdit != "" || m.promptBusy != "p" || !m.claimedByUs["p"] {
 		t.Fatalf("enter should deny: cmd=%v busy=%q", cmd != nil, m.promptBusy)
 	}
 	// and without one
 	m.promptBusy = ""
 	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "permission", Tool: "bash", Agent: "a"}}
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	press(&m, up, space)
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q" {
 		t.Fatalf("enter on an empty reason should still deny: cmd=%v busy=%q", cmd != nil, m.promptBusy)
 	}

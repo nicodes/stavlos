@@ -51,21 +51,13 @@ func (m Model) keyHints() []keyHint {
 		return []keyHint{{"↑/↓", "option"}, {"space", "toggle"}, {"enter", "confirm · next"}, {"←/→", "question"}, {"type", "something else"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusPermission:
 		if p := m.currentPrompt(); p != nil {
-			switch p.Kind {
-			case "trust":
-				return []keyHint{{"y", "trust project config"}, {"n", "skip"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
-			default:
-				if m.promptDeny {
-					return []keyHint{{"enter", "deny"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
-				}
-				if p.Dir != "" {
-					if m.promptDir {
-						return []keyHint{{"enter", "allow + add this directory"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
-					}
-					return []keyHint{{"y", "allow once"}, {"a", "allow + add directory"}, {"e", "edit the directory"}, {"n", "deny"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
-				}
-				return []keyHint{{"y", "allow once"}, {"a", "allow for session"}, {"n", "deny"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
+			switch m.permEdit {
+			case "deny":
+				return []keyHint{{"enter", "deny"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
+			case "dir":
+				return []keyHint{{"enter", "allow + add this directory"}, {"esc", "cancel"}, {"ctrl+c", "quit"}}
 			}
+			return []keyHint{{"↑/↓", "option"}, {"space", "choose"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "close"}, {"ctrl+c", "quit"}}
 		}
 		return []keyHint{{"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	}

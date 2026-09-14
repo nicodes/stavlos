@@ -116,8 +116,9 @@ type Model struct {
 	promptInput textinput.Model // answer field of a question prompt
 	dirInput    textinput.Model // path field of the dirs dialog while adding or editing
 	dirEdit     string          // "" | "add" | the path being replaced
-	promptDir   bool            // the permission dialog is editing the directory a boundary prompt offers
-	promptDeny  bool            // the permission dialog is taking an optional reason for a deny
+	permSel     int             // highlighted option of the permission dialog
+	permFor     string          // the prompt id permSel belongs to (a new prompt starts at the top)
+	permEdit    string          // "" | "deny" (reason row open) | "dir" (path row open) in the permission dialog
 	q           questionState   // the questions dialog: where the human is in the current batch
 	sbCursor    int
 	palIdx      int               // highlighted row in the "/" command palette
@@ -569,7 +570,7 @@ func (m *Model) cycleFocus(delta int) tea.Cmd {
 // the question answer, the dirs path field, or a boundary prompt's edited
 // directory. Enter submits there and space types a space.
 func (m *Model) textEntry() bool {
-	if m.promptDir || m.promptDeny || (m.focus == focusDirs && m.dirEdit != "") {
+	if m.permEdit != "" || (m.focus == focusDirs && m.dirEdit != "") {
 		return true
 	}
 	if m.focus == focusQuestions && m.currentQuestion() != nil {
@@ -691,7 +692,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		m.dirInput.Blur()
 	}
 	if prev == focusPermission && f != focusPermission {
-		m.promptDir, m.promptDeny = false, false
+		m.permEdit = ""
 		m.dirInput.Blur()
 	}
 	if prev == focusQuestions && f != focusQuestions {
@@ -2010,76 +2011,136 @@ func isAlias(c Command, typed string) bool {
 	return false
 }
 
-// permissionKey handles keys while the prompt box has focus: y/n/a answer
-// a permission (y/n a trust prompt); a question takes typing into its own
-// field and enter submits it; esc closes the dialog.
-func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
-	if key.Matches(msg, keys.Clear) && !m.promptDir && !m.promptDeny {
-		return m.closeDialog()
+// permOption is one row of the permission dialog's single-select list.
+type permOption struct {
+	id    string // allow | always | prefix | add | add_other | deny | trust | skip
+	label string
+	desc  string
+}
+
+// permOptions are the hard-coded answers a prompt offers, top to bottom.
+// A plain permission: once, this exact call for the session, the command's
+// prefix for the session (bash, when one can be derived), deny. A boundary
+// prompt: once, add the offered directory, add another one, deny. Trust:
+// trust the project config, or not now.
+func permOptions(p *protocol.PromptInfo) []permOption {
+	switch {
+	case p.Kind == "trust":
+		return []permOption{
+			{"trust", "Trust this project's config", "until these files change"},
+			{"skip", "Not now", "run on the global config only"},
+		}
+	case p.Dir != "":
+		return []permOption{
+			{"allow", "Allow once", ""},
+			{"add", "Allow and add " + shortHome(p.Dir), "the agent keeps the directory for the session"},
+			{"add_other", "Allow and add another directory…", "type the path"},
+			{"deny", "Deny", "with an optional reason"},
+		}
 	}
+	what := "this exact call"
+	if p.Tool == "bash" || p.Tool == "bash_async" {
+		what = "this exact command"
+	}
+	opts := []permOption{
+		{"allow", "Allow once", ""},
+		{"always", "Allow for this session", what},
+	}
+	if p.Tool == "bash" || p.Tool == "bash_async" {
+		if pre := protocol.CommandPrefix(fullToolArg(p.Tool, p.Input)); pre != "" {
+			opts = append(opts, permOption{"prefix", "Allow " + pre + " for this session", "every command starting with it"})
+		}
+	}
+	return append(opts, permOption{"deny", "Deny", "with an optional reason"})
+}
+
+// permSelection is the highlighted row for p: the stored one when it
+// belongs to this prompt, else the top.
+func (m Model) permSelection(p *protocol.PromptInfo) int {
+	if m.permFor != p.ID {
+		return 0
+	}
+	if n := len(permOptions(p)); m.permSel >= n {
+		return n - 1
+	}
+	return m.permSel
+}
+
+// permissionKey handles keys while the permission dialog has focus: ↑/↓
+// move through the options, space chooses one (Deny opens a row for an
+// optional reason, "add another directory" a row for the path, both
+// submitted with enter and cancelled with esc); esc closes the dialog with
+// the prompt still waiting.
+func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 	p := m.currentPrompt()
 	if p == nil { // empty dialog: nothing to answer
+		if key.Matches(msg, keys.Clear) {
+			return m.closeDialog()
+		}
 		return nil
 	}
-	// A boundary prompt's directory can be edited before it is added: e
-	// opens the field prefilled, enter allows and adds what was typed, esc
-	// cancels the edit.
-	if m.promptDir {
+	if m.permFor != p.ID {
+		m.permFor, m.permSel, m.permEdit = p.ID, 0, ""
+	}
+	if m.permEdit != "" {
 		switch {
 		case key.Matches(msg, keys.OvClose):
-			m.promptDir = false
+			m.permEdit = ""
 			m.dirInput.Blur()
 			return nil
 		case key.Matches(msg, keys.Submit):
-			dir := strings.TrimSpace(m.dirInput.Value())
-			if dir == "" {
+			text := strings.TrimSpace(m.dirInput.Value())
+			edit := m.permEdit
+			if edit == "dir" && text == "" {
 				return nil
 			}
-			m.promptDir = false
+			m.permEdit = ""
 			m.dirInput.Blur()
-			return m.answerPromptDir(p, dir)
+			if edit == "dir" {
+				return m.answerPromptDir(p, text)
+			}
+			return m.denyPrompt(p, text)
 		}
 		var cmd tea.Cmd
 		m.dirInput, cmd = m.dirInput.Update(msg)
 		return cmd
 	}
-	if p.Kind == "permission" && p.Dir != "" && msg.String() == "e" {
-		m.promptDir = true
-		m.dirInput.SetValue(p.Dir)
-		m.dirInput.CursorEnd()
-		return m.dirInput.Focus()
-	}
-	// n opens a field for an optional reason; enter denies with whatever is
-	// there (nothing is fine), esc cancels.
-	if m.promptDeny {
-		switch {
-		case key.Matches(msg, keys.OvClose):
-			m.promptDeny = false
-			m.dirInput.Blur()
-			return nil
-		case key.Matches(msg, keys.Submit):
-			reason := strings.TrimSpace(m.dirInput.Value())
-			m.promptDeny = false
-			m.dirInput.Blur()
-			return m.denyPrompt(p, reason)
-		}
-		var cmd tea.Cmd
-		m.dirInput, cmd = m.dirInput.Update(msg)
-		return cmd
-	}
-	if p.Kind == "permission" && key.Matches(msg, keys.No) { // trust and questions keep their direct answers
-		m.promptDeny = true
-		m.dirInput.SetValue("")
-		m.dirInput.Placeholder = "why not? (optional) · enter denies"
-		return m.dirInput.Focus()
-	}
+	opts := permOptions(p)
+	n := len(opts)
 	switch {
-	case key.Matches(msg, keys.Yes):
-		return m.answerPrompt(p, "allow")
-	case key.Matches(msg, keys.No): // trust: a plain deny
-		return m.answerPrompt(p, "deny")
-	case key.Matches(msg, keys.Always) && p.Kind != "trust":
-		return m.answerPrompt(p, "allow_always")
+	case key.Matches(msg, keys.Clear):
+		return m.closeDialog()
+	case key.Matches(msg, keys.SelUp):
+		m.permSel = ((m.permSel-1)%n + n) % n
+		return nil
+	case key.Matches(msg, keys.SelDown):
+		m.permSel = (m.permSel + 1) % n
+		return nil
+	case key.Matches(msg, keys.Select):
+		if m.permSel >= n {
+			m.permSel = n - 1
+		}
+		switch opts[m.permSel].id {
+		case "allow", "trust":
+			return m.answerPrompt(p, "allow")
+		case "always", "add":
+			return m.answerPrompt(p, "allow_always")
+		case "prefix":
+			return m.answerPromptPrefix(p, protocol.CommandPrefix(fullToolArg(p.Tool, p.Input)))
+		case "skip":
+			return m.answerPrompt(p, "deny")
+		case "add_other":
+			m.permEdit = "dir"
+			m.dirInput.Placeholder = "path (absolute, ~, or relative to the session directory)"
+			m.dirInput.SetValue(p.Dir)
+			m.dirInput.CursorEnd()
+			return m.dirInput.Focus()
+		case "deny":
+			m.permEdit = "deny"
+			m.dirInput.Placeholder = "why not? (optional) · enter denies"
+			m.dirInput.SetValue("")
+			return m.dirInput.Focus()
+		}
 	}
 	return nil
 }
@@ -2537,6 +2598,23 @@ func (m *Model) denyPrompt(p *protocol.PromptInfo, reason string) tea.Cmd {
 	m.promptBusy = p.ID
 	m.claimedByUs[p.ID] = true
 	return denyPromptCmd(m.ctx, m.c, p.ID, reason)
+}
+
+// answerPromptPrefix allows the call and every command of the tool that
+// starts with prefix for the rest of the session.
+func (m *Model) answerPromptPrefix(p *protocol.PromptInfo, prefix string) tea.Cmd {
+	if prefix == "" {
+		return m.answerPrompt(p, "allow_always")
+	}
+	if m.promptBusy == p.ID {
+		return m.setStatus("answer in flight…", false)
+	}
+	if p.ClaimedBy != "" && !m.claimedByUs[p.ID] {
+		return m.setStatus("claimed by another client", true)
+	}
+	m.promptBusy = p.ID
+	m.claimedByUs[p.ID] = true
+	return allowPromptPrefixCmd(m.ctx, m.c, p.ID, prefix)
 }
 
 // answerPromptDir is allow_always on a boundary prompt with an edited
