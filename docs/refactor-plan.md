@@ -181,10 +181,10 @@ tests that pin current behaviour first.
 6.5 `pkg/client`: `Options{CallTimeout}`, non-blocking notifications with a `Lagged` signal,
     `Reconnector` (dial with backoff, re-attach, resubscribe from last seq), one `ReplyPrompt`
     taking the params struct, pending-map cleanup on write error, `Notification` type.
-6.6 One `daemon.Main(ctx, Options)`; delete `cmd/stavlosd` (see D2); `client.Connect` launcher
+6.6 One `daemon.Main(ctx, Options)` ✅; delete `cmd/stavlosd` (see D2); `client.Connect` launcher
     moved out of `cmd/stavlos` and unit-tested; `replaceStale` refuses when agents are live unless
     `--restart-daemon`; `buildid` computed eagerly and passed to the child via env.
-6.7 Escalation: `Reply(id, client, Answer)` only; trust prompt gets per-prompt timeouts (no
+6.7 Escalation: `Reply(id, client, Answer)` only ✅; trust prompt gets per-prompt timeouts (no
     default-deny after 3 min); `Trust()` uses `AnswerWhere`.
 
 ### Phase 7 — Model layer  [M]

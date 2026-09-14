@@ -318,7 +318,7 @@ Permission and question prompts need a routing policy, since several clients may
 
 1. The prompt is broadcast to all `interactive` clients. A client **claims** it when a human starts answering (focuses or opens the prompt), by sending an explicit claim; delivery alone never claims, so an unattended client cannot absorb prompts. The claimant is the only one that can answer. A claim with no `Reply` expires after a short timeout and the prompt is re-broadcast.
 2. If unclaimed after *N* seconds, it is broadcast to `fallback` clients as well.
-3. If unanswered after *M* seconds, the configured headless default applies (default: deny).
+3. If unanswered after *M* seconds, the configured headless default applies (default: deny). This applies to permission prompts only: a question from an agent and the trust prompt have no sensible default and wait until they are answered or withdrawn. A trust decision made elsewhere (`stavlos trust`) settles an open trust prompt even if a client had claimed it.
 
 *N* and *M* are single global settings in v1. Once a default has been applied, or the prompt has been withdrawn by a `Cancel` (§6.2), late answers are rejected with an explanation rather than silently ignored.
 
