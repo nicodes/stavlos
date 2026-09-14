@@ -226,7 +226,7 @@ tests that pin current behaviour first.
     (`notice`, `helpLines`, `todoLabel`, `mcpLabel`, `monitorGlyph`, `prettyJSON`, stale hotkey
     text); test-only exports to `export_test.go`.
 8.7 Package split: `tui/transcript`, `tui/render`, `tui/dialog`, `tui`.
-8.8 Tests: `findLine` helpers and relative-order assertions replace row-index/line-count pins;
+8.8 ✅ (done before 8.7; `findLine` + `inOrder`; exact-geometry tests of the strip, row ranges and wrapping keep their pins on purpose) Tests: `findLine` helpers and relative-order assertions replace row-index/line-count pins;
     `TestSidebarNav` and `TestTabCyclesFocus` split into subtests.
 
 ### Phase 9 — Cleanup and docs  [S]

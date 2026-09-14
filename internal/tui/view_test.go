@@ -316,7 +316,7 @@ func TestMonitorRows(t *testing.T) {
 		t.Fatalf("the strip stays one line with a tab open:\n%s", view)
 	}
 	// the dialog: title (with esc: close), a blank line, one row per job, inside the border
-	if view := stripANSI(m.tabDialog(100)); strings.Count(view, "\n") != 8 || !strings.Contains(view, "Async 3") || !strings.Contains(view, "esc: close") || !strings.Contains(view, "go test") || !strings.Contains(view, "cooldown") {
+	if view := stripANSI(m.tabDialog(100)); !strings.Contains(view, "esc: close") || !inOrder(view, "Async 3", "go test", "cooldown") {
 		t.Fatalf("async dialog:\n%s", view)
 	}
 	m.focus = focusInput
@@ -444,160 +444,172 @@ func press(m *Model, msgs ...tea.KeyMsg) tea.Cmd {
 func TestTabCyclesFocus(t *testing.T) {
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	stab := tea.KeyMsg{Type: tea.KeyShiftTab}
-	m := sessionModel()
-	if m.focus != focusInput {
-		t.Fatalf("default focus %v", m.focus)
-	}
-	// No prompt, sidebar hidden, top to bottom: chat → input → tabs → meta
-	// row, wrapping. From the input, tab goes down to the strip and
-	// shift+tab up to the chat. The strip is one stop, landing on permission,
-	// and ←/→ walk the tabs; the meta row is a stop too: ←/→ pick role,
-	// model, variant.
 	right := tea.KeyMsg{Type: tea.KeyRight}
 	left := tea.KeyMsg{Type: tea.KeyLeft}
-	press(&m, stab)
-	if m.focus != focusChat || m.follow || m.input.Focused() {
-		t.Fatalf("shift+tab: focus=%v follow=%v", m.focus, m.follow)
-	}
-	press(&m, tab, tab, tab) // chat → input → strip → meta row
-	if m.focus != focusMeta || m.metaSel != metaRole || m.input.Focused() {
-		t.Fatalf("tab x3: focus=%v sel=%v", m.focus, m.metaSel)
-	}
-	press(&m, left) // leftmost already (no YOLO): stays
-	press(&m, right)
-	if m.metaSel != metaModel {
-		t.Fatalf("→ should move to the model: %v", m.metaSel)
-	}
-	press(&m, right)
-	press(&m, right) // rightmost: stays on the variant
-	if m.metaSel != metaVariant {
-		t.Fatalf("→→ should stop on the variant: %v", m.metaSel)
-	}
-	if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil {
-		t.Fatal("space on a meta part should open its dialog")
-	}
-	press(&m, tab, tab, tab) // meta row → chat → input → strip
-	// the strip: a highlight, no dialog yet
-	if m.focus != focusTabs || m.tabSel != 0 || strings.Contains(m.View(), "╭") {
-		t.Fatalf("back to the strip: focus=%v sel=%d", m.focus, m.tabSel)
-	}
-	press(&m, left) // already leftmost: stays
-	if m.tabSel != 0 {
-		t.Fatalf("left at the edge: sel=%d", m.tabSel)
-	}
-	press(&m, right, right, right, right, right)
-	press(&m, right) // already rightmost (dirs): stays
-	if m.focus != focusTabs || m.tabSel != 5 {
-		t.Fatalf("right x6: focus=%v sel=%d", m.focus, m.tabSel)
-	}
-	press(&m, left, left, left)
-	if m.tabSel != 2 {
-		t.Fatalf("left x3: sel=%d", m.tabSel)
-	}
-	// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
-	press(&m, tea.KeyMsg{Type: tea.KeySpace})
-	if dv := stripANSI(m.tabDialog(100)); m.focus != focusAsync || !strings.Contains(dv, "Async 0") || !strings.Contains(dv, "not waiting on anything") || strings.Contains(dv, "permission") {
-		t.Fatalf("enter: focus=%v\n%s", m.focus, dv)
-	}
-	press(&m, right)
-	if m.focus != focusAsync {
-		t.Fatalf("→ inside a dialog should do nothing: focus=%v", m.focus)
-	}
-	// esc returns to where the dialog was opened from: the strip, with the
-	// closed tab still highlighted
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 2 {
-		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
-	}
-	press(&m, left, left)                     // past questions to permission
-	press(&m, tea.KeyMsg{Type: tea.KeySpace}) // permission dialog, nothing waiting
-	if dv := stripANSI(m.tabDialog(100)); m.focus != focusPermission || !strings.Contains(dv, "Permission 0") || !strings.Contains(dv, "no prompts waiting") {
-		t.Fatalf("enter on permission: focus=%v\n%s", m.focus, dv)
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}) // nothing to answer: ignored
-	if m.focus != focusPermission {
-		t.Fatalf("y on an empty permission dialog: focus=%v", m.focus)
-	}
-	press(&m, tab) // tab from a dialog moves on from the strip: to the meta row
-	if m.focus != focusMeta || m.input.Focused() {
-		t.Fatalf("tab from a dialog: focus=%v", m.focus)
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // meta row → input
-	if m.focus != focusInput || !m.follow || !m.input.Focused() {
-		t.Fatalf("esc from the meta row: focus=%v follow=%v", m.focus, m.follow)
-	}
-
-	// Sidebar shown: input → tabs → meta row → sidebar → chat → input.
-	m.showTree = true
-	m.layout()
-	var seen []focus
-	for i := 0; i < 5; i++ {
+	t.Run("chat, input, strip and meta row", func(t *testing.T) {
+		m := sessionModel()
+		if m.focus != focusInput {
+			t.Fatalf("default focus %v", m.focus)
+		}
+		// No prompt, sidebar hidden, top to bottom: chat → input → tabs → meta
+		// row, wrapping. From the input, tab goes down to the strip and
+		// shift+tab up to the chat. The strip is one stop, landing on permission,
+		// and ←/→ walk the tabs; the meta row is a stop too: ←/→ pick role,
+		// model, variant.
+		press(&m, stab)
+		if m.focus != focusChat || m.follow || m.input.Focused() {
+			t.Fatalf("shift+tab: focus=%v follow=%v", m.focus, m.follow)
+		}
+		press(&m, tab, tab, tab) // chat → input → strip → meta row
+		if m.focus != focusMeta || m.metaSel != metaRole || m.input.Focused() {
+			t.Fatalf("tab x3: focus=%v sel=%v", m.focus, m.metaSel)
+		}
+		press(&m, left) // leftmost already (no YOLO): stays
+		press(&m, right)
+		if m.metaSel != metaModel {
+			t.Fatalf("→ should move to the model: %v", m.metaSel)
+		}
+		press(&m, right)
+		press(&m, right) // rightmost: stays on the variant
+		if m.metaSel != metaVariant {
+			t.Fatalf("→→ should stop on the variant: %v", m.metaSel)
+		}
+		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil {
+			t.Fatal("space on a meta part should open its dialog")
+		}
+		press(&m, tab, tab, tab) // meta row → chat → input → strip
+		// the strip: a highlight, no dialog yet
+		if m.focus != focusTabs || m.tabSel != 0 || strings.Contains(m.View(), "╭") {
+			t.Fatalf("back to the strip: focus=%v sel=%d", m.focus, m.tabSel)
+		}
+		press(&m, left) // already leftmost: stays
+		if m.tabSel != 0 {
+			t.Fatalf("left at the edge: sel=%d", m.tabSel)
+		}
+		press(&m, right, right, right, right, right)
+		press(&m, right) // already rightmost (dirs): stays
+		if m.focus != focusTabs || m.tabSel != 5 {
+			t.Fatalf("right x6: focus=%v sel=%d", m.focus, m.tabSel)
+		}
+		press(&m, left, left, left)
+		if m.tabSel != 2 {
+			t.Fatalf("left x3: sel=%d", m.tabSel)
+		}
+		// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
+		press(&m, tea.KeyMsg{Type: tea.KeySpace})
+		if dv := stripANSI(m.tabDialog(100)); m.focus != focusAsync || !strings.Contains(dv, "Async 0") || !strings.Contains(dv, "not waiting on anything") || strings.Contains(dv, "permission") {
+			t.Fatalf("enter: focus=%v\n%s", m.focus, dv)
+		}
+		press(&m, right)
+		if m.focus != focusAsync {
+			t.Fatalf("→ inside a dialog should do nothing: focus=%v", m.focus)
+		}
+		// esc returns to where the dialog was opened from: the strip, with the
+		// closed tab still highlighted
+		press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+		if m.focus != focusTabs || m.tabSel != 2 {
+			t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
+		}
+		press(&m, left, left)                     // past questions to permission
+		press(&m, tea.KeyMsg{Type: tea.KeySpace}) // permission dialog, nothing waiting
+		if dv := stripANSI(m.tabDialog(100)); m.focus != focusPermission || !strings.Contains(dv, "Permission 0") || !strings.Contains(dv, "no prompts waiting") {
+			t.Fatalf("enter on permission: focus=%v\n%s", m.focus, dv)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}) // nothing to answer: ignored
+		if m.focus != focusPermission {
+			t.Fatalf("y on an empty permission dialog: focus=%v", m.focus)
+		}
+		press(&m, tab) // tab from a dialog moves on from the strip: to the meta row
+		if m.focus != focusMeta || m.input.Focused() {
+			t.Fatalf("tab from a dialog: focus=%v", m.focus)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // meta row → input
+		if m.focus != focusInput || !m.follow || !m.input.Focused() {
+			t.Fatalf("esc from the meta row: focus=%v follow=%v", m.focus, m.follow)
+		}
+	})
+	t.Run("with the sidebar", func(t *testing.T) {
+		m := sessionModel()
+		// Sidebar shown: input → tabs → meta row → sidebar → chat → input.
+		m.showTree = true
+		m.layout()
+		var seen []focus
+		for i := 0; i < 5; i++ {
+			press(&m, tab)
+			seen = append(seen, m.focus)
+		}
+		if want := []focus{focusTabs, focusMeta, focusSidebar, focusChat, focusInput}; !equalFocus(seen, want) {
+			t.Fatalf("with sidebar: %v, want %v", seen, want)
+		}
+		// Hiding the sidebar while it has focus falls back to the input.
+		press(&m, tab, tab, tab) // input → tabs → meta row → sidebar
+		m.showTree = false
+		m.ensureFocus()
+		if m.focus != focusInput {
+			t.Fatalf("sidebar hidden: focus=%v", m.focus)
+		}
+	})
+	t.Run("with a pending prompt", func(t *testing.T) {
+		m := sessionModel()
+		// Pending prompt: strip (highlighting permission) → meta → chat → input.
+		m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
+		if m.focus != focusInput {
+			t.Fatal("a new prompt must not steal focus")
+		}
+		var seen []focus
+		for i := 0; i < 4; i++ {
+			press(&m, tab)
+			seen = append(seen, m.focus)
+		}
+		if want := []focus{focusTabs, focusMeta, focusChat, focusInput}; !equalFocus(seen, want) {
+			t.Fatalf("with prompt: %v, want %v", seen, want)
+		}
+	})
+	t.Run("the strip lands on its leftmost tab", func(t *testing.T) {
+		m := sessionModel()
+		// Whatever the tabs hold, landing on the strip always highlights the
+		// leftmost tab; ←/→ move from there.
+		m.prompts = nil
+		m.agents = append(m.agents, protocol.AgentInfo{ID: "c", Parent: "a", Label: "kid", State: "working"})
+		press(&m, tab) // input → strip
+		if m.focus != focusTabs || m.tabSel != 0 {
+			t.Fatalf("the strip should land on permission even with a child: %v sel %d", m.focus, m.tabSel)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+		m.agents = m.agents[:len(m.agents)-1]
+		m.agents[0].Monitors = []protocol.MonitorInfo{{ID: "j", Kind: "command", Label: "sleep", State: "running"}}
 		press(&m, tab)
-		seen = append(seen, m.focus)
-	}
-	if want := []focus{focusTabs, focusMeta, focusSidebar, focusChat, focusInput}; !equalFocus(seen, want) {
-		t.Fatalf("with sidebar: %v, want %v", seen, want)
-	}
-	// Hiding the sidebar while it has focus falls back to the input.
-	press(&m, tab, tab, tab) // input → tabs → meta row → sidebar
-	m.showTree = false
-	m.ensureFocus()
-	if m.focus != focusInput {
-		t.Fatalf("sidebar hidden: focus=%v", m.focus)
-	}
-
-	// Pending prompt: strip (highlighting permission) → meta → chat → input.
-	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
-	if m.focus != focusInput {
-		t.Fatal("a new prompt must not steal focus")
-	}
-	seen = nil
-	for i := 0; i < 4; i++ {
-		press(&m, tab)
-		seen = append(seen, m.focus)
-	}
-	if want := []focus{focusTabs, focusMeta, focusChat, focusInput}; !equalFocus(seen, want) {
-		t.Fatalf("with prompt: %v, want %v", seen, want)
-	}
-	// Whatever the tabs hold, landing on the strip always highlights the
-	// leftmost tab; ←/→ move from there.
-	m.prompts = nil
-	m.agents = append(m.agents, protocol.AgentInfo{ID: "c", Parent: "a", Label: "kid", State: "working"})
-	press(&m, tab) // input → strip
-	if m.focus != focusTabs || m.tabSel != 0 {
-		t.Fatalf("the strip should land on permission even with a child: %v sel %d", m.focus, m.tabSel)
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	m.agents = m.agents[:len(m.agents)-1]
-	m.agents[0].Monitors = []protocol.MonitorInfo{{ID: "j", Kind: "command", Label: "sleep", State: "running"}}
-	press(&m, tab)
-	if m.focus != focusTabs || m.tabSel != 0 {
-		t.Fatalf("the strip should land on permission even with a job: %v sel %d", m.focus, m.tabSel)
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	m.agents[0].Monitors = nil
-	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
-	press(&m, tab, tea.KeyMsg{Type: tea.KeySpace}) // input → strip → the permission dialog
-	if m.focus != focusPermission {
-		t.Fatalf("tab enter from input: %v", m.focus)
-	}
-	// Answering the prompt elsewhere closes the dialog back onto the strip
-	// it was opened from.
-	m.removePrompt("p")
-	m.ensureFocus()
-	if m.focus != focusTabs || m.tabSel != 0 {
-		t.Fatalf("prompt gone: focus=%v sel=%d", m.focus, m.tabSel)
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // strip → input
-	// Tab never cycles agents any more; ctrl+n still does.
-	press(&m, tab, tab)
-	if m.selected != 0 {
-		t.Fatalf("tab changed the selection to %d", m.selected)
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyCtrlN})
-	if m.selected != 1 {
-		t.Fatalf("ctrl+n: selected %d", m.selected)
-	}
+		if m.focus != focusTabs || m.tabSel != 0 {
+			t.Fatalf("the strip should land on permission even with a job: %v sel %d", m.focus, m.tabSel)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+		m.agents[0].Monitors = nil
+		m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
+		press(&m, tab, tea.KeyMsg{Type: tea.KeySpace}) // input → strip → the permission dialog
+		if m.focus != focusPermission {
+			t.Fatalf("tab enter from input: %v", m.focus)
+		}
+		// Answering the prompt elsewhere closes the dialog back onto the strip
+		// it was opened from.
+		m.removePrompt("p")
+		m.ensureFocus()
+		if m.focus != focusTabs || m.tabSel != 0 {
+			t.Fatalf("prompt gone: focus=%v sel=%d", m.focus, m.tabSel)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // strip → input
+	})
+	t.Run("tab never cycles agents", func(t *testing.T) {
+		m := sessionModel()
+		// Tab never cycles agents any more; ctrl+n still does.
+		press(&m, tab, tab)
+		if m.selected != 0 {
+			t.Fatalf("tab changed the selection to %d", m.selected)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyCtrlN})
+		if m.selected != 1 {
+			t.Fatalf("ctrl+n: selected %d", m.selected)
+		}
+	})
 }
 
 func equalFocus(a, b []focus) bool {
@@ -990,8 +1002,11 @@ func TestSectionTabStrip(t *testing.T) {
 	}
 	v = stripANSI(m.tabDialog(100))
 	lines := strings.Split(v, "\n")
-	// border, title, blank, two rows, hints, border
-	if len(lines) != 8 || !strings.Contains(lines[1], "Async 2") || !strings.HasSuffix(strings.TrimRight(lines[1], " │"), "esc: close") || strings.Contains(lines[1], "permission") || strings.TrimSpace(strings.Trim(lines[2], "│")) != "" || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "scout") || strings.Contains(lines[3], "go test") || !strings.Contains(lines[4], "coder (coder)  go test") {
+	// the title (with esc: close), a blank line, the awaited agent's row
+	// under the cursor, then the job's row
+	title, scout, job := findLine(lines, "Async 2"), findLine(lines, "scout"), findLine(lines, "coder (coder)  go test")
+	if title < 0 || !strings.HasSuffix(strings.TrimRight(lines[title], " │"), "esc: close") || strings.Contains(lines[title], "permission") || strings.TrimSpace(strings.Trim(lines[title+1], "│")) != "" ||
+		scout <= title+1 || !strings.Contains(lines[scout], "▸") || strings.Contains(lines[scout], "go test") || job <= scout {
 		t.Fatalf("async dialog:\n%s", v)
 	}
 	// space on the job row selects nothing and keeps the dialog
@@ -1002,8 +1017,7 @@ func TestSectionTabStrip(t *testing.T) {
 	// permission focused: the tool row over its command
 	m.focus = focusPermission
 	v = stripANSI(m.tabDialog(100))
-	lines = strings.Split(v, "\n")
-	if len(lines) != 12 || !strings.Contains(lines[1], "Permission 1/1") || !strings.HasPrefix(lines[3], "│ $ make test  coder (coder)") || !strings.HasPrefix(lines[5], "│ ▸ ● Allow once") || strings.Contains(v, "scout") {
+	if !inOrder(v, "Permission 1/1", "│ $ make test  coder (coder)", "│ ▸ ● Allow once") || strings.Contains(v, "scout") {
 		t.Fatalf("permission dialog:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
@@ -1401,16 +1415,12 @@ func TestTodoTabAndDialog(t *testing.T) {
 	}
 	dv := stripANSI(m.tabDialog(120))
 	lines := strings.Split(dv, "\n")
-	// border, title, blank, four rows, border
-	if len(lines) != 10 || !strings.Contains(lines[1], "Todo 2/4") || !strings.Contains(lines[1], "esc: close") {
+	// the title (with esc: close), then the four items in order
+	if title := findLine(lines, "Todo 2/4"); title < 0 || !strings.Contains(lines[title], "esc: close") ||
+		!inOrder(dv, "Todo 2/4", "● Read the code", "◐ Fix the bug", "○ Run the tests", "× Write docs") {
 		t.Fatalf("todo dialog:\n%s", dv)
 	}
-	for i, want := range []string{"● Read the code", "◐ Fix the bug", "○ Run the tests", "× Write docs"} {
-		if !strings.Contains(lines[3+i], want) {
-			t.Fatalf("row %d should read %q:\n%s", i, want, dv)
-		}
-	}
-	if !strings.Contains(lines[3], "▸") {
+	if first := findLine(lines, "● Read the code"); !strings.Contains(lines[first], "▸") {
 		t.Fatalf("the cursor should start on the first row:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
@@ -2175,6 +2185,161 @@ func TestSidebarRowsLeaveOneColumn(t *testing.T) {
 // the cost at the right edge; n jumps to the next agent waiting on you and
 // a click on a row selects that agent.
 func TestSidebarNav(t *testing.T) {
+	t.Run("header and tree rows", func(t *testing.T) {
+		m := sidebarNavModel()
+		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
+		header := len(m.sidebarHeader(sidebarWidth - 1))
+		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" || !strings.HasPrefix(sb[6], "agents") || strings.Contains(strings.Join(sb, "\n"), "need you") {
+			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:7], "\n"))
+		}
+		rows := m.treeRows(sidebarWidth - 1)
+		plain := make([]string, len(rows))
+		for i, r := range rows {
+			plain[i] = stripANSI(r)
+			if w := ansi.StringWidth(plain[i]); w != sidebarWidth-1 {
+				t.Fatalf("row %d should be %d wide, got %d: %q", i, sidebarWidth-1, w, plain[i])
+			}
+		}
+		if !strings.HasPrefix(plain[0], "  ◐ main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
+			t.Fatalf("root row: %q", plain[0])
+		}
+		if !strings.HasPrefix(plain[1], "    ● world-politics (") || !strings.HasSuffix(plain[1], "… ! $0.05") {
+			t.Fatalf("blocked child row should carry the badge and cost: %q", plain[1])
+		}
+		if !strings.HasSuffix(strings.TrimRight(plain[2], " "), "business (general)") {
+			t.Fatalf("a row with nothing on the right ends with the label: %q", plain[2])
+		}
+		if !strings.HasSuffix(plain[3], " ?") {
+			t.Fatalf("a question shows ?: %q", plain[3])
+		}
+	})
+	t.Run("n selects the next agent that needs you", func(t *testing.T) {
+		m := sidebarNavModel()
+		// n jumps to the next agent needing you and selects it; again wraps
+		m.setFocus(focusSidebar)
+		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+		if m.sbCursor != 1 || m.selectedID() != "b" || m.focus != focusSidebar {
+			t.Fatalf("n: cursor=%d selected=%s focus=%v", m.sbCursor, m.selectedID(), m.focus)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+		if m.selectedID() != "d" {
+			t.Fatalf("second n: %s", m.selectedID())
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+		if m.selectedID() != "b" {
+			t.Fatalf("n should wrap: %s", m.selectedID())
+		}
+		m.prompts = nil
+		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+		if m.selectedID() != "b" || !strings.Contains(m.status, "no agent is waiting") {
+			t.Fatalf("n with nothing pending: %s %q", m.selectedID(), m.status)
+		}
+		if hs := m.keyHints(); hs[2].key != "n" {
+			t.Fatalf("hints %+v", hs)
+		}
+	})
+	t.Run("a click on a tree row selects it", func(t *testing.T) {
+		m := sidebarNavModel()
+		m.prompts = nil
+		// a click on a tree row selects that agent (rows start after the header)
+		m.setFocus(focusInput)
+		header := len(m.sidebarHeader(sidebarWidth - 1))
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+		if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 2 {
+			t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
+		}
+	})
+	t.Run("the sessions section", func(t *testing.T) {
+		m := sidebarNavModel()
+		m.prompts = nil
+		// the sessions section: folded by default with the count, space on its
+		// heading unfolds it, ↓ walks into it, space on a session resumes it;
+		// a click does the same
+		m.navSessions = []protocol.SessionInfo{
+			{ID: "s-old", Title: "fix the login bug\nplease", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
+			{ID: "s-older", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
+		}
+		m.setFocus(focusSidebar)
+		body, items := m.sidebarBody(sidebarWidth - 1)
+		if len(body) != len(m.agents)+2 || items[len(m.agents)+1] != len(m.agents) || !strings.HasPrefix(stripANSI(body[len(m.agents)+1]), "sessions 2 ▸") {
+			t.Fatalf("folded sessions section:\n%s\n%v", strings.Join(body, "\n"), items)
+		}
+		for m.sbCursor != len(m.agents) {
+			press(&m, tea.KeyMsg{Type: tea.KeyDown})
+		}
+		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd != nil || !m.navSessionsOpen || m.focus != focusSidebar {
+			t.Fatalf("space on the heading should unfold: open=%v focus=%v", m.navSessionsOpen, m.focus)
+		}
+		body, items = m.sidebarBody(sidebarWidth - 1)
+		plainBody := make([]string, len(body))
+		for i, r := range body {
+			plainBody[i] = stripANSI(r)
+		}
+		na := len(m.agents)
+		if len(body) != na+4 || !strings.HasPrefix(plainBody[na+1], "sessions ▾") || !strings.HasPrefix(plainBody[na+2], "  ● fix the login bug") || strings.Contains(plainBody[na+2], "\n") || !strings.HasSuffix(plainBody[na+2], "2h00m") || !strings.HasPrefix(plainBody[na+3], "  ○ docs sweep") || !strings.HasSuffix(plainBody[na+3], "26h00m") || items[na+3] != na+2 {
+			t.Fatalf("open sessions section:\n%s\n%v", strings.Join(plainBody, "\n"), items)
+		}
+		for _, r := range plainBody[na+2:] {
+			if w := ansi.StringWidth(r); w != sidebarWidth-1 {
+				t.Fatalf("session rows fill the width: %d %q", w, r)
+			}
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown})
+		if m.sbCursor != na+2 {
+			t.Fatalf("cursor should walk into the sessions: %d", m.sbCursor)
+		}
+		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "resuming docs sweep") {
+			t.Fatalf("space on a session should resume it: cmd=%v status=%q", cmd != nil, m.status)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the first agent
+		if m.sbCursor != 0 {
+			t.Fatalf("wrap: %d", m.sbCursor)
+		}
+		header := len(m.sidebarHeader(sidebarWidth - 1))
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+		if m.navSessionsOpen {
+			t.Fatal("a click on the heading should fold the section")
+		}
+	})
+	t.Run("a selected agent's prompts come first", func(t *testing.T) {
+		m := sidebarNavModel()
+		// the dialogs show the selected agent's prompt first, then the oldest
+		m.prompts = []protocol.PromptInfo{
+			{ID: "pb", Kind: "permission", Agent: "b", Tool: "shell"},
+			{ID: "qd", Kind: "question", Agent: "d", Questions: []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}},
+			{ID: "pd", Kind: "permission", Agent: "d", Tool: "read"},
+		}
+		m.selected = 0 // main has none: the oldest of each kind
+		if m.currentPrompt().ID != "pb" || m.currentQuestion().ID != "qd" {
+			t.Fatalf("no own prompt: %s %s", m.currentPrompt().ID, m.currentQuestion().ID)
+		}
+		m.selected = 3 // asker: its own permission jumps ahead of b's
+		if m.currentPrompt().ID != "pd" || m.currentQuestion().ID != "qd" {
+			t.Fatalf("own prompt first: %s %s", m.currentPrompt().ID, m.currentQuestion().ID)
+		}
+		if perms, qs := m.promptCounts(); perms != 2 || qs != 1 {
+			t.Fatalf("the strip still counts everything: %d %d", perms, qs)
+		}
+	})
+	t.Run("the swarm line reads idle", func(t *testing.T) {
+		m := sidebarNavModel()
+		m.prompts = nil
+		m.setFocus(focusInput)
+		// the swarm line reads idle when nothing is happening
+		m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "general", State: "idle"}}
+		if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 7 {
+			t.Fatalf("idle swarm line: %q header %d", sl, len(m.sidebarHeader(sidebarWidth-1)))
+		}
+	})
+}
+
+// sidebarNavModel is a session with the sidebar open: a root waiting on
+// its children, one blocked on a permission and one on a question.
+func sidebarNavModel() Model {
 	m := sessionModel()
 	m.showTree = true
 	m.width, m.height = 120, 40
@@ -2192,136 +2357,7 @@ func TestSidebarNav(t *testing.T) {
 	}
 	m.selected = 0
 	m.layout()
-	sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
-	header := len(m.sidebarHeader(sidebarWidth - 1))
-	if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" || !strings.HasPrefix(sb[6], "agents") || strings.Contains(strings.Join(sb, "\n"), "need you") {
-		t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:7], "\n"))
-	}
-	rows := m.treeRows(sidebarWidth - 1)
-	plain := make([]string, len(rows))
-	for i, r := range rows {
-		plain[i] = stripANSI(r)
-		if w := ansi.StringWidth(plain[i]); w != sidebarWidth-1 {
-			t.Fatalf("row %d should be %d wide, got %d: %q", i, sidebarWidth-1, w, plain[i])
-		}
-	}
-	if !strings.HasPrefix(plain[0], "  ◐ main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
-		t.Fatalf("root row: %q", plain[0])
-	}
-	if !strings.HasPrefix(plain[1], "    ● world-politics (") || !strings.HasSuffix(plain[1], "… ! $0.05") {
-		t.Fatalf("blocked child row should carry the badge and cost: %q", plain[1])
-	}
-	if !strings.HasSuffix(strings.TrimRight(plain[2], " "), "business (general)") {
-		t.Fatalf("a row with nothing on the right ends with the label: %q", plain[2])
-	}
-	if !strings.HasSuffix(plain[3], " ?") {
-		t.Fatalf("a question shows ?: %q", plain[3])
-	}
-	// n jumps to the next agent needing you and selects it; again wraps
-	m.setFocus(focusSidebar)
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	if m.sbCursor != 1 || m.selectedID() != "b" || m.focus != focusSidebar {
-		t.Fatalf("n: cursor=%d selected=%s focus=%v", m.sbCursor, m.selectedID(), m.focus)
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	if m.selectedID() != "d" {
-		t.Fatalf("second n: %s", m.selectedID())
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	if m.selectedID() != "b" {
-		t.Fatalf("n should wrap: %s", m.selectedID())
-	}
-	m.prompts = nil
-	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-	if m.selectedID() != "b" || !strings.Contains(m.status, "no agent is waiting") {
-		t.Fatalf("n with nothing pending: %s %q", m.selectedID(), m.status)
-	}
-	if hs := m.keyHints(); hs[2].key != "n" {
-		t.Fatalf("hints %+v", hs)
-	}
-	// a click on a tree row selects that agent (rows start after the header)
-	m.setFocus(focusInput)
-	header = len(m.sidebarHeader(sidebarWidth - 1))
-	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
-	m = nm.(Model)
-	if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 2 {
-		t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
-	}
-	// the sessions section: folded by default with the count, space on its
-	// heading unfolds it, ↓ walks into it, space on a session resumes it;
-	// a click does the same
-	m.navSessions = []protocol.SessionInfo{
-		{ID: "s-old", Title: "fix the login bug\nplease", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
-		{ID: "s-older", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
-	}
-	m.setFocus(focusSidebar)
-	body, items := m.sidebarBody(sidebarWidth - 1)
-	if len(body) != len(m.agents)+2 || items[len(m.agents)+1] != len(m.agents) || !strings.HasPrefix(stripANSI(body[len(m.agents)+1]), "sessions 2 ▸") {
-		t.Fatalf("folded sessions section:\n%s\n%v", strings.Join(body, "\n"), items)
-	}
-	for m.sbCursor != len(m.agents) {
-		press(&m, tea.KeyMsg{Type: tea.KeyDown})
-	}
-	if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd != nil || !m.navSessionsOpen || m.focus != focusSidebar {
-		t.Fatalf("space on the heading should unfold: open=%v focus=%v", m.navSessionsOpen, m.focus)
-	}
-	body, items = m.sidebarBody(sidebarWidth - 1)
-	plainBody := make([]string, len(body))
-	for i, r := range body {
-		plainBody[i] = stripANSI(r)
-	}
-	na := len(m.agents)
-	if len(body) != na+4 || !strings.HasPrefix(plainBody[na+1], "sessions ▾") || !strings.HasPrefix(plainBody[na+2], "  ● fix the login bug") || strings.Contains(plainBody[na+2], "\n") || !strings.HasSuffix(plainBody[na+2], "2h00m") || !strings.HasPrefix(plainBody[na+3], "  ○ docs sweep") || !strings.HasSuffix(plainBody[na+3], "26h00m") || items[na+3] != na+2 {
-		t.Fatalf("open sessions section:\n%s\n%v", strings.Join(plainBody, "\n"), items)
-	}
-	for _, r := range plainBody[na+2:] {
-		if w := ansi.StringWidth(r); w != sidebarWidth-1 {
-			t.Fatalf("session rows fill the width: %d %q", w, r)
-		}
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown})
-	if m.sbCursor != na+2 {
-		t.Fatalf("cursor should walk into the sessions: %d", m.sbCursor)
-	}
-	if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "resuming docs sweep") {
-		t.Fatalf("space on a session should resume it: cmd=%v status=%q", cmd != nil, m.status)
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the first agent
-	if m.sbCursor != 0 {
-		t.Fatalf("wrap: %d", m.sbCursor)
-	}
-	header = len(m.sidebarHeader(sidebarWidth - 1))
-	nm, _ = m.Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
-	m = nm.(Model)
-	if m.navSessionsOpen {
-		t.Fatal("a click on the heading should fold the section")
-	}
-	// the dialogs show the selected agent's prompt first, then the oldest
-	m.prompts = []protocol.PromptInfo{
-		{ID: "pb", Kind: "permission", Agent: "b", Tool: "shell"},
-		{ID: "qd", Kind: "question", Agent: "d", Questions: []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}},
-		{ID: "pd", Kind: "permission", Agent: "d", Tool: "read"},
-	}
-	m.selected = 0 // main has none: the oldest of each kind
-	if m.currentPrompt().ID != "pb" || m.currentQuestion().ID != "qd" {
-		t.Fatalf("no own prompt: %s %s", m.currentPrompt().ID, m.currentQuestion().ID)
-	}
-	m.selected = 3 // asker: its own permission jumps ahead of b's
-	if m.currentPrompt().ID != "pd" || m.currentQuestion().ID != "qd" {
-		t.Fatalf("own prompt first: %s %s", m.currentPrompt().ID, m.currentQuestion().ID)
-	}
-	if perms, qs := m.promptCounts(); perms != 2 || qs != 1 {
-		t.Fatalf("the strip still counts everything: %d %d", perms, qs)
-	}
-	m.prompts = nil
-	m.setFocus(focusInput)
-	// the swarm line reads idle when nothing is happening
-	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "general", State: "idle"}}
-	if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 7 {
-		t.Fatalf("idle swarm line: %q header %d", sl, len(m.sidebarHeader(sidebarWidth-1)))
-	}
+	return m
 }
 
 func TestRoleAwareDialogs(t *testing.T) {
@@ -2416,16 +2452,14 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("focus %v", m.focus)
 	}
 	dv := stripANSI(m.tabDialog(120))
-	lines := strings.Split(dv, "\n")
-	// border, title, blank, three rows, border
-	if len(lines) != 9 || !strings.Contains(lines[1], "MCP 1/3") || !strings.Contains(lines[3], "● github  2 tools · 2h00m") || !strings.Contains(lines[4], "× docs  spawn npx: not found") || !strings.Contains(lines[5], "○ linear  starts at the next turn") {
+	// the title, then one row per server in order
+	if !inOrder(dv, "MCP 1/3", "● github  2 tools · 2h00m", "× docs  spawn npx: not found", "○ linear  starts at the next turn") {
 		t.Fatalf("mcp dialog:\n%s", dv)
 	}
 	// enter on a server lists its tools under it (short names), enter again folds them
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	dv = stripANSI(m.tabDialog(120))
-	lines = strings.Split(dv, "\n")
-	if len(lines) != 11 || !strings.Contains(lines[4], "get_issue") || !strings.Contains(lines[5], "create_issue") || strings.Contains(lines[4], "mcp__") {
+	if !inOrder(dv, "● github", "get_issue", "create_issue", "× docs") || strings.Contains(dv, "mcp__") {
 		t.Fatalf("expanded server:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace}) // a tool row: space does nothing
@@ -2433,7 +2467,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatal("enter on a tool row should not toggle anything")
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeySpace})
-	if m.mcpOpen["github"] || strings.Count(stripANSI(m.tabDialog(120)), "\n") != 8 {
+	if m.mcpOpen["github"] || strings.Contains(stripANSI(m.tabDialog(120)), "get_issue") {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
@@ -2477,7 +2511,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	if !strings.Contains(dv, "a add directory · space edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
 		t.Fatalf("dirs dialog should carry its own hints (without esc):\n%s", dv)
 	}
-	if len(lines) < 9 || !strings.Contains(lines[1], "Dirs 3") || !strings.Contains(lines[3], "▸ /repo  session") || strings.Contains(lines[3], "◆") || !strings.Contains(lines[4], "/srv/shared  role") || !strings.Contains(lines[5], "/tmp/build  human") {
+	if repo := findLine(lines, "▸ /repo  session"); repo < 0 || strings.Contains(lines[repo], "◆") || !inOrder(dv, "Dirs 3", "▸ /repo  session", "/srv/shared  role", "/tmp/build  human") {
 		t.Fatalf("dirs dialog:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
