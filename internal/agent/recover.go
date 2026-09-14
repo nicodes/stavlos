@@ -303,7 +303,9 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			continue
 		}
 		a.start()
-		if len(a.prompts)+len(a.steers) > 0 {
+		// Anything that starts a turn wakes it: prompts, steers, and wakes
+		// (a response or a lost job waiting in the mailbox).
+		if len(a.prompts)+len(a.steers)+len(a.wakes) > 0 {
 			a.signal()
 		}
 	}
