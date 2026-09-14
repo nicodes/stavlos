@@ -577,7 +577,7 @@ func TestBashKillStopsJob(t *testing.T) {
 func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	setupConfig(t)
 	// Only "general" ships built in; a user preset comes from agents/<name>.md.
-	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
+	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "roles")
 	_ = os.MkdirAll(agentsDir, 0o755)
 	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools: [read, bash]\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
 	work := t.TempDir()
@@ -684,7 +684,8 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if last.IsError || !strings.Contains(last.Content, `"label":"main"`) || !strings.Contains(last.Content, `"you":true`) || !strings.Contains(last.Content, `"parent":"`+rootID+`"`) {
+			flat := strings.Join(strings.Fields(last.Content), "") // the tool pretty-prints its JSON
+			if last.IsError || !strings.Contains(flat, `"label":"main"`) || !strings.Contains(flat, `"you":true`) || !strings.Contains(flat, `"parent":"`+rootID+`"`) {
 				t.Errorf("agent_status should list the whole tree with the caller marked: %+v", last)
 			}
 			return call("k4", "agent_response", `{"to":"`+rootID+`","text":"asked"}`)
@@ -716,6 +717,7 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 	if te.Reason != "end_turn" {
 		t.Fatalf("turn 2: %+v", te)
 	}
+	h.waitFor(event.ResponseReceived, rootID) // the child's agent_response, after its status check
 }
 
 func TestVariants(t *testing.T) {
@@ -939,7 +941,7 @@ func TestSessionListTitles(t *testing.T) {
 // root preset, with its full tool set.
 func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	setupConfig(t)
-	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
+	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "roles")
 	_ = os.MkdirAll(agentsDir, 0o755)
 	presetFile := filepath.Join(agentsDir, "coder.md")
 	os.WriteFile(presetFile, []byte("---\ndescription: Old coder\ntools: [read, bash]\n---\nYou are the old coder.\n"), 0o644)
@@ -1181,5 +1183,117 @@ func TestFullAgentIDs(t *testing.T) {
 	h.waitFor(event.TurnEnded, root) // the "thanks" turn
 	if len(fm.calls) < 3 {
 		h.waitFor(event.TurnEnded, root)
+	}
+}
+
+// TestRoles: role modes gate the root, /roles and agent_create; model and
+// variant whitelists bound set_model/set_variant and decide what a child
+// inherits; a subagent past max_turns answers its askers with the limit.
+func TestRoles(t *testing.T) {
+	setupConfig(t)
+	g := os.Getenv("STAVLOS_CONFIG_DIR")
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","rootAgent":"lead"}`), 0o644)
+	roles := filepath.Join(g, "roles")
+	os.MkdirAll(roles, 0o755)
+	os.WriteFile(filepath.Join(roles, "lead.md"), []byte("---\ndescription: Leads\nmode: primary\nmodels:\n  - id: fake/m1\n    variants: [high]\nspawn: [limited, boss, general]\n---\nYou lead.\n"), 0o644)
+	os.WriteFile(filepath.Join(roles, "limited.md"), []byte("---\ndescription: Limited\nmode: subagent\nmodels: [fake/m2]\nmax_turns: 1\ntools: [read]\n---\nYou are limited.\n"), 0o644)
+	os.WriteFile(filepath.Join(roles, "boss.md"), []byte("---\ndescription: Boss\nmode: primary\n---\nYou boss.\n"), 0o644)
+
+	work := t.TempDir()
+	fm := &fakeModel{}
+	var childID string
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response {
+			return call("c1", "agent_create", `{"archetype":"limited","label":"kid","task":"think"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			childID = strings.TrimSpace(strings.TrimPrefix(last.Content, "spawned kid (limited) as "))
+			if last.IsError || childID == "" || strings.Contains(childID, " ") {
+				t.Errorf("spawn result: %+v", last)
+			}
+			return call("c2", "agent_create", `{"archetype":"boss","label":"b","task":"x"}`)
+		},
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0]
+			if !last.IsError || !strings.Contains(last.Content, "primary-only") {
+				t.Errorf("a primary-only role must not be spawnable: %+v", last)
+			}
+			return call("c3", "agent_message", `{"id":"`+childID+`","text":"again"}`)
+		},
+		func(model.Request) model.Response { return text("sent") },
+		func(req model.Request) model.Response {
+			last := req.Messages[len(req.Messages)-1].Blocks[0].Text
+			if !strings.Contains(last, "turn limit") {
+				t.Errorf("the parent should be told about the turn limit: %q", last)
+			}
+			return text("noted")
+		},
+	}
+	fm.childSteps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			if !strings.Contains(req.System, "turn 1 of at most 1") {
+				t.Errorf("the child should be told its turn budget:\n%s", req.System)
+			}
+			return text("thinking") // turn 1 passes without an answer
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, err := h.c.CreateSession(ctx, work, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	// the root runs the configured primary role on its default variant
+	if agents[0].Archetype != "lead" || agents[0].Model != "fake/m1" || agents[0].Variant != "high" {
+		t.Fatalf("root %+v", agents[0])
+	}
+	// whitelists bound the switches
+	if err := h.c.SetAgentVariant(ctx, root, "low"); err == nil || !strings.Contains(err.Error(), "does not allow variant") {
+		t.Fatalf("variant outside the role: %v", err)
+	}
+	if err := h.c.SetAgentModel(ctx, root, "fake/m2"); err == nil || !strings.Contains(err.Error(), "does not allow model") {
+		t.Fatalf("model outside the role: %v", err)
+	}
+	if err := h.c.SetAgentRole(ctx, root, "limited"); err == nil || !strings.Contains(err.Error(), "subagent-only") {
+		t.Fatalf("subagent-only role on the main agent: %v", err)
+	}
+
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	var sp event.AgentSpawnedPayload
+	for sp.Parent == "" { // the subscription replays the root's own spawn first
+		e := h.waitFor(event.AgentSpawned, "")
+		_ = e.Decode(&sp)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if len(agents) != 2 || agents[1].Archetype != "limited" || agents[1].Model != "fake/m2" || agents[1].Variant != "" {
+		t.Fatalf("child should start on its role's default model: %+v", agents)
+	}
+	if err := h.c.SetAgentRole(ctx, agents[1].ID, "boss"); err == nil || !strings.Contains(err.Error(), "primary-only") {
+		t.Fatalf("primary-only role on a subagent: %v", err)
+	}
+	// the child's second turn is over its limit: the parent is answered
+	e := h.waitFor(event.ResponseReceived, root)
+	var rp event.ResponsePayload
+	_ = e.Decode(&rp)
+	if !strings.Contains(rp.Text, "turn limit of 1") {
+		t.Fatalf("limit response: %+v", rp)
+	}
+	var te event.TurnEndedPayload
+	for te.Turn != 2 {
+		e = h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	// switching the root to a role without a whitelist keeps its model and variant
+	if err := h.c.SetAgentRole(ctx, root, "general"); err != nil {
+		t.Fatal(err)
+	}
+	agents, _ = h.c.Tree(ctx, s.ID)
+	if agents[0].Archetype != "general" || agents[0].Model != "fake/m1" || agents[0].Variant != "high" {
+		t.Fatalf("after /roles general: %+v", agents[0])
 	}
 }

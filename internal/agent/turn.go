@@ -65,6 +65,15 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 		_, _ = a.record(bg, event.TurnEnded, event.TurnEndedPayload{Turn: turn, Reason: reason, Error: errText})
 	}
 
+	// A subagent past its role's turn limit does not run: the turn ends at
+	// once and every agent waiting on it is told, so nobody waits forever.
+	if limit := a.Preset().MaxTurns; a.Parent != "" && limit > 0 && turn > limit {
+		msg := fmt.Sprintf("turn limit reached: %s may take at most %d turns", a.Label, limit)
+		end("error", msg)
+		a.reportTurnLimit(limit)
+		return
+	}
+
 	for {
 		if turnCtx.Err() != nil {
 			end("cancelled", "")
@@ -292,6 +301,9 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	sb.WriteString("\n\n")
 	fmt.Fprintf(&sb, "Working directory: %s\n", a.s.Dir)
 	fmt.Fprintf(&sb, "Your agent id is %s.\n", a.ID)
+	if limit := a.preset.MaxTurns; a.Parent != "" && limit > 0 {
+		fmt.Fprintf(&sb, "This is turn %d of at most %d: answer with agent_response before the limit; after it your turns end at once and the agents waiting on you are told you ran out.\n", a.turn, limit)
+	}
 	if a.Parent != "" {
 		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) created by a parent agent (id %s). Your task arrives as the first message. When it is done, or cannot be done, answer with agent_response to the agent that asked (its id is in the message); it only sees what you put there. You stay alive afterwards: the parent or another agent may message you again, and you keep your context. Other agents in this session can message you, and agent_message lets you message any of them, including your parent, by id.\n", a.Archetype, a.Label, a.Parent)
 	}

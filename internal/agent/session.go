@@ -207,6 +207,19 @@ func (s *Session) resolve(id string) (*Agent, bool) {
 	return found, found != nil
 }
 
+// agentsSnapshot lists the session's agents in creation order.
+func (s *Session) agentsSnapshot() []*Agent {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]*Agent, 0, len(s.order))
+	for _, id := range s.order {
+		if a, ok := s.agents[id]; ok {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
 // Root returns the root agent.
 func (s *Session) Root() *Agent {
 	s.mu.RLock()
@@ -292,23 +305,57 @@ func (s *Session) Presets() []protocol.PresetInfo {
 	cfg := s.Config()
 	var out []protocol.PresetInfo
 	for _, p := range cfg.Presets {
-		out = append(out, protocol.PresetInfo{Name: p.Name, Description: p.Description, Model: p.Model, Spawn: p.Spawn})
+		info := protocol.PresetInfo{Name: p.Name, Description: p.Description, Mode: p.Mode, Spawn: p.Spawn, Color: p.Color, MaxTurns: p.MaxTurns}
+		for _, m := range p.Models {
+			info.Models = append(info.Models, protocol.ModelSpec{ID: m.ID, Variants: m.Variants})
+		}
+		out = append(out, info)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 
-// resolveModel implements PRD §8.3.
-func (s *Session) resolveModel(spawnArg string, preset config.Preset, parent *Agent) string {
-	switch {
-	case spawnArg != "":
-		return spawnArg
-	case preset.Model != "":
-		return preset.Model
-	case parent != nil:
-		return parent.ModelID()
+// resolveModel implements PRD §8.3 under the role's whitelist: an explicit
+// spawn argument must be allowed; otherwise the parent's (or the
+// session's) model is inherited when the role allows it, else the role's
+// default (its first listed model).
+func (s *Session) resolveModel(spawnArg string, preset config.Preset, parent *Agent) (string, error) {
+	if spawnArg != "" {
+		if !preset.AllowsModel(spawnArg) {
+			return "", fmt.Errorf("role %s does not allow model %s (allowed: %s)", preset.Name, spawnArg, modelList(preset))
+		}
+		return spawnArg, nil
 	}
-	return s.Model()
+	inherited := s.Model()
+	if parent != nil {
+		inherited = parent.ModelID()
+	}
+	if inherited != "" && preset.AllowsModel(inherited) {
+		return inherited, nil
+	}
+	if d := preset.DefaultModel(); d != "" {
+		return d, nil
+	}
+	return inherited, nil
+}
+
+// modelList names a role's allowed models for error messages.
+func modelList(p config.Preset) string {
+	ids := make([]string, 0, len(p.Models))
+	for _, m := range p.Models {
+		ids = append(ids, m.ID)
+	}
+	return strings.Join(ids, ", ")
+}
+
+// fitVariant picks the variant an agent on model id should run under role
+// p when it would otherwise inherit want: want when allowed, else the
+// model's default variant under the role.
+func fitVariant(p config.Preset, id, want string) string {
+	if p.AllowsVariant(id, want) {
+		return want
+	}
+	return p.DefaultVariant(id)
 }
 
 // spawn creates and starts an agent. parent=="" for the root.
@@ -330,8 +377,16 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		if !contains(parent.preset.Spawn, archetype) {
 			return nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", parent.Archetype, archetype, parent.preset.Spawn)
 		}
+		if !preset.CanBeSubagent() {
+			return nil, fmt.Errorf("role %q is primary-only: it cannot be spawned", archetype)
+		}
+	} else if !preset.CanBePrimary() {
+		return nil, fmt.Errorf("role %q is subagent-only: it cannot be the main agent", archetype)
 	}
-	modelID := s.resolveModel(modelArg, preset, parent)
+	modelID, err := s.resolveModel(modelArg, preset, parent)
+	if err != nil {
+		return nil, err
+	}
 	if parent != nil {
 		if modelID == "" {
 			return nil, errors.New(ErrNoModel)
@@ -344,6 +399,7 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 	if parent != nil && modelID == parent.ModelID() {
 		a.variant = parent.Variant() // same model: same flavour (logged below, after the spawn event)
 	}
+	a.variant = fitVariant(preset, modelID, a.variant) // …within what the role allows for that model
 	if parent != nil {
 		a.ctx, a.kill = context.WithCancel(parent.ctx)
 	} else {

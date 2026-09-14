@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -310,7 +311,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.replayTo = msg.res.Seq
 		m.loading = msg.res.Seq > 0
-		cmds = append(cmds, subscribeCmd(m.ctx, m.c, m.sessionID, 0), sessionsCmd(m.ctx, m.c, m.session.Dir, true))
+		cmds = append(cmds, subscribeCmd(m.ctx, m.c, m.sessionID, 0), sessionsCmd(m.ctx, m.c, m.session.Dir, true), presetsCmd(m.ctx, m.c, m.sessionID))
 
 	case subscribedMsg:
 		if msg.err != nil {
@@ -388,7 +389,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.onLoginDone(msg))
 
 	case rolesMsg:
-		cmds = append(cmds, m.onRoles(msg))
+		if msg.err == nil {
+			m.presets = msg.roles
+		}
+		if !msg.quiet {
+			cmds = append(cmds, m.onRoles(msg))
+		}
 	case variantsMsg:
 		cmds = append(cmds, m.onVariants(msg))
 	case sessionsMsg:
@@ -2597,16 +2603,93 @@ func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
 	}
 	label := m.agentLabel(m.selectedID())
 	o := newOverlay(ovRoles, overlayList, "Change role of "+label)
+	// The main agent may take primary or all roles, a subagent subagent or
+	// all ones: a role's mode decides where it shows.
+	primary := true
+	if a := m.selectedAgent(); a != nil && a.Parent != "" {
+		primary = false
+	}
 	items := make([]overlayItem, 0, len(msg.roles))
 	for _, r := range msg.roles {
-		hint := r.Description
-		if len(r.Spawn) > 0 {
-			hint += "  · spawns " + strings.Join(r.Spawn, ", ")
+		if (primary && r.Mode == "subagent") || (!primary && r.Mode == "primary") {
+			continue
 		}
-		items = append(items, overlayItem{id: r.Name, label: r.Name, hint: hint})
+		items = append(items, overlayItem{id: r.Name, label: r.Name, hint: roleHint(r)})
+	}
+	if len(items) == 0 {
+		o.setEmpty("no role may run here", false)
 	}
 	o.setItems(items)
 	return m.openOverlay(o)
+}
+
+// roleHint is a role's one-line summary in the /roles picker: its
+// description, then its mode when restricted, its default model when it
+// has a whitelist, and what it spawns.
+func roleHint(r protocol.PresetInfo) string {
+	hint := r.Description
+	if r.Mode != "" && r.Mode != "all" {
+		hint += "  · " + r.Mode
+	}
+	if len(r.Models) > 0 {
+		short, _ := splitModel(r.Models[0].ID)
+		hint += "  · " + short
+		if len(r.Models) > 1 {
+			hint += fmt.Sprintf(" +%d", len(r.Models)-1)
+		}
+	}
+	if len(r.Spawn) > 0 {
+		hint += "  · spawns " + strings.Join(r.Spawn, ", ")
+	}
+	return hint
+}
+
+// roleInfo finds a cached role by name.
+func (m *Model) roleInfo(name string) *protocol.PresetInfo {
+	for i := range m.presets {
+		if m.presets[i].Name == name {
+			return &m.presets[i]
+		}
+	}
+	return nil
+}
+
+// selectedRole is the selected agent's role, nil when unknown.
+func (m *Model) selectedRole() *protocol.PresetInfo {
+	if a := m.selectedAgent(); a != nil {
+		return m.roleInfo(a.Archetype)
+	}
+	return nil
+}
+
+// roleTints maps every cached role to its colour name ("" for none).
+func (m *Model) roleTints() map[string]string {
+	out := map[string]string{}
+	for _, r := range m.presets {
+		if r.Color != "" {
+			out[r.Name] = r.Color
+		}
+	}
+	return out
+}
+
+// roleModelSpec is the whitelist entry of role r that admits model id
+// (glob-aware), nil when r has no whitelist or none matches.
+func roleModelSpec(r *protocol.PresetInfo, id string) *protocol.ModelSpec {
+	if r == nil {
+		return nil
+	}
+	for i := range r.Models {
+		if ok, _ := path.Match(r.Models[i].ID, id); ok || r.Models[i].ID == id {
+			return &r.Models[i]
+		}
+	}
+	return nil
+}
+
+// roleAllowsModel: any model without a whitelist, else a matching entry.
+func roleAllowsModel(r *protocol.PresetInfo, id string) bool {
+	return r == nil || len(r.Models) == 0 || roleModelSpec(r, id) != nil
 }
 
 // onSessions opens the /sessions picker: this directory's sessions, newest
@@ -2736,8 +2819,20 @@ func (m *Model) onVariants(msg variantsMsg) tea.Cmd {
 		}
 		return ""
 	}
-	items := []overlayItem{{id: "", label: "default", hint: "provider default" + mark("")}}
+	// A role that lists variants for this model narrows the picker to them
+	// (and drops the provider default, which is then not allowed).
+	var allowed []string
+	if spec := roleModelSpec(m.selectedRole(), msg.model); spec != nil && len(spec.Variants) > 0 {
+		allowed = spec.Variants
+	}
+	var items []overlayItem
+	if allowed == nil {
+		items = append(items, overlayItem{id: "", label: "default", hint: "provider default" + mark("")})
+	}
 	for _, v := range msg.variants {
+		if allowed != nil && !containsStr(allowed, v) {
+			continue
+		}
 		items = append(items, overlayItem{id: v, label: v, hint: "reasoning effort" + mark(v)})
 	}
 	o.setItems(items)
@@ -2752,8 +2847,31 @@ func (m *Model) onModels(msg modelsMsg) tea.Cmd {
 	if len(msg.models) == 0 {
 		o.setEmpty("no providers connected — run /provider", true)
 	}
-	o.setItems(modelItems(msg.models))
+	// The selected agent's role may whitelist models: only those are offered.
+	models := msg.models
+	if r := m.selectedRole(); r != nil && len(r.Models) > 0 {
+		o.title = "Select a model · allowed by " + r.Name
+		models = nil
+		for _, mi := range msg.models {
+			if roleAllowsModel(r, mi.ID) {
+				models = append(models, mi)
+			}
+		}
+		if len(models) == 0 && len(msg.models) > 0 {
+			o.setEmpty("role "+r.Name+" allows none of the connected models", true)
+		}
+	}
+	o.setItems(modelItems(models))
 	return m.openOverlay(o)
+}
+
+func containsStr(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
 }
 
 // shortHome abbreviates the home directory prefix.

@@ -57,21 +57,109 @@ type MCP struct {
 	URL     string            `json:"url,omitempty"`
 }
 
-// Preset is an archetype definition from agents/<name>.md (PRD §10.3).
+// Preset is a role definition from roles/<name>.md (PRD §10.3). The word
+// "role" is what users see; "preset" and "archetype" are the same thing in
+// code and in the log.
 type Preset struct {
-	Name        string         `yaml:"-"`
-	Description string         `yaml:"description"`
-	Model       string         `yaml:"model"`
-	Loop        string         `yaml:"loop"`
-	Tools       []string       `yaml:"tools"`
-	Skills      []string       `yaml:"skills"`
-	MCP         []string       `yaml:"mcp"`
-	Spawn       []string       `yaml:"spawn"`
-	Policy      map[string]any `yaml:"policy"`
-	Body        string         `yaml:"-"` // system prompt
-	Source      string         `yaml:"-"` // file path
-	Layer       string         `yaml:"-"` // global | project | builtin
+	Name        string
+	Description string
+	Mode        string      // primary | subagent | all
+	Models      []ModelSpec // model whitelist, first is the default; empty = any, inherit
+	Loop        string
+	Tools       []string                     // tool names (and the groups bash, todo)
+	ToolRules   map[string]map[string]string // tool → pattern → verb, from the map form of tools:
+	Skills      []string
+	MCP         []string
+	Spawn       []string
+	MaxTurns    int    // subagent only: turns before it must answer; 0 = unlimited
+	Color       string // one of RoleColors, or ""
+	Body        string // system prompt
+	Source      string // file path
+	Layer       string // global | project | builtin
 }
+
+// ModelSpec is one entry of a role's model whitelist: a model id (a glob
+// such as "openai/*" is allowed) and, optionally, the variants allowed for
+// it, the first being the default. No variants means any the provider
+// offers, provider default.
+type ModelSpec struct {
+	ID       string   `yaml:"id"`
+	Variants []string `yaml:"variants"`
+}
+
+// Role modes.
+const (
+	ModePrimary  = "primary"  // selectable for the main agent, never spawned
+	ModeSubagent = "subagent" // only created with agent_create by a role that lists it
+	ModeAll      = "all"      // both (the default)
+)
+
+// RoleColors are the named tints a role may pick for its rows in the TUI.
+var RoleColors = []string{"red", "blue", "green", "yellow", "purple", "orange", "pink", "cyan"}
+
+// AllowsModel reports whether the role's whitelist admits a model id (any
+// model when the list is empty).
+func (p Preset) AllowsModel(id string) bool {
+	if len(p.Models) == 0 {
+		return true
+	}
+	return p.modelSpec(id) != nil
+}
+
+// modelSpec finds the whitelist entry matching a model id (glob-aware).
+func (p Preset) modelSpec(id string) *ModelSpec {
+	for i := range p.Models {
+		if ok, _ := filepath.Match(p.Models[i].ID, id); ok || p.Models[i].ID == id {
+			return &p.Models[i]
+		}
+	}
+	return nil
+}
+
+// DefaultModel is the whitelist's first entry when it is a plain id, else
+// "" (a glob cannot be a default; the caller falls back to inheriting).
+func (p Preset) DefaultModel() string {
+	if len(p.Models) == 0 || strings.ContainsAny(p.Models[0].ID, "*?[") {
+		return ""
+	}
+	return p.Models[0].ID
+}
+
+// AllowsVariant reports whether variant v may be used with model id under
+// this role: any when the list is empty or the matching entry lists none.
+// "" (the provider default) is allowed only when the entry lists none.
+func (p Preset) AllowsVariant(id, v string) bool {
+	spec := p.modelSpec(id)
+	if spec == nil || len(spec.Variants) == 0 {
+		return true
+	}
+	for _, x := range spec.Variants {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+// DefaultVariantList is the variants listed for model id (nil = any).
+func (p Preset) DefaultVariantList(id string) []string {
+	if spec := p.modelSpec(id); spec != nil {
+		return spec.Variants
+	}
+	return nil
+}
+
+// DefaultVariant is the first variant listed for model id, "" when none.
+func (p Preset) DefaultVariant(id string) string {
+	if spec := p.modelSpec(id); spec != nil && len(spec.Variants) > 0 {
+		return spec.Variants[0]
+	}
+	return ""
+}
+
+// CanBePrimary / CanBeSubagent read the mode.
+func (p Preset) CanBePrimary() bool  { return p.Mode != ModeSubagent }
+func (p Preset) CanBeSubagent() bool { return p.Mode != ModePrimary }
 
 // Skill is a skills/<name>/SKILL.md (PRD §10.4).
 type Skill struct {
@@ -174,9 +262,10 @@ func Load(dir string, trust Trust) (*Effective, error) {
 	}
 	e.applyFile(gf, "global")
 	e.Plugins = gf.Plugins
-	if err := e.loadPresets(filepath.Join(gdir, "agents"), "global"); err != nil {
+	if err := e.loadPresets(filepath.Join(gdir, "roles"), "global"); err != nil {
 		return nil, err
 	}
+	warnOldAgentsDir(filepath.Join(gdir, "agents"))
 	if err := e.loadSkills(filepath.Join(gdir, "skills")); err != nil {
 		return nil, err
 	}
@@ -200,9 +289,10 @@ func Load(dir string, trust Trust) (*Effective, error) {
 				fmt.Fprintf(os.Stderr, "stavlos: ignoring plugins in %s (global only)\n", pdir)
 			}
 			e.applyFile(pf, "project")
-			if err := e.loadPresets(filepath.Join(pdir, "agents"), "project"); err != nil {
+			if err := e.loadPresets(filepath.Join(pdir, "roles"), "project"); err != nil {
 				return nil, err
 			}
+			warnOldAgentsDir(filepath.Join(pdir, "agents"))
 			if err := e.loadSkills(filepath.Join(pdir, "skills")); err != nil {
 				return nil, err
 			}
@@ -317,9 +407,37 @@ func (e *Effective) loadPresets(dir, layer string) error {
 			return err
 		}
 		p.Layer = layer
+		if err := e.checkTightening(p); err != nil {
+			return err
+		}
 		e.Presets[p.Name] = p
 	}
 	return nil
+}
+
+// checkTightening rejects a role rule that would loosen the layered policy
+// (PRD §10.6: roles only tighten). Silently ignoring it would leave the
+// user wondering why the rule did nothing.
+func (e *Effective) checkTightening(p Preset) error {
+	for _, r := range p.PresetPolicy().Rules() {
+		base := e.Policy.Decide(r.Tool, samplePattern(r.Pattern))
+		if r.Verb.Rank() < base.Rank() {
+			return fmt.Errorf("%s: tools.%s %q: %s loosens the policy (%s); roles may only tighten", p.Source, r.Tool, r.Pattern, r.Verb, base)
+		}
+	}
+	return nil
+}
+
+// samplePattern turns a glob into a representative argument.
+func samplePattern(p string) string {
+	return strings.NewReplacer("*", "x", "?", "x").Replace(p)
+}
+
+// warnOldAgentsDir points at the rename once per load.
+func warnOldAgentsDir(dir string) {
+	if st, err := os.Stat(dir); err == nil && st.IsDir() {
+		fmt.Fprintf(os.Stderr, "stavlos: %s is ignored; roles now live in %s\n", dir, filepath.Join(filepath.Dir(dir), "roles"))
+	}
 }
 
 func (e *Effective) loadSkills(dir string) error {
@@ -354,27 +472,160 @@ func (e *Effective) loadSkills(dir string) error {
 	return nil
 }
 
-// ReadPreset parses one agents/<name>.md file.
+// roleFile is the frontmatter of roles/<name>.md. tools and models take
+// two shapes each (a list, or a map/list of objects), so they are decoded
+// from nodes.
+type roleFile struct {
+	Description string    `yaml:"description"`
+	Mode        string    `yaml:"mode"`
+	Models      yaml.Node `yaml:"models"`
+	Loop        string    `yaml:"loop"`
+	Tools       yaml.Node `yaml:"tools"`
+	Skills      []string  `yaml:"skills"`
+	MCP         []string  `yaml:"mcp"`
+	Spawn       []string  `yaml:"spawn"`
+	MaxTurns    int       `yaml:"max_turns"`
+	Color       string    `yaml:"color"`
+	// Retired keys, named so the error can say what replaced them.
+	Model  *string        `yaml:"model"`
+	Policy map[string]any `yaml:"policy"`
+	Hidden *bool          `yaml:"hidden"`
+}
+
+// DefaultTools is what a role gets when it lists none.
+var DefaultTools = []string{"bash", "read", "apply_patch", "skill"}
+
+// ReadPreset parses one roles/<name>.md file.
 func ReadPreset(path string) (Preset, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return Preset{}, err
 	}
-	var p Preset
-	body, err := frontmatter(string(b), &p)
+	var f roleFile
+	body, err := frontmatter(string(b), &f)
 	if err != nil {
-		return p, fmt.Errorf("%s: %w", path, err)
+		return Preset{}, fmt.Errorf("%s: %w", path, err)
 	}
-	p.Name = strings.TrimSuffix(filepath.Base(path), ".md")
-	p.Body = strings.TrimSpace(body)
-	p.Source = path
+	p := Preset{
+		Name: strings.TrimSuffix(filepath.Base(path), ".md"), Description: strings.TrimSpace(f.Description),
+		Mode: f.Mode, Loop: f.Loop, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color,
+		Body: strings.TrimSpace(body), Source: path,
+	}
+	fail := func(format string, args ...any) (Preset, error) {
+		return Preset{}, fmt.Errorf("%s: "+format, append([]any{path}, args...)...)
+	}
+	switch {
+	case f.Model != nil:
+		return fail("model: is now models: (a list; the first entry is the default)")
+	case f.Policy != nil:
+		return fail("policy: is now written under tools: (tools.<name>.<pattern>: verb)")
+	case f.Hidden != nil:
+		return fail("hidden: is not supported; use mode: or leave the role out of spawn lists")
+	case p.Description == "":
+		return fail("description: is required")
+	case p.MaxTurns < 0:
+		return fail("max_turns: must be 0 or more")
+	}
+	switch p.Mode {
+	case "":
+		p.Mode = ModeAll
+	case ModePrimary, ModeSubagent, ModeAll:
+	default:
+		return fail("mode: %q must be primary, subagent or all", p.Mode)
+	}
+	if p.Color != "" && !contains(RoleColors, p.Color) {
+		return fail("color: %q must be one of %s", p.Color, strings.Join(RoleColors, ", "))
+	}
 	if p.Loop == "" {
 		p.Loop = "default"
 	}
+	if p.Models, err = parseModels(&f.Models); err != nil {
+		return fail("models: %v", err)
+	}
+	if p.Tools, p.ToolRules, err = parseTools(&f.Tools); err != nil {
+		return fail("tools: %v", err)
+	}
 	if len(p.Tools) == 0 {
-		p.Tools = []string{"bash", "read", "apply_patch", "skill"}
+		p.Tools = append([]string(nil), DefaultTools...)
 	}
 	return p, nil
+}
+
+// parseModels reads the models whitelist: a list whose entries are either
+// a model id or {id, variants}.
+func parseModels(n *yaml.Node) ([]ModelSpec, error) {
+	if n.Kind == 0 {
+		return nil, nil
+	}
+	if n.Kind != yaml.SequenceNode {
+		return nil, errors.New("must be a list of model ids or {id, variants} entries")
+	}
+	var out []ModelSpec
+	for _, it := range n.Content {
+		switch it.Kind {
+		case yaml.ScalarNode:
+			out = append(out, ModelSpec{ID: strings.TrimSpace(it.Value)})
+		case yaml.MappingNode:
+			var m ModelSpec
+			if err := it.Decode(&m); err != nil {
+				return nil, err
+			}
+			if m.ID == "" {
+				return nil, errors.New("an entry needs an id")
+			}
+			out = append(out, m)
+		default:
+			return nil, errors.New("entries are model ids or {id, variants}")
+		}
+	}
+	return out, nil
+}
+
+// parseTools reads the tools key: a list of names (inherited policy), or a
+// map of name → verb | {pattern: verb}. Names come back in file order.
+func parseTools(n *yaml.Node) ([]string, map[string]map[string]string, error) {
+	if n.Kind == 0 {
+		return nil, nil, nil
+	}
+	switch n.Kind {
+	case yaml.SequenceNode:
+		var names []string
+		if err := n.Decode(&names); err != nil {
+			return nil, nil, err
+		}
+		return names, nil, nil
+	case yaml.MappingNode:
+		var names []string
+		rules := map[string]map[string]string{}
+		for i := 0; i+1 < len(n.Content); i += 2 {
+			name, val := n.Content[i].Value, n.Content[i+1]
+			names = append(names, name)
+			switch val.Kind {
+			case yaml.ScalarNode:
+				if val.Tag == "!!null" || val.Value == "" {
+					continue // present, inherited policy
+				}
+				if !policy.Verb(val.Value).Valid() {
+					return nil, nil, fmt.Errorf("%s: %q is not allow, ask or deny", name, val.Value)
+				}
+				rules[name] = map[string]string{"*": val.Value}
+			case yaml.MappingNode:
+				m := map[string]string{}
+				for k := 0; k+1 < len(val.Content); k += 2 {
+					pat, verb := val.Content[k].Value, val.Content[k+1].Value
+					if !policy.Verb(verb).Valid() {
+						return nil, nil, fmt.Errorf("%s.%s: %q is not allow, ask or deny", name, pat, verb)
+					}
+					m[pat] = verb
+				}
+				rules[name] = m
+			default:
+				return nil, nil, fmt.Errorf("%s: give a verb or a map of pattern → verb", name)
+			}
+		}
+		return names, rules, nil
+	}
+	return nil, nil, errors.New("must be a list of tool names or a map of tool → rules")
 }
 
 // frontmatter splits "---\nyaml\n---\nbody" and decodes the yaml into v.
@@ -530,22 +781,41 @@ func ProjectHash(dir string) ([]string, string, error) {
 	return files, hex.EncodeToString(h.Sum(nil))[:32], nil
 }
 
-// PresetPolicy returns the preset's tightening rules.
+// PresetPolicy returns the role's tightening rules from the map form of
+// tools:. Rules on bash also cover bash_async (the same commands run
+// there); rules on todo cover todo_add and todo_update.
 func (p Preset) PresetPolicy() *policy.Set {
-	return ParsePolicy(normalizeYAML(p.Policy))
+	m := map[string]any{}
+	for tool, rules := range p.ToolRules {
+		r := map[string]any{}
+		for pat, verb := range rules {
+			r[pat] = verb
+		}
+		for _, t := range toolGroup(tool) {
+			m[t] = r
+		}
+	}
+	return ParsePolicy(m)
 }
 
-// normalizeYAML converts yaml's map[string]interface{} nesting to the shape
-// ParsePolicy expects (already map[string]any in yaml.v3).
-func normalizeYAML(m map[string]any) map[string]any { return m }
+// toolGroup expands a tools: key to the tool names it gates.
+func toolGroup(name string) []string {
+	switch name {
+	case "bash":
+		return []string{"bash", "bash_async"}
+	case "todo":
+		return []string{"todo_add", "todo_update"}
+	}
+	return []string{name}
+}
 
-// builtinPresets is the one preset every install starts with. It can do
+// builtinPresets is the one role every install starts with. It can do
 // everything and can delegate to copies of itself; users add specialised
-// presets as <config>/agents/<name>.md or <project>/.stavlos/agents/<name>.md.
+// roles as <config>/roles/<name>.md or <project>/.stavlos/roles/<name>.md.
 func builtinPresets() []Preset {
 	return []Preset{
 		{
-			Name: "general", Layer: "builtin",
+			Name: "general", Layer: "builtin", Mode: ModeAll,
 			Description: "General-purpose engineer: reads, edits, runs, and delegates",
 			Tools:       []string{"bash", "read", "apply_patch", "skill", "todo"},
 			Spawn:       []string{"general"},
@@ -583,4 +853,13 @@ func SetGlobalModel(modelID string) error {
 		s = s[:i+1] + fmt.Sprintf("\n  \"model\": %q,", modelID) + s[i+1:]
 	}
 	return os.WriteFile(p, []byte(s), 0o644)
+}
+
+func contains(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
 }

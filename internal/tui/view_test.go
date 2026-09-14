@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/nicodes/stavlos/internal/event"
@@ -102,19 +103,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, false, metaNone)); got != "main (coder) · claude-opus-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, false, metaNone, lipgloss.NewStyle())); got != "main (coder) · claude-opus-5 · default" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "", "", 0, false, metaNone)); got != "main (coder) · no model — /models" {
+	if got := stripANSI(metaLine("main", "coder", "", "", 0, false, metaNone, lipgloss.NewStyle())); got != "main (coder) · no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, false, metaNone)); got != "scout (explorer) · llama3 · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, false, metaNone, lipgloss.NewStyle())); got != "scout (explorer) · llama3 · default · 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, false, metaNone)); got != "main (coder) · gpt-5 · high" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, false, metaNone, lipgloss.NewStyle())); got != "main (coder) · gpt-5 · high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, true, metaNone)); got != "YOLO · main (coder) · gpt-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, true, metaNone, lipgloss.NewStyle())); got != "YOLO · main (coder) · gpt-5 · default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
@@ -204,7 +205,7 @@ func TestAgentRows(t *testing.T) {
 		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "killed"},
 		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running"},
 	}
-	rows := agentRows(agents, "root", spawned, map[string]string{"c1": "Running the tests now, hold on while I look through all of it"}, now, 100)
+	rows := agentRows(agents, "root", spawned, map[string]string{"c1": "Running the tests now, hold on while I look through all of it"}, nil, now, 100)
 	if len(rows) != 2 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
@@ -217,7 +218,7 @@ func TestAgentRows(t *testing.T) {
 	if !strings.Contains(rows[1], "tester") || !strings.Contains(rows[1], "3s") || strings.Contains(rows[1], "turn") {
 		t.Fatalf("%q", rows[1])
 	}
-	if rows := agentRows(agents, "c2", spawned, nil, now, 100); len(rows) != 0 {
+	if rows := agentRows(agents, "c2", spawned, nil, nil, now, 100); len(rows) != 0 {
 		t.Fatalf("no children expected: %q", rows)
 	}
 	if got := fmtElapsed(3725 * time.Second); got != "1h02m" {
@@ -1580,7 +1581,7 @@ func TestMetaRowHits(t *testing.T) {
 	m.selected = 0
 	m.session.Yolo = true
 	// "YOLO · main (coder) · openai/gpt-5 · high"
-	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, true, metaNone))
+	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, true, metaNone, lipgloss.NewStyle()))
 	at := func(sub string) int { return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1 } // a column, not a byte offset
 	for _, c := range []struct {
 		x    int
@@ -1596,7 +1597,7 @@ func TestMetaRowHits(t *testing.T) {
 	// without yolo the row starts at the name; a missing variant reads "default"
 	m.session.Yolo = false
 	m.agents[0].Variant = ""
-	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, false, metaNone))
+	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, false, metaNone, lipgloss.NewStyle()))
 	if m.metaHit(0) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
 		t.Fatalf("no-yolo row: %q", row)
 	}
@@ -2009,5 +2010,75 @@ func TestSidebarRowsLeaveOneColumn(t *testing.T) {
 		if w := ansi.StringWidth(stripANSI(row)); w != sidebarWidth-1 {
 			t.Fatalf("a truncated row should be %d wide, got %d: %q", sidebarWidth-1, w, stripANSI(row))
 		}
+	}
+}
+
+func TestRoleAwareDialogs(t *testing.T) {
+	m := sessionModel()
+	m.agents = []protocol.AgentInfo{
+		{ID: "root", Label: "main", Archetype: "lead", Model: "openai/gpt-5"},
+		{ID: "c1", Parent: "root", Label: "scout", Archetype: "reviewer", Model: "openai/gpt-5", Variant: "high"},
+	}
+	m.presets = []protocol.PresetInfo{
+		{Name: "general", Description: "does it all", Mode: "all", Spawn: []string{"general"}},
+		{Name: "lead", Description: "runs the show", Mode: "primary", Color: "blue"},
+		{Name: "reviewer", Description: "reviews", Mode: "subagent", Color: "cyan", Models: []protocol.ModelSpec{{ID: "openai/gpt-5", Variants: []string{"medium", "high"}}, {ID: "xai/*"}}},
+	}
+	names := func(o *overlay) []string {
+		var out []string
+		for _, it := range o.items {
+			out = append(out, it.id)
+		}
+		return out
+	}
+	// /roles for the main agent: primary and all roles, not subagent ones
+	m.selected = 0
+	m.onRoles(rolesMsg{roles: m.presets})
+	if got := strings.Join(names(m.ov), ","); got != "general,lead" {
+		t.Fatalf("roles for main: %s", got)
+	}
+	m.closeOverlay()
+	// …and for a subagent: subagent and all roles, not primary ones
+	m.selected = 1
+	m.onRoles(rolesMsg{roles: m.presets})
+	if got := strings.Join(names(m.ov), ","); got != "general,reviewer" {
+		t.Fatalf("roles for a child: %s", got)
+	}
+	if !strings.Contains(m.ov.items[1].hint, "subagent") || !strings.Contains(m.ov.items[1].hint, "gpt-5 +1") {
+		t.Fatalf("role hint: %q", m.ov.items[1].hint)
+	}
+	m.closeOverlay()
+	// /models under a whitelisted role offers only the allowed models (globs count)
+	all := []protocol.ModelInfo{{ID: "openai/gpt-5"}, {ID: "openai/gpt-4"}, {ID: "xai/grok-4"}}
+	m.onModels(modelsMsg{models: all})
+	if got := strings.Join(names(m.ov), ","); got != "openai/gpt-5,xai/grok-4" || !strings.Contains(m.ov.title, "reviewer") {
+		t.Fatalf("models for reviewer: %s (%s)", got, m.ov.title)
+	}
+	m.closeOverlay()
+	// /variants under that role: only the listed ones, and no provider default
+	m.onVariants(variantsMsg{model: "openai/gpt-5", current: "high", variants: []string{"low", "medium", "high", "xhigh"}})
+	if got := strings.Join(names(m.ov), ","); got != "medium,high" {
+		t.Fatalf("variants for reviewer: %s", got)
+	}
+	m.closeOverlay()
+	// a role without a whitelist keeps everything, default included
+	m.selected = 0
+	m.onModels(modelsMsg{models: all})
+	if len(m.ov.items) != 3 {
+		t.Fatalf("models for lead: %d", len(m.ov.items))
+	}
+	m.closeOverlay()
+	m.onVariants(variantsMsg{model: "openai/gpt-5", variants: []string{"low", "high"}})
+	if got := strings.Join(names(m.ov), ","); got != ",low,high" {
+		t.Fatalf("variants for lead: %q", got)
+	}
+	m.closeOverlay()
+	// colours: a tinted role renders, an unknown colour is plain
+	if roleStyle("cyan").GetForeground() == roleStyle("").GetForeground() {
+		t.Fatal("cyan should tint")
+	}
+	rows := agentRows(m.agents, "root", nil, nil, m.roleTints(), time.Now(), 100)
+	if len(rows) != 1 || !strings.Contains(stripANSI(rows[0]), "scout (reviewer)") {
+		t.Fatalf("rows %q", rows)
 	}
 }

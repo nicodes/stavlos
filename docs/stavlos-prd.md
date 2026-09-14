@@ -409,7 +409,7 @@ Three layers with one layout. Global is yours and trusted. Project is the team's
 ```
 ~/.config/stavlos/            # global; identical layout to .stavlos/ plus plugins
   stavlos.json
-  agents/<name>.md
+  roles/<name>.md
   skills/<name>/SKILL.md
   plugins/<name>/             # local plugin builds (§11)
   plugins.lock.json
@@ -470,29 +470,44 @@ JSONC with a `$schema` for editor validation. Every key is optional; anything om
 }
 ```
 
-### 10.3 Presets — `agents/<name>.md`
+### 10.3 Roles — `roles/<name>.md`
 
-A preset defines an archetype. The filename is the archetype name and becomes the Discord role.
+A role (preset, archetype: the same thing in code and in the log) is one markdown file: YAML frontmatter, then the system prompt. The filename is the role name and becomes the Discord role. Global roles live in `<config>/roles/`, project roles in `.stavlos/roles/`; a project role with the same name wins. Every key but `description` is optional, and anything unset is inherited.
 
 ```markdown
 ---
-description: Implements features and fixes bugs in this repo
-model: anthropic/claude-sonnet-5      # optional; omitted → inherits parent's active model
-loop: default                          # optional; only 'default' ships in v1
-tools: [bash, read, apply_patch]
-skills: [go-conventions]               # skill descriptions this agent carries in context
-mcp: [github]                          # servers from stavlos.json this agent may reach
-spawn: [general, explorer]             # archetypes it may spawn; omit → cannot spawn
-policy:                                # preset-level tightening only
+description: Reviews a diff for correctness and risk; reports, never edits   # required
+mode: subagent                  # primary | subagent | all (default)
+models:                         # whitelist, in order; the first is the default; omit → any, inherit
+  - id: openai/gpt-5.1-codex
+    variants: [medium, high]    # allowed for this model; the first is its default
+  - id: openai/gpt-5.1-codex-mini   # no variants → any the provider offers, provider default
+  - xai/grok-4-fast             # shorthand for the same; globs such as openai/* are allowed
+tools:                          # which tools, and how each is gated; a list means inherited policy
   bash:
     "git push*": deny
+    "*": ask
+  read: allow
+  todo: allow
+skills: [review-checklist]      # skill descriptions this role carries
+mcp: [github]                   # servers from stavlos.json it may reach
+spawn: [explorer]               # roles it may create; omit or empty → cannot spawn
+max_turns: 20                   # subagent only: turns before it must answer; 0 = unlimited
+color: cyan                     # red blue green yellow purple orange pink cyan
 ---
 
-You are a Go engineer working in this repository. Prefer small commits.
-Delegate reading unfamiliar code to an explorer before editing it.
+You are a careful reviewer…
 ```
 
-Only one preset ships built in: `general`, a general-purpose engineer with bash, read, apply_patch and skill that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised presets — explorers, testers, reviewers — are the user's to add, one file each. The lifecycle tools (`agent_create`, `agent_cancel`, `agent_kill`) are implied by a non-empty `spawn` list; `agent_message`, `agent_response` and `agent_status` every agent has. Presets are the hub — skills, MCP servers, and policy are referenced *by* presets, not parallel to them. Preset creation must be as frictionless as skill creation, or users will reach for skills when a preset is correct.
+**Mode.** `primary` roles are offered in `/roles` for the main agent and are valid as the root role; `agent_create` refuses them. `subagent` roles are only created by `agent_create` from a role that lists them; `/roles` on the main agent hides them and a subagent cannot switch to a `primary` role. `all` is both, and the default; `general` is `all`.
+
+**Models and variants.** The whitelist bounds `/models` and `agent.set_model` for any agent in the role. A child inherits its parent's model when the list allows it, otherwise it starts on the list's first plain entry; its variant is inherited only when that model's entry allows it, otherwise it takes the entry's first variant (or the provider default when the entry lists none). `/variants` and `agent.set_variant` are bounded the same way, and switching model or role re-fits the variant. All of it is enforced in the daemon, so a client cannot bypass it.
+
+**Tools and rules.** `tools` decides both presence and gating: a tool not listed is never offered. The map form nests policy rules under each tool (patterns are the same prefix globs as `stavlos.json`); rules on `bash` also cover `bash_async`, `todo` covers `todo_add` and `todo_update`. Roles only tighten the layered policy (allow → ask → deny): a loosening entry is a configuration error at load, never silently ignored. The agent tools exist through `spawn` and the messaging set; listing one only re-gates it.
+
+**Turn limit.** A subagent whose role sets `max_turns` is told, in its system prompt, which turn it is on and that it must answer before the limit. A turn past the limit ends at once with an error, and every agent still waiting on it receives an `agent_response` saying so, so nobody waits forever.
+
+Only one role ships built in: `general`, a general-purpose engineer with bash, read, apply_patch, skill and todo that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised roles — explorers, testers, reviewers — are the user's to add, one file each; the repository carries `.stavlos/roles/coder.md` as a worked example. The lifecycle tools (`agent_create`, `agent_cancel`, `agent_kill`) are implied by a non-empty `spawn` list; `agent_message`, `agent_response` and `agent_status` every agent has. Roles are the hub — skills, MCP servers and policy are referenced *by* roles, not parallel to them. Role creation must be as frictionless as skill creation, or users will reach for skills when a role is correct. Rejected: `hidden` (a spawnable but invisible role is a footgun; `mode` and spawn lists cover every case), `temperature` (variants cover what the providers here expose), `memory` and `hooks` (roadmap).
 
 ### 10.4 Skills — `skills/<name>/SKILL.md`
 
