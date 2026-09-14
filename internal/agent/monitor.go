@@ -1,14 +1,12 @@
 package agent
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
@@ -18,31 +16,25 @@ import (
 
 // Background jobs (PRD §6.3): shell commands that outlived the shell
 // tool's wait window (or were started with background: true) whose exit
-// lands in the agent's mailbox and wakes it, exactly like a child's finish. Internally they are "monitors" of kind "command"; the kind field
-// is kept so the log stays readable if other sources return later.
+// lands in the agent's mailbox and wakes it, exactly like a child's answer.
+// The shell tool starts every process (internal/proc); the runtime adopts
+// it, kills it at its timeout or when stopped, and fires when it exits.
+// Internally they are "monitors" of kind "command"; the kind field is kept
+// so the log stays readable if other sources return later.
 
-// Monitor is one general monitor owned by an agent.
+// Monitor is one background job owned by an agent.
 type Monitor struct {
 	ID      string
-	Kind    string // command | watch | timer
+	Kind    string // command
 	Label   string
 	Spec    string
-	Glob    string
-	Seconds float64
 	Started time.Time
 
 	mu       sync.Mutex
 	state    string // running | fired | stopped | lost
 	progress string
 	cancel   context.CancelFunc
-	buf      bytes.Buffer // command output (tail-capped)
-	lines    int
 }
-
-const (
-	monitorOutputCap = 256 * 1024
-	watchInterval    = time.Second
-)
 
 // Info is the protocol view.
 func (m *Monitor) Info() protocol.MonitorInfo {
@@ -59,9 +51,6 @@ func (a *Agent) monitorsAPI() tools.Monitors { return monitorsAPI{a: a} }
 
 type monitorsAPI struct{ a *Agent }
 
-func (m monitorsAPI) StartCommand(command string, timeout time.Duration) (string, error) {
-	return m.a.startMonitor("command", command, "", 0, timeout)
-}
 func (m monitorsAPI) AdoptCommand(command string, job tools.Job, timeout time.Duration) (string, error) {
 	return m.a.adoptMonitor(command, job, timeout)
 }
@@ -92,35 +81,15 @@ func (a *Agent) monitorList() []*Monitor {
 	return out
 }
 
-// startMonitor creates, logs, arms, and runs a monitor.
-func (a *Agent) startMonitor(kind, spec, glob string, seconds float64, timeout time.Duration) (string, error) {
-	if !a.Alive() {
-		return "", fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
-	}
-	m := &Monitor{ID: NewID("m"), Kind: kind, Spec: spec, Glob: glob, Seconds: seconds, Started: time.Now(), state: "running"}
-	m.Label = monitorLabel(kind, spec, glob, seconds)
-	ctx, cancel := context.WithCancel(a.ctx)
-	m.cancel = cancel
-	a.mu.Lock()
-	a.monitors[m.ID] = m
-	a.armed[m.ID] = true
-	a.mu.Unlock()
-	_, _ = a.record(context.Background(), event.MonitorStarted, event.MonitorStartedPayload{ID: m.ID, Kind: kind, Label: m.Label, Spec: spec, Glob: glob, Seconds: seconds})
-	_, _ = a.record(context.Background(), event.MonitorArmed, event.MonitorPayload{IDs: []string{m.ID}})
-	go a.runMonitor(ctx, m, timeout)
-	return m.ID, nil
-}
-
-// adoptMonitor turns a shell call that outlived its wait window into a job:
-// the process keeps running under the tool's writer; the monitor waits on
-// it, kills it at the timeout (counted from its start) or when stopped, and
-// fires like any job.
+// adoptMonitor turns a running shell command into a job: the process keeps
+// running under the tool's writer; the monitor waits on it, kills it at the
+// timeout (counted from its start) or when stopped, and fires like any job.
 func (a *Agent) adoptMonitor(command string, job tools.Job, timeout time.Duration) (string, error) {
 	if !a.Alive() {
 		return "", fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
 	}
 	m := &Monitor{ID: NewID("m"), Kind: "command", Spec: command, Started: job.Started(), state: "running"}
-	m.Label = monitorLabel("command", command, "", 0)
+	m.Label = monitorLabel(command)
 	m.progress = fmt.Sprintf("%d lines", job.Lines())
 	ctx, cancel := context.WithCancel(a.ctx)
 	m.cancel = cancel
@@ -187,12 +156,12 @@ func summarizeExit(res *event.MonitorFiredPayload, err error, killed bool, timeo
 	}
 }
 
-func monitorLabel(kind, spec, glob string, seconds float64) string {
-	s := spec
-	if len(s) > 40 {
-		s = s[:40] + "…"
+// monitorLabel is the command, cut short for lists.
+func monitorLabel(spec string) string {
+	if len(spec) > 40 {
+		return spec[:40] + "…"
 	}
-	return s
+	return spec
 }
 
 func fmtDuration(d time.Duration) string {
@@ -204,61 +173,6 @@ func fmtDuration(d time.Duration) string {
 		return fmt.Sprintf("%dm%02ds", int(d.Minutes()), int(d.Seconds())%60)
 	}
 	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
-}
-
-// runMonitor executes the job and delivers its result.
-func (a *Agent) runMonitor(ctx context.Context, m *Monitor, timeout time.Duration) {
-	var res event.MonitorFiredPayload
-	res.ID, res.Kind, res.Label = m.ID, m.Kind, m.Label
-	res = a.runCommandMonitor(ctx, m, timeout, res)
-	if ctx.Err() != nil {
-		a.finishMonitor(m, "stopped")
-		return
-	}
-	a.fireMonitor(m, res)
-}
-
-func (a *Agent) runCommandMonitor(ctx context.Context, m *Monitor, timeout time.Duration, res event.MonitorFiredPayload) event.MonitorFiredPayload {
-	if timeout <= 0 {
-		timeout = time.Hour
-	}
-	tctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	cmd := exec.CommandContext(tctx, "bash", "-c", m.Spec)
-	cmd.Dir = a.s.Dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	cmd.WaitDelay = 2 * time.Second
-	w := &monitorWriter{m: m}
-	cmd.Stdout, cmd.Stderr = w, w
-	err := cmd.Run()
-	m.mu.Lock()
-	out := m.buf.String()
-	m.mu.Unlock()
-	res.Output = out
-	if ctx.Err() != nil {
-		res.Summary = "background command stopped"
-		return res
-	}
-	summarizeExit(&res, err, tctx.Err() == context.DeadlineExceeded, timeout)
-	return res
-}
-
-type monitorWriter struct{ m *Monitor }
-
-func (w *monitorWriter) Write(p []byte) (int, error) {
-	w.m.mu.Lock()
-	defer w.m.mu.Unlock()
-	w.m.buf.Write(p)
-	w.m.lines += bytes.Count(p, []byte("\n"))
-	if w.m.buf.Len() > monitorOutputCap {
-		b := w.m.buf.Bytes()
-		keep := append([]byte("… [earlier output dropped] …\n"), b[len(b)-monitorOutputCap/2:]...)
-		w.m.buf.Reset()
-		w.m.buf.Write(keep)
-	}
-	w.m.progress = fmt.Sprintf("%d lines", w.m.lines)
-	return len(p), nil
 }
 
 // --- completion ---

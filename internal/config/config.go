@@ -31,6 +31,7 @@ type File struct {
 	Compaction *Compaction    `json:"compaction,omitempty"`
 	MCP        map[string]MCP `json:"mcp,omitempty"`
 	Search     *Search        `json:"search,omitempty"` // web_search backend
+	Env        *EnvConfig     `json:"env,omitempty"`    // what child processes inherit
 	Policy     map[string]any `json:"policy,omitempty"` // tool → verb | {pattern: verb}
 	Plugins    []string       `json:"plugins,omitempty"`
 }
@@ -53,6 +54,13 @@ type Compaction struct {
 
 // Search configures web_search: a provider and its key (the key may be
 // "${env:NAME}").
+// EnvConfig shapes the environment of the processes agents run. Variables
+// whose names look like credentials (…_API_KEY, …TOKEN, …SECRET,
+// …PASSWORD…) and STAVLOS_* are dropped; Pass lists names kept anyway.
+type EnvConfig struct {
+	Pass []string `json:"pass,omitempty"`
+}
+
 type Search struct {
 	Provider string `json:"provider,omitempty"` // brave | tavily | exa
 	APIKey   string `json:"apiKey,omitempty"`
@@ -204,6 +212,7 @@ type Effective struct {
 	}
 	MCP      map[string]MCP
 	Search   Search          // web_search backend, key expanded
+	PassEnv  []string        // environment variables child processes keep although their names look like secrets
 	Policy   *policy.Layered // global and local rules as the base; the trusted project's rules as an overlay that can only tighten
 	Presets  map[string]Preset
 	Skills   map[string]Skill
@@ -391,6 +400,13 @@ func (e *Effective) applyFile(f File, layer string) {
 	}
 	for k, v := range f.MCP {
 		e.MCP[k] = v
+	}
+	if f.Env != nil {
+		for _, n := range f.Env.Pass {
+			if !contains(e.PassEnv, n) {
+				e.PassEnv = append(e.PassEnv, n)
+			}
+		}
 	}
 	rules := ParsePolicy(f.Policy)
 	if layer == "project" {

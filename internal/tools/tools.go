@@ -31,6 +31,7 @@ type Env struct {
 	Todo      Todos                   // the agent's todo list; nil if the preset does not include "todo"
 	Ask       Asker                   // raises a question batch to the human and waits; nil in tests without a runtime
 	Search    SearchConfig            // web_search backend; zero → the tool explains how to configure it
+	PassEnv   []string                // environment variables kept for child processes although their names look like secrets (config env.pass)
 }
 
 // Asker is implemented by the agent runtime: it blocks the turn on a
@@ -40,19 +41,19 @@ type Asker interface {
 	Ask(ctx context.Context, questions []protocol.Question) ([]string, error)
 }
 
-// Monitors is implemented by the agent runtime: sources other than children
-// that land a result in the agent's mailbox and wake it when armed.
+// Monitors is implemented by the agent runtime: background jobs, whose
+// exit lands a result in the agent's mailbox and wakes it.
 type Monitors interface {
-	StartCommand(command string, timeout time.Duration) (string, error)
-	// AdoptCommand takes over a command the shell tool already started and
-	// that outlived its wait window; it becomes a job like any other.
+	// AdoptCommand takes over a command the shell tool started (one that
+	// outlived its wait window, or was started in the background) and
+	// kills, reaps and reports it like any other job.
 	AdoptCommand(command string, job Job, timeout time.Duration) (string, error)
 	List() []MonitorStatus
 	Stop(id string) error
 	Has(id string) bool
 }
 
-// Job is a shell command already running under the shell tool.
+// Job is a shell command running under the shell tool (a *proc.Job).
 type Job interface {
 	Done() <-chan struct{} // closed once the process has exited
 	Err() error            // the exit error, valid after Done
