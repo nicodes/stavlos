@@ -39,6 +39,7 @@ func (spawnTool) Def() model.ToolDef {
 			"label":     prop("string", "Short human-facing name for this child, e.g. 'auth-explorer' (required)"),
 			"task":      prop("string", "The complete task description; the child has no other context"),
 			"model":     prop("string", "Optional provider/model-id override for this child"),
+			"dirs":      map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Optional directories to grant the child on top of the session directory and its role's own; each must be inside one of yours (agent_status lists them)"},
 		}, "archetype", "label", "task")}
 }
 func (spawnTool) PolicyArg(in json.RawMessage) string {
@@ -50,7 +51,10 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
 		return *r
 	}
-	var a struct{ Archetype, Label, Task, Model string }
+	var a struct {
+		Archetype, Label, Task, Model string
+		Dirs                          []string
+	}
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
@@ -60,7 +64,7 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if ok, why := env.Orch.CanSpawn(env.Agent); !ok {
 		return errf("cannot spawn: %s", why)
 	}
-	id, err := env.Orch.Spawn(ctx, env.Agent, a.Archetype, a.Label, a.Task, a.Model)
+	id, err := env.Orch.Spawn(ctx, env.Agent, a.Archetype, a.Label, a.Task, a.Model, a.Dirs)
 	if err != nil {
 		return errf("%v", err)
 	}

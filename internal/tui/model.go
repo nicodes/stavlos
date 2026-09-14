@@ -146,6 +146,7 @@ const (
 	focusAsync                   // the async tab: running bash_async jobs
 	focusTodo                    // the todo tab: the selected agent's todo list
 	focusMCP                     // the mcp tab: the selected agent's MCP servers
+	focusDirs                    // the dirs tab: the selected agent's working directories
 	focusSidebar                 // the agent tree (↑/↓ enter)
 	focusTabs                    // the tab strip: ←/→ highlight a tab, enter opens its dialog
 	focusMeta                    // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
@@ -153,7 +154,7 @@ const (
 
 // tabFocuses are the tabs of the strip under the chat, left to right. They
 // are one stop in the tab cycle; ←/→ move between them.
-var tabFocuses = []focus{focusPermission, focusAgents, focusAsync, focusTodo, focusMCP}
+var tabFocuses = []focus{focusPermission, focusAgents, focusAsync, focusTodo, focusMCP, focusDirs}
 
 // isTab reports whether f is one of the strip's tabs.
 func isTab(f focus) bool {
@@ -462,6 +463,14 @@ func (m *Model) stripShown() bool {
 	return !m.isHome()
 }
 
+// selectedDirs returns the selected agent's working directories.
+func (m *Model) selectedDirs() []protocol.DirInfo {
+	if a := m.selectedAgent(); a != nil {
+		return a.Dirs
+	}
+	return nil
+}
+
 // selectedMCP returns the selected agent's MCP servers (its role's list).
 func (m *Model) selectedMCP() []protocol.MCPInfo {
 	if a := m.selectedAgent(); a != nil {
@@ -614,7 +623,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		}
 	case focusSidebar:
 		m.sbCursor = m.selected
-	case focusAgents, focusAsync, focusTodo, focusMCP:
+	case focusAgents, focusAsync, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0
 	case focusMeta:
 		m.metaSel = m.metaParts()[0] // always the leftmost part: YOLO while on, else the role
@@ -677,6 +686,24 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 // over the items (informational only), esc closes.
 func (m *Model) todoKey(msg tea.KeyMsg) tea.Cmd {
 	n := len(m.selectedTodos())
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.closeDialog()
+	case key.Matches(msg, keys.SelUp), msg.String() == "k":
+		if n > 0 {
+			m.agCursor = ((m.agCursor-1)%n + n) % n
+		}
+	case key.Matches(msg, keys.SelDown), msg.String() == "j":
+		if n > 0 {
+			m.agCursor = (m.agCursor + 1) % n
+		}
+	}
+	return nil
+}
+
+// listKey is the key handling of a read-only list dialog: ↑/↓ (or j/k)
+// move over n rows, esc closes.
+func (m *Model) listKey(msg tea.KeyMsg, n int) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeDialog()
@@ -862,6 +889,8 @@ func (m *Model) tabRowCount() int {
 	case focusMCP:
 		_, owners := mcpRows(m.selectedMCP(), m.mcpOpen, time.Now(), 200)
 		return len(owners)
+	case focusDirs:
+		return len(m.selectedDirs())
 	}
 	return 0
 }
@@ -1338,6 +1367,7 @@ func (m *Model) tabAt(x int) (focus, bool) {
 		{fmt.Sprintf("async (%d)", len(m.runningJobs())), focusAsync},
 		{todoLabel(m.selectedTodos()), focusTodo},
 		{mcpLabel(m.selectedMCP()), focusMCP},
+		{fmt.Sprintf("dirs (%d)", len(m.selectedDirs())), focusDirs},
 	}
 	x0 := 0
 	for _, l := range labels {
@@ -1511,6 +1541,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.todoKey(msg)
 	case focusMCP:
 		return m.mcpKey(msg)
+	case focusDirs:
+		return m.listKey(msg, len(m.selectedDirs()))
 	case focusSidebar:
 		return m.sidebarKey(msg)
 	case focusMeta:

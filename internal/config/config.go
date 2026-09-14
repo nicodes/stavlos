@@ -81,11 +81,12 @@ type Preset struct {
 	Skills      []string
 	MCP         []string
 	Spawn       []string
-	MaxTurns    int    // subagent only: turns before it must answer; 0 = unlimited
-	Color       string // one of RoleColors, or ""
-	Body        string // system prompt
-	Source      string // file path
-	Layer       string // global | project | builtin
+	MaxTurns    int      // subagent only: turns before it must answer; 0 = unlimited
+	Color       string   // one of RoleColors, or ""
+	Dirs        []string // working directories besides the session's, relative to it or absolute (~ allowed)
+	Body        string   // system prompt
+	Source      string   // file path
+	Layer       string   // global | project | builtin
 }
 
 // ModelSpec is one entry of a role's model whitelist: a model id (a glob
@@ -496,6 +497,7 @@ type roleFile struct {
 	Spawn       []string  `yaml:"spawn"`
 	MaxTurns    int       `yaml:"max_turns"`
 	Color       string    `yaml:"color"`
+	Dirs        []string  `yaml:"dirs"`
 	// Retired keys, named so the error can say what replaced them.
 	Model  *string        `yaml:"model"`
 	Policy map[string]any `yaml:"policy"`
@@ -518,7 +520,7 @@ func ReadPreset(path string) (Preset, error) {
 	}
 	p := Preset{
 		Name: strings.TrimSuffix(filepath.Base(path), ".md"), Description: strings.TrimSpace(f.Description),
-		Mode: f.Mode, Loop: f.Loop, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color,
+		Mode: f.Mode, Loop: f.Loop, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color, Dirs: f.Dirs,
 		Body: strings.TrimSpace(body), Source: path,
 	}
 	fail := func(format string, args ...any) (Preset, error) {

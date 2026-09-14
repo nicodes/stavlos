@@ -469,14 +469,14 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.tabSel != 0 {
 		t.Fatalf("left at the edge: sel=%d", m.tabSel)
 	}
-	press(&m, right, right, right, right)
-	press(&m, right) // already rightmost (mcp): stays
-	if m.focus != focusTabs || m.tabSel != 4 {
-		t.Fatalf("right x5: focus=%v sel=%d", m.focus, m.tabSel)
+	press(&m, right, right, right, right, right)
+	press(&m, right) // already rightmost (dirs): stays
+	if m.focus != focusTabs || m.tabSel != 5 {
+		t.Fatalf("right x6: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, left, left, left)
+	press(&m, left, left, left, left)
 	if m.tabSel != 1 {
-		t.Fatalf("left x3: sel=%d", m.tabSel)
+		t.Fatalf("left x4: sel=%d", m.tabSel)
 	}
 	// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -2092,7 +2092,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 
 func TestMCPTabAndDialog(t *testing.T) {
 	m := sessionModel()
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo (0) · mcp (0)") {
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo (0) · mcp (0) · dirs (0)") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	started := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
@@ -2153,5 +2153,51 @@ func TestMCPTabAndDialog(t *testing.T) {
 		if !strings.Contains(v, want) {
 			t.Fatalf("chat lacks %q:\n%s", want, v)
 		}
+	}
+}
+
+func TestDirsTabAndBoundaryPrompt(t *testing.T) {
+	m := sessionModel()
+	m.agents[0].Dirs = []protocol.DirInfo{{Path: "/repo", Source: "session"}, {Path: "/srv/shared", Source: "role"}, {Path: "/tmp/build", Source: "human"}}
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "dirs (3)") {
+		t.Fatalf("strip:\n%s", sv)
+	}
+	tab := tea.KeyMsg{Type: tea.KeyTab}
+	right := tea.KeyMsg{Type: tea.KeyRight}
+	press(&m, tab, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.focus != focusDirs {
+		t.Fatalf("focus %v", m.focus)
+	}
+	dv := stripANSI(m.tabDialog(120))
+	lines := strings.Split(dv, "\n")
+	if len(lines) != 7 || !strings.Contains(lines[1], "Dirs (3)") || !strings.Contains(lines[3], "◆ /repo  session") || !strings.Contains(lines[4], "/srv/shared  role") || !strings.Contains(lines[5], "/tmp/build  human") {
+		t.Fatalf("dirs dialog:\n%s", dv)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown})
+	if m.agCursor != 1 {
+		t.Fatalf("cursor %d", m.agCursor)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.focus != focusTabs || m.tabSel != 5 {
+		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
+	}
+	// a boundary prompt names the directory and what a does
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "read", Agent: "a", Input: []byte(`{"path":"/etc/hosts"}`), Dir: "/etc"}}
+	m.setFocus(focusPermission)
+	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
+	if !strings.Contains(body, "outside its directories · a adds /etc") {
+		t.Fatalf("boundary prompt body:\n%s", body)
+	}
+	hs := m.keyHints()
+	if hs[1].key != "a" || hs[1].desc != "allow + add directory" {
+		t.Fatalf("hints %+v", hs)
+	}
+	// the chat notes an added directory
+	tr := m.transcript("a")
+	tr.Apply(event.Event{Agent: "a", Type: event.AgentDirAdded, Payload: event.MustPayload(event.DirAddedPayload{Dir: "/etc", Source: "human"})})
+	m.setFocus(focusInput)
+	m.refreshViewport()
+	if v := stripANSI(m.vp.View()); !strings.Contains(v, "◆ dirs: + /etc (human)") {
+		t.Fatalf("chat:\n%s", v)
 	}
 }

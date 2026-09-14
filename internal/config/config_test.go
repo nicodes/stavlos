@@ -130,13 +130,14 @@ tools:
 spawn: [explorer]
 max_turns: 20
 color: cyan
+dirs: [../shared, ~/notes]
 ---
 You review.
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Name != "reviewer" || p.Mode != ModeSubagent || p.MaxTurns != 20 || p.Color != "cyan" || p.Body != "You review." {
+	if p.Name != "reviewer" || p.Mode != ModeSubagent || p.MaxTurns != 20 || p.Color != "cyan" || p.Body != "You review." || strings.Join(p.Dirs, ",") != "../shared,~/notes" {
 		t.Fatalf("%+v", p)
 	}
 	if len(p.Models) != 3 || p.Models[0].ID != "openai/gpt-5.1-codex" || len(p.Models[0].Variants) != 2 || p.Models[2].ID != "xai/grok-4-fast" || p.Models[2].Variants != nil {

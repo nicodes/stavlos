@@ -953,6 +953,13 @@ func EventLines(ev event.Event) []Line {
 		}
 		return []Line{{Kind: LineError, Glyph: glyphToolMCP, Tone: ToneError, Text: fmt.Sprintf("mcp: %s failed: %s", p.Server, p.Error)}}
 
+	case event.AgentDirAdded:
+		var p event.DirAddedPayload
+		if err := ev.Decode(&p); err != nil {
+			return decodeErr(ev, err)
+		}
+		return []Line{{Kind: LineDim, Glyph: glyphToolFiles, Text: fmt.Sprintf("dirs: + %s (%s)", shortHome(p.Dir), p.Source)}}
+
 	case event.MCPStopped:
 		var p event.MCPRefPayload
 		if err := ev.Decode(&p); err != nil {

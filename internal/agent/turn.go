@@ -212,15 +212,31 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	if verb == policy.Ask && a.s.Yolo() {
 		verb = policy.Allow // yolo: the session answers every ask with allow
 	}
+	// A call that reaches outside the agent's working directories asks
+	// first, even when policy allows the tool (yolo answers that too). The
+	// prompt names the directory; "allow_always" adds it to the agent.
+	boundary := ""
+	if verb != policy.Deny {
+		if d := a.outsideDir(c.Name, c.Input, t); d != "" {
+			boundary = d
+			if !a.s.Yolo() {
+				verb = policy.Ask
+			}
+		}
+	}
 	switch verb {
 	case policy.Deny:
 		finish("Denied by policy: "+c.Name+" "+arg, true, false, true)
 		return
 	case policy.Ask:
 		a.setState(StateBlocked)
+		question := fmt.Sprintf("%s wants to run %s", a.Label, c.Name)
+		if boundary != "" {
+			question = fmt.Sprintf("%s wants to run %s outside its directories (%s)", a.Label, c.Name, boundary)
+		}
 		ans := a.s.host.Prompt(turnCtx, protocol.PromptInfo{
 			ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: "permission", Tool: c.Name, Input: c.Input,
-			Question: fmt.Sprintf("%s wants to run %s", a.Label, c.Name),
+			Question: question, Dir: boundary,
 		})
 		a.setState(StateRunning)
 		switch {
@@ -231,6 +247,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 			a.s.mu.Lock()
 			a.s.allowAlways[key] = true
 			a.s.mu.Unlock()
+			if boundary != "" {
+				_ = a.addDir(bg, boundary, "human")
+			}
 		case ans.Value == "allow":
 		default:
 			why := "Permission denied by the user."
@@ -303,6 +322,11 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	sb.WriteString(a.preset.Body)
 	sb.WriteString("\n\n")
 	fmt.Fprintf(&sb, "Working directory: %s\n", a.s.Dir)
+	if dirs := a.dirPaths(); len(dirs) > 1 {
+		fmt.Fprintf(&sb, "Your working directories: %s. Reading, editing or running commands outside them asks the human first; agent_create can grant a child any of them.\n", strings.Join(dirs, ", "))
+	} else {
+		sb.WriteString("Reading, editing or running commands outside the working directory asks the human first.\n")
+	}
 	fmt.Fprintf(&sb, "Your agent id is %s.\n", a.ID)
 	if limit := a.preset.MaxTurns; a.Parent != "" && limit > 0 {
 		fmt.Fprintf(&sb, "This is turn %d of at most %d: answer with agent_response before the limit; after it your turns end at once and the agents waiting on you are told you ran out.\n", a.turn, limit)

@@ -59,6 +59,7 @@ type Agent struct {
 	todos      []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
 	todoSeq    int                   // last todo id issued
 	mcps       map[string]*mcpServer // MCP servers this agent has started (name → server)
+	extraDirs  []dirEntry            // working directories beyond the session\'s and the role\'s: grants and the human\'s answers (logged)
 	events     []event.Event         // this agent's events (projection cache)
 	cancelTurn context.CancelFunc
 	yieldFlag  bool            // set by the monitor tool: end the turn after this batch
@@ -464,6 +465,9 @@ func (a *Agent) Info() protocol.AgentInfo {
 	info.LastError = a.lastError
 	info.Todos = append([]event.TodoItem(nil), a.todos...)
 	info.MCP = a.mcpInfoLocked()
+	for _, d := range a.dirListLocked() {
+		info.Dirs = append(info.Dirs, protocol.DirInfo{Path: d.path, Source: d.source})
+	}
 	mons := make([]*Monitor, 0, len(a.monitors))
 	for _, m := range a.monitors {
 		mons = append(mons, m)

@@ -53,8 +53,8 @@ func (o orchestrator) child(parent, id string) (*Agent, error) {
 	return c, nil
 }
 
-func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task, modelID string) (string, error) {
-	a, err := o.s.spawn(ctx, parent, archetype, label, task, modelID)
+func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (string, error) {
+	a, err := o.s.spawn(ctx, parent, archetype, label, task, modelID, dirs)
 	if err != nil {
 		return "", err
 	}
@@ -69,11 +69,17 @@ func (o orchestrator) Message(caller, id, text string) error {
 	if err != nil {
 		return err
 	}
-	if err := c.Steer(context.Background(), text, "agent:"+caller); err != nil {
-		return err
-	}
-	if from, ok := o.s.Agent(caller); ok {
+	// The expectation is registered before delivery: a recipient that
+	// answers (or hits its turn limit) at once must find its asker waiting.
+	from, hasFrom := o.s.Agent(caller)
+	if hasFrom {
 		from.expect(c.ID)
+	}
+	if err := c.Steer(context.Background(), text, "agent:"+caller); err != nil {
+		if hasFrom {
+			from.forget(c.ID)
+		}
+		return err
 	}
 	return nil
 }
@@ -140,7 +146,11 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 	var out []tools.ChildStatus
 	for _, c := range agents {
 		in := c.Info()
-		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller})
+		var dirs []string
+		for _, d := range in.Dirs {
+			dirs = append(dirs, d.Path)
+		}
+		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: c.Label, Archetype: c.Archetype, State: in.State, Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller, Dirs: dirs})
 	}
 	return out, nil
 }
