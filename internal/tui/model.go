@@ -1704,28 +1704,11 @@ func (m *Model) rows() rowLayout {
 // labels are laid out as sectionTabs draws them: permission, agents, async,
 // separated by " · ".
 func (m *Model) tabAt(x int) (focus, bool) {
-	perms, questions := m.promptCounts()
-	perm := fmt.Sprintf("permission (%d)", perms)
-	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
-		perm = fmt.Sprintf("%s (%d)", p.Kind, perms)
-	}
-	labels := []struct {
-		text string
-		f    focus
-	}{
-		{perm, focusPermission},
-		{fmt.Sprintf("questions (%d)", questions), focusQuestions},
-		{fmt.Sprintf("agents (%d)", len(m.liveChildren())), focusAgents},
-		{fmt.Sprintf("async (%d)", len(m.runningJobs())), focusAsync},
-		{todoLabel(m.selectedTodos()), focusTodo},
-		{mcpLabel(m.selectedMCP()), focusMCP},
-		{fmt.Sprintf("dirs (%d)", len(m.selectedDirs())), focusDirs},
-	}
 	x0 := 0
-	for _, l := range labels {
-		w := ansi.StringWidth(l.text)
+	for i, text := range m.tabTexts() {
+		w := ansi.StringWidth(text)
 		if x >= x0 && x < x0+w {
-			return l.f, true
+			return tabFocuses[i], true
 		}
 		x0 += w + 3 // " · "
 	}
