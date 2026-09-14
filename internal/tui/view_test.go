@@ -652,7 +652,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 
 	// A question is not a permission: the permission tab ignores it and the
 	// questions dialog takes it (typing goes to its field, enter answers).
-	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Header: "Colour", Question: "which?", Options: []protocol.QuestionOption{{Label: "blue"}}}}}}
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "blue"}}}}}}
 	m.promptBusy = ""
 	m.ensureFocus()
 	if m.currentPrompt() != nil || m.currentQuestion() == nil {
@@ -2356,7 +2356,7 @@ func TestEnterReturnsToInputAndSpaceSelects(t *testing.T) {
 		t.Fatalf("space in an overlay should pick the row: cmd=%v ov=%v", cmd != nil, m.ov != nil)
 	}
 	// text fields keep enter: a question's typed answer
-	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Header: "Name", Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}}}
+	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}}}
 	m.setFocus(focusQuestions)
 	typedSpace := tea.KeyMsg{Type: tea.KeySpace, Runes: []rune{' '}} // as a terminal sends it
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}, typedSpace, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
@@ -2456,9 +2456,9 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user", Questions: []protocol.Question{
-		{Header: "Backend", Question: "Which backend?", Options: []protocol.QuestionOption{{Label: "Postgres", Description: "what the repo uses"}, {Label: "SQLite"}}},
-		{Header: "Extras", Question: "Which extras?", Options: []protocol.QuestionOption{{Label: "Cache"}, {Label: "Queue"}, {Label: "Search"}}},
-		{Header: "Name", Question: "What should the service be called?", Options: []protocol.QuestionOption{{Label: "stavlos-api"}}},
+		{Question: "Which backend?", Options: []protocol.QuestionOption{{Label: "Postgres", Description: "what the repo uses"}, {Label: "SQLite"}}},
+		{Question: "Which extras?", Options: []protocol.QuestionOption{{Label: "Cache"}, {Label: "Queue"}, {Label: "Search"}}},
+		{Question: "What should the service be called?", Options: []protocol.QuestionOption{{Label: "stavlos-api"}}},
 	}}
 	// a new question opens its dialog when the input is idle
 	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: batch})
@@ -2469,14 +2469,15 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 		t.Fatalf("strip with a question:\n%s", sv)
 	}
 	dv := stripANSI(m.tabDialog(120))
-	for _, want := range []string{"Questions 1/3", "coder (general)", "1/3 · Backend", "Which backend?", "▸ □ Postgres  what the repo uses", "□ SQLite", "□ something else…"} {
+	for _, want := range []string{"Questions 1/3", "coder (general)", "Which backend?", "▸ □ Postgres  what the repo uses", "□ SQLite", "□ something else…"} {
 		if !strings.Contains(dv, want) {
 			t.Fatalf("dialog lacks %q:\n%s", want, dv)
 		}
 	}
-	// heading, then the question, then who asks (no "asks" word), then the list
-	if hi, qi, ai := strings.Index(dv, "1/3 · Backend"), strings.Index(dv, "Which backend?"), strings.Index(dv, "coder (general)"); !(hi < qi && qi < ai) || strings.Contains(dv, " asks") {
-		t.Fatalf("order should be heading, question, agent:\n%s", dv)
+	// the question comes first, then who asks (no heading, no "asks" word), then the list
+	lines := strings.Split(dv, "\n")
+	if !strings.Contains(lines[3], "Which backend?") || !strings.Contains(lines[4], "coder (general)") || strings.Contains(dv, " asks") || strings.Contains(dv, "· Backend") {
+		t.Fatalf("order should be question, agent, list:\n%s", dv)
 	}
 	// a checklist: enter with nothing picked does nothing; ↓ space toggles
 	// SQLite; enter confirms and moves on
@@ -2534,7 +2535,7 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 		t.Fatalf("after the answer: focus=%v", m.focus)
 	}
 	// chat: the tool call line names the headers
-	if got := toolArg("ask_user", []byte(`{"questions":[{"header":"Backend"},{"header":"Name"}]}`)); got != "Backend · Name" {
+	if got := toolArg("ask_user", []byte(`{"questions":[{"question":"Which backend?"},{"question":"Call it?"}]}`)); got != "Which backend? · Call it?" {
 		t.Fatalf("ask_user arg %q", got)
 	}
 }

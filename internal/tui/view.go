@@ -1179,10 +1179,10 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 		return append(lines, strings.Split(p.Question, "\n")...)
 	}
 	cur := p.Questions[q.idx]
-	// The heading, the question, then who is asking; the checklist below.
-	lines = append(lines, styleBold.Render(fmt.Sprintf("%d/%d · %s", q.idx+1, len(p.Questions), cur.Header)))
+	// The question first (bold), then who is asking; the checklist below.
+	// Position in the batch is in the dialog title ("Questions 2/3").
 	for _, l := range strings.Split(ansi.Wrap(cur.Question, width, ""), "\n") {
-		lines = append(lines, l)
+		lines = append(lines, styleBold.Render(l))
 	}
 	if p.Agent != "" {
 		lines = append(lines, styleDim.Render(m.agentWhoLabel(p.Agent)))

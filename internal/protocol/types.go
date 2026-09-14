@@ -296,7 +296,6 @@ type PromptInfo struct {
 // always present; the human may pick any number of them and add a typed
 // answer of their own, all joined with ", " in the answer.
 type Question struct {
-	Header   string           `json:"header"`
 	Question string           `json:"question"`
 	Options  []QuestionOption `json:"options"`
 }

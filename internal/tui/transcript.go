@@ -1248,14 +1248,14 @@ func toolArg(name string, raw json.RawMessage) string {
 		return str("name")
 	case "ask_user":
 		var a struct {
-			Questions []struct{ Header string }
+			Questions []struct{ Question string }
 		}
 		if json.Unmarshal(raw, &a) == nil {
-			var hs []string
+			var qs []string
 			for _, q := range a.Questions {
-				hs = append(hs, q.Header)
+				qs = append(qs, q.Question)
 			}
-			return strings.Join(hs, " · ")
+			return strings.Join(qs, " · ")
 		}
 		return ""
 	case "todo_add":
