@@ -1776,7 +1776,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			m.palIdx = (m.palIdx - 1 + len(pm)) % len(pm)
 			return nil
 		}
-		if m.input.Line() > 0 { // inside a multi-line draft ↑ moves up a line
+		// ↑ moves the cursor up a row (a logical line, or a wrapped row of
+		// one) while there is a row above; on the top row it walks history.
+		if m.input.Line() > 0 || m.input.LineInfo().RowOffset > 0 {
 			break
 		}
 		m.historyMove(-1)
@@ -1786,7 +1788,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 			m.palIdx = (m.palIdx + 1) % len(pm)
 			return nil
 		}
-		if m.input.Line() < m.input.LineCount()-1 { // ↓ moves down a line until the last
+		// ↓ moves down a row while there is one below; on the bottom row it
+		// walks history forward.
+		if li := m.input.LineInfo(); m.input.Line() < m.input.LineCount()-1 || li.RowOffset < li.Height-1 {
 			break
 		}
 		m.historyMove(1)
