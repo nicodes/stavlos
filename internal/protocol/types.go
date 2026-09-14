@@ -285,6 +285,18 @@ const (
 	ModeYolo = "yolo"
 )
 
+// ModeSummary says in a phrase what a permission mode does, for pickers,
+// status lines and the chat.
+func ModeSummary(mode string) string {
+	switch mode {
+	case ModeAuto:
+		return "asks only outside the agent's directories"
+	case ModeYolo:
+		return "every permission is approved, directories included"
+	}
+	return "every permission is asked"
+}
+
 type AgentInfo struct {
 	ID            string           `json:"id"`
 	Session       string           `json:"session"`

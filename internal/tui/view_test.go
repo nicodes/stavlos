@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/tui/format"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -96,8 +98,8 @@ func TestFooterRight(t *testing.T) {
 func TestFmtCost(t *testing.T) {
 	cases := map[float64]string{0: "0.00", 0.0123: "0.0123", 0.01: "0.01", 1.5: "1.50", 2.3456: "2.3456", 0.00004: "0.00"}
 	for in, want := range cases {
-		if got := fmtCost(in); got != want {
-			t.Errorf("fmtCost(%v) = %q, want %q", in, got, want)
+		if got := format.Cost(in); got != want {
+			t.Errorf("format.Cost(%v) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -155,7 +157,7 @@ func TestHomeAndSessionViews(t *testing.T) {
 	if strings.Contains(plain, "session ") {
 		t.Fatal("home view must not show the sidebar")
 	}
-	if !strings.Contains(plain, shortHome(m.session.Dir)) {
+	if !strings.Contains(plain, format.ShortHome(m.session.Dir)) {
 		t.Fatalf("home view should name the session directory above the meta row:\n%s", plain)
 	}
 	if !strings.Contains(plain, "Giddy up!") {
@@ -236,7 +238,7 @@ func TestAgentRows(t *testing.T) {
 	if rows := agentRows(awaitedOf(agents, "c2"), spawned, nil, nil, now, 100); len(rows) != 0 {
 		t.Fatalf("c2 waits on nobody: %q", rows)
 	}
-	if got := fmtElapsed(3725 * time.Second); got != "1h02m" {
+	if got := format.Elapsed(3725 * time.Second); got != "1h02m" {
 		t.Fatalf("%s", got)
 	}
 

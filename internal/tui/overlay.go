@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nicodes/stavlos/internal/tui/format"
+
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -272,7 +274,7 @@ func (o *overlay) loginLines(inner int, spinner string) []string {
 		}
 		if !l.browser {
 			out = append(out, "and enter the code:")
-			out = append(out, "  "+styleOvCode.Render(truncRunes(spacedCode(l.code), inner-2)))
+			out = append(out, "  "+styleOvCode.Render(format.Trunc(spacedCode(l.code), inner-2)))
 		}
 		if ins := strings.TrimSpace(l.instructions); ins != "" {
 			for _, s := range strings.Split(ansi.Wrap(ins, inner, ""), "\n") {
@@ -308,9 +310,9 @@ func dialogTitle(title string, width int) string {
 	const hint = "esc: close"
 	avail := width - len(hint) - 2
 	if avail < 4 {
-		return styleOvTitle.Render(truncRunes(title, width))
+		return styleOvTitle.Render(format.Trunc(title, width))
 	}
-	t := truncRunes(title, avail)
+	t := format.Trunc(title, avail)
 	pad := width - len([]rune(t)) - len(hint)
 	return styleOvTitle.Render(t) + strings.Repeat(" ", pad) + styleDim.Render(hint)
 }
@@ -406,16 +408,16 @@ func renderItem(it overlayItem, cur bool, width int) string {
 	if hint != "" {
 		hintW = len([]rune(hint)) + 2
 		if hintW > avail/2 {
-			hint = truncRunes(hint, avail/2-2)
+			hint = format.Trunc(hint, avail/2-2)
 			hintW = len([]rune(hint)) + 2
 		}
 	}
-	// truncRunes appends an ellipsis, so budgets leave one cell for it.
+	// format.Trunc appends an ellipsis, so budgets leave one cell for it.
 	leftMax := avail - hintW
 	if n := len([]rune(label)); n > leftMax {
-		label, sub = truncRunes(label, max(leftMax-1, 0)), ""
+		label, sub = format.Trunc(label, max(leftMax-1, 0)), ""
 	} else if n+len([]rune(sub)) > leftMax {
-		sub = truncRunes(sub, max(leftMax-n-1, 0))
+		sub = format.Trunc(sub, max(leftMax-n-1, 0))
 	}
 	leftW := len([]rune(label)) + len([]rune(sub))
 	pad := avail - leftW - hintW + 2
@@ -526,22 +528,12 @@ func modelItems(ms []protocol.ModelInfo) []overlayItem {
 func modelHint(m protocol.ModelInfo) string {
 	var parts []string
 	if m.Context > 0 {
-		parts = append(parts, "ctx "+fmtTokens(m.Context))
+		parts = append(parts, "ctx "+format.Tokens(m.Context))
 	}
 	if m.InputPrice > 0 || m.OutputPrice > 0 {
 		parts = append(parts, "$"+fmtPrice(m.InputPrice)+"/$"+fmtPrice(m.OutputPrice)+" per 1M")
 	}
 	return strings.Join(parts, " · ")
-}
-
-func fmtTokens(n int) string {
-	switch {
-	case n >= 1_000_000:
-		return strings.TrimSuffix(strconv.FormatFloat(float64(n)/1_000_000, 'f', 1, 64), ".0") + "m"
-	case n >= 1000:
-		return strconv.Itoa((n+500)/1000) + "k"
-	}
-	return strconv.Itoa(n)
 }
 
 func fmtPrice(v float64) string {
