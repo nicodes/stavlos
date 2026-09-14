@@ -947,7 +947,11 @@ func markCursorForTest(t *testing.T) {
 	t.Helper()
 	prev := highlightRow
 	highlightRow = func(s string, _ int) string { return gutterMark + s }
-	t.Cleanup(func() { highlightRow = prev })
+	renderEpoch++
+	t.Cleanup(func() {
+		highlightRow = prev
+		renderEpoch++
+	})
 }
 
 func TestAgentCreateLineTracksChild(t *testing.T) {
