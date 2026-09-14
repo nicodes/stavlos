@@ -215,6 +215,29 @@ func TestBoundaryPrompt(t *testing.T) {
 	if strings.Join(dirs, " ") != s.Dir+":session "+other+":human" {
 		t.Fatalf("dirs %v", dirs)
 	}
+	t.Run("a symlink is judged by where it points", func(t *testing.T) {
+		fm := &fakeModel{steps: []step{reply(call("c1", "read", `{"path":"link/note.txt"}`)), reply(text("ok"))}}
+		s, h := newTestSession(t, testConfig{}, fm)
+		_ = s.SetMode(context.Background(), protocol.ModeAuto)
+		if err := os.Symlink(other, filepath.Join(s.Dir, "link")); err != nil {
+			t.Fatal(err)
+		}
+		h.answerWith(escalation.Answer{Value: "deny"})
+		runTurn(t, s, h, "go")
+		if n := h.promptCount(); n != 1 || h.prompts[0].Dir != other {
+			t.Fatalf("prompts %d dir %q (want %q)", n, h.prompts[0].Dir, other)
+		}
+	})
+	t.Run("a parent-relative shell argument asks in auto mode", func(t *testing.T) {
+		fm := &fakeModel{steps: []step{reply(call("c1", "shell", `{"command":"cat ../outside.txt"}`)), reply(text("ok"))}}
+		s, h := newTestSession(t, testConfig{}, fm)
+		_ = s.SetMode(context.Background(), protocol.ModeAuto)
+		h.answerWith(escalation.Answer{Value: "deny"})
+		runTurn(t, s, h, "go")
+		if n := h.promptCount(); n != 1 || h.prompts[0].Dir == "" {
+			t.Fatalf("prompts %d: %+v", n, h.prompts)
+		}
+	})
 	t.Run("yolo skips the boundary", func(t *testing.T) {
 		fm := &fakeModel{steps: []step{reply(call("c1", "read", `{"path":"`+f+`"}`)), reply(text("ok"))}}
 		s, h := newTestSession(t, testConfig{}, fm)

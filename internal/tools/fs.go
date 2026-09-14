@@ -12,27 +12,38 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 )
 
-func resolve(env *Env, p string) string {
-	if p == "" {
-		return env.Dir
-	}
-	if filepath.IsAbs(p) {
-		return filepath.Clean(p)
-	}
-	return filepath.Join(env.Dir, p)
-}
+func resolve(env *Env, p string) string { return ResolvePath(env.Dir, p) }
 
-// relForPolicy returns the path relative to the session dir when inside it,
-// so patterns like "src/**" work; absolute otherwise.
-func relForPolicy(dir, p string) string {
-	abs := p
+// ResolvePath is the one way a model-supplied path becomes a filesystem
+// path: absolute against root, cleaned, and with symlinks resolved on the
+// part of it that exists, so a link inside the working directory that
+// points outside is judged — and opened — by where it leads. Nothing is
+// expanded: "~" and "$HOME" are the shell's business, not a path's. The
+// boundary check and the tools use the same function, so they cannot
+// disagree about which file a call touches.
+func ResolvePath(root, p string) string {
+	if p == "" {
+		p = root
+	}
 	if !filepath.IsAbs(p) {
-		abs = filepath.Join(dir, p)
+		p = filepath.Join(root, p)
 	}
-	if rel, err := filepath.Rel(dir, abs); err == nil && !strings.HasPrefix(rel, "..") {
-		return rel
+	p = filepath.Clean(p)
+	rest := ""
+	for cur := p; ; {
+		if real, err := filepath.EvalSymlinks(cur); err == nil {
+			if rest == "" {
+				return real
+			}
+			return filepath.Join(real, rest)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p // nothing of it exists yet
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
 	}
-	return abs
 }
 
 // --- read ---

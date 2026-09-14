@@ -225,3 +225,37 @@ type fakeAsker struct{}
 func (fakeAsker) Ask(ctx context.Context, qs []protocol.Question) ([]string, error) {
 	return []string{"a, b, typed"}, nil
 }
+
+// TestResolvePath: relative paths hang off the root, .. escapes, symlinks
+// resolve on the existing part, and nothing is expanded.
+func TestResolvePath(t *testing.T) {
+	root := t.TempDir()
+	other := t.TempDir()
+	os.WriteFile(filepath.Join(other, "secret.txt"), []byte("s"), 0o644)
+	os.Symlink(other, filepath.Join(root, "link"))
+	os.Symlink(filepath.Join(other, "secret.txt"), filepath.Join(root, "file-link"))
+	rootReal, _ := filepath.EvalSymlinks(root)
+	otherReal, _ := filepath.EvalSymlinks(other)
+	cases := map[string]string{
+		"":                    rootReal,
+		"a/b.txt":             filepath.Join(rootReal, "a", "b.txt"),
+		"./a/../b.txt":        filepath.Join(rootReal, "b.txt"),
+		"../x":                filepath.Join(filepath.Dir(rootReal), "x"),
+		"/etc/hostname":       "/etc/hostname",
+		"link/secret.txt":     filepath.Join(otherReal, "secret.txt"),
+		"link/new/deeper.txt": filepath.Join(otherReal, "new", "deeper.txt"),
+		"file-link":           filepath.Join(otherReal, "secret.txt"),
+		"~/x":                 filepath.Join(rootReal, "~", "x"),
+		"$HOME/x":             filepath.Join(rootReal, "$HOME", "x"),
+	}
+	for in, want := range cases {
+		if got := ResolvePath(root, in); got != want {
+			t.Errorf("ResolvePath(%q) = %q want %q", in, got, want)
+		}
+	}
+	// read opens what ResolvePath says: the link's target
+	r := Builtin()["read"].Run(context.Background(), json.RawMessage(`{"path":"link/secret.txt"}`), &Env{Dir: root})
+	if r.IsError || !strings.Contains(r.Output, "s") {
+		t.Fatalf("%+v", r)
+	}
+}

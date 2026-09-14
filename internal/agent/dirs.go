@@ -17,7 +17,10 @@ import (
 // its role adds dirs:; its creator may grant directories from its own set at
 // agent_create; the human may add one by answering a boundary prompt. A
 // tool call that reaches outside the set asks first, even when policy
-// allows the tool. This is string inspection of paths and commands, not a
+// allows the tool. File paths are resolved the way the tools open them
+// (tools.ResolvePath: symlinks followed, nothing expanded); shell commands
+// are inspected as text — absolute, ~, $HOME-style and parent-relative
+// arguments, cd and redirect targets. That is string inspection, not a
 // sandbox: it catches the model's ordinary behaviour, not an adversary's.
 
 type dirEntry struct{ path, source string }
@@ -77,11 +80,14 @@ func (a *Agent) dirPaths() []string {
 	return out
 }
 
-// inDirs reports whether an absolute path lies in the working set.
+// inDirs reports whether an absolute path lies in the working set. Both
+// sides are compared with symlinks resolved, so a working directory that
+// is itself a link (or reached through one) still contains its files.
 func (a *Agent) inDirs(p string) bool {
-	p = filepath.Clean(p)
+	p = tools.ResolvePath("", p)
 	for _, d := range a.dirList() {
-		if p == d.path || strings.HasPrefix(p, d.path+string(filepath.Separator)) {
+		dir := tools.ResolvePath("", d.path)
+		if p == dir || strings.HasPrefix(p, dir+string(filepath.Separator)) {
 			return true
 		}
 	}
@@ -176,7 +182,7 @@ func (a *Agent) outsideDir(name string, input json.RawMessage, t tools.Tool) str
 			paths = []string{t.PolicyArg(input)}
 		}
 		for i, p := range paths {
-			paths[i] = resolveDir(a.s.Dir, p)
+			paths[i] = tools.ResolvePath(a.s.Dir, p) // as the tool will open it: no ~ or ${env:} for a model's path
 		}
 	}
 	for _, p := range paths {
@@ -213,10 +219,11 @@ func grantDir(p string) string {
 }
 
 // bashPathCandidates picks the paths a shell command line may touch, best
-// effort: absolute and ~ arguments (also after --flag=), cd targets and
-// redirect targets (relative ones taken from base). The program of each
-// simple command and /dev/* are skipped; a glob is cut at its first
-// wildcard.
+// effort: absolute, ~ and parent-relative (../x) arguments (also after
+// --flag=), $HOME/$PWD/$TMPDIR-style arguments with those variables
+// expanded, cd targets and redirect targets (relative ones taken from
+// base). The program of each simple command and /dev/* are skipped; a glob
+// is cut at its first wildcard.
 func bashPathCandidates(cmd, base string) []string {
 	var out []string
 	add := func(p string) {
@@ -265,10 +272,32 @@ func bashPathCandidates(cmd, base string) []string {
 		if eq := strings.IndexByte(tok, '='); eq >= 0 && strings.HasPrefix(tok, "-") {
 			val = tok[eq+1:]
 		}
-		q := strings.Trim(val, "\"'")
-		if strings.HasPrefix(q, "/") || q == "~" || strings.HasPrefix(q, "~/") {
+		q := expandShellVars(strings.Trim(val, "\"'"), base)
+		if strings.HasPrefix(q, "/") || q == "~" || strings.HasPrefix(q, "~/") || q == ".." || strings.HasPrefix(q, "../") || strings.Contains(q, "/../") {
 			add(q)
 		}
 	}
 	return out
+}
+
+// expandShellVars expands the variables a path usually leans on: $HOME,
+// $PWD (the working directory), $TMPDIR and $USER. Others stay as written.
+func expandShellVars(s, base string) string {
+	if !strings.Contains(s, "$") {
+		return s
+	}
+	return os.Expand(s, func(name string) string {
+		switch name {
+		case "HOME":
+			h, _ := os.UserHomeDir()
+			return h
+		case "PWD":
+			return base
+		case "TMPDIR":
+			return os.TempDir()
+		case "USER":
+			return os.Getenv("USER")
+		}
+		return "$" + name
+	})
 }
