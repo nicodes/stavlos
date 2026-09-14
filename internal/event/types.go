@@ -27,6 +27,7 @@ const (
 	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
 	AgentVariantChanged Type = "agent.variant_changed" // VariantChangedPayload: model variant (reasoning effort) switched
 	AgentDirAdded       Type = "agent.dir_added"       // DirAddedPayload: a directory joined the agent\'s working set (a grant at creation, or the human\'s answer)
+	AgentDirRemoved     Type = "agent.dir_removed"     // DirRefPayload: the human took a directory out of the agent\'s working set
 
 	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: wake armed for these ids (children or monitors)
 	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
@@ -138,6 +139,10 @@ type AgentSpawnedPayload struct {
 type DirAddedPayload struct {
 	Dir    string `json:"dir"`
 	Source string `json:"source"`
+}
+
+type DirRefPayload struct {
+	Dir string `json:"dir"`
 }
 
 // ResponsePayload is an agent_response delivered to this agent: who sent

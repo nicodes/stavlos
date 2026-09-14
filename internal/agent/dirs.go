@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,10 +50,14 @@ func (a *Agent) dirListLocked() []dirEntry {
 		}
 	}
 	for _, d := range a.preset.Dirs {
-		add(dirEntry{resolveDir(a.s.Dir, d), "role"})
+		if e := (dirEntry{resolveDir(a.s.Dir, d), "role"}); !a.removedDirs[e.path] {
+			add(e)
+		}
 	}
 	for _, e := range a.extraDirs {
-		add(e)
+		if !a.removedDirs[e.path] {
+			add(e)
+		}
 	}
 	return out
 }
@@ -83,7 +88,8 @@ func (a *Agent) inDirs(p string) bool {
 	return false
 }
 
-// addDir puts a directory in the working set and logs it.
+// addDir puts a directory in the working set and logs it. A directory the
+// human had removed comes back.
 func (a *Agent) addDir(ctx context.Context, dir, source string) error {
 	dir = filepath.Clean(dir)
 	if a.inDirs(dir) {
@@ -93,9 +99,64 @@ func (a *Agent) addDir(ctx context.Context, dir, source string) error {
 		return err
 	}
 	a.mu.Lock()
-	a.extraDirs = append(a.extraDirs, dirEntry{dir, source})
+	a.applyDirAdded(dir, source)
 	a.mu.Unlock()
 	return nil
+}
+
+// applyDirAdded installs an added directory; the caller holds a.mu.
+func (a *Agent) applyDirAdded(dir, source string) {
+	delete(a.removedDirs, dir)
+	a.extraDirs = append(a.extraDirs, dirEntry{dir, source})
+}
+
+// AddDir is the human's add (an absolute path, ~, or a path relative to the
+// session directory).
+func (a *Agent) AddDir(ctx context.Context, dir string) error {
+	if strings.TrimSpace(dir) == "" {
+		return fmt.Errorf("a directory is required")
+	}
+	return a.addDir(ctx, resolveDir(a.s.Dir, dir), "human")
+}
+
+// RemoveDir takes a directory out of the working set. The session
+// directory stays; a role directory is hidden until added back.
+func (a *Agent) RemoveDir(ctx context.Context, dir string) error {
+	dir = resolveDir(a.s.Dir, dir)
+	if dir == filepath.Clean(a.s.Dir) {
+		return fmt.Errorf("the session directory cannot be removed")
+	}
+	found := false
+	for _, d := range a.dirList() {
+		if d.path == dir {
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("%s is not one of the agent's directories", dir)
+	}
+	if _, err := a.record(ctx, event.AgentDirRemoved, event.DirRefPayload{Dir: dir}); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	a.applyDirRemoved(dir)
+	a.mu.Unlock()
+	return nil
+}
+
+// applyDirRemoved forgets a directory; the caller holds a.mu.
+func (a *Agent) applyDirRemoved(dir string) {
+	if a.removedDirs == nil {
+		a.removedDirs = map[string]bool{}
+	}
+	a.removedDirs[dir] = true
+	kept := a.extraDirs[:0]
+	for _, e := range a.extraDirs {
+		if e.path != dir {
+			kept = append(kept, e)
+		}
+	}
+	a.extraDirs = kept
 }
 
 // outsideDir returns the first directory a tool call reaches outside the

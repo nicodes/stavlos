@@ -284,6 +284,35 @@ func modeDesc(mode string) string {
 	return "every permission is asked"
 }
 
+func addDirCmd(ctx context.Context, c *client.Client, agent, dir string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		return resultMsg{"added " + dir, c.AddAgentDir(ctx, agent, dir)}
+	}
+}
+
+func removeDirCmd(ctx context.Context, c *client.Client, agent, dir string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		return resultMsg{"removed " + shortHome(dir), c.RemoveAgentDir(ctx, agent, dir)}
+	}
+}
+
+// replaceDirCmd swaps one directory for another (an edit in the dirs
+// dialog): the new one is added first so the agent never loses ground.
+func replaceDirCmd(ctx context.Context, c *client.Client, agent, oldDir, newDir string) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := withTimeout(ctx)
+		defer cancel()
+		if err := c.AddAgentDir(ctx, agent, newDir); err != nil {
+			return resultMsg{"", err}
+		}
+		return resultMsg{"replaced " + shortHome(oldDir) + " with " + newDir, c.RemoveAgentDir(ctx, agent, oldDir)}
+	}
+}
+
 func setModeCmd(ctx context.Context, c *client.Client, session, mode string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := withTimeout(ctx)
