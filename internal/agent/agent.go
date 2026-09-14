@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
@@ -59,6 +60,7 @@ type Agent struct {
 	todos      []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
 	todoSeq    int                   // last todo id issued
 	mcps       map[string]*mcpServer // MCP servers this agent has started (name → server)
+	mcpIdle    *time.Timer           // stops idle MCP servers (MCPIdleAfter)
 	extraDirs  []dirEntry            // working directories beyond the session\'s and the role\'s: grants and the human\'s answers (logged)
 	events     []event.Event         // this agent's events (projection cache)
 	cancelTurn context.CancelFunc

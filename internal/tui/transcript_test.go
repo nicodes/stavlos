@@ -171,7 +171,6 @@ func TestToolLine(t *testing.T) {
 		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`, "Agent create  scout (explorer)"},
 		{"agent_message", `{"id":"ag_1","text":"go"}`, "Agent message  ag_1"},
 		{"agent_cancel", `{"id":"ag_1"}`, "Agent cancel  ag_1"},
-		{"agent_kill", `{"id":"ag_1"}`, "Agent kill  ag_1"},
 		{"agent_response", `{"to":"ag_2","text":"found it"}`, "Agent response delivered  → ag_2"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
 		{"agent_finish", `{"status":"success","summary":"x"}`, "Agent complete  success"},

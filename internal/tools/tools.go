@@ -74,7 +74,6 @@ type Orchestrator interface {
 	// mid-turn if it is busy, as a new turn if it is idle.
 	Message(caller, id, text string) error
 	Cancel(parent, id string) error
-	Kill(parent, id string) error
 	Status(parent, id string) ([]ChildStatus, error)
 	// Respond delivers the caller's answer to an agent that prompted it; the
 	// recipient is woken between turns. The caller stays alive.
@@ -111,7 +110,7 @@ func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
 		bashTool{}, readTool{}, patchTool{}, skillTool{}, responseTool{},
-		spawnTool{}, messageTool{}, cancelTool{}, killTool{}, statusTool{},
+		spawnTool{}, messageTool{}, cancelTool{}, statusTool{},
 		bashAsyncTool{}, bashKillTool{},
 		todoAddTool{}, todoUpdateTool{},
 	} {
@@ -121,7 +120,7 @@ func Builtin() Set {
 }
 
 // OrchestrationNames are the tools implied by a non-empty spawn list.
-var OrchestrationNames = []string{"agent_create", "agent_cancel", "agent_kill"}
+var OrchestrationNames = []string{"agent_create", "agent_cancel"}
 
 // MessagingNames are offered to every agent: any agent may prompt any
 // other in its session and see the tree. Steering is the main agent's

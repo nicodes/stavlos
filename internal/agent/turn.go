@@ -31,6 +31,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	a.yieldFlag = false
 	a.lastError = ""
 	a.mu.Unlock()
+	a.disarmMCPIdle()
 	defer func() {
 		cancel()
 		a.mu.Lock()
@@ -63,6 +64,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 		}
 		a.mu.Unlock()
 		_, _ = a.record(bg, event.TurnEnded, event.TurnEndedPayload{Turn: turn, Reason: reason, Error: errText})
+		a.armMCPIdle()
 	}
 
 	// A subagent past its role's turn limit does not run: the turn ends at
@@ -384,7 +386,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 					fmt.Fprintf(&sb, "- %s: %s\n", arch, p.Description)
 				}
 			}
-			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents busy in this session (idle children do not count). Children run in the background. A child's agent_response wakes you with its answer as a new message, never mid-turn (an answer that lands while you are working arrives when your current turn ends). There is no wait tool: when nothing more can be done until a child answers, end your turn. Children stay alive after answering: agent_message one again for a follow-up (it keeps its context) and agent_kill children you no longer need. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Busy(), cfg.Limits.MaxAgents)
+			fmt.Fprintf(&sb, "Limits: depth %d of %d, %d of %d agents busy in this session (idle children do not count). Children run in the background. A child's agent_response wakes you with its answer as a new message, never mid-turn (an answer that lands while you are working arrives when your current turn ends). There is no wait tool: when nothing more can be done until a child answers, end your turn. Children stay alive for the session: agent_message one again for a follow-up (it keeps its context); there is nothing to clean up. Each child starts with no context beyond the task text you give it.\n", a.Depth, cfg.Limits.MaxDepth, a.s.Busy(), cfg.Limits.MaxAgents)
 			names = append(names, tools.OrchestrationNames...)
 		} else {
 			fmt.Fprintf(&sb, "You cannot spawn right now (%s). Do the work yourself.\n", why)

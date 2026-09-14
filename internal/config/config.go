@@ -235,7 +235,6 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "agent_response", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_message", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_cancel", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "agent_kill", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_status", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "bash", Pattern: "*", Verb: policy.Ask},
 		policy.Rule{Tool: "bash_async", Pattern: "*", Verb: policy.Ask},
@@ -835,7 +834,7 @@ func builtinPresets() []Preset {
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
 Work carefully: read before you edit, prefer small targeted changes, and run the project's tests or build after changing code.
 Search and read with bash (grep -rn, rg, find, ls) and read; edit with apply_patch. Run slow commands such as test suites with bash_async.
-Delegate independent pieces of work to subagents when that saves your own context or lets things run in parallel: give each a specific task and a short label, then keep working or end your turn; each child's answer comes back to you as a message. A child stays alive after answering: message it again for follow-ups, and kill children you no longer need. Subagents can delegate too.
+Delegate independent pieces of work to subagents when that saves your own context or lets things run in parallel: give each a specific task and a short label, then keep working or end your turn; each child's answer comes back to you as a message. A child stays alive for the session: message it again for follow-ups. Subagents can delegate too.
 Report what you changed and what you verified.`,
 		},
 	}

@@ -33,7 +33,7 @@ func jsonOut(v any) Result {
 type spawnTool struct{}
 
 func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_create", Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its agent_response comes back to you as a new message between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive afterwards: agent_message it again for follow-ups (it keeps its context), and agent_kill it when you are done with it.",
+	return model.ToolDef{Name: "agent_create", Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its agent_response comes back to you as a new message between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive for the rest of the session: agent_message it again for follow-ups (it keeps its context). There is nothing to clean up.",
 		Schema: schema(map[string]any{
 			"archetype": prop("string", "Preset name of the child (see the list in your instructions)"),
 			"label":     prop("string", "Short human-facing name for this child, e.g. 'auth-explorer' (required)"),
@@ -110,25 +110,6 @@ func (cancelTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 	}
 	return Result{Output: "cancelled"}
 }
-
-type killTool struct{}
-
-func (killTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "agent_kill", Description: "Tear down a child agent and its subtree when you no longer need it. Its history is preserved but it cannot be prompted again.",
-		Schema: schema(map[string]any{"id": prop("string", "Child agent id")}, "id")}
-}
-func (killTool) PolicyArg(in json.RawMessage) string { return idArg(in) }
-func (killTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	if r := needOrch(env); r != nil {
-		return *r
-	}
-	if err := env.Orch.Kill(env.Agent, idArg(in)); err != nil {
-		return errf("%v", err)
-	}
-	return Result{Output: "killed"}
-}
-
-// --- monitor / result / status ---
 
 type statusTool struct{}
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/nicodes/stavlos/internal/agent"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/model/registry"
@@ -1403,12 +1404,29 @@ func TestMCPServersPerAgent(t *testing.T) {
 	if byName["echo"].State != "connected" || len(byName["echo"].Tools) != 1 || byName["missing"].State != "failed" {
 		t.Fatalf("tree mcp %+v", agents[0].MCP)
 	}
+	// an idle agent's servers stop after MCPIdleAfter and start again at
+	// its next turn (agents are never killed, so this is what keeps an idle
+	// child cheap)
+	agent.MCPIdleAfter = 150 * time.Millisecond
+	defer func() { agent.MCPIdleAfter = 10 * time.Minute }()
+	fm.mu.Lock()
+	fm.steps = append(fm.steps, func(model.Request) model.Response { return text("idle now") })
+	fm.mu.Unlock()
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "one more")
+	h.waitFor(event.TurnEnded, root)
+	h.waitFor(event.MCPStopped, root)
+	agents, _ = h.c.Tree(ctx, s.ID)
+	for _, m := range agents[0].MCP {
+		if m.Name == "echo" && m.State != "pending" {
+			t.Fatalf("idle stop should leave the server pending for the next turn: %+v", m)
+		}
+	}
+	agent.MCPIdleAfter = 10 * time.Minute
 	// a role without MCP: the next turn stops the server
 	if err := h.c.SetAgentRole(ctx, root, "general"); err != nil {
 		t.Fatal(err)
 	}
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "again")
-	h.waitFor(event.MCPStopped, root)
 	h.waitFor(event.TurnEnded, root)
 	agents, _ = h.c.Tree(ctx, s.ID)
 	if len(agents[0].MCP) != 0 {
