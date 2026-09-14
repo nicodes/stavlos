@@ -208,6 +208,7 @@ type AgentInfo struct {
 	LastError string           `json:"last_error,omitempty"` // error that ended the most recent turn, if any
 	Monitors  []MonitorInfo    `json:"monitors,omitempty"`   // this agent's general monitors (not children)
 	Todos     []event.TodoItem `json:"todos,omitempty"`      // this agent\'s todo list, in creation order
+	MCP       []MCPInfo        `json:"mcp,omitempty"`        // this agent\'s MCP servers (the ones its role lists), with state
 }
 type AgentTreeParams struct {
 	V       int    `json:"v"`
@@ -445,6 +446,17 @@ type PromptNotification struct {
 
 // MonitorInfo is a general monitor owned by an agent: a background command,
 // a file watch, or a timer. Children are not monitors; they are agents.
+// MCPInfo is one MCP server an agent's role lists. State: pending (not
+// started yet: it starts at the agent's next turn) | starting | connected |
+// failed | stopped.
+type MCPInfo struct {
+	Name    string   `json:"name"`
+	State   string   `json:"state"`
+	Error   string   `json:"error,omitempty"`
+	Tools   []string `json:"tools,omitempty"` // model-facing names
+	Started string   `json:"started,omitempty"`
+}
+
 type MonitorInfo struct {
 	ID       string `json:"id"`
 	Agent    string `json:"agent"`

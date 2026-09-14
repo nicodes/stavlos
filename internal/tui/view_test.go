@@ -462,17 +462,14 @@ func TestTabCyclesFocus(t *testing.T) {
 	if m.tabSel != 0 {
 		t.Fatalf("left at the edge: sel=%d", m.tabSel)
 	}
-	press(&m, right)
-	press(&m, right)
-	press(&m, right)
-	press(&m, right) // already rightmost (todo): stays
-	if m.focus != focusTabs || m.tabSel != 3 {
-		t.Fatalf("right x4: focus=%v sel=%d", m.focus, m.tabSel)
+	press(&m, right, right, right, right)
+	press(&m, right) // already rightmost (mcp): stays
+	if m.focus != focusTabs || m.tabSel != 4 {
+		t.Fatalf("right x5: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, left)
-	press(&m, left)
+	press(&m, left, left, left)
 	if m.tabSel != 1 {
-		t.Fatalf("left left: sel=%d", m.tabSel)
+		t.Fatalf("left x3: sel=%d", m.tabSel)
 	}
 	// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -2080,5 +2077,71 @@ func TestRoleAwareDialogs(t *testing.T) {
 	rows := agentRows(m.agents, "root", nil, nil, m.roleTints(), time.Now(), 100)
 	if len(rows) != 1 || !strings.Contains(stripANSI(rows[0]), "scout (reviewer)") {
 		t.Fatalf("rows %q", rows)
+	}
+}
+
+func TestMCPTabAndDialog(t *testing.T) {
+	m := sessionModel()
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo (0) · mcp (0)") {
+		t.Fatalf("strip:\n%s", sv)
+	}
+	started := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
+	m.agents[0].MCP = []protocol.MCPInfo{
+		{Name: "github", State: "connected", Tools: []string{"mcp__github__get_issue", "mcp__github__create_issue"}, Started: started},
+		{Name: "docs", State: "failed", Error: "spawn npx: not found"},
+		{Name: "linear", State: "pending"},
+	}
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "mcp (1/3)") {
+		t.Fatalf("strip with servers:\n%s", sv)
+	}
+	// tab → meta → strip, → x4 lands on mcp, enter opens its dialog
+	tab := tea.KeyMsg{Type: tea.KeyTab}
+	right := tea.KeyMsg{Type: tea.KeyRight}
+	press(&m, tab, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.focus != focusMCP {
+		t.Fatalf("focus %v", m.focus)
+	}
+	dv := stripANSI(m.tabDialog(120))
+	lines := strings.Split(dv, "\n")
+	// border, title, blank, three rows, border
+	if len(lines) != 7 || !strings.Contains(lines[1], "MCP (1/3)") || !strings.Contains(lines[3], "● github  2 tools · 2h00m") || !strings.Contains(lines[4], "× docs  spawn npx: not found") || !strings.Contains(lines[5], "○ linear  starts at the next turn") {
+		t.Fatalf("mcp dialog:\n%s", dv)
+	}
+	// enter on a server lists its tools under it (short names), enter again folds them
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+	dv = stripANSI(m.tabDialog(120))
+	lines = strings.Split(dv, "\n")
+	if len(lines) != 9 || !strings.Contains(lines[4], "get_issue") || !strings.Contains(lines[5], "create_issue") || strings.Contains(lines[4], "mcp__") {
+		t.Fatalf("expanded server:\n%s", dv)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyEnter}) // a tool row: enter does nothing
+	if !m.mcpOpen["github"] {
+		t.Fatal("enter on a tool row should not toggle anything")
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.mcpOpen["github"] || strings.Count(stripANSI(m.tabDialog(120)), "\n") != 6 {
+		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.focus != focusTabs || m.tabSel != 4 {
+		t.Fatalf("esc should return to the strip on mcp: focus=%v sel=%d", m.focus, m.tabSel)
+	}
+	// chat: tool names and server events
+	if got := toolTitle("mcp__github__create_issue"); got != "github · create_issue" {
+		t.Fatalf("title %q", got)
+	}
+	if g, _ := toolGlyph("mcp__github__create_issue"); g != glyphToolMCP {
+		t.Fatalf("glyph %q", g)
+	}
+	tr := m.transcript("a")
+	tr.Apply(event.Event{Agent: "a", Type: event.MCPStarted, Payload: event.MustPayload(event.MCPStartedPayload{Server: "github", Tools: []string{"x", "y"}})})
+	tr.Apply(event.Event{Agent: "a", Type: event.MCPFailed, Payload: event.MustPayload(event.MCPFailedPayload{Server: "docs", Error: "boom"})})
+	tr.Apply(event.Event{Agent: "a", Type: event.MCPStopped, Payload: event.MustPayload(event.MCPRefPayload{Server: "github"})})
+	m.refreshViewport()
+	v := stripANSI(m.vp.View())
+	for _, want := range []string{"≡ mcp: github connected · 2 tools", "≡ mcp: docs failed: boom", "≡ mcp: github stopped"} {
+		if !strings.Contains(v, want) {
+			t.Fatalf("chat lacks %q:\n%s", want, v)
+		}
 	}
 }

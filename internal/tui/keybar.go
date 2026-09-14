@@ -28,6 +28,8 @@ func (m Model) keyHints() []keyHint {
 		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusAsync, focusTodo:
 		return []keyHint{{"↑/↓", "move"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
+	case focusMCP:
+		return []keyHint{{"↑/↓", "move"}, {"enter", "show/hide tools"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusSidebar:
 		return []keyHint{{"↑/↓", "move"}, {"enter", "select agent"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
 	case focusMeta:

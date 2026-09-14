@@ -147,6 +147,10 @@ func errf(format string, a ...any) Result {
 	return Result{Output: fmt.Sprintf(format, a...), IsError: true}
 }
 
+// Clip truncates tool output to max bytes (0 = 32k), keeping the head and
+// the tail.
+func Clip(s string, max int) string { return clip(s, max) }
+
 func clip(s string, max int) string {
 	if max <= 0 {
 		max = 32 * 1024
