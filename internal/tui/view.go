@@ -784,38 +784,74 @@ func promptBoxWidth(width int) int {
 // nameStyle tints the "label (role)" part (the role's colour, or plain).
 // modeTag is "AUTO" or "YOLO" (the session's permission mode), "" for ask.
 func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) string {
-	pick := func(part metaPart, text string, st lipgloss.Style) string {
-		if part == sel {
-			return styleBoxTitleFocus.Render(text)
+	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel, nameStyle)
+	return line
+}
+
+// metaLineSpans is metaLine plus where each clickable part was drawn.
+func metaLineSpans(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) (string, []span[metaPart]) {
+	var b strings.Builder
+	var spans []span[metaPart]
+	x := 0
+	part := func(p metaPart, text string, st lipgloss.Style) {
+		if p == sel {
+			st = styleBoxTitleFocus
 		}
-		return st.Render(text)
+		w := ansi.StringWidth(text)
+		spans = append(spans, span[metaPart]{x, x + w, p})
+		b.WriteString(st.Render(text))
+		x += w
 	}
-	s := ""
+	sep := func() {
+		b.WriteString(" · ")
+		x += 3
+	}
 	if modeTag != "" {
 		st := styleWarn // YOLO: nothing asks
 		if modeTag == "AUTO" {
 			st = styleAccent // AUTO: only the boundary asks
 		}
-		s = pick(metaYolo, modeTag, st) + " · "
+		part(metaYolo, modeTag, st)
+		sep()
 	}
 	name := label
 	if role != "" {
 		name = fmt.Sprintf("%s (%s)", label, role)
 	}
-	s += pick(metaRole, name, nameStyle) + " · "
+	part(metaRole, name, nameStyle)
+	sep()
 	if model == "" {
-		return s + pick(metaModel, "no model — /models", styleWarn)
+		part(metaModel, "no model — /models", styleWarn)
+		return b.String(), spans
 	}
 	short, _ := splitModel(model) // just the model id; the provider is in /models
-	s += pick(metaModel, short, lipgloss.NewStyle())
+	part(metaModel, short, lipgloss.NewStyle())
 	if variant == "" {
 		variant = "default"
 	}
-	s += " · " + pick(metaVariant, variant, lipgloss.NewStyle())
+	sep()
+	part(metaVariant, variant, lipgloss.NewStyle())
 	if queued > 0 {
-		s += styleDim.Render(fmt.Sprintf(" · %d queued", queued))
+		b.WriteString(styleDim.Render(fmt.Sprintf(" · %d queued", queued)))
 	}
-	return s
+	return b.String(), spans
+}
+
+// span is the columns [from, to) of one clickable thing drawn on a row.
+type span[T any] struct {
+	from, to int
+	id       T
+}
+
+// hitSpan returns what was drawn at column x.
+func hitSpan[T any](spans []span[T], x int) (T, bool) {
+	for _, s := range spans {
+		if x >= s.from && x < s.to {
+			return s.id, true
+		}
+	}
+	var zero T
+	return zero, false
 }
 
 // --- footer ---
@@ -971,10 +1007,9 @@ func (m Model) inputBoxView(width int) string {
 	return m.inputView()
 }
 
-// metaRow is the line under the divider: role and model on the left, tokens
-// and cost (or a transient status) on the right, dot separators within
-// each side. The left side is truncated first when they collide.
-func (m Model) metaRow(width int) string {
+// metaLeft is the meta row's left side for the selected agent and where
+// its parts were drawn (the mouse hit-tests the same spans).
+func (m Model) metaLeft() (string, []span[metaPart]) {
 	label, role, model, variant, queued := "agent", "", m.session.Model, "", 0
 	if a := m.selectedAgent(); a != nil {
 		label, role, variant, queued = a.Label, a.Archetype, a.Variant, a.Queued
@@ -990,7 +1025,14 @@ func (m Model) metaRow(width int) string {
 	if r := m.roleInfo(role); r != nil {
 		nameStyle = roleStyle(r.Color)
 	}
-	left := metaLine(label, role, model, variant, queued, m.modeTag(), sel, nameStyle)
+	return metaLineSpans(label, role, model, variant, queued, m.modeTag(), sel, nameStyle)
+}
+
+// metaRow is the line under the divider: role and model on the left, tokens
+// and cost (or a transient status) on the right, dot separators within
+// each side. The left side is truncated first when they collide.
+func (m Model) metaRow(width int) string {
+	left, _ := m.metaLeft()
 	right := m.footerRightView()
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {
@@ -1340,27 +1382,42 @@ func (m Model) sectionsView(width int) string {
 	return m.sectionTabs(m.currentPrompt(), width)
 }
 
-// tabDialogHeader is how many lines precede the rows in a tab dialog: the
-// title line and the blank line under it.
-const tabDialogHeader = 2
-
 // tabDialog is the dialog of the open tab, drawn over the chat like every
 // other dialog: its title and count (with "esc: close" at the right), a
 // blank line, then its rows (the pending prompt, the live children, the
 // running jobs) or a note that it is empty. Each tab has its own; nothing
 // switches between them from inside.
 func (m Model) tabDialog(bodyWidth int) string {
+	box, _ := m.tabDialogBox(bodyWidth)
+	return box
+}
+
+// tabDialogBox is tabDialog plus, for every line inside the border (the
+// title is line 0), the selectable row drawn there or -1.
+func (m Model) tabDialogBox(bodyWidth int) (string, []int) {
 	w := dialogWidth(bodyWidth)
 	inner := w - 4 // border + padding
 	lines := []string{dialogTitle(m.tabDialogTitle(), inner), ""}
-	for _, l := range m.tabBodyLines(inner) {
-		lines = append(lines, ansi.Truncate(l, inner, "…"))
+	rows := []int{-1, -1}
+	body, bodyRows := m.tabBodyRows(inner)
+	for i, l := range body {
+		for k, part := range strings.Split(l, "\n") {
+			lines = append(lines, ansi.Truncate(part, inner, "…"))
+			if k == 0 {
+				rows = append(rows, bodyRows[i])
+			} else {
+				rows = append(rows, -1)
+			}
+		}
 	}
 	if f := dialogHintLines(m.keyHints(), inner); len(f) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, f...)
+		for range len(f) + 1 {
+			rows = append(rows, -1)
+		}
 	}
-	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
+	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n")), rows
 }
 
 // tabDialogTitle is the open tab's title with its count; a prompt dialog
@@ -1427,15 +1484,34 @@ func dialogWidth(bodyWidth int) int {
 	return w
 }
 
-// tabBodyLines is the focused tab's rows, laid out for width columns.
+// tabBodyLines is the focused tab's body, laid out for width columns.
 func (m Model) tabBodyLines(width int) []string {
+	lines, _ := m.tabBodyRows(width)
+	return lines
+}
+
+// tabBodyRows is tabBodyLines plus, for every line, the selectable row it
+// draws (-1 for none): what a click or hover on that line picks.
+func (m Model) tabBodyRows(width int) ([]string, []int) {
+	// rowsAt maps n rows drawn one per line from line start.
+	rowsAt := func(lines []string, start, n int) ([]string, []int) {
+		rows := make([]int, len(lines))
+		for i := range rows {
+			rows[i] = -1
+			if start >= 0 && i >= start && i < start+n {
+				rows[i] = i - start
+			}
+		}
+		return lines, rows
+	}
+	note := func(text string) ([]string, []int) { return rowsAt([]string{styleDim.Render(text)}, -1, 0) }
 	switch m.focus {
 	case focusAsync:
 		// what the selected agent is waiting on: the agents whose answer it
 		// expects, then its running jobs
 		waiting, jobs := m.awaitedAgents(), m.runningJobs()
 		if len(waiting)+len(jobs) == 0 {
-			return []string{styleDim.Render("  not waiting on anything")}
+			return note("  not waiting on anything")
 		}
 		owner, role := "", ""
 		if a := m.selectedAgent(); a != nil {
@@ -1443,27 +1519,30 @@ func (m Model) tabBodyLines(width int) []string {
 		}
 		rows := agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2)
 		rows = append(rows, monitorRows(jobs, owner, role, time.Now(), width-2)...)
-		return m.cursorRows(rows)
+		return rowsAt(m.cursorRows(rows), 0, len(rows))
 	case focusTodo:
 		items := m.selectedTodos()
 		if len(items) == 0 {
-			return []string{styleDim.Render("  no todo items")}
+			return note("  no todo items")
 		}
-		return m.cursorRows(todoRows(items, width-2))
+		rows := todoRows(items, width-2)
+		return rowsAt(m.cursorRows(rows), 0, len(rows))
 	case focusMCP:
 		items := m.selectedMCP()
 		if len(items) == 0 {
-			return []string{styleDim.Render("  no mcp servers")}
+			return note("  no mcp servers")
 		}
 		rows, _ := mcpRows(items, m.mcpOpen, time.Now(), width-2)
-		return m.cursorRows(rows)
+		return rowsAt(m.cursorRows(rows), 0, len(rows))
 	case focusDirs:
 		items := m.selectedDirs()
 		var rows []string
+		n := 0
 		if len(items) == 0 {
 			rows = []string{styleDim.Render("  no directories")}
 		} else {
 			rows = m.cursorRows(dirRows(items, width-2))
+			n = len(rows)
 		}
 		if m.dirEdit != "" {
 			label := "add a directory"
@@ -1472,28 +1551,30 @@ func (m Model) tabBodyLines(width int) []string {
 			}
 			rows = append(rows, "", styleDim.Render(label), m.dirInput.View())
 		}
-		return rows
+		return rowsAt(rows, 0, n)
 	case focusPermission:
 		p := m.currentPrompt()
 		if p == nil {
-			return []string{styleDim.Render("  no prompts waiting")}
+			return note("  no prompts waiting")
 		}
-		return strings.Split(m.promptBox(p, width), "\n")
+		lines, start := m.promptBox(p, width)
+		return rowsAt(lines, start, len(permOptions(p)))
 	case focusQuestions:
 		p := m.currentQuestion()
 		if p == nil {
-			return []string{styleDim.Render("  no questions waiting")}
+			return note("  no questions waiting")
 		}
-		return m.questionLines(p, width)
+		lines, start, n := m.questionLines(p, width)
+		return rowsAt(lines, start, n)
 	}
-	return nil
+	return nil, nil
 }
 
 // questionLines renders the current question of a batch: who asks, "n/m ·
 // Header", the question, the options with the cursor and the picks, then
-// the free-text field.
-func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
-	var lines []string
+// the free-text field. The n selectable rows (the options and "something
+// else") start at line optStart (-1 when there are none).
+func (m Model) questionLines(p *protocol.PromptInfo, width int) (lines []string, optStart, n int) {
 	q := m.q
 	if q.id != p.ID || len(p.Questions) == 0 {
 		q = questionState{answers: make([]string, len(p.Questions))}
@@ -1502,7 +1583,7 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 		q.idx = len(p.Questions) - 1
 	}
 	if len(p.Questions) == 0 {
-		return append(lines, strings.Split(p.Question, "\n")...)
+		return append(lines, strings.Split(p.Question, "\n")...), -1, 0
 	}
 	cur := p.Questions[q.idx]
 	// The question (bold) with who is asking after it on the same line, dim;
@@ -1523,6 +1604,7 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 	}
 	lines = append(lines, "")
 	// The checklist: every option, then a last row for a typed answer.
+	optStart, n = len(lines), len(cur.Options)+1
 	for i, o := range cur.Options {
 		marker := "  "
 		if i == q.sel && !q.typing {
@@ -1553,7 +1635,7 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 	if done := answered(q.answers); done > 0 && done < len(p.Questions) {
 		lines = append(lines, "", styleDim.Render(fmt.Sprintf("%d of %d answered · ←/→ to review", done, len(p.Questions))))
 	}
-	return lines
+	return lines, optStart, n
 }
 
 func answered(answers []string) int {
@@ -1570,13 +1652,14 @@ func answered(answers []string) int {
 // highlighted one in accent, the rest dim (except a permission tab with
 // prompts waiting, which is warning orange). Key hints live in the key bar.
 func (m Model) sectionTabs(p *protocol.PromptInfo, width int) string {
-	return ansi.Truncate(m.tabLabels(p), width, "…") // the session directory lives in the dirs tab
+	labels, _ := m.tabLabels(p)
+	return ansi.Truncate(labels, width, "…") // the session directory lives in the dirs tab
 }
 
 // tabLabels is "permission (n) · agents (n) · async (n)": the highlighted
 // tab (while the strip has focus) or the open one (while its dialog is up)
-// in accent, the rest dim.
-func (m Model) tabLabels(p *protocol.PromptInfo) string {
+// in accent, the rest dim; with where each label was drawn.
+func (m Model) tabLabels(p *protocol.PromptInfo) (string, []span[focus]) {
 	on := func(f focus) bool {
 		if m.focus == focusTabs {
 			return tabFocuses[m.tabSel] == f
@@ -1586,8 +1669,13 @@ func (m Model) tabLabels(p *protocol.PromptInfo) string {
 	perms, questions := m.promptCounts()
 	texts := m.tabTexts()
 	tabs := make([]string, len(texts))
+	spans := make([]span[focus], 0, len(texts))
+	x := 0
 	for i, f := range tabFocuses {
 		label := texts[i]
+		w := ansi.StringWidth(label)
+		spans = append(spans, span[focus]{x, x + w, f})
+		x += w + 3 // " · "
 		switch {
 		case on(f):
 			tabs[i] = styleBoxTitleFocus.Render(label)
@@ -1599,7 +1687,7 @@ func (m Model) tabLabels(p *protocol.PromptInfo) string {
 			tabs[i] = styleDim.Render(label)
 		}
 	}
-	return strings.Join(tabs, styleDim.Render(" · "))
+	return strings.Join(tabs, styleDim.Render(" · ")), spans
 }
 
 // cursorRows puts the ▸ marker (as in every dialog) on the row under
@@ -1622,9 +1710,9 @@ func (m Model) cursorRows(rows []string) []string {
 // cut; a boundary prompt adds the line saying it reaches outside the
 // agent's directories; trust shows the project directory and its files —
 // then the single-select list of answers, and the reason or path row
-// while one is open. Key hints live in the key bar.
-func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
-	var lines []string
+// while one is open. Key hints live in the key bar. The options start at
+// line optStart.
+func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, optStart int) {
 	who := ""
 	if p.Agent != "" {
 		who = m.agentWhoLabel(p.Agent)
@@ -1693,6 +1781,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 		}
 	}
 	lines = append(lines, "")
+	optStart = len(lines)
 	sel := m.permSelection(p)
 	for i, o := range permOptions(p) {
 		marker := "  "
@@ -1721,7 +1810,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 	case m.promptBusy == p.ID:
 		lines = append(lines, styleDim.Render("answering…"))
 	}
-	return strings.Join(lines, "\n")
+	return lines, optStart
 }
 
 // agentWhoLabel is "label (role)" for an agent, as the async rows name a
