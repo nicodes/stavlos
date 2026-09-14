@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -69,16 +70,13 @@ func TestFileToolsAndShell(t *testing.T) {
 // fakeMonitors records jobs handed over by the shell tool.
 type fakeMonitors struct {
 	adopted []Job
-	started []string
+	specs   []string
 }
 
-func (f *fakeMonitors) StartCommand(command string, timeout time.Duration) (string, error) {
-	f.started = append(f.started, command)
-	return "m-bg", nil
-}
 func (f *fakeMonitors) AdoptCommand(command string, job Job, timeout time.Duration) (string, error) {
 	f.adopted = append(f.adopted, job)
-	return "m-adopted", nil
+	f.specs = append(f.specs, command)
+	return fmt.Sprintf("m%d", len(f.adopted)), nil
 }
 func (f *fakeMonitors) List() []MonitorStatus { return nil }
 func (f *fakeMonitors) Stop(id string) error  { return nil }
@@ -102,7 +100,7 @@ func TestShellWaitWindow(t *testing.T) {
 	}
 	start := time.Now()
 	r = sh.Run(ctx, json.RawMessage(`{"command":"echo early; sleep 1.5; echo late; exit 4","wait":1}`), env)
-	if r.IsError || !strings.HasPrefix(r.Output, "still running after 1s; continuing as job m-adopted") || !strings.Contains(r.Output, "output so far:\nearly\n") || time.Since(start) > 1400*time.Millisecond {
+	if r.IsError || !strings.HasPrefix(r.Output, "still running after 1s; continuing as job m1") || !strings.Contains(r.Output, "output so far:\nearly\n") || time.Since(start) > 1400*time.Millisecond {
 		t.Fatalf("handover: %+v after %v", r, time.Since(start))
 	}
 	if len(mon.adopted) != 1 {
@@ -117,13 +115,27 @@ func TestShellWaitWindow(t *testing.T) {
 	if job.Output() != "early\nlate\n" || job.Lines() != 2 || job.Err() == nil || !strings.Contains(job.Err().Error(), "4") {
 		t.Fatalf("job: out=%q lines=%d err=%v", job.Output(), job.Lines(), job.Err())
 	}
-	r = sh.Run(ctx, json.RawMessage(`{"command":"sleep 30","background":true}`), env)
-	if r.IsError || !strings.Contains(r.Output, "started job m-bg") || len(mon.started) != 1 || mon.started[0] != "sleep 30" {
-		t.Fatalf("background: %+v started=%v", r, mon.started)
+	// background: started and adopted at once, no wait, no stream
+	var streamed strings.Builder
+	env.Partial = func(s string) { streamed.WriteString(s) }
+	start = time.Now()
+	r = sh.Run(ctx, json.RawMessage(`{"command":"echo bg; sleep 30","background":true}`), env)
+	if r.IsError || !strings.Contains(r.Output, "started job m2") || len(mon.adopted) != 2 || mon.specs[1] != "echo bg; sleep 30" || time.Since(start) > 500*time.Millisecond {
+		t.Fatalf("background: %+v adopted=%d", r, len(mon.adopted))
 	}
+	bg := mon.adopted[1]
+	for bg.Lines() < 1 {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if bg.Output() != "bg\n" || streamed.Len() != 0 {
+		t.Fatalf("background output %q streamed %q", bg.Output(), streamed.String())
+	}
+	bg.Kill()
+	<-bg.Done()
+	env.Partial = nil
 	// kill ends the process group
 	r = sh.Run(ctx, json.RawMessage(`{"command":"sleep 30 & wait","wait":1}`), env)
-	job = mon.adopted[1]
+	job = mon.adopted[2]
 	job.Kill()
 	select {
 	case <-job.Done():

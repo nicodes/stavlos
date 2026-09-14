@@ -602,6 +602,9 @@ Load order is the `plugins` array first, then the local directory. A local build
 
 ## 12. Execution environment
 
+**Child processes.** Every process an agent starts — a shell command, a background job, an MCP server — goes through `internal/proc`: `bash -c` in its own process group (a kill takes the children), a two-second wait for pipes after exit, the last 256 KB of output kept, and the daemon's environment scrubbed: `STAVLOS_*` and any variable whose name matches `API_KEY`, `APIKEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`, `CREDENTIAL` or `PRIVATE_KEY` are dropped, so a command the model runs cannot read them back into the transcript. `"env": {"pass": ["GITHUB_TOKEN"]}` in `stavlos.json` keeps named variables; an MCP definition's `env` adds what that server needs. The shell tool starts the process and hands it to the runtime when it outlives the wait window (or at once with `background: true`); the runtime owns kill, reap and report from then on.
+
+
 Agents run commands directly against the session's working directory. The daemon does not create worktrees or containers and does not enforce isolation.
 
 This is a scope decision, not an oversight. Isolation strategies vary — git worktrees, containers, VMs, nothing — and the right one depends on the project. Stavlos leaves it to the user and the model: a preset or skill can instruct an agent to create a worktree before touching files, and policy can deny writes outside a given path. Daemon-enforced sandboxing is on the roadmap and will be designed so that policy remains unchanged when it lands; the policy schema is therefore safe to mark stable now.

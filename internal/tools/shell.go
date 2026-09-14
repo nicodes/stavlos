@@ -1,17 +1,15 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
-	"sync"
-	"syscall"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/proc"
 )
 
 // shell is the one command tool. It runs the command and waits up to a
@@ -26,7 +24,6 @@ const (
 	maxShellWaitSeconds      = 300
 	defaultJobTimeoutSeconds = 3600
 	maxJobTimeoutSeconds     = 7200
-	shellOutputCap           = 256 * 1024 // a long job keeps this much of its tail in memory
 )
 
 func (shellTool) Def() model.ToolDef {
@@ -73,20 +70,22 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		a.Timeout = maxJobTimeoutSeconds
 	}
 	timeout := time.Duration(a.Timeout) * time.Second
-	if a.Background {
-		if env.Mon == nil {
-			return errf("background jobs are not available to this agent")
-		}
-		id, err := env.Mon.StartCommand(a.Command, timeout)
+	if a.Background && env.Mon == nil {
+		return errf("background jobs are not available to this agent")
+	}
+	job, err := proc.Start(a.Command, env.Dir, proc.Env(env.PassEnv), env.Partial)
+	if err != nil {
+		return errf("%v", err)
+	}
+	if a.Background { // no wait: the runtime takes it at once
+		job.Detach()
+		id, err := env.Mon.AdoptCommand(a.Command, job, timeout)
 		if err != nil {
+			job.Kill()
+			<-job.Done()
 			return errf("%v", err)
 		}
 		return Result{Output: fmt.Sprintf("started job %s; you will be woken with its output when it exits (shell_kill %s stops it)", id, id)}
-	}
-
-	job, err := startCommand(a.Command, env.Dir, env.Partial)
-	if err != nil {
-		return errf("%v", err)
 	}
 	wait := time.NewTimer(time.Duration(a.Wait) * time.Second)
 	defer wait.Stop()
@@ -116,6 +115,7 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 			return Result{Output: clip(job.Output(), env.MaxOutput) + fmt.Sprintf("\n[killed after %ds timeout]", a.Timeout), IsError: true}
 		}
 	}
+	job.Detach() // the call that wanted the stream is over
 	id, err := env.Mon.AdoptCommand(a.Command, job, timeout)
 	if err != nil {
 		job.Kill()
@@ -130,7 +130,7 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 }
 
 // shellResult is the inline result of a command that exited in time.
-func shellResult(job *runningCommand, maxOutput int) Result {
+func shellResult(job *proc.Job, maxOutput int) Result {
 	text := clip(job.Output(), maxOutput)
 	if err := job.Err(); err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
@@ -142,87 +142,6 @@ func shellResult(job *runningCommand, maxOutput int) Result {
 		text = "(no output)"
 	}
 	return Result{Output: text}
-}
-
-// runningCommand is a command started by the shell tool. It implements Job
-// so the agent runtime can adopt it when it outlives the wait window.
-type runningCommand struct {
-	cmd     *exec.Cmd
-	out     *partialWriter
-	exit    chan struct{} // closed once the process has exited and its output is drained
-	err     error         // cmd.Wait's result, valid after exit is closed
-	started time.Time
-}
-
-// startCommand runs command under bash in its own process group so a kill
-// takes its children too. It is not bound to a context: an adopted job
-// outlives the tool call that started it.
-func startCommand(command, dir string, partial func(string)) (*runningCommand, error) {
-	cmd := exec.Command("bash", "-c", command)
-	cmd.Dir = dir
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.WaitDelay = 2 * time.Second // a child that exits but leaves the pipes open does not hang Wait
-	out := &partialWriter{fn: partial}
-	cmd.Stdout, cmd.Stderr = out, out
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	j := &runningCommand{cmd: cmd, out: out, exit: make(chan struct{}), started: time.Now()}
-	go func() {
-		j.err = cmd.Wait()
-		close(j.exit)
-	}()
-	return j, nil
-}
-
-func (j *runningCommand) Done() <-chan struct{} { return j.exit }
-func (j *runningCommand) Err() error            { return j.err }
-func (j *runningCommand) Output() string        { return j.out.String() }
-func (j *runningCommand) Lines() int            { return j.out.Lines() }
-func (j *runningCommand) Started() time.Time    { return j.started }
-
-// Kill ends the whole process group.
-func (j *runningCommand) Kill() {
-	if j.cmd.Process != nil {
-		_ = syscall.Kill(-j.cmd.Process.Pid, syscall.SIGKILL)
-	}
-}
-
-// partialWriter tees output to env.Partial and a tail-capped buffer.
-type partialWriter struct {
-	mu    sync.Mutex
-	buf   bytes.Buffer
-	lines int
-	fn    func(string)
-}
-
-func (w *partialWriter) Write(p []byte) (int, error) {
-	w.mu.Lock()
-	w.buf.Write(p)
-	w.lines += bytes.Count(p, []byte("\n"))
-	if w.buf.Len() > shellOutputCap {
-		b := w.buf.Bytes()
-		keep := append([]byte("… [earlier output dropped] …\n"), b[len(b)-shellOutputCap/2:]...)
-		w.buf.Reset()
-		w.buf.Write(keep)
-	}
-	w.mu.Unlock()
-	if w.fn != nil {
-		w.fn(string(p))
-	}
-	return len(p), nil
-}
-
-func (w *partialWriter) String() string {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.buf.String()
-}
-
-func (w *partialWriter) Lines() int {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	return w.lines
 }
 
 // --- shell_kill: stop a background job ---
