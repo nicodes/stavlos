@@ -130,32 +130,11 @@ func (c *mdConverter) walk(n *html.Node) {
 	}
 	switch n.Type {
 	case html.TextNode:
-		if c.pre > 0 {
-			c.write(n.Data)
-			return
-		}
-		t := strings.Join(strings.Fields(n.Data), " ")
-		if t == "" {
-			if strings.ContainsAny(n.Data, " \n\t") && len(c.out) > 0 && !c.endsWith(" ") && !c.endsWith("\n") {
-				c.write(" ")
-			}
-			return
-		}
-		if strings.HasPrefix(n.Data, " ") || strings.HasPrefix(n.Data, "\n") {
-			if len(c.out) > 0 && !c.endsWith(" ") && !c.endsWith("\n") {
-				c.write(" ")
-			}
-		}
-		c.write(t)
-		if strings.HasSuffix(n.Data, " ") || strings.HasSuffix(n.Data, "\n") {
-			c.write(" ")
-		}
+		c.textNode(n)
 		return
 	case html.ElementNode:
 	default:
-		for k := n.FirstChild; k != nil; k = k.NextSibling {
-			c.walk(k)
-		}
+		c.children(n)
 		return
 	}
 	if skipTags[n.Data] {
@@ -163,15 +142,12 @@ func (c *mdConverter) walk(n *html.Node) {
 	}
 	switch n.Data {
 	case "h1", "h2", "h3", "h4", "h5", "h6":
-		level := int(n.Data[1] - '0')
 		if t := c.text(n); t != "" {
-			c.block(strings.Repeat("#", level) + " " + t)
+			c.block(strings.Repeat("#", int(n.Data[1]-'0')) + " " + t)
 		}
 	case "p", "div", "section", "article", "main", "figure", "figcaption", "details", "summary", "dd", "dt", "address":
 		c.flushLine()
-		for k := n.FirstChild; k != nil; k = k.NextSibling {
-			c.walk(k)
-		}
+		c.children(n)
 		c.flushLine()
 		if n.Data == "p" || n.Data == "section" || n.Data == "article" {
 			c.write("\n")
@@ -181,119 +157,177 @@ func (c *mdConverter) walk(n *html.Node) {
 	case "hr":
 		c.block("---")
 	case "pre":
-		code := c.rawText(n)
-		lang := ""
-		if cd := findNode(n, "code"); cd != nil {
-			for _, cls := range strings.Fields(attr(cd, "class")) {
-				if strings.HasPrefix(cls, "language-") {
-					lang = strings.TrimPrefix(cls, "language-")
-				}
-			}
-		}
-		c.block("```" + lang + "\n" + strings.TrimRight(code, "\n") + "\n```")
+		c.preformatted(n)
 	case "code", "kbd", "samp":
 		if t := c.rawText(n); t != "" {
 			c.write("`" + strings.ReplaceAll(strings.TrimSpace(t), "\n", " ") + "`")
 		}
 	case "strong", "b":
-		if t := c.text(n); t != "" {
-			c.write("**" + t + "**")
-		}
+		c.wrapText(n, "**")
 	case "em", "i":
-		if t := c.text(n); t != "" {
-			c.write("*" + t + "*")
-		}
+		c.wrapText(n, "*")
 	case "a":
-		t := c.text(n)
-		href := attr(n, "href")
-		if c.base != nil && href != "" {
-			if ref, err := url.Parse(href); err == nil {
-				href = c.base.ResolveReference(ref).String()
-			}
-		}
-		switch {
-		case t == "" && href == "":
-		case href == "" || strings.HasPrefix(href, "javascript:") || t == href:
-			c.write(t)
-		case t == "":
-			c.write(href)
-		default:
-			c.write("[" + t + "](" + href + ")")
-		}
+		c.link(n)
 	case "img":
 		if alt := strings.TrimSpace(attr(n, "alt")); alt != "" {
 			c.write("[image: " + alt + "]")
 		}
 	case "ul", "ol":
-		c.flushLine()
-		c.list = append(c.list, listState{ordered: n.Data == "ol"})
-		for k := n.FirstChild; k != nil; k = k.NextSibling {
-			c.walk(k)
-		}
-		c.list = c.list[:len(c.list)-1]
-		if len(c.list) == 0 {
-			c.write("\n")
-		}
+		c.listElement(n)
 	case "li":
-		c.flushLine()
-		indent := strings.Repeat("  ", max(len(c.list)-1, 0))
-		marker := "- "
-		if len(c.list) > 0 && c.list[len(c.list)-1].ordered {
-			c.list[len(c.list)-1].n++
-			marker = fmt.Sprintf("%d. ", c.list[len(c.list)-1].n)
-		}
-		c.write(indent + marker)
-		for k := n.FirstChild; k != nil; k = k.NextSibling {
-			c.walk(k)
-		}
-		c.flushLine()
+		c.listItem(n)
 	case "blockquote":
-		c.flushLine()
-		c.quote++
-		start := len(c.out)
-		for k := n.FirstChild; k != nil; k = k.NextSibling {
-			c.walk(k)
-		}
-		c.flushLine()
-		c.quote--
-		// re-prefix what the children wrote (blocks already carry ">"; plain
-		// lines do not): only the quote's own text is rewritten.
-		inner := string(c.out[start:])
-		c.out = c.out[:start]
-		var lines []string
-		for _, l := range strings.Split(strings.TrimRight(inner, "\n"), "\n") {
-			if !strings.HasPrefix(l, ">") && strings.TrimSpace(l) != "" {
-				l = "> " + l
-			}
-			lines = append(lines, l)
-		}
-		c.write(strings.Join(lines, "\n") + "\n\n")
+		c.blockquote(n)
 	case "table":
-		c.flushLine()
-		var rows []string
-		for _, tr := range findAll(n, "tr") {
-			var cells []string
-			for k := tr.FirstChild; k != nil; k = k.NextSibling {
-				if k.Type == html.ElementNode && (k.Data == "td" || k.Data == "th") {
-					cells = append(cells, c.text(k))
-				}
-			}
-			if len(cells) > 0 {
-				rows = append(rows, "| "+strings.Join(cells, " | ")+" |")
-			}
-		}
-		if len(rows) > 0 {
-			if len(rows) > 1 {
-				cols := strings.Count(rows[0], "|") - 1
-				rows = append([]string{rows[0], "|" + strings.Repeat(" --- |", cols)}, rows[1:]...)
-			}
-			c.block(strings.Join(rows, "\n"))
-		}
+		c.table(n)
 	default:
-		for k := n.FirstChild; k != nil; k = k.NextSibling {
-			c.walk(k)
+		c.children(n)
+	}
+}
+
+// children walks n's children in order.
+func (c *mdConverter) children(n *html.Node) {
+	for k := n.FirstChild; k != nil; k = k.NextSibling {
+		c.walk(k)
+	}
+}
+
+// textNode writes a text node: verbatim inside <pre>, whitespace collapsed
+// elsewhere, with a single space kept at the edges.
+func (c *mdConverter) textNode(n *html.Node) {
+	if c.pre > 0 {
+		c.write(n.Data)
+		return
+	}
+	t := strings.Join(strings.Fields(n.Data), " ")
+	if t == "" {
+		if strings.ContainsAny(n.Data, " \n\t") && len(c.out) > 0 && !c.endsWith(" ") && !c.endsWith("\n") {
+			c.write(" ")
+		}
+		return
+	}
+	if strings.HasPrefix(n.Data, " ") || strings.HasPrefix(n.Data, "\n") {
+		if len(c.out) > 0 && !c.endsWith(" ") && !c.endsWith("\n") {
+			c.write(" ")
 		}
 	}
+	c.write(t)
+	if strings.HasSuffix(n.Data, " ") || strings.HasSuffix(n.Data, "\n") {
+		c.write(" ")
+	}
+}
+
+// preformatted writes a <pre> block as a fenced code block, with the
+// language of a "language-*" class on its <code>.
+func (c *mdConverter) preformatted(n *html.Node) {
+	code := c.rawText(n)
+	lang := ""
+	if cd := findNode(n, "code"); cd != nil {
+		for _, cls := range strings.Fields(attr(cd, "class")) {
+			if strings.HasPrefix(cls, "language-") {
+				lang = strings.TrimPrefix(cls, "language-")
+			}
+		}
+	}
+	c.block("```" + lang + "\n" + strings.TrimRight(code, "\n") + "\n```")
+}
+
+// wrapText writes n's text between mark on both sides (bold, italic).
+func (c *mdConverter) wrapText(n *html.Node, mark string) {
+	if t := c.text(n); t != "" {
+		c.write(mark + t + mark)
+	}
+}
+
+// link writes an anchor as [text](href), resolved against the page.
+func (c *mdConverter) link(n *html.Node) {
+	t := c.text(n)
+	href := attr(n, "href")
+	if c.base != nil && href != "" {
+		if ref, err := url.Parse(href); err == nil {
+			href = c.base.ResolveReference(ref).String()
+		}
+	}
+	switch {
+	case t == "" && href == "":
+	case href == "" || strings.HasPrefix(href, "javascript:") || t == href:
+		c.write(t)
+	case t == "":
+		c.write(href)
+	default:
+		c.write("[" + t + "](" + href + ")")
+	}
+}
+
+// listElement walks a <ul> or <ol>, numbering the items of an <ol>.
+func (c *mdConverter) listElement(n *html.Node) {
+	c.flushLine()
+	c.list = append(c.list, listState{ordered: n.Data == "ol"})
+	c.children(n)
+	c.list = c.list[:len(c.list)-1]
+	if len(c.list) == 0 {
+		c.write("\n")
+	}
+}
+
+// listItem writes one <li>, indented by the list depth.
+func (c *mdConverter) listItem(n *html.Node) {
+	c.flushLine()
+	indent := strings.Repeat("  ", max(len(c.list)-1, 0))
+	marker := "- "
+	if len(c.list) > 0 && c.list[len(c.list)-1].ordered {
+		c.list[len(c.list)-1].n++
+		marker = fmt.Sprintf("%d. ", c.list[len(c.list)-1].n)
+	}
+	c.write(indent + marker)
+	c.children(n)
+	c.flushLine()
+}
+
+// blockquote writes its children with "> " before each plain line (blocks
+// already carry ">"; only the quote's own text is rewritten).
+func (c *mdConverter) blockquote(n *html.Node) {
+	c.flushLine()
+	c.quote++
+	start := len(c.out)
+	c.children(n)
+	c.flushLine()
+	c.quote--
+	inner := string(c.out[start:])
+	c.out = c.out[:start]
+	var lines []string
+	for _, l := range strings.Split(strings.TrimRight(inner, "\n"), "\n") {
+		if !strings.HasPrefix(l, ">") && strings.TrimSpace(l) != "" {
+			l = "> " + l
+		}
+		lines = append(lines, l)
+	}
+	c.write(strings.Join(lines, "\n") + "\n\n")
+}
+
+// table writes a table as a markdown table, the first row as its header.
+func (c *mdConverter) table(n *html.Node) {
+	c.flushLine()
+	var rows []string
+	for _, tr := range findAll(n, "tr") {
+		var cells []string
+		for k := tr.FirstChild; k != nil; k = k.NextSibling {
+			if k.Type == html.ElementNode && (k.Data == "td" || k.Data == "th") {
+				cells = append(cells, c.text(k))
+			}
+		}
+		if len(cells) > 0 {
+			rows = append(rows, "| "+strings.Join(cells, " | ")+" |")
+		}
+	}
+	if len(rows) == 0 {
+		return
+	}
+	if len(rows) > 1 {
+		cols := strings.Count(rows[0], "|") - 1
+		rows = append([]string{rows[0], "|" + strings.Repeat(" --- |", cols)}, rows[1:]...)
+	}
+	c.block(strings.Join(rows, "\n"))
 }
 
 // rawText is the text of n with whitespace kept (code).
