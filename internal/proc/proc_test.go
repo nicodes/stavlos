@@ -3,6 +3,7 @@ package proc
 import (
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -46,8 +47,9 @@ func TestEnvScrub(t *testing.T) {
 }
 
 func TestStartKillTail(t *testing.T) {
+	var mu sync.Mutex
 	var streamed strings.Builder
-	j, err := Start("echo one; echo two; sleep 30", t.TempDir(), Env(nil), func(s string) { streamed.WriteString(s) })
+	j, err := Start("echo one; echo two; sleep 30", t.TempDir(), Env(nil), func(s string) { mu.Lock(); streamed.WriteString(s); mu.Unlock() })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +57,11 @@ func TestStartKillTail(t *testing.T) {
 	for j.Lines() < 2 && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	if j.Output() != "one\ntwo\n" || streamed.String() != "one\ntwo\n" {
-		t.Fatalf("output %q streamed %q", j.Output(), streamed.String())
+	mu.Lock()
+	got := streamed.String()
+	mu.Unlock()
+	if j.Output() != "one\ntwo\n" || got != "one\ntwo\n" {
+		t.Fatalf("output %q streamed %q", j.Output(), got)
 	}
 	j.Detach()
 	j.Kill()
