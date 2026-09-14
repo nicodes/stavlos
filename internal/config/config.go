@@ -317,8 +317,8 @@ func LoadGlobal() (*Effective, error) {
 		policy.Rule{Tool: toolname.AgentStatus, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.Shell, Pattern: "*", Verb: policy.Ask},
 		policy.Rule{Tool: toolname.ShellKill, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.WebFetch, Pattern: "*", Verb: policy.Ask}, // per host: the dialog offers "allow <host> for this session"
-		policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.WebFetch, Pattern: "*", Verb: policy.Ask},  // per host: the dialog offers "allow <host> for this session"
+		policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Ask}, // allow once a search backend is configured (see LoadGlobal)
 		policy.Rule{Tool: toolname.TodoAdd, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.AskUser, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.TodoUpdate, Pattern: "*", Verb: policy.Allow},
@@ -353,6 +353,13 @@ func LoadGlobal() (*Effective, error) {
 	}
 	if err := e.applyFile(gf, "global"); err != nil {
 		return nil, fmt.Errorf("global config: %w", err)
+	}
+	// web_search asks until a backend is configured: without one every
+	// query would go to the keyless fallback, a third party the user never
+	// chose. With one, it is allowed like any read-only call unless the
+	// file says otherwise.
+	if _, explicit := gf.Policy[toolname.WebSearch]; e.Search.Provider != "" && !explicit {
+		e.Policy = policy.Layer(e.Policy.Base().Merge(policy.New(policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Allow})), e.Policy.Overlays()...)
 	}
 	e.Plugins = gf.Plugins
 	if err := e.loadPresets(filepath.Join(gdir, "roles"), "global"); err != nil {

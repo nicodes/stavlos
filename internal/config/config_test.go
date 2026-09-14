@@ -315,3 +315,27 @@ func TestConfigValidation(t *testing.T) {
 		t.Fatal("zero size accepted")
 	}
 }
+
+// TestWebSearchAsksUntilConfigured: with no search backend the tool asks
+// (its fallback is a third party); with one it is allowed; an explicit rule
+// wins either way.
+func TestWebSearchAsksUntilConfigured(t *testing.T) {
+	g := t.TempDir()
+	t.Setenv("STAVLOS_CONFIG_DIR", g)
+	t.Setenv("STAVLOS_TEST_KEY", "k")
+	for cfg, want := range map[string]policy.Verb{
+		`{}`: policy.Ask,
+		`{"search":{"provider":"brave","apiKey":"${env:STAVLOS_TEST_KEY}"}}`:                                policy.Allow,
+		`{"search":{"provider":"brave","apiKey":"${env:STAVLOS_TEST_KEY}"},"policy":{"web_search":"deny"}}`: policy.Deny,
+		`{"policy":{"web_search":"allow"}}`:                                                                 policy.Allow,
+	} {
+		os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(cfg), 0o644)
+		e, err := LoadGlobal()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := e.Policy.Decide("web_search", "anything"); got != want {
+			t.Errorf("%s: web_search %s want %s", cfg, got, want)
+		}
+	}
+}
