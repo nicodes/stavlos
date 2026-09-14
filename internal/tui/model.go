@@ -2045,17 +2045,22 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 		}
 	}
 	what := "this exact call"
-	if p.Tool == "shell" {
+	switch p.Tool {
+	case "shell":
 		what = "this exact command"
+	case "web_fetch":
+		what = "this exact URL"
 	}
 	opts := []permOption{
 		{"allow", "Allow once", ""},
 		{"always", "Allow for this session", what},
 	}
-	if p.Tool == "shell" {
-		if pre := protocol.CommandPrefix(fullToolArg(p.Tool, p.Input)); pre != "" {
-			opts = append(opts, permOption{"prefix", "Allow " + pre + " for this session", "every command starting with it"})
+	if pre := protocol.ToolPrefix(p.Tool, fullToolArg(p.Tool, p.Input)); pre != "" {
+		desc := "every command starting with it"
+		if p.Tool == "web_fetch" {
+			desc = "every page on this host"
 		}
+		opts = append(opts, permOption{"prefix", "Allow " + pre + " for this session", desc})
 	}
 	return append(opts, permOption{"deny", "Deny", "with an optional reason"})
 }
@@ -2132,7 +2137,7 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 		case "always", "add":
 			return m.answerPrompt(p, "allow_always")
 		case "prefix":
-			return m.answerPromptPrefix(p, protocol.CommandPrefix(fullToolArg(p.Tool, p.Input)))
+			return m.answerPromptPrefix(p, protocol.ToolPrefix(p.Tool, fullToolArg(p.Tool, p.Input)))
 		case "skip":
 			return m.answerPrompt(p, "deny")
 		case "add_other":

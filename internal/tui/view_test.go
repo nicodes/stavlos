@@ -738,6 +738,14 @@ func TestPermissionDialogOptions(t *testing.T) {
 	if len(permOptions(&m.prompts[0])) != 3 {
 		t.Fatalf("options %+v", permOptions(&m.prompts[0]))
 	}
+	// web_fetch: the subject is the URL, the prefix row is the host
+	m.prompts = []protocol.PromptInfo{{ID: "p4", Kind: "permission", Tool: "web_fetch", Agent: "a", Input: []byte(`{"url":"https://pkg.go.dev/net/http"}`)}}
+	body = stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
+	for _, w := range []string{"↗ https://pkg.go.dev/net/http  coder (general)", "○ Allow for this session  this exact URL", "○ Allow pkg.go.dev for this session  every page on this host"} {
+		if !strings.Contains(body, w) {
+			t.Fatalf("missing %q:\n%s", w, body)
+		}
+	}
 }
 
 func TestChatCursorMovesAndRenders(t *testing.T) {

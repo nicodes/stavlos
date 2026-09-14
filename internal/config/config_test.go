@@ -223,7 +223,7 @@ func TestExampleCoderRoleParses(t *testing.T) {
 	if p.Name != "coder" || p.Mode != ModeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
 		t.Fatalf("%+v", p)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo" || p.PresetPolicy().Decide("shell", "git push origin main") != policy.Deny {
+	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo,web_search,web_fetch" || p.PresetPolicy().Decide("shell", "git push origin main") != policy.Deny || p.PresetPolicy().Decide("web_fetch", "https://x.slack.com/y") != policy.Deny {
 		t.Fatalf("tools %v rules %+v", p.Tools, p.PresetPolicy().Rules())
 	}
 }
