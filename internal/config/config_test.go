@@ -75,6 +75,18 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if _, ok := e.Presets["general"]; !ok {
 		t.Fatal("builtin missing")
 	}
+
+	// A project rule with a longer literal prefix than a global deny does
+	// not shadow it: layering is the most restrictive decision, not a merge.
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"policy":{"shell":{"*":"allow","*--force*":"deny"}}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{"policy":{"shell":{"git*":"allow"}}}`), 0o644)
+	e, err = Load(dir, allTrust{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.Policy.Decide("shell", "git push --force") != policy.Deny || e.Policy.Decide("shell", "git status") != policy.Allow {
+		t.Fatal("project rule shadowed a global deny")
+	}
 }
 
 func TestReadOnlyBashAllowedByDefault(t *testing.T) {

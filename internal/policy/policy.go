@@ -76,32 +76,62 @@ func (s *Set) Merge(other *Set) *Set {
 	return out
 }
 
-// Tighten returns s with other's rules applied only where they are at least
-// as restrictive as s's decision for the same rule (PRD §10.6).
-func (s *Set) Tighten(other *Set) *Set {
-	if other == nil {
-		return s
-	}
-	out := New(s.rules...)
-	for _, r := range other.rules {
-		base := s.Decide(r.Tool, samplePath(r.Pattern))
-		if r.Verb.Rank() >= base.Rank() {
-			out = out.Merge(New(r))
-		}
-	}
-	return out
+// Layered is a base Set tightened by overlays: a trusted project's policy,
+// a role's rules. The decision is the most restrictive of the base's and of
+// every overlay that has a matching rule, so an overlay can only tighten
+// (PRD §10.6) — by construction, not by inspection of its patterns.
+type Layered struct {
+	base     *Set
+	overlays []*Set
 }
 
-// samplePath produces a representative argument for a pattern, used to ask
-// what the base set would decide for arguments this rule targets.
-func samplePath(p string) string {
-	return strings.NewReplacer("**", "x/x", "*", "x", "?", "x").Replace(p)
+// Layer builds a layered policy over base.
+func Layer(base *Set, overlays ...*Set) *Layered {
+	l := &Layered{base: base}
+	for _, o := range overlays {
+		l = l.With(o)
+	}
+	return l
+}
+
+// With returns l plus one more overlay (an empty or nil one changes nothing).
+func (l *Layered) With(overlay *Set) *Layered {
+	if overlay == nil || len(overlay.rules) == 0 {
+		return l
+	}
+	return &Layered{base: l.base, overlays: append(append([]*Set(nil), l.overlays...), overlay)}
+}
+
+// Base is the merged base set.
+func (l *Layered) Base() *Set { return l.base }
+
+// Overlays lists the tightening layers in order.
+func (l *Layered) Overlays() []*Set { return append([]*Set(nil), l.overlays...) }
+
+// Decide is the base's decision, raised to any overlay's more restrictive
+// matching decision. Where no overlay matches, the base alone decides.
+func (l *Layered) Decide(tool, arg string) Verb {
+	v := l.base.Decide(tool, arg)
+	for _, o := range l.overlays {
+		if ov, ok := o.Lookup(tool, arg); ok && ov.Rank() > v.Rank() {
+			v = ov
+		}
+	}
+	return v
 }
 
 // Decide returns the verb for a tool call. Default when nothing matches: Ask.
+func (s *Set) Decide(tool, arg string) Verb {
+	if v, ok := s.Lookup(tool, arg); ok {
+		return v
+	}
+	return Ask
+}
+
+// Lookup is Decide without the default: ok is false when no rule matches.
 // Specificity is the argument pattern's literal prefix, then the tool
 // pattern's literal prefix, then the more restrictive verb.
-func (s *Set) Decide(tool, arg string) Verb {
+func (s *Set) Lookup(tool, arg string) (Verb, bool) {
 	best := Verb("")
 	bestArg, bestTool := -1, -1
 	for _, r := range s.rules {
@@ -116,10 +146,7 @@ func (s *Set) Decide(tool, arg string) Verb {
 			best = r.Verb
 		}
 	}
-	if best == "" {
-		return Ask
-	}
-	return best
+	return best, best != ""
 }
 
 func toolMatch(pattern, tool string) bool {

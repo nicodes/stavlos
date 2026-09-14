@@ -203,8 +203,8 @@ type Effective struct {
 		MaxToolOutput int
 	}
 	MCP      map[string]MCP
-	Search   Search // web_search backend, key expanded
-	Policy   *policy.Set
+	Search   Search          // web_search backend, key expanded
+	Policy   *policy.Layered // global and local rules as the base; the trusted project's rules as an overlay that can only tighten
 	Presets  map[string]Preset
 	Skills   map[string]Skill
 	AgentsMD string
@@ -237,7 +237,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 	e.Escalation.Default = policy.Deny
 	e.Compaction.Threshold = 0.8
 	e.Compaction.MaxToolOutput = 32 * 1024
-	e.Policy = policy.New(
+	e.Policy = policy.Layer(policy.New(
 		policy.Rule{Tool: "read", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "skill", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_create", Pattern: "*", Verb: policy.Allow},
@@ -270,7 +270,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "shell", Pattern: "git show*", Verb: policy.Allow},
 		policy.Rule{Tool: "shell", Pattern: "git blame*", Verb: policy.Allow},
 		policy.Rule{Tool: "apply_patch", Pattern: "*", Verb: policy.Ask},
-	)
+	))
 	for _, p := range builtinPresets() {
 		e.Presets[p.Name] = p
 	}
@@ -381,9 +381,11 @@ func (e *Effective) applyFile(f File, layer string) {
 	}
 	rules := ParsePolicy(f.Policy)
 	if layer == "project" {
-		e.Policy = e.Policy.Tighten(rules)
+		// The project's rules are an overlay: they can only tighten what
+		// the global and local layers decide (PRD §10.6).
+		e.Policy = e.Policy.With(rules)
 	} else {
-		e.Policy = e.Policy.Merge(rules)
+		e.Policy = policy.Layer(e.Policy.Base().Merge(rules), e.Policy.Overlays()...)
 	}
 }
 
@@ -444,9 +446,11 @@ func (e *Effective) loadPresets(dir, layer string) error {
 	return nil
 }
 
-// checkTightening rejects a role rule that would loosen the layered policy
-// (PRD §10.6: roles only tighten). Silently ignoring it would leave the
-// user wondering why the rule did nothing.
+// checkTightening rejects a role rule that could never take effect because
+// it is looser than the layered policy (PRD §10.6: roles only tighten). The
+// layering itself makes such a rule inert whatever this check says; the
+// error exists so the user is not left wondering why the rule did nothing.
+// It samples one argument per pattern, so it catches the plain cases.
 func (e *Effective) checkTightening(p Preset) error {
 	for _, r := range p.PresetPolicy().Rules() {
 		base := e.Policy.Decide(r.Tool, samplePattern(r.Pattern))
