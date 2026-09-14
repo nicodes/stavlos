@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/shellcmd"
 )
@@ -12,7 +13,8 @@ import (
 // permits are the allows a human granted for the rest of a session: exact
 // calls ("Allow for this session") and prefixes ("Allow go test for this
 // session": a command prefix, a host). They answer a policy Ask; they
-// never override a Deny, and they end with the session (PRD §10.3).
+// never override a Deny, and they last for the session, across daemon
+// restarts (each is logged as permit.granted and replayed) (PRD §10.3).
 type permits struct {
 	mu       sync.Mutex
 	calls    map[string]bool     // tool + "\x00" + primary subject
@@ -34,6 +36,15 @@ func (p *permits) covers(tool string, sub policy.Subject) bool {
 		}
 	}
 	return false
+}
+
+// apply installs a granted permit (live or replayed).
+func (p *permits) apply(g event.PermitPayload) {
+	if g.Prefix != "" {
+		p.rememberPrefix(g.Tool, g.Prefix)
+	} else if g.Call != "" {
+		p.rememberCall(g.Tool, g.Call)
+	}
 }
 
 // rememberCall allows this exact call for the session.

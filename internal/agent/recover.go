@@ -161,6 +161,11 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 				// A job result the turn consumed; open jobs are found from
 				// the monitor events, so nothing to unqueue here.
 			}
+		case event.PermitGranted:
+			var p event.PermitPayload
+			if e.Decode(&p) == nil {
+				s.permits.apply(p)
+			}
 		case event.TodoChanged:
 			if a, ok := s.agents[e.Agent]; ok {
 				var p event.TodoPayload

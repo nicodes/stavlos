@@ -132,12 +132,12 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	switch ans.Value {
 	case protocol.AnswerAllowPrefix:
 		if prefix != "" {
-			a.s.permits.rememberPrefix(c.Name, prefix)
+			a.grantPermit(event.PermitPayload{Tool: c.Name, Prefix: prefix})
 		} else {
-			a.s.permits.rememberCall(c.Name, d.arg)
+			a.grantPermit(event.PermitPayload{Tool: c.Name, Call: d.arg})
 		}
 	case protocol.AnswerAllowAlways:
-		a.s.permits.rememberCall(c.Name, d.arg)
+		a.grantPermit(event.PermitPayload{Tool: c.Name, Call: d.arg})
 	case protocol.AnswerAllow:
 	default:
 		why := "Permission denied by the user."
@@ -157,6 +157,13 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 		_ = a.addDir(context.Background(), dir, "human")
 	}
 	return "", false, true
+}
+
+// grantPermit remembers an allow for the session and logs it, so recovery
+// restores it.
+func (a *Agent) grantPermit(p event.PermitPayload) {
+	a.s.permits.apply(p)
+	_, _ = a.record(context.Background(), event.PermitGranted, p)
 }
 
 // toolEnv is what a tool gets from this agent for one call.

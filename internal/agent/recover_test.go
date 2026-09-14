@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nicodes/stavlos/internal/escalation"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -251,5 +252,46 @@ func TestRecoverMissingRoleIsReadOnly(t *testing.T) {
 	}
 	if ok, _ := s2.canSpawn(r); ok {
 		t.Fatal("a read-only fallback must not spawn")
+	}
+}
+
+// TestRecoverKeepsSessionAllows: an allow_prefix and an allow_always granted
+// before a restart still answer after it, and a deny rule still wins.
+func TestRecoverKeepsSessionAllows(t *testing.T) {
+	cfgJSON := `{"model":"fake/m1","policy":{"shell":{"make test --force*":"deny","*":"ask"}}}`
+	fm := &fakeModel{steps: []step{
+		reply(call("c1", "shell", `{"command":"make test"}`)),
+		reply(call("c2", "shell", `{"command":"echo exact"}`)),
+		reply(text("ok")),
+	}}
+	s, h := newTestSession(t, testConfig{json: cfgJSON}, fm)
+	h.answerWith(escalation.Answer{Value: "allow_prefix"}, escalation.Answer{Value: "allow_always"})
+	runTurn(t, s, h, "go")
+	if n := h.promptCount(); n != 2 {
+		t.Fatalf("prompts before restart: %d", n)
+	}
+	s.Stop()
+
+	fm.steps = []step{
+		reply(call("d1", "shell", `{"command":"make test -j4"}`)),
+		reply(call("d2", "shell", `{"command":"echo exact"}`)),
+		reply(call("d3", "shell", `{"command":"make test --force"}`)),
+		reply(call("d4", "shell", `{"command":"make build"}`)),
+		reply(text("ok")),
+	}
+	h2 := newFakeHost(fm)
+	h2.answerWith(escalation.Answer{Value: "deny"})
+	s2, err := Recover(context.Background(), h2, s.ID, s.Dir, s.Created, s.Config(), h.all())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s2.Stop)
+	runTurn(t, s2, h2, "again")
+	if n := h2.promptCount(); n != 1 {
+		t.Fatalf("prompts after restart: %d (only make build should ask)", n)
+	}
+	fin := finished(h2, s2.Root().ID)
+	if len(fin) != 4 || fin[0].Denied || fin[1].Denied || !fin[2].Denied || !strings.Contains(fin[2].Output, "Denied by policy") || !fin[3].Denied {
+		t.Fatalf("%+v", fin)
 	}
 }
