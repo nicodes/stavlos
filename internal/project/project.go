@@ -194,13 +194,19 @@ func mergeUser(a, b []model.Block) []model.Block {
 	return append(results, rest...)
 }
 
-// EstimateTokens is a cheap size estimate (≈4 chars/token) for compaction.
-func EstimateTokens(msgs []model.Message, system string) int {
+// EstimateTokens is a cheap size estimate (≈4 chars/token) of what a call
+// carries: the system prompt, every block (a thinking block's opaque
+// signature counts too: providers replay it), and the tool definitions,
+// which go out with every call and can run to thousands of tokens.
+func EstimateTokens(msgs []model.Message, system string, tools []model.ToolDef) int {
 	n := len(system)
 	for _, m := range msgs {
 		for _, b := range m.Blocks {
-			n += len(b.Text) + len(b.Content) + len(b.Input) + 8
+			n += len(b.Text) + len(b.Content) + len(b.Input) + len(b.Signature)/2 + 8
 		}
+	}
+	for _, t := range tools {
+		n += len(t.Name) + len(t.Description) + len(t.Schema) + 8
 	}
 	return n / 4
 }

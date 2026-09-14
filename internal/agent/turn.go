@@ -114,7 +114,7 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 		a.ensureMCP(a.ctx, cfg)
 	}
 	system, defs := a.buildContext(rv, cfg)
-	history := a.prepareHistory(t.ctx, m, info, system)
+	history := a.prepareHistory(t.ctx, m, info, system, defs)
 
 	resp, err := m.Complete(t.ctx, model.Request{Model: bareID(modelID), System: system, Messages: history, Tools: defs, Variant: a.Variant()},
 		func(d model.Delta) {

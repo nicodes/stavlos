@@ -14,8 +14,9 @@ import (
 // compacts first when asked (/compact while busy) or when the history is
 // past the threshold, records the size the call will carry, and makes
 // sure the history ends with a user message.
-func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info model.Info, system string) []model.Message {
-	history := project.Project(a.eventsCopy())
+func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info model.Info, system string, defs []model.ToolDef) []model.Message {
+	history := a.history()
+	est := project.EstimateTokens(history, system, defs)
 	a.mu.Lock()
 	wanted, inFlight := a.compactNext, a.compacting
 	if !inFlight {
@@ -29,18 +30,19 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 		switch {
 		case wanted:
 			target = n // every completed turn
-		case info.ContextWindow > 0 && project.EstimateTokens(history, system) > int(float64(info.ContextWindow)*a.s.Config().Compaction.Threshold):
+		case info.ContextWindow > 0 && est > int(float64(info.ContextWindow)*a.s.Config().Compaction.Threshold):
 			target = n * 2 / 3 // the older two thirds
 		}
 		if target >= 0 {
 			if err := a.compact(turnCtx, m, target); err == nil {
-				history = project.Project(a.eventsCopy())
+				history = a.history()
+				est = project.EstimateTokens(history, system, defs)
 			}
 		}
 		a.endCompacting()
 	}
 	a.mu.Lock()
-	a.ctxTokens, a.ctxWindow = project.EstimateTokens(history, system), info.ContextWindow
+	a.ctxTokens, a.ctxWindow = est, info.ContextWindow
 	a.mu.Unlock()
 	if len(history) == 0 || history[len(history)-1].Role != model.RoleUser {
 		history = append(history, model.Message{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "(continue)"}}})
@@ -63,7 +65,7 @@ func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
 	if cut < 0 {
 		return errors.New("nothing to compact")
 	}
-	before := project.EstimateTokens(project.Project(evs), "")
+	before := project.EstimateTokens(project.Project(evs), "", nil)
 	old := project.Project(evs[:cut+1])
 	transcript := project.Transcript(old)
 	if len(transcript) > 400_000 {
@@ -99,7 +101,7 @@ func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
 	// After: the history as the next call will see it, summary included.
 	kept := append([]event.Event{}, evs[cut+1:]...)
 	kept = append(kept, event.Event{Type: event.Compacted, Seq: evs[len(evs)-1].Seq + 1, Payload: event.MustPayload(payload)})
-	payload.After = project.EstimateTokens(project.Project(append(append([]event.Event{}, evs[:cut+1]...), kept...)), "")
+	payload.After = project.EstimateTokens(project.Project(append(append([]event.Event{}, evs[:cut+1]...), kept...)), "", nil)
 	_, err = a.record(context.Background(), event.Compacted, payload)
 	return err
 }

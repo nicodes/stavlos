@@ -553,9 +553,22 @@ func TestCompact(t *testing.T) {
 	if len(comp) != 1 || comp[0].Decode(&cp) != nil || cp.Summary != "SUMMARY ONE" || cp.Before == 0 {
 		t.Fatalf("compacted events %+v payload %+v", comp, cp)
 	}
+	// The events the summary covers are gone from memory; the projection
+	// starts at the summary.
+	if evs := root.eventsCopy(); len(evs) == 0 || evs[0].Type != event.Compacted && evs[0].Seq <= cp.ToSeq {
+		t.Fatalf("events after compaction: %d, first %s seq %d (to_seq %d)", len(evs), evs[0].Type, evs[0].Seq, cp.ToSeq)
+	}
+	if hist := root.history(); len(hist) == 0 || !strings.Contains(hist[0].Blocks[0].Text, "SUMMARY ONE") {
+		t.Fatalf("history after compaction: %+v", hist)
+	}
 	if in := root.Info(); in.Context == 0 || in.State != "idle" {
 		t.Fatalf("%+v", in)
 	}
+
+	// A completed turn since that compaction, so a queued one has something
+	// to summarise (compacting only the summary again would be pointless).
+	fm.steps = []step{reply(text("mid"))}
+	runTurn(t, s, h, "mid")
 
 	// Busy: queued, then done before the next model call of the turn.
 	gate2 := make(chan struct{})
@@ -584,7 +597,7 @@ func TestCompact(t *testing.T) {
 		t.Fatalf("busy compact: %s %v", st, err)
 	}
 	close(gate2)
-	if end := h.waitTurnEnd(t, root.ID, 2); end.Reason != "end_turn" {
+	if end := h.waitTurnEnd(t, root.ID, 3); end.Reason != "end_turn" {
 		t.Fatalf("%+v", end)
 	}
 	if n := len(h.ofType(event.Compacted, root.ID)); n != 2 {
