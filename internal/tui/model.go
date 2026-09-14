@@ -444,11 +444,11 @@ func (m *Model) focusOrder() []focus {
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
-	order = append(order, focusInput) // top to bottom: under the rule come the input, the meta row, the strip
-	order = append(order, focusMeta)
+	order = append(order, focusInput) // top to bottom: under the rule come the input, the strip, the meta row
 	if m.stripShown() {
 		order = append(order, focusTabs)
 	}
+	order = append(order, focusMeta)
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
 	}
@@ -1380,12 +1380,12 @@ func (m *Model) metaHit(x int) metaPart {
 }
 
 // rowLayout is where the session view's pieces sit, in screen rows: under
-// the rule come the palette (while open), the input, a blank line, the meta
-// row and the strip.
+// the rule come the palette (while open), the input, a blank line, the
+// strip and the meta row.
 type rowLayout struct {
 	input int // first row of the input (it may span several)
-	meta  int // the meta row
 	strip int // the tab strip line
+	meta  int // the meta row
 }
 
 // rows derives the row layout the same way sessionView stacks its parts.
@@ -1396,8 +1396,8 @@ func (m *Model) rows() rowLayout {
 	}
 	lay := rowLayout{input: y}
 	y += m.inputRows() + 1 // the input, then the blank line under it
-	lay.meta = y
-	lay.strip = y + 1
+	lay.strip = y
+	lay.meta = y + 1
 	return lay
 }
 

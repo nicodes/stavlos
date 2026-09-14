@@ -866,12 +866,12 @@ func (m Model) homeLines(width, height int) homeLayout {
 	}
 	add(m.inputBoxView(boxW), boxW)
 	lay.lines = append(lay.lines, "")
-	add(m.metaRow(boxW), boxW)
 	if m.stripShown() {
 		if sv := m.sectionsView(boxW); sv != "" {
 			add(sv, boxW)
 		}
 	}
+	add(m.metaRow(boxW), boxW)
 	lay.top = (height - len(lay.lines)) / 2
 	if lay.top < 0 {
 		lay.top = 0
@@ -906,17 +906,17 @@ func (m Model) sessionView(width, height int) string {
 		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top)     // the sidebar sits on the left
 	}
 	// Under the rule: the palette (while open) and the input, a blank line,
-	// then the meta row (YOLO, role, model, variant, usage) and the tab strip.
+	// then the tab strip and the meta row (mode tag, role, model, variant,
+	// usage).
 	parts := []string{top, styleRule.Render(strings.Repeat("─", width))}
 	if pv := m.paletteViewFor(width); pv != "" {
 		parts = append(parts, pv)
 	}
-	parts = append(parts, m.inputBoxView(width))
+	parts = append(parts, m.inputBoxView(width), "")
 	if sv := m.sectionsView(width); sv != "" {
-		parts = append(parts, "", m.metaRow(width), sv)
-	} else {
-		parts = append(parts, "", m.metaRow(width))
+		parts = append(parts, sv)
 	}
+	parts = append(parts, m.metaRow(width))
 	return padLines(strings.Join(parts, "\n"), width)
 }
 
@@ -995,9 +995,8 @@ func (m Model) treeRows(width int) []string {
 	return rows
 }
 
-// sectionsView is the one-line strip between the chat and the input: the
-// permission, agents and async tabs with their counts (always shown, "(0)"
-// when empty) and the repo at the right edge. The body of whichever tab has
+// sectionsView is the one-line strip at the bottom of the footer: the tabs
+// with their counts (always shown, "(0)" when empty). The body of whichever tab has
 // focus is a dialog (tabDialog), not an inline block.
 func (m Model) sectionsView(width int) string {
 	return m.sectionTabs(m.liveChildren(), m.runningJobs(), m.currentPrompt(), width)
@@ -1105,18 +1104,11 @@ func (m Model) tabBodyLines(width int) []string {
 	return nil
 }
 
-// sectionTabs is the one-line strip: the three tabs with their counts, the
-// open one in accent, the rest dim (except a permission tab with prompts
-// waiting, which is warning orange), and the repo at the right edge. Key
-// hints live in the key bar.
+// sectionTabs is the one-line strip: the tabs with their counts, the
+// highlighted one in accent, the rest dim (except a permission tab with
+// prompts waiting, which is warning orange). Key hints live in the key bar.
 func (m Model) sectionTabs(kids []protocol.AgentInfo, jobs []protocol.MonitorInfo, p *protocol.PromptInfo, width int) string {
-	line := m.tabLabels(kids, jobs, p)
-	// The repo (cwd) sits at the right edge of the strip.
-	repo := styleDim.Render(shortHome(m.session.Dir))
-	if gap := width - lipgloss.Width(line) - lipgloss.Width(repo); gap >= 4 {
-		line += strings.Repeat(" ", gap) + repo
-	}
-	return ansi.Truncate(line, width, "…")
+	return ansi.Truncate(m.tabLabels(kids, jobs, p), width, "…") // the session directory lives in the dirs tab
 }
 
 // tabLabels is "permission (n) · agents (n) · async (n)": the highlighted
