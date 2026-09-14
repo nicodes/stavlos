@@ -47,7 +47,7 @@ Coverage: `internal/agent` 3.2 % (only `dirs_test.go`), `pkg/client` 0 %, `cmd/*
 Phases are ordered so each one makes the next cheaper and safer. Sizes: S ≈ one commit,
 M ≈ 2–4 commits, L ≈ 5+ commits.
 
-### Phase 1 — Safety net (before touching the core)  [M]
+### Phase 1 — Safety net (before touching the core)  [M]  ✅ done 2026-09-14
 
 The core is only tested through the daemon integration suite. Every later phase needs unit-level
 tests that pin current behaviour first.
@@ -60,7 +60,8 @@ tests that pin current behaviour first.
 1.3 `project`: golden tests for `Project` (dangling tool_use repair, compaction cut, ordering).
 1.4 Snapshot test of every tool's `Def().Schema` (guards the schema-from-struct change in 4.4).
 1.5 De-flake `TestChildResponseWakesParent` (wait on the child's `TurnEnded`, not the tree read).
-1.6 Add `-race` to the gate for `internal/agent` and `internal/daemon`.
+1.6 Add `-race` to the gate for `internal/agent` and `internal/daemon`. (The detector passes today; gate = vet, gofmt, `go test -race` on those two, then `go test ./...` three times. staticcheck joins the gate once Phase 9 removes the 15 dead symbols.)
+    Found on the way: a recovered agent with a pending wake (response, lost job) was never signalled — fixed.
 
 ### Phase 2 — Security fixes (small, behaviour-changing, each its own commit)  [M]
 
