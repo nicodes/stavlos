@@ -158,7 +158,7 @@ func TestHomeAndSessionViews(t *testing.T) {
 	if !strings.Contains(plain, shortHome(m.session.Dir)) {
 		t.Fatalf("home view should name the session directory above the meta row:\n%s", plain)
 	}
-	if !strings.Contains(plain, "Giddy up!") {
+	if !strings.Contains(plain, taglineText()) || taglineText() != "G i d d y   u p !" {
 		t.Fatalf("home view should carry the tagline:\n%s", plain)
 	}
 	if strings.Contains(plain, "permission (") || strings.Contains(plain, "agents (") {
