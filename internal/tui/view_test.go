@@ -832,9 +832,9 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if sv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(sv, "\n") != 0 || strings.Contains(sv, "make test") {
 		t.Fatalf("the strip should stay one line with the permission open: focus=%v\n%s", m.focus, sv)
 	}
-	// the dialog: the tool row over its command
-	if body := strings.Join(m.tabBodyLines(60), "\n"); !strings.Contains(stripANSI(body), "$ Bash · coder\n       make test") || strings.Contains(body, "{") {
-		t.Fatalf("permission should open as a tool row over its command:\n%s", stripANSI(body))
+	// the dialog: one row in the async tab's style, "$ name (role)  command"
+	if body := strings.Join(m.tabBodyLines(60), "\n"); stripANSI(body) != "$ coder (coder)  make test" {
+		t.Fatalf("permission should open as a name (role) command row:\n%s", stripANSI(body))
 	}
 	dv := stripANSI(m.tabDialog(100))
 	if !strings.HasPrefix(dv, "╭") || !strings.Contains(dv, "Permission (1)") || !strings.Contains(dv, "esc: close") || !strings.Contains(dv, "make test") || strings.Contains(dv, "agents (") {
@@ -913,7 +913,7 @@ func TestSectionTabStrip(t *testing.T) {
 	m.focus = focusPermission
 	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 6 || !strings.Contains(lines[1], "Permission (1)") || !strings.Contains(lines[3], "Bash") || !strings.Contains(lines[4], "       make test") || strings.Contains(v, "scout") {
+	if len(lines) != 5 || !strings.Contains(lines[1], "Permission (1)") || !strings.HasPrefix(lines[3], "│ $ coder (coder)  make test") || strings.Contains(v, "scout") {
 		t.Fatalf("permission dialog:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
@@ -967,13 +967,13 @@ func TestPermissionShowsWholeCommand(t *testing.T) {
 			t.Fatalf("line %q too wide or elided:\n%s", l, v)
 		}
 	}
-	joined := strings.ReplaceAll(strings.ReplaceAll(v, "\n       ", ""), "\n", "")
+	joined := strings.ReplaceAll(strings.ReplaceAll(v, "\n         ", ""), "\n", "")
 	for _, want := range []string{"rm -f \"$f\".bak; done", "echo second line"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q:\n%s", want, v)
 		}
 	}
-	if !strings.Contains(v, "\n       echo second line") {
+	if !strings.Contains(v, "\n         echo second line") {
 		t.Fatalf("newline in the command should start a new row:\n%s", v)
 	}
 }
