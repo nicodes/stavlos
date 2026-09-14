@@ -178,6 +178,11 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			}
 			_ = e.Decode(&p)
 			delete(openMonitors, p.ID)
+			// The live path disarms a job when it fires or stops without
+			// logging MonitorDisarmed; replay must not leave it armed.
+			if a, ok := s.agents[monitorOwner[p.ID]]; ok {
+				delete(a.armed, p.ID)
+			}
 		case event.MonitorArmed, event.MonitorDisarmed:
 			if a, ok := s.agents[e.Agent]; ok {
 				var p event.MonitorPayload
@@ -234,8 +239,12 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 			_ = e.Decode(&p)
 			if target, ok := askTargets[p.CallID]; ok {
 				delete(askTargets, p.CallID)
+				// The model may have addressed the peer by a prefix; the live
+				// path keyed the expectation on the resolved id, so does replay.
 				if a, ok := s.agents[e.Agent]; ok && !p.IsError && !p.Cancelled && !p.Denied {
-					a.awaiting[target]++
+					if peer, ok := s.resolve(target); ok {
+						a.awaiting[peer.ID]++
+					}
 				}
 			}
 		case event.AgentKilled:

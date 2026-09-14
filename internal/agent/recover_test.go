@@ -24,6 +24,7 @@ type snapshot struct {
 	Todos                                               []event.TodoItem
 	Dirs                                                []protocol.DirInfo
 	Children                                            []string
+	Armed                                               []string
 }
 
 func snap(s *Session) []snapshot {
@@ -33,7 +34,7 @@ func snap(s *Session) []snapshot {
 		out = append(out, snapshot{
 			ID: in.ID, Parent: in.Parent, Archetype: in.Archetype, Label: in.Label, Model: in.Model, Variant: in.Variant, State: string(in.State),
 			Depth: in.Depth, Turn: in.Turn, Queued: in.Queued, Tokens: in.Tokens, CostUSD: in.CostUSD, LastError: in.LastError,
-			Awaiting: in.Awaiting, Todos: in.Todos, Dirs: in.Dirs, Children: a.Children(),
+			Awaiting: in.Awaiting, Todos: in.Todos, Dirs: in.Dirs, Children: a.Children(), Armed: a.armedIDs(),
 		})
 	}
 	return out
@@ -87,6 +88,21 @@ func TestRecoverRoundTrip(t *testing.T) {
 	h.waitFor(t, event.TurnEnded, root.ID) // turn 2
 	runTurn(t, s, h, "follow up")          // turn 3
 	waitUntil(t, h, func() bool { return child.StateOf() == StateIdle && s.Busy() == 0 })
+	// Turn 4: the root messages the child by a prefix of its id and starts a
+	// background job that exits; the child answers. Both leave state the
+	// replay must reproduce: an expectation keyed on the resolved id (then
+	// settled), a job armed then fired.
+	fm.steps = []step{
+		reply(call("c4", "agent_message", `{"id":"`+child.ID[:6]+`","text":"anything else?"}`)),
+		reply(call("c5", "shell", `{"command":"true","background":true}`)),
+		reply(text("waiting")),
+	}
+	fm.childSteps = []step{reply(call("k4", "agent_response", `{"to":"`+root.ID+`","text":"nothing else"}`))}
+	_ = s.SetMode(ctx, protocol.ModeYolo)
+	runTurn(t, s, h, "ask the child")
+	waitUntil(t, h, func() bool {
+		return root.Info().Turn >= 5 && root.StateOf() == StateIdle && child.StateOf() == StateIdle && s.Busy() == 0 && len(root.Info().Awaiting) == 0 && len(root.armedIDs()) == 0
+	})
 	s.Stop()
 	before := snap(s)
 	mode, modelID := s.Mode(), s.Model()
