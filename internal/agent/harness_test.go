@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -343,5 +344,17 @@ func userMessages(h *fakeHost, agent string) []event.UserMessagePayload {
 		_ = e.Decode(&p)
 		out = append(out, p)
 	}
+	return out
+}
+
+// armedIDs lists the job ids whose exit would wake the agent (test-only view).
+func (a *Agent) armedIDs() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var out []string
+	for id := range a.armed {
+		out = append(out, id)
+	}
+	sort.Strings(out)
 	return out
 }
