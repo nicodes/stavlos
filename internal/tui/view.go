@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/textsafe"
 	"strconv"
 	"strings"
 	"time"
@@ -1538,7 +1539,9 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 	default:
 		g, gap := toolGlyph(p.Tool)
 		head := styleWorking.Render(g) + gap
-		arg := fullToolArg(p.Tool, p.Input)
+		// Controls in the subject are shown, not stripped: a command that
+		// tried to erase part of itself from the screen reads as "^[".
+		arg := textsafe.Visible(fullToolArg(p.Tool, p.Input))
 		if arg == "" {
 			arg = toolTitle(p.Tool)
 		}
