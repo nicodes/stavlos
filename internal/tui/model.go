@@ -66,23 +66,15 @@ func Run(ctx context.Context, c *client.Client, sessionID string) error {
 // Model is the Bubble Tea model for one session. Update only performs state
 // transitions; every daemon interaction is a tea.Cmd from commands.go.
 type Model struct {
-	ctx       context.Context
-	c         *client.Client
-	sessionID string
-	spawned   map[string]time.Time // agent id → spawn time, for the agents block
+	ctx context.Context
+	c   *client.Client
+
+	sessionState // the bound session; replaced whole when switching
+	uiPrefs      // display choices; they survive a switch
+	dialogs      // the open overlay and sign-in
 
 	navSessions     []protocol.SessionInfo // the sidebar's sessions section: other sessions of this directory, newest first
 	navSessionsOpen bool                   // the section is expanded
-
-	session     protocol.SessionInfo
-	agents      []protocol.AgentInfo // pre-order, root first
-	selected    int
-	transcripts map[string]*Transcript
-	seq         int64
-
-	prompts     []protocol.PromptInfo // pending, oldest first; [0] is shown
-	claimedByUs map[string]bool
-	promptBusy  string // prompt id with a claim/reply in flight
 
 	presets []protocol.PresetInfo
 
@@ -91,56 +83,94 @@ type Model struct {
 	sp    spinner.Model
 
 	width, height int
-	showTree      bool            // right sidebar toggle (/tree, ctrl+b)
-	hideKeys      bool            // the key bar (divider + legend) at the bottom is hidden; /help shows it
-	cancelArmed   time.Time       // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
-	quitArmed     time.Time       // when ctrl+c was last pressed; a second within cancelWindow quits
-	hoverFocus    bool            // the chat has focus because the mouse is over it (released when the mouse leaves)
-	hoverFrom     focus           // where focus was before hover took it, restored when the mouse leaves the chat
-	sel           selection       // mouse text selection (drag to select, release to copy)
-	metaSel       metaPart        // the highlighted part of the meta row while it has focus
-	tabSel        int             // the highlighted tab (index into tabFocuses) while the strip has focus
-	dialogFrom    focus           // what had focus when the open dialog (a tab's or an overlay) was opened; closing returns there
-	mcpOpen       map[string]bool // MCP servers whose tool list is expanded in the mcp dialog
-	details       bool            // expanded tool output (/details)
-	follow        bool            // auto-scroll to bottom
+	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
+	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
+	sel           selection // mouse text selection (drag to select, release to copy)
+	metaSel       metaPart  // the highlighted part of the meta row while it has focus
+	tabSel        int       // the highlighted tab (index into tabFocuses) while the strip has focus
+	follow        bool      // auto-scroll to bottom
 
 	status      string
 	statusErr   bool
 	statusToken int
 	compactTick bool // the compaction animation tick is scheduled (a transcript has a running compaction)
+	treeTimer   bool // a debounced tree refresh is scheduled
 
-	// Keyboard focus (tab / shift+tab cycle the sections). The chat cursor
-	// walks transcript items; expanded holds per-item tool output overrides
-	// keyed by agent id; itemRows maps items to rendered viewport rows.
+	// Keyboard focus (tab / shift+tab cycle the sections).
 	focus       focus
-	chatCursor  int
-	expanded    map[string]map[int]bool
-	itemRows    map[int]rowRange
 	promptInput textinput.Model // answer field of a question prompt
 	dirInput    textinput.Model // path field of the dirs dialog while adding or editing
-	dirEdit     string          // "" | "add" | the path being replaced
+	sbCursor    int
+	palIdx      int      // highlighted row in the "/" command palette
+	history     []string // prompts sent from this client (and replayed human prompts)
+	histIdx     int      // == len(history) when editing a new line
+	histDraft   string   // unsent text saved while browsing history
+
+	fatal error
+}
+
+// sessionState is everything that belongs to the bound session. Switching
+// sessions replaces it whole (bindSession), so nothing of the previous
+// session (a half-answered question, an armed esc, a cursor) leaks into
+// the next.
+type sessionState struct {
+	sessionID   string
+	session     protocol.SessionInfo
+	agents      []protocol.AgentInfo // pre-order, root first
+	selected    int
+	spawned     map[string]time.Time // agent id → spawn time, for the agents block
+	parentOf    map[string]string    // child agent id → parent id, for the parent's agent_create line
+	transcripts map[string]*Transcript
+	seq         int64
+	loading     bool  // replaying events up to replayTo
+	replayTo    int64 // seq from reconcile
+	reconciled  bool  // the first reconcile landed
+
+	prompts     []protocol.PromptInfo // pending, oldest first; [0] is shown
+	claimedByUs map[string]bool
+	promptBusy  string          // prompt id with a claim/reply in flight
 	permSel     int             // highlighted option of the permission dialog
 	permFor     string          // the prompt id permSel belongs to (a new prompt starts at the top)
 	permEdit    string          // "" | "deny" (reason row open) | "dir" (path row open) in the permission dialog
 	q           questionState   // the questions dialog: where the human is in the current batch
-	sbCursor    int
-	palIdx      int               // highlighted row in the "/" command palette
-	agCursor    int               // highlighted row in the agents/async tab while it has focus
-	history     []string          // prompts sent from this client (and replayed human prompts)
-	parentOf    map[string]string // child agent id → parent id, for the parent's agent_create line
-	histIdx     int               // == len(history) when editing a new line
-	histDraft   string            // unsent text saved while browsing history
-	loading     bool              // replaying events up to replayTo
-	replayTo    int64             // seq from reconcile
-	treeTimer   bool              // a debounced tree refresh is scheduled
-	reconciled  bool              // the first reconcile landed
+	dirEdit     string          // "" | "add" | the path being replaced
+	mcpOpen     map[string]bool // MCP servers whose tool list is expanded in the mcp dialog
 
-	ov        *overlay                // open modal, or nil
-	providers []protocol.ProviderInfo // last provider.list result
-	login     loginFlow               // device-code sign-in in progress
+	// The chat cursor walks transcript items; expanded holds per-item tool
+	// output overrides keyed by agent id; itemRows maps items to rendered
+	// viewport rows.
+	chatCursor int
+	expanded   map[string]map[int]bool
+	itemRows   map[int]rowRange
+	agCursor   int // highlighted row in the open list dialog
 
-	fatal error
+	cancelArmed time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
+	quitArmed   time.Time // when ctrl+c was last pressed; a second within cancelWindow quits
+}
+
+// newSessionState is the state of session id before anything is known
+// about it but info.
+func newSessionState(id string, info protocol.SessionInfo) sessionState {
+	return sessionState{
+		sessionID: id, session: info,
+		spawned: map[string]time.Time{}, parentOf: map[string]string{},
+		transcripts: map[string]*Transcript{}, claimedByUs: map[string]bool{},
+	}
+}
+
+// uiPrefs are the user's display choices.
+type uiPrefs struct {
+	showTree bool // the sidebar (/tree, ctrl+b)
+	hideKeys bool // the key bar (divider + legend) at the bottom is hidden; /help shows it
+	details  bool // expanded tool output (/details)
+}
+
+// dialogs is the modal state not tied to a session.
+type dialogs struct {
+	ov         *overlay                // open modal, or nil
+	dialogFrom focus                   // what had focus when the open dialog (a tab's or an overlay) was opened; closing returns there
+	providers  []protocol.ProviderInfo // last provider.list result
+	login      loginFlow               // device-code sign-in in progress
 }
 
 // focus names the UI section that owns the keyboard. The zero value is
@@ -275,22 +305,20 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 	di.Prompt = "› "
 	di.Placeholder = "path (absolute, ~, or relative to the session directory)"
 
-	return Model{
-		ctx:         ctx,
-		c:           c,
-		sessionID:   sessionID,
-		transcripts: map[string]*Transcript{},
-		claimedByUs: map[string]bool{},
-		expanded:    map[string]map[int]bool{},
-		vp:          vp,
-		input:       ti,
-		promptInput: pi,
-		dirInput:    di,
-		sp:          sp,
-		hideKeys:    true, // the key bar is off until /help
-		follow:      true,
-		loading:     true,
+	m := Model{
+		ctx:          ctx,
+		c:            c,
+		sessionState: newSessionState(sessionID, protocol.SessionInfo{}),
+		uiPrefs:      uiPrefs{hideKeys: true}, // the key bar is off until /help
+		vp:           vp,
+		input:        ti,
+		promptInput:  pi,
+		dirInput:     di,
+		sp:           sp,
+		follow:       true,
 	}
+	m.loading = true // until the reconcile lands
+	return m
 }
 
 // Init starts the cursor blink, the spinner, the placeholder cycle and the
@@ -355,7 +383,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.replayTo = msg.res.Seq
 		m.loading = msg.res.Seq > 0
-		cmds = append(cmds, subscribeCmd(m.ctx, m.c, m.sessionID, 0), sessionsCmd(m.ctx, m.c, m.session.Dir, true), presetsCmd(m.ctx, m.c, m.sessionID))
+		cmds = append(cmds, subscribeCmd(m.ctx, m.c, m.sessionID, 0), sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsHistory), rolesCmd(m.ctx, m.c, m.sessionID, true))
 
 	case subscribedMsg:
 		if msg.err != nil {
@@ -388,13 +416,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.setAgents(msg.agents)
 			if m.sidebarVisible() {
-				cmds = append(cmds, navSessionsCmd(m.ctx, m.c, m.session.Dir, m.sessionID))
+				cmds = append(cmds, sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsNav))
 			}
-		}
-
-	case navSessionsMsg:
-		if msg.err == nil {
-			m.navSessions = cleanSessions(msg.sessions)
 		}
 
 	case treeTickMsg:
@@ -451,11 +474,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, m.onVariants(msg))
 	case sessionsMsg:
 		msg.sessions = cleanSessions(msg.sessions)
-		if msg.quiet {
+		switch msg.purpose {
+		case sessionsNav:
+			if msg.err == nil {
+				m.navSessions = resumable(msg.sessions, m.sessionID)
+			}
+		case sessionsHistory:
 			if msg.err == nil {
 				m.seedHistory(msg.sessions)
 			}
-		} else {
+		case sessionsPicker:
 			cmds = append(cmds, m.onSessions(msg))
 		}
 	case switchedMsg:
@@ -1006,15 +1034,10 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 
 // answerQuestions sends a batch's answers.
 func (m *Model) answerQuestions(p *protocol.PromptInfo, answers []string) tea.Cmd {
-	if m.promptBusy == p.ID {
-		return m.setStatus("answer in flight…", false)
-	}
-	if p.ClaimedBy != "" && !m.claimedByUs[p.ID] {
-		return m.setStatus("claimed by another client", true)
-	}
-	m.promptBusy = p.ID
-	m.claimedByUs[p.ID] = true
-	return answerQuestionsCmd(m.ctx, m.c, p.ID, append([]string(nil), answers...))
+	answers = append([]string(nil), answers...)
+	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error {
+		return c.AnswerQuestions(ctx, id, answers)
+	})
 }
 
 // wrapIndex brings i into [0, n) cyclically; n must be positive.
@@ -1560,7 +1583,7 @@ func (m *Model) metaAction(part metaPart) tea.Cmd {
 	case metaYolo:
 		return setModeCmd(m.ctx, m.c, m.sessionID, protocol.ModeAsk)
 	case metaRole:
-		return rolesCmd(m.ctx, m.c, m.sessionID)
+		return rolesCmd(m.ctx, m.c, m.sessionID, false)
 	case metaModel:
 		return modelsCmd(m.ctx, m.c)
 	case metaVariant:
@@ -2242,11 +2265,11 @@ func (m *Model) command(text string) tea.Cmd {
 			return c
 		}
 		if rest == "" {
-			return rolesCmd(m.ctx, m.c, m.sessionID)
+			return rolesCmd(m.ctx, m.c, m.sessionID, false)
 		}
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
 	case "/sessions", "/resume", "/session":
-		return sessionsCmd(m.ctx, m.c, m.session.Dir, false)
+		return sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsPicker)
 	case "/compact":
 		if c := needAgent(); c != nil {
 			return c
@@ -2275,7 +2298,7 @@ func (m *Model) command(text string) tea.Cmd {
 	case "/providers", "/provider", "/connect", "/login":
 		// The one provider dialog: sign in, re-sign in, sign out. A name
 		// argument jumps straight to that provider's sign-in.
-		return providersCmd(m.ctx, m.c, false, strings.ToLower(rest))
+		return providersCmd(m.ctx, m.c, providersMsg{jump: strings.ToLower(rest)})
 	}
 	return m.setStatus("unknown command "+name+" (try /help)", true)
 }
@@ -2563,17 +2586,25 @@ func (m *Model) removePrompt(id string) {
 // answerPrompt claims and replies. answer is allow | deny | allow_always or
 // free text for questions; for trust prompts "allow" means trust.
 func (m *Model) answerPrompt(p *protocol.PromptInfo, answer string) tea.Cmd {
+	// A trust prompt is answered like any other, by id: the daemon knows
+	// which directory and hash it asked about.
+	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error { return c.ReplyPrompt(ctx, id, answer) })
+}
+
+// claimThen sends one answer to p through reply, unless an answer to it is
+// already in flight or another client holds it; the command claims the
+// prompt first.
+func (m *Model) claimThen(p *protocol.PromptInfo, reply func(ctx context.Context, c *client.Client, id string) error) tea.Cmd {
 	if m.promptBusy == p.ID {
 		return m.setStatus("answer in flight…", false)
 	}
 	if p.ClaimedBy != "" && !m.claimedByUs[p.ID] {
 		return m.setStatus("claimed by another client", true)
 	}
-	m.promptBusy = p.ID
-	m.claimedByUs[p.ID] = true
-	// A trust prompt is answered like any other, by id: the daemon knows
-	// which directory and hash it asked about.
-	return answerPromptCmd(m.ctx, m.c, p.ID, answer)
+	id := p.ID
+	m.promptBusy = id
+	m.claimedByUs[id] = true
+	return replyCmd(m.ctx, m.c, id, func(ctx context.Context, c *client.Client) error { return reply(ctx, c, id) })
 }
 
 // denyPrompt denies a permission, passing the human's reason (may be empty).
@@ -2581,15 +2612,7 @@ func (m *Model) denyPrompt(p *protocol.PromptInfo, reason string) tea.Cmd {
 	if p.Kind == "trust" {
 		return m.answerPrompt(p, "deny") // trust has its own reply; no reason field
 	}
-	if m.promptBusy == p.ID {
-		return m.setStatus("answer in flight…", false)
-	}
-	if p.ClaimedBy != "" && !m.claimedByUs[p.ID] {
-		return m.setStatus("claimed by another client", true)
-	}
-	m.promptBusy = p.ID
-	m.claimedByUs[p.ID] = true
-	return denyPromptCmd(m.ctx, m.c, p.ID, reason)
+	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error { return c.DenyPrompt(ctx, id, reason) })
 }
 
 // answerPromptPrefix allows the call and every command of the tool that
@@ -2598,29 +2621,15 @@ func (m *Model) answerPromptPrefix(p *protocol.PromptInfo) tea.Cmd {
 	if p.Prefix == "" {
 		return m.answerPrompt(p, "allow_always")
 	}
-	if m.promptBusy == p.ID {
-		return m.setStatus("answer in flight…", false)
-	}
-	if p.ClaimedBy != "" && !m.claimedByUs[p.ID] {
-		return m.setStatus("claimed by another client", true)
-	}
-	m.promptBusy = p.ID
-	m.claimedByUs[p.ID] = true
-	return allowPromptPrefixCmd(m.ctx, m.c, p.ID)
+	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error { return c.AllowPromptPrefix(ctx, id) })
 }
 
 // answerPromptDir is allow_always on a boundary prompt with an edited
 // directory: the call runs and that directory joins the agent's set.
 func (m *Model) answerPromptDir(p *protocol.PromptInfo, dir string) tea.Cmd {
-	if m.promptBusy == p.ID {
-		return m.setStatus("answer in flight…", false)
-	}
-	if p.ClaimedBy != "" && !m.claimedByUs[p.ID] {
-		return m.setStatus("claimed by another client", true)
-	}
-	m.promptBusy = p.ID
-	m.claimedByUs[p.ID] = true
-	return answerPromptDirCmd(m.ctx, m.c, p.ID, dir)
+	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error {
+		return c.ReplyPromptDir(ctx, id, "allow_always", dir)
+	})
 }
 
 // --- agents / selection ---
@@ -2694,7 +2703,7 @@ func (m *Model) toggleTree() tea.Cmd {
 	}
 	m.layout()
 	if m.showTree {
-		return tea.Batch(m.setFocus(focusSidebar), navSessionsCmd(m.ctx, m.c, m.session.Dir, m.sessionID))
+		return tea.Batch(m.setFocus(focusSidebar), sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsNav))
 	}
 	return m.setFocus(focusInput)
 }
@@ -3234,7 +3243,7 @@ func (m *Model) onLoginDone(msg loginDoneMsg) tea.Cmd {
 	if m.ov != nil && m.ov.mode == overlayLogin {
 		cmds = append(cmds, m.closeOverlay())
 	}
-	cmds = append(cmds, m.setStatus("connected "+name+" ✓", false), refreshProvidersCmd(m.ctx, m.c))
+	cmds = append(cmds, m.setStatus("connected "+name+" ✓", false), providersCmd(m.ctx, m.c, providersMsg{refresh: true}))
 	if m.session.Model == "" && (len(m.agents) == 0 || m.agents[0].Model == "") {
 		cmds = append(cmds, modelsCmd(m.ctx, m.c))
 	}
@@ -3442,26 +3451,7 @@ func sessionItem(s protocol.SessionInfo, current bool) overlayItem {
 // bindSession rebinds the TUI to another session: every per-session
 // piece of state starts over and a fresh reconcile replays its history.
 func (m *Model) bindSession(info protocol.SessionInfo) tea.Cmd {
-	m.sessionID = info.ID
-	m.session = info
-	m.agents = nil
-	m.selected = 0
-	m.transcripts = map[string]*Transcript{}
-	m.seq = 0
-	m.prompts = nil
-	m.claimedByUs = map[string]bool{}
-	m.promptBusy = ""
-	m.spawned = map[string]time.Time{}
-	m.parentOf = map[string]string{}
-	m.expanded = nil
-	m.itemRows = nil
-	m.chatCursor = 0
-	m.agCursor = 0
-	m.cancelArmed = time.Time{}
-	m.quitArmed = time.Time{}
-	m.reconciled = false
-	m.loading = false
-	m.replayTo = 0
+	m.sessionState = newSessionState(info.ID, info)
 	m.follow = true
 	m.input.Reset()
 	m.refreshViewport()

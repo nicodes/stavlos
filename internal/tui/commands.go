@@ -53,13 +53,11 @@ type (
 	// placeholderTickMsg advances the input placeholder suggestion.
 	placeholderTickMsg struct{}
 
-	// providersMsg carries provider.list. notice=true renders the list into
-	// the transcript instead of opening the overlay; refresh=true only
-	// updates the cached list; jump names a provider to sign in to at once.
+	// providersMsg carries provider.list. refresh=true only updates the
+	// cached list; jump names a provider to sign in to at once.
 	providersMsg struct {
 		res     protocol.ProviderListResult
 		err     error
-		notice  bool
 		refresh bool
 		jump    string
 
@@ -83,133 +81,78 @@ type (
 	}
 )
 
-func withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
-	return context.WithTimeout(ctx, callTimeout)
+// rpcCmd runs one client call under the RPC timeout and turns its outcome
+// into a message.
+func rpcCmd(ctx context.Context, do func(ctx context.Context) tea.Msg) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(ctx, callTimeout)
+		defer cancel()
+		return do(ctx)
+	}
+}
+
+// resultCmd is a fire-and-forget call reported as a resultMsg; ok is shown
+// on success.
+func resultCmd(ctx context.Context, ok string, do func(ctx context.Context) error) tea.Cmd {
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg { return resultMsg{ok, do(ctx)} })
+}
+
+// tick delivers msg after d.
+func tick(d time.Duration, msg tea.Msg) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg { return msg })
 }
 
 func reconcileCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		res, err := c.Reconcile(ctx, session)
 		return reconcileMsg{res, err}
-	}
+	})
 }
 
 func subscribeCmd(ctx context.Context, c *client.Client, session string, from int64) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return subscribedMsg{c.Subscribe(ctx, session, from)}
-	}
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg { return subscribedMsg{c.Subscribe(ctx, session, from)} })
 }
 
 func treeCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		agents, err := c.Tree(ctx, session)
 		return treeMsg{agents, err}
-	}
+	})
 }
 
 // treeDebounceCmd fires a tick after which the tree is refetched.
-func treeDebounceCmd() tea.Cmd {
-	return tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg { return treeTickMsg{} })
-}
+func treeDebounceCmd() tea.Cmd { return tick(250*time.Millisecond, treeTickMsg{}) }
 
 func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.Kind, text, ok string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return resultMsg{ok, c.Send(ctx, agent, kind, text)}
-	}
+	return resultCmd(ctx, ok, func(ctx context.Context) error { return c.Send(ctx, agent, kind, text) })
 }
 
-// answerPromptCmd claims then replies in one step. Claiming happens only
-// here, i.e. only once the user pressed a key (PRD §7.4).
-func answerQuestionsCmd(ctx context.Context, c *client.Client, id string, answers []string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+// replyCmd claims prompt id and then replies to it. Claiming happens only
+// here, once the human acted (PRD §7.4).
+func replyCmd(ctx context.Context, c *client.Client, id string, reply func(ctx context.Context, c *client.Client) error) tea.Cmd {
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		if err := c.ClaimPrompt(ctx, id); err != nil {
 			return promptReplyMsg{id, err}
 		}
-		return promptReplyMsg{id, c.AnswerQuestions(ctx, id, answers)}
-	}
+		return promptReplyMsg{id, reply(ctx, c)}
+	})
 }
 
-func denyPromptCmd(ctx context.Context, c *client.Client, id, reason string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		if err := c.ClaimPrompt(ctx, id); err != nil {
-			return promptReplyMsg{id, err}
-		}
-		return promptReplyMsg{id, c.DenyPrompt(ctx, id, reason)}
-	}
-}
-
-func answerPromptDirCmd(ctx context.Context, c *client.Client, id, dir string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		if err := c.ClaimPrompt(ctx, id); err != nil {
-			return promptReplyMsg{id, err}
-		}
-		return promptReplyMsg{id, c.ReplyPromptDir(ctx, id, "allow_always", dir)}
-	}
-}
-
-func allowPromptPrefixCmd(ctx context.Context, c *client.Client, id string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		if err := c.ClaimPrompt(ctx, id); err != nil {
-			return promptReplyMsg{id, err}
-		}
-		return promptReplyMsg{id, c.AllowPromptPrefix(ctx, id)}
-	}
-}
-
-func answerPromptCmd(ctx context.Context, c *client.Client, id, answer string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		if err := c.ClaimPrompt(ctx, id); err != nil {
-			return promptReplyMsg{id, err}
-		}
-		return promptReplyMsg{id, c.ReplyPrompt(ctx, id, answer)}
-	}
-}
-
-func providersCmd(ctx context.Context, c *client.Client, notice bool, jump string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		res, err := c.Providers(ctx)
-		return providersMsg{res: res, err: err, notice: notice, jump: jump}
-	}
-}
-
-// refreshProvidersCmd re-fetches provider.list without opening anything.
-func refreshProvidersCmd(ctx context.Context, c *client.Client) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		res, err := c.Providers(ctx)
-		return providersMsg{res: res, err: err, refresh: true}
-	}
+// providersCmd lists providers into msg, whose fields say what the list
+// is for (a sign-in to jump to, a quiet refresh, a status to show).
+func providersCmd(ctx context.Context, c *client.Client, msg providersMsg) tea.Cmd {
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
+		msg.res, msg.err = c.Providers(ctx)
+		return msg
+	})
 }
 
 // loginStartCmd begins the device-code login for provider.
 func loginStartCmd(ctx context.Context, c *client.Client, provider, method string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		res, err := c.LoginStart(ctx, provider, method)
 		return loginStartMsg{provider: provider, res: res, err: err}
-	}
+	})
 }
 
 // loginWaitCmd blocks until the login id completes. ctx is the model's
@@ -248,60 +191,41 @@ func openBrowserCmd(url string) tea.Cmd {
 // disconnectProviderCmd signs out of a provider and re-lists providers so
 // the open dialog refreshes.
 func disconnectProviderCmd(ctx context.Context, c *client.Client, id string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		if err := c.DisconnectProvider(ctx, id); err != nil {
 			return resultMsg{"", err}
 		}
 		res, err := c.Providers(ctx)
 		return providersMsg{res: res, err: err, status: "signed out of " + id}
-	}
+	})
 }
 
 // modelsCmd lists models of connected providers only.
 func modelsCmd(ctx context.Context, c *client.Client) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		ms, err := c.Models(ctx, "", false)
 		return modelsMsg{ms, err}
-	}
+	})
 }
 
-// rolesCmd lists presets for the /role picker; pickRoleCmd applies one.
+// rolesMsg carries the session's roles: for the /role picker, or (quiet)
+// to refresh the cached roles that filter the models and variants dialogs
+// and tint role names.
 type rolesMsg struct {
 	roles []protocol.PresetInfo
 	err   error
-	quiet bool // refresh the cached roles without opening the picker
+	quiet bool
 }
 
-// presetsCmd refreshes the cached roles (for filtering the models and
-// variants dialogs and for role colours) without opening a dialog.
-func presetsCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+func rolesCmd(ctx context.Context, c *client.Client, session string, quiet bool) tea.Cmd {
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		rs, err := c.Presets(ctx, session)
-		return rolesMsg{roles: rs, err: err, quiet: true}
-	}
-}
-
-func rolesCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		rs, err := c.Presets(ctx, session)
-		return rolesMsg{roles: rs, err: err}
-	}
+		return rolesMsg{roles: rs, err: err, quiet: quiet}
+	})
 }
 
 func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return resultMsg{"role set to " + role, c.SetAgentRole(ctx, agent, role)}
-	}
+	return resultCmd(ctx, "role set to "+role, func(ctx context.Context) error { return c.SetAgentRole(ctx, agent, role) })
 }
 
 // modeDesc is what each permission mode does, for the /mode picker, the
@@ -317,40 +241,26 @@ func modeDesc(mode string) string {
 }
 
 func addDirCmd(ctx context.Context, c *client.Client, agent, dir string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return resultMsg{"added " + dir, c.AddAgentDir(ctx, agent, dir)}
-	}
+	return resultCmd(ctx, "added "+dir, func(ctx context.Context) error { return c.AddAgentDir(ctx, agent, dir) })
 }
 
 func removeDirCmd(ctx context.Context, c *client.Client, agent, dir string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return resultMsg{"removed " + shortHome(dir), c.RemoveAgentDir(ctx, agent, dir)}
-	}
+	return resultCmd(ctx, "removed "+shortHome(dir), func(ctx context.Context) error { return c.RemoveAgentDir(ctx, agent, dir) })
 }
 
 // replaceDirCmd swaps one directory for another (an edit in the dirs
 // dialog): the new one is added first so the agent never loses ground.
 func replaceDirCmd(ctx context.Context, c *client.Client, agent, oldDir, newDir string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		if err := c.AddAgentDir(ctx, agent, newDir); err != nil {
 			return resultMsg{"", err}
 		}
 		return resultMsg{"replaced " + shortHome(oldDir) + " with " + newDir, c.RemoveAgentDir(ctx, agent, oldDir)}
-	}
+	})
 }
 
 func setModeCmd(ctx context.Context, c *client.Client, session, mode string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return resultMsg{"mode " + mode + ": " + modeDesc(mode), c.SetSessionMode(ctx, session, mode)}
-	}
+	return resultCmd(ctx, "mode "+mode+": "+modeDesc(mode), func(ctx context.Context) error { return c.SetSessionMode(ctx, session, mode) })
 }
 
 // compactCmd is /compact. Summarising takes a model call, so it gets a
@@ -393,43 +303,39 @@ func copyCmd(text string) tea.Cmd {
 	}
 }
 
-// sessionsMsg carries session.list: for the /sessions picker, or (quiet)
-// for the recent list on the home screen.
+// sessionsPurpose is what a session.list result is for.
+type sessionsPurpose int
+
+const (
+	sessionsPicker  sessionsPurpose = iota // the /sessions picker
+	sessionsHistory                        // earlier prompts for ↑/↓ on the start screen
+	sessionsNav                            // the sidebar's sessions section
+)
+
+// sessionsMsg carries session.list for one purpose.
 type sessionsMsg struct {
 	sessions []protocol.SessionInfo
 	err      error
-	quiet    bool
+	purpose  sessionsPurpose
 }
 
-func sessionsCmd(ctx context.Context, c *client.Client, dir string, quiet bool) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+func sessionsCmd(ctx context.Context, c *client.Client, dir string, purpose sessionsPurpose) tea.Cmd {
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		ss, err := c.Sessions(ctx, dir, false)
-		return sessionsMsg{ss, err, quiet}
-	}
+		return sessionsMsg{ss, err, purpose}
+	})
 }
 
-// navSessionsMsg carries the sidebar's sessions section: the directory's
-// other resumable sessions, newest first.
-type navSessionsMsg struct {
-	sessions []protocol.SessionInfo
-	err      error
-}
-
-func navSessionsCmd(ctx context.Context, c *client.Client, dir, current string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		ss, err := c.Sessions(ctx, dir, false)
-		var out []protocol.SessionInfo
-		for _, s := range ss {
-			if s.ID != current && s.Title != "" { // never prompted: nothing to resume
-				out = append(out, s)
-			}
+// resumable is the sidebar's sessions section: the directory's other
+// sessions that were ever prompted, in the order given.
+func resumable(ss []protocol.SessionInfo, current string) []protocol.SessionInfo {
+	var out []protocol.SessionInfo
+	for _, s := range ss {
+		if s.ID != current && s.Title != "" { // never prompted: nothing to resume
+			out = append(out, s)
 		}
-		return navSessionsMsg{out, err}
 	}
+	return out
 }
 
 // switchedMsg reports a session resume for the /sessions picker: the TUI
@@ -440,13 +346,11 @@ type switchedMsg struct {
 }
 
 func switchSessionCmd(ctx context.Context, c *client.Client, from, to string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		_ = c.Unsubscribe(ctx, from)
 		info, err := c.ResumeSession(ctx, to)
 		return switchedMsg{info, err}
-	}
+	})
 }
 
 // variantsMsg carries the variant names a model offers, for the /variants
@@ -459,41 +363,27 @@ type variantsMsg struct {
 }
 
 func variantsCmd(ctx context.Context, c *client.Client, modelID, current string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		vs, err := c.Variants(ctx, modelID)
 		return variantsMsg{modelID, current, vs, err}
-	}
+	})
 }
 
 func pickVariantCmd(ctx context.Context, c *client.Client, agent, variant string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		what := "variant set to " + variant
-		if variant == "" {
-			what = "variant reset to the provider default"
-		}
-		return resultMsg{what, c.SetAgentVariant(ctx, agent, variant)}
+	what := "variant set to " + variant
+	if variant == "" {
+		what = "variant reset to the provider default"
 	}
+	return resultCmd(ctx, what, func(ctx context.Context) error { return c.SetAgentVariant(ctx, agent, variant) })
 }
 
 // pickAgentModelCmd / pickSessionModelCmd are the /models overlay actions.
 func pickAgentModelCmd(ctx context.Context, c *client.Client, agent, modelID string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return resultMsg{"model set to " + modelID, c.SetAgentModel(ctx, agent, modelID)}
-	}
+	return resultCmd(ctx, "model set to "+modelID, func(ctx context.Context) error { return c.SetAgentModel(ctx, agent, modelID) })
 }
 
 func pickSessionModelCmd(ctx context.Context, c *client.Client, session, modelID string) tea.Cmd {
-	return func() tea.Msg {
-		ctx, cancel := withTimeout(ctx)
-		defer cancel()
-		return resultMsg{"session model set to " + modelID, c.SetSessionModel(ctx, session, modelID)}
-	}
+	return resultCmd(ctx, "session model set to "+modelID, func(ctx context.Context) error { return c.SetSessionModel(ctx, session, modelID) })
 }
 
 // compactTickMsg animates the compaction bar while a summariser runs.
@@ -501,16 +391,11 @@ type compactTickMsg struct{}
 
 const compactTickPeriod = 120 * time.Millisecond
 
-func compactTickCmd() tea.Cmd {
-	return tea.Tick(compactTickPeriod, func(time.Time) tea.Msg { return compactTickMsg{} })
-}
-
-func placeholderTickCmd() tea.Cmd {
-	return tea.Tick(placeholderPeriod, func(time.Time) tea.Msg { return placeholderTickMsg{} })
-}
+func compactTickCmd() tea.Cmd     { return tick(compactTickPeriod, compactTickMsg{}) }
+func placeholderTickCmd() tea.Cmd { return tick(placeholderPeriod, placeholderTickMsg{}) }
 
 func clearStatusCmd(token int, after time.Duration) tea.Cmd {
-	return tea.Tick(after, func(time.Time) tea.Msg { return clearStatusMsg{token} })
+	return tick(after, clearStatusMsg{token})
 }
 
 // isConflict reports whether err is the daemon's conflict error (prompt
