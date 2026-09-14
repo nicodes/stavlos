@@ -53,6 +53,7 @@ const (
 	TurnAborted      Type = "turn.aborted"      // TurnPayload (daemon restart, PRD §4.3)
 
 	PromptRequested Type = "prompt.requested" // PromptRequestedPayload (permission/question)
+	PromptEscalated Type = "prompt.escalated" // PromptRefPayload: unclaimed past the claim timeout, shown to the fallback tier too
 	PromptClaimed   Type = "prompt.claimed"   // PromptRefPayload
 	PromptAnswered  Type = "prompt.answered"  // PromptAnsweredPayload
 	PromptWithdrawn Type = "prompt.withdrawn" // PromptRefPayload

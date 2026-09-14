@@ -191,6 +191,8 @@ func (d *Daemon) recordPrompt(action protocol.PromptAction, info protocol.Prompt
 			rp.Questions, _ = json.Marshal(info.Questions)
 		}
 		t, payload = event.PromptRequested, rp
+	case protocol.ActionEscalated:
+		t, payload = event.PromptEscalated, event.PromptRefPayload{ID: info.ID}
 	case protocol.ActionClaimed:
 		t, payload = event.PromptClaimed, event.PromptRefPayload{ID: info.ID, Client: clientID}
 	case protocol.ActionAnswered:
