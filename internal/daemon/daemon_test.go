@@ -1935,6 +1935,59 @@ func TestAllowPrefix(t *testing.T) {
 // turn with the model and logs a Compacted event; the next turn's request
 // starts from the summary. Mid-turn it is queued and runs before the next
 // model call.
+// TestWebSearchNeedsABackend: without "search" in the config the model is
+// not offered web_search (the prompt says so); with it, it is.
+func TestWebSearchNeedsABackend(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			names := map[string]bool{}
+			for _, d := range req.Tools {
+				names[d.Name] = true
+			}
+			if names["web_search"] || !names["web_fetch"] || !strings.Contains(req.System, "no search backend is configured") {
+				t.Errorf("unconfigured search: tools=%v", names)
+			}
+			return text("ok")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
+	h.waitFor(event.TurnEnded, agents[0].ID)
+
+	// with a backend: offered, and the key comes from the environment
+	t.Setenv("STAVLOS_TEST_SEARCH_KEY", "k-123")
+	setupConfig(t)
+	g := os.Getenv("STAVLOS_CONFIG_DIR")
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","search":{"provider":"Brave","apiKey":"${env:STAVLOS_TEST_SEARCH_KEY}"}}`), 0o644)
+	fm2 := &fakeModel{}
+	fm2.steps = []func(model.Request) model.Response{
+		func(req model.Request) model.Response {
+			for _, d := range req.Tools {
+				if d.Name == "web_search" {
+					return text("ok")
+				}
+			}
+			t.Error("web_search should be offered with a backend configured")
+			return text("ok")
+		},
+	}
+	h2 := newHarness(t, t.TempDir(), fm2)
+	defer h2.close()
+	s2, _ := h2.c.CreateSession(ctx, work, "", "")
+	_ = h2.c.Subscribe(ctx, s2.ID, 0)
+	agents, _ = h2.c.Tree(ctx, s2.ID)
+	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
+	h2.waitFor(event.TurnEnded, agents[0].ID)
+}
+
 func TestManualCompact(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
