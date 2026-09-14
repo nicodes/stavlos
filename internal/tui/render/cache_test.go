@@ -1,4 +1,4 @@
-package tui
+package render
 
 import (
 	"encoding/json"
@@ -19,11 +19,11 @@ import (
 func TestRenderMatchesRenderAll(t *testing.T) {
 	markCursorForTest(t)
 	tr := transcript.NewTranscript()
-	cache := &renderCache{}
+	cache := &Cache{}
 	check := func(stage string) {
 		t.Helper()
 		items := tr.Items()
-		for _, base := range []RenderOpts{
+		for _, base := range []Options{
 			{Width: 80},
 			{Width: 36, Details: true},
 			{Width: 80, NoFold: true},
@@ -36,8 +36,8 @@ func TestRenderMatchesRenderAll(t *testing.T) {
 					o.Focused, o.Cursor = true, cur
 					o.Expanded = map[int]bool{cur: cur%2 == 0}
 				}
-				want, wantRows := renderAll(tr.All(), o)
-				got, gotRows := renderTranscript(tr, cache, o)
+				want, wantRows := Lines(tr.All(), o)
+				got, gotRows := Transcript(tr, cache, o)
 				if got != want || !reflect.DeepEqual(gotRows, wantRows) {
 					t.Fatalf("%s, opts %+v:\ngot:\n%s\nwant:\n%s\nrows %v vs %v", stage, o, got, want, gotRows, wantRows)
 				}
@@ -70,15 +70,15 @@ func TestRenderMatchesRenderAll(t *testing.T) {
 // it leaves and enters; a finished call renders only its own item.
 func TestRenderReusesUnchangedItems(t *testing.T) {
 	tr := transcript.NewTranscript()
-	cache := &renderCache{}
+	cache := &Cache{}
 	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "hi"}))
 	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
 	tr.Apply(mk(3, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "working on it"}}}))
-	o := RenderOpts{Width: 80, Focused: true, Cursor: 0}
-	misses := func(step string, want int, o RenderOpts) {
+	o := Options{Width: 80, Focused: true, Cursor: 0}
+	misses := func(step string, want int, o Options) {
 		t.Helper()
 		before := cache.misses
-		renderTranscript(tr, cache, o)
+		Transcript(tr, cache, o)
 		if got := cache.misses - before; got != want {
 			t.Fatalf("%s: rendered %d items, want %d", step, got, want)
 		}

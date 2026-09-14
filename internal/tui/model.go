@@ -25,6 +25,7 @@ import (
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tui/format"
+	"github.com/nicodes/stavlos/internal/tui/render"
 	"github.com/nicodes/stavlos/internal/tui/theme"
 	"github.com/nicodes/stavlos/internal/tui/transcript"
 	"github.com/nicodes/stavlos/pkg/client"
@@ -123,7 +124,7 @@ type sessionState struct {
 	spawned     map[string]time.Time // agent id → spawn time, for the agents block
 	parentOf    map[string]string    // child agent id → parent id, for the parent's agent_create line
 	transcripts map[string]*transcript.Transcript
-	renders     map[string]*renderCache // per agent: rendered rows of its transcript's items
+	renders     map[string]*render.Cache // per agent: rendered rows of its transcript's items
 	seq         int64
 	loading     bool  // replaying events up to replayTo
 	replayTo    int64 // seq from reconcile
@@ -144,7 +145,7 @@ type sessionState struct {
 	// viewport rows.
 	chatCursor int
 	expanded   map[string]map[int]bool
-	itemRows   map[int]rowRange
+	itemRows   map[int]render.RowRange
 	agCursor   int // highlighted row in the open list dialog
 
 	cancelArmed time.Time // when esc was last pressed on an empty input while the agent was busy; a second esc within cancelWindow cancels
@@ -157,7 +158,7 @@ func newSessionState(id string, info protocol.SessionInfo) sessionState {
 	return sessionState{
 		sessionID: id, session: info,
 		spawned: map[string]time.Time{}, parentOf: map[string]string{},
-		transcripts: map[string]*transcript.Transcript{}, renders: map[string]*renderCache{}, claimedByUs: map[string]bool{},
+		transcripts: map[string]*transcript.Transcript{}, renders: map[string]*render.Cache{}, claimedByUs: map[string]bool{},
 	}
 }
 
@@ -1708,7 +1709,7 @@ func (m *Model) tabAt(x int) (focus, bool) {
 // itemAtRow maps a viewport content row to the chat item drawn there.
 func (m *Model) itemAtRow(row int) (int, bool) {
 	for item, r := range m.itemRows {
-		if row >= r.first && row <= r.last {
+		if row >= r.First && row <= r.Last {
 			return item, true
 		}
 	}
@@ -2201,10 +2202,10 @@ func (m *Model) scrollToCursor() {
 	}
 	h := m.vp.Height
 	switch {
-	case r.last-r.first+1 > h || r.first < m.vp.YOffset:
-		m.vp.SetYOffset(r.first)
-	case r.last >= m.vp.YOffset+h:
-		m.vp.SetYOffset(r.last - h + 1)
+	case r.Last-r.First+1 > h || r.First < m.vp.YOffset:
+		m.vp.SetYOffset(r.First)
+	case r.Last >= m.vp.YOffset+h:
+		m.vp.SetYOffset(r.Last - h + 1)
 	}
 }
 
@@ -2954,7 +2955,7 @@ func (m *Model) refreshViewport() {
 	working, waiting, verb, stats, active := false, false, "", "", ""
 	if t != nil && t.InTurn() {
 		working, verb = true, t.TurnVerb()
-		stats = turnStats(t.TurnStats(time.Now()))
+		stats = render.TurnStats(t.TurnStats(time.Now()))
 		active = m.activeTodo()
 	}
 	for _, p := range m.prompts {
@@ -2963,7 +2964,7 @@ func (m *Model) refreshViewport() {
 			break
 		}
 	}
-	opts := RenderOpts{
+	opts := render.Options{
 		Width:    m.vp.Width,
 		Details:  m.details,
 		Spinner:  m.sp.View(),
@@ -2976,14 +2977,14 @@ func (m *Model) refreshViewport() {
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,
 
-		CompactFrame: compactFrame(time.Now()),
+		CompactFrame: render.CompactFrame(time.Now()),
 	}
 	var content string
-	var rows map[int]rowRange
+	var rows map[int]render.RowRange
 	if t != nil {
-		content, rows = renderTranscript(t, m.chatCache(m.selectedID()), opts) // unchanged items come from the cache
+		content, rows = render.Transcript(t, m.chatCache(m.selectedID()), opts) // unchanged items come from the cache
 	} else {
-		content, rows = renderAll(nil, opts)
+		content, rows = render.Lines(nil, opts)
 	}
 	m.itemRows = rows
 	m.vp.SetContent(content)
@@ -3561,10 +3562,10 @@ func containsStr(xs []string, x string) bool {
 }
 
 // chatCache is the render cache of agent id's transcript.
-func (m *Model) chatCache(id string) *renderCache {
+func (m *Model) chatCache(id string) *render.Cache {
 	c := m.renders[id]
 	if c == nil {
-		c = &renderCache{}
+		c = &render.Cache{}
 		m.renders[id] = c
 	}
 	return c

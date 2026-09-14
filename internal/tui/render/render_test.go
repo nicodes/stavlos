@@ -1,4 +1,4 @@
-package tui
+package render
 
 import (
 	"encoding/json"
@@ -24,11 +24,11 @@ func mk(seq int64, agent string, typ event.Type, payload any) event.Event {
 
 // renderLines renders (collapsed) and returns trimmed, ANSI-free lines.
 func renderLines(lines []transcript.Line) []string {
-	return renderWith(lines, RenderOpts{Width: 80, Spinner: "⠋", NoFold: true})
+	return renderWith(lines, Options{Width: 80, Spinner: "⠋", NoFold: true})
 }
 
-func renderWith(lines []transcript.Line, o RenderOpts) []string {
-	out := strings.Split(stripANSI(Render(lines, o)), "\n")
+func renderWith(lines []transcript.Line, o Options) []string {
+	out := strings.Split(stripANSI(firstOf(Lines(lines, o))), "\n")
 	for i := range out {
 		out[i] = strings.TrimRight(out[i], " ")
 	}
@@ -137,7 +137,7 @@ func TestUserBlockBorderAndWrap(t *testing.T) {
 	text := "one two three four five six seven eight nine ten"
 	got := renderWith(transcript.Build([]event.Event{
 		mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi\n" + text}),
-	}), RenderOpts{Width: 30, NoFold: true})
+	}), Options{Width: 30, NoFold: true})
 	if got[0] != "› hi" {
 		t.Fatalf("prompt glyph + padding: %q", got[0])
 	}
@@ -194,7 +194,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 		t.Fatalf("compacted rule should be centered: %q", rule)
 	}
 
-	expanded := renderWith(tr.All(), RenderOpts{Width: 80, Details: true})
+	expanded := renderWith(tr.All(), Options{Width: 80, Details: true})
 	if n := count(expanded, "  line"); n != 20 {
 		t.Fatalf("expanded: want 20 output lines, got %d", n)
 	}
@@ -207,8 +207,8 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 
 func TestToolOutputExpandedCap(t *testing.T) {
 	lines := transcript.OutputLines(strings.TrimRight(strings.Repeat("x\n", 50), "\n"))
-	collapsed := renderWith(lines, RenderOpts{Width: 80, NoFold: true})
-	expanded := renderWith(lines, RenderOpts{Width: 80, Details: true})
+	collapsed := renderWith(lines, Options{Width: 80, NoFold: true})
+	expanded := renderWith(lines, Options{Width: 80, Details: true})
 	if count(collapsed, "  x") != transcript.MaxOutputCollapsed || !contains(collapsed, "  … +47 lines") {
 		t.Fatalf("collapsed:\n%s", strings.Join(collapsed, "\n"))
 	}
@@ -308,35 +308,35 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("x\n", 6), "\n")}))
 	lines := tr.All()
 
-	plain := renderWith(lines, RenderOpts{Width: 80, NoFold: true})
+	plain := renderWith(lines, Options{Width: 80, NoFold: true})
 	for _, l := range plain {
-		if strings.Contains(l, gutterMark) {
+		if strings.Contains(l, GutterMark) {
 			t.Fatalf("no cursor without focus: %q", l)
 		}
 	}
-	got := renderWith(lines, RenderOpts{Width: 80, Cursor: 1, Focused: true})
-	if !contains(got, gutterMark+"$ Shell  ls") || !contains(got, gutterMark+"  x") || contains(got, gutterMark+"│  hi") {
+	got := renderWith(lines, Options{Width: 80, Cursor: 1, Focused: true})
+	if !contains(got, GutterMark+"$ Shell  ls") || !contains(got, GutterMark+"  x") || contains(got, GutterMark+"│  hi") {
 		t.Fatalf("cursor marks only item 1:\n%s", strings.Join(got, "\n"))
 	}
 	if !contains(got, "› hi") {
 		t.Fatalf("non-cursor lines keep the gutter space:\n%s", strings.Join(got, "\n"))
 	}
 	// Per-item override expands item 1 while /details is off, and vice versa.
-	exp := renderWith(lines, RenderOpts{Width: 80, NoFold: true, Expanded: map[int]bool{1: true}})
+	exp := renderWith(lines, Options{Width: 80, NoFold: true, Expanded: map[int]bool{1: true}})
 	if count(exp, "  x") != 6 || contains(exp, "    … +3 lines") {
 		t.Fatalf("expanded override:\n%s", strings.Join(exp, "\n"))
 	}
-	col := renderWith(lines, RenderOpts{Width: 80, Details: true, Expanded: map[int]bool{1: false}})
+	col := renderWith(lines, Options{Width: 80, Details: true, Expanded: map[int]bool{1: false}})
 	if count(col, "  x") != transcript.MaxOutputCollapsed {
 		t.Fatalf("collapsed override:\n%s", strings.Join(col, "\n"))
 	}
-	_, rows := renderAll(lines, RenderOpts{Width: 80, NoFold: true})
+	_, rows := Lines(lines, Options{Width: 80, NoFold: true})
 	// user block on row 0 (no leading blank at the top), one blank row of
 	// spacing, then the tool item: line, 3 output lines, trailer
-	if r := rows[0]; r.first != 0 || r.last != 0 {
+	if r := rows[0]; r.First != 0 || r.Last != 0 {
 		t.Fatalf("user rows: %+v (want 0..0)", r)
 	}
-	if r := rows[1]; r.first != 2 || r.last != 6 {
+	if r := rows[1]; r.First != 2 || r.Last != 6 {
 		t.Fatalf("tool rows: %+v (want 2..6: tool line, 3 output lines, trailer)", r)
 	}
 }
@@ -382,7 +382,7 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 		t.Fatalf("order within tool item wrong (req %d, ans %d, out %d):\n%s", reqAt, ansAt, outAt, joined)
 	}
 	// the notices are nested under the call at the output's indent
-	rendered := renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem})
+	rendered := renderWith(lines, Options{Width: 80, Focused: true, Cursor: toolItem})
 	for _, r := range rendered {
 		if strings.Contains(r, "permission") || strings.Contains(r, "answered") {
 			if !strings.HasPrefix(strings.TrimLeft(r, "▍"), "  ") {
@@ -431,7 +431,7 @@ func TestFoldingToOneLine(t *testing.T) {
 		}
 		return r
 	}
-	plain := nonblank(renderWith(lines, RenderOpts{Width: 80}))
+	plain := nonblank(renderWith(lines, Options{Width: 80}))
 	joined := strings.Join(plain, "\n")
 	// user input and final response in full
 	for _, want := range []string{"line one", "line two", "final answer", "with two lines"} {
@@ -457,7 +457,7 @@ func TestFoldingToOneLine(t *testing.T) {
 	}
 	// cursor on the tool item previews its first lines (call, permission,
 	// answer) with a +N marker; enter (Expanded) shows everything
-	prev := nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem}))
+	prev := nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: toolItem}))
 	joinedPrev := strings.Join(prev, "\n")
 	if !strings.Contains(joinedPrev, "permission") || !strings.Contains(joinedPrev, "allow") || strings.Contains(joinedPrev, "found it") {
 		t.Fatalf("cursor on tool:\n%s", joinedPrev)
@@ -468,19 +468,19 @@ func TestFoldingToOneLine(t *testing.T) {
 			toolPrev++
 		}
 	}
-	if toolPrev > previewLines || !strings.Contains(joinedPrev, "+") {
-		t.Fatalf("preview should be at most %d lines with a +N marker:\n%s", previewLines, joinedPrev)
+	if toolPrev > PreviewLines || !strings.Contains(joinedPrev, "+") {
+		t.Fatalf("preview should be at most %d lines with a +N marker:\n%s", PreviewLines, joinedPrev)
 	}
-	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: toolItem, Expanded: map[int]bool{toolItem: true}})), "\n")
+	full := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: toolItem, Expanded: map[int]bool{toolItem: true}})), "\n")
 	if !strings.Contains(full, "permission") || !strings.Contains(full, "allow") || !strings.Contains(full, "\n") || strings.Count(full, "\n") < 5 {
 		t.Fatalf("expanded tool:\n%s", full)
 	}
-	child := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: childItem})), "\n")
+	child := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: childItem})), "\n")
 	if !strings.Contains(child, "found it") || strings.Contains(child, "permission") {
 		t.Fatalf("cursor on child:\n%s", child)
 	}
 	// /details shows everything
-	all := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Details: true})), "\n")
+	all := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Details: true})), "\n")
 	if !strings.Contains(all, "found it") || !strings.Contains(all, "permission") || !strings.Contains(all, "e\n") && !strings.HasSuffix(all, "e") {
 		t.Fatalf("details:\n%s", all)
 	}
@@ -581,7 +581,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		}
 		return r
 	}
-	plain := nonblank(renderWith(lines, RenderOpts{Width: 80}))
+	plain := nonblank(renderWith(lines, Options{Width: 80}))
 	joined := strings.Join(plain, "\n")
 	for _, want := range []string{"run the tests", "waiting", "all green", "job: go test", "job: src", "job: cooldown", "Job \"go test\" (m1): go test exited 0"} {
 		if !strings.Contains(joined, want) {
@@ -602,7 +602,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	// cursor on the command monitor previews the start, the fired line and
 	// the first output line with a +N marker; expanded shows the collapsed
 	// output rule (3 lines + "… +N lines")
-	prev := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
+	prev := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
 	for _, want := range []string{"$ job: go test", "$ go test exited 0", "ok  a", "+"} {
 		if !strings.Contains(prev, want) {
 			t.Fatalf("cursor on monitor lacks %q:\n%s", want, prev)
@@ -611,7 +611,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	if strings.Contains(prev, "ok  c") {
 		t.Fatalf("preview shows too much:\n%s", prev)
 	}
-	full := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Focused: true, Cursor: cmdStart.Item, Expanded: map[int]bool{cmdStart.Item: true}})), "\n")
+	full := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: cmdStart.Item, Expanded: map[int]bool{cmdStart.Item: true}})), "\n")
 	for _, want := range []string{"$ go test exited 0", "ok  a", "ok  c", "ok  d", "ok  e"} {
 		if !strings.Contains(full, want) {
 			t.Fatalf("expanded monitor lacks %q:\n%s", want, full)
@@ -621,7 +621,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		t.Fatalf("expanded monitor shows other items:\n%s", full)
 	}
 	// /details shows the whole output and the user block's output lines
-	all := strings.Join(nonblank(renderWith(lines, RenderOpts{Width: 80, Details: true})), "\n")
+	all := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Details: true})), "\n")
 	for _, want := range []string{"ok  e", "job stopped (unmonitor)", "timer elapsed", "ok  b"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("details lacks %q:\n%s", want, all)
@@ -645,7 +645,7 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
 	render := func() string {
-		s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: tr.InTurn()})
+		s, _ := Lines(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: tr.InTurn()})
 		return stripANSI(s)
 	}
 	if tr.InTurn() || strings.Contains(render(), "working…") {
@@ -658,11 +658,11 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 		t.Fatalf("mid-turn should end with the indicator:\n%s", out)
 	}
 	// blocked on a permission: an exclamation mark and a different label
-	if s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Waiting: true}); !strings.HasSuffix(stripANSI(s), "\n\n! permission requested") || strings.Contains(s, "working") {
+	if s, _ := Lines(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Waiting: true}); !strings.HasSuffix(stripANSI(s), "\n\n! permission requested") || strings.Contains(s, "working") {
 		t.Fatalf("waiting indicator:\n%s", stripANSI(s))
 	}
 	// the indicator is not an item: the cursor/expand bookkeeping ignores it
-	if _, rows := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Working: true}); len(rows) != tr.Items() {
+	if _, rows := Lines(tr.All(), Options{Width: 80, NoFold: true, Working: true}); len(rows) != tr.Items() {
 		t.Fatalf("rows %d, items %d", len(rows), tr.Items())
 	}
 	// elapsed time grows with the clock; tokens add up over the turn
@@ -673,10 +673,10 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	if el, tok := tr.TurnStats(ref.Add(75 * time.Second)); el-base != 75*time.Second || tok != 1500 {
 		t.Fatalf("turn stats: %v %d", el-base, tok)
 	}
-	if got := turnStats(75*time.Second, 1500); got != "(1m15s · 2k tokens)" {
+	if got := TurnStats(75*time.Second, 1500); got != "(1m15s · 2k tokens)" {
 		t.Fatalf("stats: %q", got)
 	}
-	if s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Stats: "(3s · 0 tokens)"}); !strings.HasSuffix(stripANSI(s), "⠋ working… (3s · 0 tokens)") {
+	if s, _ := Lines(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Stats: "(3s · 0 tokens)"}); !strings.HasSuffix(stripANSI(s), "⠋ working… (3s · 0 tokens)") {
 		t.Fatalf("stats suffix:\n%s", stripANSI(s))
 	}
 	tr.Apply(mk(3, event.TurnEnded, event.TurnEndedPayload{Turn: 1}))
@@ -692,7 +692,7 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	if v := tr.TurnVerb(); v != transcript.TurnVerbs[1] {
 		t.Fatalf("turn 2 verb %q, want %q", v, transcript.TurnVerbs[1])
 	}
-	if s, _ := renderAll(tr.All(), RenderOpts{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Verb: tr.TurnVerb()}); !strings.HasSuffix(stripANSI(s), "⠋ "+transcript.TurnVerbs[1]+"…") {
+	if s, _ := Lines(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Verb: tr.TurnVerb()}); !strings.HasSuffix(stripANSI(s), "⠋ "+transcript.TurnVerbs[1]+"…") {
 		t.Fatalf("verb on the indicator:\n%s", stripANSI(s))
 	}
 	tr.Apply(mk(5, event.TurnAborted, event.TurnPayload{Turn: 2}))
@@ -709,13 +709,13 @@ func TestCursorMarkSkipsSpacingRows(t *testing.T) {
 		{Kind: transcript.LineTool, Text: "Shell  ls", Item: 2, Tool: "shell"},
 	}
 	for cursor := 0; cursor < 3; cursor++ {
-		out, _ := renderAll(lines, RenderOpts{Width: 60, NoFold: true, Focused: true, Cursor: cursor})
+		out, _ := Lines(lines, Options{Width: 60, NoFold: true, Focused: true, Cursor: cursor})
 		for _, row := range strings.Split(stripANSI(out), "\n") {
-			if strings.TrimSpace(row) == gutterMark {
+			if strings.TrimSpace(row) == GutterMark {
 				t.Fatalf("cursor %d: the mark sits on a blank spacing row:\n%s", cursor, stripANSI(out))
 			}
 		}
-		if !strings.Contains(stripANSI(out), gutterMark) {
+		if !strings.Contains(stripANSI(out), GutterMark) {
 			t.Fatalf("cursor %d: no mark at all:\n%s", cursor, stripANSI(out))
 		}
 	}
@@ -725,20 +725,15 @@ func TestCursorMarkSkipsSpacingRows(t *testing.T) {
 // visible gutter mark so assertions can see which rows carry the cursor.
 func markCursorForTest(t *testing.T) {
 	t.Helper()
-	prev := highlightRow
-	highlightRow = func(s string, _ int) string { return gutterMark + s }
-	renderEpoch++
-	t.Cleanup(func() {
-		highlightRow = prev
-		renderEpoch++
-	})
+	prev := SwapHighlight(func(s string, _ int) string { return GutterMark + s })
+	t.Cleanup(func() { SwapHighlight(prev) })
 }
 
 func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 	tr := transcript.NewTranscript()
 	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "delegate"}))
 	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "agent_response", From: "scout (a1b2c3d4)", Text: "Repository survey complete.\nNo edits were needed."}))
-	folded := renderWith(tr.All(), RenderOpts{Width: 80})
+	folded := renderWith(tr.All(), Options{Width: 80})
 	if !contains(folded, "⑂ Agent response received · scout (a1b2c3d4) +2") {
 		t.Fatalf("folded response should name itself and its sender:\n%s", strings.Join(folded, "\n"))
 	}
@@ -747,7 +742,7 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 			t.Fatalf("folded response should not lead with the answer text:\n%s", strings.Join(folded, "\n"))
 		}
 	}
-	full := renderWith(tr.All(), RenderOpts{Width: 80, NoFold: true})
+	full := renderWith(tr.All(), Options{Width: 80, NoFold: true})
 	assertSubsequence(t, full, []string{"⑂ Agent response received · scout (a1b2c3d4)", "Repository survey complete.", "No edits were needed."})
 }
 
@@ -759,14 +754,14 @@ func TestDeliveredResponseShowsItsText(t *testing.T) {
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
 	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "r1", Name: "agent_response", Input: json.RawMessage(`{"to":"a4e33e14942","text":"Concise findings:\n- Go-only module"}`)}))
 	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "r1", Name: "agent_response", Output: "response delivered to a4e33e14942"}))
-	full := renderWith(tr.All(), RenderOpts{Width: 80, NoFold: true})
+	full := renderWith(tr.All(), Options{Width: 80, NoFold: true})
 	assertSubsequence(t, full, []string{"⑂ Agent response delivered  → a4e33e14942", "  Concise findings:", "  - Go-only module"})
 	for _, l := range full {
 		if strings.Contains(l, "response delivered to") {
 			t.Fatalf("the bare tool result should not show:\n%s", strings.Join(full, "\n"))
 		}
 	}
-	if folded := renderWith(tr.All(), RenderOpts{Width: 80}); !contains(folded, "⑂ Agent response delivered  → a4e33e14942 +2") {
+	if folded := renderWith(tr.All(), Options{Width: 80}); !contains(folded, "⑂ Agent response delivered  → a4e33e14942 +2") {
 		t.Fatalf("folded:\n%s", strings.Join(folded, "\n"))
 	}
 }
@@ -828,3 +823,5 @@ func showThinkingForTest(t *testing.T) {
 	transcript.ShowThinking = true
 	t.Cleanup(func() { transcript.ShowThinking = false })
 }
+
+func firstOf(s string, _ map[int]RowRange) string { return s }

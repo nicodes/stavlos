@@ -17,6 +17,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/format"
+	"github.com/nicodes/stavlos/internal/tui/render"
 	"github.com/nicodes/stavlos/internal/tui/transcript"
 )
 
@@ -384,15 +385,9 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 		t.Fatalf("cursor %d selected %d", m.sbCursor, m.selected)
 	}
 	// the cursor is a row background (a visible marker here), never an arrow
-	prev := highlightRow
-	highlightRow = func(s string, _ int) string { return gutterMark + s }
-	renderEpoch++
-	t.Cleanup(func() {
-		highlightRow = prev
-		renderEpoch++
-	})
+	markCursorForTest(t)
 	rows := m.treeRows(30)
-	if !strings.HasPrefix(rows[2], gutterMark) || strings.Contains(rows[0], gutterMark) || strings.Contains(strings.Join(rows, ""), "▶") || strings.Contains(strings.Join(rows, ""), "▸") {
+	if !strings.HasPrefix(rows[2], render.GutterMark) || strings.Contains(rows[0], render.GutterMark) || strings.Contains(strings.Join(rows, ""), "▶") || strings.Contains(strings.Join(rows, ""), "▸") {
 		t.Fatalf("cursor row: %q", rows)
 	}
 	m.handleKey(tea.KeyMsg{Type: tea.KeySpace})
@@ -792,7 +787,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	// marked is the first non-blank line carrying the cursor marker.
 	marked := func() string {
 		for _, l := range strings.Split(stripANSI(m.vp.View()), "\n") {
-			if s := strings.TrimSpace(strings.TrimPrefix(l, gutterMark)); strings.HasPrefix(l, gutterMark) && s != "" {
+			if s := strings.TrimSpace(strings.TrimPrefix(l, render.GutterMark)); strings.HasPrefix(l, render.GutterMark) && s != "" {
 				return s
 			}
 		}
@@ -814,7 +809,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	}
 	// The cursor item is scrolled into view.
 	r := m.itemRows[m.chatCursor]
-	if r.first < m.vp.YOffset || r.last >= m.vp.YOffset+m.vp.Height {
+	if r.First < m.vp.YOffset || r.Last >= m.vp.YOffset+m.vp.Height {
 		t.Fatalf("cursor rows %+v not visible at offset %d height %d", r, m.vp.YOffset, m.vp.Height)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyHome})
@@ -833,7 +828,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	// Under the cursor the tool item previews a few lines; enter expands
 	// this item fully; enter again returns to the preview.
 	view := func() string { return stripANSI(m.vp.View()) }
-	if n := strings.Count(view(), "out"); n != previewLines-1 {
+	if n := strings.Count(view(), "out"); n != render.PreviewLines-1 {
 		t.Fatalf("preview before enter (%d 'out' lines):\n%s", n, view())
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
@@ -841,7 +836,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 		t.Fatalf("expanded after enter (%v):\n%s", m.expanded["a"], view())
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
-	if m.expanded["a"][items-1] || strings.Count(view(), "out") != previewLines-1 {
+	if m.expanded["a"][items-1] || strings.Count(view(), "out") != render.PreviewLines-1 {
 		t.Fatalf("preview after second enter:\n%s", view())
 	}
 	// Expansion is per visit: expand, move away, come back → preview again.
@@ -854,7 +849,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 		t.Fatalf("moving away should drop the expansion: %v", m.expanded["a"])
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
-	if n := strings.Count(view(), "out"); n != previewLines-1 {
+	if n := strings.Count(view(), "out"); n != render.PreviewLines-1 {
 		t.Fatalf("back on the item it should be the preview (%d):\n%s", n, view())
 	}
 	// Enter on a non-tool item is inert.
@@ -868,13 +863,13 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 		t.Fatalf("expanded before leaving:\n%s", view())
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyShiftTab}) // esc → input; shift+tab back up to the chat
-	if m.focus != focusChat || len(m.expanded["a"]) != 0 || strings.Count(view(), "out") != previewLines-1 {
+	if m.focus != focusChat || len(m.expanded["a"]) != 0 || strings.Count(view(), "out") != render.PreviewLines-1 {
 		t.Fatalf("re-entering the chat should show the preview: focus=%v %v\n%s", m.focus, m.expanded["a"], view())
 	}
 
 	// Leaving the chat resumes following and drops the marker.
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusInput || !m.follow || !m.vp.AtBottom() || strings.Contains(stripANSI(m.vp.View()), gutterMark) {
+	if m.focus != focusInput || !m.follow || !m.vp.AtBottom() || strings.Contains(stripANSI(m.vp.View()), render.GutterMark) {
 		t.Fatalf("leave chat: focus=%v follow=%v bottom=%v", m.focus, m.follow, m.vp.AtBottom())
 	}
 	if hs := m.keyHints(); hs[4].key != "tab" || hs[4].desc != "next section" {
@@ -1136,7 +1131,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if !strings.Contains(v, "┄┄ compacting ") || strings.Count(v, "▰")+strings.Count(v, "▱") != 10 || strings.Contains(stripANSI(m.statusLine(100)), "compact") {
 		t.Fatalf("chat while compacting:\n%s", v)
 	}
-	if a, b := stripANSI(compactSweep(0)), stripANSI(compactSweep(5)); a == b {
+	if a, b := stripANSI(render.CompactSweep(0)), stripANSI(render.CompactSweep(5)); a == b {
 		t.Fatalf("the bar should move: %q %q", a, b)
 	}
 	before := len(tr.All())
@@ -1585,19 +1580,19 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
 		m = nm.(Model)
 	}
-	move(5, r.first-m.vp.YOffset)
+	move(5, r.First-m.vp.YOffset)
 	if m.focus != focusChat || m.chatCursor != 1 || !m.hoverFocus {
 		t.Fatalf("hover should focus the chat on item 1: focus=%v cursor=%d hover=%v", m.focus, m.chatCursor, m.hoverFocus)
 	}
 	// the row is highlighted like an arrow-key visit
 	markCursorForTest(t)
 	m.refreshViewport()
-	if !strings.Contains(stripANSI(m.vp.View()), gutterMark+"› prompt 0") {
+	if !strings.Contains(stripANSI(m.vp.View()), render.GutterMark+"› prompt 0") {
 		t.Fatalf("hovered item should carry the cursor:\n%s", stripANSI(m.vp.View()))
 	}
 	// hovering another item moves the cursor
 	r2 := m.itemRows[items-1]
-	move(5, r2.first-m.vp.YOffset)
+	move(5, r2.First-m.vp.YOffset)
 	if m.chatCursor != items-1 {
 		t.Fatalf("cursor should follow the mouse: %d", m.chatCursor)
 	}
@@ -1615,7 +1610,7 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 	// a tab dialog owns hover: the chat behind it is left alone
 	m.setFocus(focusInput)
 	m.setFocus(focusPermission)
-	move(5, r.first-m.vp.YOffset)
+	move(5, r.First-m.vp.YOffset)
 	if m.focus != focusPermission || m.hoverFocus {
 		t.Fatalf("hover must not take focus from an open tab dialog: %v", m.focus)
 	}
@@ -1638,16 +1633,16 @@ func TestMouseClickTogglesItem(t *testing.T) {
 		m = nm.(Model)
 	}
 	view := func() string { return stripANSI(m.vp.View()) }
-	click(r.first - m.vp.YOffset)
+	click(r.First - m.vp.YOffset)
 	if m.focus != focusChat || m.chatCursor != item || !m.expanded["a"][item] || strings.Count(view(), "out") != 8 {
 		t.Fatalf("click should select and expand: focus=%v cursor=%d expanded=%v\n%s", m.focus, m.chatCursor, m.expanded["a"], view())
 	}
-	click(r.first - m.vp.YOffset)
-	if m.expanded["a"][item] || strings.Count(view(), "out") != previewLines-1 {
+	click(r.First - m.vp.YOffset)
+	if m.expanded["a"][item] || strings.Count(view(), "out") != render.PreviewLines-1 {
 		t.Fatalf("second click should collapse to the preview:\n%s", view())
 	}
 	// a click on a user item is inert beyond selecting it
-	click(m.itemRows[0].first - m.vp.YOffset)
+	click(m.itemRows[0].First - m.vp.YOffset)
 	if m.chatCursor != 0 || len(m.expanded["a"]) != 0 {
 		t.Fatalf("click on a non-tool item: cursor=%d expanded=%v", m.chatCursor, m.expanded["a"])
 	}
@@ -1720,7 +1715,7 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 		t.Fatalf("permission tab: %v", m.focus)
 	}
 	r := m.itemRows[0]
-	move(3, r.first-m.vp.YOffset)
+	move(3, r.First-m.vp.YOffset)
 	if m.focus != focusPermission || m.hoverFocus {
 		t.Fatalf("hover must not take focus from the dialog: focus=%v hover=%v", m.focus, m.hoverFocus)
 	}
@@ -2157,12 +2152,12 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 	// hovering the chat, right of the sidebar, still selects an item
 	m.setFocus(focusInput)
 	r := m.itemRows[0]
-	ev(tea.MouseMsg{X: sidebarWidth + 1 + 3, Y: r.first - m.vp.YOffset, Action: tea.MouseActionMotion})
+	ev(tea.MouseMsg{X: sidebarWidth + 1 + 3, Y: r.First - m.vp.YOffset, Action: tea.MouseActionMotion})
 	if m.focus != focusChat || m.chatCursor != 0 {
 		t.Fatalf("hover over the chat with the sidebar open: focus=%v cursor=%d", m.focus, m.chatCursor)
 	}
 	// hovering over the sidebar hands focus back
-	ev(tea.MouseMsg{X: 2, Y: r.first - m.vp.YOffset, Action: tea.MouseActionMotion})
+	ev(tea.MouseMsg{X: 2, Y: r.First - m.vp.YOffset, Action: tea.MouseActionMotion})
 	if m.focus != focusInput {
 		t.Fatalf("hover over the sidebar should release the chat: %v", m.focus)
 	}
