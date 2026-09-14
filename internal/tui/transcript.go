@@ -944,6 +944,8 @@ func EventLines(ev event.Event) []Line {
 			return errorBlock(msg)
 		case event.ReasonMaxTokens:
 			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn stopped: max_tokens"}, {Kind: LineBlank}}
+		case event.ReasonEndTurn:
+			// the reply speaks for itself
 		}
 		return nil
 
