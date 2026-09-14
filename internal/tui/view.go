@@ -1160,19 +1160,15 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 		lines = append(lines, l)
 	}
 	lines = append(lines, "")
+	// The checklist: every option, then a last row for a typed answer.
 	for i, o := range cur.Options {
 		marker := "  "
 		if i == q.sel && !q.typing {
 			marker = styleOvMarker.Render("▸") + " "
 		}
-		mark := styleDim.Render("○")
-		if cur.Multi {
-			mark = styleDim.Render("□")
-			if q.marks[i] {
-				mark = styleOvGood.Render("■")
-			}
-		} else if q.answers[q.idx] == o.Label {
-			mark = styleOvGood.Render("●")
+		mark := styleDim.Render("□")
+		if q.marks[i] {
+			mark = styleOvGood.Render("■")
 		}
 		row := marker + mark + " " + o.Label
 		if o.Description != "" {
@@ -1180,14 +1176,18 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) []string {
 		}
 		lines = append(lines, ansi.Truncate(row, width, "…"))
 	}
-	if len(cur.Options) > 0 {
-		lines = append(lines, "")
+	marker := "  "
+	if q.sel == len(cur.Options) && !q.typing {
+		marker = styleOvMarker.Render("▸") + " "
 	}
-	label := "or type an answer"
-	if len(cur.Options) == 0 {
-		label = "type your answer"
+	switch {
+	case q.typing:
+		lines = append(lines, marker+styleOvGood.Render("■")+" "+m.promptInput.View())
+	case strings.TrimSpace(q.custom) != "":
+		lines = append(lines, ansi.Truncate(marker+styleOvGood.Render("■")+" "+q.custom, width, "…"))
+	default:
+		lines = append(lines, marker+styleDim.Render("□ something else…"))
 	}
-	lines = append(lines, styleDim.Render(label), m.promptInput.View())
 	if done := answered(q.answers); done > 0 && done < len(p.Questions) {
 		lines = append(lines, "", styleDim.Render(fmt.Sprintf("%d of %d answered · ←/→ to review", done, len(p.Questions))))
 	}

@@ -23,7 +23,7 @@ const (
 )
 
 func (askTool) Def() model.ToolDef {
-	return model.ToolDef{Name: "ask_user", Description: "Ask the human one to four short questions when several valid approaches exist and guessing would waste work: which backend, which of two designs, whether to keep going. Each question has a header (a few words), the question text and, usually, two to four options with a label and a one-line description; put the option you would pick first. The human can always type an answer instead of picking one, so never add an 'Other' option; leave options out for a free-text question. The turn waits for the answers. Do not ask what you can find out yourself, and do not ask more than once for the same thing.",
+	return model.ToolDef{Name: "ask_user", Description: "Ask the human one to four short questions when several valid approaches exist and guessing would waste work: which backend, which of two designs, whether to keep going. Each question has a header (a few words), the question text and one to four options with a label and a one-line description; put the option you would pick first. Every question is a checklist: the human may pick several options and always has a last entry for typing something else, so never add an 'Other' or 'all of the above' option. The turn waits for the answers. Do not ask what you can find out yourself, and do not ask more than once for the same thing.",
 		Schema: schema(map[string]any{
 			"questions": map[string]any{
 				"type": "array", "minItems": 1, "maxItems": askMaxQuestions,
@@ -33,7 +33,7 @@ func (askTool) Def() model.ToolDef {
 						"header":   prop("string", "A label of a few words, shown as the question's title"),
 						"question": prop("string", "The question, ending with ?"),
 						"options": map[string]any{
-							"type": "array", "maxItems": askMaxOptions,
+							"type": "array", "minItems": 1, "maxItems": askMaxOptions,
 							"items": map[string]any{
 								"type": "object",
 								"properties": map[string]any{
@@ -43,9 +43,8 @@ func (askTool) Def() model.ToolDef {
 								"required": []string{"label"},
 							},
 						},
-						"multi": prop("boolean", "Allow picking several options"),
 					},
-					"required": []string{"header", "question"},
+					"required": []string{"header", "question", "options"},
 				},
 			},
 		}, "questions")}
@@ -98,6 +97,9 @@ func parseQuestions(in json.RawMessage) ([]protocol.Question, error) {
 		}
 		if len([]rune(q.Header)) > askMaxHeader {
 			q.Header = string([]rune(q.Header)[:askMaxHeader])
+		}
+		if len(q.Options) == 0 {
+			return nil, fmt.Errorf("question %d needs at least one option (the human can always type something else)", i+1)
 		}
 		if len(q.Options) > askMaxOptions {
 			return nil, fmt.Errorf("question %d: at most %d options", i+1, askMaxOptions)

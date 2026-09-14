@@ -877,13 +877,14 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 }
 
 // questionState is where the human is inside an ask_user batch: which
-// question, which option the cursor is on, the picks so far, and whether
-// the "other" field is being typed into.
+// question, which row the cursor is on, the picks so far (options and a
+// typed answer), and whether the text field has the keys.
 type questionState struct {
 	id      string       // the prompt the state belongs to
 	idx     int          // current question
-	sel     int          // option under the cursor
-	marks   map[int]bool // multi: toggled options of the current question
+	sel     int          // row under the cursor: an option, or the last row ("something else")
+	marks   map[int]bool // toggled options of the current question
+	custom  string       // the typed "something else" answer of the current question
 	answers []string     // one per question, "" until answered
 	typing  bool         // the free-text field has the keys
 }
@@ -900,12 +901,13 @@ func (q *questionState) bind(p *protocol.PromptInfo) {
 	*q = questionState{id: p.ID, marks: map[int]bool{}, answers: make([]string, len(p.Questions))}
 }
 
-// questionsKey handles keys in the questions dialog. ↑/↓ move over the
-// options, space picks (single: and moves on) or toggles (multi), enter
-// confirms the current question — the highlighted option, the toggled set,
-// or the typed text — and moves on; the last confirmation submits the
-// batch. ←/→ move between questions. Typing goes into the "other" field;
-// esc leaves the field, or closes the dialog (the batch keeps waiting).
+// questionsKey handles keys in the questions dialog. Every question is a
+// checklist: ↑/↓ move over the options and the last row, "something else";
+// space toggles an option, or opens the text field on the last row; typing
+// anywhere opens it too. Enter confirms the current question — the toggled
+// options plus any typed text, joined — and moves on; the last confirmation
+// submits the batch. ←/→ move between questions to review. Esc leaves the
+// text field, or closes the dialog (the batch keeps waiting).
 func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 	p := m.currentQuestion()
 	if p == nil {
@@ -919,16 +921,32 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 		m.q.idx = len(p.Questions) - 1
 	}
 	cur := p.Questions[m.q.idx]
-	nopt := len(cur.Options)
-	confirm := func(answer string) tea.Cmd {
+	nopt := len(cur.Options) // the row after the options is "something else"
+	rows := nopt + 1
+	picked := func() string {
+		var out []string
+		for i, o := range cur.Options {
+			if m.q.marks[i] {
+				out = append(out, o.Label)
+			}
+		}
+		if c := strings.TrimSpace(m.q.custom); c != "" {
+			out = append(out, c)
+		}
+		return strings.Join(out, ", ")
+	}
+	confirm := func() tea.Cmd {
+		answer := picked()
+		if answer == "" {
+			return nil // nothing chosen yet
+		}
 		m.q.answers[m.q.idx] = answer
 		m.q.typing = false
 		m.promptInput.Reset()
 		m.promptInput.Blur()
 		if m.q.idx+1 < len(p.Questions) {
 			m.q.idx++
-			m.q.sel = 0
-			m.q.marks = map[int]bool{}
+			m.q.sel, m.q.marks, m.q.custom = 0, map[int]bool{}, ""
 			return nil
 		}
 		return m.answerQuestions(p, m.q.answers)
@@ -936,15 +954,13 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 	if m.q.typing {
 		switch {
 		case key.Matches(msg, keys.OvClose):
+			m.q.custom = strings.TrimSpace(m.promptInput.Value())
 			m.q.typing = false
 			m.promptInput.Blur()
 			return nil
 		case key.Matches(msg, keys.Submit):
-			text := strings.TrimSpace(m.promptInput.Value())
-			if text == "" {
-				return nil
-			}
-			return confirm(text)
+			m.q.custom = strings.TrimSpace(m.promptInput.Value())
+			return confirm()
 		}
 		var cmd tea.Cmd
 		m.promptInput, cmd = m.promptInput.Update(msg)
@@ -956,56 +972,38 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.TabLeft):
 		if m.q.idx > 0 {
 			m.q.idx--
-			m.q.sel, m.q.marks = 0, map[int]bool{}
+			m.q.sel, m.q.marks, m.q.custom = 0, map[int]bool{}, ""
 		}
 		return nil
 	case key.Matches(msg, keys.TabRight):
 		if m.q.idx+1 < len(p.Questions) {
 			m.q.idx++
-			m.q.sel, m.q.marks = 0, map[int]bool{}
+			m.q.sel, m.q.marks, m.q.custom = 0, map[int]bool{}, ""
 		}
 		return nil
 	case key.Matches(msg, keys.SelUp):
-		if nopt > 0 {
-			m.q.sel = ((m.q.sel-1)%nopt + nopt) % nopt
-		}
+		m.q.sel = ((m.q.sel-1)%rows + rows) % rows
 		return nil
 	case key.Matches(msg, keys.SelDown):
-		if nopt > 0 {
-			m.q.sel = (m.q.sel + 1) % nopt
-		}
+		m.q.sel = (m.q.sel + 1) % rows
 		return nil
 	case key.Matches(msg, keys.Select):
-		if nopt == 0 {
+		if m.q.sel == nopt { // "something else": type it
 			m.q.typing = true
+			m.promptInput.SetValue(m.q.custom)
+			m.promptInput.CursorEnd()
 			return m.promptInput.Focus()
 		}
-		if cur.Multi {
-			m.q.marks[m.q.sel] = !m.q.marks[m.q.sel]
-			return nil
-		}
-		return confirm(cur.Options[m.q.sel].Label)
+		m.q.marks[m.q.sel] = !m.q.marks[m.q.sel]
+		return nil
 	case key.Matches(msg, keys.Submit):
-		if cur.Multi {
-			var picked []string
-			for i, o := range cur.Options {
-				if m.q.marks[i] {
-					picked = append(picked, o.Label)
-				}
-			}
-			if len(picked) == 0 {
-				return nil
-			}
-			return confirm(strings.Join(picked, ", "))
-		}
-		if nopt == 0 {
-			m.q.typing = true
-			return m.promptInput.Focus()
-		}
-		return confirm(cur.Options[m.q.sel].Label)
+		return confirm()
 	case msg.Type == tea.KeyRunes || msg.Type == tea.KeyBackspace:
-		// typing starts the free-text answer
+		// typing starts the "something else" answer
 		m.q.typing = true
+		m.q.sel = nopt
+		m.promptInput.SetValue(m.q.custom)
+		m.promptInput.CursorEnd()
 		cmd := m.promptInput.Focus()
 		var cmd2 tea.Cmd
 		m.promptInput, cmd2 = m.promptInput.Update(msg)
@@ -1219,7 +1217,7 @@ func (m *Model) tabRowCount() int {
 		return len(m.selectedDirs())
 	case focusQuestions:
 		if p := m.currentQuestion(); p != nil && m.q.idx < len(p.Questions) {
-			return len(p.Questions[m.q.idx].Options)
+			return len(p.Questions[m.q.idx].Options) + 1 // plus "something else"
 		}
 	}
 	return 0

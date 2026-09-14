@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/protocol"
 )
 
 func TestFileToolsAndBash(t *testing.T) {
@@ -122,4 +123,22 @@ func TestTodoTools(t *testing.T) {
 	if r := ts["todo_update"].Run(ctx, json.RawMessage(`{"id":"t9","status":"done"}`), env); !r.IsError {
 		t.Fatalf("unknown id should fail: %+v", r)
 	}
+}
+
+func TestAskUserNeedsOptions(t *testing.T) {
+	ts := Builtin()
+	r := ts["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"header":"h","question":"q?"}]}`), &Env{Ask: fakeAsker{}})
+	if !r.IsError || !strings.Contains(r.Output, "at least one option") {
+		t.Fatalf("options are required: %+v", r)
+	}
+	r = ts["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"header":"h","question":"q?","options":[{"label":"a"},{"label":"b"}]}]}`), &Env{Ask: fakeAsker{}})
+	if r.IsError || r.Output != "h: a, b, typed" {
+		t.Fatalf("answers: %+v", r)
+	}
+}
+
+type fakeAsker struct{}
+
+func (fakeAsker) Ask(ctx context.Context, qs []protocol.Question) ([]string, error) {
+	return []string{"a, b, typed"}, nil
 }
