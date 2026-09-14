@@ -5,6 +5,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/nicodes/stavlos/internal/tui/theme"
 )
 
 // keyHint is one entry of the key legend: what to press, what it does.
@@ -94,12 +96,12 @@ func dialogHintLines(hints []keyHint, width int) []string {
 		case "esc", "tab", "ctrl+c":
 			continue
 		}
-		cells = append(cells, styleKey.Render(h.key)+" "+styleDim.Render(h.desc))
+		cells = append(cells, theme.StyleKey.Render(h.key)+" "+theme.StyleDim.Render(h.desc))
 	}
 	if len(cells) == 0 {
 		return nil
 	}
-	sep := styleDim.Render(" · ")
+	sep := theme.StyleDim.Render(" · ")
 	var lines []string
 	var line string
 	for _, c := range cells {
@@ -124,7 +126,7 @@ func keyBarLines(hints []keyHint, width, maxRows int) []string {
 	var row []string
 	rowW := 0
 	for _, h := range hints {
-		cell := styleKey.Render(h.key) + " " + styleDim.Render(h.desc)
+		cell := theme.StyleKey.Render(h.key) + " " + theme.StyleDim.Render(h.desc)
 		cw := lipgloss.Width(cell)
 		if rowW > 0 && rowW+len(sep)+cw > width {
 			rows = append(rows, strings.Join(row, sep))
@@ -151,6 +153,6 @@ func (m Model) keyBarView() (string, int) {
 		return "", 0
 	}
 	rows := keyBarLines(m.keyHints(), m.width, 2)
-	lines := append([]string{styleRule.Render(strings.Repeat("─", m.width))}, rows...)
+	lines := append([]string{theme.StyleRule.Render(strings.Repeat("─", m.width))}, rows...)
 	return strings.Join(lines, "\n"), len(lines)
 }
