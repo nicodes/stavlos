@@ -86,8 +86,9 @@ func TestCompleteStream(t *testing.T) {
 	}
 
 	req := model.Request{
-		Model:  "gpt-5.4",
-		System: "be brief",
+		Model:     "gpt-5.4",
+		System:    "be brief",
+		MaxTokens: 4000, // never forwarded: the backend rejects max_output_tokens
 		Tools: []model.ToolDef{{
 			Name:        "bash",
 			Description: "run a command",
@@ -113,6 +114,10 @@ func TestCompleteStream(t *testing.T) {
 	resp, err := m.Complete(context.Background(), req, func(d model.Delta) { deltas = append(deltas, d) })
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
+	}
+
+	if _, ok := gotBody["max_output_tokens"]; ok {
+		t.Error("max_output_tokens must not be sent: the ChatGPT backend rejects it")
 	}
 
 	// Headers.
