@@ -54,7 +54,7 @@ func TestFilterItemsMatchesIDNotLabel(t *testing.T) {
 }
 
 func TestOverlayCursorFollowsFilter(t *testing.T) {
-	o := newOverlay(ovProviders, overlayList, "t", "")
+	o := newOverlay(ovProviders, overlayList, "t")
 	o.setItems([]overlayItem{{id: "a", label: "A"}, {id: "b", label: "B"}, {id: "c", label: "C"}})
 	o.move(2)
 	if o.selected().id != "c" {
@@ -145,7 +145,7 @@ func TestSpacedCode(t *testing.T) {
 }
 
 func TestLoginOverlayView(t *testing.T) {
-	o := newOverlay(ovProviders, overlayLogin, "", "")
+	o := newOverlay(ovProviders, overlayLogin, "")
 	o.switchLogin("ChatGPT")
 
 	// Starting state: no URL yet, just the spinner.
@@ -214,7 +214,7 @@ func TestLoginOverlayView(t *testing.T) {
 }
 
 func TestOverlayViewListsAndPages(t *testing.T) {
-	o := newOverlay(ovModels, overlayList, "Select a model", "enter: set")
+	o := newOverlay(ovModels, overlayList, "Select a model")
 	var items []overlayItem
 	for i := 0; i < 25; i++ {
 		items = append(items, overlayItem{id: "m" + string(rune('a'+i)), label: "Model " + string(rune('A'+i)), hint: "ctx 1k"})
@@ -258,7 +258,7 @@ func TestCompositeKeepsWidth(t *testing.T) {
 }
 
 func TestLoginOverlayBrowserMode(t *testing.T) {
-	o := newOverlay(ovProviders, overlayLogin, "", "")
+	o := newOverlay(ovProviders, overlayLogin, "")
 	o.switchLogin("ChatGPT")
 	o.setLogin("https://auth.example/oauth/authorize?x=1", "", "Complete the sign-in in your browser.")
 	if !o.login.browser {

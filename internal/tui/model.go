@@ -2413,7 +2413,7 @@ func (m *Model) openMethodMenu(p protocol.ProviderInfo) tea.Cmd {
 	for _, me := range p.Methods {
 		items = append(items, overlayItem{id: me.ID, label: me.Label})
 	}
-	ov := newOverlay(ovMethods, overlayList, "Login method", "enter to select · esc to close")
+	ov := newOverlay(ovMethods, overlayList, "Login method")
 	ov.setItems(items)
 	return m.openOverlay(ov)
 }
@@ -2427,7 +2427,7 @@ func (m *Model) startLogin(p protocol.ProviderInfo, method string) tea.Cmd {
 	m.login.provider, m.login.name, m.login.method = p.ID, name, method
 	var cmd tea.Cmd
 	if m.ov == nil {
-		cmd = m.openOverlay(newOverlay(ovProviders, overlayLogin, "", ""))
+		cmd = m.openOverlay(newOverlay(ovProviders, overlayLogin, ""))
 	}
 	m.ov.switchLogin(name)
 	return tea.Batch(cmd, loginStartCmd(m.ctx, m.c, p.ID, method))
@@ -2512,7 +2512,7 @@ func (m *Model) onProviders(msg providersMsg) tea.Cmd {
 			}
 		}
 	}
-	o := newOverlay(ovProviders, overlayList, "Providers", "enter: sign in · ctrl+d: sign out · esc: close")
+	o := newOverlay(ovProviders, overlayList, "Providers")
 	o.setItems(providerItems(msg.res.Providers))
 	cmd := m.openOverlay(o)
 	switch {
@@ -2551,7 +2551,7 @@ func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
 		return m.setStatus("roles: "+msg.err.Error(), true)
 	}
 	label := m.agentLabel(m.selectedID())
-	o := newOverlay(ovRoles, overlayList, "Change role of "+label, "enter: switch this agent's preset · takes effect at its next turn")
+	o := newOverlay(ovRoles, overlayList, "Change role of "+label)
 	items := make([]overlayItem, 0, len(msg.roles))
 	for _, r := range msg.roles {
 		hint := r.Description
@@ -2571,7 +2571,7 @@ func (m *Model) onSessions(msg sessionsMsg) tea.Cmd {
 	if msg.err != nil {
 		return m.setStatus("sessions: "+msg.err.Error(), true)
 	}
-	o := newOverlay(ovSessions, overlayList, "Sessions in "+shortHome(m.session.Dir), "enter: resume where it left off · esc: close")
+	o := newOverlay(ovSessions, overlayList, "Sessions in "+shortHome(m.session.Dir))
 	items := make([]overlayItem, 0, len(msg.sessions))
 	for _, s := range msg.sessions {
 		if s.Title == "" && s.ID != m.sessionID {
@@ -2580,7 +2580,7 @@ func (m *Model) onSessions(msg sessionsMsg) tea.Cmd {
 		items = append(items, sessionItem(s, s.ID == m.sessionID))
 	}
 	if len(items) == 0 {
-		o.setInfo("no sessions here yet", false)
+		o.setEmpty("no sessions here yet", false)
 	}
 	o.setItems(items)
 	return m.openOverlay(o)
@@ -2681,9 +2681,9 @@ func (m *Model) onVariants(msg variantsMsg) tea.Cmd {
 		return m.setStatus("variants: "+msg.err.Error(), true)
 	}
 	label := m.agentLabel(m.selectedID())
-	o := newOverlay(ovVariants, overlayList, "Variant for "+label+" · "+msg.model, "enter: use this variant at the agent's next model call")
+	o := newOverlay(ovVariants, overlayList, "Variant for "+label+" · "+msg.model)
 	if len(msg.variants) == 0 {
-		o.setInfo("this model has no variants", false)
+		o.setEmpty("this model has no variants", false)
 	}
 	mark := func(id string) string {
 		if id == msg.current {
@@ -2703,9 +2703,9 @@ func (m *Model) onModels(msg modelsMsg) tea.Cmd {
 	if msg.err != nil {
 		return m.setStatus("models: "+msg.err.Error(), true)
 	}
-	o := newOverlay(ovModels, overlayList, "Select a model", "enter: set for the selected agent · ctrl+s: set session default")
+	o := newOverlay(ovModels, overlayList, "Select a model")
 	if len(msg.models) == 0 {
-		o.setInfo("no providers connected — run /provider", true)
+		o.setEmpty("no providers connected — run /provider", true)
 	}
 	o.setItems(modelItems(msg.models))
 	return m.openOverlay(o)

@@ -54,7 +54,7 @@ func TestKeyHintsByContext(t *testing.T) {
 	}
 	m.focus = focusInput
 	m.prompts = nil
-	m.ov = newOverlay(ovModels, overlayList, "", "")
+	m.ov = newOverlay(ovModels, overlayList, "")
 	if hs := m.keyHints(); !has(hs, "ctrl+s") {
 		t.Fatalf("models: %+v", hs)
 	}

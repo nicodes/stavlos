@@ -979,47 +979,38 @@ func (m Model) sectionsView(width int) string {
 }
 
 // tabDialogHeader is how many lines precede the rows in a tab dialog: the
-// title, the hint line and the rule.
-const tabDialogHeader = 3
+// title line and the blank line under it.
+const tabDialogHeader = 2
 
 // tabDialog is the dialog of the open tab, drawn over the chat like every
-// other dialog: its title and count, a hint line, a rule, then its rows (the
-// pending prompt, the live children, the running jobs) or a note that it is
-// empty. Each tab has its own; nothing switches between them from inside.
+// other dialog: its title and count (with "esc: close" at the right), a
+// blank line, then its rows (the pending prompt, the live children, the
+// running jobs) or a note that it is empty. Each tab has its own; nothing
+// switches between them from inside.
 func (m Model) tabDialog(bodyWidth int) string {
 	w := dialogWidth(bodyWidth)
 	inner := w - 4 // border + padding
-	title, info := m.tabDialogHead()
-	lines := []string{
-		styleOvTitle.Render(truncRunes(title, inner)),
-		styleDim.Render(ansi.Truncate(info, inner, "…")),
-		styleRule.Render(strings.Repeat("─", inner)),
-	}
+	lines := []string{dialogTitle(m.tabDialogTitle(), inner), ""}
 	for _, l := range m.tabBodyLines(inner) {
 		lines = append(lines, ansi.Truncate(l, inner, "…"))
 	}
 	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))
 }
 
-// tabDialogHead is the open tab's title (with its count) and key hints.
-func (m Model) tabDialogHead() (title, info string) {
+// tabDialogTitle is the open tab's title with its count; a prompt dialog
+// is named after the kind of prompt at the head of the queue.
+func (m Model) tabDialogTitle() string {
 	switch m.focus {
 	case focusAgents:
-		return fmt.Sprintf("Agents (%d)", len(m.liveChildren())), "enter: select agent · esc: close"
+		return fmt.Sprintf("Agents (%d)", len(m.liveChildren()))
 	case focusAsync:
-		return fmt.Sprintf("Async (%d)", len(m.runningJobs())), "esc: close"
+		return fmt.Sprintf("Async (%d)", len(m.runningJobs()))
 	}
 	n := len(m.prompts)
-	p := m.currentPrompt()
-	switch {
-	case p == nil:
-		return fmt.Sprintf("Permission (%d)", n), "esc: close"
-	case p.Kind == "question":
-		return fmt.Sprintf("Question (%d)", n), "enter: answer · 1-9: pick an option · esc: close"
-	case p.Kind == "trust":
-		return fmt.Sprintf("Trust (%d)", n), "y: trust project config · n: skip · esc: close"
+	if p := m.currentPrompt(); p != nil && p.Kind != "permission" {
+		return fmt.Sprintf("%s (%d)", strings.ToUpper(p.Kind[:1])+p.Kind[1:], n)
 	}
-	return fmt.Sprintf("Permission (%d)", n), "y: allow once · a: allow for session · n: deny · esc: close"
+	return fmt.Sprintf("Permission (%d)", n)
 }
 
 // dialogWidth is the box width every dialog uses: overlayWidth, narrowed to

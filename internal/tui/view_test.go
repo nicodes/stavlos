@@ -299,8 +299,8 @@ func TestMonitorRows(t *testing.T) {
 	if view := stripANSI(m.sectionsView(100)); strings.Count(view, "\n") != 0 {
 		t.Fatalf("the strip stays one line with a tab open:\n%s", view)
 	}
-	// the dialog: title, hint, rule, one row per job, inside the border
-	if view := stripANSI(m.tabDialog(100)); strings.Count(view, "\n") != 7 || !strings.Contains(view, "Async (3)") || !strings.Contains(view, "go test") || !strings.Contains(view, "cooldown") {
+	// the dialog: title (with esc: close), a blank line, one row per job, inside the border
+	if view := stripANSI(m.tabDialog(100)); strings.Count(view, "\n") != 6 || !strings.Contains(view, "Async (3)") || !strings.Contains(view, "esc: close") || !strings.Contains(view, "go test") || !strings.Contains(view, "cooldown") {
 		t.Fatalf("async dialog:\n%s", view)
 	}
 	m.focus = focusInput
@@ -837,7 +837,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("permission should open as a tool row over its command:\n%s", stripANSI(body))
 	}
 	dv := stripANSI(m.tabDialog(100))
-	if !strings.HasPrefix(dv, "╭") || !strings.Contains(dv, "Permission (1)") || !strings.Contains(dv, "y: allow once") || !strings.Contains(dv, "make test") || strings.Contains(dv, "agents (") {
+	if !strings.HasPrefix(dv, "╭") || !strings.Contains(dv, "Permission (1)") || !strings.Contains(dv, "esc: close") || !strings.Contains(dv, "make test") || strings.Contains(dv, "agents (") {
 		t.Fatalf("permission dialog:\n%s", dv)
 	}
 	// the dialog is composited into the full view (here over the home screen)
@@ -891,29 +891,29 @@ func TestSectionTabStrip(t *testing.T) {
 		t.Fatalf("tab strip:\n%s", v)
 	}
 	// agents focused: the strip is unchanged; the dialog has its own title,
-	// a hint line, then its rows
+	// a blank line, then its rows
 	m.focus = focusAgents
 	if sv := stripANSI(m.sectionsView(100)); strings.Count(sv, "\n") != 0 || strings.Contains(sv, "scout") {
 		t.Fatalf("strip with agents focused:\n%s", sv)
 	}
 	v = stripANSI(m.tabDialog(100))
 	lines := strings.Split(v, "\n")
-	// border, title, hint, rule, one row, border
-	if len(lines) != 6 || !strings.Contains(lines[1], "Agents (1)") || strings.Contains(lines[1], "permission") || !strings.Contains(lines[4], "▸") || !strings.Contains(lines[4], "scout") {
+	// border, title, blank, one row, border
+	if len(lines) != 5 || !strings.Contains(lines[1], "Agents (1)") || !strings.HasSuffix(strings.TrimRight(lines[1], " │"), "esc: close") || strings.Contains(lines[1], "permission") || strings.TrimSpace(strings.Trim(lines[2], "│")) != "" || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "scout") {
 		t.Fatalf("agents dialog:\n%s", v)
 	}
 	// async focused: the job row
 	m.focus = focusAsync
 	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 6 || !strings.Contains(lines[1], "Async (1)") || !strings.Contains(lines[4], "▸") || !strings.Contains(lines[4], "go test") || strings.Contains(v, "scout") {
+	if len(lines) != 5 || !strings.Contains(lines[1], "Async (1)") || !strings.Contains(lines[3], "▸") || !strings.Contains(lines[3], "go test") || strings.Contains(v, "scout") {
 		t.Fatalf("async dialog:\n%s", v)
 	}
 	// permission focused: the tool row over its command
 	m.focus = focusPermission
 	v = stripANSI(m.tabDialog(100))
 	lines = strings.Split(v, "\n")
-	if len(lines) != 7 || !strings.Contains(lines[1], "Permission (1)") || !strings.Contains(lines[2], "y: allow once") || !strings.Contains(lines[4], "Bash") || !strings.Contains(lines[5], "       make test") || strings.Contains(v, "scout") {
+	if len(lines) != 6 || !strings.Contains(lines[1], "Permission (1)") || !strings.Contains(lines[3], "Bash") || !strings.Contains(lines[4], "       make test") || strings.Contains(v, "scout") {
 		t.Fatalf("permission dialog:\n%s", v)
 	}
 	// no prompt: the tab stays with a zero count and the generic hint
@@ -1232,14 +1232,14 @@ func TestOverlayClosesBackToItsOrigin(t *testing.T) {
 	m := sessionModel()
 	// opened from the meta row: closing leaves the meta row focused, the input blurred
 	m.setFocus(focusMeta)
-	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles", ""))
+	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles"))
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.ov != nil || m.focus != focusMeta || m.input.Focused() {
 		t.Fatalf("meta origin: ov=%v focus=%v input=%v", m.ov != nil, m.focus, m.input.Focused())
 	}
 	// opened from the input: closing refocuses the input
 	m.setFocus(focusInput)
-	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles", ""))
+	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles"))
 	if m.input.Focused() {
 		t.Fatal("an open overlay should blur the input")
 	}
@@ -1523,7 +1523,7 @@ func TestDialogRowsTakeTheMouse(t *testing.T) {
 	m := sessionModel()
 	m.width, m.height = 100, 40
 	m.layout()
-	o := newOverlay(ovVariants, overlayList, "Variant", "hint")
+	o := newOverlay(ovVariants, overlayList, "Variant")
 	o.setItems([]overlayItem{{id: "", label: "default"}, {id: "low", label: "low"}, {id: "high", label: "high"}})
 	m.openOverlay(o)
 	// find row 2 ("high") by scanning the composited screen for its text
