@@ -155,6 +155,9 @@ func TestHomeAndSessionViews(t *testing.T) {
 	if strings.Contains(plain, "session ") {
 		t.Fatal("home view must not show the sidebar")
 	}
+	if !strings.Contains(plain, shortHome(m.session.Dir)) {
+		t.Fatalf("home view should name the session directory above the meta row:\n%s", plain)
+	}
 	if !strings.Contains(plain, "Giddy up!") {
 		t.Fatalf("home view should carry the tagline:\n%s", plain)
 	}
@@ -1761,11 +1764,18 @@ func TestInputGrowsWithTheMessage(t *testing.T) {
 		t.Fatalf("200 columns of text in a 60-column box should wrap to several lines: %d", m.inputRows())
 	}
 	// never past the cap
-	m.input.SetValue(strings.Repeat("line\n", 30))
+	m.input.SetValue(strings.Repeat("line\n", 60))
 	m.layout()
-	if m.inputRows() != inputMaxLines {
-		t.Fatalf("cap: %d", m.inputRows())
+	if m.inputRows() != m.inputCap() || m.inputCap() != m.height/2 { // half the window
+		t.Fatalf("cap: rows=%d cap=%d height=%d", m.inputRows(), m.inputCap(), m.height)
 	}
+	saved := m.height
+	m.height = 12
+	m.layout()
+	if m.inputCap() != inputMaxLines || m.inputRows() != inputMaxLines {
+		t.Fatalf("a short window keeps the floor: rows=%d cap=%d", m.inputRows(), m.inputCap())
+	}
+	m.height = saved
 	// back to one line when cleared
 	m.input.Reset()
 	m.layout()
@@ -1873,13 +1883,13 @@ func TestInputNeverHidesRows(t *testing.T) {
 		if !strings.HasPrefix(rows[0], "› "+head) {
 			t.Fatalf("first row hidden for %q (height %d):\n%s", head, m.inputRows(), view)
 		}
-		if m.inputRows() > inputMaxLines {
+		if m.inputRows() > m.inputCap() {
 			t.Fatalf("over the cap: %d", m.inputRows())
 		}
 		// the end of the message is on screen too (unless capped)
 		last := []rune(strings.TrimRight(text, " "))
 		tail := string(last[max(0, len(last)-5):])
-		if m.inputRows() < inputMaxLines && !strings.Contains(view, strings.TrimSpace(tail)) {
+		if m.inputRows() < m.inputCap() && !strings.Contains(view, strings.TrimSpace(tail)) {
 			t.Fatalf("last row hidden for tail %q (height %d):\n%s", tail, m.inputRows(), view)
 		}
 	}

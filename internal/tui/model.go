@@ -190,8 +190,26 @@ func (l *loginFlow) reset() {
 	*l = loginFlow{}
 }
 
-// inputMaxLines caps how tall the input grows before it scrolls inside.
-const inputMaxLines = 8
+// inputMaxLines is the least the input may grow to before it scrolls
+// inside; inputHardMax the most. Between them the cap follows the window
+// (inputCap), so a big paste on a tall terminal is shown whole.
+const (
+	inputMaxLines = 8
+	inputHardMax  = 40
+)
+
+// inputCap is how tall the input may grow on this window: half its height,
+// never under inputMaxLines nor over inputHardMax.
+func (m Model) inputCap() int {
+	c := m.height / 2
+	if c < inputMaxLines {
+		c = inputMaxLines
+	}
+	if c > inputHardMax {
+		c = inputHardMax
+	}
+	return c
+}
 
 // newInputArea builds the message input: a textarea that starts one line
 // tall and grows with the text (see inputRows), no line numbers, no cursor
@@ -212,8 +230,8 @@ func newInputArea() textarea.Model {
 	// The textarea itself is always inputMaxLines tall so it never scrolls
 	// until a message really is that long; the view shows only the rows
 	// the text needs (see inputRows).
-	ta.MaxHeight = inputMaxLines
-	ta.SetHeight(inputMaxLines)
+	ta.MaxHeight = inputHardMax
+	ta.SetHeight(inputMaxLines) // layout raises it to inputCap for the window
 	ta.EndOfBufferCharacter = ' '
 	ta.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("ctrl+j", "alt+enter"))
 	// A subtle background makes the input stand out from the chat above
@@ -1234,8 +1252,8 @@ func (m Model) inputRows() int {
 	if rows < 1 {
 		rows = 1
 	}
-	if rows > inputMaxLines {
-		rows = inputMaxLines
+	if c := m.inputCap(); rows > c {
+		rows = c
 	}
 	return rows
 }
@@ -2526,6 +2544,7 @@ func (m *Model) layout() {
 	}
 	boxW := m.boxWidth()
 	m.input.SetWidth(boxW)
+	m.input.SetHeight(m.inputCap())                                                            // the textarea is always cap tall; the view trims to the rows used
 	m.promptInput.Width = dialogWidth(m.width) - 4 - 2 - len([]rune(m.promptInput.Prompt)) - 1 // inside the tab dialog, under promptBox's indent
 	m.dirInput.Width = dialogWidth(m.width) - 4 - 2 - len([]rune(m.dirInput.Prompt)) - 1
 

@@ -874,6 +874,8 @@ func (m Model) homeLines(width, height int) homeLayout {
 			add(sv, boxW)
 		}
 	}
+	// The directory the session will work in, dim, above the meta row.
+	add(styleDim.Render(shortHome(m.session.Dir)), boxW)
 	add(m.metaRow(boxW), boxW)
 	lay.top = (height - len(lay.lines)) / 2
 	if lay.top < 0 {
