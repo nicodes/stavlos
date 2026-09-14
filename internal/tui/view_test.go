@@ -531,20 +531,20 @@ func TestTabCyclesFocus(t *testing.T) {
 	if want := []focus{focusChat, focusMeta, focusTabs, focusInput}; !equalFocus(seen, want) {
 		t.Fatalf("with prompt: %v, want %v", seen, want)
 	}
-	// With a child but no prompt, the strip highlights agents; with only a
-	// job, async.
+	// Whatever the tabs hold, landing on the strip always highlights the
+	// leftmost tab; ←/→ move from there.
 	m.prompts = nil
 	m.agents = append(m.agents, protocol.AgentInfo{ID: "c", Parent: "a", Label: "kid", State: "working"})
 	press(&m, stab)
-	if m.focus != focusTabs || m.tabSel != 1 {
-		t.Fatalf("first non-empty tab should be agents: %v sel %d", m.focus, m.tabSel)
+	if m.focus != focusTabs || m.tabSel != 0 {
+		t.Fatalf("the strip should land on permission even with a child: %v sel %d", m.focus, m.tabSel)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	m.agents = m.agents[:len(m.agents)-1]
 	m.agents[0].Monitors = []protocol.MonitorInfo{{ID: "j", Kind: "command", Label: "sleep", State: "running"}}
 	press(&m, stab)
-	if m.focus != focusTabs || m.tabSel != 2 {
-		t.Fatalf("first non-empty tab should be async: %v sel %d", m.focus, m.tabSel)
+	if m.focus != focusTabs || m.tabSel != 0 {
+		t.Fatalf("the strip should land on permission even with a job: %v sel %d", m.focus, m.tabSel)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	m.agents[0].Monitors = nil
@@ -1184,6 +1184,35 @@ func TestEscTwiceCancelsTheTurn(t *testing.T) {
 	m.cancelArmed = time.Time{}
 	if cmd := press(&m, esc); cmd != nil || !m.cancelArmed.IsZero() {
 		t.Fatal("esc on an idle agent should be inert")
+	}
+}
+
+func TestFocusAlwaysLandsLeftmost(t *testing.T) {
+	m := sessionModel()
+	tab := tea.KeyMsg{Type: tea.KeyTab}
+	right := tea.KeyMsg{Type: tea.KeyRight}
+	press(&m, tab, tab, right, right) // chat → meta row, then over to the variant
+	if m.focus != focusMeta || m.metaSel != metaVariant {
+		t.Fatalf("setup: focus=%v sel=%v", m.focus, m.metaSel)
+	}
+	press(&m, tab, right) // strip, highlight moved to agents
+	if m.focus != focusTabs || m.tabSel != 1 {
+		t.Fatalf("setup: focus=%v sel=%d", m.focus, m.tabSel)
+	}
+	// coming back, neither remembers where it was: leftmost again
+	press(&m, tab, tab, tab) // input → chat → meta row
+	if m.focus != focusMeta || m.metaSel != metaRole {
+		t.Fatalf("meta row should land on the role: focus=%v sel=%v", m.focus, m.metaSel)
+	}
+	press(&m, tab)
+	if m.focus != focusTabs || m.tabSel != 0 {
+		t.Fatalf("strip should land on permission: focus=%v sel=%d", m.focus, m.tabSel)
+	}
+	// with YOLO on, the leftmost part of the meta row is the YOLO tag
+	m.session.Yolo = true
+	press(&m, tab, tab, tab)
+	if m.focus != focusMeta || m.metaSel != metaYolo {
+		t.Fatalf("meta row with YOLO should land on YOLO: focus=%v sel=%v", m.focus, m.metaSel)
 	}
 }
 

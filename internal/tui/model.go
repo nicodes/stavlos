@@ -427,7 +427,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // --- focus ---
 
 // focusOrder lists the sections tab cycles through, top to bottom: the chat
-// (once there is one), the tab strip (as one stop, see defaultTab), the
+// (once there is one), the tab strip (as one stop), the
 // input, and the sidebar (while visible).
 func (m *Model) focusOrder() []focus {
 	order := make([]focus, 0, 4)
@@ -494,20 +494,6 @@ func (m *Model) cycleFocus(delta int) tea.Cmd {
 	}
 	n := len(order)
 	return m.setFocus(order[((i+delta)%n+n)%n])
-}
-
-// defaultTab is the tab highlighted when the strip gains focus: the first,
-// left to right, with anything in it, or permission when all are empty.
-func (m *Model) defaultTab() int {
-	switch {
-	case m.currentPrompt() != nil:
-		return 0
-	case len(m.liveChildren()) > 0:
-		return 1
-	case len(m.runningJobs()) > 0:
-		return 2
-	}
-	return 0
 }
 
 // closeDialog leaves an open tab dialog for whatever had focus when it was
@@ -598,11 +584,9 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	case focusAgents, focusAsync:
 		m.agCursor = 0
 	case focusMeta:
-		if !m.metaHas(m.metaSel) {
-			m.metaSel = metaRole
-		}
+		m.metaSel = m.metaParts()[0] // always the leftmost part: YOLO while on, else the role
 	case focusTabs:
-		m.tabSel = m.defaultTab()
+		m.tabSel = 0 // always the leftmost tab: permission
 	}
 	return nil
 }
@@ -1089,15 +1073,6 @@ func (m *Model) metaParts() []metaPart {
 		parts = append(parts, metaYolo)
 	}
 	return append(parts, metaRole, metaModel, metaVariant)
-}
-
-func (m *Model) metaHas(p metaPart) bool {
-	for _, q := range m.metaParts() {
-		if q == p {
-			return true
-		}
-	}
-	return false
 }
 
 // metaAction is what a part of the meta row does when picked, by click or
