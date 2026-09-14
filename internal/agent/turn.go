@@ -107,21 +107,27 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 		// completed turn), or the history is past the threshold (the older
 		// two thirds).
 		a.mu.Lock()
-		wanted := a.compactNext
-		a.compactNext = false
-		a.mu.Unlock()
-		n := len(a.eventsCopy())
-		target := -1
-		switch {
-		case wanted:
-			target = n
-		case info.ContextWindow > 0 && project.EstimateTokens(history, system) > int(float64(info.ContextWindow)*a.s.Config().Compaction.Threshold):
-			target = n * 2 / 3
+		wanted, inFlight := a.compactNext, a.compacting
+		if !inFlight {
+			a.compactNext = false
+			a.compacting = true // released below; a /compact arriving meanwhile queues instead of running alongside
 		}
-		if target >= 0 {
-			if err := a.compact(turnCtx, m, target); err == nil {
-				history = project.Project(a.eventsCopy())
+		a.mu.Unlock()
+		if !inFlight {
+			n := len(a.eventsCopy())
+			target := -1
+			switch {
+			case wanted:
+				target = n
+			case info.ContextWindow > 0 && project.EstimateTokens(history, system) > int(float64(info.ContextWindow)*a.s.Config().Compaction.Threshold):
+				target = n * 2 / 3
 			}
+			if target >= 0 {
+				if err := a.compact(turnCtx, m, target); err == nil {
+					history = project.Project(a.eventsCopy())
+				}
+			}
+			a.endCompacting()
 		}
 		a.mu.Lock()
 		a.ctxTokens, a.ctxWindow = project.EstimateTokens(history, system), info.ContextWindow
