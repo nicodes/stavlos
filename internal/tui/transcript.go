@@ -228,9 +228,10 @@ func (t *Transcript) Apply(ev event.Event) {
 		var p event.MonitorStartedPayload
 		if ev.Decode(&p) == nil && p.ID != "" {
 			t.monKinds[p.ID] = p.Kind
-			// A job started by bash_async is represented by that call's own
-			// line: it stays yellow while the job runs and the outcome nests
-			// under it. Only a job with no such call gets its own notice.
+			// A job that grew out of a shell call is represented by that
+			// call's own line: it stays yellow while the job runs and the
+			// outcome nests under it. Only a job with no such call gets its
+			// own notice.
 			if i := t.lastAsyncCall(); i >= 0 {
 				t.monitors[p.ID] = i
 				t.Lines[i].Tone = ToneWorking
@@ -255,7 +256,7 @@ func (t *Transcript) Apply(ev event.Event) {
 				}
 				delete(t.monitors, p.ID)
 				if t.Lines[i].Kind == LineTool {
-					lines = nested(lines) // under the bash_async call, like tool output
+					lines = nested(lines) // under the shell call, like tool output
 				}
 				t.insertIntoItem(t.Lines[i].Item, lines)
 				return
@@ -396,8 +397,8 @@ func monitorKindFromText(text string) string {
 	return "command"
 }
 
-// lastAsyncCall returns the index of the most recent bash_async call line
-// that is not yet tied to a job, or -1.
+// lastAsyncCall returns the index of the most recent shell call line (or
+// bash_async in old logs) that is not yet tied to a job, or -1.
 func (t *Transcript) lastAsyncCall() int {
 	tied := map[int]bool{}
 	for _, idx := range t.monitors {
@@ -405,7 +406,7 @@ func (t *Transcript) lastAsyncCall() int {
 	}
 	for i := len(t.Lines) - 1; i >= 0; i-- {
 		l := t.Lines[i]
-		if l.Kind == LineTool && l.tool == "bash_async" && !tied[i] {
+		if l.Kind == LineTool && (l.tool == "shell" || l.tool == "bash_async") && !tied[i] {
 			return i
 		}
 	}
@@ -476,7 +477,7 @@ func (t *Transcript) insertIntoItem(item int, lines []Line) {
 
 // ChildSpawned ties a just-spawned child to the agent_create call that
 // made it: the call line reads as in progress (yellow) until ChildDone,
-// the way a bash_async call tracks its job.
+// the way a shell call tracks its job.
 func (t *Transcript) ChildSpawned(childID string) {
 	if i := t.lastAgentCreateCall(); i >= 0 {
 		t.Lines[i].Tone = ToneWorking
@@ -534,7 +535,7 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 		l.Suffix = "(denied)"
 	}
 	// A delivered agent_message waits for that agent's answer: yellow until
-	// its agent_response lands (see answered), like bash_async and its job.
+	// its agent_response lands (see answered), like a shell call and its job.
 	if target, ok := t.askTarget[p.CallID]; ok {
 		delete(t.askTarget, p.CallID)
 		if !p.IsError && !p.Cancelled && !p.Denied {
@@ -784,7 +785,7 @@ func EventLines(ev event.Event) []Line {
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case "monitor_fired":
-			return blockWith(BlockChild, "bash async result", p.Text, monitorGlyph("command"))
+			return blockWith(BlockChild, "job result", p.Text, monitorGlyph("command"))
 		default:
 			return block(BlockUser, p.Kind, p.Text)
 		}
@@ -1210,9 +1211,9 @@ func toolArg(name string, raw json.RawMessage) string {
 		return strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
 	}
 	switch name {
-	case "bash", "bash_async":
+	case "shell", "bash", "bash_async": // the old names: logs from before the rename
 		return str("command")
-	case "bash_async_kill":
+	case "shell_kill", "bash_async_kill":
 		return str("id")
 	case "read", "write", "edit":
 		return str("path")

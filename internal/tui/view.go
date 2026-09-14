@@ -1416,7 +1416,7 @@ func (m Model) agentWhoLabel(id string) string {
 // whose argument is text the user must read in full before approving.
 func fullToolArg(tool string, raw json.RawMessage) string {
 	switch tool {
-	case "bash", "bash_async":
+	case "shell", "bash", "bash_async": // the last two: old logs
 		var in struct {
 			Command string `json:"command"`
 		}
@@ -1618,7 +1618,7 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 // clock for monitors; the fork for agent tools.
 const (
 	glyphToolFiles    = "◆" // file tools (read, apply_patch, skill)
-	glyphToolShell    = "$" // bash, bash_async, bash_async_kill: the shell prompt
+	glyphToolShell    = "$" // shell, shell_kill (and the old bash names): the shell prompt
 	glyphToolMonitors = "$" // async jobs are shell commands
 	glyphToolAgents   = "⑂"
 	glyphToolTodo     = "◇" // todo_add, todo_update
@@ -1630,7 +1630,7 @@ func toolGlyph(tool string) (string, string) {
 	switch {
 	case strings.HasPrefix(tool, "agent_"):
 		return glyphToolAgents, " "
-	case tool == "bash" || tool == "bash_async" || tool == "bash_async_kill":
+	case tool == "shell" || tool == "shell_kill" || tool == "bash" || tool == "bash_async" || tool == "bash_async_kill":
 		return glyphToolShell, " "
 	case strings.HasPrefix(tool, "todo_"):
 		return glyphToolTodo, " "

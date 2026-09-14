@@ -25,7 +25,7 @@ type Env struct {
 	Skills    map[string]config.Skill // skills this agent may load
 	Agent     string                  // caller agent id
 	Orch      Orchestrator            // nil if the agent cannot orchestrate
-	Partial   func(string)            // receives streamed partial output (bash); may be nil
+	Partial   func(string)            // receives streamed partial output (shell); may be nil
 	MaxOutput int                     // truncate tool output beyond this many bytes (0 = 32k)
 	Mon       Monitors                // general monitors (background commands, watches, timers); nil if unavailable
 	Todo      Todos                   // the agent's todo list; nil if the preset does not include "todo"
@@ -43,9 +43,22 @@ type Asker interface {
 // that land a result in the agent's mailbox and wake it when armed.
 type Monitors interface {
 	StartCommand(command string, timeout time.Duration) (string, error)
+	// AdoptCommand takes over a command the shell tool already started and
+	// that outlived its wait window; it becomes a job like any other.
+	AdoptCommand(command string, job Job, timeout time.Duration) (string, error)
 	List() []MonitorStatus
 	Stop(id string) error
 	Has(id string) bool
+}
+
+// Job is a shell command already running under the shell tool.
+type Job interface {
+	Done() <-chan struct{} // closed once the process has exited
+	Err() error            // the exit error, valid after Done
+	Kill()                 // ends the process group
+	Output() string        // output so far (tail-capped)
+	Lines() int
+	Started() time.Time
 }
 
 // MonitorStatus is a running general monitor.
@@ -118,9 +131,9 @@ type Set map[string]Tool
 func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
-		bashTool{}, readTool{}, patchTool{}, skillTool{}, responseTool{},
+		shellTool{}, readTool{}, patchTool{}, skillTool{}, responseTool{},
 		spawnTool{}, messageTool{}, cancelTool{}, statusTool{},
-		bashAsyncTool{}, bashKillTool{},
+		shellKillTool{},
 		todoAddTool{}, todoUpdateTool{}, askTool{},
 	} {
 		s[t.Def().Name] = t
@@ -137,8 +150,8 @@ var OrchestrationNames = []string{"agent_create", "agent_cancel"}
 // parent (see OrchestrationNames).
 var MessagingNames = []string{"agent_message", "agent_response", "agent_status"}
 
-// AsyncNames are offered to every agent that has bash.
-var AsyncNames = []string{"bash_async", "bash_async_kill"}
+// AsyncNames are offered to every agent that has shell.
+var AsyncNames = []string{"shell_kill"}
 
 // AskNames are offered to every agent: asking the human is never a role
 // choice.

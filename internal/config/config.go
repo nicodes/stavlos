@@ -76,7 +76,7 @@ type Preset struct {
 	Mode        string      // primary | subagent | all
 	Models      []ModelSpec // model whitelist, first is the default; empty = any, inherit
 	Loop        string
-	Tools       []string                     // tool names (and the groups bash, todo)
+	Tools       []string                     // tool names (and the group todo)
 	ToolRules   map[string]map[string]string // tool → pattern → verb, from the map form of tools:
 	Skills      []string
 	MCP         []string
@@ -236,29 +236,28 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "agent_message", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_cancel", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "agent_status", Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "*", Verb: policy.Ask},
-		policy.Rule{Tool: "bash_async", Pattern: "*", Verb: policy.Ask},
-		policy.Rule{Tool: "bash_async_kill", Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "*", Verb: policy.Ask},
+		policy.Rule{Tool: "shell_kill", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "todo_add", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "ask_user", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "todo_update", Pattern: "*", Verb: policy.Allow},
 		// Read-only shell commands are allowed by default so searching and
 		// looking around never prompts; anything that writes still asks.
-		policy.Rule{Tool: "bash", Pattern: "grep *", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "rg *", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "find *", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "ls*", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "cat *", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "head *", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "tail *", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "wc *", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "pwd", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "tree*", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "git status*", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "git log*", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "git diff*", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "git show*", Verb: policy.Allow},
-		policy.Rule{Tool: "bash", Pattern: "git blame*", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "grep *", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "rg *", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "find *", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "ls*", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "cat *", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "head *", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "tail *", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "wc *", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "pwd", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "tree*", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "git status*", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "git log*", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "git diff*", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "git show*", Verb: policy.Allow},
+		policy.Rule{Tool: "shell", Pattern: "git blame*", Verb: policy.Allow},
 		policy.Rule{Tool: "apply_patch", Pattern: "*", Verb: policy.Ask},
 	)
 	for _, p := range builtinPresets() {
@@ -505,7 +504,7 @@ type roleFile struct {
 }
 
 // DefaultTools is what a role gets when it lists none.
-var DefaultTools = []string{"bash", "read", "apply_patch", "skill"}
+var DefaultTools = []string{"shell", "read", "apply_patch", "skill"}
 
 // ReadPreset parses one roles/<name>.md file.
 func ReadPreset(path string) (Preset, error) {
@@ -794,8 +793,7 @@ func ProjectHash(dir string) ([]string, string, error) {
 }
 
 // PresetPolicy returns the role's tightening rules from the map form of
-// tools:. Rules on bash also cover bash_async (the same commands run
-// there); rules on todo cover todo_add and todo_update.
+// tools:. Rules on todo cover todo_add and todo_update.
 func (p Preset) PresetPolicy() *policy.Set {
 	m := map[string]any{}
 	for tool, rules := range p.ToolRules {
@@ -813,8 +811,6 @@ func (p Preset) PresetPolicy() *policy.Set {
 // toolGroup expands a tools: key to the tool names it gates.
 func toolGroup(name string) []string {
 	switch name {
-	case "bash":
-		return []string{"bash", "bash_async"}
 	case "todo":
 		return []string{"todo_add", "todo_update"}
 	}
@@ -829,12 +825,12 @@ func builtinPresets() []Preset {
 		{
 			Name: "general", Layer: "builtin", Mode: ModeAll,
 			Description: "General-purpose engineer: reads, edits, runs, and delegates",
-			Tools:       []string{"bash", "read", "apply_patch", "skill", "todo"},
+			Tools:       []string{"shell", "read", "apply_patch", "skill", "todo"},
 			Spawn:       []string{"general"},
 			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
 Work carefully: read before you edit, prefer small targeted changes, and run the project's tests or build after changing code.
-Search and read with bash (grep -rn, rg, find, ls) and read; edit with apply_patch. Run slow commands such as test suites with bash_async.
+Search and read with shell (grep -rn, rg, find, ls) and read; edit with apply_patch. A slow command such as a test suite continues as a background job on its own; start servers with background: true.
 Delegate independent pieces of work to subagents when that saves your own context or lets things run in parallel: give each a specific task and a short label, then keep working or end your turn; each child's answer comes back to you as a message. A child stays alive for the session: message it again for follow-ups. Subagents can delegate too.
 Report what you changed and what you verified.`,
 		},

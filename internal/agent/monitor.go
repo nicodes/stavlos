@@ -16,9 +16,9 @@ import (
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// Background jobs (PRD §6.3): shell commands started with bash_async whose
-// exit lands in the agent's mailbox and wakes it, exactly like a child's
-// finish. Internally they are "monitors" of kind "command"; the kind field
+// Background jobs (PRD §6.3): shell commands that outlived the shell
+// tool's wait window (or were started with background: true) whose exit
+// lands in the agent's mailbox and wakes it, exactly like a child's finish. Internally they are "monitors" of kind "command"; the kind field
 // is kept so the log stays readable if other sources return later.
 
 // Monitor is one general monitor owned by an agent.
@@ -61,6 +61,9 @@ type monitorsAPI struct{ a *Agent }
 
 func (m monitorsAPI) StartCommand(command string, timeout time.Duration) (string, error) {
 	return m.a.startMonitor("command", command, "", 0, timeout)
+}
+func (m monitorsAPI) AdoptCommand(command string, job tools.Job, timeout time.Duration) (string, error) {
+	return m.a.adoptMonitor(command, job, timeout)
 }
 func (m monitorsAPI) List() []tools.MonitorStatus {
 	var out []tools.MonitorStatus
@@ -106,6 +109,82 @@ func (a *Agent) startMonitor(kind, spec, glob string, seconds float64, timeout t
 	_, _ = a.record(context.Background(), event.MonitorArmed, event.MonitorPayload{IDs: []string{m.ID}})
 	go a.runMonitor(ctx, m, timeout)
 	return m.ID, nil
+}
+
+// adoptMonitor turns a shell call that outlived its wait window into a job:
+// the process keeps running under the tool's writer; the monitor waits on
+// it, kills it at the timeout (counted from its start) or when stopped, and
+// fires like any job.
+func (a *Agent) adoptMonitor(command string, job tools.Job, timeout time.Duration) (string, error) {
+	if !a.Alive() {
+		return "", fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
+	}
+	m := &Monitor{ID: NewID("m"), Kind: "command", Spec: command, Started: job.Started(), state: "running"}
+	m.Label = monitorLabel("command", command, "", 0)
+	m.progress = fmt.Sprintf("%d lines", job.Lines())
+	ctx, cancel := context.WithCancel(a.ctx)
+	m.cancel = cancel
+	a.mu.Lock()
+	a.monitors[m.ID] = m
+	a.armed[m.ID] = true
+	a.mu.Unlock()
+	_, _ = a.record(context.Background(), event.MonitorStarted, event.MonitorStartedPayload{ID: m.ID, Kind: "command", Label: m.Label, Spec: command})
+	_, _ = a.record(context.Background(), event.MonitorArmed, event.MonitorPayload{IDs: []string{m.ID}})
+	go a.runAdopted(ctx, m, job, timeout)
+	return m.ID, nil
+}
+
+func (a *Agent) runAdopted(ctx context.Context, m *Monitor, job tools.Job, timeout time.Duration) {
+	if timeout <= 0 {
+		timeout = time.Hour
+	}
+	deadline := time.NewTimer(time.Until(job.Started().Add(timeout)))
+	defer deadline.Stop()
+	tick := time.NewTicker(time.Second)
+	defer tick.Stop()
+	killed := false
+	for {
+		select {
+		case <-job.Done():
+			res := event.MonitorFiredPayload{ID: m.ID, Kind: m.Kind, Label: m.Label, Output: job.Output()}
+			summarizeExit(&res, job.Err(), killed, timeout)
+			a.fireMonitor(m, res)
+			return
+		case <-ctx.Done():
+			job.Kill()
+			a.finishMonitor(m, "stopped")
+			return
+		case <-deadline.C:
+			killed = true
+			job.Kill()
+		case <-tick.C:
+			m.mu.Lock()
+			m.progress = fmt.Sprintf("%d lines", job.Lines())
+			m.mu.Unlock()
+		}
+	}
+}
+
+// summarizeExit fills a job result's summary, exit code and error flag
+// from how the process ended.
+func summarizeExit(res *event.MonitorFiredPayload, err error, killed bool, timeout time.Duration) {
+	switch {
+	case killed:
+		res.Summary = fmt.Sprintf("background command killed after %s timeout", fmtDuration(timeout))
+		res.IsError = true
+		res.ExitCode = -1
+	case err != nil:
+		if ee, ok := err.(*exec.ExitError); ok {
+			res.ExitCode = ee.ExitCode()
+			res.Summary = fmt.Sprintf("background command exited %d", res.ExitCode)
+		} else {
+			res.Summary = "background command failed: " + err.Error()
+			res.ExitCode = -1
+		}
+		res.IsError = true
+	default:
+		res.Summary = "background command finished (exit 0)"
+	}
 }
 
 func monitorLabel(kind, spec, glob string, seconds float64) string {
@@ -157,25 +236,11 @@ func (a *Agent) runCommandMonitor(ctx context.Context, m *Monitor, timeout time.
 	out := m.buf.String()
 	m.mu.Unlock()
 	res.Output = out
-	switch {
-	case ctx.Err() != nil:
+	if ctx.Err() != nil {
 		res.Summary = "background command stopped"
-	case tctx.Err() == context.DeadlineExceeded:
-		res.Summary = fmt.Sprintf("background command killed after %s timeout", fmtDuration(timeout))
-		res.IsError = true
-		res.ExitCode = -1
-	case err != nil:
-		if ee, ok := err.(*exec.ExitError); ok {
-			res.ExitCode = ee.ExitCode()
-			res.Summary = fmt.Sprintf("background command exited %d", res.ExitCode)
-		} else {
-			res.Summary = "background command failed: " + err.Error()
-			res.ExitCode = -1
-		}
-		res.IsError = true
-	default:
-		res.Summary = "background command finished (exit 0)"
+		return res
 	}
+	summarizeExit(&res, err, tctx.Err() == context.DeadlineExceeded, timeout)
 	return res
 }
 

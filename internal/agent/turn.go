@@ -377,7 +377,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	}
 
 	names := append([]string(nil), a.preset.Tools...)
-	if contains(names, "bash") {
+	if contains(names, "shell") {
 		names = append(names, tools.AsyncNames...)
 	}
 	if contains(names, "todo") {
@@ -391,8 +391,8 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	sb.WriteString("\n# Asking the human\nask_user puts one to four short questions to the human and waits for the answers; use it when several valid approaches exist and guessing would waste work, never for what you can find out yourself. Put the option you would pick first. The human may type an answer instead of picking one.\n")
 	sb.WriteString("\n# Messaging\nagent_message sends a message to any other agent in this session (a child, a sibling, or your parent) by id. It reaches them at their next step, mid-turn if they are busy, so use it for anything they need to know now. A message you receive names its sender and arrives the same way: fold it into what you are doing, and when you have what it asked for answer with agent_response addressed to that agent's id (one call per asker; it wakes them between turns, and you stay alive). Do not re-send a message that is still unanswered. A message from the human is answered in your normal reply, never with agent_response. agent_status lists every agent in the session with its id and state.\n")
 	can, why := a.s.canSpawn(a)
-	if contains(names, "bash") {
-		sb.WriteString("\n# Background jobs\nbash_async starts a command as a job and returns its id at once; when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. Use it for anything slow. bash_async_kill stops a job. There is no wait tool: when nothing more can be done until a result arrives, end your turn and you will be woken.\n")
+	if contains(names, "shell") {
+		sb.WriteString("\n# Background jobs\nshell waits up to 15 seconds for a command (the wait argument changes that); one still running then continues as a background job and you get its id and the output so far. Pass background: true to skip the wait for servers, watchers and anything you know is slow. When a job exits you are woken with its exit code and output as a new message, between turns, never mid-turn. shell_kill stops a job. There is no wait tool: when nothing more can be done until a result arrives, end your turn and you will be woken.\n")
 	}
 	if contains(names, "todo") {
 		sb.WriteString("\n# Todo list\nFor work with three or more steps, plan with todo_add (one item per step, short and imperative) and keep the list honest with todo_update: exactly one item in_progress while you work, done the moment a step is finished and verified, cancelled for steps you drop. Add a new item for a blocker rather than marking blocked work done. Skip the list for single-step or trivial requests. The human sees it beside your chat; it survives compaction, and its current state is:\n")

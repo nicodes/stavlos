@@ -405,7 +405,7 @@ func initConfig(args []string) error {
   "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
   "policy": {
     // read-only commands (grep, rg, find, ls, git status/log/diff, …) are allowed by the built-in defaults
-    "bash":  { "git push*": "ask", "rm -rf*": "deny" },
+    "shell": { "git push*": "ask", "rm -rf*": "deny" },
     "apply_patch": { "**": "ask" },
     "read":  "allow"
   }

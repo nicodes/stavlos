@@ -165,7 +165,7 @@ func (a *Agent) applyDirRemoved(dir string) {
 func (a *Agent) outsideDir(name string, input json.RawMessage, t tools.Tool) string {
 	var paths []string
 	switch name {
-	case "bash", "bash_async":
+	case "shell":
 		var in struct{ Command string }
 		_ = json.Unmarshal(input, &in)
 		paths = bashPathCandidates(in.Command, a.s.Dir)

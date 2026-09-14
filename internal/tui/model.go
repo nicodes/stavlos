@@ -149,7 +149,7 @@ const (
 	focusPermission              // the permission tab: pending permission/trust prompts (y/n/a)
 	focusQuestions               // the questions tab: an ask_user batch, answered one question at a time
 	focusAgents                  // the agents tab: live children
-	focusAsync                   // the async tab: running bash_async jobs
+	focusAsync                   // the async tab: running shell jobs
 	focusTodo                    // the todo tab: the selected agent's todo list
 	focusMCP                     // the mcp tab: the selected agent's MCP servers
 	focusDirs                    // the dirs tab: the selected agent's working directories
@@ -2020,7 +2020,7 @@ type permOption struct {
 
 // permOptions are the hard-coded answers a prompt offers, top to bottom.
 // A plain permission: once, this exact call for the session, the command's
-// prefix for the session (bash, when one can be derived), deny. A boundary
+// prefix for the session (shell, when one can be derived), deny. A boundary
 // prompt: once, add the offered directory, add another one, deny. Trust:
 // trust the project config, or not now.
 func permOptions(p *protocol.PromptInfo) []permOption {
@@ -2039,14 +2039,14 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 		}
 	}
 	what := "this exact call"
-	if p.Tool == "bash" || p.Tool == "bash_async" {
+	if p.Tool == "shell" {
 		what = "this exact command"
 	}
 	opts := []permOption{
 		{"allow", "Allow once", ""},
 		{"always", "Allow for this session", what},
 	}
-	if p.Tool == "bash" || p.Tool == "bash_async" {
+	if p.Tool == "shell" {
 		if pre := protocol.CommandPrefix(fullToolArg(p.Tool, p.Input)); pre != "" {
 			opts = append(opts, permOption{"prefix", "Allow " + pre + " for this session", "every command starting with it"})
 		}
