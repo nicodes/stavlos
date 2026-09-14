@@ -177,11 +177,16 @@ func TestWebSearch(t *testing.T) {
 			_, _ = w.Write([]byte(`{"results":[{"title":"E","url":"https://e","text":"exa text"}]}`))
 		case "/fail":
 			http.Error(w, `{"error":"bad key"}`, http.StatusUnauthorized)
+		case "/mcp":
+			w.Header().Set("Content-Type", "text/event-stream")
+			text := "Title: charmbracelet/bubbletea\nURL: https://github.com/charmbracelet/bubbletea/\nPublished: 2020-01-10\nAuthor: charmbracelet\nHighlights:\nGitHub - bubbletea\n...\n# Bubble Tea\nThe fun, functional way to build terminal apps\n\n---\n\nTitle: Second\nURL: https://example.com/2\nHighlights:\nsecond text"
+			msg, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "result": map[string]any{"content": []map[string]any{{"type": "text", "text": text}}}})
+			_, _ = w.Write([]byte("event: message\ndata: " + string(msg) + "\n\n"))
 		}
 	}))
 	defer srv.Close()
 	old := searchEndpoints
-	searchEndpoints = map[string]string{"brave": srv.URL + "/brave", "tavily": srv.URL + "/tavily", "exa": srv.URL + "/exa"}
+	searchEndpoints = map[string]string{"brave": srv.URL + "/brave", "tavily": srv.URL + "/tavily", "exa": srv.URL + "/exa", exaMCP: srv.URL + "/mcp"}
 	defer func() { searchEndpoints = old }()
 
 	ctx := context.Background()
@@ -189,8 +194,13 @@ func TestWebSearch(t *testing.T) {
 	if ws.PolicyArg(json.RawMessage(`{"query":" go modules "}`)) != "go modules" {
 		t.Fatal("policy arg should be the query")
 	}
-	if r := ws.Run(ctx, json.RawMessage(`{"query":"go"}`), &Env{}); !r.IsError || !strings.Contains(r.Output, "not configured") {
-		t.Fatalf("unconfigured: %+v", r)
+	// unconfigured: Exa's keyless MCP endpoint, a JSON-RPC tools/call answered as SSE
+	r0 := ws.Run(ctx, json.RawMessage(`{"query":"bubbletea"}`), &Env{})
+	if r0.IsError || gotAuth != "" || !strings.Contains(gotBody, `"name":"web_search_exa"`) || !strings.Contains(gotBody, `"numResults":5`) || !strings.Contains(r0.Output, "via exa-mcp (free, no key): 2 results") || !strings.Contains(r0.Output, "1. charmbracelet/bubbletea\n   https://github.com/charmbracelet/bubbletea/\n   GitHub - bubbletea # Bubble Tea The fun, functional way to build terminal apps") || !strings.Contains(r0.Output, "2. Second\n   https://example.com/2\n   second text") {
+		t.Fatalf("keyless fallback: %+v body=%s", r0, gotBody)
+	}
+	if res, err := parseExaMCP([]byte(`{"jsonrpc":"2.0","id":1,"result":{"isError":true,"content":[{"type":"text","text":"rate limited"}]}}`)); err == nil || !strings.Contains(err.Error(), "rate limited") || res != nil {
+		t.Fatalf("mcp error: %v %v", res, err)
 	}
 	r := ws.Run(ctx, json.RawMessage(`{"query":"go modules","n":2}`), &Env{Search: SearchConfig{Provider: "brave", APIKey: "k1"}})
 	if r.IsError || gotAuth != "k1" || !strings.Contains(r.Output, "via brave: 2 results") || !strings.Contains(r.Output, "1. Go\n   https://go.dev\n   The Go language") || !strings.Contains(r.Output, "…") {
