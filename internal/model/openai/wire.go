@@ -84,7 +84,3 @@ type apiError struct {
 	Type    string `json:"type"`
 	Code    any    `json:"code"`
 }
-
-type errorEnvelope struct {
-	Error *apiError `json:"error"`
-}

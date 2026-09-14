@@ -189,10 +189,10 @@ tests that pin current behaviour first.
 
 ### Phase 7 — Model layer  [M]
 
-7.1 `internal/model/stream`: one `ReadSSE`, one `Complete(ctx, client, endpoint, hdr, codec,
+7.1 `internal/model/stream` ✅: one `ReadSSE`, one `Complete(ctx, client, endpoint, hdr, codec,
     onDelta)` owning post/auth/error mapping/ctx-wins/partial-on-error; codex and chatcompletions
     become `Codec`s. Fixes D1.
-7.2 In the shared layer: "stream ended before completion" error when no terminal event; pre-first-
+7.2 In the shared layer ✅: "stream ended before completion" error when no terminal event; pre-first-
     byte retry with `Retry-After` (≤3, jittered); idle watchdog (120 s default, configurable);
     total-bytes cap; one `http.Client` constructor.
 7.3 Registry subscription table (id, display, flow, open, allow, variants) replacing the scattered
@@ -200,7 +200,7 @@ tests that pin current behaviour first.
 7.4 `model.Capabilities{SupportsMaxTokens, ReplaysReasoning, Variants}`; compaction prompt says
     "at most N words" where max tokens is unsupported. `Block.ProviderID`/`Opaque` instead of
     smuggling through `ID`/`Signature`.
-7.5 Delete dead API-key era: `model/anthropic` + SDK dep (see D1 decision), `auth.Resolve/Source*/
+7.5 (adapter + SDK deleted ✅; the rest pending) Delete dead API-key era: `model/anthropic` + SDK dep (see D1 decision), `auth.Resolve/Source*/
     Credential.Key`, `modelsdev.ProviderInfo`, `openai.New`, `Registry.Register/KindPlugin`,
     `ProviderInfo.Source/Via/Env/Hint`, `openCall.partial`. Rename `openai` → `chatcompletions`.
 7.6 models.dev: return stale cache immediately, refresh in background, swap pointer.

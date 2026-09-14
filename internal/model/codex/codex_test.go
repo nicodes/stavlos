@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/model/stream"
 )
 
 const cannedStream = `data: {"type":"response.created","response":{"id":"resp_1","status":"in_progress"}}
@@ -44,6 +45,9 @@ data: {"type":"response.output_item.done","output_index":2,"item":{"type":"funct
 data: {"type":"response.completed","response":{"id":"resp_1","status":"completed","output":[],"usage":{"input_tokens":120,"output_tokens":30,"input_tokens_details":{"cached_tokens":20}}}}
 
 `
+
+// The 429 test retries; keep its backoff negligible.
+func init() { stream.RetryDelay = time.Millisecond }
 
 func staticSource(access, account string) model.TokenSource {
 	return func(context.Context) (model.Token, error) {

@@ -5,24 +5,17 @@
 package codex
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"runtime"
-	"strings"
-	"time"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/model/stream"
 )
 
 // DefaultEndpoint is the Codex Responses endpoint.
 const DefaultEndpoint = "https://chatgpt.com/backend-api/codex/responses"
-
-// maxErrorBody bounds how much of an error response we quote.
-const maxErrorBody = 2048
 
 // userAgent identifies this client to the backend.
 var userAgent = fmt.Sprintf("stavlos/0.1 (%s %s)", runtime.GOOS, runtime.GOARCH)
@@ -41,16 +34,7 @@ func New(src model.TokenSource) model.Provider {
 
 // NewWithEndpoint is New with a custom URL (tests, proxies).
 func NewWithEndpoint(src model.TokenSource, endpoint string) model.Provider {
-	return &provider{
-		src:      src,
-		endpoint: endpoint,
-		// No overall timeout: streams are long and ctx bounds them. Allow up
-		// to three minutes for the backend to start answering.
-		http: &http.Client{Transport: &http.Transport{
-			Proxy:                 http.ProxyFromEnvironment,
-			ResponseHeaderTimeout: 3 * time.Minute,
-		}},
-	}
+	return &provider{src: src, endpoint: endpoint, http: stream.NewHTTPClient()}
 }
 
 func (p *provider) Name() string { return "openai" }
@@ -73,60 +57,29 @@ type client struct {
 	id string
 }
 
-// post sends the request body and returns the streaming response, or a
-// descriptive error for non-2xx statuses.
-func (p *provider) post(ctx context.Context, body []byte) (*http.Response, error) {
+// header sets the ChatGPT credential and the headers the backend expects
+// from a Codex client.
+func (p *provider) header(ctx context.Context, h http.Header) error {
 	if p.src == nil {
-		return nil, fmt.Errorf("codex: no token source configured")
+		return fmt.Errorf("codex: no token source configured")
 	}
 	tok, err := p.src(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("codex: token: %w", err)
+		return fmt.Errorf("codex: token: %w", err)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.endpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("codex: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Accept", "text/event-stream")
-	httpReq.Header.Set("Authorization", "Bearer "+tok.Access)
+	h.Set("Authorization", "Bearer "+tok.Access)
 	if tok.AccountID != "" {
-		httpReq.Header.Set("ChatGPT-Account-Id", tok.AccountID)
+		h.Set("ChatGPT-Account-Id", tok.AccountID)
 	}
-	httpReq.Header.Set("originator", "stavlos")
-	httpReq.Header.Set("User-Agent", userAgent)
-
-	resp, err := p.http.Do(httpReq)
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, fmt.Errorf("codex: %w", err)
-	}
-	if resp.StatusCode/100 != 2 {
-		defer resp.Body.Close()
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBody))
-		if resp.StatusCode == http.StatusUnauthorized {
-			return nil, fmt.Errorf("codex: unauthorized (token expired or revoked): run /providers to log in again")
-		}
-		return nil, fmt.Errorf("codex: status %d: %s", resp.StatusCode, errorText(raw))
-	}
-	return resp, nil
+	h.Set("originator", "stavlos")
+	h.Set("User-Agent", userAgent)
+	return nil
 }
 
-// errorText extracts the API's message from an error body, or quotes it.
-func errorText(raw []byte) string {
-	var env struct {
-		Error *struct {
-			Type    string `json:"type"`
-			Message string `json:"message"`
-		} `json:"error"`
+// onStatus turns a rejected token into instructions.
+func onStatus(code int, _ []byte) error {
+	if code == http.StatusUnauthorized {
+		return fmt.Errorf("codex: unauthorized (token expired or revoked): run /providers to log in again")
 	}
-	if json.Unmarshal(raw, &env) == nil && env.Error != nil && env.Error.Message != "" {
-		if env.Error.Type != "" {
-			return env.Error.Type + ": " + env.Error.Message
-		}
-		return env.Error.Message
-	}
-	return strings.TrimSpace(string(raw))
+	return nil
 }

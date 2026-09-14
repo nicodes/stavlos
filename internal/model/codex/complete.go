@@ -1,8 +1,6 @@
 package codex
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/model/stream"
 )
 
 // Complete streams one Responses call. On ctx cancellation it returns the
@@ -22,74 +21,9 @@ func (m *client) Complete(ctx context.Context, req model.Request, onDelta func(m
 	if err != nil {
 		return model.Response{}, fmt.Errorf("codex: %w", err)
 	}
-	resp, err := m.p.post(ctx, body)
-	if err != nil {
-		return model.Response{}, err
-	}
-	defer resp.Body.Close()
-
-	acc := newAccumulator(onDelta)
-	if err := readSSE(ctx, resp.Body, acc.feed); err != nil {
-		if ctx.Err() != nil {
-			return acc.response(), ctx.Err()
-		}
-		return acc.response(), fmt.Errorf("codex: %w", err)
-	}
-	return acc.response(), nil
-}
-
-// readSSE parses a text/event-stream body, calling onData for each
-// "data:" payload until [DONE], EOF, ctx cancellation, or onData returning
-// errStreamDone (a terminal event was seen).
-func readSSE(ctx context.Context, r io.Reader, onData func([]byte) error) error {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64<<10), 16<<20)
-	var data []byte
-	flush := func() error {
-		if len(data) == 0 {
-			return nil
-		}
-		payload := data
-		data = nil
-		if bytes.Equal(bytes.TrimSpace(payload), []byte("[DONE]")) {
-			return io.EOF
-		}
-		return onData(payload)
-	}
-	for sc.Scan() {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		line := sc.Bytes()
-		switch {
-		case len(line) == 0:
-			if err := flush(); err != nil {
-				if err == io.EOF {
-					return nil
-				}
-				return err
-			}
-		case bytes.HasPrefix(line, []byte(":")):
-			// comment / keepalive
-		case bytes.HasPrefix(line, []byte("data:")):
-			v := bytes.TrimPrefix(line, []byte("data:"))
-			v = bytes.TrimPrefix(v, []byte(" "))
-			if len(data) > 0 {
-				data = append(data, '\n')
-			}
-			data = append(data, v...)
-		}
-	}
-	if err := sc.Err(); err != nil {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		return err
-	}
-	if err := flush(); err != nil && err != io.EOF {
-		return err
-	}
-	return nil
+	return stream.Complete(ctx, stream.Request{
+		Name: "codex", Client: m.p.http, URL: m.p.endpoint, Body: body, Header: m.p.header, OnStatus: onStatus,
+	}, newAccumulator(onDelta))
 }
 
 // event is the union of stream event shapes we care about.
@@ -177,6 +111,13 @@ type accumulator struct {
 func newAccumulator(onDelta func(model.Delta)) *accumulator {
 	return &accumulator{onDelta: onDelta, items: map[int]*item{}}
 }
+
+// Feed, Response and Terminal make the accumulator a stream.Codec.
+func (a *accumulator) Feed(payload []byte) error { return a.feed(payload) }
+func (a *accumulator) Response() model.Response  { return a.response() }
+
+// Terminal: response.completed or response.incomplete arrived.
+func (a *accumulator) Terminal() bool { return a.status != "" }
 
 // at returns the item at output index idx, creating it with kind if new.
 // A nil idx addresses the most recently opened item.
