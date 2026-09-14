@@ -225,7 +225,7 @@ tests that pin current behaviour first.
 8.6 ✅ (also gone: `helpKeyLines`, `monitorKindFromText`, `monitorKindWord`; `Transcript.Notice` joined the test-only helpers) `EventLines` as a renderer table; `handleKey` split (`inputKey`); dead code removed
     (`notice`, `helpLines`, `todoLabel`, `mcpLabel`, `monitorGlyph`, `prettyJSON`, stale hotkey
     text); test-only exports to `export_test.go`.
-8.7 Package split: `tui/transcript`, `tui/render`, `tui/dialog`, `tui`.
+8.7 ✅ Package split: `tui/transcript`, `tui/render`, `tui/dialog`, `tui` (plus `tui/theme` for the palette and `tui/format` for number, time and path formatting, which the others share; the overlay list component stays in `tui`, since the Model drives its fields directly).
 8.8 ✅ (done before 8.7; `findLine` + `inOrder`; exact-geometry tests of the strip, row ranges and wrapping keep their pins on purpose) Tests: `findLine` helpers and relative-order assertions replace row-index/line-count pins;
     `TestSidebarNav` and `TestTabCyclesFocus` split into subtests.
 

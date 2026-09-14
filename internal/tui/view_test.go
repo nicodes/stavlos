@@ -140,7 +140,7 @@ func TestInputBoxAndPromptWidth(t *testing.T) {
 }
 
 func TestHomeAndSessionViews(t *testing.T) {
-	m := newModel(nil, nil, "sess-1234-5678")
+	m := newModel(context.Background(), nil, "sess-1234-5678")
 	m.width, m.height = 100, 30
 	m.reconciled = true
 	m.loading = false
