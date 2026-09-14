@@ -1935,20 +1935,25 @@ func TestAllowPrefix(t *testing.T) {
 // turn with the model and logs a Compacted event; the next turn's request
 // starts from the summary. Mid-turn it is queued and runs before the next
 // model call.
-// TestWebSearchNeedsABackend: without "search" in the config the model is
-// not offered web_search (the prompt says so); with it, it is.
-func TestWebSearchNeedsABackend(t *testing.T) {
+// TestWebSearchAlwaysOffered: web_search is offered with or without a
+// configured backend (the keyless Exa fallback covers the latter), and a
+// configured key is read from the environment.
+func TestWebSearchAlwaysOffered(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
+	offered := func(req model.Request) bool {
+		for _, d := range req.Tools {
+			if d.Name == "web_search" {
+				return true
+			}
+		}
+		return false
+	}
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
-			names := map[string]bool{}
-			for _, d := range req.Tools {
-				names[d.Name] = true
-			}
-			if names["web_search"] || !names["web_fetch"] || !strings.Contains(req.System, "no search backend is configured") {
-				t.Errorf("unconfigured search: tools=%v", names)
+			if !offered(req) || !strings.Contains(req.System, "web_search returns titles") {
+				t.Error("web_search should be offered without a backend (keyless fallback)")
 			}
 			return text("ok")
 		},
@@ -1962,7 +1967,6 @@ func TestWebSearchNeedsABackend(t *testing.T) {
 	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
 	h.waitFor(event.TurnEnded, agents[0].ID)
 
-	// with a backend: offered, and the key comes from the environment
 	t.Setenv("STAVLOS_TEST_SEARCH_KEY", "k-123")
 	setupConfig(t)
 	g := os.Getenv("STAVLOS_CONFIG_DIR")
@@ -1970,12 +1974,9 @@ func TestWebSearchNeedsABackend(t *testing.T) {
 	fm2 := &fakeModel{}
 	fm2.steps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
-			for _, d := range req.Tools {
-				if d.Name == "web_search" {
-					return text("ok")
-				}
+			if !offered(req) {
+				t.Error("web_search should be offered with a backend configured")
 			}
-			t.Error("web_search should be offered with a backend configured")
 			return text("ok")
 		},
 	}

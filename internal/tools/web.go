@@ -607,11 +607,16 @@ func findAll(n *html.Node, tag string) []*html.Node {
 
 // --- web_search ---
 
-// SearchConfig is the search backend from stavlos.json ("search").
+// SearchConfig is the search backend from stavlos.json ("search"). Empty,
+// web_search falls back to Exa's hosted MCP endpoint, which answers
+// without a key (what OpenCode uses); a configured backend takes over.
 type SearchConfig struct {
 	Provider string // brave | tavily | exa
 	APIKey   string
 }
+
+// exaMCP is the keyless fallback's provider name, as reported to the model.
+const exaMCP = "exa-mcp (free, no key)"
 
 type webSearchTool struct{}
 
@@ -636,6 +641,7 @@ var searchEndpoints = map[string]string{
 	"brave":  "https://api.search.brave.com/res/v1/web/search",
 	"tavily": "https://api.tavily.com/search",
 	"exa":    "https://api.exa.ai/search",
+	exaMCP:   "https://mcp.exa.ai/mcp",
 }
 
 type searchResult struct {
@@ -662,7 +668,7 @@ func (webSearchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Resu
 	}
 	cfg := env.Search
 	if cfg.Provider == "" || cfg.APIKey == "" {
-		return errf("web_search is not configured: set \"search\": {\"provider\": \"brave\" | \"tavily\" | \"exa\", \"apiKey\": \"…\"} in stavlos.json (the key may be \"${env:NAME}\")")
+		cfg = SearchConfig{Provider: exaMCP} // no backend configured: Exa's free endpoint
 	}
 	results, err := webSearch(ctx, cfg, a.Query, a.N)
 	if err != nil {
@@ -714,6 +720,15 @@ func webSearch(ctx context.Context, cfg SearchConfig, query string, n int) ([]se
 		if err == nil {
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("x-api-key", cfg.APIKey)
+		}
+	case exaMCP:
+		// MCP over HTTP: one tools/call, answered as JSON or as an SSE stream.
+		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+			"name": "web_search_exa", "arguments": map[string]any{"query": query, "numResults": n, "objective": query}}})
+		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+		if err == nil {
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Accept", "application/json, text/event-stream")
 		}
 	default:
 		return nil, fmt.Errorf("unknown search provider %q (brave, tavily or exa)", cfg.Provider)
@@ -773,6 +788,76 @@ func parseSearch(provider string, raw []byte) ([]searchResult, error) {
 		for _, x := range r.Results {
 			out = append(out, searchResult{x.Title, x.URL, x.Text})
 		}
+	case exaMCP:
+		return parseExaMCP(raw)
+	}
+	return out, nil
+}
+
+// parseExaMCP reads the MCP reply (a JSON-RPC object, or SSE "data:" lines
+// carrying one) and splits its text content into results: blocks separated
+// by "---", each "Title: …\nURL: …\n…Highlights:\n<text>".
+func parseExaMCP(raw []byte) ([]searchResult, error) {
+	payload := raw
+	if bytes.HasPrefix(bytes.TrimSpace(raw), []byte("event:")) || bytes.Contains(raw, []byte("\ndata: ")) || bytes.HasPrefix(raw, []byte("data: ")) {
+		payload = nil
+		for _, line := range bytes.Split(raw, []byte("\n")) {
+			if bytes.HasPrefix(line, []byte("data: ")) {
+				payload = append(payload, bytes.TrimPrefix(line, []byte("data: "))...)
+			}
+		}
+	}
+	var r struct {
+		Result struct {
+			IsError bool `json:"isError"`
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"result"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(payload, &r); err != nil {
+		return nil, fmt.Errorf("exa mcp: bad response: %v", err)
+	}
+	if r.Error != nil {
+		return nil, fmt.Errorf("exa mcp: %s", r.Error.Message)
+	}
+	var text strings.Builder
+	for _, c := range r.Result.Content {
+		if c.Type == "text" {
+			text.WriteString(c.Text)
+		}
+	}
+	if r.Result.IsError {
+		return nil, fmt.Errorf("exa mcp: %s", strings.TrimSpace(text.String()))
+	}
+	var out []searchResult
+	for _, block := range strings.Split(text.String(), "\n---\n") {
+		var res searchResult
+		var highlights []string
+		inHighlights := false
+		for _, line := range strings.Split(strings.TrimSpace(block), "\n") {
+			switch {
+			case inHighlights:
+				if strings.TrimSpace(line) != "..." {
+					highlights = append(highlights, line)
+				}
+			case strings.HasPrefix(line, "Title: "):
+				res.Title = strings.TrimSpace(strings.TrimPrefix(line, "Title: "))
+			case strings.HasPrefix(line, "URL: "):
+				res.URL = strings.TrimSpace(strings.TrimPrefix(line, "URL: "))
+			case strings.HasPrefix(line, "Highlights:"):
+				inHighlights = true
+			}
+		}
+		if res.URL == "" {
+			continue
+		}
+		res.Snippet = strings.Join(highlights, " ")
+		out = append(out, res)
 	}
 	return out, nil
 }
