@@ -2830,3 +2830,33 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 		t.Fatalf("ask_user arg %q", got)
 	}
 }
+
+// TestControlsNeverReachTheTerminal: escape sequences in a model's text,
+// an agent's label or a session title are removed on the way in, and a
+// permission subject shows them as carets so nothing can hide.
+func TestControlsNeverReachTheTerminal(t *testing.T) {
+	m := sessionModel()
+	m.agents[0].Archetype = "general"
+	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"rm -rf ~ \u001b[2K\u001b[1Gls -la"}`)}}
+	m.setFocus(focusPermission)
+	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
+	if !strings.Contains(body, "$ rm -rf ~ ^[^[ls -la  coder (general)") {
+		t.Fatalf("hidden bytes should show as carets:\n%s", body)
+	}
+	tr := m.transcript("a")
+	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi \x1b]0;evil\x07there"}))
+	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Text: "str\x1b[31meam"})
+	for _, l := range tr.All() {
+		if strings.ContainsRune(l.Text, 0x1b) || strings.ContainsRune(l.Text, 0x07) {
+			t.Fatalf("control reached the transcript: %q", l.Text)
+		}
+	}
+	m.setAgents([]protocol.AgentInfo{{ID: "a", Label: "ma\x1b[2Kin", Archetype: "general"}})
+	if m.agents[0].Label != "main" {
+		t.Fatalf("label %q", m.agents[0].Label)
+	}
+	m.upsertPrompt(protocol.PromptInfo{ID: "q", Kind: "question", Question: "pick\x9b2K one"})
+	if p := m.prompts[m.findPrompt("q")]; p.Question != "pick one" {
+		t.Fatalf("question %q", p.Question)
+	}
+}

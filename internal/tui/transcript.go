@@ -10,6 +10,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/textsafe"
 )
 
 // LineKind selects the style a transcript line is rendered with.
@@ -194,7 +195,7 @@ func (t *Transcript) Apply(ev event.Event) {
 		t.compactItem = item
 	case event.Compacted, event.CompactionFailed:
 		if t.compactItem >= 0 {
-			t.replaceItem(t.compactItem, EventLines(ev))
+			t.replaceItem(t.compactItem, cleanLines(EventLines(ev)))
 			t.compactItem = -1
 			return
 		}
@@ -226,7 +227,7 @@ func (t *Transcript) Apply(ev event.Event) {
 					t.prompts[p.ID] = item
 					_, last := itemRange(t.Lines, item)
 					t.promptLine[p.ID] = last + 1 // where insertIntoItem puts it
-					t.insertIntoItem(item, nested(EventLines(ev)))
+					t.insertIntoItem(item, nested(cleanLines(EventLines(ev))))
 					return
 				}
 			}
@@ -242,7 +243,7 @@ func (t *Transcript) Apply(ev event.Event) {
 				if ev.Type != event.PromptClaimed {
 					delete(t.prompts, p.ID)
 				}
-				t.insertIntoItem(item, nested(EventLines(ev)))
+				t.insertIntoItem(item, nested(cleanLines(EventLines(ev))))
 				return
 			}
 		}
@@ -270,7 +271,7 @@ func (t *Transcript) Apply(ev event.Event) {
 			if p.Kind == "" {
 				p.Kind = t.monKinds[p.ID]
 			}
-			lines := monitorFiredLines(p)
+			lines := cleanLines(monitorFiredLines(p))
 			if i, ok := t.monitors[p.ID]; ok && i < len(t.Lines) {
 				t.Lines[i].Tone = ToneNone
 				if p.IsError {
@@ -290,7 +291,7 @@ func (t *Transcript) Apply(ev event.Event) {
 	case event.MonitorStopped:
 		var p event.MonitorRefPayload
 		if ev.Decode(&p) == nil {
-			lines := monitorStoppedLines(t.monKinds[p.ID], p.Reason)
+			lines := cleanLines(monitorStoppedLines(t.monKinds[p.ID], p.Reason))
 			if i, ok := t.monitors[p.ID]; ok && i < len(t.Lines) {
 				t.Lines[i].Tone = ToneError
 				delete(t.monitors, p.ID)
@@ -314,14 +315,14 @@ func (t *Transcript) Apply(ev event.Event) {
 				item = t.Lines[i].Item
 				t.finishCall(p)
 				t.stream = nil
-				t.insertIntoItem(item, EventLines(ev))
+				t.insertIntoItem(item, cleanLines(EventLines(ev)))
 				return
 			}
 			t.finishCall(p)
 		}
 		t.stream = nil
 	}
-	t.appendItem(item, EventLines(ev))
+	t.appendItem(item, cleanLines(EventLines(ev)))
 	switch ev.Type {
 	case event.TurnStarted:
 		t.turn, t.turnStart, t.turnTokens = true, ev.Time, 0
@@ -664,6 +665,7 @@ func (t *Transcript) stopRunning() {
 // ToolName+Text is partial tool output; ToolName alone is a tool_use block
 // starting in the model's response.
 func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
+	n.Text, n.Thinking = textsafe.Clean(n.Text), textsafe.Clean(n.Thinking)
 	if n.Turn != t.streamTurn {
 		t.streamTurn = n.Turn
 		t.stream = nil

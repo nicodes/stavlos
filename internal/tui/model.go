@@ -347,7 +347,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.fatal = fmt.Errorf("reconcile: %w", msg.err)
 			return m, tea.Quit
 		}
-		m.session = msg.res.Session
+		m.session = cleanSession(msg.res.Session)
 		m.reconciled = true
 		m.setAgents(msg.res.Agents)
 		for _, p := range msg.res.Prompts {
@@ -394,7 +394,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case navSessionsMsg:
 		if msg.err == nil {
-			m.navSessions = msg.sessions
+			m.navSessions = cleanSessions(msg.sessions)
 		}
 
 	case treeTickMsg:
@@ -450,6 +450,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case variantsMsg:
 		cmds = append(cmds, m.onVariants(msg))
 	case sessionsMsg:
+		msg.sessions = cleanSessions(msg.sessions)
 		if msg.quiet {
 			if msg.err == nil {
 				m.seedHistory(msg.sessions)
@@ -461,7 +462,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			cmds = append(cmds, m.setStatus("resume: "+msg.err.Error(), true))
 		} else {
-			cmds = append(cmds, m.bindSession(msg.info))
+			cmds = append(cmds, m.bindSession(cleanSession(msg.info)))
 		}
 	case modelsMsg:
 		cmds = append(cmds, m.onModels(msg))
@@ -2595,6 +2596,7 @@ func (m *Model) findPrompt(id string) int {
 }
 
 func (m *Model) upsertPrompt(p protocol.PromptInfo) {
+	cleanPrompt(&p)
 	if i := m.findPrompt(p.ID); i >= 0 {
 		m.prompts[i] = p
 		return
@@ -2725,6 +2727,7 @@ func (m *Model) agentLabel(id string) string {
 
 // setAgents replaces the tree, keeping the selection on the same agent.
 func (m *Model) setAgents(agents []protocol.AgentInfo) {
+	agents = cleanAgents(agents)
 	prev := m.selectedID()
 	m.agents = agents
 	if i := m.findAgent(prev); i >= 0 {
