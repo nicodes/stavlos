@@ -2,8 +2,6 @@ package registry
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -26,6 +24,7 @@ const fixture = `{
    "gpt-5.7":{"id":"gpt-5.7","limit":{"context":1000},"cost":{"input":1,"output":1}}}},
  "xai":{"id":"xai","env":["XAI_API_KEY"],"npm":"@ai-sdk/xai","api":"https://api.x.ai/v1","models":{
    "grok-4":{"id":"grok-4","name":"Grok 4","limit":{"context":256000},"cost":{"input":3,"output":15}},
+   "grok-imagine-image":{"id":"grok-imagine-image"},
    "other":{"id":"other","limit":{"context":1}}}},
  "anthropic":{"id":"anthropic","env":["ANTHROPIC_API_KEY"],"npm":"@ai-sdk/anthropic","models":{"claude":{"id":"claude"}}}
 }`
@@ -84,7 +83,7 @@ func TestOnlyTwoProviders(t *testing.T) {
 	for _, m := range r.Models("", true) {
 		ids[m.ID] = true
 	}
-	if !ids["openai/gpt-5.4"] || !ids["openai/gpt-5.7"] || ids["openai/gpt-5.5-pro"] || ids["openai/gpt-4.1"] || !ids["xai/grok-4"] || ids["xai/other"] {
+	if !ids["openai/gpt-5.4"] || !ids["openai/gpt-5.7"] || ids["openai/gpt-5.5-pro"] || ids["openai/gpt-4.1"] || !ids["xai/grok-4"] || ids["xai/other"] || ids["xai/grok-imagine-image"] {
 		t.Fatalf("%v", ids)
 	}
 }
@@ -186,5 +185,38 @@ func TestGrokUsesBearer(t *testing.T) {
 	}
 }
 
-var _ = base64.StdEncoding
-var _ = json.Marshal
+// TestProvidersBuiltOnce: a subscription's adapter is built on first use
+// and reused; changing the endpoints starts over.
+func TestProvidersBuiltOnce(t *testing.T) {
+	r, _, _ := newReg(t)
+	if err := r.SaveLogin("openai", oauth.Tokens{Access: "a", Refresh: "r", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	p1, _, err := r.lookup("openai/gpt-5.4")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p2, _, _ := r.lookup("openai/gpt-5.7")
+	if p1 != p2 {
+		t.Fatal("the adapter was rebuilt")
+	}
+	r.WithEndpoints("http://127.0.0.1:1", "")
+	if p3, _, _ := r.lookup("openai/gpt-5.4"); p3 == p1 {
+		t.Fatal("new endpoints should build a new adapter")
+	}
+	if err := r.Disconnect("openai"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := r.lookup("openai/gpt-5.4"); err == nil || !strings.Contains(err.Error(), "not connected") {
+		t.Fatalf("after disconnect: %v", err)
+	}
+	// A catalog swap is seen by the next listing.
+	cat, _ := modelsdev.Parse([]byte(`{"xai":{"models":{"grok-9":{"id":"grok-9"}}}}`))
+	r.SetCatalog(cat)
+	if ms := r.Models("xai", true); len(ms) != 1 || ms[0].ID != "xai/grok-9" {
+		t.Fatalf("after SetCatalog: %+v", ms)
+	}
+	if st, _ := r.Status("xai"); st.Models != 1 {
+		t.Fatalf("model count not recomputed for the new catalog: %d", st.Models)
+	}
+}

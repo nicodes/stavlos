@@ -13,50 +13,52 @@ import (
 	"github.com/nicodes/stavlos/internal/paths"
 )
 
-// URL is the models.dev database endpoint.
-const URL = "https://models.dev/api.json"
+// URL is the models.dev database endpoint (a variable for tests).
+var URL = "https://models.dev/api.json"
 
 // TTL is how long a cached copy is considered fresh.
 const TTL = 24 * time.Hour
 
-// fetchTimeout bounds the network fetch so a slow endpoint cannot stall startup.
+// fetchTimeout bounds one network fetch.
 const fetchTimeout = 15 * time.Second
 
 // CachePath is where the fetched database is stored.
 func CachePath() string { return filepath.Join(paths.CacheDir(), "models.json") }
 
-// Load returns the catalog, preferring in order: a fresh cache, the network,
-// a stale cache, and finally the embedded fallback. It never fails on a
-// network error alone; an error is returned only if nothing parses.
-func Load(ctx context.Context) (*Catalog, error) {
+// Load returns the catalog without waiting on the network when it can: a
+// fresh cache, else a stale cache, else the network, else the embedded
+// copy. stale reports that the caller should Refresh in the background (a
+// stale cache or the embedded fallback was returned). An error is returned
+// only if nothing parses.
+func Load(ctx context.Context) (c *Catalog, stale bool, err error) {
 	path := CachePath()
-
-	if data, fresh := readCache(path); fresh {
+	if data, fresh := readCache(path); data != nil {
 		if c, err := Parse(data); err == nil {
-			return c, nil
+			return c, !fresh, nil
 		}
 	}
-
-	data, fetchErr := fetch(ctx)
+	c, fetchErr := Refresh(ctx)
 	if fetchErr == nil {
-		if c, err := Parse(data); err == nil {
-			writeCache(path, data) // best effort
-			return c, nil
-		} else {
-			fetchErr = err
-		}
+		return c, false, nil
 	}
-
-	if data, _ := readCache(path); data != nil {
-		if c, err := Parse(data); err == nil {
-			return c, nil
-		}
-	}
-
-	c, err := Parse(fallbackJSON)
+	c, err = Parse(fallbackJSON)
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("modelsdev: fetch: %w", fetchErr), err)
+		return nil, false, errors.Join(fmt.Errorf("modelsdev: fetch: %w", fetchErr), err)
 	}
+	return c, true, nil
+}
+
+// Refresh fetches the database, parses it and caches it.
+func Refresh(ctx context.Context) (*Catalog, error) {
+	data, err := fetch(ctx)
+	if err != nil {
+		return nil, err
+	}
+	c, err := Parse(data)
+	if err != nil {
+		return nil, err
+	}
+	writeCache(CachePath(), data) // best effort
 	return c, nil
 }
 
@@ -73,15 +75,30 @@ func readCache(path string) ([]byte, bool) {
 	return data, time.Since(st.ModTime()) < TTL
 }
 
+// writeCache replaces the cache through a temporary file of its own, so two
+// processes refreshing at once never interleave their writes.
 func writeCache(path string, data []byte) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	f, err := os.CreateTemp(dir, "models-*.json")
+	if err != nil {
 		return
 	}
-	_ = os.Rename(tmp, path)
+	tmp := f.Name()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+	}
 }
 
 func fetch(ctx context.Context) ([]byte, error) {

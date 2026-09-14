@@ -1,8 +1,8 @@
-// Package openai implements model.Provider for the Chat Completions wire
+// Package chatcompletions implements model.Provider for the Chat Completions wire
 // protocol with a rotating bearer token. The registry uses it for the Grok
 // (xAI) subscription; the ChatGPT subscription speaks the Responses
 // protocol (internal/model/codex).
-package openai
+package chatcompletions
 
 import (
 	"net/http"
