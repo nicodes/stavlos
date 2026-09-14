@@ -23,7 +23,7 @@ stavlos sessions               # list sessions (they survive daemon restarts)
 stavlos tree <session>         # agent tree with state and cost
 stavlos send|steer|cancel|kill <agent> [text]
 stavlos trust [dir]            # confirm a project's .stavlos/ layer
-stavlos daemon                 # run stavlosd in the foreground
+stavlos daemon                 # run the daemon in the foreground (there is no separate binary)
 ```
 
 Model ids are `openai/gpt-5.4`, `xai/grok-4`, and so on; `/models` lists what each subscription serves.
