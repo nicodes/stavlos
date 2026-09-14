@@ -166,11 +166,18 @@ func TestHomeAndSessionViews(t *testing.T) {
 			t.Fatal("the empty strip should not be a tab stop on the home screen")
 		}
 	}
-	// once a prompt is waiting the strip (and its tab stop) appears
-	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "trust", Agent: "a"}}
-	if v := stripANSI(m.View()); !strings.Contains(v, "trust (1)") {
-		t.Fatalf("a waiting prompt should bring the strip to the home screen:\n%s", v)
+	// a waiting prompt does not bring the strip to the home screen; it opens
+	// its own dialog when it arrives
+	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "p", Kind: "trust", Agent: "a"}})
+	if v := stripANSI(m.View()); strings.Contains(v, "trust (1)") || m.focus != focusPermission || !strings.Contains(v, "Trust (1)") {
+		t.Fatalf("home with a prompt: focus=%v\n%s", m.focus, v)
 	}
+	for _, f := range m.focusOrder() {
+		if f == focusTabs {
+			t.Fatal("the strip is never a stop on the home screen")
+		}
+	}
+	m.closeDialog()
 	m.prompts = nil
 	for _, l := range lines {
 		if ansi.StringWidth(l) > 100 {
@@ -805,6 +812,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	m := newModel(context.Background(), nil, "s")
 	m.width, m.height = 120, 40
 	m.reconciled = true
+	m.transcript("root").Notice("hello") // a session, not the home screen (which has no strip)
 	m.agents = []protocol.AgentInfo{
 		{ID: "root", Label: "coder", Archetype: "coder", State: "idle"},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running"},
@@ -819,9 +827,9 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("collapsed strip should only count:\n%s", sv)
 	}
 
-	// tab order: chat is skipped on the home view; the input, meta row, strip
+	// tab order: the chat, the input, the meta row, the strip
 	order := m.focusOrder()
-	if len(order) != 3 || order[0] != focusInput || order[1] != focusMeta || order[2] != focusTabs {
+	if len(order) != 4 || order[0] != focusChat || order[1] != focusInput || order[2] != focusMeta || order[3] != focusTabs {
 		t.Fatalf("order %v", order)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab}, tea.KeyMsg{Type: tea.KeyTab}) // input → meta row → strip (highlighting permission: a prompt waits)
@@ -866,7 +874,9 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.selectedID() != "c2" || m.focus != focusTabs {
+	// c2 has no chat yet, so its view is the home screen, which has no strip
+	// to return to: the dialog closes onto the input instead
+	if m.selectedID() != "c2" || m.focus != focusInput {
 		t.Fatalf("enter should select the child under the cursor: %s focus %v", m.selectedID(), m.focus)
 	}
 	// now the selected agent has no children: the tab stays, reading (0)

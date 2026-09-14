@@ -454,14 +454,12 @@ func (m *Model) focusOrder() []focus {
 	return order
 }
 
-// stripShown reports whether the permission/agents/async strip is drawn:
-// always in a session, and on the home (logo) screen only once something
-// is in it, so a trust prompt or an early child is still reachable.
+// stripShown reports whether the tab strip is drawn: in a session always,
+// on the home (logo) screen never. A prompt that arrives on the home screen
+// (the project trust prompt) still opens its dialog on its own; the strip
+// appears with the first exchange.
 func (m *Model) stripShown() bool {
-	if !m.isHome() {
-		return true
-	}
-	return m.currentPrompt() != nil || len(m.liveChildren())+len(m.runningJobs())+len(m.selectedTodos())+len(m.selectedMCP()) > 0
+	return !m.isHome()
 }
 
 // selectedMCP returns the selected agent's MCP servers (its role's list).
