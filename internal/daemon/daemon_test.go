@@ -338,6 +338,7 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = h.c.Subscribe(ctx, s.ID, 0)
+	_ = h.c.SetSessionMode(ctx, s.ID, "auto") // chained commands ask under policy; auto answers inside the directory
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
@@ -526,6 +527,7 @@ func TestShellBackgroundWakes(t *testing.T) {
 	ctx := context.Background()
 	s, _ := h.c.CreateSession(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
+	_ = h.c.SetSessionMode(ctx, s.ID, "auto")
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
@@ -591,6 +593,7 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	ctx := context.Background()
 	s, _ := h.c.CreateSession(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
+	_ = h.c.SetSessionMode(ctx, s.ID, "auto")
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
@@ -626,6 +629,7 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	defer h2.close()
 	s2, _ := h2.c.CreateSession(ctx, work, "", "")
 	_ = h2.c.Subscribe(ctx, s2.ID, 0)
+	_ = h2.c.SetSessionMode(ctx, s2.ID, "auto")
 	agents, _ = h2.c.Tree(ctx, s2.ID)
 	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "run it")
 	h2.waitFor(event.TurnEnded, agents[0].ID)
@@ -663,6 +667,7 @@ func TestShellKillStopsJob(t *testing.T) {
 	ctx := context.Background()
 	s, _ := h.c.CreateSession(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
+	_ = h.c.SetSessionMode(ctx, s.ID, "auto")
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	start := time.Now()

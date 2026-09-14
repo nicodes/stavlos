@@ -15,6 +15,7 @@ import (
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/project"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/shellcmd"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -218,6 +219,12 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 				verb, arg = v, x
 			}
 		}
+	}
+	// A shell allow rule speaks for one simple command: "cat *" says
+	// nothing about "cat x; rm -rf ~" or "cat x > ~/.bashrc". A compound
+	// command asks (auto and yolo then answer as they do for any ask).
+	if c.Name == "shell" && verb == policy.Allow && !shellcmd.Simple(arg) {
+		verb = policy.Ask
 	}
 	key := c.Name + "\x00" + arg
 	a.s.mu.RLock()

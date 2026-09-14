@@ -38,6 +38,13 @@ func TestToolVerdicts(t *testing.T) {
 		{name: "deny rule refuses without a prompt", policy: `{"shell":{"rm *":"deny","*":"ask"}}`, tool: "shell", in: `{"command":"rm -rf x"}`, wantDenied: true, wantOut: "Denied by policy"},
 		{name: "deny rule holds in yolo", policy: `{"shell":{"rm *":"deny","*":"ask"}}`, mode: protocol.ModeYolo, tool: "shell", in: `{"command":"rm -rf x"}`, wantDenied: true},
 		{name: "read is allowed by default", tool: "read", in: `{"path":"f.txt"}`, wantOut: "hello"},
+		{name: "a read-only command is allowed by default", tool: "shell", in: `{"command":"cat f.txt"}`, wantOut: "hello"},
+		{name: "a chained command asks even when its first word is allowed", tool: "shell", in: `{"command":"cat f.txt; touch x"}`, answer: escalation.Answer{Value: "deny"}, wantPrompt: true, wantDenied: true},
+		{name: "a redirection asks", tool: "shell", in: `{"command":"cat f.txt > out"}`, answer: escalation.Answer{Value: "deny"}, wantPrompt: true, wantDenied: true},
+		{name: "a pipe asks", tool: "shell", in: `{"command":"cat f.txt | sh"}`, answer: escalation.Answer{Value: "deny"}, wantPrompt: true, wantDenied: true},
+		{name: "process substitution asks", tool: "shell", in: `{"command":"cat <(id)"}`, answer: escalation.Answer{Value: "deny"}, wantPrompt: true, wantDenied: true},
+		{name: "a quoted separator is still one command", tool: "shell", in: `{"command":"grep -c \"a; b\" f.txt"}`, wantOut: "0"},
+		{name: "auto answers a chained command's ask", mode: protocol.ModeAuto, tool: "shell", in: `{"command":"cat f.txt; echo tail"}`, wantOut: "tail"},
 		{name: "unknown tool is an error", tool: "nope", in: `{}`, wantOut: "unknown tool"},
 	}
 	for _, tc := range cases {
