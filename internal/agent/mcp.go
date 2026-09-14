@@ -35,6 +35,12 @@ const (
 	mcpNamePrefix   = "mcp__"
 )
 
+// MCPIdleAfter is how long an agent may sit idle before its MCP servers
+// are stopped; they start again at its next turn. Agents are never killed
+// by the model, so this is what keeps an idle child cheap. A variable so
+// tests can shorten it.
+var MCPIdleAfter = 10 * time.Minute
+
 // mcpServer is one running (or failed) server owned by an agent.
 type mcpServer struct {
 	name    string
@@ -178,6 +184,36 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 		a.mu.Unlock()
 		_, _ = a.record(context.Background(), event.MCPFailed, event.MCPFailedPayload{Server: name, Error: "server exited: " + s.err})
 	}()
+}
+
+// armMCPIdle schedules the idle stop after a turn ends; disarmMCPIdle
+// cancels it when the next turn starts.
+func (a *Agent) armMCPIdle() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.mcps) == 0 {
+		return
+	}
+	if a.mcpIdle != nil {
+		a.mcpIdle.Stop()
+	}
+	a.mcpIdle = time.AfterFunc(MCPIdleAfter, func() {
+		a.mu.Lock()
+		idle := a.state == StateIdle && len(a.prompts)+len(a.steers)+len(a.responses) == 0
+		a.mu.Unlock()
+		if idle {
+			a.stopMCP("")
+		}
+	})
+}
+
+func (a *Agent) disarmMCPIdle() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.mcpIdle != nil {
+		a.mcpIdle.Stop()
+		a.mcpIdle = nil
+	}
 }
 
 // hasMCP reports whether the agent has any server entries.

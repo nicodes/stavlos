@@ -93,15 +93,6 @@ func (o orchestrator) Cancel(parent, id string) error {
 	return nil
 }
 
-func (o orchestrator) Kill(parent, id string) error {
-	c, err := o.child(parent, id)
-	if err != nil {
-		return err
-	}
-	o.s.killTree(c)
-	return nil
-}
-
 // Respond delivers the caller's answer to another agent in the session; the
 // recipient is woken between turns. The caller stays alive.
 func (o orchestrator) Respond(caller, to, text string) error {

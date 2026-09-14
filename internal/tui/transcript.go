@@ -1224,7 +1224,7 @@ func toolArg(name string, raw json.RawMessage) string {
 		default:
 			return arch
 		}
-	case "agent_message", "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status", "send", "steer", "cancel", "kill", "result", "status":
+	case "agent_message", "agent_prompt", "agent_steer", "agent_cancel", "agent_kill", "agent_result", "agent_status", "send", "steer", "cancel", "kill", "result", "status": // agent_kill/agent_result/agent_prompt/agent_steer: legacy logs
 		return str("id")
 	case "monitor":
 		if ids, ok := in["ids"].([]any); ok && len(ids) > 0 {
