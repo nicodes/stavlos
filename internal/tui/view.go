@@ -1716,7 +1716,7 @@ func todoRows(items []event.TodoItem, width int) []string {
 func dirRows(items []protocol.DirInfo, width int) []string {
 	rows := make([]string, 0, len(items))
 	for _, d := range items {
-		row := "  " + styleDim.Render(glyphToolFiles) + " " + styleBold.Render(shortHome(d.Path)) + "  " + styleDim.Render(d.Source)
+		row := "  " + styleBold.Render(shortHome(d.Path)) + "  " + styleDim.Render(d.Source)
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows

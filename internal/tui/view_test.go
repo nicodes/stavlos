@@ -2247,7 +2247,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	if !strings.Contains(dv, "a add directory · space edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
 		t.Fatalf("dirs dialog should carry its own hints (without esc):\n%s", dv)
 	}
-	if len(lines) < 9 || !strings.Contains(lines[1], "Dirs 3") || !strings.Contains(lines[3], "◆ /repo  session") || !strings.Contains(lines[4], "/srv/shared  role") || !strings.Contains(lines[5], "/tmp/build  human") {
+	if len(lines) < 9 || !strings.Contains(lines[1], "Dirs 3") || !strings.Contains(lines[3], "▸ /repo  session") || strings.Contains(lines[3], "◆") || !strings.Contains(lines[4], "/srv/shared  role") || !strings.Contains(lines[5], "/tmp/build  human") {
 		t.Fatalf("dirs dialog:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
