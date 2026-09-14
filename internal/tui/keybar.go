@@ -37,7 +37,7 @@ func (m Model) keyHints() []keyHint {
 	case focusMCP:
 		return []keyHint{{"↑/↓", "move"}, {"space", "show/hide tools"}, {"enter", "input"}, {"esc", "close"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusSidebar:
-		return []keyHint{{"↑/↓", "move"}, {"space", "select agent"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
+		return []keyHint{{"↑/↓", "move"}, {"space", "select agent"}, {"n", "next agent needing you"}, {"enter", "input"}, {"tab", "next section"}, {"esc", "back to input"}, {"ctrl+b", "close sidebar"}, {"pgup/pgdn", "scroll"}, {"ctrl+c", "quit"}}
 	case focusMeta:
 		return []keyHint{{"←/→", "choose"}, {"space", "open (mode tag: back to ask)"}, {"enter", "input"}, {"esc", "back to input"}, {"tab", "next section"}, {"ctrl+c", "quit"}}
 	case focusTabs:

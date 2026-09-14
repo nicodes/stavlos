@@ -195,7 +195,7 @@ func TestHomeAndSessionViews(t *testing.T) {
 	m.showTree = true
 	m.layout()
 	sess := stripANSI(m.View())
-	if !strings.Contains(sess, "hello") || !strings.Contains(sess, "session  sess-123") {
+	if !strings.Contains(sess, "hello") || !strings.Contains(sess, "Stavlos") || !strings.Contains(sess, "\nidle ") || !strings.Contains(sess, "$0.00") {
 		t.Fatalf("session view:\n%s", sess)
 	}
 	m.width = 90 // too narrow: sidebar auto-hides
@@ -2096,10 +2096,11 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 	m.layout()
 	m.refreshViewport()
 	lines := strings.Split(stripANSI(m.View()), "\n")
-	// the sidebar's session header is at the left edge, the chat to its right
+	// the sidebar's header (the app name over the session directory) is at
+	// the left edge, the chat to its right
 	found := false
 	for _, l := range lines {
-		if strings.HasPrefix(strings.TrimLeft(l, " "), "session") && strings.Index(l, "session") < sidebarWidth {
+		if strings.HasPrefix(l, "Stavlos") {
 			found = true
 		}
 	}
@@ -2157,6 +2158,93 @@ func TestSidebarRowsLeaveOneColumn(t *testing.T) {
 		if w := ansi.StringWidth(stripANSI(row)); w != sidebarWidth-1 {
 			t.Fatalf("a truncated row should be %d wide, got %d: %q", sidebarWidth-1, w, stripANSI(row))
 		}
+	}
+}
+
+// TestSidebarNav: the sidebar reads as the swarm nav — directory, one
+// line of swarm state, and a tree whose rows carry a needs-you badge and
+// the cost at the right edge; n jumps to the next agent waiting on you and
+// a click on a row selects that agent.
+func TestSidebarNav(t *testing.T) {
+	m := sessionModel()
+	m.showTree = true
+	m.width, m.height = 120, 40
+	m.session.Dir = "/home/x/Work/proj"
+	m.session.Created = time.Now().Add(-12 * time.Minute).UTC().Format(time.RFC3339)
+	m.agents = []protocol.AgentInfo{
+		{ID: "a", Label: "main", Archetype: "general", State: "waiting", Awaiting: []string{"b", "c"}, CostUSD: 0.20},
+		{ID: "b", Parent: "a", Depth: 1, Label: "world-politics", Archetype: "general", State: "blocked", CostUSD: 0.05},
+		{ID: "c", Parent: "a", Depth: 1, Label: "business", Archetype: "general", State: "running"},
+		{ID: "d", Parent: "a", Depth: 1, Label: "asker", Archetype: "general", State: "blocked"},
+	}
+	m.prompts = []protocol.PromptInfo{
+		{ID: "p", Kind: "permission", Agent: "b", Tool: "shell"},
+		{ID: "q", Kind: "question", Agent: "d", Questions: []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}},
+	}
+	m.selected = 0
+	m.layout()
+	sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
+	header := len(m.sidebarHeader(sidebarWidth - 1))
+	if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || !strings.HasPrefix(sb[1], "/home/x/Work/proj") || !strings.HasPrefix(sb[2], "$0.25 · 12m") || !strings.HasPrefix(sb[3], "3 working · 1 waiting") || !strings.HasPrefix(sb[4], "2 need you") || strings.TrimSpace(sb[5]) != "" || !strings.HasPrefix(sb[6], "agents") {
+		t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:7], "\n"))
+	}
+	rows := m.treeRows(sidebarWidth - 1)
+	plain := make([]string, len(rows))
+	for i, r := range rows {
+		plain[i] = stripANSI(r)
+		if w := ansi.StringWidth(plain[i]); w != sidebarWidth-1 {
+			t.Fatalf("row %d should be %d wide, got %d: %q", i, sidebarWidth-1, w, plain[i])
+		}
+	}
+	if !strings.HasPrefix(plain[0], "▸ ◐ main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
+		t.Fatalf("root row: %q", plain[0])
+	}
+	if !strings.HasPrefix(plain[1], "    ● world-politics (") || !strings.HasSuffix(plain[1], "… ! $0.05") {
+		t.Fatalf("blocked child row should carry the badge and cost: %q", plain[1])
+	}
+	if !strings.HasSuffix(strings.TrimRight(plain[2], " "), "business (general)") {
+		t.Fatalf("a row with nothing on the right ends with the label: %q", plain[2])
+	}
+	if !strings.HasSuffix(plain[3], " ?") {
+		t.Fatalf("a question shows ?: %q", plain[3])
+	}
+	// n jumps to the next agent needing you and selects it; again wraps
+	m.setFocus(focusSidebar)
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if m.sbCursor != 1 || m.selectedID() != "b" || m.focus != focusSidebar {
+		t.Fatalf("n: cursor=%d selected=%s focus=%v", m.sbCursor, m.selectedID(), m.focus)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if m.selectedID() != "d" {
+		t.Fatalf("second n: %s", m.selectedID())
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if m.selectedID() != "b" {
+		t.Fatalf("n should wrap: %s", m.selectedID())
+	}
+	m.prompts = nil
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+	if m.selectedID() != "b" || !strings.Contains(m.status, "no agent is waiting") {
+		t.Fatalf("n with nothing pending: %s %q", m.selectedID(), m.status)
+	}
+	if hs := m.keyHints(); hs[2].key != "n" {
+		t.Fatalf("hints %+v", hs)
+	}
+	// a click on a tree row selects that agent (rows start after the header,
+	// which lost its need-you line with the prompts)
+	m.setFocus(focusInput)
+	header = len(m.sidebarHeader(sidebarWidth - 1))
+	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	m = nm.(Model)
+	if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 2 {
+		t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
+	}
+	// the swarm line reads idle when nothing is happening, and the need-you
+	// line disappears with the prompts (the header shrinks by a row)
+	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "general", State: "idle"}}
+	if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 6 {
+		t.Fatalf("idle swarm line: %q header %d", sl, len(m.sidebarHeader(sidebarWidth-1)))
 	}
 }
 

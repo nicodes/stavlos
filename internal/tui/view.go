@@ -980,32 +980,108 @@ func (m Model) sessionView(width, height int) string {
 	return padLines(strings.Join(parts, "\n"), width)
 }
 
-// sidebarView is the left panel: session summary, agent tree, prompts.
+// sidebarView is the left panel — the swarm nav: the header (app name,
+// session directory, cost and age, swarm state) then the agent tree with a
+// badge and cost per row. What the tree selects, the rest of the screen
+// shows and the footer controls.
 func (m Model) sidebarView(height int) string {
-	id := m.sessionID
-	if len(id) > 8 {
-		id = id[:8]
-	}
-	model := m.session.Model
-	if model == "" {
-		model = "—"
-	}
 	inner := sidebarWidth - 1 // rows start at the left edge; one column of right padding
-	rows := []string{
-		styleAccent.Bold(true).Render("Stavlos"),
-		styleDim.Render("session") + "  " + id,
-		styleDim.Render("model") + "    " + truncRunes(model, inner-9),
-		styleDim.Render("cost") + "     $" + fmtCost(m.totalCost()),
-		"",
-		styleBold.Render("agents") + m.sidebarFocusHint(),
-	}
-	rows = append(rows, m.treeRows(inner)...)
+	rows := append(m.sidebarHeader(inner), m.treeRows(inner)...)
 	if len(rows) > height {
 		rows = rows[:height]
 	}
 	return lipgloss.NewStyle().Width(sidebarWidth).Height(height).MaxHeight(height).Render(strings.Join(rows, "\n"))
 }
 
+// sidebarHeader is what precedes the tree: the app name, the session
+// directory, its cost and age, the swarm state ("3 working · 1 waiting",
+// or "idle"), a warning line while agents need the human ("2 need you"),
+// a blank, and the "agents" heading. The tree's first row follows, which
+// is how a click on the sidebar finds its agent.
+func (m Model) sidebarHeader(width int) []string {
+	dir := shortHome(m.session.Dir)
+	if dir == "" {
+		dir = "—"
+	}
+	meta := "$" + fmtCost(m.totalCost())
+	if t, err := time.Parse(time.RFC3339, m.session.Created); err == nil && !t.IsZero() {
+		meta += " · " + fmtElapsed(time.Since(t))
+	}
+	rows := []string{
+		styleAccent.Bold(true).Render("Stavlos"),
+		styleDim.Render(truncRunes(dir, width)),
+		styleDim.Render(truncRunes(meta, width)),
+		styleDim.Render(truncRunes(m.swarmLine(), width)),
+	}
+	if need := m.needCount(); need > 0 {
+		text := fmt.Sprintf("%d need you", need)
+		if need == 1 {
+			text = "1 needs you"
+		}
+		rows = append(rows, styleWarn.Render(text))
+	}
+	return append(rows, "", styleBold.Render("agents")+m.sidebarFocusHint())
+}
+
+// swarmLine counts the agents working and waiting on an answer; "idle"
+// when neither.
+func (m Model) swarmLine() string {
+	var working, waiting int
+	for _, a := range m.agents {
+		switch agentOutcome(a) {
+		case "working":
+			working++
+		case "waiting":
+			waiting++
+		}
+	}
+	var parts []string
+	if working > 0 {
+		parts = append(parts, fmt.Sprintf("%d working", working))
+	}
+	if waiting > 0 {
+		parts = append(parts, fmt.Sprintf("%d waiting", waiting))
+	}
+	if len(parts) == 0 {
+		return "idle"
+	}
+	return strings.Join(parts, " · ")
+}
+
+// needCount is how many agents have a permission or question pending.
+func (m Model) needCount() int {
+	n := 0
+	for _, a := range m.agents {
+		if m.needsHuman(a.ID) != "" {
+			n++
+		}
+	}
+	return n
+}
+
+// needsHuman is the badge for an agent with a prompt of its own waiting:
+// "!" for a permission or trust prompt, "?" for a question, "" otherwise.
+func (m Model) needsHuman(agent string) string {
+	badge := ""
+	for _, p := range m.prompts {
+		if p.Agent != agent {
+			continue
+		}
+		if p.Kind == "question" {
+			if badge == "" {
+				badge = "?"
+			}
+			continue
+		}
+		return "!"
+	}
+	return badge
+}
+
+// treeRows renders the agent tree, one row per agent: indent, the
+// cursor/selection marker, the state dot, "label (role)", then, at the
+// right edge, the needs-you badge and the agent's cost. Every row is
+// exactly width wide.
 func (m Model) treeRows(width int) []string {
 	rows := make([]string, 0, len(m.agents))
 	focused := m.focus == focusSidebar && m.sidebarVisible()
@@ -1019,19 +1095,38 @@ func (m Model) treeRows(width int) []string {
 			marker = styleAccent.Render("▸") + " "
 		}
 		dot := agentDot(a)
-		// The prefix indent + marker + dot + " " is four columns plus the
-		// indent, and truncRunes adds its ellipsis on top of the budget; the
-		// text gets the rest so a truncated row reaches the panel's edge
-		// (the caller leaves one column before the separator).
-		avail := width - len([]rune(indent)) - 5
+		// The right column: the badge (warning) and the cost (dim), with a
+		// space before it whenever it is not empty.
+		right, rightW := "", 0
+		if b := m.needsHuman(a.ID); b != "" {
+			right, rightW = styleWarn.Render(b), 1
+		}
+		if a.CostUSD > 0 {
+			c := "$" + fmtCost(a.CostUSD)
+			if right != "" {
+				right += " "
+				rightW++
+			}
+			right += styleDim.Render(c)
+			rightW += len([]rune(c))
+		}
+		// indent + marker + dot + " " is four columns plus the indent; the
+		// text gets what is left before the right column and one space.
+		avail := width - len([]rune(indent)) - 4 - rightW
+		if rightW > 0 {
+			avail--
+		}
 		if avail < 4 {
 			avail = 4
 		}
-		label := a.State
+		text := fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
 		if agentOutcome(a) == "error" {
-			label = "error"
+			text += " · error"
 		}
-		text := truncRunes(fmt.Sprintf("%s (%s) · %s", a.Label, a.Archetype, label), avail)
+		if len([]rune(text)) > avail {
+			text = truncRunes(text, avail-1) // the ellipsis takes the last column
+		}
+		textW := ansi.StringWidth(text)
 		tint := ""
 		if r := m.roleInfo(a.Archetype); r != nil {
 			tint = r.Color
@@ -1046,7 +1141,14 @@ func (m Model) treeRows(width int) []string {
 		default:
 			text = styleDim.Render(text)
 		}
-		row := indent + marker + dot + " " + text
+		gap := width - len([]rune(indent)) - 4 - textW - rightW
+		if gap < 1 && rightW > 0 {
+			gap = 1
+		}
+		if gap < 0 {
+			gap = 0
+		}
+		row := indent + marker + dot + " " + text + strings.Repeat(" ", gap) + right
 		rows = append(rows, row)
 	}
 	if len(rows) == 0 {
