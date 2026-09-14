@@ -927,6 +927,7 @@ func (m Model) sidebarView(height int) string {
 	}
 	inner := sidebarWidth - 1 // rows start at the left edge; one column of right padding
 	rows := []string{
+		styleAccent.Bold(true).Render("Stavlos"),
 		styleDim.Render("session") + "  " + id,
 		styleDim.Render("model") + "    " + truncRunes(model, inner-9),
 		styleDim.Render("cost") + "     $" + fmtCost(m.totalCost()),
