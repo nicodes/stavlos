@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,10 +31,17 @@ type Credential struct {
 	Email     string `json:"email,omitempty"`
 }
 
-// Store reads and writes auth.json.
+// Store reads and writes auth.json. Reads are served from memory while the
+// file's modification time and size are unchanged, so the per-request token
+// lookups of a running daemon cost a stat, not a read and a JSON decode;
+// a login made by another process is still seen at once.
 type Store struct {
 	path string
 	mu   sync.Mutex
+
+	cached  map[string]Credential // nil until the first load
+	modTime time.Time
+	size    int64
 }
 
 // Open returns a store at path; the file need not exist yet.
@@ -42,44 +50,87 @@ func Open(path string) *Store { return &Store{path: path} }
 // Path returns the file path.
 func (s *Store) Path() string { return s.path }
 
+// load returns the stored credentials; callers hold mu and must not modify
+// the map (it is the cache).
 func (s *Store) load() (map[string]Credential, error) {
-	m := map[string]Credential{}
-	b, err := os.ReadFile(s.path)
+	st, err := os.Stat(s.path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return m, nil
+		s.remember(map[string]Credential{}, nil)
+		return s.cached, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if len(strings.TrimSpace(string(b))) == 0 {
-		return m, nil
+	if s.cached != nil && st.ModTime().Equal(s.modTime) && st.Size() == s.size {
+		return s.cached, nil
 	}
-	if err := json.Unmarshal(b, &m); err != nil {
-		return nil, fmt.Errorf("%s: %w", s.path, err)
+	b, err := os.ReadFile(s.path)
+	if err != nil {
+		return nil, err
 	}
+	m := map[string]Credential{}
+	if len(strings.TrimSpace(string(b))) > 0 {
+		if err := json.Unmarshal(b, &m); err != nil {
+			return nil, fmt.Errorf("%s: %w", s.path, err)
+		}
+	}
+	s.remember(m, st)
 	return m, nil
 }
 
+func (s *Store) remember(m map[string]Credential, st fs.FileInfo) {
+	s.cached, s.modTime, s.size = m, time.Time{}, -1
+	if st != nil {
+		s.modTime, s.size = st.ModTime(), st.Size()
+	}
+}
+
+// save writes m through a temporary file of its own (mode 0600 from the
+// start) and renames it into place, then caches it.
 func (s *Store) save(m map[string]Credential) error {
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
+	f, err := os.CreateTemp(dir, ".auth-*.json")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	tmp := f.Name()
+	_, err = f.Write(append(b, '\n'))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp, s.path)
+	}
+	if err != nil {
+		os.Remove(tmp)
+		s.cached = nil
+		return err
+	}
+	st, err := os.Stat(s.path)
+	if err != nil {
+		s.cached = nil
+		return nil
+	}
+	s.remember(m, st)
+	return nil
 }
 
-// All returns every stored credential keyed by provider id.
+// All returns a copy of every stored credential keyed by provider id.
 func (s *Store) All() (map[string]Credential, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.load()
+	m, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	return maps.Clone(m), nil
 }
 
 // Get returns the credential for a provider.
@@ -108,6 +159,7 @@ func (s *Store) Set(provider string, c Credential) error {
 	if c.Added == "" {
 		c.Added = time.Now().UTC().Format(time.RFC3339)
 	}
+	m = maps.Clone(m)
 	m[norm(provider)] = c
 	return s.save(m)
 }
@@ -120,6 +172,7 @@ func (s *Store) Remove(provider string) error {
 	if err != nil {
 		return err
 	}
+	m = maps.Clone(m)
 	delete(m, norm(provider))
 	return s.save(m)
 }
