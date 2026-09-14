@@ -27,6 +27,7 @@ type Env struct {
 	Partial   func(string)            // receives streamed partial output (bash); may be nil
 	MaxOutput int                     // truncate tool output beyond this many bytes (0 = 32k)
 	Mon       Monitors                // general monitors (background commands, watches, timers); nil if unavailable
+	Todo      Todos                   // the agent\'s todo list; nil if the preset does not include "todo"
 }
 
 // Monitors is implemented by the agent runtime: sources other than children
@@ -109,6 +110,7 @@ func Builtin() Set {
 		bashTool{}, readTool{}, patchTool{}, skillTool{}, responseTool{},
 		spawnTool{}, messageTool{}, cancelTool{}, killTool{}, statusTool{},
 		bashAsyncTool{}, bashKillTool{},
+		todoAddTool{}, todoUpdateTool{},
 	} {
 		s[t.Def().Name] = t
 	}
@@ -126,6 +128,9 @@ var MessagingNames = []string{"agent_message", "agent_response", "agent_status"}
 
 // AsyncNames are offered to every agent that has bash.
 var AsyncNames = []string{"bash_async", "bash_async_kill"}
+
+// TodoNames are the tools implied by "todo" in a preset's tool list.
+var TodoNames = []string{"todo_add", "todo_update"}
 
 func schema(props map[string]any, required ...string) json.RawMessage {
 	m := map[string]any{"type": "object", "properties": props}

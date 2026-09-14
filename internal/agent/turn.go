@@ -231,7 +231,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	}
 
 	cfg := a.s.Config()
-	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Mon: a.monitorsAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
+	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Mon: a.monitorsAPI(), Todo: a.todoAPIIfEnabled(), MaxOutput: cfg.Compaction.MaxToolOutput,
 		Partial: func(s string) {
 			a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
 		}}
@@ -315,6 +315,9 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	if contains(names, "bash") {
 		names = append(names, tools.AsyncNames...)
 	}
+	if contains(names, "todo") {
+		names = append(names, tools.TodoNames...)
+	}
 	// Every agent can message every other agent in its session; a message
 	// reaches its recipient at the next step, even mid-turn.
 	names = append(names, tools.MessagingNames...)
@@ -322,6 +325,16 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	can, why := a.s.canSpawn(a)
 	if contains(names, "bash") {
 		sb.WriteString("\n# Background jobs\nbash_async starts a command as a job and returns its id at once; when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. Use it for anything slow. bash_async_kill stops a job. There is no wait tool: when nothing more can be done until a result arrives, end your turn and you will be woken.\n")
+	}
+	if contains(names, "todo") {
+		sb.WriteString("\n# Todo list\nFor work with three or more steps, plan with todo_add (one item per step, short and imperative) and keep the list honest with todo_update: exactly one item in_progress while you work, done the moment a step is finished and verified, cancelled for steps you drop. Add a new item for a blocker rather than marking blocked work done. Skip the list for single-step or trivial requests. The human sees it beside your chat; it survives compaction, and its current state is:\n")
+		items := a.todosAPI().List()
+		if len(items) == 0 {
+			sb.WriteString("(empty)\n")
+		}
+		for _, it := range items {
+			fmt.Fprintf(&sb, "- %s [%s] %s\n", it.ID, it.Status, it.Text)
+		}
 	}
 	if a.canOrchestrate() {
 		sb.WriteString("\n# Delegation\n")

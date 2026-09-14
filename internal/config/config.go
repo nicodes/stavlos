@@ -141,6 +141,8 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "bash", Pattern: "*", Verb: policy.Ask},
 		policy.Rule{Tool: "bash_async", Pattern: "*", Verb: policy.Ask},
 		policy.Rule{Tool: "bash_async_kill", Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: "todo_add", Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: "todo_update", Pattern: "*", Verb: policy.Allow},
 		// Read-only shell commands are allowed by default so searching and
 		// looking around never prompts; anything that writes still asks.
 		policy.Rule{Tool: "bash", Pattern: "grep *", Verb: policy.Allow},
@@ -545,7 +547,7 @@ func builtinPresets() []Preset {
 		{
 			Name: "general", Layer: "builtin",
 			Description: "General-purpose engineer: reads, edits, runs, and delegates",
-			Tools:       []string{"bash", "read", "apply_patch", "skill"},
+			Tools:       []string{"bash", "read", "apply_patch", "skill", "todo"},
 			Spawn:       []string{"general"},
 			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.

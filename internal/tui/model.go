@@ -142,6 +142,7 @@ const (
 	focusPermission              // the permission tab: pending prompt box (y/n/a, question field)
 	focusAgents                  // the agents tab: live children
 	focusAsync                   // the async tab: running bash_async jobs
+	focusTodo                    // the todo tab: the selected agent's todo list
 	focusSidebar                 // the agent tree (↑/↓ enter)
 	focusTabs                    // the tab strip: ←/→ highlight a tab, enter opens its dialog
 	focusMeta                    // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
@@ -149,7 +150,7 @@ const (
 
 // tabFocuses are the tabs of the strip under the chat, left to right. They
 // are one stop in the tab cycle; ←/→ move between them.
-var tabFocuses = []focus{focusPermission, focusAgents, focusAsync}
+var tabFocuses = []focus{focusPermission, focusAgents, focusAsync, focusTodo}
 
 // isTab reports whether f is one of the strip's tabs.
 func isTab(f focus) bool {
@@ -452,7 +453,25 @@ func (m *Model) stripShown() bool {
 	if !m.isHome() {
 		return true
 	}
-	return m.currentPrompt() != nil || len(m.liveChildren())+len(m.runningJobs()) > 0
+	return m.currentPrompt() != nil || len(m.liveChildren())+len(m.runningJobs())+len(m.selectedTodos()) > 0
+}
+
+// selectedTodos returns the selected agent's todo list.
+func (m *Model) selectedTodos() []event.TodoItem {
+	if a := m.selectedAgent(); a != nil {
+		return a.Todos
+	}
+	return nil
+}
+
+// activeTodo is the text of the selected agent's in-progress item, "" if none.
+func (m *Model) activeTodo() string {
+	for _, it := range m.selectedTodos() {
+		if it.Status == "in_progress" {
+			return it.Text
+		}
+	}
+	return ""
 }
 
 // liveChildren returns the selected agent's live children, in tree order.
@@ -581,7 +600,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		}
 	case focusSidebar:
 		m.sbCursor = m.selected
-	case focusAgents, focusAsync:
+	case focusAgents, focusAsync, focusTodo:
 		m.agCursor = 0
 	case focusMeta:
 		m.metaSel = m.metaParts()[0] // always the leftmost part: YOLO while on, else the role
@@ -625,6 +644,25 @@ func (m *Model) agentsKey(msg tea.KeyMsg) tea.Cmd {
 // over the running jobs (informational only), esc closes.
 func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 	n := len(m.runningJobs())
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.closeDialog()
+	case key.Matches(msg, keys.SelUp), msg.String() == "k":
+		if n > 0 {
+			m.agCursor = ((m.agCursor-1)%n + n) % n
+		}
+	case key.Matches(msg, keys.SelDown), msg.String() == "j":
+		if n > 0 {
+			m.agCursor = (m.agCursor + 1) % n
+		}
+	}
+	return nil
+}
+
+// todoKey handles keys while the todo dialog is open: ↑/↓ (or j/k) move
+// over the items (informational only), esc closes.
+func (m *Model) todoKey(msg tea.KeyMsg) tea.Cmd {
+	n := len(m.selectedTodos())
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeDialog()
@@ -776,6 +814,8 @@ func (m *Model) tabRowCount() int {
 		return len(m.liveChildren())
 	case focusAsync:
 		return len(m.runningJobs())
+	case focusTodo:
+		return len(m.selectedTodos())
 	}
 	return 0
 }
@@ -1250,6 +1290,7 @@ func (m *Model) tabAt(x int) (focus, bool) {
 		{perm, focusPermission},
 		{fmt.Sprintf("agents (%d)", len(m.liveChildren())), focusAgents},
 		{fmt.Sprintf("async (%d)", len(m.runningJobs())), focusAsync},
+		{todoLabel(m.selectedTodos()), focusTodo},
 	}
 	x0 := 0
 	for _, l := range labels {
@@ -1419,6 +1460,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.agentsKey(msg)
 	case focusAsync:
 		return m.asyncKey(msg)
+	case focusTodo:
+		return m.todoKey(msg)
 	case focusSidebar:
 		return m.sidebarKey(msg)
 	case focusMeta:
@@ -2207,10 +2250,11 @@ func (m *Model) refreshViewport() {
 	if m.chatCursor < 0 {
 		m.chatCursor = 0
 	}
-	working, waiting, verb, stats := false, false, "", ""
+	working, waiting, verb, stats, active := false, false, "", "", ""
 	if t := m.transcripts[m.selectedID()]; t != nil && t.InTurn() {
 		working, verb = true, t.TurnVerb()
 		stats = turnStats(t.TurnStats(time.Now()))
+		active = m.activeTodo()
 	}
 	for _, p := range m.prompts {
 		if p.Agent == m.selectedID() {
@@ -2225,6 +2269,7 @@ func (m *Model) refreshViewport() {
 		Working:  working,
 		Waiting:  waiting,
 		Verb:     verb,
+		Active:   active,
 		Stats:    stats,
 		Expanded: m.expanded[m.selectedID()],
 		Cursor:   m.chatCursor,

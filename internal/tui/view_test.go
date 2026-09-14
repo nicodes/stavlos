@@ -463,13 +463,15 @@ func TestTabCyclesFocus(t *testing.T) {
 	}
 	press(&m, right)
 	press(&m, right)
-	press(&m, right) // already rightmost: stays
-	if m.focus != focusTabs || m.tabSel != 2 {
-		t.Fatalf("right x3: focus=%v sel=%d", m.focus, m.tabSel)
+	press(&m, right)
+	press(&m, right) // already rightmost (todo): stays
+	if m.focus != focusTabs || m.tabSel != 3 {
+		t.Fatalf("right x4: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, left)
+	press(&m, left)
 	if m.tabSel != 1 {
-		t.Fatalf("left: sel=%d", m.tabSel)
+		t.Fatalf("left left: sel=%d", m.tabSel)
 	}
 	// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -1225,6 +1227,87 @@ func TestFocusAlwaysLandsLeftmost(t *testing.T) {
 	press(&m, tab, tab, tab)
 	if m.focus != focusMeta || m.metaSel != metaYolo {
 		t.Fatalf("meta row with YOLO should land on YOLO: focus=%v sel=%v", m.focus, m.metaSel)
+	}
+}
+
+func TestTodoTabAndDialog(t *testing.T) {
+	m := sessionModel()
+	m.agents[0].Archetype = "general"
+	// empty: the tab reads (0) and its dialog says so
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "async (0) · todo (0)") {
+		t.Fatalf("strip:\n%s", sv)
+	}
+	m.focus = focusTodo
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "Todo (0)") || !strings.Contains(dv, "no todo items") {
+		t.Fatalf("empty todo dialog:\n%s", dv)
+	}
+	m.focus = focusInput
+	m.agents[0].Todos = []event.TodoItem{
+		{ID: "t1", Text: "Read the code", Status: "done"},
+		{ID: "t2", Text: "Fix the bug", Status: "in_progress"},
+		{ID: "t3", Text: "Run the tests", Status: "pending"},
+		{ID: "t4", Text: "Write docs", Status: "cancelled"},
+	}
+	// the count is done (finished + cancelled) over total
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo (2/4)") {
+		t.Fatalf("strip with items:\n%s", sv)
+	}
+	// tab → meta → strip, → x3 lands on todo, enter opens its dialog
+	tab := tea.KeyMsg{Type: tea.KeyTab}
+	right := tea.KeyMsg{Type: tea.KeyRight}
+	press(&m, tab, tab, right, right, right, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.focus != focusTodo {
+		t.Fatalf("focus %v", m.focus)
+	}
+	dv := stripANSI(m.tabDialog(120))
+	lines := strings.Split(dv, "\n")
+	// border, title, blank, four rows, border
+	if len(lines) != 8 || !strings.Contains(lines[1], "Todo (2/4)") || !strings.Contains(lines[1], "esc: close") {
+		t.Fatalf("todo dialog:\n%s", dv)
+	}
+	for i, want := range []string{"● Read the code", "◐ Fix the bug", "○ Run the tests", "× Write docs"} {
+		if !strings.Contains(lines[3+i], want) {
+			t.Fatalf("row %d should read %q:\n%s", i, want, dv)
+		}
+	}
+	if !strings.Contains(lines[3], "▸") {
+		t.Fatalf("the cursor should start on the first row:\n%s", dv)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown})
+	if m.agCursor != 1 {
+		t.Fatalf("↓ should move the cursor: %d", m.agCursor)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.focus != focusTabs || m.tabSel != 3 {
+		t.Fatalf("esc should return to the strip on todo: focus=%v sel=%d", m.focus, m.tabSel)
+	}
+	// clicking the todo label on the strip opens the dialog
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	lay := m.rows()
+	x := len("permission (0) · agents (0) · async (0) · ") + 1
+	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.strip, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.strip, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	m = nm.(Model)
+	if m.focus != focusTodo {
+		t.Fatalf("clicking the todo label should open its dialog: %v", m.focus)
+	}
+	// the turn indicator names the in-progress item
+	m.setFocus(focusInput)
+	tr := m.transcript("a")
+	tr.Apply(event.Event{Agent: "a", Type: event.TurnStarted, Payload: event.MustPayload(event.TurnPayload{Turn: 1})})
+	m.refreshViewport()
+	if v := stripANSI(m.vp.View()); !strings.Contains(v, "… · Fix the bug") {
+		t.Fatalf("indicator should carry the in-progress item:\n%s", v)
+	}
+	// chat lines for the tools
+	if got := toolArg("todo_update", []byte(`{"id":"t2","status":"done"}`)); got != "t2 → done" {
+		t.Fatalf("todo_update arg %q", got)
+	}
+	if got := toolArg("todo_add", []byte(`{"text":"Run the tests"}`)); got != "Run the tests" {
+		t.Fatalf("todo_add arg %q", got)
+	}
+	if g, _ := toolGlyph("todo_add"); g != glyphToolTodo {
+		t.Fatalf("todo glyph %q", g)
 	}
 }
 
