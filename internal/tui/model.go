@@ -334,172 +334,36 @@ func (m Model) Init() tea.Cmd {
 
 // Update is the single-threaded state machine.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
+	cmds, quit := m.update(msg)
+	if quit {
+		return m, tea.Quit
+	}
+	cmds = append(cmds, m.ensureFocus())
+	m.layout()
+	return m, tea.Batch(cmds...)
+}
 
+// update applies one message; quit reports a fatal condition (m.fatal says
+// which).
+func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
-
 	case tea.KeyMsg:
 		cmds = append(cmds, m.handleKey(msg))
-
 	case tea.MouseMsg:
 		var cmd tea.Cmd
 		m.vp, cmd = m.vp.Update(msg)
 		if m.focus != focusChat {
 			m.follow = m.vp.AtBottom()
 		}
-		cmds = append(cmds, cmd)
-		cmds = append(cmds, m.mouse(msg))
-
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.sp, cmd = m.sp.Update(msg)
-		cmds = append(cmds, cmd)
-		// The "working…" indicator carries the spinner, so redraw mid-turn.
-		if t := m.transcripts[m.selectedID()]; t != nil && (t.InTurn() || t.Running()) {
-			m.refreshViewport()
-		}
-
-	case placeholderTickMsg:
-		m.input.Placeholder = placeholders[placeholderIndex(time.Now())]
-		cmds = append(cmds, placeholderTickCmd())
-
-	case compactTickMsg:
-		if m.anyCompacting() {
-			if t := m.transcripts[m.selectedID()]; t != nil && t.Compacting() {
-				m.refreshViewport()
-			}
-			cmds = append(cmds, compactTickCmd())
-		} else {
-			m.compactTick = false
-		}
-
-	case reconcileMsg:
-		if msg.err != nil {
-			m.fatal = fmt.Errorf("reconcile: %w", msg.err)
-			return m, tea.Quit
-		}
-		m.session = cleanSession(msg.res.Session)
-		m.reconciled = true
-		m.setAgents(msg.res.Agents)
-		for _, p := range msg.res.Prompts {
-			m.upsertPrompt(p)
-		}
-		m.replayTo = msg.res.Seq
-		m.loading = msg.res.Seq > 0
-		cmds = append(cmds, subscribeCmd(m.ctx, m.c, m.sessionID, 0), sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsHistory), rolesCmd(m.ctx, m.c, m.sessionID, true))
-
-	case subscribedMsg:
-		if msg.err != nil {
-			m.fatal = fmt.Errorf("subscribe: %w", msg.err)
-			return m, tea.Quit
-		}
-
-	case eventMsg:
-		cmds = append(cmds, m.applyEvent(msg.ev))
-
-	case streamMsg:
-		if msg.n.Session == "" || msg.n.Session == m.sessionID {
-			m.transcript(msg.n.Agent).ApplyStream(msg.n)
-			if msg.n.Agent == m.selectedID() {
-				m.refreshViewport()
-			}
-		}
-
-	case promptMsg:
-		cmds = append(cmds, m.applyPromptNotification(msg.n))
-
-	case disconnectedMsg:
-		m.fatal = msg.err
-		m.status, m.statusErr = "daemon disconnected", true
-		return m, tea.Quit
-
-	case treeMsg:
-		if msg.err != nil {
-			cmds = append(cmds, m.setStatus("tree: "+msg.err.Error(), true))
-		} else {
-			m.setAgents(msg.agents)
-			if m.sidebarVisible() {
-				cmds = append(cmds, sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsNav))
-			}
-		}
-
-	case treeTickMsg:
-		m.treeTimer = false
-		cmds = append(cmds, treeCmd(m.ctx, m.c, m.sessionID))
-
-	case resultMsg:
-		if msg.err != nil {
-			cmds = append(cmds, m.setStatus(msg.err.Error(), true))
-		} else if msg.ok != "" {
-			cmds = append(cmds, m.setStatus(msg.ok, false))
-		}
-
-	case promptReplyMsg:
-		if m.promptBusy == msg.id {
-			m.promptBusy = ""
-		}
-		switch {
-		case msg.err == nil:
-			m.removePrompt(msg.id)
-		case isConflict(msg.err):
-			delete(m.claimedByUs, msg.id)
-			if i := m.findPrompt(msg.id); i >= 0 && m.prompts[i].ClaimedBy == "" {
-				m.prompts[i].ClaimedBy = "?"
-			}
-			cmds = append(cmds, m.setStatus("claimed by another client", true))
-		default:
-			delete(m.claimedByUs, msg.id)
-			cmds = append(cmds, m.setStatus("prompt: "+msg.err.Error(), true))
-		}
-
-	case clearStatusMsg:
-		if msg.token == m.statusToken {
-			m.status = ""
-		}
-
-	case providersMsg:
-		cmds = append(cmds, m.onProviders(msg))
-
-	case loginStartMsg:
-		cmds = append(cmds, m.onLoginStart(msg))
-
-	case loginDoneMsg:
-		cmds = append(cmds, m.onLoginDone(msg))
-
-	case rolesMsg:
-		if msg.err == nil {
-			m.presets = msg.roles
-		}
-		if !msg.quiet {
-			cmds = append(cmds, m.onRoles(msg))
-		}
-	case variantsMsg:
-		cmds = append(cmds, m.onVariants(msg))
-	case sessionsMsg:
-		msg.sessions = cleanSessions(msg.sessions)
-		switch msg.purpose {
-		case sessionsNav:
-			if msg.err == nil {
-				m.navSessions = resumable(msg.sessions, m.sessionID)
-			}
-		case sessionsHistory:
-			if msg.err == nil {
-				m.seedHistory(msg.sessions)
-			}
-		case sessionsPicker:
-			cmds = append(cmds, m.onSessions(msg))
-		}
-	case switchedMsg:
-		if msg.err != nil {
-			cmds = append(cmds, m.setStatus("resume: "+msg.err.Error(), true))
-		} else {
-			cmds = append(cmds, m.bindSession(cleanSession(msg.info)))
-		}
-	case modelsMsg:
-		cmds = append(cmds, m.onModels(msg))
-
+		cmds = append(cmds, cmd, m.mouse(msg))
+	case spinner.TickMsg, placeholderTickMsg, compactTickMsg, treeTickMsg, clearStatusMsg:
+		cmds = append(cmds, m.onTick(msg))
+	case reconcileMsg, subscribedMsg, eventMsg, streamMsg, promptMsg, disconnectedMsg, treeMsg, resultMsg, promptReplyMsg:
+		return m.onDaemon(msg)
+	case providersMsg, loginStartMsg, loginDoneMsg, rolesMsg, variantsMsg, sessionsMsg, switchedMsg, modelsMsg:
+		cmds = append(cmds, m.onListed(msg))
 	default:
 		// Cursor blink and other component-internal messages.
 		var cmd tea.Cmd
@@ -511,10 +375,173 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.ov.update(msg))
 		}
 	}
+	return cmds, false
+}
 
-	cmds = append(cmds, m.ensureFocus())
-	m.layout()
-	return m, tea.Batch(cmds...)
+// onTick handles the timers: the spinner, the placeholder cycle, the
+// compaction bar, the debounced tree refresh and the status line expiry.
+func (m *Model) onTick(msg tea.Msg) tea.Cmd {
+	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.sp, cmd = m.sp.Update(msg)
+		// The "working…" indicator carries the spinner, so redraw mid-turn.
+		if t := m.transcripts[m.selectedID()]; t != nil && (t.InTurn() || t.Running()) {
+			m.refreshViewport()
+		}
+		return cmd
+	case placeholderTickMsg:
+		m.input.Placeholder = placeholders[placeholderIndex(time.Now())]
+		return placeholderTickCmd()
+	case compactTickMsg:
+		if !m.anyCompacting() {
+			m.compactTick = false
+			return nil
+		}
+		if t := m.transcripts[m.selectedID()]; t != nil && t.Compacting() {
+			m.refreshViewport()
+		}
+		return compactTickCmd()
+	case treeTickMsg:
+		m.treeTimer = false
+		return treeCmd(m.ctx, m.c, m.sessionID)
+	case clearStatusMsg:
+		if msg.token == m.statusToken {
+			m.status = ""
+		}
+	}
+	return nil
+}
+
+// onDaemon handles what the daemon sends: the reconcile snapshot, events,
+// streams, prompts, tree refreshes and call results. quit reports a lost
+// connection or a failed attach.
+func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
+	switch msg := msg.(type) {
+	case reconcileMsg:
+		if msg.err != nil {
+			m.fatal = fmt.Errorf("reconcile: %w", msg.err)
+			return nil, true
+		}
+		m.session = cleanSession(msg.res.Session)
+		m.reconciled = true
+		m.setAgents(msg.res.Agents)
+		for _, p := range msg.res.Prompts {
+			m.upsertPrompt(p)
+		}
+		m.replayTo = msg.res.Seq
+		m.loading = msg.res.Seq > 0
+		return []tea.Cmd{subscribeCmd(m.ctx, m.c, m.sessionID, 0), sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsHistory), rolesCmd(m.ctx, m.c, m.sessionID, true)}, false
+	case subscribedMsg:
+		if msg.err != nil {
+			m.fatal = fmt.Errorf("subscribe: %w", msg.err)
+			return nil, true
+		}
+	case eventMsg:
+		return []tea.Cmd{m.applyEvent(msg.ev)}, false
+	case streamMsg:
+		if msg.n.Session == "" || msg.n.Session == m.sessionID {
+			m.transcript(msg.n.Agent).ApplyStream(msg.n)
+			if msg.n.Agent == m.selectedID() {
+				m.refreshViewport()
+			}
+		}
+	case promptMsg:
+		return []tea.Cmd{m.applyPromptNotification(msg.n)}, false
+	case disconnectedMsg:
+		m.fatal = msg.err
+		m.status, m.statusErr = "daemon disconnected", true
+		return nil, true
+	case treeMsg:
+		if msg.err != nil {
+			return []tea.Cmd{m.setStatus("tree: "+msg.err.Error(), true)}, false
+		}
+		m.setAgents(msg.agents)
+		if m.sidebarVisible() {
+			return []tea.Cmd{sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsNav)}, false
+		}
+	case resultMsg:
+		if msg.err != nil {
+			return []tea.Cmd{m.setStatus(msg.err.Error(), true)}, false
+		}
+		if msg.ok != "" {
+			return []tea.Cmd{m.setStatus(msg.ok, false)}, false
+		}
+	case promptReplyMsg:
+		return []tea.Cmd{m.onPromptReply(msg)}, false
+	}
+	return nil, false
+}
+
+// onPromptReply settles an answer the daemon accepted or refused.
+func (m *Model) onPromptReply(msg promptReplyMsg) tea.Cmd {
+	if m.promptBusy == msg.id {
+		m.promptBusy = ""
+	}
+	switch {
+	case msg.err == nil:
+		m.removePrompt(msg.id)
+	case isConflict(msg.err):
+		delete(m.claimedByUs, msg.id)
+		if i := m.findPrompt(msg.id); i >= 0 && m.prompts[i].ClaimedBy == "" {
+			m.prompts[i].ClaimedBy = "?"
+		}
+		return m.setStatus("claimed by another client", true)
+	default:
+		delete(m.claimedByUs, msg.id)
+		return m.setStatus("prompt: "+msg.err.Error(), true)
+	}
+	return nil
+}
+
+// onListed handles list and sign-in results: providers, logins, roles,
+// variants, sessions, a resumed session and models.
+func (m *Model) onListed(msg tea.Msg) tea.Cmd {
+	switch msg := msg.(type) {
+	case providersMsg:
+		return m.onProviders(msg)
+	case loginStartMsg:
+		return m.onLoginStart(msg)
+	case loginDoneMsg:
+		return m.onLoginDone(msg)
+	case rolesMsg:
+		if msg.err == nil {
+			m.presets = msg.roles
+		}
+		if !msg.quiet {
+			return m.onRoles(msg)
+		}
+	case variantsMsg:
+		return m.onVariants(msg)
+	case sessionsMsg:
+		return m.onSessionsListed(msg)
+	case switchedMsg:
+		if msg.err != nil {
+			return m.setStatus("resume: "+msg.err.Error(), true)
+		}
+		return m.bindSession(cleanSession(msg.info))
+	case modelsMsg:
+		return m.onModels(msg)
+	}
+	return nil
+}
+
+// onSessionsListed routes a session list to what asked for it.
+func (m *Model) onSessionsListed(msg sessionsMsg) tea.Cmd {
+	msg.sessions = cleanSessions(msg.sessions)
+	switch msg.purpose {
+	case sessionsNav:
+		if msg.err == nil {
+			m.navSessions = resumable(msg.sessions, m.sessionID)
+		}
+	case sessionsHistory:
+		if msg.err == nil {
+			m.seedHistory(msg.sessions)
+		}
+	case sessionsPicker:
+		return m.onSessions(msg)
+	}
+	return nil
 }
 
 // --- focus ---
@@ -2327,134 +2354,17 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	if ev.Seq > m.seq {
 		m.seq = ev.Seq
 	}
-	var cmds []tea.Cmd
-
-	target := ev.Agent
-	switch ev.Type {
-	case event.AgentSpawned:
-		var p event.AgentSpawnedPayload
-		if ev.Decode(&p) == nil && p.ID != "" {
-			target = p.ID
-			if m.spawned == nil {
-				m.spawned = map[string]time.Time{}
-			}
-			m.spawned[p.ID] = ev.Time
-			if !m.loading && m.findAgent(p.ID) < 0 {
-				// Placeholder until the debounced tree refresh lands.
-				m.agents = append(m.agents, protocol.AgentInfo{
-					ID: p.ID, Session: ev.Session, Parent: p.Parent, Archetype: p.Archetype,
-					Label: p.Label, Model: p.Model, Depth: p.Depth, State: protocol.AgentIdle,
-				})
-			}
-			if p.Parent != "" {
-				// The parent's agent_create line tracks this child's life.
-				if m.parentOf == nil {
-					m.parentOf = map[string]string{}
-				}
-				m.parentOf[p.ID] = p.Parent
-				m.transcript(p.Parent).ChildSpawned(p.ID)
-				if !m.loading && p.Parent == m.selectedID() {
-					m.refreshViewport()
-				}
-			}
-		}
-	case event.AgentKilled:
-		if parent := m.parentOf[ev.Agent]; parent != "" {
-			m.transcript(parent).ChildState(ev.Agent, protocol.AgentKilled)
-		}
-		for _, t := range m.transcripts { // questions to it will never be answered
-			t.AskerGone(ev.Agent)
-		}
-		if !m.loading {
-			m.refreshViewport()
-		}
-	case event.PromptQueued:
-		var p event.TextPayload
-		if m.loading && ev.Decode(&p) == nil && strings.HasPrefix(p.Source, "human:") && p.Text != "" {
-			if n := len(m.history); n == 0 || m.history[n-1] != p.Text {
-				m.history = append(m.history, p.Text)
-			}
-			m.histIdx = len(m.history)
-		}
-	case event.CompactionStarted: // the chat item's bar animates until the result lands
-		if !m.loading && !m.compactTick {
-			m.compactTick = true
-			cmds = append(cmds, compactTickCmd())
-		}
-	case event.SessionModelChanged:
-		var p event.ModelChangedPayload
-		if ev.Decode(&p) == nil {
-			m.session.Model = p.Model
-		}
-	case event.SessionYoloChanged: // legacy logs
-		var p event.YoloPayload
-		if ev.Decode(&p) == nil {
-			m.session.Mode = protocol.ModeAsk
-			if p.On {
-				m.session.Mode = protocol.ModeYolo
-			}
-		}
-		for _, a := range m.agents {
-			m.transcript(a.ID).Apply(ev)
-		}
-		if !m.loading {
-			m.refreshViewport()
-		}
-	case event.SessionModeChanged:
-		var p event.ModePayload
-		if ev.Decode(&p) == nil {
-			m.session.Mode = p.Mode
-		}
-		// A session-wide switch with no agent of its own: note it in every
-		// agent's chat, like model and role changes.
-		for _, a := range m.agents {
-			m.transcript(a.ID).Apply(ev)
-		}
-		if !m.loading {
-			m.refreshViewport()
-		}
-	case event.TurnEnded:
-		var p event.TurnEndedPayload
-		if !m.loading && ev.Decode(&p) == nil && p.Reason == "error" &&
-			(strings.Contains(p.Error, "not connected") || strings.Contains(p.Error, "/provider")) {
-			cmds = append(cmds, m.setStatus("provider not connected — run /providers", true))
-		}
-	}
-
-	// The parent's agent_create line follows the child's turns: yellow while
-	// a turn runs, grey between turns.
-	if parent := m.parentOf[ev.Agent]; parent != "" {
-		switch ev.Type {
-		case event.TurnStarted:
-			m.transcript(parent).ChildState(ev.Agent, protocol.AgentRunning)
-		case event.TurnEnded, event.TurnAborted:
-			m.transcript(parent).ChildState(ev.Agent, protocol.AgentIdle)
-		}
-	}
+	target, cmds := m.eventSideEffects(ev)
+	m.followChild(ev)
 	if target != "" {
 		m.transcript(target).Apply(ev)
 		if !m.loading && target == m.selectedID() {
 			m.refreshViewport()
 		}
 	}
-
-	switch ev.Type {
-	case event.AgentSpawned, event.AgentFinished, event.AgentKilled,
-		event.TurnStarted, event.TurnEnded, event.Usage,
-		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.SessionModelChanged,
-		event.MonitorStarted, event.MonitorFired, event.MonitorStopped,
-		event.AgentDirAdded, event.AgentDirRemoved, event.TodoChanged,
-		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.ResponseReceived: // the tabs read these off the tree
-		if !m.loading {
-			cmds = append(cmds, m.markTreeDirty())
-		}
-	case event.ToolCallFinished: // a message or task just put another agent on the awaiting list
-		var p event.ToolFinishedPayload
-		if ev.Decode(&p) == nil && (toolname.Canonical(p.Name) == toolname.AgentMessage || toolname.Canonical(p.Name) == toolname.AgentCreate) && !m.loading {
-			cmds = append(cmds, m.markTreeDirty())
-		}
+	if !m.loading && changesTree(ev) {
+		cmds = append(cmds, m.markTreeDirty())
 	}
-
 	if m.loading && ev.Seq >= m.replayTo {
 		m.loading = false
 		m.refreshViewport()
@@ -2465,6 +2375,163 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 		}
 	}
 	return tea.Batch(cmds...)
+}
+
+// eventSideEffects applies what an event changes outside its transcript and
+// returns the agent whose transcript shows it.
+func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd) {
+	target = ev.Agent
+	switch ev.Type {
+	case event.AgentSpawned:
+		if id := m.onAgentSpawned(ev); id != "" {
+			target = id
+		}
+	case event.AgentKilled:
+		m.onAgentKilled(ev.Agent)
+	case event.PromptQueued:
+		m.rememberPrompt(ev)
+	case event.CompactionStarted: // the chat item's bar animates until the result lands
+		if !m.loading && !m.compactTick {
+			m.compactTick = true
+			cmds = append(cmds, compactTickCmd())
+		}
+	case event.SessionModelChanged:
+		var p event.ModelChangedPayload
+		if ev.Decode(&p) == nil {
+			m.session.Model = p.Model
+		}
+	case event.SessionYoloChanged, event.SessionModeChanged:
+		m.onModeChanged(ev)
+	case event.TurnEnded:
+		var p event.TurnEndedPayload
+		if !m.loading && ev.Decode(&p) == nil && p.Reason == "error" &&
+			(strings.Contains(p.Error, "not connected") || strings.Contains(p.Error, "/provider")) {
+			cmds = append(cmds, m.setStatus("provider not connected — run /providers", true))
+		}
+	}
+	return target, cmds
+}
+
+// onAgentSpawned records a new agent (a placeholder row until the tree
+// refresh lands) and ties it to its parent's agent_create line. It returns
+// the new agent's id, "" when the payload is unusable.
+func (m *Model) onAgentSpawned(ev event.Event) string {
+	var p event.AgentSpawnedPayload
+	if ev.Decode(&p) != nil || p.ID == "" {
+		return ""
+	}
+	if m.spawned == nil {
+		m.spawned = map[string]time.Time{}
+	}
+	m.spawned[p.ID] = ev.Time
+	if !m.loading && m.findAgent(p.ID) < 0 {
+		// Placeholder until the debounced tree refresh lands.
+		m.agents = append(m.agents, protocol.AgentInfo{
+			ID: p.ID, Session: ev.Session, Parent: p.Parent, Archetype: p.Archetype,
+			Label: p.Label, Model: p.Model, Depth: p.Depth, State: protocol.AgentIdle,
+		})
+	}
+	if p.Parent != "" {
+		// The parent's agent_create line tracks this child's life.
+		if m.parentOf == nil {
+			m.parentOf = map[string]string{}
+		}
+		m.parentOf[p.ID] = p.Parent
+		m.transcript(p.Parent).ChildSpawned(p.ID)
+		if !m.loading && p.Parent == m.selectedID() {
+			m.refreshViewport()
+		}
+	}
+	return p.ID
+}
+
+// onAgentKilled reddens the killed agent's agent_create line and every
+// question asked of it: no answer is coming.
+func (m *Model) onAgentKilled(id string) {
+	if parent := m.parentOf[id]; parent != "" {
+		m.transcript(parent).ChildState(id, protocol.AgentKilled)
+	}
+	for _, t := range m.transcripts {
+		t.AskerGone(id)
+	}
+	if !m.loading {
+		m.refreshViewport()
+	}
+}
+
+// rememberPrompt replays a human prompt into the input history.
+func (m *Model) rememberPrompt(ev event.Event) {
+	var p event.TextPayload
+	if !m.loading || ev.Decode(&p) != nil || !strings.HasPrefix(p.Source, "human:") || p.Text == "" {
+		return
+	}
+	if n := len(m.history); n == 0 || m.history[n-1] != p.Text {
+		m.history = append(m.history, p.Text)
+	}
+	m.histIdx = len(m.history)
+}
+
+// onModeChanged records the session's permission mode and notes the switch
+// in every agent's chat, like model and role changes: the event has no
+// agent of its own.
+func (m *Model) onModeChanged(ev event.Event) {
+	if ev.Type == event.SessionYoloChanged { // legacy logs
+		var p event.YoloPayload
+		if ev.Decode(&p) == nil {
+			m.session.Mode = protocol.ModeAsk
+			if p.On {
+				m.session.Mode = protocol.ModeYolo
+			}
+		}
+	} else {
+		var p event.ModePayload
+		if ev.Decode(&p) == nil {
+			m.session.Mode = p.Mode
+		}
+	}
+	for _, a := range m.agents {
+		m.transcript(a.ID).Apply(ev)
+	}
+	if !m.loading {
+		m.refreshViewport()
+	}
+}
+
+// followChild keeps the parent's agent_create line in step with the
+// child's turns: yellow while a turn runs, grey between turns.
+func (m *Model) followChild(ev event.Event) {
+	parent := m.parentOf[ev.Agent]
+	if parent == "" {
+		return
+	}
+	switch ev.Type {
+	case event.TurnStarted:
+		m.transcript(parent).ChildState(ev.Agent, protocol.AgentRunning)
+	case event.TurnEnded, event.TurnAborted:
+		m.transcript(parent).ChildState(ev.Agent, protocol.AgentIdle)
+	}
+}
+
+// changesTree reports whether ev changes what the tabs read off the agent
+// tree, so the tree needs refreshing.
+func changesTree(ev event.Event) bool {
+	switch ev.Type {
+	case event.AgentSpawned, event.AgentFinished, event.AgentKilled,
+		event.TurnStarted, event.TurnEnded, event.Usage,
+		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.SessionModelChanged,
+		event.MonitorStarted, event.MonitorFired, event.MonitorStopped,
+		event.AgentDirAdded, event.AgentDirRemoved, event.TodoChanged,
+		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.ResponseReceived:
+		return true
+	case event.ToolCallFinished: // a message or task just put another agent on the awaiting list
+		var p event.ToolFinishedPayload
+		if ev.Decode(&p) != nil {
+			return false
+		}
+		name := toolname.Canonical(p.Name)
+		return name == toolname.AgentMessage || name == toolname.AgentCreate
+	}
+	return false
 }
 
 // anyCompacting reports whether some agent's chat shows a running compaction.
