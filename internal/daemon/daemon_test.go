@@ -166,6 +166,22 @@ func (h *harness) waitFor(t event.Type, agent string) event.Event {
 	}
 }
 
+// waitTree polls the agent tree until cond holds (or 10 s pass).
+func (h *harness) waitTree(session string, cond func([]protocol.AgentInfo) bool) []protocol.AgentInfo {
+	h.t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	var agents []protocol.AgentInfo
+	for time.Now().Before(deadline) {
+		agents, _ = h.c.Tree(context.Background(), session)
+		if cond(agents) {
+			return agents
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	h.t.Fatalf("tree never settled: %+v\nevents so far:\n%s", agents, strings.Join(h.recentEvents(), "\n"))
+	return nil
+}
+
 func setupConfig(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
@@ -473,11 +489,11 @@ func TestChildResponseWakesParent(t *testing.T) {
 		t.Fatalf("parent was not woken by the response: %+v", te)
 	}
 	// the child is still there, idle, ready for a follow-up; the parent is
-	// plainly idle again now that the answer landed
-	agents, _ = h.c.Tree(ctx, s.ID)
-	if len(agents) != 2 || agents[1].State != "idle" || agents[0].State != "idle" {
-		t.Fatalf("after answering: %+v", agents)
-	}
+	// plainly idle again now that the answer landed. The child's own turn
+	// ends after its agent_response call returns, so wait for both.
+	h.waitTree(s.ID, func(agents []protocol.AgentInfo) bool {
+		return len(agents) == 2 && agents[1].State == "idle" && agents[0].State == "idle"
+	})
 }
 
 func TestShellBackgroundWakes(t *testing.T) {
