@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"testing"
@@ -73,6 +74,8 @@ func TestWebFetch(t *testing.T) {
 			http.Redirect(w, r, "https://example.org/elsewhere", http.StatusFound)
 		case "/here":
 			http.Redirect(w, r, "/page", http.StatusFound)
+		case "/downgrade":
+			http.Redirect(w, r, "http://"+r.Host+"/page", http.StatusFound)
 		case "/bin":
 			w.Header().Set("Content-Type", "application/octet-stream")
 			_, _ = w.Write([]byte{0, 1, 2, 3})
@@ -94,8 +97,19 @@ func TestWebFetch(t *testing.T) {
 	ctx := context.Background()
 	env := &Env{Dir: t.TempDir()}
 	sh := Builtin()["web_fetch"]
-	if sh.PolicyArg(json.RawMessage(`{"url":" https://go.dev/x "}`)) != "https://go.dev/x" {
-		t.Fatal("policy arg should be the url")
+	// Policy sees the URL as it will be fetched, whatever its spelling.
+	for in, want := range map[string]string{
+		` https://go.dev/x `:                                     "https://go.dev/x",
+		`http://x.slack.com/y`:                                   "https://x.slack.com/y",
+		`HTTPS://X.SLACK.COM/y`:                                  "https://x.slack.com/y",
+		`https://user:pw@x.slack.com:443/y#frag`:                 "https://x.slack.com/y",
+		`x.slack.com/y`:                                          "https://x.slack.com/y",
+		`https://github.com/nicodes/stavlos/blob/main/README.md`: "https://raw.githubusercontent.com/nicodes/stavlos/main/README.md",
+		`ftp://x/y`:                                              "ftp://x/y", // unparseable as a fetch: matched as written, then refused
+	} {
+		if got := sh.PolicyArg(json.RawMessage(`{"url":"` + in + `"}`)); got != want {
+			t.Errorf("PolicyArg(%q) = %q want %q", in, got, want)
+		}
 	}
 	r := sh.Run(ctx, json.RawMessage(`{"url":"`+srv.URL+`/page"}`), env)
 	if r.IsError || !strings.HasPrefix(r.Output, "[web_fetch: "+srv.URL+"/page · html→markdown · ") || !strings.Contains(r.Output, "Untrusted content") || !strings.Contains(r.Output, "# Go modules") {
@@ -129,6 +143,9 @@ func TestWebFetch(t *testing.T) {
 	if r = sh.Run(ctx, json.RawMessage(`{"url":"`+srv.URL+`/away"}`), env); !r.IsError || !strings.Contains(r.Output, "redirects to another host: https://example.org/elsewhere") {
 		t.Fatalf("cross-host redirect: %+v", r)
 	}
+	if r = sh.Run(ctx, json.RawMessage(`{"url":"`+srv.URL+`/downgrade"}`), env); !r.IsError || !strings.Contains(r.Output, "plain http") {
+		t.Fatalf("https→http redirect: %+v", r)
+	}
 	// binary, 404, bad scheme
 	if r = sh.Run(ctx, json.RawMessage(`{"url":"`+srv.URL+`/bin"}`), env); !r.IsError || !strings.Contains(r.Output, "binary") {
 		t.Fatalf("binary: %+v", r)
@@ -149,9 +166,12 @@ func TestWebFetch(t *testing.T) {
 		t.Fatalf("local address: %+v hits %d→%d", r, before, hits)
 	}
 	// http is upgraded, credentials dropped; a GitHub blob becomes the raw file
-	u, err := parseWebURL("http://user:pw@Example.com/a?b=c#frag")
-	if err != nil || u.String() != "https://Example.com/a?b=c" {
+	u, err := parseWebURL("http://user:pw@Example.com:443/a?b=c#frag")
+	if err != nil || u.String() != "https://example.com/a?b=c" {
 		t.Fatalf("normalise: %v %v", u, err)
+	}
+	if u, _ = parseWebURL("https://Example.com:8443/a"); u.String() != "https://example.com:8443/a" {
+		t.Fatalf("non-default port kept: %v", u)
 	}
 	if u, _ = parseWebURL("https://github.com/nicodes/stavlos/blob/main/README.md"); u.String() != "https://raw.githubusercontent.com/nicodes/stavlos/main/README.md" {
 		t.Fatalf("blob → raw: %v", u)
@@ -161,7 +181,26 @@ func TestWebFetch(t *testing.T) {
 	}
 }
 
+func TestPublicIP(t *testing.T) {
+	for _, s := range []string{"8.8.8.8", "1.1.1.1", "93.184.216.34", "2606:4700::1111", "2a00:1450:4001:80b::200e"} {
+		if !publicIP(netip.MustParseAddr(s)) {
+			t.Errorf("%s should be public", s)
+		}
+	}
+	for _, s := range []string{
+		"127.0.0.1", "127.8.8.8", "10.1.2.3", "172.16.0.1", "172.31.255.255", "192.168.1.1", "169.254.169.254", "0.0.0.0", "0.1.2.3",
+		"100.64.0.1", "100.127.255.254", "192.0.0.1", "198.18.0.1", "198.19.255.255", "224.0.0.1", "240.0.0.1", "255.255.255.255",
+		"::1", "::", "fe80::1", "fc00::1", "fd12::1", "ff02::1", "::ffff:127.0.0.1", "::ffff:10.0.0.1", "::ffff:169.254.169.254",
+		"64:ff9b::a00:1", "100::1", "2001:db8::1",
+	} {
+		if publicIP(netip.MustParseAddr(s)) {
+			t.Errorf("%s should not be public", s)
+		}
+	}
+}
+
 func TestWebSearch(t *testing.T) {
+	t.Setenv("STAVLOS_WEB_ALLOW_LOCAL", "1") // the address check applies to search too
 	var gotAuth, gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("X-Subscription-Token") + r.Header.Get("Authorization") + r.Header.Get("x-api-key")
@@ -177,6 +216,8 @@ func TestWebSearch(t *testing.T) {
 			_, _ = w.Write([]byte(`{"results":[{"title":"E","url":"https://e","text":"exa text"}]}`))
 		case "/fail":
 			http.Error(w, `{"error":"bad key"}`, http.StatusUnauthorized)
+		case "/redir":
+			http.Redirect(w, r, "/brave", http.StatusFound)
 		case "/mcp":
 			w.Header().Set("Content-Type", "text/event-stream")
 			text := "Title: charmbracelet/bubbletea\nURL: https://github.com/charmbracelet/bubbletea/\nPublished: 2020-01-10\nAuthor: charmbracelet\nHighlights:\nGitHub - bubbletea\n...\n# Bubble Tea\nThe fun, functional way to build terminal apps\n\n---\n\nTitle: Second\nURL: https://example.com/2\nHighlights:\nsecond text"
@@ -220,5 +261,16 @@ func TestWebSearch(t *testing.T) {
 	}
 	if r = ws.Run(ctx, json.RawMessage(`{"query":"go"}`), &Env{Search: SearchConfig{Provider: "bing", APIKey: "x"}}); !r.IsError || !strings.Contains(r.Output, "unknown search provider") {
 		t.Fatalf("unknown provider: %+v", r)
+	}
+	// A search backend that redirects is refused (the key would travel with it).
+	searchEndpoints["brave"] = srv.URL + "/redir"
+	if r = ws.Run(ctx, json.RawMessage(`{"query":"go"}`), &Env{Search: SearchConfig{Provider: "brave", APIKey: "k"}}); !r.IsError || !strings.Contains(r.Output, "redirect") {
+		t.Fatalf("redirect: %+v", r)
+	}
+	// Without the local override the address check stops the call.
+	t.Setenv("STAVLOS_WEB_ALLOW_LOCAL", "")
+	searchEndpoints["brave"] = srv.URL + "/brave"
+	if r = ws.Run(ctx, json.RawMessage(`{"query":"go"}`), &Env{Search: SearchConfig{Provider: "brave", APIKey: "k"}}); !r.IsError || !strings.Contains(r.Output, "private or local address") {
+		t.Fatalf("local backend: %+v", r)
 	}
 }
