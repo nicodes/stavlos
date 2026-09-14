@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/policy"
@@ -257,5 +258,33 @@ func TestResolvePath(t *testing.T) {
 	r := Builtin()["read"].Run(context.Background(), json.RawMessage(`{"path":"link/secret.txt"}`), &Env{Dir: root})
 	if r.IsError || !strings.Contains(r.Output, "s") {
 		t.Fatalf("%+v", r)
+	}
+}
+
+// TestReadStopsAtTheBudget: read never builds more than the output budget
+// (plus one line) in memory, and says how to continue.
+func TestReadStopsAtTheBudget(t *testing.T) {
+	dir := t.TempDir()
+	var sb strings.Builder
+	for i := 0; i < 20000; i++ {
+		sb.WriteString("line with some text on it to take up space\n")
+	}
+	os.WriteFile(filepath.Join(dir, "big.txt"), []byte(sb.String()), 0o644)
+	r := Builtin()["read"].Run(context.Background(), json.RawMessage(`{"path":"big.txt","limit":1000000}`), &Env{Dir: dir, MaxOutput: 8 * 1024})
+	if r.IsError || len(r.Output) > 9*1024 || !strings.Contains(r.Output, "continue with offset=") {
+		t.Fatalf("len %d err %v tail %q", len(r.Output), r.IsError, r.Output[max(0, len(r.Output)-80):])
+	}
+	// Truncation never splits a character.
+	s := strings.Repeat("é", 100)
+	for _, n := range []int{1, 2, 3, 50, 51} {
+		if c := cutRunes(s, n); !utf8.ValidString(c) || len(c) > n {
+			t.Errorf("cutRunes(%d) = %q", n, c)
+		}
+		if c := tailRunes(s, n); !utf8.ValidString(c) || len(c) > n {
+			t.Errorf("tailRunes(%d) = %q", n, c)
+		}
+	}
+	if c := clip(strings.Repeat("é", 1000), 301); !utf8.ValidString(c) {
+		t.Errorf("clip split a rune: %q", c[:10])
 	}
 }

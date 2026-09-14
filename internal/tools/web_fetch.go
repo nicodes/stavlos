@@ -194,7 +194,7 @@ func fetchPage(ctx context.Context, raw string) (webPage, error) {
 		page.Text = string(body)
 	}
 	if len(page.Text) > webMaxMarkdown {
-		page.Text, page.Truncated = page.Text[:webMaxMarkdown], true
+		page.Text, page.Truncated = cutRunes(page.Text, webMaxMarkdown), true
 	}
 	page.Text = strings.TrimSpace(page.Text)
 	if page.Text == "" {

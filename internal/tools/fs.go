@@ -57,6 +57,9 @@ func (readTool) Def() model.ToolDef {
 		Schema: schemaOf(readInput{})}
 }
 
+// readMaxLines bounds one read: past it the tool says how to continue.
+const readMaxLines = 5000
+
 type readInput struct {
 	Path   string `json:"path" desc:"File path, absolute or relative to the working directory" req:"true"`
 	Offset int    `json:"offset" desc:"1-based first line to return (default 1)"`
@@ -77,8 +80,18 @@ func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if a.Offset < 1 {
 		a.Offset = 1
 	}
-	if a.Limit <= 0 {
-		a.Limit = 2000
+	if a.Limit <= 0 || a.Limit > readMaxLines {
+		a.Limit = readMaxLines
+		if a.Limit > 2000 && a.Limit != readMaxLines {
+			a.Limit = 2000
+		}
+	}
+	if a.Limit == readMaxLines && a.Limit > 2000 {
+		a.Limit = readMaxLines
+	}
+	budget := env.MaxOutput
+	if budget <= 0 {
+		budget = 32 * 1024
 	}
 	var sb strings.Builder
 	sc := bufio.NewScanner(f)
@@ -89,7 +102,9 @@ func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		if n < a.Offset {
 			continue
 		}
-		if n >= a.Offset+a.Limit {
+		// Stop at the line limit or the byte budget: the whole file is
+		// never built in memory just to be cut down afterwards.
+		if n >= a.Offset+a.Limit || sb.Len() > budget {
 			sb.WriteString(fmt.Sprintf("… (more lines; continue with offset=%d)\n", n))
 			break
 		}

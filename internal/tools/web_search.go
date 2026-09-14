@@ -87,7 +87,7 @@ func (webSearchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Resu
 	for i, r := range results {
 		snippet := strings.Join(strings.Fields(r.Snippet), " ")
 		if len(snippet) > 300 {
-			snippet = snippet[:300] + "…"
+			snippet = cutRunes(snippet, 300) + "…"
 		}
 		fmt.Fprintf(&sb, "\n%d. %s\n   %s\n", i+1, strings.TrimSpace(r.Title), r.URL)
 		if snippet != "" {
@@ -151,7 +151,7 @@ func webSearch(ctx context.Context, cfg SearchConfig, query string, n int) ([]se
 	if resp.StatusCode >= 400 {
 		msg := strings.TrimSpace(string(raw))
 		if len(msg) > 200 {
-			msg = msg[:200] + "…"
+			msg = cutRunes(msg, 200) + "…"
 		}
 		return nil, fmt.Errorf("%s search: HTTP %d: %s", cfg.Provider, resp.StatusCode, msg)
 	}

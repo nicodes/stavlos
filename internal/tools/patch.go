@@ -42,7 +42,7 @@ const patchDescription = `Create, modify, delete, or move files with a patch in 
 *** Delete File: relative/old.txt
 *** End Patch
 
-Rules: paths are relative to the working directory. Update hunks must include enough unchanged context (usually 3 lines above and below) to locate the change uniquely; there are no line numbers. Use "*** Move to: newpath" right after an Update File header to rename. Several files may appear in one patch; it is applied atomically. To replace a whole file, delete and re-add it in the same patch.`
+Rules: paths are relative to the working directory. Update hunks must include enough unchanged context (usually 3 lines above and below) to locate the change uniquely; there are no line numbers. Use "*** Move to: newpath" right after an Update File header to rename. Several files may appear in one patch; every change is checked before any file is written, then each file is written in one step and a failure midway is rolled back. A move keeps the file's permissions and refuses to overwrite an existing file. To replace a whole file, delete and re-add it in the same patch.`
 
 type patchTool struct{}
 
@@ -88,26 +88,39 @@ func (patchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if len(ops) == 0 {
 		return errf("patch: no file sections")
 	}
-	// Stage every change first so a failure leaves nothing half-applied.
+	// Stage every change first so a failure leaves nothing half-applied:
+	// every file is read and every hunk applied in memory before a byte is
+	// written.
 	type staged struct {
-		path, content string
-		delete        bool
+		path    string
+		content string
+		mode    os.FileMode
+		prev    []byte // what was there (nil for a new file), for rollback
+		delete  bool
 	}
 	var plan []staged
 	for _, op := range ops {
 		abs := resolve(env, op.path)
 		switch op.kind {
 		case "add":
-			if _, err := os.Stat(abs); err == nil {
+			if _, err := os.Lstat(abs); err == nil {
 				return errf("patch: %s already exists (delete it first to replace it)", op.path)
 			}
-			plan = append(plan, staged{path: abs, content: strings.Join(op.added, "\n") + "\n"})
+			plan = append(plan, staged{path: abs, content: strings.Join(op.added, "\n") + "\n", mode: 0o644})
 		case "delete":
-			if _, err := os.Stat(abs); err != nil {
+			fi, err := os.Lstat(abs)
+			if err != nil {
 				return errf("patch: %s: %v", op.path, err)
+			}
+			if fi.IsDir() {
+				return errf("patch: %s is a directory", op.path)
 			}
 			plan = append(plan, staged{path: abs, delete: true})
 		case "update":
+			fi, err := os.Stat(abs)
+			if err != nil {
+				return errf("patch: %s: %v", op.path, err)
+			}
 			b, err := os.ReadFile(abs)
 			if err != nil {
 				return errf("patch: %s: %v", op.path, err)
@@ -117,25 +130,56 @@ func (patchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 				return errf("patch: %s: %v", op.path, err)
 			}
 			if op.moveTo != "" {
+				to := resolve(env, op.moveTo)
+				if _, err := os.Lstat(to); err == nil {
+					return errf("patch: cannot move %s to %s: it already exists", op.path, op.moveTo)
+				}
 				plan = append(plan, staged{path: abs, delete: true})
-				plan = append(plan, staged{path: resolve(env, op.moveTo), content: out})
+				plan = append(plan, staged{path: to, content: out, mode: fi.Mode().Perm()})
 			} else {
-				plan = append(plan, staged{path: abs, content: out})
+				plan = append(plan, staged{path: abs, content: out, mode: fi.Mode().Perm(), prev: b})
+			}
+		}
+	}
+	// Writes first, each through a temporary file renamed into place so a
+	// reader never sees a half-written file; deletions last, so a failed
+	// write never costs a file. A failure rolls the writes back.
+	var done []staged
+	rollback := func() {
+		for i := len(done) - 1; i >= 0; i-- {
+			st := done[i]
+			if st.prev == nil {
+				_ = os.Remove(st.path)
+			} else {
+				_ = os.WriteFile(st.path, st.prev, st.mode)
 			}
 		}
 	}
 	for _, st := range plan {
 		if st.delete {
-			if err := os.Remove(st.path); err != nil {
-				return errf("patch: %v", err)
-			}
 			continue
 		}
 		if err := os.MkdirAll(filepath.Dir(st.path), 0o755); err != nil {
+			rollback()
 			return errf("patch: %v", err)
 		}
-		if err := os.WriteFile(st.path, []byte(st.content), 0o644); err != nil {
+		tmp := st.path + ".stavlos-tmp"
+		if err := os.WriteFile(tmp, []byte(st.content), st.mode); err != nil {
+			rollback()
 			return errf("patch: %v", err)
+		}
+		if err := os.Rename(tmp, st.path); err != nil {
+			_ = os.Remove(tmp)
+			rollback()
+			return errf("patch: %v", err)
+		}
+		done = append(done, st)
+	}
+	for _, st := range plan {
+		if st.delete {
+			if err := os.Remove(st.path); err != nil {
+				return errf("patch: %v (the other changes were applied)", err)
+			}
 		}
 	}
 	var sb strings.Builder
