@@ -30,6 +30,7 @@ type File struct {
 	Escalation *Escalation    `json:"escalation,omitempty"`
 	Compaction *Compaction    `json:"compaction,omitempty"`
 	MCP        map[string]MCP `json:"mcp,omitempty"`
+	Search     *Search        `json:"search,omitempty"` // web_search backend
 	Policy     map[string]any `json:"policy,omitempty"` // tool → verb | {pattern: verb}
 	Plugins    []string       `json:"plugins,omitempty"`
 }
@@ -48,6 +49,13 @@ type Escalation struct {
 type Compaction struct {
 	Threshold     float64 `json:"threshold,omitempty"`
 	MaxToolOutput string  `json:"maxToolOutput,omitempty"`
+}
+
+// Search configures web_search: a provider and its key (the key may be
+// "${env:NAME}").
+type Search struct {
+	Provider string `json:"provider,omitempty"` // brave | tavily | exa
+	APIKey   string `json:"apiKey,omitempty"`
 }
 
 type MCP struct {
@@ -195,6 +203,7 @@ type Effective struct {
 		MaxToolOutput int
 	}
 	MCP      map[string]MCP
+	Search   Search // web_search backend, key expanded
 	Policy   *policy.Set
 	Presets  map[string]Preset
 	Skills   map[string]Skill
@@ -238,6 +247,8 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		policy.Rule{Tool: "agent_status", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "shell", Pattern: "*", Verb: policy.Ask},
 		policy.Rule{Tool: "shell_kill", Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: "web_fetch", Pattern: "*", Verb: policy.Ask}, // per host: the dialog offers "allow <host> for this session"
+		policy.Rule{Tool: "web_search", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "todo_add", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "ask_user", Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: "todo_update", Pattern: "*", Verb: policy.Allow},
@@ -355,6 +366,14 @@ func (e *Effective) applyFile(f File, layer string) {
 		}
 		if n := parseSize(f.Compaction.MaxToolOutput); n > 0 {
 			e.Compaction.MaxToolOutput = n
+		}
+	}
+	if f.Search != nil {
+		if f.Search.Provider != "" {
+			e.Search.Provider = strings.ToLower(f.Search.Provider)
+		}
+		if f.Search.APIKey != "" {
+			e.Search.APIKey = ExpandEnv(f.Search.APIKey)
 		}
 	}
 	for k, v := range f.MCP {
@@ -504,7 +523,7 @@ type roleFile struct {
 }
 
 // DefaultTools is what a role gets when it lists none.
-var DefaultTools = []string{"shell", "read", "apply_patch", "skill"}
+var DefaultTools = []string{"shell", "read", "apply_patch", "skill", "web_fetch", "web_search"}
 
 // ReadPreset parses one roles/<name>.md file.
 func ReadPreset(path string) (Preset, error) {
@@ -825,7 +844,7 @@ func builtinPresets() []Preset {
 		{
 			Name: "general", Layer: "builtin", Mode: ModeAll,
 			Description: "General-purpose engineer: reads, edits, runs, and delegates",
-			Tools:       []string{"shell", "read", "apply_patch", "skill", "todo"},
+			Tools:       []string{"shell", "read", "apply_patch", "skill", "todo", "web_fetch", "web_search"},
 			Spawn:       []string{"general"},
 			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.

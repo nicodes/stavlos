@@ -1308,6 +1308,10 @@ func toolArg(name string, raw json.RawMessage) string {
 		return str("command")
 	case "shell_kill", "bash_async_kill":
 		return str("id")
+	case "web_fetch":
+		return str("url")
+	case "web_search":
+		return str("query")
 	case "read", "write", "edit":
 		return str("path")
 	case "apply_patch":

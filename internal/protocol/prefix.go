@@ -1,6 +1,9 @@
 package protocol
 
-import "strings"
+import (
+	"net/url"
+	"strings"
+)
 
 // twoWordTools are commands whose first word says little on its own: "go"
 // covers build, test and run alike, so their prefix takes the subcommand too.
@@ -26,6 +29,49 @@ func CommandPrefix(cmd string) string {
 		return f[0] + " " + f[1]
 	}
 	return f[0]
+}
+
+// ToolPrefix is what "allow … for this session" may remember for a tool
+// call: the command prefix for shell, the host for web_fetch, "" for tools
+// without a sensible prefix.
+func ToolPrefix(tool, arg string) string {
+	switch tool {
+	case "shell":
+		return CommandPrefix(arg)
+	case "web_fetch":
+		return URLHost(arg)
+	}
+	return ""
+}
+
+// ToolPrefixCovers reports whether a remembered prefix covers a call of
+// tool with arg: whole-word command prefixes for shell, the host for
+// web_fetch.
+func ToolPrefixCovers(tool, prefix, arg string) bool {
+	switch tool {
+	case "shell":
+		return PrefixCovers(prefix, arg)
+	case "web_fetch":
+		return prefix != "" && URLHost(arg) == prefix
+	}
+	return false
+}
+
+// URLHost is the lower-cased host of a URL ("" when it has none); a bare
+// "host/path" counts as https.
+func URLHost(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return strings.ToLower(u.Hostname())
 }
 
 // PrefixCovers reports whether an allowed prefix covers cmd: cmd is the

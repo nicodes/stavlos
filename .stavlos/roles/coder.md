@@ -26,6 +26,9 @@ tools:
   apply_patch: ask
   skill: allow
   todo: allow
+  web_search: allow
+  web_fetch:                        # the URL is the argument; roles only tighten, so
+    "https://*.slack.com/*": deny   # host allow-lists go in stavlos.json's policy
 
 # Skill descriptions this role carries in context; bodies load on demand.
 skills: []

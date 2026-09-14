@@ -1464,6 +1464,18 @@ func (m Model) agentWhoLabel(id string) string {
 // whose argument is text the user must read in full before approving.
 func fullToolArg(tool string, raw json.RawMessage) string {
 	switch tool {
+	case "web_fetch":
+		var in struct {
+			URL string `json:"url"`
+		}
+		_ = json.Unmarshal(raw, &in)
+		return strings.TrimSpace(in.URL)
+	case "web_search":
+		var in struct {
+			Query string `json:"query"`
+		}
+		_ = json.Unmarshal(raw, &in)
+		return strings.TrimSpace(in.Query)
 	case "shell", "bash", "bash_async": // the last two: old logs
 		var in struct {
 			Command string `json:"command"`
@@ -1670,6 +1682,7 @@ const (
 	glyphToolAgents   = "⑂"
 	glyphToolTodo     = "◇" // todo_add, todo_update
 	glyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
+	glyphToolWeb      = "↗" // web_fetch, web_search
 )
 
 // toolGlyph returns the glyph for a tool name and the gap after it.
@@ -1683,6 +1696,8 @@ func toolGlyph(tool string) (string, string) {
 		return glyphToolTodo, " "
 	case strings.HasPrefix(tool, "mcp__"):
 		return glyphToolMCP, " "
+	case strings.HasPrefix(tool, "web_"):
+		return glyphToolWeb, " "
 	}
 	return glyphToolFiles, " "
 }

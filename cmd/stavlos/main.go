@@ -403,6 +403,8 @@ func initConfig(args []string) error {
   "rootAgent": "coder",
   "limits": { "maxDepth": 3, "maxAgents": 6 },
   "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
+  // web_search backend (brave, tavily or exa) — leave out to keep web_search unconfigured
+  // "search": { "provider": "brave", "apiKey": "${env:BRAVE_API_KEY}" },
   "policy": {
     // read-only commands (grep, rg, find, ls, git status/log/diff, …) are allowed by the built-in defaults
     "shell": { "git push*": "ask", "rm -rf*": "deny" },

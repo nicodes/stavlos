@@ -30,6 +30,7 @@ type Env struct {
 	Mon       Monitors                // general monitors (background commands, watches, timers); nil if unavailable
 	Todo      Todos                   // the agent's todo list; nil if the preset does not include "todo"
 	Ask       Asker                   // raises a question batch to the human and waits; nil in tests without a runtime
+	Search    SearchConfig            // web_search backend; zero → the tool explains how to configure it
 }
 
 // Asker is implemented by the agent runtime: it blocks the turn on a
@@ -135,6 +136,7 @@ func Builtin() Set {
 		spawnTool{}, messageTool{}, cancelTool{}, statusTool{},
 		shellKillTool{},
 		todoAddTool{}, todoUpdateTool{}, askTool{},
+		webFetchTool{}, webSearchTool{},
 	} {
 		s[t.Def().Name] = t
 	}
