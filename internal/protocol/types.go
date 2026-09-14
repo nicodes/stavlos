@@ -154,6 +154,7 @@ type SessionInfo struct {
 	CostUSD      float64 `json:"cost_usd"`
 	TrustPending bool    `json:"trust_pending"`
 	Mode         string  `json:"mode"`            // permission mode: ask | auto | yolo
+	State        string  `json:"state,omitempty"` // working (an agent runs) | waiting (one expects an answer) | idle; "" for a session not in memory
 	Title        string  `json:"title,omitempty"` // the first human prompt, for pickers
 }
 

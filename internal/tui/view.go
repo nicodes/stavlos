@@ -78,14 +78,23 @@ func agentOutcome(a protocol.AgentInfo) string {
 // agentDot is the coloured marker for an agent row.
 func agentDot(a protocol.AgentInfo) string {
 	switch agentOutcome(a) {
-	case "working":
-		return lipgloss.NewStyle().Foreground(colWarning).Render("●")
 	case "error":
 		return lipgloss.NewStyle().Foreground(colError).Render("●")
-	case "waiting":
-		return lipgloss.NewStyle().Foreground(colWarning).Render("◐")
 	case "complete":
 		return lipgloss.NewStyle().Foreground(colMuted).Render("●")
+	}
+	return stateDot(agentOutcome(a))
+}
+
+// stateDot is the marker for a working / waiting / idle state, shared by
+// agent rows and the sessions section: a full orange circle while
+// working, a half one while waiting, an empty dim one when idle.
+func stateDot(state string) string {
+	switch state {
+	case "working":
+		return lipgloss.NewStyle().Foreground(colWarning).Render("●")
+	case "waiting":
+		return lipgloss.NewStyle().Foreground(colWarning).Render("◐")
 	}
 	return lipgloss.NewStyle().Foreground(colMuted).Render("○")
 }
@@ -1089,7 +1098,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		if focused && m.sbCursor == na+1+k {
 			text = styleBold.Render(title)
 		}
-		rows = append(rows, marker+styleDim.Render("› ")+text+strings.Repeat(" ", gap)+styleDim.Render(age))
+		rows = append(rows, marker+stateDot(s.State)+" "+text+strings.Repeat(" ", gap)+styleDim.Render(age))
 		items = append(items, na+1+k)
 	}
 	return rows, items

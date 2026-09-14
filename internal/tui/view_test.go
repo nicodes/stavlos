@@ -2244,7 +2244,7 @@ func TestSidebarNav(t *testing.T) {
 	// heading unfolds it, ↓ walks into it, space on a session resumes it;
 	// a click does the same
 	m.navSessions = []protocol.SessionInfo{
-		{ID: "s-old", Title: "fix the login bug\nplease", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
+		{ID: "s-old", Title: "fix the login bug\nplease", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
 		{ID: "s-older", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
 	}
 	m.setFocus(focusSidebar)
@@ -2264,7 +2264,7 @@ func TestSidebarNav(t *testing.T) {
 		plainBody[i] = stripANSI(r)
 	}
 	na := len(m.agents)
-	if len(body) != na+4 || !strings.HasPrefix(plainBody[na+1], "sessions ▾") || !strings.HasPrefix(plainBody[na+2], "  › fix the login bug") || strings.Contains(plainBody[na+2], "\n") || !strings.HasSuffix(plainBody[na+2], "2h00m") || !strings.HasPrefix(plainBody[na+3], "  › docs sweep") || !strings.HasSuffix(plainBody[na+3], "26h00m") || items[na+3] != na+2 {
+	if len(body) != na+4 || !strings.HasPrefix(plainBody[na+1], "sessions ▾") || !strings.HasPrefix(plainBody[na+2], "  ● fix the login bug") || strings.Contains(plainBody[na+2], "\n") || !strings.HasSuffix(plainBody[na+2], "2h00m") || !strings.HasPrefix(plainBody[na+3], "  ○ docs sweep") || !strings.HasSuffix(plainBody[na+3], "26h00m") || items[na+3] != na+2 {
 		t.Fatalf("open sessions section:\n%s\n%v", strings.Join(plainBody, "\n"), items)
 	}
 	for _, r := range plainBody[na+2:] {
