@@ -54,18 +54,18 @@ type readTool struct{}
 
 func (readTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.Read, Description: "Read a file. Returns numbered lines. Use offset/limit for large files.",
-		Schema: schema(map[string]any{
-			"path":   prop("string", "File path, absolute or relative to the working directory"),
-			"offset": prop("integer", "1-based first line to return (default 1)"),
-			"limit":  prop("integer", "Max lines to return (default 2000)"),
-		}, "path")}
+		Schema: schemaOf(readInput{})}
 }
+
+type readInput struct {
+	Path   string `json:"path" desc:"File path, absolute or relative to the working directory" req:"true"`
+	Offset int    `json:"offset" desc:"1-based first line to return (default 1)"`
+	Limit  int    `json:"limit" desc:"Max lines to return (default 2000)"`
+}
+
 func (readTool) Subject(in json.RawMessage) policy.Subject { return policy.Path(pathArg(in)) }
 func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	var a struct {
-		Path          string `json:"path"`
-		Offset, Limit int
-	}
+	var a readInput
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}

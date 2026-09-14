@@ -25,29 +25,21 @@ const (
 
 func (askTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.AskUser, Description: "Ask the human one to four short questions when several valid approaches exist and guessing would waste work: which backend, which of two designs, whether to keep going. Each question has its text and one to four options with a label and a one-line description; put the option you would pick first. Every question is a checklist: the human may pick several options and always has a last entry for typing something else, so never add an 'Other' or 'all of the above' option. The turn waits for the answers. Do not ask what you can find out yourself, and do not ask more than once for the same thing.",
-		Schema: schema(map[string]any{
-			"questions": map[string]any{
-				"type": "array", "minItems": 1, "maxItems": askMaxQuestions,
-				"items": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"question": prop("string", "The question, ending with ?"),
-						"options": map[string]any{
-							"type": "array", "minItems": 1, "maxItems": askMaxOptions,
-							"items": map[string]any{
-								"type": "object",
-								"properties": map[string]any{
-									"label":       prop("string", "The choice, one to five words"),
-									"description": prop("string", "What picking it means (one line)"),
-								},
-								"required": []string{"label"},
-							},
-						},
-					},
-					"required": []string{"question", "options"},
-				},
-			},
-		}, "questions")}
+		Schema: schemaOf(askInput{})}
+}
+
+type askInput struct {
+	Questions []askQuestion `json:"questions" req:"true" min:"1" max:"4"`
+}
+
+type askQuestion struct {
+	Question string      `json:"question" desc:"The question, ending with ?" req:"true"`
+	Options  []askOption `json:"options" req:"true" min:"1" max:"4"`
+}
+
+type askOption struct {
+	Label       string `json:"label" desc:"The choice, one to five words" req:"true"`
+	Description string `json:"description" desc:"What picking it means (one line)"`
 }
 
 func (askTool) Subject(in json.RawMessage) policy.Subject {

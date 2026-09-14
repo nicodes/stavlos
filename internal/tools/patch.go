@@ -48,13 +48,17 @@ type patchTool struct{}
 
 func (patchTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.ApplyPatch, Description: patchDescription,
-		Schema: schema(map[string]any{"patch": prop("string", "The full patch text, from *** Begin Patch to *** End Patch")}, "patch")}
+		Schema: schemaOf(patchInput{})}
+}
+
+type patchInput struct {
+	Patch string `json:"patch" desc:"The full patch text, from *** Begin Patch to *** End Patch" req:"true"`
 }
 
 // Subject lists every path the patch touches (a move counts both ends), so
 // the policy judges each one and the most restrictive decision wins.
 func (patchTool) Subject(in json.RawMessage) policy.Subject {
-	var a struct{ Patch string }
+	var a patchInput
 	if decode(in, &a) != nil {
 		return policy.Path()
 	}
@@ -73,7 +77,7 @@ func (patchTool) Subject(in json.RawMessage) policy.Subject {
 }
 
 func (patchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	var a struct{ Patch string }
+	var a patchInput
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}

@@ -139,17 +139,6 @@ var (
 	TodoNames          = toolname.Todo          // implied by "todo" in a preset's tool list
 )
 
-func schema(props map[string]any, required ...string) json.RawMessage {
-	m := map[string]any{"type": "object", "properties": props}
-	if len(required) > 0 {
-		m["required"] = required
-	}
-	b, _ := json.Marshal(m)
-	return b
-}
-
-func prop(typ, desc string) map[string]any { return map[string]any{"type": typ, "description": desc} }
-
 func errf(format string, a ...any) Result {
 	return Result{Output: fmt.Sprintf(format, a...), IsError: true}
 }

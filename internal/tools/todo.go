@@ -44,11 +44,15 @@ type todoAddTool struct{}
 
 func (todoAddTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.TodoAdd, Description: "Add one step to your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep exactly one in_progress with todo_update as you go. Returns the item's id. Skip the list for single-step or trivial requests.",
-		Schema: schema(map[string]any{"text": prop("string", "The step, imperative and short (\"Run the tests\")")}, "text")}
+		Schema: schemaOf(todoAddInput{})}
+}
+
+type todoAddInput struct {
+	Text string `json:"text" desc:"The step, imperative and short (\"Run the tests\")" req:"true"`
 }
 
 func (todoAddTool) Subject(in json.RawMessage) policy.Subject {
-	var a struct{ Text string }
+	var a todoAddInput
 	_ = decode(in, &a)
 	return policy.Text(a.Text)
 }
@@ -57,7 +61,7 @@ func (todoAddTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 	if env.Todo == nil {
 		return errf("the todo list is not available to this agent")
 	}
-	var a struct{ Text string }
+	var a todoAddInput
 	if err := decode(in, &a); err != nil {
 		return errf("%v", err)
 	}
@@ -76,11 +80,13 @@ type todoUpdateTool struct{}
 
 func (todoUpdateTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.TodoUpdate, Description: "Update one item on your todo list: set its status (pending, in_progress, done, cancelled) and/or rewrite its text. Mark an item in_progress when you start it and done the moment it is finished and verified, never before; cancel steps you drop. Add a new item for a blocker instead of marking the blocked step done.",
-		Schema: schema(map[string]any{
-			"id":     prop("string", "The item id returned by todo_add"),
-			"status": prop("string", "pending | in_progress | done | cancelled"),
-			"text":   prop("string", "New text for the item (optional)"),
-		}, "id")}
+		Schema: schemaOf(todoUpdateInput{})}
+}
+
+type todoUpdateInput struct {
+	ID     string `json:"id" desc:"The item id returned by todo_add" req:"true"`
+	Status string `json:"status" desc:"pending | in_progress | done | cancelled"`
+	Text   string `json:"text" desc:"New text for the item (optional)"`
 }
 
 func (todoUpdateTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
@@ -89,7 +95,7 @@ func (todoUpdateTool) Run(ctx context.Context, in json.RawMessage, env *Env) Res
 	if env.Todo == nil {
 		return errf("the todo list is not available to this agent")
 	}
-	var a struct{ ID, Status, Text string }
+	var a todoUpdateInput
 	if err := decode(in, &a); err != nil {
 		return errf("%v", err)
 	}

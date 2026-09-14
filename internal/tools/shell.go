@@ -30,29 +30,24 @@ const (
 
 func (shellTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.Shell, Description: "Run a shell command in the working directory and return its combined output. Use it for searching too (grep -rn, rg, find, ls); read-only commands like these are allowed by default. A command still running after the wait window (default 15 seconds) continues as a background job: you get its id and the output so far, and when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. For servers, watchers and anything you know is slow, set background to true to skip the wait. If nothing more can be done until a job finishes, end your turn.",
-		Schema: schema(map[string]any{
-			"command":    prop("string", "The command line to run with bash -c"),
-			"wait":       prop("integer", "Seconds to wait for the command before it continues as a background job (default 15, max 300)"),
-			"background": prop("boolean", "Start it as a background job at once, without waiting"),
-			"timeout":    prop("integer", "Seconds before a background job is killed (default 3600, max 7200)"),
-		}, "command")}
+		Schema: schemaOf(shellInput{})}
+}
+
+type shellInput struct {
+	Command    string `json:"command" desc:"The command line to run with bash -c" req:"true"`
+	Wait       int    `json:"wait" desc:"Seconds to wait for the command before it continues as a background job (default 15, max 300)"`
+	Background bool   `json:"background" desc:"Start it as a background job at once, without waiting"`
+	Timeout    int    `json:"timeout" desc:"Seconds before a background job is killed (default 3600, max 7200)"`
 }
 
 func (shellTool) Subject(in json.RawMessage) policy.Subject {
-	var a struct {
-		Command string `json:"command"`
-	}
+	var a shellInput
 	_ = decode(in, &a)
 	return policy.Command(a.Command)
 }
 
 func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	var a struct {
-		Command    string `json:"command"`
-		Wait       int    `json:"wait"`
-		Background bool   `json:"background"`
-		Timeout    int    `json:"timeout"`
-	}
+	var a shellInput
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
@@ -152,7 +147,11 @@ type shellKillTool struct{}
 
 func (shellKillTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.ShellKill, Description: "Stop a background job started by shell. Use it for servers and watchers you no longer need.",
-		Schema: schema(map[string]any{"id": prop("string", "The job id shell returned")}, "id")}
+		Schema: schemaOf(shellKillInput{})}
+}
+
+type shellKillInput struct {
+	ID string `json:"id" desc:"The job id shell returned" req:"true"`
 }
 
 func (shellKillTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }

@@ -16,15 +16,20 @@ type skillTool struct{}
 
 func (skillTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.Skill, Description: "Load the full instructions of a skill by name. Skill descriptions are listed in your system prompt; load one when its description matches the task.",
-		Schema: schema(map[string]any{"name": prop("string", "Skill name")}, "name")}
+		Schema: schemaOf(skillInput{})}
 }
+
+type skillInput struct {
+	Name string `json:"name" desc:"Skill name" req:"true"`
+}
+
 func (skillTool) Subject(in json.RawMessage) policy.Subject {
-	var a struct{ Name string }
+	var a skillInput
 	_ = decode(in, &a)
 	return policy.Text(a.Name)
 }
 func (skillTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	var a struct{ Name string }
+	var a skillInput
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
@@ -44,14 +49,17 @@ type responseTool struct{}
 
 func (responseTool) Def() model.ToolDef {
 	return model.ToolDef{Name: toolname.AgentResponse, Description: "Answer an agent that prompted you. The text lands in that agent's mailbox and wakes it between turns; you stay alive and can be prompted again. Use it once per asker; answer the human in your normal reply instead.",
-		Schema: schema(map[string]any{
-			"to":   prop("string", "The asking agent's id (the message you are answering names it)"),
-			"text": prop("string", "Your answer: what you did or found, with exact paths and results"),
-		}, "to", "text")}
+		Schema: schemaOf(responseInput{})}
 }
+
+type responseInput struct {
+	To   string `json:"to" desc:"The asking agent's id (the message you are answering names it)" req:"true"`
+	Text string `json:"text" desc:"Your answer: what you did or found, with exact paths and results" req:"true"`
+}
+
 func (responseTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 func (responseTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	var a struct{ To, Text string }
+	var a responseInput
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
