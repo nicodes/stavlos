@@ -127,6 +127,8 @@ type RenderOpts struct {
 	Cursor   int
 	Focused  bool
 	NoFold   bool // render every item in full (exports, line-level tests)
+	// CompactFrame animates a running compaction's rule (the sweeping bar).
+	CompactFrame int
 }
 
 // gutterMark is the chat cursor marker drawn in the one-column gutter.
@@ -439,6 +441,9 @@ func renderLine(l Line, o RenderOpts, cursor bool) string {
 			style = styleError.Render
 		}
 	case LineRule:
+		if l.Text == GlyphCompacting {
+			return gutter + centerText(styleRule.Render("┄┄ compacting ")+compactSweep(o.CompactFrame)+styleRule.Render(" ┄┄"), o.Width)
+		}
 		return gutter + centerText(styleRule.Render(l.Text), o.Width)
 	case LineError:
 		style = styleError.Render
@@ -741,12 +746,12 @@ func contextBar(context, window int) string {
 	return st.Render(fmt.Sprintf("%d%% of %s", pct, fmtTokens(window)))
 }
 
-// compactingBar is the line above the divider while a compaction runs: a
-// segment sweeping across a ten-cell track (the summariser gives no
-// progress, so the bar shows activity, not completion).
-func compactingBar(elapsed time.Duration) string {
+// compactSweep is the bar inside a running compaction's rule: a segment
+// sweeping across a ten-cell track (the summariser gives no progress, so
+// the bar shows activity, not completion). frame advances one cell a tick.
+func compactSweep(frame int) string {
 	const cells, seg = 10, 3
-	pos := int(elapsed/compactTickPeriod) % (cells + seg)
+	pos := frame % (cells + seg)
 	var b strings.Builder
 	for i := 0; i < cells; i++ {
 		if i >= pos-seg && i < pos {
@@ -755,7 +760,12 @@ func compactingBar(elapsed time.Duration) string {
 			b.WriteString(styleDim.Render("▱"))
 		}
 	}
-	return styleDim.Render("compacting ") + b.String()
+	return b.String()
+}
+
+// compactFrame is the sweep position for now: one cell per tick period.
+func compactFrame(now time.Time) int {
+	return int(now.UnixNano() / int64(compactTickPeriod))
 }
 
 // turnStats formats the indicator's suffix: "(12s · 1.2k tokens)".
@@ -1470,8 +1480,6 @@ func fullToolArg(tool string, raw json.RawMessage) string {
 func (m Model) statusLine(width int) string {
 	var s string
 	switch {
-	case m.compacting[m.selectedID()] != (time.Time{}):
-		s = compactingBar(time.Since(m.compacting[m.selectedID()]))
 	case m.status != "" && m.statusErr:
 		s = styleStatusErr.Render(m.status)
 	case m.status != "":
