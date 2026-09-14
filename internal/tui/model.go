@@ -2280,6 +2280,11 @@ func (m *Model) command(text string) tea.Cmd {
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
 	case "/sessions", "/resume", "/session":
 		return sessionsCmd(m.ctx, m.c, m.session.Dir, false)
+	case "/compact":
+		if c := needAgent(); c != nil {
+			return c
+		}
+		return tea.Batch(m.setStatus("compacting…", false), compactCmd(m.ctx, m.c, agent))
 	case "/mode":
 		return m.openMode()
 	case "/yolo", "/auto":

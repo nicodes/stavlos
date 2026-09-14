@@ -35,6 +35,7 @@ const (
 	MAgentSetRole    = "agent.set_role"    // switch an agent's preset in place
 	MAgentSetVariant = "agent.set_variant" // switch an agent's model variant (reasoning effort)
 	MAgentAddDir     = "agent.add_dir"     // put a directory in an agent's working set
+	MAgentCompact    = "agent.compact"     // summarise the agent\'s completed turns now (or at its next turn if busy)
 	MAgentRemoveDir  = "agent.remove_dir"  // take one out (never the session directory)
 	MVariants        = "variants"          // variant names a model offers
 
@@ -257,6 +258,13 @@ type AgentSetRoleParams struct {
 	V     int    `json:"v"`
 	Agent string `json:"agent"`
 	Role  string `json:"role"` // preset name
+}
+type AgentCompactParams struct {
+	V     int    `json:"v"`
+	Agent string `json:"agent"`
+}
+type AgentCompactResult struct {
+	Status string `json:"status"` // compacted | queued (the agent is mid-turn; it compacts before its next model call)
 }
 type AgentDirParams struct {
 	V     int    `json:"v"`

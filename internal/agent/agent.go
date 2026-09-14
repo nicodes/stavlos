@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -71,6 +72,7 @@ type Agent struct {
 	monDone     []event.MonitorFiredPayload // fired monitors not yet delivered
 	wakes       map[string]bool             // ids whose completion is waiting to wake this agent (unmonitor cancels)
 	lastError   string                      // error that ended the most recent turn; cleared when a turn starts
+	compactNext bool                        // /compact arrived mid-turn: compact before the next model call, whatever the size
 	children    []string
 	done        chan struct{} // closed on kill
 	usage       struct {
@@ -399,6 +401,33 @@ func (a *Agent) Preset() config.Preset {
 // SetRole switches the agent's preset in place. The system prompt, tool
 // list, skills, and spawn list change at the next model call; the label
 // follows when it was just the old role's name.
+// Compact is /compact: summarise every completed turn now when the agent
+// is idle ("compacted"), or, mid-turn, before its next model call
+// ("queued"). Auto-compaction keeps running on its own at the threshold.
+func (a *Agent) Compact(ctx context.Context) (string, error) {
+	a.mu.Lock()
+	busy := a.state == StateRunning || a.state == StateBlocked
+	if busy {
+		a.compactNext = true
+	}
+	a.mu.Unlock()
+	if busy {
+		return "queued", nil
+	}
+	modelID := a.ModelID()
+	if modelID == "" {
+		return "", errors.New(ErrNoModel)
+	}
+	m, _, err := a.s.host.Resolve(modelID)
+	if err != nil {
+		return "", err
+	}
+	if err := a.compact(ctx, m, len(a.eventsCopy())); err != nil {
+		return "", err
+	}
+	return "compacted", nil
+}
+
 func (a *Agent) SetRole(ctx context.Context, role string) error {
 	preset, ok := a.s.Config().Presets[role]
 	if !ok {

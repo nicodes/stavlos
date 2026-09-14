@@ -1931,6 +1931,60 @@ func TestAllowPrefix(t *testing.T) {
 	}
 }
 
+// TestManualCompact: /compact on an idle agent summarises every completed
+// turn with the model and logs a Compacted event; the next turn's request
+// starts from the summary. Mid-turn it is queued and runs before the next
+// model call.
+func TestManualCompact(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response { return text("first answer") },
+		func(model.Request) model.Response { return text("second answer") },
+		// the compaction request itself
+		func(req model.Request) model.Response {
+			if !strings.Contains(req.System, "summarise") || !strings.Contains(req.Messages[0].Blocks[0].Text, "second answer") {
+				t.Errorf("compaction request: %+v", req)
+			}
+			return text("SUMMARY: two answers given")
+		},
+		// turn 3 starts from the summary
+		func(req model.Request) model.Response {
+			if len(req.Messages) < 3 || !strings.Contains(req.Messages[0].Blocks[0].Text, "SUMMARY: two answers given") || strings.Contains(req.Messages[0].Blocks[0].Text, "first answer") {
+				t.Errorf("turn after compaction should start from the summary: %+v", req.Messages)
+			}
+			return text("third answer")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	if _, err := h.c.CompactAgent(ctx, root); err == nil {
+		t.Fatal("nothing to compact before any turn")
+	}
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "one")
+	h.waitFor(event.TurnEnded, root)
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "two")
+	h.waitFor(event.TurnEnded, root)
+	status, err := h.c.CompactAgent(ctx, root)
+	if err != nil || status != "compacted" {
+		t.Fatalf("compact: %q %v", status, err)
+	}
+	e := h.waitFor(event.Compacted, root)
+	var cp event.CompactedPayload
+	_ = e.Decode(&cp)
+	if !strings.Contains(cp.Summary, "SUMMARY") || cp.ToSeq >= e.Seq || cp.FromSeq == 0 {
+		t.Fatalf("compacted payload: %+v", cp)
+	}
+	_ = h.c.Send(ctx, root, protocol.KindPrompt, "three")
+	h.waitFor(event.TurnEnded, root)
+}
+
 // TestAskUser: ask_user raises one question prompt for the batch, the
 // answers come back as "header: answer" lines, and a cancel withdraws it.
 func TestAskUser(t *testing.T) {

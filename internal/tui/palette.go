@@ -30,6 +30,7 @@ var commands = []Command{
 	{Name: "/yolo", Args: "[on|off]", Desc: "yolo mode: approve every permission, directories included (no arg toggles)", Direct: true},
 	{Name: "/sessions", Desc: "pick a session of this directory to resume where it left off", Aliases: []string{"/resume", "/session"}, Direct: true},
 	{Name: "/tree", Desc: "toggle the agent sidebar (also ctrl+b)", Direct: true},
+	{Name: "/compact", Desc: "summarise the selected agent's completed turns now to free context (automatic at 80% of the window)", Direct: true},
 	{Name: "/help", Desc: "show or hide the key bar at the bottom (off by default)", Aliases: []string{"/h", "/?"}, Direct: true},
 }
 
