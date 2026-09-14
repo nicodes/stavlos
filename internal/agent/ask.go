@@ -27,7 +27,7 @@ func (k askAPI) Ask(ctx context.Context, qs []protocol.Question) ([]string, erro
 	a.setState(StateBlocked)
 	ans := a.s.host.Prompt(ctx, protocol.PromptInfo{
 		ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: protocol.PromptQuestion, Tool: toolname.AskUser,
-		Question:  fmt.Sprintf("%s asks: %s", a.Label, strings.Join(texts, " | ")),
+		Question:  fmt.Sprintf("%s asks: %s", a.LabelNow(), strings.Join(texts, " | ")),
 		Questions: qs,
 	})
 	a.setState(StateRunning)

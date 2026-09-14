@@ -25,7 +25,7 @@ func (s *Session) senderLabel(source string) string {
 	// The label carries the full id: models copy it into agent_response,
 	// and a shortened one would not resolve.
 	if a, ok := s.Agent(id); ok {
-		return fmt.Sprintf("%s (%s)", a.Label, id)
+		return fmt.Sprintf("%s (%s)", a.LabelNow(), id)
 	}
 	return id
 }
@@ -103,10 +103,9 @@ func (o orchestrator) Respond(caller, to, text string) error {
 	if !c.Alive() {
 		return fmt.Errorf("agent %q is %s", to, c.StateOf())
 	}
-	from, _ := o.s.Agent(caller)
 	label := caller
-	if from != nil {
-		label = fmt.Sprintf("%s (%s)", from.Label, caller)
+	if from, ok := o.s.Agent(caller); ok {
+		label = fmt.Sprintf("%s (%s)", from.LabelNow(), caller)
 	}
 	// Logged under the resolved id (to may be a prefix): recovery replays
 	// the event onto e.Agent.
@@ -141,7 +140,7 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 		for _, d := range in.Dirs {
 			dirs = append(dirs, d.Path)
 		}
-		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: c.Label, Archetype: c.Archetype, State: string(in.State), Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller, Dirs: dirs})
+		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: in.Label, Archetype: in.Archetype, State: string(in.State), Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller, Dirs: dirs})
 	}
 	return out, nil
 }
@@ -159,5 +158,5 @@ func (o orchestrator) Archetypes(agent string) []string {
 	if !ok {
 		return nil
 	}
-	return append([]string(nil), a.preset.Spawn...)
+	return append([]string(nil), a.Preset().Spawn...)
 }

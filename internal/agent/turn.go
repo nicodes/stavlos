@@ -2,14 +2,12 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/config"
-	"github.com/nicodes/stavlos/internal/escalation"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
@@ -30,7 +28,6 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	turn := a.turn
 	a.state = StateRunning
 	a.cancelTurn = cancel
-	a.yieldFlag = false
 	a.lastError = ""
 	a.mu.Unlock()
 	a.disarmMCPIdle()
@@ -71,8 +68,9 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 
 	// A subagent past its role's turn limit does not run: the turn ends at
 	// once and every agent waiting on it is told, so nobody waits forever.
-	if limit := a.Preset().MaxTurns; a.Parent != "" && limit > 0 && turn > limit {
-		msg := fmt.Sprintf("turn limit reached: %s may take at most %d turns", a.Label, limit)
+	if rv := a.role(); a.Parent != "" && rv.preset.MaxTurns > 0 && turn > rv.preset.MaxTurns {
+		limit := rv.preset.MaxTurns
+		msg := fmt.Sprintf("turn limit reached: %s may take at most %d turns", rv.label, limit)
 		end(event.ReasonError, msg)
 		a.reportTurnLimit(limit)
 		return
@@ -102,7 +100,8 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 			end(event.ReasonError, err.Error())
 			return
 		}
-		system, defs := a.buildContext()
+		rv := a.role() // one consistent view of the role for this step (SetRole may run meanwhile)
+		system, defs := a.buildContext(rv)
 		history := project.Project(a.eventsCopy())
 		// Compaction before the call: asked for (/compact while busy: every
 		// completed turn), or the history is past the threshold (the older
@@ -181,15 +180,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 			if turnCtx.Err() != nil {
 				break
 			}
-			a.runTool(turnCtx, turn, c, defs)
-		}
-		// monitor: hand control back; ChildFinished envelopes wake the agent.
-		a.mu.Lock()
-		yield := a.yieldFlag
-		a.mu.Unlock()
-		if yield {
-			end(event.ReasonEndTurn, "")
-			return
+			a.runTool(turnCtx, turn, c, defs, rv)
 		}
 	}
 }
@@ -203,7 +194,7 @@ func bareID(full string) string {
 }
 
 // runTool applies policy, escalates if needed, executes, and logs.
-func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs []model.ToolDef) {
+func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs []model.ToolDef, rv roleView) {
 	bg := context.Background()
 	_, _ = a.record(bg, event.ToolCallStarted, event.ToolStartedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Input: c.Input})
 	finish := func(out string, isErr, cancelled, denied bool) {
@@ -221,7 +212,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	// and the most restrictive decision wins; the prompt names that value.
 	sub := t.Subject(c.Input)
 	arg := sub.Primary()
-	pol := a.policy()
+	pol := a.policy(rv)
 	verb := pol.Decide(c.Name, arg)
 	for _, x := range sub.Values[min(1, len(sub.Values)):] {
 		if v := pol.Decide(c.Name, x); v.Rank() > verb.Rank() {
@@ -262,9 +253,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		return
 	case policy.Ask:
 		a.setState(StateBlocked)
-		question := fmt.Sprintf("%s wants to run %s", a.Label, c.Name)
+		question := fmt.Sprintf("%s wants to run %s", rv.label, c.Name)
 		if boundary != "" {
-			question = fmt.Sprintf("%s wants to run %s outside its directories (%s)", a.Label, c.Name, boundary)
+			question = fmt.Sprintf("%s wants to run %s outside its directories (%s)", rv.label, c.Name, boundary)
 		}
 		// The prefix a client may offer to allow is the daemon's to derive
 		// from the call itself; the prompt carries it for display.
@@ -311,7 +302,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	}
 
 	cfg := a.s.Config()
-	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg), Orch: a.orch(), Mon: a.monitorsAPI(), Todo: a.todoAPIIfEnabled(), Ask: a.askAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
+	env := &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg, rv), Orch: a.orch(), Mon: a.monitorsAPI(), Todo: a.todoAPIIfEnabled(), Ask: a.askAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
 		Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Partial: func(s string) {
 			a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
@@ -343,13 +334,13 @@ func (a *Agent) setState(st State) {
 
 // policy returns the effective policy for this agent: the session's
 // layered policy with the role's rules as one more tightening overlay.
-func (a *Agent) policy() *policy.Layered {
-	return a.s.Config().Policy.With(a.preset.PresetPolicy())
+func (a *Agent) policy(rv roleView) *policy.Layered {
+	return a.s.Config().Policy.With(rv.preset.PresetPolicy())
 }
 
-func (a *Agent) skills(cfg *config.Effective) map[string]tools.Skill {
+func (a *Agent) skills(cfg *config.Effective, rv roleView) map[string]tools.Skill {
 	out := map[string]tools.Skill{}
-	for _, name := range a.preset.Skills {
+	for _, name := range rv.preset.Skills {
 		if sk, ok := cfg.Skills[name]; ok {
 			out[name] = tools.Skill{Name: sk.Name, Description: sk.Description, Body: sk.Body, Dir: sk.Dir}
 		}
@@ -358,7 +349,7 @@ func (a *Agent) skills(cfg *config.Effective) map[string]tools.Skill {
 }
 
 // canOrchestrate reports whether the orchestration tools are offered.
-func (a *Agent) canOrchestrate() bool { return len(a.preset.Spawn) > 0 }
+func canOrchestrate(rv roleView) bool { return len(rv.preset.Spawn) > 0 }
 
 // orch is the runtime behind the agent_* tools. Every agent gets one
 // (messaging is universal); which tools are offered is decided in
@@ -366,10 +357,10 @@ func (a *Agent) canOrchestrate() bool { return len(a.preset.Spawn) > 0 }
 func (a *Agent) orch() tools.Orchestrator { return orchestrator{s: a.s} }
 
 // buildContext assembles the system prompt and tool list for a model call.
-func (a *Agent) buildContext() (string, []model.ToolDef) {
+func (a *Agent) buildContext(rv roleView) (string, []model.ToolDef) {
 	cfg := a.s.Config()
 	var sb strings.Builder
-	sb.WriteString(a.preset.Body)
+	sb.WriteString(rv.preset.Body)
 	sb.WriteString("\n\n")
 	fmt.Fprintf(&sb, "Working directory: %s\n", a.s.Dir)
 	if dirs := a.dirPaths(); len(dirs) > 1 {
@@ -378,16 +369,16 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 		sb.WriteString("Reading, editing or running commands outside the working directory asks the human first.\n")
 	}
 	fmt.Fprintf(&sb, "Your agent id is %s.\n", a.ID)
-	if limit := a.preset.MaxTurns; a.Parent != "" && limit > 0 {
-		fmt.Fprintf(&sb, "This is turn %d of at most %d: answer with agent_response before the limit; after it your turns end at once and the agents waiting on you are told you ran out.\n", a.turn, limit)
+	if limit := rv.preset.MaxTurns; a.Parent != "" && limit > 0 {
+		fmt.Fprintf(&sb, "This is turn %d of at most %d: answer with agent_response before the limit; after it your turns end at once and the agents waiting on you are told you ran out.\n", rv.turn, limit)
 	}
 	if a.Parent != "" {
-		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) created by a parent agent (id %s). Your task arrives as the first message. When it is done, or cannot be done, answer with agent_response to the agent that asked (its id is in the message); it only sees what you put there. You stay alive afterwards: the parent or another agent may message you again, and you keep your context. Other agents in this session can message you, and agent_message lets you message any of them, including your parent, by id.\n", a.Archetype, a.Label, a.Parent)
+		fmt.Fprintf(&sb, "You are a subagent (archetype %s, label %q) created by a parent agent (id %s). Your task arrives as the first message. When it is done, or cannot be done, answer with agent_response to the agent that asked (its id is in the message); it only sees what you put there. You stay alive afterwards: the parent or another agent may message you again, and you keep your context. Other agents in this session can message you, and agent_message lets you message any of them, including your parent, by id.\n", rv.archetype, rv.label, a.Parent)
 	}
 	if cfg.AgentsMD != "" {
 		sb.WriteString("\n# Project instructions (AGENTS.md)\n\n" + cfg.AgentsMD + "\n")
 	}
-	skills := a.skills(cfg)
+	skills := a.skills(cfg, rv)
 	if len(skills) > 0 {
 		sb.WriteString("\n# Skills\nLoad a skill with the skill tool when its description matches your task.\n")
 		names := make([]string, 0, len(skills))
@@ -400,7 +391,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 		}
 	}
 
-	names := toolname.Expand(a.preset.Tools)
+	names := toolname.Expand(rv.preset.Tools)
 	if contains(names, toolname.Shell) {
 		names = append(names, tools.AsyncNames...)
 	}
@@ -428,11 +419,11 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 			fmt.Fprintf(&sb, "- %s [%s] %s\n", it.ID, it.Status, it.Text)
 		}
 	}
-	if a.canOrchestrate() {
+	if canOrchestrate(rv) {
 		sb.WriteString("\n# Delegation\n")
 		if can {
 			sb.WriteString("You may create child agents with the agent_create tool. Archetypes available to you:\n")
-			for _, arch := range a.preset.Spawn {
+			for _, arch := range rv.preset.Spawn {
 				if p, ok := cfg.Presets[arch]; ok {
 					fmt.Fprintf(&sb, "- %s: %s\n", arch, p.Description)
 				}
@@ -461,7 +452,7 @@ func (a *Agent) buildContext() (string, []model.ToolDef) {
 	}
 	// The role's MCP servers: started here (their process is this agent's),
 	// their tools offered as mcp__<server>__<tool>.
-	if len(a.preset.MCP) > 0 || a.hasMCP() {
+	if len(rv.preset.MCP) > 0 || a.hasMCP() {
 		a.ensureMCP(a.ctx, cfg) // also stops servers a new role no longer lists
 		if mdefs := a.mcpDefs(); len(mdefs) > 0 {
 			sb.WriteString("\n# MCP tools\nTools named mcp__<server>__<tool> come from MCP servers this role runs; their descriptions are the servers' own.\n")
@@ -526,6 +517,3 @@ func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
 	_, err = a.record(context.Background(), event.Compacted, payload)
 	return err
 }
-
-var _ = json.Marshal
-var _ escalation.Answer

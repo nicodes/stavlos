@@ -618,3 +618,42 @@ func TestChildLabels(t *testing.T) {
 		t.Fatalf("%+v", agents)
 	}
 }
+
+// TestRoleSwitchDuringTurn: /role while a turn runs is a write to the
+// preset from another goroutine; each step reads one consistent view, and
+// the race detector must stay quiet.
+func TestRoleSwitchDuringTurn(t *testing.T) {
+	gate := make(chan struct{})
+	fm := &fakeModel{steps: []step{
+		func(context.Context, model.Request) (model.Response, error) {
+			<-gate
+			return call("c1", "read", `{"path":"f.txt"}`), nil
+		},
+		reply(call("c2", "agent_status", `{}`)),
+		reply(text("done")),
+	}}
+	roles := map[string]string{
+		"lead":  "---\ndescription: Leads\nmode: primary\nspawn: [general]\n---\nYou lead.\n",
+		"other": "---\ndescription: Other\nmode: primary\ntools: [read]\n---\nYou are other.\n",
+	}
+	s, h := newTestSession(t, testConfig{json: `{"model":"fake/m1","rootAgent":"lead"}`, roles: roles}, fm)
+	_ = os.WriteFile(filepath.Join(s.Dir, "f.txt"), []byte("x\n"), 0o644)
+	root := s.Root()
+	_ = root.Prompt(context.Background(), "go", "human:test")
+	waitUntil(t, h, func() bool { return len(fm.requests()) == 1 })
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 20; i++ {
+			_ = root.SetRole(context.Background(), []string{"other", "lead"}[i%2])
+			_ = root.Info()
+			_ = s.Info()
+		}
+	}()
+	close(gate)
+	h.waitTurnEnd(t, root.ID, 1)
+	<-done
+	if in := root.Info(); in.State != "idle" || (in.Archetype != "lead" && in.Archetype != "other") {
+		t.Fatalf("%+v", in)
+	}
+}
