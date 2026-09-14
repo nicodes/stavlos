@@ -1120,7 +1120,7 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 				return cmd
 			}
 			if !inMain {
-				return m.setFocus(focusSidebar)
+				return m.sidebarClick(msg.Y)
 			}
 			return m.mouseClick(cx, msg.Y)
 		}
@@ -2780,8 +2780,47 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 			m.refreshViewport()
 		}
 		return m.setFocus(focusInput)
+	case msg.String() == "n": // the next agent that needs you, selected at once
+		if i := m.nextNeedy(m.sbCursor); i >= 0 {
+			m.sbCursor = i
+			if i != m.selected {
+				m.selected = i
+				m.follow = true
+				m.refreshViewport()
+			}
+		} else {
+			return m.setStatus("no agent is waiting on you", false)
+		}
+		return nil
 	}
 	return nil
+}
+
+// nextNeedy is the index of the next agent after from (wrapping) with a
+// permission or question of its own pending, or -1.
+func (m *Model) nextNeedy(from int) int {
+	n := len(m.agents)
+	for k := 1; k <= n; k++ {
+		i := (from + k) % n
+		if m.needsHuman(m.agents[i].ID) != "" {
+			return i
+		}
+	}
+	return -1
+}
+
+// sidebarClick focuses the sidebar and, on a tree row, selects that agent.
+func (m *Model) sidebarClick(y int) tea.Cmd {
+	cmd := m.setFocus(focusSidebar)
+	if i := y - len(m.sidebarHeader(sidebarWidth-1)); i >= 0 && i < len(m.agents) {
+		m.sbCursor = i
+		if i != m.selected {
+			m.selected = i
+			m.follow = true
+			m.refreshViewport()
+		}
+	}
+	return cmd
 }
 
 // --- prompt history ---
