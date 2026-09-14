@@ -1116,18 +1116,15 @@ func (m Model) cursorRows(rows []string) []string {
 	return rows
 }
 
-// promptBox renders the head of the prompt queue under the strip, without a
-// border: a permission is a row naming the tool (like the chat's tool line)
-// over its whole argument (the command, path or files); a question shows its
-// text, options and answer field; trust shows the directory and files. Key
-// hints live in the key bar, so only a status line (claimed, answering) is
-// added.
+// promptBox renders the head of the prompt queue as the body of the
+// permission dialog: a permission is one row in the async tab's style,
+// "$ name (role)  command", with the whole argument (the command, path or
+// files) wrapped under the command's start — it is what the user is
+// approving, so it is never cut; a question shows its text, options and
+// answer field; trust shows the directory and files. Key hints live in the
+// key bar, so only a status line (claimed, answering) is added.
 func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 	var lines []string
-	agent := ""
-	if p.Agent != "" {
-		agent = styleDim.Render(" · " + m.agentLabel(p.Agent))
-	}
 	switch p.Kind {
 	case "question":
 		lines = append(lines, strings.Split(strings.TrimRight(p.Question, "\n"), "\n")...)
@@ -1155,17 +1152,29 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 		}
 	default:
 		g, gap := toolGlyph(p.Tool)
-		lines = append(lines, styleWorking.Render(g)+gap+styleBold.Render(toolTitle(p.Tool))+agent)
-		// The argument is shown whole: a shell command is what the user is
-		// approving, so it is never cut. Long lines wrap under the tool name.
-		if arg := fullToolArg(p.Tool, p.Input); arg != "" {
-			const indent = "     "
-			wrapW := width - 2 - len(indent)
-			if wrapW < 20 {
-				wrapW = 20
-			}
-			for _, l := range strings.Split(ansi.Hardwrap(arg, wrapW, true), "\n") {
-				lines = append(lines, indent+l)
+		head := styleWorking.Render(g) + gap
+		if who := m.agentWhoLabel(p.Agent); who != "" {
+			head += styleBold.Render(who) + "  "
+		}
+		arg := fullToolArg(p.Tool, p.Input)
+		if arg == "" {
+			arg = toolTitle(p.Tool)
+		}
+		// Continuation lines align under the command; a very long head
+		// falls back to a small indent so the command keeps its room.
+		indent := lipgloss.Width(head)
+		if indent > width/2 {
+			indent = 4
+		}
+		wrapW := width - indent
+		if wrapW < 20 {
+			wrapW = 20
+		}
+		for i, l := range strings.Split(ansi.Hardwrap(arg, wrapW, true), "\n") {
+			if i == 0 {
+				lines = append(lines, head+l)
+			} else {
+				lines = append(lines, strings.Repeat(" ", indent)+l)
 			}
 		}
 	}
@@ -1175,10 +1184,23 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) string {
 	case m.promptBusy == p.ID:
 		lines = append(lines, styleDim.Render("answering…"))
 	}
-	for i := range lines {
-		lines[i] = "  " + lines[i]
-	}
 	return strings.Join(lines, "\n")
+}
+
+// agentWhoLabel is "label (role)" for an agent, as the async rows name a
+// job's owner; just the label when the role is unknown, "" for no agent.
+func (m Model) agentWhoLabel(id string) string {
+	if id == "" {
+		return ""
+	}
+	if i := m.findAgent(id); i >= 0 {
+		a := m.agents[i]
+		if a.Archetype != "" {
+			return fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
+		}
+		return a.Label
+	}
+	return id
 }
 
 // fullToolArg is toolArg without the one-line flattening for the tools
