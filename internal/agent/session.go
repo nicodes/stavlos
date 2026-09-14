@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -392,6 +393,9 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 	if !ok {
 		return nil, fmt.Errorf("unknown archetype %q", archetype)
 	}
+	if parentID != "" && !validLabel(label) {
+		return nil, fmt.Errorf("label %q: use 1–32 letters, digits, '-' or '_' (a child's label names it in messages, so it may not look like the human or the system)", label)
+	}
 	var parent *Agent
 	depth := 0
 	if parentID != "" {
@@ -473,6 +477,15 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		}
 	}
 	return a, nil
+}
+
+// labelPattern bounds a model-chosen label: a short identifier, so a child
+// cannot call itself "human", "SYSTEM:" or a sentence that reads as an
+// instruction where its messages are attributed.
+var labelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
+
+func validLabel(label string) bool {
+	return labelPattern.MatchString(label) && !strings.EqualFold(label, "human") && !strings.EqualFold(label, "system") && !strings.EqualFold(label, "user")
 }
 
 func contains(xs []string, x string) bool {

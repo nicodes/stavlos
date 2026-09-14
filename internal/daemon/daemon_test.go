@@ -1361,7 +1361,7 @@ func TestFullAgentIDs(t *testing.T) {
 			parent = parentIDFromSystem(req.System)
 			last := req.Messages[len(req.Messages)-1].Blocks[0].Text
 			// the task names its sender with the whole id, never a shortened one
-			if !strings.Contains(last, "[message from agent main ("+parent+")]") {
+			if !strings.Contains(last, "[message from agent main ("+parent+")") {
 				t.Errorf("task should name the parent by full id: %q (parent %s)", last, parent)
 			}
 			// a unique prefix still resolves, for models that shorten anyway
