@@ -239,8 +239,9 @@ func (o *overlay) view(bodyWidth int, spinner string) string {
 		lines = append(lines, o.input.View(), "")
 		lines = append(lines, o.listLines(inner)...)
 	}
-	if f := dialogHintLine(o.hints, inner); f != "" {
-		lines = append(lines, "", f)
+	if f := dialogHintLines(o.hints, inner); len(f) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, f...)
 	}
 	// Width covers padding but not the border: inner content + 2 padding + 2 border = w.
 	return styleOvBox.Width(inner + 2).Render(strings.Join(lines, "\n"))

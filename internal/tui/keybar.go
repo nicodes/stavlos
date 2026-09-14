@@ -84,23 +84,38 @@ func (m Model) keyHints() []keyHint {
 	return append(hs, keyHint{"esc esc", "cancel turn"}, keyHint{"ctrl+n/p", "agents"}, keyHint{"pgup/pgdn", "scroll"}, keyHint{"ctrl+b", tree}, keyHint{"ctrl+c", "quit"})
 }
 
-// dialogHintLine is the footer every dialog carries whatever the key bar
-// setting: the keys that act inside it, "key desc · key desc", dim. esc,
-// tab and ctrl+c are left out (esc is on the title line; the other two are
-// not the dialog's own).
-func dialogHintLine(hints []keyHint, width int) string {
-	var parts []string
+// dialogHintLines is the footer every dialog carries whatever the key bar
+// setting: the keys that act inside it, "key desc · key desc", dim,
+// wrapped onto as many lines as they need so none is cut. esc, tab and
+// ctrl+c are left out (esc is on the title line; the other two are not
+// the dialog's own).
+func dialogHintLines(hints []keyHint, width int) []string {
+	var cells []string
 	for _, h := range hints {
 		switch h.key {
 		case "esc", "tab", "ctrl+c":
 			continue
 		}
-		parts = append(parts, styleKey.Render(h.key)+" "+styleDim.Render(h.desc))
+		cells = append(cells, styleKey.Render(h.key)+" "+styleDim.Render(h.desc))
 	}
-	if len(parts) == 0 {
-		return ""
+	if len(cells) == 0 {
+		return nil
 	}
-	return ansi.Truncate(strings.Join(parts, styleDim.Render(" · ")), width, "…")
+	sep := styleDim.Render(" · ")
+	var lines []string
+	var line string
+	for _, c := range cells {
+		switch {
+		case line == "":
+			line = c
+		case lipgloss.Width(line)+3+lipgloss.Width(c) <= width:
+			line += sep + c
+		default:
+			lines = append(lines, line)
+			line = c
+		}
+	}
+	return append(lines, ansi.Truncate(line, width, "…"))
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at
