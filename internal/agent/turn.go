@@ -477,10 +477,17 @@ func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
 	if cut < 0 {
 		return errors.New("nothing to compact")
 	}
+	before := project.EstimateTokens(project.Project(evs), "")
 	old := project.Project(evs[:cut+1])
 	transcript := project.Transcript(old)
 	if len(transcript) > 400_000 {
 		transcript = transcript[len(transcript)-400_000:]
+	}
+	// Clients draw a bar while the summariser runs.
+	_, _ = a.record(context.Background(), event.CompactionStarted, event.CompactionPayload{Before: before})
+	fail := func(err error) error {
+		_, _ = a.record(context.Background(), event.CompactionFailed, event.CompactionPayload{Before: before, Error: err.Error()})
+		return err
 	}
 	req := model.Request{
 		Model:  bareID(a.ModelID()),
@@ -491,7 +498,7 @@ func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
 	}
 	resp, err := m.Complete(ctx, req, nil)
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	var sb strings.Builder
 	for _, b := range resp.Blocks {
@@ -500,9 +507,14 @@ func (a *Agent) compact(ctx context.Context, m model.Model, target int) error {
 		}
 	}
 	if sb.Len() == 0 {
-		return errors.New("empty summary")
+		return fail(errors.New("empty summary"))
 	}
-	_, err = a.record(context.Background(), event.Compacted, event.CompactedPayload{FromSeq: evs[0].Seq, ToSeq: evs[cut].Seq, Summary: sb.String()})
+	payload := event.CompactedPayload{FromSeq: evs[0].Seq, ToSeq: evs[cut].Seq, Summary: sb.String(), Before: before}
+	// After: the history as the next call will see it, summary included.
+	kept := append([]event.Event{}, evs[cut+1:]...)
+	kept = append(kept, event.Event{Type: event.Compacted, Seq: evs[len(evs)-1].Seq + 1, Payload: event.MustPayload(payload)})
+	payload.After = project.EstimateTokens(project.Project(append(append([]event.Event{}, evs[:cut+1]...), kept...)), "")
+	_, err = a.record(context.Background(), event.Compacted, payload)
 	return err
 }
 

@@ -996,7 +996,11 @@ func EventLines(ev event.Event) []Line {
 		if err := ev.Decode(&p); err != nil {
 			return decodeErr(ev, err)
 		}
-		lines := []Line{{Kind: LineBlank}, {Kind: LineRule, Text: GlyphCompacted}}
+		rule := GlyphCompacted
+		if p.Before > 0 && p.After > 0 {
+			rule = fmt.Sprintf("┄┄ compacted %s → %s tokens ┄┄", fmtTokens(p.Before), fmtTokens(p.After))
+		}
+		lines := []Line{{Kind: LineBlank}, {Kind: LineRule, Text: rule}}
 		if s := strings.TrimSpace(p.Summary); s != "" {
 			lines = append(lines, truncLines(s, maxSummaryLine, LineDim)...)
 		}

@@ -1981,8 +1981,18 @@ func TestManualCompact(t *testing.T) {
 	e := h.waitFor(event.Compacted, root)
 	var cp event.CompactedPayload
 	_ = e.Decode(&cp)
-	if !strings.Contains(cp.Summary, "SUMMARY") || cp.ToSeq >= e.Seq || cp.FromSeq == 0 {
+	if !strings.Contains(cp.Summary, "SUMMARY") || cp.ToSeq >= e.Seq || cp.FromSeq == 0 || cp.Before <= 0 || cp.After <= 0 {
 		t.Fatalf("compacted payload: %+v", cp)
+	}
+	evs, _ := h.d.Log.Read(ctx, s.ID, 1, 0)
+	started := false
+	for _, ev := range evs {
+		if ev.Type == event.CompactionStarted && ev.Agent == root {
+			started = true
+		}
+	}
+	if !started {
+		t.Fatal("compaction.started should precede compacted")
 	}
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "three")
 	h.waitFor(event.TurnEnded, root)

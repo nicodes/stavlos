@@ -105,6 +105,8 @@ type Model struct {
 	status      string
 	statusErr   bool
 	statusToken int
+	compacting  map[string]time.Time // agents whose compaction is running (a bar above the divider), by id
+	compactTick bool                 // the compaction animation tick is scheduled
 
 	// Keyboard focus (tab / shift+tab cycle the sections). The chat cursor
 	// walks transcript items; expanded holds per-item tool output overrides
@@ -327,6 +329,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case placeholderTickMsg:
 		m.input.Placeholder = placeholders[placeholderIndex(time.Now())]
 		cmds = append(cmds, placeholderTickCmd())
+
+	case compactTickMsg:
+		if len(m.compacting) > 0 {
+			cmds = append(cmds, compactTickCmd())
+		} else {
+			m.compactTick = false
+		}
 
 	case reconcileMsg:
 		if msg.err != nil {
@@ -2284,7 +2293,7 @@ func (m *Model) command(text string) tea.Cmd {
 		if c := needAgent(); c != nil {
 			return c
 		}
-		return tea.Batch(m.setStatus("compacting…", false), compactCmd(m.ctx, m.c, agent))
+		return compactCmd(m.ctx, m.c, agent) // the compaction events drive the bar and the result line
 	case "/mode":
 		return m.openMode()
 	case "/yolo", "/auto":
@@ -2372,6 +2381,33 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 				m.history = append(m.history, p.Text)
 			}
 			m.histIdx = len(m.history)
+		}
+	case event.CompactionStarted:
+		if !m.loading {
+			if m.compacting == nil {
+				m.compacting = map[string]time.Time{}
+			}
+			m.compacting[ev.Agent] = ev.Time
+			if !m.compactTick {
+				m.compactTick = true
+				cmds = append(cmds, compactTickCmd())
+			}
+		}
+	case event.Compacted:
+		delete(m.compacting, ev.Agent)
+		var p event.CompactedPayload
+		if !m.loading && ev.Decode(&p) == nil && ev.Agent == m.selectedID() {
+			text := "compacted"
+			if p.Before > 0 && p.After > 0 {
+				text = fmt.Sprintf("compacted: %s → %s tokens", fmtTokens(p.Before), fmtTokens(p.After))
+			}
+			cmds = append(cmds, m.setStatus(text, false))
+		}
+	case event.CompactionFailed:
+		delete(m.compacting, ev.Agent)
+		var p event.CompactionPayload
+		if !m.loading && ev.Decode(&p) == nil && ev.Agent == m.selectedID() {
+			cmds = append(cmds, m.setStatus("compaction failed: "+p.Error, true))
 		}
 	case event.SessionModelChanged:
 		var p event.ModelChangedPayload

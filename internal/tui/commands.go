@@ -372,12 +372,10 @@ func compactCmd(ctx context.Context, c *client.Client, agent string) tea.Cmd {
 		ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 		defer cancel()
 		status, err := c.CompactAgent(ctx, agent)
-		switch status {
-		case "queued":
+		if status == "queued" {
 			return resultMsg{"compaction queued: the agent is mid-turn and compacts before its next model call", err}
-		default:
-			return resultMsg{"compacted: earlier turns are now a summary", err}
 		}
+		return resultMsg{"", err} // the Compacted event reports the result
 	}
 }
 
@@ -486,6 +484,15 @@ func pickSessionModelCmd(ctx context.Context, c *client.Client, session, modelID
 		defer cancel()
 		return resultMsg{"session model set to " + modelID, c.SetSessionModel(ctx, session, modelID)}
 	}
+}
+
+// compactTickMsg animates the compaction bar while a summariser runs.
+type compactTickMsg struct{}
+
+const compactTickPeriod = 120 * time.Millisecond
+
+func compactTickCmd() tea.Cmd {
+	return tea.Tick(compactTickPeriod, func(time.Time) tea.Msg { return compactTickMsg{} })
 }
 
 func placeholderTickCmd() tea.Cmd {
