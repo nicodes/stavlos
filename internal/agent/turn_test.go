@@ -657,3 +657,38 @@ func TestRoleSwitchDuringTurn(t *testing.T) {
 		t.Fatalf("%+v", in)
 	}
 }
+
+// TestLogWriteFailureEndsTheTurn: when the log refuses an event the turn
+// does not carry on from a history the log cannot replay; it ends with the
+// error at its next step and the agent says so.
+func TestLogWriteFailureEndsTheTurn(t *testing.T) {
+	fm := &fakeModel{steps: []step{
+		reply(call("c1", "read", `{"path":"f.txt"}`)),
+		reply(text("should not be reached")),
+	}}
+	s, h := newTestSession(t, testConfig{}, fm)
+	_ = os.WriteFile(filepath.Join(s.Dir, "f.txt"), []byte("x\n"), 0o644)
+	root := s.Root()
+	// The failure lands on the tool's finished event.
+	fm.steps[0] = func(context.Context, model.Request) (model.Response, error) {
+		h.mu.Lock()
+		h.failNext = errors.New("disk full")
+		h.mu.Unlock()
+		return call("c1", "read", `{"path":"f.txt"}`), nil
+	}
+	end := runTurn(t, s, h, "go")
+	if end.Reason != "error" || !strings.Contains(end.Error, "event log") || !strings.Contains(end.Error, "disk full") {
+		t.Fatalf("%+v", end)
+	}
+	if len(fm.requests()) != 1 {
+		t.Fatal("the model was called again after a log failure")
+	}
+	if in := root.Info(); in.State != "idle" || !strings.Contains(in.LastError, "disk full") {
+		t.Fatalf("%+v", in)
+	}
+	// The next turn runs normally.
+	fm.steps = []step{reply(text("fine"))}
+	if end := runTurn(t, s, h, "again"); end.Reason != "end_turn" {
+		t.Fatalf("%+v", end)
+	}
+}

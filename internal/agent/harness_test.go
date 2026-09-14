@@ -34,6 +34,7 @@ type fakeHost struct {
 	prompts  []protocol.PromptInfo
 	streams  []protocol.StreamNotification
 	badModel error // CheckModel/Resolve fail with this when set
+	failNext error // the next Append fails with this, once
 }
 
 func newFakeHost(m *fakeModel) *fakeHost {
@@ -43,6 +44,11 @@ func newFakeHost(m *fakeModel) *fakeHost {
 func (h *fakeHost) Append(_ context.Context, e event.Event) (event.Event, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.failNext != nil {
+		err := h.failNext
+		h.failNext = nil
+		return e, err
+	}
 	h.seq[e.Session]++
 	e.Seq = h.seq[e.Session]
 	e.Global = int64(len(h.events) + 1)
