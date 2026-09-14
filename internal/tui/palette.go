@@ -123,20 +123,3 @@ func paletteView(matches []Command, idx, width int) string {
 	}
 	return lipgloss.NewStyle().Width(width).Render(strings.Join(rows, "\n"))
 }
-
-// helpLines is generated from the registry plus the key reference.
-func helpLines() []string {
-	out := []string{"commands:", "  <text>                           send to the selected agent (a busy agent takes it at its next step)"}
-	for _, c := range commands {
-		left := c.Name
-		if c.Args != "" {
-			left += " " + c.Args
-		}
-		desc := c.Desc
-		if len(c.Aliases) > 0 {
-			desc += " (alias " + strings.Join(c.Aliases, ", ") + ")"
-		}
-		out = append(out, fmt.Sprintf("  %-33s%s", left, desc))
-	}
-	return append(out, helpKeyLines...)
-}

@@ -222,7 +222,7 @@ tests that pin current behaviour first.
 8.5 ✅ (per-session dialog state — question, permission and dirs rows, mcp folds — joined `sessionState`; commands share `rpcCmd`/`resultCmd`/`tick`) `Model` split into `sessionState` (zeroed wholesale on bind), `dialogs`, `uiPrefs`; `reply()`
     and `claimThen()` helpers; msg/cmd near-duplicates merged (`sessionsMsg`, `rolesMsg`,
     `providersMsg`, tick helper).
-8.6 `EventLines` as a renderer table; `handleKey` split (`inputKey`); dead code removed
+8.6 ✅ (also gone: `helpKeyLines`, `monitorKindFromText`, `monitorKindWord`; `Transcript.Notice` joined the test-only helpers) `EventLines` as a renderer table; `handleKey` split (`inputKey`); dead code removed
     (`notice`, `helpLines`, `todoLabel`, `mcpLabel`, `monitorGlyph`, `prettyJSON`, stale hotkey
     text); test-only exports to `export_test.go`.
 8.7 Package split: `tui/transcript`, `tui/render`, `tui/dialog`, `tui`.
