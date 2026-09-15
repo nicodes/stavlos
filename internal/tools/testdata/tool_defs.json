@@ -212,7 +212,7 @@
     "schema": {
       "properties": {
         "limit": {
-          "description": "Max lines to return (default 2000)",
+          "description": "Max lines to return (default 2000, max 5000)",
           "type": "integer"
         },
         "offset": {
