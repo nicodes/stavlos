@@ -41,12 +41,11 @@ The meta row under the input shows the selected agent's role, model and variant,
 
 ### The tab strip
 
-A strip under the input holds seven tabs, each always there with its count: "permission", "questions", "async", "due", "todo", "mcp" and "dirs". Tab lands on the leftmost, ←/→ move the highlight, enter or a click opens that tab's dialog, and esc returns to where you came from.
+The tabs, each always there with its count, are "permission" and "questions" (shown as `! n · ? n`, every channel's prompts), "dirs" (the channel's directories), and an agent's own "async", "todo" and "mcp". In an agent's chat the last three sit at the right end of the meta row; `! ? dirs` sit in the strip under the input while the sidebar is hidden, and in the sidebar (with dirs behind each channel's ⚙) while it shows. Tab lands on the leftmost, ←/→ move the highlight, enter or a click opens that tab's dialog, and esc returns to where you came from.
 
 - **permission** holds the permission prompts. The permission and questions dialogs show the selected agent's prompt first and the oldest one otherwise, while the strip counts every prompt in the channel.
 - **questions** holds `ask_user` batches (see below).
-- **async** shows what the selected agent is waiting on: the agents whose answer it expects (a child it tasked, a sibling or parent it messaged) and its running shell jobs.
-- **due** is the other direction: who is waiting on the selected agent's reply, you first, then any agent that messaged it. Space opens that chat.
+- **async** holds both directions for the selected agent: under "waiting on", the agents whose answer it expects (a child it tasked, a sibling or parent it messaged) and its running shell jobs; under "owes a reply to", who waits on its reply, you first, then any agent that messaged it. Space on an agent (or on you) opens that chat.
 - **todo** lists the selected agent's plan.
 - **mcp** lists its MCP servers with their state, tool count and uptime.
 - **dirs** edits its working directories: `a` adds, enter replaces, ctrl+d removes; the channel directory stays.

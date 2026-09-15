@@ -30,8 +30,6 @@ func (m Model) keyHints() []dialog.Hint {
 	}
 	switch m.focus {
 	case focusAsync:
-		return []dialog.Hint{hint("↑/↓", "move"), hint("space", "select agent"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
-	case focusDue:
 		return []dialog.Hint{hint("↑/↓", "move"), hint("space", "open chat"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusTodo:
 		return []dialog.Hint{hint("↑/↓", "move"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}

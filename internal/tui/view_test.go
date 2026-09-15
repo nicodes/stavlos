@@ -485,14 +485,14 @@ func TestTabCyclesFocus(t *testing.T) {
 		if m.tabSel != 0 {
 			t.Fatalf("left at the edge: sel=%d", m.tabSel)
 		}
-		press(&m, right, right, right, right, right, right)
+		press(&m, right, right, right, right, right)
 		press(&m, right) // already rightmost (mcp): stays
-		if m.focus != focusTabs || m.tabSel != 6 {
-			t.Fatalf("right x7: focus=%v sel=%d", m.focus, m.tabSel)
+		if m.focus != focusTabs || m.tabSel != 5 {
+			t.Fatalf("right x6: focus=%v sel=%d", m.focus, m.tabSel)
 		}
-		press(&m, left, left, left)
+		press(&m, left, left)
 		if m.tabSel != 3 {
-			t.Fatalf("left x3: sel=%d", m.tabSel)
+			t.Fatalf("left x2: sel=%d", m.tabSel)
 		}
 		// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
 		press(&m, tea.KeyMsg{Type: tea.KeySpace})
@@ -957,11 +957,11 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "Async 2") || !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
 		t.Fatalf("async dialog:\n%s", dv)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // strip (async) → past due → todo
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // strip (async) → todo
 	if m.focus != focusTodo {
 		t.Fatalf("todo: focus=%v", m.focus)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeySpace}) // strip (todo) → past due → async for the selection test
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeySpace}) // strip (todo) → async for the selection test
 	if m.focus != focusAsync {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -989,7 +989,7 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: the channel's tabs over the agent's, counts only
 	v := stripANSI(tabsView(m, 100))
-	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · ? 0 · dirs 0\nasync 2 · due 0 · todo") ||
+	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · ? 0 · dirs 0\nasync 2 · todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
@@ -1384,7 +1384,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Archetype = "general"
 	// empty: the tab reads (0) and its dialog says so
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 · due 0 · todo 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 · todo 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	m.focus = focusTodo
@@ -1402,10 +1402,10 @@ func TestTodoTabAndDialog(t *testing.T) {
 	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 2/4") {
 		t.Fatalf("strip with items:\n%s", sv)
 	}
-	// tab → strip, → x5 lands on todo, enter opens its dialog
+	// tab → strip, → x4 lands on todo, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusTodo {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -1424,7 +1424,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 		t.Fatalf("↓ should move the cursor: %d", m.agCursor)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 5 {
+	if m.focus != focusTabs || m.tabSel != 4 {
 		t.Fatalf("esc should return to the strip on todo: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// clicking the todo label on the strip opens the dialog
@@ -2502,10 +2502,10 @@ func TestMCPTabAndDialog(t *testing.T) {
 	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "mcp 1/3") {
 		t.Fatalf("strip with servers:\n%s", sv)
 	}
-	// tab → strip, → x6 lands on mcp, enter opens its dialog
+	// tab → strip, → x5 lands on mcp, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusMCP {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2529,7 +2529,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 6 {
+	if m.focus != focusTabs || m.tabSel != 5 {
 		t.Fatalf("esc should return to the strip on mcp: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// chat: tool names and server events
@@ -2970,7 +2970,7 @@ func TestTabRowsMoveVertically(t *testing.T) {
 		{1, true, 4},  // ? → due
 		{2, true, 5},  // dirs → todo
 		{3, false, 0}, // async → !
-		{6, false, 2}, // mcp → dirs (clamped to the shorter row)
+		{5, false, 2}, // mcp → dirs
 		{0, false, 0}, // top row stays
 		{4, true, 4},  // bottom row stays
 	} {
@@ -3040,7 +3040,7 @@ func TestPromptsAcrossChannels(t *testing.T) {
 
 // TestChannelChatFooterIsTheChannels: the channel chat's footer carries only
 // what is the channel's: the mode tag, the channel's tokens and cost, and no
-// async · due · todo · mcp tabs; an agent's chat has them all back. The view
+// async · todo · mcp tabs; an agent's chat has them all back. The view
 // fills the window either way.
 func TestChannelChatFooterIsTheChannels(t *testing.T) {
 	m := channelModel()
