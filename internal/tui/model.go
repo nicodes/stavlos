@@ -233,6 +233,20 @@ var tabRows = [][]focus{
 // tabFocuses is every tab in strip order: the top row, then the bottom.
 var tabFocuses = slices.Concat(tabRows...)
 
+// tabLayout is the tab rows as they are drawn: tabRows while the sidebar is
+// hidden; with it showing, ! and ? on top (in the sidebar, above the
+// channels) and dirs out of the tabs, a row under the open channel instead,
+// since the directories are that channel's.
+func (m Model) tabLayout() [][]focus {
+	if m.sidebarVisible() {
+		return [][]focus{{focusPermission, focusQuestions}, tabRows[1]}
+	}
+	return tabRows
+}
+
+// tabOrder is tabLayout's tabs in order: what the strip's highlight walks.
+func (m Model) tabOrder() []focus { return slices.Concat(m.tabLayout()...) }
+
 // isTab reports whether f is one of the strip's tabs.
 func isTab(f focus) bool {
 	for _, t := range tabFocuses {
@@ -826,7 +840,7 @@ func (m *Model) closeDialog() tea.Cmd {
 	}
 	cmd := m.setFocus(from)
 	if from == focusTabs {
-		for i, t := range tabFocuses {
+		for i, t := range m.tabOrder() {
 			if t == closed {
 				m.tabSel = i
 			}
@@ -857,13 +871,14 @@ func (m *Model) tabsKey(msg tea.KeyMsg) tea.Cmd {
 			m.tabSel--
 		}
 	case key.Matches(msg, keys.TabRight):
-		if m.tabSel < len(tabFocuses)-1 {
+		if m.tabSel < len(m.tabOrder())-1 {
 			m.tabSel++
 		}
 	case key.Matches(msg, keys.OvUp), key.Matches(msg, keys.OvDown):
-		m.tabSel = otherRowTab(m.tabSel, key.Matches(msg, keys.OvDown))
+		m.tabSel = m.otherRowTab(m.tabSel, key.Matches(msg, keys.OvDown))
 	case key.Matches(msg, keys.Select):
-		return m.openTab(tabFocuses[m.tabSel])
+		order := m.tabOrder()
+		return m.openTab(order[min(m.tabSel, len(order)-1)])
 	}
 	return nil
 }
@@ -916,7 +931,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	case focusSidebar:
 		m.sbCursor = m.channelRow()
 		if !m.superChat {
-			m.sbCursor = m.channelRow() + 1 + m.selected
+			m.sbCursor = m.channelRow() + 2 + m.selected
 		}
 	case focusAsync, focusDue, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0
@@ -1695,7 +1710,7 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 		}
 		return cmd
 	case y >= lay.strip && y < lay.meta: // a tab label opens that tab's dialog
-		if f, ok := m.tabAt(x, y-lay.strip+len(tabRows)-m.stripRows()); ok {
+		if f, ok := m.tabAt(x, y-lay.strip+len(m.tabLayout())-m.stripRows()); ok {
 			return m.openTab(f)
 		}
 	case y >= lay.input && y < lay.input+m.inputRows(): // the input lines
@@ -2986,8 +3001,8 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.Select):
 		return m.sidebarSelect(m.sbCursor)
 	case msg.String() == "n": // the next agent that needs you, selected at once
-		if i := m.nextNeedy(max(-1, m.sbCursor-m.channelRow()-1)); i >= 0 {
-			m.sbCursor = m.channelRow() + 1 + i
+		if i := m.nextNeedy(max(-1, m.sbCursor-m.channelRow()-2)); i >= 0 {
+			m.sbCursor = m.channelRow() + 2 + i
 			m.openAgent(i)
 		} else {
 			return m.setStatus("no agent is waiting on you", false)
@@ -3015,12 +3030,13 @@ func (m *Model) nextNeedy(from int) int {
 // top to bottom: 0 is + channel, then the channels alphabetically with this
 // channel's agents right under its row (channelRow).
 func (m *Model) sidebarItems() int {
-	return len(m.agents) + 2 + len(m.navChannels)
+	return len(m.agents) + 3 + len(m.navChannels)
 }
 
 // channelRow is the sidebar cursor index of this channel's row: after
 // + channel and the other channels named before it (navChannels is kept in
-// alphabetical order). Its agent i is channelRow()+1+i.
+// alphabetical order). Its dirs row follows, then its agent i at
+// channelRow()+2+i.
 func (m Model) channelRow() int {
 	n := 1
 	for _, s := range m.navChannels {
@@ -3048,14 +3064,16 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 			return tea.Batch(chat, cmd)
 		}
 		return tea.Batch(chat, m.setFocus(focusInput))
-	case i <= here+na:
-		m.openAgent(i - here - 1)
+	case i == here+1:
+		return m.openTab(focusDirs) // the open channel's dirs row
+	case i <= here+1+na:
+		m.openAgent(i - here - 2)
 		if cmd, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
 			return cmd
 		}
 		return m.setFocus(focusInput)
-	case i-na-2 < len(m.navChannels):
-		return m.openOther(i - na - 2)
+	case i-na-3 < len(m.navChannels):
+		return m.openOther(i - na - 3)
 	}
 	return nil
 }
@@ -3134,8 +3152,8 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 			return tea.Batch(cmd, chat, open)
 		}
 		return tea.Batch(cmd, chat)
-	case i > m.channelRow() && i <= m.channelRow()+len(m.agents):
-		m.openAgent(i - m.channelRow() - 1)
+	case i > m.channelRow()+1 && i <= m.channelRow()+1+len(m.agents):
+		m.openAgent(i - m.channelRow() - 2)
 		if open, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
 			return tea.Batch(cmd, open)
 		}
@@ -4024,18 +4042,19 @@ func (m *Model) chatCache(id string) *render.Cache {
 // otherRowTab is the tab ↑ (down false) or ↓ (down true) moves the strip's
 // highlight to from tab sel: the same place in the row above or below,
 // clamped to that row's length; sel itself on the first or last row.
-func otherRowTab(sel int, down bool) int {
+func (m Model) otherRowTab(sel int, down bool) int {
+	rows := m.tabLayout()
 	row, col, start := 0, sel, 0
-	for row < len(tabRows)-1 && col >= len(tabRows[row]) {
-		col -= len(tabRows[row])
-		start += len(tabRows[row])
+	for row < len(rows)-1 && col >= len(rows[row]) {
+		col -= len(rows[row])
+		start += len(rows[row])
 		row++
 	}
 	switch {
-	case down && row < len(tabRows)-1:
-		return start + len(tabRows[row]) + min(col, len(tabRows[row+1])-1)
+	case down && row < len(rows)-1:
+		return start + len(rows[row]) + min(col, len(rows[row+1])-1)
 	case !down && row > 0:
-		return start - len(tabRows[row-1]) + min(col, len(tabRows[row-1])-1)
+		return start - len(rows[row-1]) + min(col, len(rows[row-1])-1)
 	}
 	return sel
 }

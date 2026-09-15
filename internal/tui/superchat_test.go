@@ -49,7 +49,7 @@ func TestSuperChatView(t *testing.T) {
 	}
 
 	m.setFocus(focusSidebar)
-	if m.sbCursor != 3 { // + channel, this channel, then the agents
+	if m.sbCursor != 4 { // + channel, this channel, its dirs, then the agents
 		t.Fatalf("the sidebar cursor starts on the shown agent's row: %d", m.sbCursor)
 	}
 	m.sbCursor = 1 // this channel's row

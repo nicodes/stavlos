@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -382,7 +383,7 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 	down := tea.KeyMsg{Type: tea.KeyDown}
 	m.handleKey(down)
 	m.handleKey(down)
-	if m.sbCursor != 4 || m.selected != 0 { // row 0 is + channel, 1 this channel, agent i is row i+2
+	if m.sbCursor != 5 || m.selected != 0 { // row 0 is + channel, 1 this channel, 2 its dirs, agent i is row i+3
 		t.Fatalf("cursor %d selected %d", m.sbCursor, m.selected)
 	}
 	// the cursor is a row background (a visible marker here), never an arrow
@@ -2184,9 +2185,23 @@ func TestSidebarNav(t *testing.T) {
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
 		if header != 9 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" ||
-			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1 · ? 1/1 · dirs 0") || strings.TrimSpace(sb[7]) != "" || !strings.HasPrefix(sb[8], "channels") || strings.Contains(strings.Join(sb, "\n"), "need you") {
+			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1 · ? 1/1") || strings.Contains(sb[sidebarTabsRow], "dirs") || strings.TrimSpace(sb[7]) != "" || !strings.HasPrefix(sb[8], "channels") || strings.Contains(strings.Join(sb, "\n"), "need you") {
 			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:9], "\n"))
 		}
+		// dirs is the open channel's: a row under it, above its first agent,
+		// and out of the tabs the strip walks
+		if body, items := m.sidebarBody(sidebarWidth - 1); strings.TrimRight(stripANSI(body[2]), " ") != "    dirs 0" || items[2] != 2 || !strings.Contains(stripANSI(body[3]), "@main") {
+			t.Fatalf("dirs row:\n%s", stripANSI(strings.Join(body, "\n")))
+		}
+		if slices.Contains(m.tabOrder(), focusDirs) {
+			t.Fatalf("with the sidebar the strip's tabs skip dirs: %v", m.tabOrder())
+		}
+		m.setFocus(focusSidebar)
+		m.sidebarSelect(m.channelRow() + 1)
+		if m.focus != focusDirs {
+			t.Fatalf("the dirs row opens the dirs dialog: %v", m.focus)
+		}
+		m.closeDialog()
 		// with the sidebar showing, the footer strip keeps only the agent's row
 		if sv := stripANSI(m.sectionsView(120)); strings.Contains(sv, "dirs") || !strings.HasPrefix(sv, "async") || strings.Count(sv, "\n") != 0 {
 			t.Fatalf("strip with the sidebar:\n%s", sv)
@@ -2221,7 +2236,7 @@ func TestSidebarNav(t *testing.T) {
 		// n jumps to the next agent needing you and selects it; again wraps
 		m.setFocus(focusSidebar)
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-		if m.sbCursor != 3 || m.selectedID() != "b" || m.focus != focusSidebar {
+		if m.sbCursor != 4 || m.selectedID() != "b" || m.focus != focusSidebar {
 			t.Fatalf("n: cursor=%d selected=%s focus=%v", m.sbCursor, m.selectedID(), m.focus)
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
@@ -2247,10 +2262,10 @@ func TestSidebarNav(t *testing.T) {
 		// a click on a tree row selects that agent (rows start after the header)
 		m.setFocus(focusInput)
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 4, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 4, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 5, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 5, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
-		if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 4 {
+		if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 5 {
 			t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
 		}
 	})
@@ -2273,12 +2288,12 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if f := strings.Fields(plain[2]); len(body) != na+4 || !strings.HasPrefix(plain[0], "  + channel") || strings.TrimRight(plain[1], " ") != "  ? #docs" ||
-			len(f) != 2 || f[1] != "#proj" || strings.TrimRight(plain[na+3], " ") != "  ! #proj-2" || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
-			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || m.channelRow() != 2 {
+		if f := strings.Fields(plain[2]); len(body) != na+5 || !strings.HasPrefix(plain[0], "  + channel") || strings.TrimRight(plain[1], " ") != "  ? #docs" ||
+			len(f) != 2 || f[1] != "#proj" || strings.TrimRight(plain[3], " ") != "    dirs 0" || strings.TrimRight(plain[na+4], " ") != "  ! #proj-2" || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
+			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[4] != 4 || items[na+4] != na+4 || m.channelRow() != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}
-		for _, i := range []int{1, 2, na + 3} {
+		for _, i := range []int{1, 2, 3, na + 4} {
 			if w := ansi.StringWidth(plain[i]); w != sidebarWidth-1 {
 				t.Fatalf("channel rows fill the width: %d %q", w, plain[i])
 			}
@@ -2289,7 +2304,7 @@ func TestSidebarNav(t *testing.T) {
 		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "opening #docs") {
 			t.Fatalf("space on a channel should open it: cmd=%v status=%q", cmd != nil, m.status)
 		}
-		for m.sbCursor != na+3 {
+		for m.sbCursor != na+4 {
 			press(&m, tea.KeyMsg{Type: tea.KeyDown})
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the + channel row
@@ -2298,8 +2313,8 @@ func TestSidebarNav(t *testing.T) {
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}) // from + channel, n still finds an agent
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 3, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 3, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 4, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 4, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
 		if !strings.Contains(m.status, "opening #proj-2") {
 			t.Fatalf("a click on a channel should open it: %q", m.status)
@@ -2941,6 +2956,7 @@ func TestControlsNeverReachTheTerminal(t *testing.T) {
 // TestTabRowsMoveVertically: ↑/↓ on the strip move the highlight between the
 // channel's row and the agent's, keeping the column where the row allows.
 func TestTabRowsMoveVertically(t *testing.T) {
+	m := channelModel() // the sidebar hidden: ! ? dirs over the agent's row
 	for _, c := range []struct {
 		sel  int
 		down bool
@@ -2954,7 +2970,7 @@ func TestTabRowsMoveVertically(t *testing.T) {
 		{0, false, 0}, // top row stays
 		{4, true, 4},  // bottom row stays
 	} {
-		if got := otherRowTab(c.sel, c.down); got != c.want {
+		if got := m.otherRowTab(c.sel, c.down); got != c.want {
 			t.Errorf("otherRowTab(%d, %v) = %d, want %d", c.sel, c.down, got, c.want)
 		}
 	}
@@ -2981,7 +2997,7 @@ func TestPromptsAcrossChannels(t *testing.T) {
 	}
 	// opening @world-politics (b) from the sidebar opens the permission dialog on its own prompt
 	m.setFocus(focusSidebar)
-	m.sidebarSelect(m.channelRow() + 2)
+	m.sidebarSelect(m.channelRow() + 3)
 	if perms, _ := m.promptCountsIn(m.scope); m.focus != focusPermission || m.currentPrompt().ID != "p-here" || m.scope.agent != "b" || perms != 1 {
 		t.Fatalf("agent open: focus=%v prompt=%s scope=%+v perms=%d", m.focus, m.currentPrompt().ID, m.scope, perms)
 	}
@@ -3000,7 +3016,7 @@ func TestPromptsAcrossChannels(t *testing.T) {
 	m.closeDialog()
 	// @asker (d) waits on a question only: its open goes to the questions dialog
 	m.setFocus(focusSidebar)
-	m.sidebarSelect(m.channelRow() + 4)
+	m.sidebarSelect(m.channelRow() + 5)
 	if m.focus != focusQuestions || m.currentQuestion().ID != "q-here" {
 		t.Fatalf("agent with a question: focus=%v", m.focus)
 	}

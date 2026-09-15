@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -534,9 +535,10 @@ func (m Model) sidebarView(height int) string {
 // sidebarHeader is what precedes the tree: the app name, a blank, the
 // channel directory, the channel's tokens and cost (the rollup of what
 // the meta row shows per agent), the swarm state ("3 working · 1
-// waiting", or "idle"), a blank, the ! ? dirs tabs (sidebarTabsRow; the
-// footer strip keeps only the agent's row while the sidebar shows), a blank,
-// and the "channels" heading. The tree's
+// waiting", or "idle"), a blank, the ! and ? tabs (sidebarTabsRow; every
+// channel's prompts, so above the channels; the footer strip keeps only the
+// agent's row while the sidebar shows, and dirs is a row under the open
+// channel), a blank, and the "channels" heading. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	dir := format.ShortHome(m.channel.Dir)
@@ -565,15 +567,15 @@ const sidebarTabsRow = 6
 // agent's while the sidebar shows the ! ? dirs row.
 func (m Model) stripRows() int {
 	if m.sidebarVisible() {
-		return len(tabRows) - 1
+		return len(m.tabLayout()) - 1
 	}
-	return len(tabRows)
+	return len(m.tabLayout())
 }
 
 // sidebarBody is everything under the header: the + channel row, then the
 // directory's channels in alphabetical order (they never move on their
 // own), each "● #name" with its state dot first, this channel's row (its
-// chat) with its agent tree right under it. items maps each row to its
+// chat) with its dirs row and then its agent tree right under it. items maps each row to its
 // cursor index (+ channel 0, then top to bottom; see channelRow), -1 for rows
 // the cursor skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
@@ -614,17 +616,24 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		dot = mark
 	}
 	channel(dot, channelLabel(m.channel), style, here)
+	// the open channel's dirs, above its agents: the directories are the channel's
+	dirs := fmt.Sprintf("dirs %d", len(m.channelDirs()))
+	dirsStyle := theme.StyleDim
+	if m.focus == focusDirs {
+		dirsStyle = theme.StyleBoxTitleFocus
+	}
+	line("    "+dirsStyle.Render(dirs)+strings.Repeat(" ", max(0, width-4-len(dirs))), here+1)
 	tree := m.treeRows(width)
 	rows = append(rows, tree...)
 	for i := range tree {
 		if i < na {
-			items = append(items, here+1+i)
+			items = append(items, here+2+i)
 		} else {
 			items = append(items, -1) // the "(no agents)" row
 		}
 	}
 	for k := here - 1; k < len(m.navChannels); k++ {
-		other(m.navChannels[k], 2+na+k)
+		other(m.navChannels[k], 3+na+k)
 	}
 	return rows, items
 }
@@ -739,7 +748,7 @@ func (m Model) treeRows(width int) []string {
 			gap = 0
 		}
 		row := indent + dot + " " + text + strings.Repeat(" ", gap) + right
-		if focused && m.channelRow()+1+i == m.sbCursor {
+		if focused && m.channelRow()+2+i == m.sbCursor {
 			row = render.Highlight(row, width)
 		}
 		rows = append(rows, row)
@@ -1046,23 +1055,29 @@ func (m Model) sectionTabs(p *protocol.PromptInfo, width int) string {
 // (while its dialog is up) is in accent, the rest dim; with where each label
 // was drawn, per row.
 func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
+	layout := m.tabLayout()
+	order := slices.Concat(layout...)
 	on := func(f focus) bool {
 		if m.focus == focusTabs {
-			return tabFocuses[m.tabSel] == f
+			return m.tabSel < len(order) && order[m.tabSel] == f
 		}
 		return m.focus == f
 	}
 	perms, questions := m.promptCounts()
 	texts := m.tabTexts()
-	tabs := make([]string, len(texts))
-	spans := make([][]span[focus], len(tabRows))
-	row, x, first := 0, 0, 0 // first: the index of row's first tab
+	text := make(map[focus]string, len(texts))
 	for i, f := range tabFocuses {
-		if i-first == len(tabRows[row]) {
-			first += len(tabRows[row])
+		text[f] = texts[i]
+	}
+	tabs := make([]string, len(order))
+	spans := make([][]span[focus], len(layout))
+	row, x, first := 0, 0, 0 // first: the index of row's first tab
+	for i, f := range order {
+		if i-first == len(layout[row]) {
+			first += len(layout[row])
 			row, x = row+1, 0
 		}
-		label := texts[i]
+		label := text[f]
 		// the prompt tabs show the glyph their prompts draw in place of the
 		// word, to save room: "! 1/2" (permission or trust), "? 0"; their
 		// dialogs keep the word in the title
@@ -1086,9 +1101,9 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 			tabs[i] = theme.StyleDim.Render(label)
 		}
 	}
-	lines := make([]string, len(tabRows))
+	lines := make([]string, len(layout))
 	first = 0
-	for r, tr := range tabRows {
+	for r, tr := range layout {
 		lines[r] = strings.Join(tabs[first:first+len(tr)], theme.StyleDim.Render(" · "))
 		first += len(tr)
 	}
