@@ -542,8 +542,8 @@ func (m Model) sidebarHeader(width int) []string {
 
 // sidebarBody is everything under the header: the + channel row, then the
 // directory's channels in alphabetical order (they never move on their
-// own), this channel's row (its chat) with its agent tree right under it,
-// each other channel a row with its state and age. items maps each row to its
+// own), each "● #name" with its state dot first, this channel's row (its
+// chat) with its agent tree right under it. items maps each row to its
 // cursor index (+ channel 0, then top to bottom; see channelRow), -1 for rows
 // the cursor skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
@@ -554,30 +554,28 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		rows, items = append(rows, text), append(items, idx)
 	}
+	// "  ● #name": the channel's state dot, then its name, padded to the width
+	channel := func(dot, name string, style lipgloss.Style, idx int) {
+		name = format.Trunc(name, width-5)
+		line("  "+dot+" "+style.Render(name)+strings.Repeat(" ", max(0, width-4-ansi.StringWidth(name))), idx)
+	}
 	other := func(s protocol.ChannelInfo, idx int) {
-		age := ""
-		if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
-			age = format.Elapsed(time.Since(t))
-		}
-		avail := max(4, width-4-ansi.StringWidth(age)-1)
-		name := channelLabel(s)
-		if ansi.StringWidth(name) > avail {
-			name = format.Trunc(name, avail-1)
-		}
-		gap := max(1, width-4-ansi.StringWidth(name)-ansi.StringWidth(age))
-		line("  "+theme.StyleDim.Render(name)+strings.Repeat(" ", gap)+stateDot(string(s.State))+" "+theme.StyleDim.Render(age), idx)
+		channel(stateDot(string(s.State)), channelLabel(s), theme.StyleDim, idx)
 	}
 	line("  "+theme.StyleDim.Render("+ channel")+strings.Repeat(" ", max(0, width-11)), 0)
 	here, na := m.channelRow(), len(m.agents)
 	for k := 0; k < here-1; k++ {
 		other(m.navChannels[k], 1+k)
 	}
-	label := format.Trunc(channelLabel(m.channel), width-3)
-	chat := theme.StyleDim.Render(label)
-	if m.superChat {
-		chat = theme.StyleSelected.Render(label)
+	states := make([]protocol.AgentState, 0, na)
+	for _, a := range m.agents {
+		states = append(states, a.State)
 	}
-	line("  "+chat+strings.Repeat(" ", max(0, width-2-ansi.StringWidth(label))), here)
+	style := theme.StyleDim
+	if m.superChat {
+		style = theme.StyleSelected
+	}
+	channel(stateDot(string(protocol.RollUp(states))), channelLabel(m.channel), style, here)
 	tree := m.treeRows(width)
 	rows = append(rows, tree...)
 	for i := range tree {
@@ -593,12 +591,12 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	return rows, items
 }
 
-// channelLabel is a channel's label in the sidebar and the picker: "# name".
+// channelLabel is a channel's label in the sidebar and the picker: "#name".
 func channelLabel(s protocol.ChannelInfo) string {
 	if s.Name == "" {
-		return "# channel"
+		return "#channel"
 	}
-	return "# " + s.Name
+	return "#" + s.Name
 }
 
 // swarmLine counts the agents working and waiting on an answer; "idle"
@@ -654,7 +652,7 @@ func (m Model) treeRows(width int) []string {
 	rows := make([]string, 0, len(m.agents))
 	focused := m.focus == focusSidebar && m.sidebarVisible()
 	for i, a := range m.agents {
-		indent := "    " + strings.Repeat("  ", a.Depth) // one level under this channel's "# name" row
+		indent := "    " + strings.Repeat("  ", a.Depth) // one level under this channel's "#name" row
 		dot := agentDot(a)
 		// The right column: the badge (warning) and the cost (dim), with a
 		// space before it whenever it is not empty.
