@@ -502,3 +502,19 @@ func TestWhoNamesTheLine(t *testing.T) {
 		t.Errorf("a chat reply: %+v", c.All())
 	}
 }
+
+// TestDeniedCallShowsWhy: a denied call gets "✗ Permission denied" under
+// it, with the reason when there is one, instead of its output.
+func TestDeniedCallShowsWhy(t *testing.T) {
+	for out, want := range map[string]string{
+		"Permission denied by the user: too risky":                                        "**Permission denied** · too risky",
+		"Permission denied by the user.":                                                  "**Permission denied**",
+		"Denied by policy: shell rm -rf ~":                                                "**Permission denied** · by policy",
+		"Permission denied: nobody answered the prompt and the headless default is deny.": "**Permission denied** · nobody answered the prompt and the headless default is deny",
+	} {
+		lines := EventLines(event.Event{Type: event.ToolCallFinished, Time: time.Now(), Payload: event.MustPayload(event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: out, IsError: true, Denied: true})})
+		if len(lines) != 1 || lines[0].Text != want || lines[0].Glyph != GlyphFailed {
+			t.Errorf("%q: %+v", out, lines)
+		}
+	}
+}

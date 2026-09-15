@@ -457,14 +457,11 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 	if l.Suffix != "" {
 		text += " " + l.Suffix
 	}
-	// A line's own glyph, coloured by lifecycle: yellow in progress, red on
-	// error or termination, otherwise the glyph's natural colour.
+	// A line's own glyph, in its kind's colour. Glyphs never change colour
+	// with a line's state (running, waiting, failed): colour on a glyph says
+	// who a line is about (see whoColours).
 	if l.Glyph != "" {
-		if l.Running && l.Kind != transcript.LineTool {
-			glyph = theme.StyleWorking.Render(l.Glyph) + " "
-		} else {
-			glyph = glyphStyle(l).Render(l.Glyph) + " "
-		}
+		glyph = glyphStyle(l).Render(l.Glyph) + " "
 	}
 	if l.Block != transcript.BlockNone && (l.Kind == transcript.LineText || l.Kind == transcript.LineLabel) {
 		bs := blockStyle(l.Block)
@@ -509,24 +506,22 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 
 // whoColours gives a line that names someone (Line.Who) that one's colour
 // on its glyph and its leading @name: the role's colour for an agent, blue
-// for the human. A glyph showing a state (running, waiting, failed) keeps
-// it. It returns the glyph, the text with the name's bold markers dropped,
-// the name to draw ("" when the text does not lead with it) and its style.
+// for the human. It returns the glyph, the text with the name's bold
+// markers dropped, the name to draw ("" when the text does not lead with
+// it) and its style.
 func whoColours(l transcript.Line, o Options, glyph, text string) (string, string, string, lipgloss.Style) {
 	if l.Who == "" || o.WhoStyle == nil {
 		return glyph, text, "", lipgloss.Style{}
 	}
 	ws := o.WhoStyle(l.Who)
-	if !l.Running && !l.Err && l.Tone == transcript.ToneNone {
-		switch {
-		case l.Kind == transcript.LineTool:
-			g, gap := transcript.CallGlyph(l)
-			glyph = ws.Render(g) + gap
-		case l.Glyph != "":
-			glyph = ws.Render(l.Glyph) + " "
-		case l.Lead:
-			glyph = ws.Render("›") + " "
-		}
+	switch {
+	case l.Kind == transcript.LineTool:
+		g, gap := transcript.CallGlyph(l)
+		glyph = ws.Render(g) + gap
+	case l.Glyph != "":
+		glyph = ws.Render(l.Glyph) + " "
+	case l.Lead:
+		glyph = ws.Render("›") + " "
 	}
 	name := "@" + l.Who
 	text = strings.Replace(text, "**"+name+"**", name, 1)
@@ -589,13 +584,7 @@ func markdownStyle(base lipgloss.Style) func(...string) string {
 // gap after it.
 func toolLineGlyph(l transcript.Line) string {
 	g, gap := transcript.CallGlyph(l)
-	switch {
-	case l.Running || l.Tone == transcript.ToneWorking:
-		return theme.StyleWorking.Render(g) + gap // in progress: the glyph, yellow
-	case l.Err || l.Tone == transcript.ToneError:
-		return theme.StyleError.Render(g) + gap // same glyph, red, on failure
-	}
-	return theme.StyleTool.Render(g) + gap
+	return theme.StyleTool.Render(g) + gap // one colour whatever the call's state
 }
 
 // renderToolText styles "Bash  git status (cancelled)": bold name, muted
@@ -685,12 +674,6 @@ func CompactFrame(now time.Time) int {
 
 // glyphStyle picks a glyph's colour from its tone, then its kind.
 func glyphStyle(l transcript.Line) lipgloss.Style {
-	switch l.Tone {
-	case transcript.ToneWorking:
-		return theme.StyleWorking
-	case transcript.ToneError:
-		return theme.StyleError
-	}
 	switch {
 	case l.Kind == transcript.LineFinished:
 		return theme.StyleFinished

@@ -912,3 +912,12 @@ func TestWhoColoursGlyphAndName(t *testing.T) {
 		t.Fatalf("colours asked for %v", asked)
 	}
 }
+
+// TestDeniedCallRendersUnderTheCall: the denial sits under its call.
+func TestDeniedCallRendersUnderTheCall(t *testing.T) {
+	tr := transcript.NewTranscript()
+	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"rm -rf build"}`)}))
+	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "Permission denied by the user: not now", IsError: true, Denied: true}))
+	got := renderWith(tr.All(), Options{Width: 80, NoFold: true})
+	assertSubsequence(t, got, []string{"$ Shell  rm -rf build (denied)", "  ✗ Permission denied · not now"})
+}
