@@ -830,7 +830,12 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 		case e := <-h.evs:
 			switch {
 			case e.Type == event.UserMessage && e.Agent == rootID && um.From == "":
-				_ = e.Decode(&um)
+				// the answer, not the child's later message: when both land
+				// before the parent wakes, its turn logs the prompt first
+				var got event.UserMessagePayload
+				if _ = e.Decode(&got); got.Kind == event.MsgAgentResponse {
+					um = got
+				}
 			case e.Type == event.TurnEnded && e.Agent == rootID:
 				var te event.TurnEndedPayload
 				if _ = e.Decode(&te); te.Turn == 2 {

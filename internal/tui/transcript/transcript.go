@@ -180,6 +180,7 @@ type Transcript struct {
 	turnVerb    string    // the indicator's verb for this turn ("Galloping")
 	compactItem int       // item of the running compaction's rule (replaced by the result), -1 when none
 	turnGap     bool      // a turn started or ended: the next item appended starts a new stretch (TurnStart)
+	nudged      bool      // a nudge was just drawn: the turn it starts continues right under it
 	spawnTask   string    // a spawned agent\'s task, held until its first prompt draws the spawn and the task as one item
 	spawnAs     string    // …and what it was spawned as: "scout (general) · model"
 
@@ -253,8 +254,14 @@ func (t *Transcript) Apply(ev event.Event) {
 	t.answerGlyph(ev, lines)
 	t.appendItem(lines)
 	t.afterAppend(ev)
-	if ev.Type == event.TurnStarted || ev.Type == event.TurnEnded || ev.Type == event.TurnAborted {
+	switch ev.Type {
+	case event.TurnEnded, event.TurnAborted:
 		t.turnGap = true // what follows starts a new stretch of the chat
+	case event.ReminderQueued:
+		t.nudged = true // a nudge opens the turn it starts: no second gap under it
+	case event.TurnStarted:
+		t.turnGap = t.turnGap || !t.nudged
+		t.nudged = false
 	}
 }
 

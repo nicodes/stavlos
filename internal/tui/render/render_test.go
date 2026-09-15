@@ -887,6 +887,29 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
+	// a nudge opens the turn it starts: a gap above it, none under it
+	tr.Apply(mk(9, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 2, Reason: "end_turn"}))
+	tr.Apply(mk(10, "a", event.ReminderQueued, event.RepliesPayload{Parties: []string{"user"}, Names: []string{"user"}}))
+	tr.Apply(mk(11, "a", event.TurnStarted, event.TurnPayload{Turn: 3}))
+	tr.Apply(mk(12, "a", event.UserMessage, event.UserMessagePayload{Turn: 3, Kind: event.MsgReminder, Text: "[reminder from the harness] ..."}))
+	tr.Apply(mk(13, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 3, Blocks: []model.Block{{Type: model.BlockText, Text: "replying now"}}}))
+	nudged := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
+	if !strings.HasSuffix(nudged, "› @user thanks\n\n↻ Nudged owes a reply to you\n§ replying now") {
+		t.Fatalf("nudge spacing:\n%s", nudged)
+	}
+	tr = transcript.NewTranscript()
+	for _, ev := range []event.Event{
+		mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}),
+		mk(2, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "list files"}),
+		mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}),
+		mk(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a.go"}),
+		mk(5, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "one file"}}}),
+		mk(6, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}),
+		mk(7, "a", event.TurnStarted, event.TurnPayload{Turn: 2}),
+		mk(8, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "thanks"}),
+	} {
+		tr.Apply(ev)
+	}
 	// the loader keeps one blank row above it
 	working := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true, Working: true, Spinner: "◐", Verb: "Trotting"}), "\n")
 	if !strings.HasSuffix(working, "› @user thanks\n\n◐ Trotting…") {
