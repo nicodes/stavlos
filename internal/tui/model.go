@@ -80,6 +80,7 @@ type Model struct {
 	channelState // the bound channel; replaced whole when switching
 	uiPrefs      // display choices; they survive a switch
 	dialogs      // the open overlay and sign-in
+	promptState  // what waits on the human, in every channel; survives a switch
 
 	navChannels []protocol.ChannelInfo // the sidebar's channels section: other channels of this directory, newest first
 
@@ -136,15 +137,8 @@ type channelState struct {
 	replayTo    int64 // seq from reconcile
 	reconciled  bool  // the first reconcile landed
 
-	prompts     []protocol.PromptInfo // pending, oldest first; [0] is shown
-	claimedByUs map[string]bool
-	promptBusy  string          // prompt id with a claim/reply in flight
-	permSel     int             // highlighted option of the permission dialog
-	permFor     string          // the prompt id permSel belongs to (a new prompt starts at the top)
-	permEdit    string          // "" | "deny" (reason row open) | "dir" (path row open) in the permission dialog
-	q           questionState   // the questions dialog: where the human is in the current batch
-	dirEdit     string          // "" | "add" | the path being replaced
-	mcpOpen     map[string]bool // MCP servers whose tool list is expanded in the mcp dialog
+	dirEdit string          // "" | "add" | the path being replaced
+	mcpOpen map[string]bool // MCP servers whose tool list is expanded in the mcp dialog
 
 	// The chat cursor walks transcript items; expanded holds per-item tool
 	// output overrides keyed by agent id; itemRows maps items to rendered
@@ -164,8 +158,31 @@ func newChannelState(id string, info protocol.ChannelInfo) channelState {
 	return channelState{
 		channelID: id, channel: info,
 		spawned: map[string]time.Time{}, parentOf: map[string]string{},
-		transcripts: map[string]*transcript.Transcript{}, renders: map[string]*render.Cache{}, claimedByUs: map[string]bool{},
+		transcripts: map[string]*transcript.Transcript{}, renders: map[string]*render.Cache{},
 	}
+}
+
+// promptState is what waits on the human across every channel (the daemon
+// sends every channel's prompts) and where the human is in answering it.
+type promptState struct {
+	prompts     []protocol.PromptInfo // pending, oldest first, every channel's
+	claimedByUs map[string]bool
+	promptBusy  string        // prompt id with a claim/reply in flight
+	permSel     int           // highlighted option of the permission dialog
+	permFor     string        // the prompt id permSel belongs to (a new prompt starts at the top)
+	permEdit    string        // "" | "deny" (reason row open) | "dir" (path row open) in the permission dialog
+	q           questionState // the questions dialog: where the human is in the current batch
+	scope       promptScope   // what the open permission or questions dialog is limited to; zero = every channel
+}
+
+// promptScope limits the permission and questions dialogs to one channel's
+// prompts, or one agent's: set when opening a channel or agent that waits on
+// the human opens its dialog, zero when a tab opens it.
+type promptScope struct{ channel, agent string }
+
+// holds reports whether p is within the scope.
+func (s promptScope) holds(p protocol.PromptInfo) bool {
+	return (s.channel == "" || p.Channel == s.channel) && (s.agent == "" || p.Agent == s.agent)
 }
 
 // uiPrefs are the user's display choices.
@@ -330,6 +347,7 @@ func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 		ctx:          ctx,
 		c:            c,
 		channelState: newChannelState(channelID, protocol.ChannelInfo{}),
+		promptState:  promptState{claimedByUs: map[string]bool{}},
 		uiPrefs:      uiPrefs{hideKeys: true}, // the key bar is off until /help
 		vp:           vp,
 		input:        ti,
@@ -538,6 +556,9 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 		}
 		cmd := m.bindChannel(cleanChannel(msg.info))
 		m.opened = true // switched to from inside the TUI: the channel's chat, not the splash
+		if open, ok := m.openWaiting(m.channelID, ""); ok {
+			return tea.Batch(cmd, open)
+		}
 		return cmd
 	case modelsMsg:
 		return m.onModels(msg)
@@ -842,7 +863,7 @@ func (m *Model) tabsKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.OvUp), key.Matches(msg, keys.OvDown):
 		m.tabSel = otherRowTab(m.tabSel, key.Matches(msg, keys.OvDown))
 	case key.Matches(msg, keys.Select):
-		return m.setFocus(tabFocuses[m.tabSel])
+		return m.openTab(tabFocuses[m.tabSel])
 	}
 	return nil
 }
@@ -867,6 +888,9 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	if prev == focusQuestions && f != focusQuestions {
 		m.q.typing = false
 		m.promptInput.Blur()
+	}
+	if (prev == focusPermission || prev == focusQuestions) && f != focusPermission && f != focusQuestions {
+		m.scope = promptScope{} // the dialog closed: one opened from a tab next shows every channel's
 	}
 	if isTab(f) && !isTab(prev) {
 		m.dialogFrom = prev // a tab dialog opens: remember where to return on close
@@ -1261,7 +1285,7 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 				return cmd
 			}
 			if !inMain {
-				return m.sidebarClick(msg.Y)
+				return m.sidebarClick(msg.X, msg.Y)
 			}
 			return m.mouseClick(cx, msg.Y)
 		}
@@ -1671,8 +1695,8 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 		}
 		return cmd
 	case y >= lay.strip && y < lay.meta: // a tab label opens that tab's dialog
-		if f, ok := m.tabAt(x, y-lay.strip); ok {
-			return m.setFocus(f)
+		if f, ok := m.tabAt(x, y-lay.strip+len(tabRows)-m.stripRows()); ok {
+			return m.openTab(f)
 		}
 	case y >= lay.input && y < lay.input+m.inputRows(): // the input lines
 		return m.setFocus(focusInput)
@@ -1824,7 +1848,7 @@ func (m *Model) rows() rowLayout {
 	lay := rowLayout{input: y}
 	y += m.inputRows() + 1 // the input, then the blank line under it
 	lay.strip = y
-	lay.meta = y + len(tabRows)
+	lay.meta = y + m.stripRows()
 	return lay
 }
 
@@ -2708,10 +2732,7 @@ func (m *Model) markTreeDirty() tea.Cmd {
 // typed, no overlay) opens the permission tab so it can be answered at
 // once; a draft in progress is never interrupted.
 func (m *Model) applyPromptNotification(n protocol.PromptNotification) tea.Cmd {
-	if n.Prompt.Channel != "" && n.Prompt.Channel != m.channelID {
-		return nil
-	}
-	before := len(m.prompts)
+	before := len(m.prompts) // every channel's prompts are kept: the tabs span channels
 	switch n.Action {
 	case protocol.ActionRequested, protocol.ActionEscalated, protocol.ActionClaimed:
 		m.upsertPrompt(n.Prompt)
@@ -2723,7 +2744,7 @@ func (m *Model) applyPromptNotification(n protocol.PromptNotification) tea.Cmd {
 	if n.Prompt.Agent == m.selectedID() {
 		m.refreshViewport()
 	}
-	if before == 0 && len(m.prompts) > 0 && m.focus == focusInput && m.ov == nil && strings.TrimSpace(m.input.Value()) == "" {
+	if before == 0 && len(m.prompts) > 0 && (n.Prompt.Channel == "" || n.Prompt.Channel == m.channelID) && m.focus == focusInput && m.ov == nil && strings.TrimSpace(m.input.Value()) == "" {
 		if n.Prompt.Kind == "question" {
 			return m.setFocus(focusQuestions)
 		}
@@ -2752,7 +2773,7 @@ func (m *Model) firstPrompt(question bool) *protocol.PromptInfo {
 	var first *protocol.PromptInfo
 	for i := range m.prompts {
 		p := &m.prompts[i]
-		if (p.Kind == "question") != question {
+		if (p.Kind == "question") != question || !m.scope.holds(*p) {
 			continue
 		}
 		if p.Agent == sel {
@@ -2765,9 +2786,16 @@ func (m *Model) firstPrompt(question bool) *protocol.PromptInfo {
 	return first
 }
 
-// promptCounts is how many permission-ish prompts and question batches wait.
-func (m *Model) promptCounts() (perms, questions int) {
+// promptCounts is how many permission-ish prompts and question batches wait
+// in every channel.
+func (m *Model) promptCounts() (perms, questions int) { return m.promptCountsIn(promptScope{}) }
+
+// promptCountsIn counts only what scope holds.
+func (m *Model) promptCountsIn(scope promptScope) (perms, questions int) {
 	for _, p := range m.prompts {
+		if !scope.holds(p) {
+			continue
+		}
 		if p.Kind == "question" {
 			questions++
 		} else {
@@ -2799,9 +2827,9 @@ func (m *Model) removePrompt(id string) {
 	if i := m.findPrompt(id); i >= 0 {
 		m.prompts = append(m.prompts[:i], m.prompts[i+1:]...)
 	}
-	perms, questions := m.promptCounts()
+	perms, questions := m.promptCountsIn(m.scope)
 	if perms == 0 && m.focus == focusPermission {
-		m.closeDialog() // the last permission was answered: the dialog closes
+		m.closeDialog() // the last permission it shows was answered: the dialog closes
 	}
 	if questions == 0 && m.focus == focusQuestions {
 		m.closeDialog()
@@ -3015,14 +3043,55 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 	case i < here:
 		return m.openOther(i - 1)
 	case i == here:
-		return tea.Batch(m.openChat(), m.setFocus(focusInput))
+		chat := m.openChat()
+		if cmd, ok := m.openWaiting(m.channelID, ""); ok {
+			return tea.Batch(chat, cmd)
+		}
+		return tea.Batch(chat, m.setFocus(focusInput))
 	case i <= here+na:
 		m.openAgent(i - here - 1)
+		if cmd, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
+			return cmd
+		}
 		return m.setFocus(focusInput)
 	case i-na-2 < len(m.navChannels):
 		return m.openOther(i - na - 2)
 	}
 	return nil
+}
+
+// openTab opens tab f's dialog from the tabs (the strip or the sidebar): a
+// permission or questions dialog opened this way shows every channel's.
+func (m *Model) openTab(f focus) tea.Cmd {
+	m.scope = promptScope{}
+	cmd := m.setFocus(f)
+	if f == focusQuestions {
+		m.q.bind(m.currentQuestion())
+	}
+	return cmd
+}
+
+// openWaiting opens the permission dialog, else the questions dialog, on
+// what waits in channel (only agent's when agent is set) when anything does,
+// and reports whether it opened one: opening a channel or an agent that waits
+// on the human goes straight to its prompts.
+func (m *Model) openWaiting(channel, agent string) (tea.Cmd, bool) {
+	scope := promptScope{channel, agent}
+	perms, questions := m.promptCountsIn(scope)
+	f := focusPermission
+	switch {
+	case perms > 0:
+	case questions > 0:
+		f = focusQuestions
+	default:
+		return nil, false
+	}
+	m.scope = scope
+	cmd := m.setFocus(f)
+	if f == focusQuestions {
+		m.q.bind(m.currentQuestion())
+	}
+	return cmd, true
 }
 
 // openOther opens the directory's other channel k (navChannels order) in
@@ -3043,8 +3112,14 @@ func (m *Model) newChannel() tea.Cmd {
 // sidebarClick focuses the sidebar and acts on the row under the pointer
 // like space: the chat row or an agent row opens that chat (the sidebar
 // keeps focus), + channel or another channel's row acts like space.
-func (m *Model) sidebarClick(y int) tea.Cmd {
+func (m *Model) sidebarClick(x, y int) tea.Cmd {
 	cmd := m.setFocus(focusSidebar)
+	if y == sidebarTabsRow { // the ! ? dirs tabs: a click opens that tab
+		if f, ok := m.tabAt(x, 0); ok && m.sidebarVisible() {
+			return tea.Batch(cmd, m.openTab(f))
+		}
+		return cmd
+	}
 	_, items := m.sidebarBody(sidebarWidth - 1)
 	row := y - len(m.sidebarHeader(sidebarWidth-1))
 	if row < 0 || row >= len(items) || items[row] < 0 {
@@ -3054,9 +3129,16 @@ func (m *Model) sidebarClick(y int) tea.Cmd {
 	m.sbCursor = i
 	switch {
 	case i == m.channelRow():
-		return tea.Batch(cmd, m.openChat())
+		chat := m.openChat()
+		if open, ok := m.openWaiting(m.channelID, ""); ok {
+			return tea.Batch(cmd, chat, open)
+		}
+		return tea.Batch(cmd, chat)
 	case i > m.channelRow() && i <= m.channelRow()+len(m.agents):
 		m.openAgent(i - m.channelRow() - 1)
+		if open, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
+			return tea.Batch(cmd, open)
+		}
 		return cmd
 	}
 	return tea.Batch(cmd, m.sidebarSelect(i))

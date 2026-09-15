@@ -138,7 +138,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	// from the call itself; the prompt carries it for display.
 	prefix := prefixFor(d.sub.Kind, d.arg)
 	ans := a.s.host.Prompt(turnCtx, protocol.PromptInfo{
-		ID: NewID("p"), Channel: a.s.ID, Agent: a.ID, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
+		ID: NewID("p"), Channel: a.s.ID, ChannelName: a.s.Name(), Agent: a.ID, From: a.LabelNow(), Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
 		Question: question, Dir: d.boundary, Prefix: prefix,
 	})
 	a.setState(StateRunning)
