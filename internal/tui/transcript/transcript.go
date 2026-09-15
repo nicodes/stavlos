@@ -104,7 +104,9 @@ const (
 	GlyphChild      = "⑂" // a child agent reported back (same fork as spawn)
 	GlyphReply      = "‹" // a response: an agent's reply in the session chat, a response to or from another agent
 	GlyphAsk        = "›" // a prompt to or from another agent (the human's own prompts draw › in blue)
-	GlyphSpawn      = "»" // a child agent was spawned: agent_create's mark, since its task is the prompt that made it
+	GlyphSpawn      = "⋙" // a child agent was spawned: agent_create's mark, since its task is the prompt that made it
+	GlyphInfo       = "»" // an info message another agent sent: it needs no reply (the double of a prompt\'s ›)
+	GlyphInfoSent   = "«" // an info message this agent sends (the double of a message\'s ‹)
 	GlyphTask       = "▹" // the task handed to a child
 	GlyphFinished   = "✓" // an agent finished
 	GlyphError      = "!" // a turn error
@@ -1040,9 +1042,12 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 	event.UserMessage: decoded(func(p event.UserMessagePayload) []Line {
 		switch p.Kind {
-		case event.MsgPrompt, "", event.MsgSteer, event.MsgNote: // a steer or a note reads exactly like a prompt
+		case event.MsgPrompt, "", event.MsgSteer, event.MsgNote: // a steer or a note reads like a prompt
+			if p.From != "" && p.Kind == event.MsgNote {
+				return received(p.From, p.Text, GlyphInfo) // info: needs no reply
+			}
 			if p.From != "" {
-				return received(p.From, p.Text)
+				return received(p.From, p.Text, GlyphAsk)
 			}
 			lines := block(BlockUser, "", "**@user** "+p.Text) // the human's own input: blue "› @user …"
 			for i := range lines {
@@ -1053,7 +1058,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			}
 			return lines
 		case event.MsgAgentResponse:
-			return received(p.From, p.Text)
+			return received(p.From, p.Text, GlyphAsk)
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case event.MsgMonitorFired:
@@ -1118,6 +1123,10 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			// task that creates it), then the rest of the text under it
 			who, text := promptOf(p.Name, p.Input)
 			lines := []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, Tool: p.Name, Who: who}}
+			var in struct{ Kind string }
+			if _ = json.Unmarshal(p.Input, &in); p.Name == toolname.Message && in.Kind == "info" {
+				lines[0].Glyph = GlyphInfoSent // needs no reply: « (a denial still swaps in ✗)
+			}
 			if _, rest, ok := strings.Cut(text, "\n"); ok {
 				lines = append(lines, OutputLines(rest)...)
 			}
@@ -1388,14 +1397,14 @@ func blockWith(kind BlockKind, label, text, glyph string) []Line {
 // received is what another agent sent this one, a prompt or a response:
 // "› @scout …" with the name bold and later lines aligned under the text.
 // What this agent sends reads "‹ @scout …" (its message calls), and only
-// the human's own input is drawn blue.
-func received(from, text string) []Line {
+// the human's own input is drawn blue. An info message reads » instead.
+func received(from, text, glyph string) []Line {
 	body := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	first := body[0]
 	if from != "" {
 		first = strings.TrimSpace("**@" + from + "** " + first)
 	}
-	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: first, Block: BlockChild, Glyph: GlyphAsk, Who: from}}
+	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: first, Block: BlockChild, Glyph: glyph, Who: from}}
 	for _, l := range body[1:] {
 		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild, Indent: 1})
 	}
@@ -1752,7 +1761,7 @@ const (
 	GlyphToolShell    = "$" // shell, shell_kill (and the old bash names): the shell prompt
 	GlyphToolMonitors = "$" // async jobs are shell commands
 	GlyphToolAgents   = "⑂"
-	GlyphToolCreate   = "»" // agent_create: the double of a prompt's ›, since it makes the agent it prompts
+	GlyphToolCreate   = "⋙" // agent_create: the triple of a prompt\'s ›, since it makes the agent it prompts
 	GlyphToolTodo     = "□" // todo_add, todo_update
 	GlyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
 	GlyphToolWeb      = "↓" // web_fetch: pulling a page in

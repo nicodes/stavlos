@@ -534,7 +534,7 @@ func TestDeniedCallShowsWhy(t *testing.T) {
 	}
 }
 
-// TestAgentCreateReadsLikeAPrompt: creating an agent reads "» @scout task",
+// TestAgentCreateReadsLikeAPrompt: creating an agent reads "⋙ @scout task",
 // names the agent it made (a taken label gets a suffix), keeps the rest of
 // the task under it and hides the "created" result.
 func TestAgentCreateReadsLikeAPrompt(t *testing.T) {
@@ -589,5 +589,26 @@ func TestWebToolTitles(t *testing.T) {
 	}
 	if got := ToolTitle("web_search"); got != "Search" {
 		t.Fatalf("web_search: %q", got)
+	}
+}
+
+// TestInfoMessagesDrawDoubleArrows: an info message reads « when sent and »
+// when received; a request or response keeps ‹ and ›.
+func TestInfoMessagesDrawDoubleArrows(t *testing.T) {
+	for kind, want := range map[string]string{"info": GlyphInfoSent, "request": GlyphReply, "": GlyphReply} {
+		input, _ := json.Marshal(map[string]string{"to": "scout", "text": "fyi", "kind": kind})
+		lines := EventLines(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "message", Input: input}))
+		if g, _ := CallGlyph(lines[0]); g != want {
+			t.Errorf("sent %q: glyph %q, want %q", kind, g, want)
+		}
+	}
+	for kind, want := range map[event.MessageKind]string{event.MsgNote: GlyphInfo, event.MsgPrompt: GlyphAsk, event.MsgAgentResponse: GlyphAsk} {
+		lines := EventLines(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: kind, Text: "fyi", From: "main"}))
+		if lines[1].Glyph != want {
+			t.Errorf("received %q: glyph %q, want %q", kind, lines[1].Glyph, want)
+		}
+	}
+	if GlyphSpawn != "⋙" || GlyphToolCreate != "⋙" {
+		t.Fatal("a new agent reads ⋙")
 	}
 }
