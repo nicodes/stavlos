@@ -1592,6 +1592,12 @@ func ToolTitle(name string) string {
 			return parts[0] + " · " + parts[1]
 		}
 	}
+	switch name {
+	case toolname.WebFetch:
+		return "Fetch"
+	case toolname.WebSearch:
+		return "Search"
+	}
 	return titleCase(name)
 }
 

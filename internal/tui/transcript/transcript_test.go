@@ -579,3 +579,13 @@ func TestPatchShowsItsDiff(t *testing.T) {
 		t.Fatalf("diff:\n%s\nwant:\n%s", strings.Join(got, " / "), want)
 	}
 }
+
+// TestWebToolTitles: the web tools read as plain verbs.
+func TestWebToolTitles(t *testing.T) {
+	if got := ToolTitle("web_fetch"); got != "Fetch" {
+		t.Fatalf("web_fetch: %q", got)
+	}
+	if got := ToolTitle("web_search"); got != "Search" {
+		t.Fatalf("web_search: %q", got)
+	}
+}
