@@ -81,7 +81,7 @@ func TestBuildTranscript(t *testing.T) {
 		"$ Shell  sleep 100 (cancelled)",
 		"  partial",
 		"◌ thinking…",
-		"Done.",
+		"§ Done.",
 		"◦ Turn cancelled",
 		"✓ Finished success",
 		"all good",
@@ -236,7 +236,7 @@ func TestAssistantMarkdownAndErrors(t *testing.T) {
 		mk(2, "a", event.TurnEnded, event.TurnEndedPayload{Reason: "error", Error: "boom"}),
 		mk(3, "a", event.AgentKilled, nil),
 	}))
-	assertSubsequence(t, got, []string{"Plan", "Some bold text", " fmt.Println()", "- item", "! boom", "⊘ killed"})
+	assertSubsequence(t, got, []string{"§ Plan", "  Some bold text", "   fmt.Println()", "  - item", "! boom", "⊘ killed"})
 	for _, g := range got {
 		if strings.Contains(g, "```") || strings.Contains(g, "· gpt-x") {
 			t.Fatalf("unexpected line %q (fences dropped; no model trailer on tool_use)", g)
@@ -261,7 +261,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "shell"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"› hi", "◌ thinking…", "Hello", "$ Shell"})
+	assertSubsequence(t, got, []string{"› hi", "◌ thinking…", "§ Hello", "$ Shell"})
 	if len(tr.Tail()) == 0 || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -274,7 +274,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 		t.Fatal("buffer should be cleared by assistant.message")
 	}
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"◌ one", "Hello"})
+	assertSubsequence(t, got, []string{"◌ one", "§ Hello"})
 	for _, g := range got {
 		if g == "$ Shell" || g == "◌ thinking…" || g == "two" {
 			t.Fatalf("stale stream line %q", g)
