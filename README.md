@@ -48,7 +48,7 @@ The tabs, each always there with its count, are "permission" and "questions" (sh
 - **async** holds both directions for the selected agent: under "waiting on", the agents whose answer it expects (a child it tasked, a sibling or parent it messaged) and its running shell jobs; under "owes a reply to", who waits on its reply, you first, then any agent that messaged it. Space on an agent (or on you) opens that chat.
 - **todo** lists the selected agent's plan.
 - **mcp** lists its MCP servers with their state, tool count and uptime.
-- **dirs** edits its working directories: `a` adds, enter replaces, ctrl+d removes; the channel directory stays.
+- **dirs** edits the channel's working directories, shared by every agent: `a` adds, enter replaces, ctrl+d removes; the channel directory stays.
 
 ### The sidebar
 
@@ -61,18 +61,18 @@ Under the tree, a folded "channels" section lists this directory's other channel
 Permission prompts show the command (or path) with the asking agent after it, then a fixed list of answers; ↑/↓ move and space chooses:
 
 - A plain permission offers "Allow once", "Allow for this channel" (this exact call), "Allow `<prefix>` for this channel" for a simple shell command, and "Deny", which opens a row for an optional reason the agent reads. The prefix is the first word, or two for git, go, npm, cargo, make, docker and the like: `go test` then covers every `go test …` that is not chained, piped or redirected. It is never offered for wrappers such as `bash`, `env`, `sudo` or `python`.
-- A boundary prompt, for a call outside the agent's directories, offers "Allow once", "Allow and add <dir>", "Allow and add another directory…" and "Deny". "Allow and add" puts the directory on that agent: the whole git checkout when the path is inside one, else the path's directory.
+- A boundary prompt, for a call outside the channel's directories, offers "Allow once", "Allow and add <dir>", "Allow and add another directory…" and "Deny". "Allow and add" adds the directory to the channel's set, for every agent: the whole git checkout when the path is inside one, else the path's directory.
 - The trust prompt for a project's `.stavlos/` offers "Trust this project's config" or "Not now".
 
 Esc closes a dialog with the prompt still waiting.
 
 `/mode` picks the channel's permission mode:
 
-- **ask**, the default, prompts for every policy ask and every call outside an agent's directories.
-- **auto** (`/auto`) approves permissions inside the agent's directories; a call outside them is denied, and the agent is told that auto mode does not allow it (switch to ask to grant a directory with "Allow and add").
+- **ask**, the default, prompts for every policy ask and every call outside the channel's directories.
+- **auto** (`/auto`) approves permissions inside the channel's directories; a call outside them is denied, and the agent is told that auto mode does not allow it (switch to ask to grant a directory with "Allow and add").
 - **yolo** (`/yolo`) approves everything a policy would ask about, directories included.
 
-Switching a mode on answers whatever is waiting as that mode would have: yolo allows every permission prompt, auto allows the ones inside the directories and denies the ones outside. Deny rules, model questions and the trust prompt apply in every mode. An ASK, AUTO or YOLO tag before the role always shows the mode: clicking AUTO or YOLO goes back to ask, clicking ASK opens `/mode`. Auto is prompt-free inside the directories only as far as the harness can see: paths in shell commands come from inspecting the command line, not from a sandbox, so keep deny rules for what must never run.
+Switching a mode on answers whatever is waiting as that mode would have: yolo allows every permission prompt, auto allows the ones inside the directories and denies the ones outside. Deny rules, model questions and the trust prompt apply in every mode. An ASK, AUTO or YOLO tag before the role always shows the mode: clicking AUTO or YOLO goes back to ask, clicking ASK opens `/mode`. Auto is prompt-free inside the directories as far as the harness can see paths on the command line; what a command does beyond that is held by the sandbox (below), so keep deny rules for what must never run.
 
 ## Roles
 
@@ -81,7 +81,7 @@ One role ships built in, `general`, which can read, edit, run commands and deleg
 - `mode`: primary, subagent or all
 - `models`: a whitelist, with the variants allowed per model
 - `tools`: every tool is available by default; `<tool>: deny` removes one, and policy rules nested under a tool tighten it
-- `spawn`, `max_turns`, `color`, `dirs`, `skills`, `mcp`
+- `spawn`, `max_turns`, `color`, `skills`, `mcp` (roles carry no directories: those are the channel's)
 
 The role decides what `/roles`, `/models` and `/variants` offer, and the daemon enforces it.
 
@@ -89,7 +89,11 @@ The role decides what `/roles`, `/models` and `/variants` offer, and the daemon 
 
 **Delegate and message.** Delegating to child agents is the model's job (`agent_create`). Every agent has a unique name in its channel (the root is `main`; a name already taken gets a suffix, `scout-2`), and agents talk with one tool, `message`, addressed by name to any other agent or to you as `user`. Each message has a kind. A request (the default) asks for something: the recipient owes a reply, the sender waits, and it reaches the recipient at its next step, even mid-turn. A response answers a request, such as a child finishing its task: it settles it and wakes the agent waiting on it between turns, never mid-turn. Info needs no reply (thanks, an acknowledgement): nobody owes or waits, and an idle recipient is not woken for it. So an agent that is waiting on you can still be asked a question first: that question is a request, and your answer later is a response. A role can keep its agents from messaging you with a deny rule on `message` for `user`. A child idles with its context intact for follow-ups for the rest of the channel: nothing kills it, and its MCP servers stop after ten idle minutes. There is no wait tool.
 
-**Run commands.** Agents run commands with one `shell` tool. Read-only commands such as `grep`, `rg`, `find`, `ls`, `cat` and `git status`/`log`/`diff` run without a prompt, but only as one simple command: chain, pipe or redirect one and it asks. A call waits up to 15 seconds; a command still running then continues as a background job (the call returns its id and the output so far), and `background: true` skips the wait for servers. A job's exit wakes its agent the same way a response does, and `shell_kill` stops a job. Every command and MCP server runs with a scrubbed environment, without `STAVLOS_*` or any variable whose name looks like a credential, so list what a build really needs under `"env": {"pass": ["GITHUB_TOKEN"]}` in `stavlos.json`.
+**Search.** `grep` and `glob` search file contents and names (with ripgrep when it is installed) and never ask. They are tools, not shell commands, so searching needs no shell permission.
+
+**Run commands.** Agents run commands with one `shell` tool. No command is allowed by default: each asks until you allow it once, for the channel, or by prefix, or with a rule in `stavlos.json`. A call waits up to 15 seconds; a command still running then continues as a background job (the call returns its id and the output so far), and `background: true` skips the wait for servers. A job's exit wakes its agent the same way a response does, and `shell_kill` stops a job. Every command and MCP server runs with a scrubbed environment, without `STAVLOS_*` or any variable whose name looks like a credential, so list what a build really needs under `"env": {"pass": ["GITHUB_TOKEN"]}` in `stavlos.json`.
+
+**The sandbox.** On Linux every command and MCP server runs inside a boundary the kernel enforces (Landlock, plus a user and mount namespace where the kernel allows them; the daemon log names the level). It may write only beneath the channel's directories, a scratch directory of the channel mounted as `/tmp`, and the caches build tools fill. The files that steer the harness or run code later stay read-only: `.git/hooks`, `.git/config`, `.stavlos`, `AGENTS.md` and `.envrc`. It cannot see Stavlos's own config, data, cache or socket, your runtime directory (where the D-Bus and agent sockets live), or credential stores such as `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh` and `~/.netrc`. Configure it in the global `stavlos.json` only: `"sandbox": {"network": false, "writable": ["~/.m2"], "hide": ["~/private"]}`, or `"enabled": false` to turn it off. The build caches stay writable, so a command can still poison one.
 
 **Reach the web.**
 
@@ -100,7 +104,7 @@ Auto mode approves fetches like any read-only call. Everything fetched is handed
 
 **Plan.** `todo_add` and `todo_update` keep a per-agent list that is logged, projected into the system prompt at every call (so it survives compaction) and shown to you in the todo tab.
 
-**Work in directories.** Every agent may read, edit and run commands in the channel directory plus its role's `dirs`. A parent can grant a child directories from its own set at `agent_create`. A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
+**Work in directories.** A channel has one set of working directories, shared by every agent: the channel directory plus whatever you add. Roles and `agent_create` grant none. A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
 
 **Use MCP servers.** A role's `mcp:` list starts MCP servers for that agent alone (stdio servers defined under `mcp` in `stavlos.json`). The model sees their tools as `mcp__<server>__<tool>` and calls them through the usual permission path.
 
@@ -109,6 +113,7 @@ Auto mode approves fetches like any read-only call. Everything fetched is handed
 ## Other commands
 
 ```sh
+stavlos new                    # start another channel in this directory
 stavlos open <#name|id>        # open a channel by name (plain `stavlos` opens this directory's)
 stavlos channels               # list channels (they survive daemon restarts)
 stavlos tree <channel>         # agent tree with state and cost
@@ -127,9 +132,9 @@ Put a `.stavlos/` directory in a repository to add roles (`roles/<name>.md`), sk
 
 ## Status
 
-Implemented: daemon with SQLite event log, actor scheduler, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend) and Grok subscription adapters with browser and device-code sign-in, models.dev metadata.
+Implemented: daemon with SQLite event log, one state machine per channel with a goroutine per agent, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend) and Grok subscription adapters with browser and device-code sign-in, models.dev metadata, native search tools, and a Linux sandbox for commands and MCP servers.
 
-Not yet: Discord service, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork in the TUI (the protocol supports it), a sandbox for shell commands.
+Not yet: Discord service, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
 
 ## Development
 
