@@ -21,6 +21,7 @@ import (
 	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
+	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
 	"gopkg.in/yaml.v3"
 )
@@ -31,6 +32,7 @@ type File struct {
 	Schema     string         `json:"$schema,omitempty"`
 	Model      string         `json:"model,omitempty"`
 	RootAgent  string         `json:"rootAgent,omitempty"`
+	Mode       string         `json:"mode,omitempty"` // the permission mode a new channel starts in: ask | auto | yolo
 	Limits     *Limits        `json:"limits,omitempty"`
 	Escalation *Escalation    `json:"escalation,omitempty"`
 	Compaction *Compaction    `json:"compaction,omitempty"`
@@ -228,6 +230,7 @@ type Effective struct {
 	Dir        string
 	Model      string
 	RootAgent  string
+	Mode       string // the permission mode a new channel starts in
 	Limits     Limits
 	Escalation struct {
 		ClaimTimeout, AnswerTimeout time.Duration
@@ -338,6 +341,7 @@ func Defaults() File {
 	allow, ask := string(policy.Allow), string(policy.Ask)
 	return File{
 		RootAgent:  "general",
+		Mode:       protocol.ModeAsk,
 		Limits:     &Limits{MaxDepth: 3, MaxAgents: 6},
 		Escalation: &Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: string(policy.Deny)},
 		Compaction: &Compaction{Threshold: 0.8, MaxToolOutput: "32kb"},
@@ -421,6 +425,13 @@ func (e *Effective) applyFile(f File, layer string) error {
 	if f.RootAgent != "" {
 		e.RootAgent = f.RootAgent
 	}
+	switch f.Mode {
+	case "":
+	case protocol.ModeAsk, protocol.ModeAuto, protocol.ModeYolo:
+		e.Mode = f.Mode
+	default:
+		return fmt.Errorf("mode %q: ask, auto or yolo", f.Mode)
+	}
 	if f.Reminders != nil {
 		e.Reminders = *f.Reminders
 	}
@@ -491,6 +502,8 @@ func (e *Effective) checkRepositoryFile(f File) error {
 		return errors.New("sandbox: is global only: a repository cannot widen the boundary its commands run in")
 	case len(f.Dirs) > 0:
 		return errors.New("dirs: is global only: a repository cannot add directories its agents may work in")
+	case f.Mode != "" && f.Mode != protocol.ModeAsk:
+		return errors.New("mode: a repository may only start channels in ask; auto and yolo are set in the global stavlos.json")
 	case f.Search != nil:
 		return errors.New("search: is global only: a repository cannot choose where queries and keys go")
 	case len(f.Plugins) > 0:
