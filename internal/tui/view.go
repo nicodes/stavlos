@@ -515,7 +515,7 @@ func (m Model) sidebarView(height int) string {
 // sidebarHeader is what precedes the tree: the app name, a blank, the
 // session directory, the session's tokens and cost (the rollup of what
 // the meta row shows per agent), the swarm state ("3 working · 1
-// waiting", or "idle"), a blank, and the "agents" heading. The tree's
+// waiting", or "idle"), a blank, and the "channels" heading. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	dir := format.ShortHome(m.session.Dir)
@@ -530,7 +530,7 @@ func (m Model) sidebarHeader(width int) []string {
 		theme.StyleDim.Render(format.Trunc(usage, width)),
 		theme.StyleDim.Render(format.Trunc(m.swarmLine(), width)),
 		"",
-		theme.StyleBold.Render("agents") + m.sidebarFocusHint(),
+		theme.StyleBold.Render("channels") + m.sidebarFocusHint(),
 	}
 }
 
@@ -673,7 +673,7 @@ func (m Model) treeRows(width int) []string {
 	rows := make([]string, 0, len(m.agents))
 	focused := m.focus == focusSidebar && m.sidebarVisible()
 	for i, a := range m.agents {
-		indent := "  " + strings.Repeat("  ", a.Depth)
+		indent := "    " + strings.Repeat("  ", a.Depth) // one level under the channels heading's "# chat"
 		dot := agentDot(a)
 		// The right column: the badge (warning) and the cost (dim), with a
 		// space before it whenever it is not empty.

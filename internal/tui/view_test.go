@@ -2187,7 +2187,7 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" || !strings.HasPrefix(sb[6], "agents") || strings.Contains(strings.Join(sb, "\n"), "need you") {
+		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" || !strings.HasPrefix(sb[6], "channels") || strings.Contains(strings.Join(sb, "\n"), "need you") {
 			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:7], "\n"))
 		}
 		rows := m.treeRows(sidebarWidth - 1)
@@ -2198,10 +2198,10 @@ func TestSidebarNav(t *testing.T) {
 				t.Fatalf("row %d should be %d wide, got %d: %q", i, sidebarWidth-1, w, plain[i])
 			}
 		}
-		if !strings.HasPrefix(plain[0], "  ◐ main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
+		if !strings.HasPrefix(plain[0], "    ◐ main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
 			t.Fatalf("root row: %q", plain[0])
 		}
-		if !strings.HasPrefix(plain[1], "    ● world-politics (") || !strings.HasSuffix(plain[1], "… ! $0.05") {
+		if !strings.HasPrefix(plain[1], "      ● world-politics") || !strings.HasSuffix(plain[1], "… ! $0.05") {
 			t.Fatalf("blocked child row should carry the badge and cost: %q", plain[1])
 		}
 		if !strings.HasSuffix(strings.TrimRight(plain[2], " "), "business (general)") {
