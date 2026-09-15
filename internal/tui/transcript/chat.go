@@ -88,7 +88,7 @@ func (t *Transcript) reply(agent string, p event.ChatPayload) {
 	} else {
 		lines = append([]Line{{Kind: LineText, Text: "@" + from}}, lines...)
 	}
-	lines[0].Glyph = GlyphReply
+	lines[0].Glyph, lines[0].Who = GlyphReply, from
 	for i := 1; i < len(lines); i++ {
 		lines[i].Indent = 1
 	}

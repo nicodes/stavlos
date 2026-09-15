@@ -3223,6 +3223,8 @@ func (m *Model) refreshViewport() {
 		Stats:    stats,
 		Expanded: m.expanded[m.viewID()],
 		TurnGaps: !m.superChat,
+		WhoStyle: m.whoStyle,
+		WhoKey:   m.whoKey(),
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,
 
@@ -3614,6 +3616,37 @@ func (m *Model) roleInfo(name string) *protocol.PresetInfo {
 		}
 	}
 	return nil
+}
+
+// whoStyle is the colour a chat line takes for someone it names: an agent's
+// role colour (green when its role sets none), blue for the human.
+func (m *Model) whoStyle(name string) lipgloss.Style {
+	if name == "user" {
+		return lipgloss.NewStyle().Foreground(theme.ColAccent)
+	}
+	tint := "green"
+	for _, a := range m.agents {
+		if a.Label == name {
+			if r := m.roleInfo(a.Archetype); r != nil && r.Color != "" {
+				tint = r.Color
+			}
+			break
+		}
+	}
+	return roleStyle(tint)
+}
+
+// whoKey changes whenever whoStyle's colours do, so cached chat rows redraw.
+func (m *Model) whoKey() string {
+	var b strings.Builder
+	for _, a := range m.agents {
+		b.WriteString(a.Label + "=")
+		if r := m.roleInfo(a.Archetype); r != nil {
+			b.WriteString(r.Color)
+		}
+		b.WriteByte(';')
+	}
+	return b.String()
 }
 
 // selectedRole is the selected agent's role, nil when unknown.

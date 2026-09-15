@@ -2,6 +2,7 @@ package render
 
 import (
 	"encoding/json"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"regexp"
 	"strings"
@@ -890,5 +891,24 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	working := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true, Working: true, Spinner: "◐", Verb: "Trotting"}), "\n")
 	if !strings.HasSuffix(working, "› @user thanks\n\n◐ Trotting…") {
 		t.Fatalf("loader spacing:\n%s", working)
+	}
+}
+
+// TestWhoColoursGlyphAndName: a line that names someone asks WhoStyle for
+// their colour and draws the name without its bold markers.
+func TestWhoColoursGlyphAndName(t *testing.T) {
+	asked := map[string]bool{}
+	whoStyle := func(name string) lipgloss.Style {
+		asked[name] = true
+		return lipgloss.NewStyle()
+	}
+	tr := transcript.NewTranscript()
+	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "look", From: "main"}))
+	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "message", Input: json.RawMessage(`{"to":"scout","text":"go"}`)}))
+	tr.Apply(mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}))
+	got := renderWith(tr.All(), Options{Width: 80, NoFold: true, WhoStyle: whoStyle})
+	assertSubsequence(t, got, []string{"› @main look", "‹ @scout go", "› @user hi"})
+	if !asked["main"] || !asked["scout"] || !asked["user"] {
+		t.Fatalf("colours asked for %v", asked)
 	}
 }
