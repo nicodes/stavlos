@@ -200,7 +200,7 @@ func TestHomeAndChannelViews(t *testing.T) {
 	m.showTree = true
 	m.layout()
 	sess := stripANSI(m.View())
-	if !strings.Contains(sess, "hello") || !strings.Contains(sess, "Stavlos") || !strings.Contains(sess, "\nidle ") || !strings.Contains(sess, "$0.00") {
+	if !strings.Contains(sess, "hello") || !strings.Contains(sess, "Stavlos") || strings.Contains(sess, "\nidle ") || !strings.Contains(sess, "\nchannels ") || !strings.Contains(sess, "$0.00") {
 		t.Fatalf("channel view:\n%s", sess)
 	}
 	m.width = 90 // too narrow: sidebar auto-hides
@@ -2175,8 +2175,8 @@ func TestSidebarRowsLeaveOneColumn(t *testing.T) {
 	}
 }
 
-// TestSidebarNav: the sidebar reads as the swarm nav — directory, one
-// line of swarm state, and a tree whose rows carry a needs-you badge and
+// TestSidebarNav: the sidebar reads as the swarm nav — directory, usage,
+// the ! ? tabs, and a tree whose rows carry a needs-you badge and
 // the cost at the right edge; n jumps to the next agent waiting on you and
 // a click on a row selects that agent.
 func TestSidebarNav(t *testing.T) {
@@ -2184,9 +2184,10 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		if header != 8 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" ||
-			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1 · ? 1/1") || strings.Contains(sb[sidebarTabsRow], "dirs") || strings.TrimSpace(sb[7]) != "" || !strings.HasPrefix(sb[8], "channels ") || !strings.Contains(sb[8], " + ") || strings.Contains(sb[8], "↑/↓") || strings.Contains(strings.Join(sb, "\n"), "need you") {
-			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:9], "\n"))
+		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || strings.TrimSpace(sb[4]) != "" ||
+			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1 · ? 1/1") || strings.Contains(sb[sidebarTabsRow], "dirs") || strings.TrimSpace(sb[6]) != "" || !strings.HasPrefix(sb[7], "channels ") || !strings.Contains(sb[7], " "+newChannelMark+" ") || strings.Contains(sb[7], "↑/↓") ||
+			strings.Contains(strings.Join(sb, "\n"), "waiting") || strings.Contains(strings.Join(sb, "\n"), "need you") {
+			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:8], "\n"))
 		}
 		// dirs is the open channel's: out of the tabs the strip walks, behind
 		// the gear at the right edge of the channel's row; → on the row, or a
@@ -2300,7 +2301,7 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if f := strings.Fields(plain[2]); len(body) != na+4 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " + ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
+		if f := strings.Fields(plain[2]); len(body) != na+4 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
 			len(f) != 3 || f[1] != "#proj" || f[2] != channelGear || strings.Join(strings.Fields(plain[na+3]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
 			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || m.channelRow() != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
@@ -2416,16 +2417,6 @@ func TestSidebarNav(t *testing.T) {
 		}
 		if perms, qs := m.promptCounts(); perms != 2 || qs != 1 {
 			t.Fatalf("the strip still counts everything: %d %d", perms, qs)
-		}
-	})
-	t.Run("the swarm line reads idle", func(t *testing.T) {
-		m := sidebarNavModel()
-		m.prompts = nil
-		m.setFocus(focusInput)
-		// the swarm line reads idle when nothing is happening
-		m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "general", State: "idle"}}
-		if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 8 {
-			t.Fatalf("idle swarm line: %q header %d", sl, len(m.sidebarHeader(sidebarWidth-1)))
 		}
 	})
 }
