@@ -460,7 +460,7 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 	// A line's own glyph, in its kind's colour. Glyphs never change colour
 	// with a line's state (running, waiting, failed): colour on a glyph says
 	// who a line is about (see whoColours).
-	if l.Glyph != "" {
+	if l.Glyph != "" && l.Kind != transcript.LineTool { // a call's glyph comes from CallGlyph
 		glyph = glyphStyle(l).Render(l.Glyph) + " "
 	}
 	if l.Block != transcript.BlockNone && (l.Kind == transcript.LineText || l.Kind == transcript.LineLabel) {
