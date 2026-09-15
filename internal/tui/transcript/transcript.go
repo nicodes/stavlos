@@ -98,7 +98,8 @@ const (
 // Leader glyphs for chat items (see the glyph table in docs).
 const (
 	GlyphChild     = "⑂" // a child agent reported back (same fork as spawn)
-	GlyphReply     = "‹" // an agent's reply in the session chat (the mirror of the human's ›)
+	GlyphReply     = "‹" // a response: an agent's reply in the session chat, a response to or from another agent
+	GlyphAsk       = "›" // a prompt to or from another agent (the human's own prompts draw › in blue)
 	GlyphSpawn     = "⑂" // a child agent was spawned (fork)
 	GlyphTask      = "▹" // the task handed to a child
 	GlyphFinished  = "✓" // an agent finished
@@ -932,14 +933,14 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		switch p.Kind {
 		case event.MsgPrompt, "", event.MsgSteer: // a steer reads exactly like a prompt
 			if p.From != "" {
-				return incoming("Prompt from "+p.From, p.Text)
+				return incoming("Prompt from "+p.From, GlyphAsk, p.Text)
 			}
 			return block(BlockUser, "", p.Text) // the human's own input: blue ›
 		case event.MsgAgentResponse:
 			if p.From != "" {
-				return incoming("Response from "+p.From, p.Text)
+				return incoming("Response from "+p.From, GlyphReply, p.Text)
 			}
-			return incoming("Response", p.Text)
+			return incoming("Response", GlyphReply, p.Text)
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case event.MsgMonitorFired:
@@ -1233,12 +1234,13 @@ func blockWith(kind BlockKind, label, text, glyph string) []Line {
 }
 
 // incoming is what another agent sent this one, a prompt or a response: a
-// tool-like head ("⑂ Prompt from scout") over its text. Only the human's
+// tool-like head ("› Prompt from scout", "‹ Response from scout") over its
+// text. Only the human's
 // own input is drawn blue, and the agent's own message calls read
 // "Prompt  to name" or "Response  to name", so incoming and outgoing never
 // look alike.
-func incoming(head, text string) []Line {
-	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: "**" + head + "**", Block: BlockChild, Glyph: GlyphChild}}
+func incoming(head, glyph, text string) []Line {
+	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: "**" + head + "**", Block: BlockChild, Glyph: glyph}}
 	for _, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
 		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild})
 	}
@@ -1536,6 +1538,19 @@ const (
 	GlyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
 	GlyphToolWeb      = "↗" // web_fetch, web_search
 )
+
+// CallGlyph is a tool line's glyph and the gap after it: ToolGlyph of its
+// tool, except that a message reads as the arrow of what it is, › for a
+// prompt and ‹ for a response.
+func CallGlyph(l Line) (string, string) {
+	if toolname.Canonical(l.Tool) == toolname.Message {
+		if strings.HasPrefix(l.Text, "Response") {
+			return GlyphReply, " "
+		}
+		return GlyphAsk, " "
+	}
+	return ToolGlyph(l.Tool)
+}
 
 // toolGlyph returns the glyph for a tool name and the gap after it.
 func ToolGlyph(tool string) (string, string) {
