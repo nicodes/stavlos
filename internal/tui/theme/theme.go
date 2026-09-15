@@ -18,10 +18,9 @@ var (
 	ColPink    = lipgloss.AdaptiveColor{Light: "#BE185D", Dark: "#F472B6"}
 	ColCyan    = lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#22D3EE"}
 	ColInputBg = lipgloss.AdaptiveColor{Light: "#F3F4F6", Dark: "#1C2129"} // the message input's background
-	ColLit     = lipgloss.AdaptiveColor{Light: "#000000", Dark: "#FFFFFF"} // the text of the chat item being read (under the cursor, or expanded)
 
 	StyleDim      = lipgloss.NewStyle().Foreground(ColMuted)
-	StyleLit      = lipgloss.NewStyle().Foreground(ColLit) // the chat item being read: lighter than the rest
+	StyleLit      = lipgloss.NewStyle() // the chat item being read: the text colour, as the human's posts have, instead of grey
 	StyleKey      = lipgloss.NewStyle().Foreground(ColAccent).Bold(true)
 	StyleWorking  = lipgloss.NewStyle().Foreground(ColWarning)
 	StyleBold     = lipgloss.NewStyle().Bold(true)

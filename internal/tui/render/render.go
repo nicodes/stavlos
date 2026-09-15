@@ -638,8 +638,9 @@ func kindStyle(l transcript.Line) (leader, glyph string, style func(...string) s
 }
 
 // litStyle is a line's text style in the item being read (under the cursor,
-// or expanded): lighter than the rest of the chat, dim text and plain text
-// alike, so the part being read stands out. Lines whose colour is their
+// or expanded): the text colour the human's posts have, so grey text (an
+// agent's reply or aside, tool output) lightens and the part being read
+// stands out. Lines whose colour is their
 // meaning (an error, a finish, a diff's added and removed lines) keep it;
 // glyphs and @names are coloured apart and keep theirs.
 func litStyle(l transcript.Line, style func(...string) string) func(...string) string {
