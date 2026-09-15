@@ -971,3 +971,12 @@ func TestDeniedCallReadsOnItsLine(t *testing.T) {
 		}
 	}
 }
+
+// TestPatchDiffRenders: a patch's diff sits under its call.
+func TestPatchDiffRenders(t *testing.T) {
+	input, _ := json.Marshal(map[string]string{"patch": "*** Begin Patch\n*** Update File: a.go\n@@ func run() {\n-old()\n*** End Patch"})
+	tr := transcript.NewTranscript()
+	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Input: input}))
+	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Output: "updated a.go (1 hunk(s))"}))
+	assertSubsequence(t, renderLines(tr.All()), []string{"± Apply patch  a.go", "  a.go", "  @@ func run() {", "  -old()"})
+}
