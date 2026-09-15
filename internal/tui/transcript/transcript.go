@@ -1679,8 +1679,9 @@ func CleanLines(lines []Line) []Line {
 // Tool-call glyphs by group: the gear for files, shell and finish; the
 // clock for monitors; the fork for agent tools.
 const (
-	GlyphToolFiles    = "◆" // file tools (apply_patch, skill)
+	GlyphToolFiles    = "◆" // file tools (skill)
 	GlyphToolRead     = "⌕" // read: looking into a file
+	GlyphToolPatch    = "±" // apply_patch: a diff
 	GlyphToolShell    = "$" // shell, shell_kill (and the old bash names): the shell prompt
 	GlyphToolMonitors = "$" // async jobs are shell commands
 	GlyphToolAgents   = "⑂"
@@ -1732,6 +1733,8 @@ func ToolGlyph(tool string) (string, string) {
 	switch {
 	case tool == toolname.Read:
 		return GlyphToolRead, " "
+	case tool == toolname.ApplyPatch:
+		return GlyphToolPatch, " "
 	case tool == toolname.AgentCreate:
 		return GlyphToolCreate, " "
 	case strings.HasPrefix(tool, "agent_") || tool == toolname.Message:
