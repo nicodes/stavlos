@@ -209,7 +209,7 @@ func (m *Model) seedHistory(channels []protocol.ChannelInfo) {
 // busy turn), tab to complete a command, enter to run or send; anything
 // else edits the text.
 func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
-	if m.mentionKey(msg) {
+	if m.mentionKey(msg) || m.paletteStep(msg) {
 		return nil
 	}
 	switch {
@@ -230,9 +230,6 @@ func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
 		m.follow = true
 		return nil
 	case key.Matches(msg, keys.SelUp):
-		if pm := paletteMatches(m.input.Value()); len(pm) > 0 && stepCursor(msg, &m.palIdx, len(pm), false) {
-			return nil
-		}
 		// ↑ moves the cursor up a row (a logical line, or a wrapped row of
 		// one) while there is a row above; on the top row it walks history.
 		if m.input.Line() > 0 || m.input.LineInfo().RowOffset > 0 {
@@ -241,9 +238,6 @@ func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
 		m.historyMove(-1)
 		return nil
 	case key.Matches(msg, keys.SelDown):
-		if pm := paletteMatches(m.input.Value()); len(pm) > 0 && stepCursor(msg, &m.palIdx, len(pm), false) {
-			return nil
-		}
 		// ↓ moves down a row while there is one below; on the bottom row it
 		// walks history forward.
 		if li := m.input.LineInfo(); m.input.Line() < m.input.LineCount()-1 || li.RowOffset < li.Height-1 {
