@@ -153,7 +153,7 @@ func TestShellWaitWindow(t *testing.T) {
 // fakeTodos is a todo list in memory.
 type fakeTodos struct{ items []event.TodoItem }
 
-func (f *fakeTodos) Edit(add []string, updates []TodoUpdate) ([]event.TodoItem, error) {
+func (f *fakeTodos) Edit(add []TodoAdd, updates []TodoUpdate) ([]event.TodoItem, error) {
 	items := append([]event.TodoItem(nil), f.items...)
 	for _, u := range updates {
 		found := false
@@ -172,8 +172,12 @@ func (f *fakeTodos) Edit(add []string, updates []TodoUpdate) ([]event.TodoItem, 
 			return nil, os.ErrNotExist
 		}
 	}
-	for _, text := range add {
-		items = append(items, event.TodoItem{ID: "t" + strconv.Itoa(len(items)+1), Text: text, Status: event.TodoPending})
+	for _, it := range add {
+		status := event.TodoStatus(it.Status)
+		if status == "" {
+			status = event.TodoPending
+		}
+		items = append(items, event.TodoItem{ID: "t" + strconv.Itoa(len(items)+1), Text: it.Text, Status: status})
 	}
 	f.items = items
 	return items, nil
@@ -187,17 +191,18 @@ func TestTodoTool(t *testing.T) {
 	ts := Builtin()
 	ctx := context.Background()
 	run := func(env *Env, in string) Result { return ts["todo"].Run(ctx, json.RawMessage(in), env) }
-	if r := run(&Env{}, `{"add":["x"]}`); !r.IsError || !strings.Contains(r.Output, "not available") {
+	if r := run(&Env{}, `{"add":[{"text":"x"}]}`); !r.IsError || !strings.Contains(r.Output, "not available") {
 		t.Fatalf("no list: %+v", r)
 	}
 	f := &fakeTodos{}
 	env := &Env{Todo: f}
-	if r := run(env, `{"add":["  Run the tests ","Fix the bug"]}`); r.IsError || len(f.items) != 2 || f.items[0].Text != "Run the tests" || !strings.Contains(r.Output, "- t2 [pending] Fix the bug") {
+	if r := run(env, `{"add":[{"text":"  Run the tests "},{"text":"Fix the bug"}]}`); r.IsError || len(f.items) != 2 || f.items[0].Text != "Run the tests" || !strings.Contains(r.Output, "- t2 [pending] Fix the bug") {
 		t.Fatalf("add: %+v %+v", r, f.items)
 	}
 	for in, want := range map[string]string{
-		`{}`:             "nothing to do",
-		`{"add":["  "]}`: "needs text",
+		`{}`:                      "nothing to do",
+		`{"add":[{"text":"  "}]}`: "needs text",
+		`{"add":[{"text":"x","status":"doing"}]}`:   "pending, in_progress, done, cancelled",
 		`{"update":[{"id":"t1","status":"doing"}]}`: "pending, in_progress, done, cancelled",
 		`{"update":[{"id":"t1"}]}`:                  "nothing to change",
 		`{"update":[{"status":"done"}]}`:            "needs the item's id",
@@ -207,9 +212,15 @@ func TestTodoTool(t *testing.T) {
 			t.Fatalf("%s: want an error with %q, got %+v, list %+v", in, want, r, f.items)
 		}
 	}
-	r := run(env, `{"update":[{"id":"t1","status":"in_progress","text":"Run all the tests"}],"add":["Ship it"]}`)
+	r := run(env, `{"update":[{"id":"t1","status":"in_progress","text":"Run all the tests"}],"add":[{"text":"Ship it"}]}`)
 	if r.IsError || f.items[0].Status != "in_progress" || f.items[0].Text != "Run all the tests" || len(f.items) != 3 || !strings.Contains(r.Output, "- t3 [pending] Ship it") {
 		t.Fatalf("update and add: %+v %+v", r, f.items)
+	}
+	// the plan and its first in_progress step are one call
+	f.items = nil
+	r = run(env, `{"add":[{"text":"Read the code","status":"in_progress"},{"text":"Fix it"}]}`)
+	if r.IsError || len(f.items) != 2 || f.items[0].Status != event.TodoInProgress || f.items[1].Status != event.TodoPending {
+		t.Fatalf("add with a status: %+v %+v", r, f.items)
 	}
 }
 
