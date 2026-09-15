@@ -678,7 +678,7 @@ func (m Model) treeRows(width int) []string {
 		if avail < 4 {
 			avail = 4
 		}
-		text := fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
+		text := fmt.Sprintf("@%s (%s)", a.Label, a.Archetype) // an agent reads @name, as it is addressed
 		if agentOutcome(a) == "error" {
 			text += " · error"
 		}
