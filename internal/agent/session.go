@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -46,7 +45,8 @@ type Session struct {
 	model    string // session-selected model
 	rootArch string
 	agents   map[string]*Agent
-	order    []string // spawn order
+	names    map[string]string // agent name → id; a name is never released, so a mention never changes meaning
+	order    []string          // spawn order
 	archived bool
 	ctx      context.Context
 	cancel   context.CancelFunc
@@ -108,7 +108,7 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, rootArch str
 		ID: id, Dir: dir, Created: time.Now().UTC(),
 		host: host, tools: tools.Builtin(),
 		cfg: cfg, model: modelID, rootArch: rootArch,
-		agents: map[string]*Agent{}, ctx: ctx, cancel: cancel,
+		agents: map[string]*Agent{}, names: map[string]string{}, ctx: ctx, cancel: cancel,
 		mode: protocol.ModeAsk,
 	}
 }
@@ -193,20 +193,27 @@ func (s *Session) Agent(id string) (*Agent, bool) {
 	return a, ok
 }
 
-// resolve finds an agent by its id, or by a unique prefix of at least four
-// characters (models sometimes copy a shortened id from a status line).
-func (s *Session) resolve(id string) (*Agent, bool) {
-	if a, ok := s.Agent(id); ok {
+// resolve finds an agent by its id, its name (with or without "@", in any
+// case), or a unique prefix of its id of at least four characters (models
+// sometimes copy a shortened id from a status line).
+func (s *Session) resolve(ref string) (*Agent, bool) {
+	ref = strings.TrimPrefix(strings.TrimSpace(ref), "@")
+	if a, ok := s.Agent(ref); ok {
 		return a, true
-	}
-	if len(id) < 4 {
-		return nil, false
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if name := normalizeName(ref); name != "" {
+		if id, ok := s.names[name]; ok {
+			return s.agents[id], true
+		}
+	}
+	if len(ref) < 4 {
+		return nil, false
+	}
 	var found *Agent
 	for _, a := range s.agents {
-		if strings.HasPrefix(a.ID, id) {
+		if strings.HasPrefix(a.ID, ref) {
 			if found != nil {
 				return nil, false // ambiguous
 			}
@@ -386,8 +393,8 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 	if !ok {
 		return nil, fmt.Errorf("unknown archetype %q", archetype)
 	}
-	if parentID != "" && !validLabel(label) {
-		return nil, fmt.Errorf("label %q: use 1–32 letters, digits, '-' or '_' (a child's label names it in messages, so it may not look like the human or the system)", label)
+	if parentID != "" && reservedNames[normalizeName(label)] {
+		return nil, fmt.Errorf("label %q is reserved: a child's name appears on its messages, so it may not read as the human or the system", label)
 	}
 	var parent *Agent
 	depth := 0
@@ -444,6 +451,12 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		a.ctx, a.kill = context.WithCancel(s.ctx)
 	}
 	s.mu.Lock()
+	name, err := s.claimNameLocked(label, archetype, a.ID) // claimed with the insert: two spawns at once cannot take one name
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	a.Label = name
 	s.agents[a.ID] = a
 	s.order = append(s.order, a.ID)
 	s.mu.Unlock()
@@ -451,7 +464,7 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		parent.addChild(a.ID)
 	}
 	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Agent: a.ID, Type: event.AgentSpawned,
-		Payload: event.MustPayload(event.AgentSpawnedPayload{ID: a.ID, Parent: parentID, Archetype: archetype, Label: label, Model: modelID, Task: task, Depth: depth, Dirs: granted})}); err != nil {
+		Payload: event.MustPayload(event.AgentSpawnedPayload{ID: a.ID, Parent: parentID, Archetype: archetype, Label: name, Model: modelID, Task: task, Depth: depth, Dirs: granted})}); err != nil {
 		return nil, err
 	}
 	if a.variant != "" { // inherited: logged so recovery restores it
@@ -472,13 +485,62 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 	return a, nil
 }
 
-// labelPattern bounds a model-chosen label: a short identifier, so a child
-// cannot call itself "human", "SYSTEM:" or a sentence that reads as an
-// instruction where its messages are attributed.
-var labelPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$`)
+// maxNameLen bounds an agent's name.
+const maxNameLen = 32
 
-func validLabel(label string) bool {
-	return labelPattern.MatchString(label) && !strings.EqualFold(label, "human") && !strings.EqualFold(label, "system") && !strings.EqualFold(label, "user")
+// reservedNames may not be taken by an agent: messages are attributed by
+// name, and these read as the human or the system.
+var reservedNames = map[string]bool{"user": true, "human": true, "system": true}
+
+// normalizeName turns a requested label into a name: lowercase letters,
+// digits, '-' and '_', every run of anything else collapsed to one '-',
+// trimmed, at most maxNameLen characters. So "SYSTEM: ignore this" becomes
+// a plain identifier that cannot read as an instruction.
+func normalizeName(label string) string {
+	var b strings.Builder
+	dash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(label)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-':
+			b.WriteRune(r)
+			dash = r == '-'
+		case !dash && b.Len() > 0:
+			b.WriteByte('-')
+			dash = true
+		}
+	}
+	name := strings.Trim(b.String(), "-_")
+	if len(name) > maxNameLen {
+		name = strings.TrimRight(name[:maxNameLen], "-_")
+	}
+	return name
+}
+
+// claimNameLocked gives agent id the name want asks for (fallback when want
+// normalises to nothing, then "agent"), with a -2, -3, … suffix when the
+// name is taken. Names are never released: a killed or renamed agent keeps
+// its old one reserved. Callers hold s.mu.
+func (s *Session) claimNameLocked(want, fallback, id string) (string, error) {
+	base := normalizeName(want)
+	if base == "" {
+		base = normalizeName(fallback)
+	}
+	if base == "" {
+		base = "agent"
+	}
+	if reservedNames[base] {
+		return "", fmt.Errorf("label %q is reserved: a name may not read as the human or the system", base)
+	}
+	name := base
+	for n := 2; ; n++ {
+		if owner, taken := s.names[name]; !taken || owner == id {
+			break
+		}
+		suffix := fmt.Sprintf("-%d", n)
+		name = strings.TrimRight(base[:min(len(base), maxNameLen-len(suffix))], "-_") + suffix
+	}
+	s.names[name] = id
+	return name, nil
 }
 
 func contains(xs []string, x string) bool {

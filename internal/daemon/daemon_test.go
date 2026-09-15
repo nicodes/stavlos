@@ -1422,15 +1422,13 @@ func TestRoles(t *testing.T) {
 
 	work := t.TempDir()
 	fm := &fakeModel{}
-	var childID string
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
 			return call("c1", "agent_create", `{"archetype":"limited","label":"kid","task":"think"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			childID = strings.TrimSpace(strings.TrimPrefix(last.Content, "spawned kid (limited) as "))
-			if last.IsError || childID == "" || strings.Contains(childID, " ") {
+			if last.IsError || !strings.HasPrefix(last.Content, "created kid (limited), id ") {
 				t.Errorf("spawn result: %+v", last)
 			}
 			return call("c2", "agent_create", `{"archetype":"boss","label":"b","task":"x"}`)
@@ -1440,7 +1438,7 @@ func TestRoles(t *testing.T) {
 			if !last.IsError || !strings.Contains(last.Content, "primary-only") {
 				t.Errorf("a primary-only role must not be spawnable: %+v", last)
 			}
-			return call("c3", "agent_message", `{"id":"`+childID+`","text":"again"}`)
+			return call("c3", "agent_message", `{"id":"kid","text":"again"}`) // by name
 		},
 		func(model.Request) model.Response { return text("sent") },
 		func(req model.Request) model.Response {

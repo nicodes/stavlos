@@ -53,7 +53,7 @@ func (responseTool) Def() model.ToolDef {
 }
 
 type responseInput struct {
-	To   string `json:"to" desc:"The asking agent's id (the message you are answering names it)" req:"true"`
+	To   string `json:"to" desc:"The asking agent's name or id (the message you are answering names it)" req:"true"`
 	Text string `json:"text" desc:"Your answer: what you did or found, with exact paths and results" req:"true"`
 }
 

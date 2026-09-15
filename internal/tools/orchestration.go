@@ -41,7 +41,7 @@ func (spawnTool) Def() model.ToolDef {
 
 type spawnInput struct {
 	Archetype string   `json:"archetype" desc:"Preset name of the child (see the list in your instructions)" req:"true"`
-	Label     string   `json:"label" desc:"Short human-facing name for this child, e.g. 'auth-explorer' (required)" req:"true"`
+	Label     string   `json:"label" desc:"Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the session gets a suffix (auth-explorer-2); the result says the name it got" req:"true"`
 	Task      string   `json:"task" desc:"The complete task description; the child has no other context" req:"true"`
 	Model     string   `json:"model" desc:"Optional provider/model-id override for this child"`
 	Dirs      []string `json:"dirs" desc:"Optional directories to grant the child on top of the session directory and its role's own; each must be inside one of yours (agent_status lists them)"`
@@ -66,11 +66,11 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if ok, why := env.Orch.CanSpawn(env.Agent); !ok {
 		return errf("cannot spawn: %s", why)
 	}
-	id, err := env.Orch.Spawn(ctx, env.Agent, a.Archetype, a.Label, a.Task, a.Model, a.Dirs)
+	id, name, err := env.Orch.Spawn(ctx, env.Agent, a.Archetype, a.Label, a.Task, a.Model, a.Dirs)
 	if err != nil {
 		return errf("%v", err)
 	}
-	return Result{Output: fmt.Sprintf("spawned %s (%s) as %s", a.Label, a.Archetype, id)}
+	return Result{Output: fmt.Sprintf("created %s (%s), id %s; address it by its name", name, a.Archetype, id)}
 }
 
 // --- message / cancel / kill ---
@@ -83,7 +83,7 @@ func (messageTool) Def() model.ToolDef {
 }
 
 type messageInput struct {
-	ID   string `json:"id" desc:"Target agent id (any agent in the session)" req:"true"`
+	ID   string `json:"id" desc:"Target agent: its name or id (any agent in the session)" req:"true"`
 	Text string `json:"text" desc:"Message" req:"true"`
 }
 
@@ -110,7 +110,7 @@ func (cancelTool) Def() model.ToolDef {
 }
 
 type cancelInput struct {
-	ID string `json:"id" desc:"Child agent id" req:"true"`
+	ID string `json:"id" desc:"Child agent: its name or id" req:"true"`
 }
 
 func (cancelTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
@@ -132,7 +132,7 @@ func (statusTool) Def() model.ToolDef {
 }
 
 type statusInput struct {
-	ID string `json:"id" desc:"Agent id; omit for the whole session"`
+	ID string `json:"id" desc:"Agent name or id; omit for the whole session"`
 }
 
 func (statusTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }

@@ -53,12 +53,12 @@ func (o orchestrator) child(parent, id string) (*Agent, error) {
 	return c, nil
 }
 
-func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (string, error) {
+func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (id, name string, err error) {
 	a, err := o.s.spawn(ctx, parent, archetype, label, task, modelID, dirs)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return a.ID, nil
+	return a.ID, a.LabelNow(), nil
 }
 
 // Message delivers text to another agent in the session at its next step:
