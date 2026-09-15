@@ -195,7 +195,6 @@ func TestBoundaryPrompt(t *testing.T) {
 		reply(text("ok")),
 	}}
 	s, h := newTestSession(t, testConfig{}, fm)
-	_ = s.SetMode(context.Background(), protocol.ModeAuto)
 	h.answerWith(escalation.Answer{Value: "allow_always"}, escalation.Answer{Value: "deny"})
 	runTurn(t, s, h, "go")
 	if n := h.promptCount(); n != 1 {
@@ -218,7 +217,6 @@ func TestBoundaryPrompt(t *testing.T) {
 	t.Run("a symlink is judged by where it points", func(t *testing.T) {
 		fm := &fakeModel{steps: []step{reply(call("c1", "read", `{"path":"link/note.txt"}`)), reply(text("ok"))}}
 		s, h := newTestSession(t, testConfig{}, fm)
-		_ = s.SetMode(context.Background(), protocol.ModeAuto)
 		if err := os.Symlink(other, filepath.Join(s.Dir, "link")); err != nil {
 			t.Fatal(err)
 		}
@@ -228,14 +226,23 @@ func TestBoundaryPrompt(t *testing.T) {
 			t.Fatalf("prompts %d dir %q (want %q)", n, h.prompts[0].Dir, other)
 		}
 	})
-	t.Run("a parent-relative shell argument asks in auto mode", func(t *testing.T) {
+	t.Run("a parent-relative shell argument asks", func(t *testing.T) {
 		fm := &fakeModel{steps: []step{reply(call("c1", "shell", `{"command":"cat ../outside.txt"}`)), reply(text("ok"))}}
 		s, h := newTestSession(t, testConfig{}, fm)
-		_ = s.SetMode(context.Background(), protocol.ModeAuto)
 		h.answerWith(escalation.Answer{Value: "deny"})
 		runTurn(t, s, h, "go")
 		if n := h.promptCount(); n != 1 || h.prompts[0].Dir == "" {
 			t.Fatalf("prompts %d: %+v", n, h.prompts)
+		}
+	})
+	t.Run("auto denies the boundary without asking", func(t *testing.T) {
+		fm := &fakeModel{steps: []step{reply(call("c1", "read", `{"path":"`+f+`"}`)), reply(text("ok"))}}
+		s, h := newTestSession(t, testConfig{}, fm)
+		_ = s.SetMode(context.Background(), protocol.ModeAuto)
+		runTurn(t, s, h, "go")
+		fin := finished(h, s.Root().ID)
+		if h.promptCount() != 0 || len(fin) != 1 || !fin[0].Denied || !strings.Contains(fin[0].Output, "auto mode") || strings.Contains(fin[0].Output, "secret") {
+			t.Fatalf("prompts %d finished %+v", h.promptCount(), fin)
 		}
 	})
 	t.Run("yolo skips the boundary", func(t *testing.T) {

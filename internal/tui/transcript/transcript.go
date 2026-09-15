@@ -1282,6 +1282,8 @@ func denialMark(output string) string {
 		return "(by policy)"
 	case strings.HasPrefix(out, "Permission denied: nobody answered"):
 		return "(no answer)"
+	case strings.HasPrefix(out, "Denied in auto mode:"):
+		return "(outside dirs, auto mode)"
 	}
 	if reason, ok := strings.CutPrefix(out, "Permission denied by the user:"); ok {
 		if reason = strings.TrimSuffix(strings.TrimSpace(reason), "."); reason != "" {

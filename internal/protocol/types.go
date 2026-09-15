@@ -303,7 +303,7 @@ const (
 func ModeSummary(mode string) string {
 	switch mode {
 	case ModeAuto:
-		return "asks only outside the agent's directories"
+		return "allows inside the agent's directories, denies outside them"
 	case ModeYolo:
 		return "every permission is approved, directories included"
 	}

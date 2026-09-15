@@ -162,14 +162,15 @@ var handlers = map[string]handler{
 		if err := s.SetMode(ctx, p.Mode); err != nil {
 			return nil, err
 		}
-		// Anything already waiting that the new mode would have allowed is
-		// allowed now, so the agents move: yolo takes every permission
-		// prompt, auto only the ones that stay inside the agent's directories.
+		// Anything already waiting is answered as the new mode would have, so
+		// the agents move: yolo allows every permission prompt; auto allows
+		// the ones inside the agent's directories and denies the ones outside.
 		switch p.Mode {
 		case protocol.ModeYolo:
 			c.d.esc.AnswerAll(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "yolo")
 		case protocol.ModeAuto:
 			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir == "" })
+			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerDeny, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir != "" })
 		}
 		return okResult, nil
 	}),

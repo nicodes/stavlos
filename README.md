@@ -70,10 +70,10 @@ Esc closes a dialog with the prompt still waiting.
 `/mode` picks the session's permission mode:
 
 - **ask**, the default, prompts for every policy ask and every call outside an agent's directories.
-- **auto** (`/auto`) approves permissions inside the agent's directories; a call outside still asks, and "Allow and add" on that prompt grows the directories.
+- **auto** (`/auto`) approves permissions inside the agent's directories; a call outside them is denied, and the agent is told that auto mode does not allow it (switch to ask to grant a directory with "Allow and add").
 - **yolo** (`/yolo`) approves everything a policy would ask about, directories included.
 
-Switching on approves whatever is waiting that the mode would have allowed. Deny rules, model questions and the trust prompt apply in every mode. An AUTO or YOLO tag before the role shows the mode, and clicking it goes back to ask. Auto is prompt-free inside the directories only as far as the harness can see: paths in shell commands come from inspecting the command line, not from a sandbox, so keep deny rules for what must never run.
+Switching a mode on answers whatever is waiting as that mode would have: yolo allows every permission prompt, auto allows the ones inside the directories and denies the ones outside. Deny rules, model questions and the trust prompt apply in every mode. An ASK, AUTO or YOLO tag before the role always shows the mode: clicking AUTO or YOLO goes back to ask, clicking ASK opens `/mode`. Auto is prompt-free inside the directories only as far as the harness can see: paths in shell commands come from inspecting the command line, not from a sandbox, so keep deny rules for what must never run.
 
 ## Roles
 

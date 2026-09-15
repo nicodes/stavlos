@@ -1065,8 +1065,8 @@ func TestAutoMode(t *testing.T) {
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if !last.IsError || !strings.Contains(last.Content, "denied") {
-				t.Errorf("the boundary prompt was denied by hand: %+v", last)
+			if !last.IsError || !strings.Contains(last.Content, "auto mode") {
+				t.Errorf("auto denies a call outside the directories: %+v", last)
 			}
 			return call("c3", "shell", `{"command":"rm -rf nothing"}`)
 		},
@@ -1090,34 +1090,18 @@ func TestAutoMode(t *testing.T) {
 	if err := h.c.SetSessionMode(ctx, s.ID, "auto"); err != nil {
 		t.Fatal(err)
 	}
-	// auto approves the waiting inside command; the outside read then raises
-	// a boundary prompt that auto does not approve
-	e := h.waitFor(event.PromptRequested, root)
-	var pr event.PromptRequestedPayload
-	_ = e.Decode(&pr)
-	if pr.Tool != "read" || !strings.Contains(pr.Question, "outside its directories") {
-		t.Fatalf("expected a boundary prompt: %+v", pr)
-	}
-	pending := h.d.esc.Pending(s.ID)
-	if len(pending) != 1 || pending[0].Dir == "" {
-		t.Fatalf("pending %+v", pending)
-	}
-	// switching to auto again (already auto) or asking for auto must not approve it
-	_ = h.c.SetSessionMode(ctx, s.ID, "auto")
-	if len(h.d.esc.Pending(s.ID)) != 1 {
-		t.Fatal("auto must not approve a boundary prompt")
-	}
-	_ = h.c.ClaimPrompt(ctx, pending[0].ID)
-	if err := h.c.ReplyPrompt(ctx, pending[0].ID, "deny"); err != nil {
-		t.Fatal(err)
-	}
+	// auto approves the waiting inside command, then denies the outside read
+	// without asking
 	var te event.TurnEndedPayload
 	for te.Turn != 1 {
-		e = h.waitFor(event.TurnEnded, root)
+		e := h.waitFor(event.TurnEnded, root)
 		_ = e.Decode(&te)
 	}
 	if _, err := os.Stat(filepath.Join(work, "inside")); err != nil {
 		t.Fatal("the inside command should have run under auto")
+	}
+	if n := len(h.d.esc.Pending(s.ID)); n != 0 {
+		t.Fatalf("auto should leave no boundary prompt waiting: %d", n)
 	}
 	rc, _ := h.c.Reconcile(ctx, s.ID)
 	if rc.Session.Mode != "auto" {
@@ -2483,5 +2467,42 @@ func TestSessionPost(t *testing.T) {
 	h.waitFor(event.TurnEnded, root)
 	if _, err := h.c.Post(ctx, s.ID, "@nobody hi"); err == nil || !strings.Contains(err.Error(), "@nobody") {
 		t.Fatalf("an unknown mention should be refused: %v", err)
+	}
+}
+
+// TestAutoDeniesAWaitingBoundaryPrompt: a boundary prompt waiting in ask
+// mode is denied, with the auto mode note, when the session switches to
+// auto.
+func TestAutoDeniesAWaitingBoundaryPrompt(t *testing.T) {
+	setupConfig(t)
+	work, outside := t.TempDir(), t.TempDir()
+	_ = os.WriteFile(filepath.Join(outside, "f.txt"), []byte("secret"), 0o644)
+	told := make(chan string, 1)
+	fm := &fakeModel{}
+	fm.steps = []func(model.Request) model.Response{
+		func(model.Request) model.Response { return call("c1", "read", `{"path":"`+outside+`/f.txt"}`) },
+		func(req model.Request) model.Response {
+			told <- req.Messages[len(req.Messages)-1].Blocks[0].Content
+			return text("done")
+		},
+	}
+	h := newHarness(t, t.TempDir(), fm)
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
+	h.waitFor(event.PromptRequested, agents[0].ID) // the outside read waits in ask mode
+	if err := h.c.SetSessionMode(ctx, s.ID, "auto"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-told:
+		if !strings.Contains(got, "auto mode") || strings.Contains(got, "secret") {
+			t.Fatalf("the waiting boundary prompt should be denied by auto: %q", got)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the agent was never told")
 	}
 }
