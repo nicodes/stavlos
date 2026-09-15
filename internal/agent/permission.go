@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
@@ -10,6 +11,7 @@ import (
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/shellcmd"
+	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -84,13 +86,20 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 	if sub.Kind == policy.KindCommand && verb == policy.Allow && !shellcmd.Simple(arg) {
 		verb = policy.Ask
 	}
+	// An edit to the files that steer the harness itself asks whatever
+	// policy says and whatever the mode: an agent must not rewrite its own
+	// rules, instructions or git hooks unseen.
+	control := a.controlFile(c.Name, sub)
+	if control != "" && verb == policy.Allow {
+		verb, arg = policy.Ask, control
+	}
 	// What the human allowed for the channel answers an ask, never a deny.
 	if verb == policy.Ask && a.s.permits.covers(c.Name, sub) {
 		verb = policy.Allow
 	}
 	mode := a.s.Mode()
-	if verb == policy.Ask && mode != protocol.ModeAsk {
-		verb = policy.Allow // auto and yolo answer every policy ask with allow
+	if verb == policy.Ask && control == "" && (mode == protocol.ModeYolo || mode == protocol.ModeAuto && !egress(c.Name, sub)) {
+		verb = policy.Allow // yolo answers every other ask; auto every one that sends nothing out
 	}
 	// A call that reaches outside the channel's working directories is judged
 	// by the mode even when policy allows the tool: ask mode asks (the prompt
@@ -110,6 +119,43 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 		}
 	}
 	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why}
+}
+
+// egress reports whether a call sends data out of the machine or to a
+// process the harness does not inspect: a fetch, a search, an MCP tool.
+// Auto mode leaves these asking; only a rule or a channel permit (a host,
+// an MCP tool pattern) answers them.
+func egress(tool string, sub policy.Subject) bool {
+	return sub.Kind == policy.KindURL || tool == toolname.WebSearch || strings.HasPrefix(tool, toolname.MCPPrefix)
+}
+
+// controlFiles are the paths, relative to a working directory, whose edits
+// always ask: the harness's config and roles, the agents' instructions,
+// git's internals (hooks run code) and direnv's script.
+var controlFiles = []string{".stavlos", "AGENTS.md", ".git", ".envrc"}
+
+// controlFile is the first control file an apply_patch call edits, "" when
+// it edits none.
+func (a *Agent) controlFile(tool string, sub policy.Subject) string {
+	if tool != toolname.ApplyPatch {
+		return ""
+	}
+	dirs := a.s.dirPaths()
+	for _, v := range sub.Values {
+		p := tools.ResolvePath(a.s.Dir, v)
+		for _, d := range dirs {
+			rel, err := filepath.Rel(tools.ResolvePath("", d), p)
+			if err != nil {
+				continue
+			}
+			for _, cf := range controlFiles {
+				if rel == cf || strings.HasPrefix(rel, cf+string(filepath.Separator)) {
+					return v
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // autoOutside is what an agent is told when auto mode denies a call outside

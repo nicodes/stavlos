@@ -51,6 +51,10 @@ func TestToolVerdicts(t *testing.T) {
 		{name: "process substitution asks", policy: catGrep, tool: "shell", in: `{"command":"cat <(id)"}`, answer: escalation.Answer{Value: "deny"}, wantPrompt: true, wantDenied: true},
 		{name: "a quoted separator is still one command", policy: catGrep, tool: "shell", in: `{"command":"grep -c \"a; b\" f.txt"}`, wantOut: "0"},
 		{name: "auto answers a chained command's ask", mode: protocol.ModeAuto, tool: "shell", in: `{"command":"cat f.txt; echo tail"}`, wantOut: "tail"},
+		{name: "auto still asks before a fetch", mode: protocol.ModeAuto, tool: "web_fetch", in: `{"url":"https://example.com/"}`, answer: escalation.Answer{Value: "deny"}, wantPrompt: true, wantDenied: true},
+		{name: "yolo still asks before editing the harness's config", mode: protocol.ModeYolo, tool: "apply_patch", in: `{"patch":"*** Begin Patch\n*** Add File: .stavlos/stavlos.json\n+{}\n*** End Patch"}`, answer: escalation.Answer{Value: "deny"}, wantPrompt: true, wantDenied: true},
+		{name: "an allow rule does not cover a git hook", policy: `{"apply_patch":"allow"}`, tool: "apply_patch", in: `{"patch":"*** Begin Patch\n*** Add File: .git/hooks/pre-commit\n+rm -rf ~\n*** End Patch"}`, answer: escalation.Answer{Value: "deny"}, wantPrompt: true, wantDenied: true},
+		{name: "auto allows an ordinary patch", mode: protocol.ModeAuto, tool: "apply_patch", in: `{"patch":"*** Begin Patch\n*** Add File: src/a.go\n+package a\n*** End Patch"}`, wantOut: "added src/a.go"},
 		{name: "unknown tool is an error", tool: "nope", in: `{}`, wantOut: "unknown tool"},
 	}
 	for _, tc := range cases {
