@@ -40,8 +40,9 @@ type (
 	}
 	subscribedMsg struct{ err error }
 	treeMsg       struct {
-		agents []protocol.AgentInfo
-		err    error
+		channel string
+		agents  []protocol.AgentInfo
+		err     error
 	}
 	treeTickMsg struct{}
 	// resultMsg reports a fire-and-forget call; ok is shown on success.
@@ -128,7 +129,7 @@ func subscribeCmd(ctx context.Context, c *client.Client, channel string, from in
 func treeCmd(ctx context.Context, c *client.Client, channel string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		res, err := client.Do(ctx, c, protocol.AgentTree, protocol.AgentTreeParams{Channel: channel})
-		return treeMsg{res.Agents, err}
+		return treeMsg{channel, res.Agents, err}
 	})
 }
 
