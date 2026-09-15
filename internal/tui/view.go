@@ -428,10 +428,14 @@ func (m Model) metaShown() bool { return !m.superChat || !m.connected() }
 // each side. The left side is truncated first when they collide.
 func (m Model) metaRow(width int) string {
 	left, _ := m.metaLeft()
-	right := "" // the usage sits on the divider over the input (ruleLine); only the sign-in nudge stays here
+	var parts []string // the usage sits on the divider over the input (ruleLine)
 	if !m.connected() {
-		right = m.footerRightView()
+		parts = append(parts, m.footerRightView()) // the sign-in nudge
 	}
+	if tabs := m.agentTabs(); tabs != "" {
+		parts = append(parts, tabs) // async · due · todo · mcp at the right end
+	}
+	right := strings.Join(parts, "   ")
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {
 		avail := width - lipgloss.Width(right) - 4
@@ -599,13 +603,36 @@ const channelGear = "⚙"
 // sidebarTabsRow is the sidebar header row that holds the ! and ? tabs.
 const sidebarTabsRow = 5
 
-// stripRows is how many tab rows the footer strip draws: both, or only the
-// agent's while the sidebar shows the ! ? dirs row.
+// stripRows is how many tab rows the footer strip draws: the ! ? dirs row
+// while the sidebar is hidden, none while it shows (! and ? sit in the
+// sidebar then). An agent's own tabs sit at the right end of the meta row.
 func (m Model) stripRows() int {
 	if m.sidebarVisible() {
-		return len(m.tabLayout()) - 1
+		return 0
 	}
-	return len(m.tabLayout())
+	return 1
+}
+
+// agentTabs is the agent's tab row, async · due · todo · mcp, as the meta
+// row draws it at its right end; "" in the channel chat.
+func (m Model) agentTabs() string {
+	if m.superChat {
+		return ""
+	}
+	labels, _ := m.tabLabels(m.currentPrompt())
+	lines := strings.Split(labels, "\n")
+	return lines[len(lines)-1]
+}
+
+// metaTabAt maps a column of the meta row, drawn width wide, to the agent tab
+// drawn there.
+func (m Model) metaTabAt(x, width int) (focus, bool) {
+	tabs := m.agentTabs()
+	if tabs == "" {
+		return 0, false
+	}
+	_, spans := m.tabLabels(m.currentPrompt())
+	return hitSpan(spans[len(spans)-1], x-(width-lipgloss.Width(tabs)))
 }
 
 // sidebarBody is everything under the header: the "channels" title with its
@@ -1053,7 +1080,7 @@ func answered(answers []string) int {
 func (m Model) sectionTabs(p *protocol.PromptInfo, width int) string {
 	labels, _ := m.tabLabels(p)
 	rows := strings.Split(labels, "\n")
-	rows = rows[len(rows)-m.stripRows():] // the ! ? dirs row sits in the sidebar while it shows
+	rows = rows[:m.stripRows()] // the ! ? dirs row sits in the sidebar while it shows; the agent's row on the meta row
 	for i := range rows {
 		rows[i] = ansi.Truncate(rows[i], width, "…") // the channel directory lives in the dirs tab
 	}
