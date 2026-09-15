@@ -19,7 +19,7 @@ func TestBashPathCandidates(t *testing.T) {
 		{"cat /etc/hostname", []string{"/etc/hostname"}},             // an absolute argument
 		{"grep -r x ~/other", []string{home() + "/other"}},           // ~ expands
 		{"cd /tmp/build && make", []string{"/tmp/build"}},            // cd target
-		{"cd ../sibling; ls", []string{"/work/sibling"}},             // relative cd target, from the session directory
+		{"cd ../sibling; ls", []string{"/work/sibling"}},             // relative cd target, from the channel directory
 		{"go test ./... > /tmp/out.txt", []string{"/tmp/out.txt"}},   // redirect target
 		{"make 2>/var/log/x.log", []string{"/var/log/x.log"}},        // attached redirect
 		{"rg --path=/srv/data foo", []string{"/srv/data"}},           // --flag=path

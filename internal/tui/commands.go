@@ -104,20 +104,20 @@ func tick(d time.Duration, msg tea.Msg) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return msg })
 }
 
-func reconcileCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
+func reconcileCmd(ctx context.Context, c *client.Client, channel string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		res, err := c.Reconcile(ctx, session)
+		res, err := c.Reconcile(ctx, channel)
 		return reconcileMsg{res, err}
 	})
 }
 
-func subscribeCmd(ctx context.Context, c *client.Client, session string, from int64) tea.Cmd {
-	return rpcCmd(ctx, func(ctx context.Context) tea.Msg { return subscribedMsg{c.Subscribe(ctx, session, from)} })
+func subscribeCmd(ctx context.Context, c *client.Client, channel string, from int64) tea.Cmd {
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg { return subscribedMsg{c.Subscribe(ctx, channel, from)} })
 }
 
-func treeCmd(ctx context.Context, c *client.Client, session string) tea.Cmd {
+func treeCmd(ctx context.Context, c *client.Client, channel string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		agents, err := c.Tree(ctx, session)
+		agents, err := c.Tree(ctx, channel)
 		return treeMsg{agents, err}
 	})
 }
@@ -129,11 +129,11 @@ func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.
 	return resultCmd(ctx, ok, func(ctx context.Context) error { return c.Send(ctx, agent, kind, text) })
 }
 
-// postCmd sends the human's message to the session chat; the daemon
+// postCmd sends the human's message to the channel chat; the daemon
 // delivers it by @mention and refuses a mention that names no agent.
-func postCmd(ctx context.Context, c *client.Client, session, text string) tea.Cmd {
+func postCmd(ctx context.Context, c *client.Client, channel, text string) tea.Cmd {
 	return resultCmd(ctx, "", func(ctx context.Context) error {
-		_, err := c.Post(ctx, session, text)
+		_, err := c.Post(ctx, channel, text)
 		return err
 	})
 }
@@ -219,7 +219,7 @@ func modelsCmd(ctx context.Context, c *client.Client) tea.Cmd {
 	})
 }
 
-// rolesMsg carries the session's roles: for the /role picker, or (quiet)
+// rolesMsg carries the channel's roles: for the /role picker, or (quiet)
 // to refresh the cached roles that filter the models and variants dialogs
 // and tint role names.
 type rolesMsg struct {
@@ -228,9 +228,9 @@ type rolesMsg struct {
 	quiet bool
 }
 
-func rolesCmd(ctx context.Context, c *client.Client, session string, quiet bool) tea.Cmd {
+func rolesCmd(ctx context.Context, c *client.Client, channel string, quiet bool) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		rs, err := c.Presets(ctx, session)
+		rs, err := c.Presets(ctx, channel)
 		return rolesMsg{roles: rs, err: err, quiet: quiet}
 	})
 }
@@ -239,27 +239,27 @@ func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.
 	return resultCmd(ctx, "role set to "+role, func(ctx context.Context) error { return c.SetAgentRole(ctx, agent, role) })
 }
 
-func addDirCmd(ctx context.Context, c *client.Client, session, dir string) tea.Cmd {
-	return resultCmd(ctx, "added "+dir, func(ctx context.Context) error { return c.AddSessionDir(ctx, session, dir) })
+func addDirCmd(ctx context.Context, c *client.Client, channel, dir string) tea.Cmd {
+	return resultCmd(ctx, "added "+dir, func(ctx context.Context) error { return c.AddChannelDir(ctx, channel, dir) })
 }
 
-func removeDirCmd(ctx context.Context, c *client.Client, session, dir string) tea.Cmd {
-	return resultCmd(ctx, "removed "+format.ShortHome(dir), func(ctx context.Context) error { return c.RemoveSessionDir(ctx, session, dir) })
+func removeDirCmd(ctx context.Context, c *client.Client, channel, dir string) tea.Cmd {
+	return resultCmd(ctx, "removed "+format.ShortHome(dir), func(ctx context.Context) error { return c.RemoveChannelDir(ctx, channel, dir) })
 }
 
 // replaceDirCmd swaps one directory for another (an edit in the dirs
 // dialog): the new one is added first so no agent loses ground.
-func replaceDirCmd(ctx context.Context, c *client.Client, session, oldDir, newDir string) tea.Cmd {
+func replaceDirCmd(ctx context.Context, c *client.Client, channel, oldDir, newDir string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		if err := c.AddSessionDir(ctx, session, newDir); err != nil {
+		if err := c.AddChannelDir(ctx, channel, newDir); err != nil {
 			return resultMsg{"", err}
 		}
-		return resultMsg{"replaced " + format.ShortHome(oldDir) + " with " + newDir, c.RemoveSessionDir(ctx, session, oldDir)}
+		return resultMsg{"replaced " + format.ShortHome(oldDir) + " with " + newDir, c.RemoveChannelDir(ctx, channel, oldDir)}
 	})
 }
 
-func setModeCmd(ctx context.Context, c *client.Client, session, mode string) tea.Cmd {
-	return resultCmd(ctx, "mode "+mode+": "+protocol.ModeSummary(mode), func(ctx context.Context) error { return c.SetSessionMode(ctx, session, mode) })
+func setModeCmd(ctx context.Context, c *client.Client, channel, mode string) tea.Cmd {
+	return resultCmd(ctx, "mode "+mode+": "+protocol.ModeSummary(mode), func(ctx context.Context) error { return c.SetChannelMode(ctx, channel, mode) })
 }
 
 // compactCmd is /compact. Summarising takes a model call, so it gets a
@@ -302,33 +302,33 @@ func copyCmd(text string) tea.Cmd {
 	}
 }
 
-// sessionsPurpose is what a session.list result is for.
-type sessionsPurpose int
+// channelsPurpose is what a channel.list result is for.
+type channelsPurpose int
 
 const (
-	sessionsPicker  sessionsPurpose = iota // the /sessions picker
-	sessionsHistory                        // earlier prompts for ↑/↓ on the start screen
-	sessionsNav                            // the sidebar's sessions section
+	channelsPicker  channelsPurpose = iota // the /channels picker
+	channelsHistory                        // earlier prompts for ↑/↓ on the start screen
+	channelsNav                            // the sidebar's channels section
 )
 
-// sessionsMsg carries session.list for one purpose.
-type sessionsMsg struct {
-	sessions []protocol.SessionInfo
+// channelsMsg carries channel.list for one purpose.
+type channelsMsg struct {
+	channels []protocol.ChannelInfo
 	err      error
-	purpose  sessionsPurpose
+	purpose  channelsPurpose
 }
 
-func sessionsCmd(ctx context.Context, c *client.Client, dir string, purpose sessionsPurpose) tea.Cmd {
+func channelsCmd(ctx context.Context, c *client.Client, dir string, purpose channelsPurpose) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		ss, err := c.Sessions(ctx, dir, false)
-		return sessionsMsg{ss, err, purpose}
+		ss, err := c.Channels(ctx, dir, false)
+		return channelsMsg{ss, err, purpose}
 	})
 }
 
-// resumable is the sidebar's sessions section: the directory's other
-// sessions that were ever prompted, in the order given.
-func resumable(ss []protocol.SessionInfo, current string) []protocol.SessionInfo {
-	var out []protocol.SessionInfo
+// resumable is the sidebar's channels section: the directory's other
+// channels that were ever prompted, in the order given.
+func resumable(ss []protocol.ChannelInfo, current string) []protocol.ChannelInfo {
+	var out []protocol.ChannelInfo
 	for _, s := range ss {
 		if s.ID != current && s.Title != "" { // never prompted: nothing to resume
 			out = append(out, s)
@@ -337,17 +337,17 @@ func resumable(ss []protocol.SessionInfo, current string) []protocol.SessionInfo
 	return out
 }
 
-// switchedMsg reports a session resume for the /sessions picker: the TUI
+// switchedMsg reports a channel resume for the /channels picker: the TUI
 // rebinds to info.ID and reconciles from scratch.
 type switchedMsg struct {
-	info protocol.SessionInfo
+	info protocol.ChannelInfo
 	err  error
 }
 
-func switchSessionCmd(ctx context.Context, c *client.Client, from, to string) tea.Cmd {
+func switchChannelCmd(ctx context.Context, c *client.Client, from, to string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		_ = c.Unsubscribe(ctx, from)
-		info, err := c.ResumeSession(ctx, to)
+		info, err := c.ResumeChannel(ctx, to)
 		return switchedMsg{info, err}
 	})
 }
@@ -376,13 +376,13 @@ func pickVariantCmd(ctx context.Context, c *client.Client, agent, variant string
 	return resultCmd(ctx, what, func(ctx context.Context) error { return c.SetAgentVariant(ctx, agent, variant) })
 }
 
-// pickAgentModelCmd / pickSessionModelCmd are the /models overlay actions.
+// pickAgentModelCmd / pickChannelModelCmd are the /models overlay actions.
 func pickAgentModelCmd(ctx context.Context, c *client.Client, agent, modelID string) tea.Cmd {
 	return resultCmd(ctx, "model set to "+modelID, func(ctx context.Context) error { return c.SetAgentModel(ctx, agent, modelID) })
 }
 
-func pickSessionModelCmd(ctx context.Context, c *client.Client, session, modelID string) tea.Cmd {
-	return resultCmd(ctx, "session model set to "+modelID, func(ctx context.Context) error { return c.SetSessionModel(ctx, session, modelID) })
+func pickChannelModelCmd(ctx context.Context, c *client.Client, channel, modelID string) tea.Cmd {
+	return resultCmd(ctx, "channel model set to "+modelID, func(ctx context.Context) error { return c.SetChannelModel(ctx, channel, modelID) })
 }
 
 // compactTickMsg animates the compaction bar while a summariser runs.

@@ -6,7 +6,7 @@ import (
 )
 
 // Everything the daemon hands the TUI that a model or a tool wrote passes
-// through textsafe on the way in: a label, a question, a session title, a
+// through textsafe on the way in: a label, a question, a channel title, a
 // line of transcript. The terminal then only ever draws text the TUI
 // styled itself. The permission dialog keeps the hidden bytes visible
 // (textsafe.Visible) so the human sees that a command tried to hide
@@ -45,7 +45,7 @@ func cleanPrompt(p *protocol.PromptInfo) {
 	// p.Input is decoded by the renderer, which shows controls visibly.
 }
 
-func cleanSession(s protocol.SessionInfo) protocol.SessionInfo {
+func cleanChannel(s protocol.ChannelInfo) protocol.ChannelInfo {
 	s.Title, s.Dir = textsafe.Clean(s.Title), textsafe.Clean(s.Dir)
 	for i := range s.Dirs {
 		s.Dirs[i].Path = textsafe.Clean(s.Dirs[i].Path)
@@ -53,9 +53,9 @@ func cleanSession(s protocol.SessionInfo) protocol.SessionInfo {
 	return s
 }
 
-func cleanSessions(ss []protocol.SessionInfo) []protocol.SessionInfo {
+func cleanChannels(ss []protocol.ChannelInfo) []protocol.ChannelInfo {
 	for i := range ss {
-		ss[i] = cleanSession(ss[i])
+		ss[i] = cleanChannel(ss[i])
 	}
 	return ss
 }

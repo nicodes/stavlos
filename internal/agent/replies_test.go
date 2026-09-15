@@ -38,7 +38,7 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 			return text("still just notes"), nil
 		},
 	}}
-	s, h := newTestSession(t, testConfig{reminders: true}, fm)
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return root.Info().Turn == 1+maxNudges && root.StateOf() == StateIdle })
@@ -73,7 +73,7 @@ func TestNudgeGetsAReply(t *testing.T) {
 		reply(call("c1", "message", `{"to":"user","text":"all good"}`)),
 		reply(text("done")),
 	}}
-	s, h := newTestSession(t, testConfig{reminders: true}, fm)
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return len(h.ofType(event.MessageToUser, root.ID)) == 1 && root.StateOf() == StateIdle })
@@ -89,7 +89,7 @@ func TestReplyNeedsNoReminder(t *testing.T) {
 		reply(call("c1", "message", `{"to":"user","text":"all good"}`)),
 		reply(text("notes")),
 	}}
-	s, h := newTestSession(t, testConfig{reminders: true}, fm)
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return root.StateOf() == StateIdle })
@@ -115,7 +115,7 @@ func TestNoNudgeWhileWaiting(t *testing.T) {
 			return call("k1", "message", `{"to":"main","text":"found it","kind":"response"}`), nil
 		}},
 	}
-	s, h := newTestSession(t, testConfig{reminders: true}, fm)
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "delegate")
 	time.Sleep(50 * time.Millisecond)
@@ -148,7 +148,7 @@ func TestChildRemindedOfItsParent(t *testing.T) {
 			},
 		},
 	}
-	s, h := newTestSession(t, testConfig{reminders: true}, fm)
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "delegate")
 	waitUntil(t, h, func() bool { return len(s.Agents()) == 2 })
@@ -173,7 +173,7 @@ func TestChildRemindedOfItsParent(t *testing.T) {
 // starts its turn after recovery.
 func TestReminderSurvivesRestart(t *testing.T) {
 	fm := &fakeModel{steps: []step{reply(text("notes only")), reply(text("notes again"))}}
-	s, h := newTestSession(t, testConfig{reminders: true}, fm)
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return len(h.ofType(event.ReminderQueued, root.ID)) >= 1 })

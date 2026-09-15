@@ -14,8 +14,8 @@ func chatEvent(seq int64, agent string, typ event.Type, p any) event.Event {
 	return event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 }
 
-// TestSuperChatView: the session chat shows posts and messages to the
-// human, typing there posts to the session, space on a message opens its
+// TestSuperChatView: the channel chat shows posts and messages to the
+// human, typing there posts to the channel, space on a message opens its
 // agent's own chat, and the sidebar's chat row goes back.
 func TestSuperChatView(t *testing.T) {
 	m := sidebarNavModel()
@@ -59,7 +59,7 @@ func TestSuperChatView(t *testing.T) {
 	}
 }
 
-// TestMentionAutocomplete: typing @ in the session chat offers the live
+// TestMentionAutocomplete: typing @ in the channel chat offers the live
 // agents by name; tab completes, and an @ inside a word is not a mention.
 func TestMentionAutocomplete(t *testing.T) {
 	m := sidebarNavModel()
@@ -138,7 +138,7 @@ func TestDueTab(t *testing.T) {
 	}
 	m.setFocus(focusDue)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
-	if !strings.Contains(strings.Split(body, "\n")[0], "you  the session chat") || !strings.Contains(body, "world-politics (general)") {
+	if !strings.Contains(strings.Split(body, "\n")[0], "you  the channel chat") || !strings.Contains(body, "world-politics (general)") {
 		t.Fatalf("due body:\n%s", body)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})

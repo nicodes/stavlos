@@ -30,7 +30,7 @@ const (
 
 type queued struct {
 	text, source string
-	post         string // the session chat post a steer delivers, if any
+	post         string // the channel chat post a steer delivers, if any
 }
 
 // response is an answer waiting in the mailbox: who answered (id
@@ -48,7 +48,7 @@ type Agent struct {
 	Label     string
 	Depth     int
 
-	s      *Session
+	s      *Channel
 	preset config.Preset
 
 	ctx  context.Context // agent context; cancelled by Kill or parent Kill
@@ -67,7 +67,7 @@ type Agent struct {
 	owed        map[string]bool       // parties owed a reply ("user" or an agent id) by the messages taken in (replies.go)
 	nudges      int                   // reminder turns in a row with no reply; they stop at maxNudges
 	remind      []string              // parties a queued reminder names; it starts a turn
-	lastPost    string                // the session chat post the human's latest input delivered; a message to the user answers it
+	lastPost    string                // the channel chat post the human's latest input delivered; a message to the user answers it
 	todos       []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
 	todoSeq     int                   // last todo id issued
 	mcps        map[string]*mcpServer // MCP servers this agent has started (name → server)
@@ -96,7 +96,7 @@ type Agent struct {
 	started bool
 }
 
-func newAgent(s *Session, id, parent, archetype, label, modelID string, depth int, preset config.Preset) *Agent {
+func newAgent(s *Channel, id, parent, archetype, label, modelID string, depth int, preset config.Preset) *Agent {
 	return &Agent{
 		ID: id, Parent: parent, Archetype: archetype, Label: label, Depth: depth,
 		s: s, preset: preset, modelID: modelID, state: StateIdle,
@@ -194,7 +194,7 @@ func (a *Agent) Prompt(ctx context.Context, text, source string) error {
 	if !a.Alive() {
 		return fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
 	}
-	if _, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.PromptQueued,
+	if _, err := a.s.host.Append(ctx, event.Event{Channel: a.s.ID, Agent: a.ID, Type: event.PromptQueued,
 		Payload: event.MustPayload(event.TextPayload{Text: text, Source: source})}); err != nil {
 		return err
 	}
@@ -210,12 +210,12 @@ func (a *Agent) Steer(ctx context.Context, text, source string) error {
 	return a.steer(ctx, text, source, "")
 }
 
-// steer is Steer carrying the session chat post it delivers ("" for none).
+// steer is Steer carrying the channel chat post it delivers ("" for none).
 func (a *Agent) steer(ctx context.Context, text, source, post string) error {
 	if !a.Alive() {
 		return fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
 	}
-	if _, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.SteerReceived,
+	if _, err := a.s.host.Append(ctx, event.Event{Channel: a.s.ID, Agent: a.ID, Type: event.SteerReceived,
 		Payload: event.MustPayload(event.TextPayload{Text: text, Source: source, Post: post})}); err != nil {
 		return err
 	}
@@ -233,7 +233,7 @@ func (a *Agent) note(ctx context.Context, text, source string) error {
 	if !a.Alive() {
 		return fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
 	}
-	if _, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.NoteQueued,
+	if _, err := a.s.host.Append(ctx, event.Event{Channel: a.s.ID, Agent: a.ID, Type: event.NoteQueued,
 		Payload: event.MustPayload(event.TextPayload{Text: text, Source: source})}); err != nil {
 		return err
 	}
@@ -253,7 +253,7 @@ func (a *Agent) Cancel() {
 	}
 }
 
-// killNow tears the agent down (children are handled by Session.killTree).
+// killNow tears the agent down (children are handled by Channel.killTree).
 func (a *Agent) killNow() {
 	a.mu.Lock()
 	if a.state == StateKilled {
@@ -265,7 +265,7 @@ func (a *Agent) killNow() {
 	a.kill()      // cancels monitors too (their ctx derives from a.ctx)
 	a.stopMCP("") // and the MCP servers it owns
 	a.closeDone()
-	_, _ = a.s.host.Append(context.Background(), event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentKilled,
+	_, _ = a.s.host.Append(context.Background(), event.Event{Channel: a.s.ID, Agent: a.ID, Type: event.AgentKilled,
 		Payload: event.MustPayload(event.AgentRefPayload{ID: a.ID})})
 	for _, o := range a.s.Agents() { // nobody will hear back from it now, or reply to it
 		o.forget(a.ID)
@@ -382,7 +382,7 @@ func (a *Agent) SetVariant(ctx context.Context, v string) error {
 	a.mu.Lock()
 	a.variant = v
 	a.mu.Unlock()
-	_, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentVariantChanged,
+	_, err := a.s.host.Append(ctx, event.Event{Channel: a.s.ID, Agent: a.ID, Type: event.AgentVariantChanged,
 		Payload: event.MustPayload(event.VariantChangedPayload{Variant: v})})
 	return err
 }
@@ -407,13 +407,13 @@ func (a *Agent) setModelAndVariant(ctx context.Context, id, variant string) erro
 	a.modelID, a.variant = id, variant
 	a.mu.Unlock()
 	if id != prevModel {
-		if _, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentModelChanged,
+		if _, err := a.s.host.Append(ctx, event.Event{Channel: a.s.ID, Agent: a.ID, Type: event.AgentModelChanged,
 			Payload: event.MustPayload(event.ModelChangedPayload{Model: id})}); err != nil {
 			return err
 		}
 	}
 	if variant != prevVariant {
-		if _, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentVariantChanged,
+		if _, err := a.s.host.Append(ctx, event.Event{Channel: a.s.ID, Agent: a.ID, Type: event.AgentVariantChanged,
 			Payload: event.MustPayload(event.VariantChangedPayload{Variant: variant})}); err != nil {
 			return err
 		}
@@ -541,7 +541,7 @@ func (a *Agent) SetRole(ctx context.Context, role string) error {
 	a.preset = preset
 	label := a.Label
 	a.mu.Unlock()
-	_, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentRoleChanged,
+	_, err := a.s.host.Append(ctx, event.Event{Channel: a.s.ID, Agent: a.ID, Type: event.AgentRoleChanged,
 		Payload: event.MustPayload(event.RoleChangedPayload{Role: role, Label: label})})
 	return err
 }
@@ -572,7 +572,7 @@ func (a *Agent) Info() protocol.AgentInfo {
 		state = protocol.AgentWaiting // idle, but a question or a job is outstanding
 	}
 	info := protocol.AgentInfo{
-		ID: a.ID, Session: a.s.ID, Parent: a.Parent, Archetype: a.Archetype, Label: a.Label,
+		ID: a.ID, Channel: a.s.ID, Parent: a.Parent, Archetype: a.Archetype, Label: a.Label,
 		Model: a.modelID, Variant: a.variant, Depth: a.Depth, State: state, Turn: a.turn,
 		Queued:  len(a.prompts) + len(a.steers) + len(a.notes) + len(a.responses),
 		CostUSD: a.usage.cost, Tokens: a.usage.tokens,
@@ -606,7 +606,7 @@ func (a *Agent) Info() protocol.AgentInfo {
 // and the log have parted, so the failure is kept and the turn ends at its
 // next step rather than carrying on from a history nobody can replay.
 func (a *Agent) record(ctx context.Context, t event.Type, payload any) (event.Event, error) {
-	e := event.Event{Session: a.s.ID, Agent: a.ID, Type: t}
+	e := event.Event{Channel: a.s.ID, Agent: a.ID, Type: t}
 	if payload != nil {
 		e.Payload = event.MustPayload(payload)
 	}

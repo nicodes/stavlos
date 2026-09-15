@@ -32,7 +32,7 @@ type snapshot struct {
 	Armed                                               []string
 }
 
-func snap(s *Session) []snapshot {
+func snap(s *Channel) []snapshot {
 	var out []snapshot
 	for _, a := range s.Agents() {
 		in := a.Info()
@@ -46,8 +46,8 @@ func snap(s *Session) []snapshot {
 	return out
 }
 
-// TestRecoverRoundTrip drives a session through the paths that mutate
-// state, replays its log into a fresh session, and expects the same view.
+// TestRecoverRoundTrip drives a channel through the paths that mutate
+// state, replays its log into a fresh channel, and expects the same view.
 // This is the guard for keeping the live path and Recover in step.
 func TestRecoverRoundTrip(t *testing.T) {
 	other := t.TempDir()
@@ -70,7 +70,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 			},
 		},
 	}
-	s, h := newTestSession(t, testConfig{}, fm)
+	s, h := newTestChannel(t, testConfig{}, fm)
 	ctx := context.Background()
 	root := s.Root()
 	if err := s.SetMode(ctx, protocol.ModeAuto); err != nil {
@@ -126,7 +126,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 		t.Fatalf("recovered view differs\nlive:\n%s\nrecovered:\n%s\nlog:\n%s", bj, aj, h.dump())
 	}
 	if s2.Mode() != mode || s2.Model() != modelID || s2.Live() != 2 {
-		t.Fatalf("session: mode %s model %s live %d", s2.Mode(), s2.Model(), s2.Live())
+		t.Fatalf("channel: mode %s model %s live %d", s2.Mode(), s2.Model(), s2.Live())
 	}
 	if len(h2.all()) != 0 {
 		t.Fatalf("recovery of a clean log should log nothing, got\n%s", h2.dump())
@@ -142,7 +142,7 @@ func TestRecoverAbortsOpenTurns(t *testing.T) {
 		reply(call("c1", "shell", `{"command":"sleep 30","background":true}`)),
 		func(context.Context, model.Request) (model.Response, error) { <-gate; return text("never"), nil },
 	}}
-	s, h := newTestSession(t, testConfig{}, fm)
+	s, h := newTestChannel(t, testConfig{}, fm)
 	_ = s.SetMode(context.Background(), protocol.ModeYolo)
 	root := s.Root()
 	_ = root.Prompt(context.Background(), "go", "human:test")
@@ -185,14 +185,14 @@ func TestRecoverAbortsOpenTurns(t *testing.T) {
 	}
 }
 
-// TestRecoverArchivedAndKilled pins that archived sessions and killed
+// TestRecoverArchivedAndKilled pins that archived channels and killed
 // agents come back dead, and a queued prompt restarts a live agent.
 func TestRecoverArchivedAndKilled(t *testing.T) {
 	fm := &fakeModel{steps: []step{
 		reply(call("c1", "agent_create", `{"archetype":"general","label":"x","task":"t"}`)),
 		reply(text("ok")),
 	}}
-	s, h := newTestSession(t, testConfig{}, fm)
+	s, h := newTestChannel(t, testConfig{}, fm)
 	runTurn(t, s, h, "go")
 	child := s.Agents()[1]
 	waitUntil(t, h, func() bool { return s.Busy() == 0 })
@@ -238,7 +238,7 @@ func TestRecoverArchivedAndKilled(t *testing.T) {
 // (usually most capable) root role.
 func TestRecoverMissingRoleIsReadOnly(t *testing.T) {
 	roles := map[string]string{"lead": "---\ndescription: Leads\nmode: primary\nspawn: [general]\n---\nYou lead.\n"}
-	s, h := newTestSession(t, testConfig{json: `{"model":"fake/m1","rootAgent":"lead"}`, roles: roles}, &fakeModel{steps: []step{reply(text("hi"))}})
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","rootAgent":"lead"}`, roles: roles}, &fakeModel{steps: []step{reply(text("hi"))}})
 	runTurn(t, s, h, "go")
 	s.Stop()
 	cfg, _ := loadTestConfig(t, testConfig{}) // the lead role is gone
@@ -260,16 +260,16 @@ func TestRecoverMissingRoleIsReadOnly(t *testing.T) {
 	}
 }
 
-// TestRecoverKeepsSessionAllows: an allow_prefix and an allow_always granted
+// TestRecoverKeepsChannelAllows: an allow_prefix and an allow_always granted
 // before a restart still answer after it, and a deny rule still wins.
-func TestRecoverKeepsSessionAllows(t *testing.T) {
+func TestRecoverKeepsChannelAllows(t *testing.T) {
 	cfgJSON := `{"model":"fake/m1","policy":{"shell":{"make test --force*":"deny","*":"ask"}}}`
 	fm := &fakeModel{steps: []step{
 		reply(call("c1", "shell", `{"command":"make test"}`)),
 		reply(call("c2", "shell", `{"command":"echo exact"}`)),
 		reply(text("ok")),
 	}}
-	s, h := newTestSession(t, testConfig{json: cfgJSON}, fm)
+	s, h := newTestChannel(t, testConfig{json: cfgJSON}, fm)
 	h.answerWith(escalation.Answer{Value: "allow_prefix"}, escalation.Answer{Value: "allow_always"})
 	runTurn(t, s, h, "go")
 	if n := h.promptCount(); n != 2 {

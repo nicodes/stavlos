@@ -15,8 +15,8 @@ import (
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// Working directories (PRD §10.7): the session has one working set, shared
-// by every agent: the session directory and what the human adds, in the dirs
+// Working directories (PRD §10.7): the channel has one working set, shared
+// by every agent: the channel directory and what the human adds, in the dirs
 // tab or by answering a boundary prompt. Roles carry none and agent_create
 // grants none: one set is what a person can keep track of. A tool call that
 // reaches outside the set asks first, even when policy allows the tool.
@@ -43,16 +43,16 @@ func resolveDir(base, d string) string {
 	return filepath.Clean(d)
 }
 
-// dirList is the session's working set: the session directory, then the
+// dirList is the channel's working set: the channel directory, then the
 // added directories in the order they came.
-func (s *Session) dirList() []dirEntry {
+func (s *Channel) dirList() []dirEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return append([]dirEntry{{s.Dir, "session"}}, s.dirs...)
+	return append([]dirEntry{{s.Dir, "channel"}}, s.dirs...)
 }
 
 // dirPaths is the working set as paths.
-func (s *Session) dirPaths() []string {
+func (s *Channel) dirPaths() []string {
 	var out []string
 	for _, d := range s.dirList() {
 		out = append(out, d.path)
@@ -61,7 +61,7 @@ func (s *Session) dirPaths() []string {
 }
 
 // dirInfos is the working set for clients.
-func (s *Session) dirInfos() []protocol.DirInfo {
+func (s *Channel) dirInfos() []protocol.DirInfo {
 	var out []protocol.DirInfo
 	for _, d := range s.dirList() {
 		out = append(out, protocol.DirInfo{Path: d.path, Source: d.source})
@@ -72,7 +72,7 @@ func (s *Session) dirInfos() []protocol.DirInfo {
 // inDirs reports whether an absolute path lies in the working set. Both
 // sides are compared with symlinks resolved, so a working directory that
 // is itself a link (or reached through one) still contains its files.
-func (s *Session) inDirs(p string) bool {
+func (s *Channel) inDirs(p string) bool {
 	p = tools.ResolvePath("", p)
 	for _, d := range s.dirList() {
 		dir := tools.ResolvePath("", d.path)
@@ -86,12 +86,12 @@ func (s *Session) inDirs(p string) bool {
 // addDir puts a directory in the working set and logs it on agent, the one
 // whose boundary prompt added it ("" for the dirs tab). A directory already
 // inside the set is a no-op.
-func (s *Session) addDir(ctx context.Context, agent, dir, source string) error {
+func (s *Channel) addDir(ctx context.Context, agent, dir, source string) error {
 	dir = filepath.Clean(dir)
 	if s.inDirs(dir) {
 		return nil
 	}
-	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Agent: agent, Type: event.SessionDirAdded,
+	if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Agent: agent, Type: event.ChannelDirAdded,
 		Payload: event.MustPayload(event.DirAddedPayload{Dir: dir, Source: source})}); err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (s *Session) addDir(ctx context.Context, agent, dir, source string) error {
 
 // applyDirAdded installs an added directory; the caller holds s.mu or is
 // replaying the log (where an older log's per-agent entries may repeat).
-func (s *Session) applyDirAdded(dir, source string) {
+func (s *Channel) applyDirAdded(dir, source string) {
 	if dir == filepath.Clean(s.Dir) || slices.ContainsFunc(s.dirs, func(e dirEntry) bool { return e.path == dir }) {
 		return
 	}
@@ -111,25 +111,25 @@ func (s *Session) applyDirAdded(dir, source string) {
 }
 
 // AddDir is the human's add (an absolute path, ~, or a path relative to the
-// session directory).
-func (s *Session) AddDir(ctx context.Context, dir string) error {
+// channel directory).
+func (s *Channel) AddDir(ctx context.Context, dir string) error {
 	if strings.TrimSpace(dir) == "" {
 		return fmt.Errorf("a directory is required")
 	}
 	return s.addDir(ctx, "", resolveDir(s.Dir, dir), "human")
 }
 
-// RemoveDir takes a directory out of the working set. The session
+// RemoveDir takes a directory out of the working set. The channel
 // directory stays.
-func (s *Session) RemoveDir(ctx context.Context, dir string) error {
+func (s *Channel) RemoveDir(ctx context.Context, dir string) error {
 	dir = resolveDir(s.Dir, dir)
 	if dir == filepath.Clean(s.Dir) {
-		return fmt.Errorf("the session directory cannot be removed")
+		return fmt.Errorf("the channel directory cannot be removed")
 	}
 	if !slices.ContainsFunc(s.dirList(), func(e dirEntry) bool { return e.path == dir }) {
-		return fmt.Errorf("%s is not one of the session's directories", dir)
+		return fmt.Errorf("%s is not one of the channel's directories", dir)
 	}
-	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.SessionDirRemoved, Payload: event.MustPayload(event.DirRefPayload{Dir: dir})}); err != nil {
+	if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Type: event.ChannelDirRemoved, Payload: event.MustPayload(event.DirRefPayload{Dir: dir})}); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -140,7 +140,7 @@ func (s *Session) RemoveDir(ctx context.Context, dir string) error {
 
 // applyDirRemoved forgets a directory; the caller holds s.mu or is
 // replaying the log.
-func (s *Session) applyDirRemoved(dir string) {
+func (s *Channel) applyDirRemoved(dir string) {
 	s.dirs = slices.DeleteFunc(s.dirs, func(e dirEntry) bool { return e.path == dir })
 }
 

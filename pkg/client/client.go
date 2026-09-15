@@ -172,55 +172,49 @@ func (c *Client) Shutdown(ctx context.Context) error {
 	return c.Call(ctx, protocol.MDaemonShutdown, nil, nil)
 }
 
-func (c *Client) Sessions(ctx context.Context, dir string, archived bool) ([]protocol.SessionInfo, error) {
-	var r protocol.SessionListResult
-	err := c.Call(ctx, protocol.MSessionList, protocol.SessionListParams{Dir: dir, IncludeArchived: archived}, &r)
-	return r.Sessions, err
+func (c *Client) Channels(ctx context.Context, dir string, archived bool) ([]protocol.ChannelInfo, error) {
+	var r protocol.ChannelListResult
+	err := c.Call(ctx, protocol.MChannelList, protocol.ChannelListParams{Dir: dir, IncludeArchived: archived}, &r)
+	return r.Channels, err
 }
 
-func (c *Client) CreateSession(ctx context.Context, dir, modelID, root string) (protocol.SessionInfo, error) {
-	var r protocol.SessionInfo
-	err := c.Call(ctx, protocol.MSessionCreate, protocol.SessionCreateParams{Dir: dir, Model: modelID, RootAgent: root}, &r)
+func (c *Client) CreateChannel(ctx context.Context, dir, modelID, root string) (protocol.ChannelInfo, error) {
+	var r protocol.ChannelInfo
+	err := c.Call(ctx, protocol.MChannelCreate, protocol.ChannelCreateParams{Dir: dir, Model: modelID, RootAgent: root}, &r)
 	return r, err
 }
 
-func (c *Client) ResumeSession(ctx context.Context, id string) (protocol.SessionInfo, error) {
-	var r protocol.SessionInfo
-	err := c.Call(ctx, protocol.MSessionResume, protocol.SessionRef{ID: id}, &r)
+func (c *Client) ResumeChannel(ctx context.Context, id string) (protocol.ChannelInfo, error) {
+	var r protocol.ChannelInfo
+	err := c.Call(ctx, protocol.MChannelResume, protocol.ChannelRef{ID: id}, &r)
 	return r, err
 }
 
-func (c *Client) ForkSession(ctx context.Context, id string, seq int64) (protocol.SessionInfo, error) {
-	var r protocol.SessionInfo
-	err := c.Call(ctx, protocol.MSessionFork, protocol.SessionForkParams{ID: id, Seq: seq}, &r)
-	return r, err
+func (c *Client) ArchiveChannel(ctx context.Context, id string) error {
+	return c.Call(ctx, protocol.MChannelArchive, protocol.ChannelRef{ID: id}, nil)
 }
 
-func (c *Client) ArchiveSession(ctx context.Context, id string) error {
-	return c.Call(ctx, protocol.MSessionArchive, protocol.SessionRef{ID: id}, nil)
+func (c *Client) SetChannelModel(ctx context.Context, id, modelID string) error {
+	return c.Call(ctx, protocol.MChannelSetModel, protocol.ChannelSetModelParams{ID: id, Model: modelID}, nil)
 }
 
-func (c *Client) SetSessionModel(ctx context.Context, id, modelID string) error {
-	return c.Call(ctx, protocol.MSessionSetModel, protocol.SessionSetModelParams{ID: id, Model: modelID}, nil)
+// SetChannelMode sets the channel's permission mode: ask, auto or yolo.
+func (c *Client) SetChannelMode(ctx context.Context, id, mode string) error {
+	return c.Call(ctx, protocol.MChannelSetMode, protocol.ChannelSetModeParams{ID: id, Mode: mode}, nil)
 }
 
-// SetSessionMode sets the session's permission mode: ask, auto or yolo.
-func (c *Client) SetSessionMode(ctx context.Context, id, mode string) error {
-	return c.Call(ctx, protocol.MSessionSetMode, protocol.SessionSetModeParams{ID: id, Mode: mode}, nil)
-}
-
-// Post sends the human's message to the session chat: every @mentioned
+// Post sends the human's message to the channel chat: every @mentioned
 // agent gets it as a steer, the root agent when none is mentioned. It
 // returns the names of the agents it went to.
-func (c *Client) Post(ctx context.Context, session, text string) ([]string, error) {
-	var r protocol.SessionPostResult
-	err := c.Call(ctx, protocol.MSessionPost, protocol.SessionPostParams{ID: session, Text: text}, &r)
+func (c *Client) Post(ctx context.Context, channel, text string) ([]string, error) {
+	var r protocol.ChannelPostResult
+	err := c.Call(ctx, protocol.MChannelPost, protocol.ChannelPostParams{ID: channel, Text: text}, &r)
 	return r.To, err
 }
 
-func (c *Client) Tree(ctx context.Context, session string) ([]protocol.AgentInfo, error) {
+func (c *Client) Tree(ctx context.Context, channel string) ([]protocol.AgentInfo, error) {
 	var r protocol.AgentTreeResult
-	err := c.Call(ctx, protocol.MAgentTree, protocol.AgentTreeParams{Session: session}, &r)
+	err := c.Call(ctx, protocol.MAgentTree, protocol.AgentTreeParams{Channel: channel}, &r)
 	return r.Agents, err
 }
 
@@ -244,9 +238,9 @@ func (c *Client) SetAgentRole(ctx context.Context, agent, role string) error {
 	return c.Call(ctx, protocol.MAgentSetRole, protocol.AgentSetRoleParams{Agent: agent, Role: role}, nil)
 }
 
-func (c *Client) Prompts(ctx context.Context, session string) ([]protocol.PromptInfo, error) {
+func (c *Client) Prompts(ctx context.Context, channel string) ([]protocol.PromptInfo, error) {
 	var r protocol.PromptListResult
-	err := c.Call(ctx, protocol.MPromptList, protocol.PromptListParams{Session: session}, &r)
+	err := c.Call(ctx, protocol.MPromptList, protocol.PromptListParams{Channel: channel}, &r)
 	return r.Prompts, err
 }
 
@@ -269,7 +263,7 @@ func (c *Client) AnswerQuestions(ctx context.Context, id string, answers []strin
 	return c.Call(ctx, protocol.MPromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerAnswered, Answers: answers}, nil)
 }
 
-// AllowPromptPrefix allows a permission and, for the rest of the session,
+// AllowPromptPrefix allows a permission and, for the channel,
 // every call the prompt's prefix covers (PromptInfo.Prefix: a command
 // prefix for shell, a host for web_fetch). The daemon derives the prefix
 // from the call itself; a prompt without one behaves like allow_always.
@@ -292,17 +286,17 @@ func (c *Client) TrustReply(ctx context.Context, dir, hash string, trust bool) e
 	return c.Call(ctx, protocol.MTrustReply, protocol.TrustReplyParams{Dir: dir, Hash: hash, Trust: trust}, nil)
 }
 
-func (c *Client) Subscribe(ctx context.Context, session string, from int64) error {
-	return c.Call(ctx, protocol.MSubscribe, protocol.SubscribeParams{Session: session, From: from}, nil)
+func (c *Client) Subscribe(ctx context.Context, channel string, from int64) error {
+	return c.Call(ctx, protocol.MSubscribe, protocol.SubscribeParams{Channel: channel, From: from}, nil)
 }
 
-func (c *Client) Unsubscribe(ctx context.Context, session string) error {
-	return c.Call(ctx, protocol.MUnsubscribe, protocol.SubscribeParams{Session: session}, nil)
+func (c *Client) Unsubscribe(ctx context.Context, channel string) error {
+	return c.Call(ctx, protocol.MUnsubscribe, protocol.SubscribeParams{Channel: channel}, nil)
 }
 
-func (c *Client) Reconcile(ctx context.Context, session string) (protocol.ReconcileResult, error) {
+func (c *Client) Reconcile(ctx context.Context, channel string) (protocol.ReconcileResult, error) {
 	var r protocol.ReconcileResult
-	err := c.Call(ctx, protocol.MReconcile, protocol.SessionRef{ID: session}, &r)
+	err := c.Call(ctx, protocol.MReconcile, protocol.ChannelRef{ID: channel}, &r)
 	return r, err
 }
 
@@ -312,7 +306,7 @@ func (c *Client) SetAgentVariant(ctx context.Context, agent, variant string) err
 }
 
 // AddAgentDir puts a directory in an agent's working set; RemoveAgentDir
-// takes one out (the session directory cannot be removed).
+// takes one out (the channel directory cannot be removed).
 // CompactAgent is /compact: "compacted" when the agent summarised its
 // completed turns now, "queued" when it was mid-turn and will before its
 // next model call.
@@ -322,15 +316,15 @@ func (c *Client) CompactAgent(ctx context.Context, agent string) (string, error)
 	return r.Status, err
 }
 
-// AddSessionDir puts a directory in the session's working set, which every
+// AddChannelDir puts a directory in the channel's working set, which every
 // agent shares.
-func (c *Client) AddSessionDir(ctx context.Context, id, dir string) error {
-	return c.Call(ctx, protocol.MSessionAddDir, protocol.SessionDirParams{ID: id, Dir: dir}, nil)
+func (c *Client) AddChannelDir(ctx context.Context, id, dir string) error {
+	return c.Call(ctx, protocol.MChannelAddDir, protocol.ChannelDirParams{ID: id, Dir: dir}, nil)
 }
 
-// RemoveSessionDir takes a directory out of it (never the session directory).
-func (c *Client) RemoveSessionDir(ctx context.Context, id, dir string) error {
-	return c.Call(ctx, protocol.MSessionRemoveDir, protocol.SessionDirParams{ID: id, Dir: dir}, nil)
+// RemoveChannelDir takes a directory out of it (never the channel directory).
+func (c *Client) RemoveChannelDir(ctx context.Context, id, dir string) error {
+	return c.Call(ctx, protocol.MChannelRemoveDir, protocol.ChannelDirParams{ID: id, Dir: dir}, nil)
 }
 
 // Variants lists the variant names a model offers.
@@ -340,9 +334,9 @@ func (c *Client) Variants(ctx context.Context, modelID string) ([]string, error)
 	return r.Variants, err
 }
 
-func (c *Client) Presets(ctx context.Context, session string) ([]protocol.PresetInfo, error) {
+func (c *Client) Presets(ctx context.Context, channel string) ([]protocol.PresetInfo, error) {
 	var r protocol.PresetsResult
-	err := c.Call(ctx, protocol.MPresets, protocol.PresetsParams{Session: session}, &r)
+	err := c.Call(ctx, protocol.MPresets, protocol.PresetsParams{Channel: channel}, &r)
 	return r.Presets, err
 }
 

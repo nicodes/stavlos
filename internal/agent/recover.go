@@ -13,13 +13,13 @@ import (
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
-// Recover rebuilds a session from its log (PRD §4.3, §5). Any turn that was
+// Recover rebuilds a channel from its log (PRD §4.3, §5). Any turn that was
 // open when the daemon stopped gets a TurnAborted event; agents come back
 // idle with their unconsumed prompts and steers re-queued. Nothing restarts
 // automatically.
-func Recover(ctx context.Context, host Host, id, dir string, created time.Time, cfg *config.Effective, events []event.Event) (*Session, error) {
+func Recover(ctx context.Context, host Host, id, dir string, created time.Time, cfg *config.Effective, events []event.Event) (*Channel, error) {
 	if len(events) == 0 {
-		return nil, fmt.Errorf("session %s has no events", id)
+		return nil, fmt.Errorf("channel %s has no events", id)
 	}
 	s := New(host, id, dir, cfg, "", "")
 	s.Created = created
@@ -47,7 +47,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 
 // recovery is what Recover gathers while it walks the log.
 type recovery struct {
-	s   *Session
+	s   *Channel
 	cfg *config.Effective
 
 	openTurns    map[string]int                         // agent → turn still open at shutdown
@@ -61,12 +61,12 @@ type recovery struct {
 	missingRole  map[string]string // agent id → why it runs read-only (set after replay: turns clear lastError)
 }
 
-// apply folds one logged event into the session being rebuilt.
+// apply folds one logged event into the channel being rebuilt.
 func (r *recovery) apply(e event.Event) {
 	switch e.Type {
-	case event.SessionCreated, event.SessionArchived, event.SessionModelChanged, event.SessionYoloChanged, event.SessionModeChanged,
-		event.SessionDirAdded, event.SessionDirRemoved, event.AgentDirAdded, event.AgentDirRemoved:
-		r.session(e)
+	case event.ChannelCreated, event.ChannelArchived, event.ChannelModelChanged, event.ChannelYoloChanged, event.ChannelModeChanged,
+		event.ChannelDirAdded, event.ChannelDirRemoved, event.AgentDirAdded, event.AgentDirRemoved:
+		r.channel(e)
 	case event.AgentSpawned:
 		r.spawned(e)
 	case event.AgentRoleChanged, event.AgentModelChanged, event.AgentVariantChanged, event.TodoChanged:
@@ -96,38 +96,38 @@ func (r *recovery) apply(e event.Event) {
 	}
 }
 
-func (r *recovery) session(e event.Event) {
+func (r *recovery) channel(e event.Event) {
 	s := r.s
 	switch e.Type {
-	case event.SessionCreated:
-		var p event.SessionCreatedPayload
+	case event.ChannelCreated:
+		var p event.ChannelCreatedPayload
 		_ = e.Decode(&p)
 		s.model, s.rootArch = p.Model, p.RootAgent
 		if s.Dir == "" {
 			s.Dir = p.Dir
 		}
-	case event.SessionArchived:
+	case event.ChannelArchived:
 		s.archived = true
-	case event.SessionModelChanged:
+	case event.ChannelModelChanged:
 		var p event.ModelChangedPayload
 		_ = e.Decode(&p)
 		s.model = p.Model
-	case event.SessionYoloChanged: // legacy logs
+	case event.ChannelYoloChanged: // legacy logs
 		var p event.YoloPayload
 		_ = e.Decode(&p)
 		s.mode = protocol.ModeAsk
 		if p.On {
 			s.mode = protocol.ModeYolo
 		}
-	case event.SessionModeChanged:
+	case event.ChannelModeChanged:
 		var p event.ModePayload
 		_ = e.Decode(&p)
 		s.mode = p.Mode
-	case event.SessionDirAdded, event.AgentDirAdded: // agent.dir_added: an older log's per-agent set, now the session's
+	case event.ChannelDirAdded, event.AgentDirAdded: // agent.dir_added: an older log's per-agent set, now the channel's
 		var p event.DirAddedPayload
 		_ = e.Decode(&p)
 		s.applyDirAdded(p.Dir, p.Source)
-	case event.SessionDirRemoved, event.AgentDirRemoved:
+	case event.ChannelDirRemoved, event.AgentDirRemoved:
 		var p event.DirRefPayload
 		_ = e.Decode(&p)
 		s.applyDirRemoved(p.Dir)
@@ -158,7 +158,7 @@ func (r *recovery) spawned(e event.Event) {
 	if !ok {
 		r.missingRole[a.ID] = missingRoleError(p.Archetype)
 	}
-	for _, d := range p.Dirs { // an older log's grants join the session's set
+	for _, d := range p.Dirs { // an older log's grants join the channel's set
 		s.applyDirAdded(d, "grant")
 	}
 	if par, ok := s.agents[p.Parent]; ok {
@@ -387,7 +387,7 @@ func (r *recovery) reportLostJobs(ctx context.Context, host Host) {
 			continue
 		}
 		res := event.MonitorFiredPayload{ID: id, Kind: p.Kind, Label: p.Label, Summary: "background job lost in a daemon restart; rerun it if you still need the result", IsError: true, ExitCode: -1}
-		e, err := host.Append(ctx, event.Event{Session: s.ID, Agent: a.ID, Type: event.MonitorFired, Payload: event.MustPayload(res)})
+		e, err := host.Append(ctx, event.Event{Channel: s.ID, Agent: a.ID, Type: event.MonitorFired, Payload: event.MustPayload(res)})
 		if err == nil {
 			a.events = append(a.events, e)
 		}
@@ -400,14 +400,14 @@ func (r *recovery) reportLostJobs(ctx context.Context, host Host) {
 }
 
 // resume closes the turns left open, re-queues each survivor's inbox and
-// starts it; killed agents, and every agent of an archived session, stay
+// starts it; killed agents, and every agent of an archived channel, stay
 // down.
 func (r *recovery) resume(ctx context.Context, host Host) error {
 	s := r.s
 	for _, id := range s.order {
 		a := s.agents[id]
 		if turn, ok := r.openTurns[id]; ok && !r.finished[id] {
-			e, err := host.Append(ctx, event.Event{Session: s.ID, Agent: id, Type: event.TurnAborted, Payload: event.MustPayload(event.TurnPayload{Turn: turn})})
+			e, err := host.Append(ctx, event.Event{Channel: s.ID, Agent: id, Type: event.TurnAborted, Payload: event.MustPayload(event.TurnPayload{Turn: turn})})
 			if err != nil {
 				return err
 			}

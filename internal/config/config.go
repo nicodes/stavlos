@@ -296,8 +296,8 @@ func Load(dir string, trust Trust) (*Effective, error) {
 
 // LoadGlobal is the daemon-wide configuration: the defaults and the global
 // layer, nothing from any directory. It is what the daemon itself runs on
-// (escalation timers, the fallback for a session whose own config fails to
-// load); Load builds a session's config on top of it.
+// (escalation timers, the fallback for a channel whose own config fails to
+// load); Load builds a channel's config on top of it.
 func LoadGlobal() (*Effective, error) {
 	e := &Effective{Presets: map[string]Preset{}, Skills: map[string]Skill{}, MCP: map[string]MCP{}}
 
@@ -320,7 +320,7 @@ func LoadGlobal() (*Effective, error) {
 		policy.Rule{Tool: toolname.AgentStatus, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.Shell, Pattern: "*", Verb: policy.Ask},
 		policy.Rule{Tool: toolname.ShellKill, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.WebFetch, Pattern: "*", Verb: policy.Ask},  // per host: the dialog offers "allow <host> for this session"
+		policy.Rule{Tool: toolname.WebFetch, Pattern: "*", Verb: policy.Ask},  // per host: the dialog offers "allow <host> for this channel"
 		policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Ask}, // allow once a search backend is configured (see LoadGlobal)
 		policy.Rule{Tool: toolname.TodoAdd, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.AskUser, Pattern: "*", Verb: policy.Allow},
@@ -690,7 +690,7 @@ func ReadPreset(path string) (Preset, error) {
 	case f.Hidden != nil:
 		return fail("hidden: is not supported; use mode: or leave the role out of spawn lists")
 	case f.Dirs != nil:
-		return fail("dirs: was removed: working directories belong to the session (the dirs tab, or \"Allow and add\" on a boundary prompt)")
+		return fail("dirs: was removed: working directories belong to the channel (the dirs tab, or \"Allow and add\" on a boundary prompt)")
 	case p.Description == "":
 		return fail("description: is required")
 	case p.MaxTurns < 0:
@@ -1012,7 +1012,7 @@ func builtinPresets() []Preset {
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
 Work carefully: read before you edit, prefer small targeted changes, and run the project's tests or build after changing code.
 Search and read with shell (grep -rn, rg, find, ls) and read; edit with apply_patch. A slow command such as a test suite continues as a background job on its own; start servers with background: true.
-Delegate independent pieces of work to subagents when that saves your own context or lets things run in parallel: give each a specific task and a short label, then keep working or end your turn; each child's answer comes back to you as a message. A child stays alive for the session: message it again for follow-ups. Subagents can delegate too.
+Delegate independent pieces of work to subagents when that saves your own context or lets things run in parallel: give each a specific task and a short label, then keep working or end your turn; each child's answer comes back to you as a message. A child stays alive in the channel: message it again for follow-ups. Subagents can delegate too.
 Report what you changed and what you verified.`,
 		},
 	}

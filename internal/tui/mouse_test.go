@@ -14,7 +14,7 @@ import (
 // hover moves the selection, a click acts like space, and the subject,
 // the question and an open text row do not respond.
 func TestPromptOptionsTakeTheMouse(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	m.width, m.height = 100, 40
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a",
@@ -41,7 +41,7 @@ func TestPromptOptionsTakeTheMouse(t *testing.T) {
 		m = nm.(Model)
 	}
 
-	move(at("Allow for this session"))
+	move(at("Allow for this channel"))
 	if m.focus != focusPermission || m.permSel != 1 {
 		t.Fatalf("hover: focus=%v sel=%d", m.focus, m.permSel)
 	}

@@ -27,7 +27,7 @@ func TestNormalizeName(t *testing.T) {
 }
 
 func TestClaimName(t *testing.T) {
-	s := &Session{names: map[string]string{}, agents: map[string]*Agent{}}
+	s := &Channel{names: map[string]string{}, agents: map[string]*Agent{}}
 	claim := func(want, fallback, id string) string {
 		t.Helper()
 		name, err := s.claimNameLocked(want, fallback, id)
@@ -59,12 +59,12 @@ func TestClaimName(t *testing.T) {
 // TestRecoverGivesDuplicateNamesSuffixes: a log from before unique names may
 // repeat a label; replay claims names in creation order, every time.
 func TestRecoverGivesDuplicateNamesSuffixes(t *testing.T) {
-	s, h := newTestSession(t, testConfig{}, &fakeModel{})
+	s, h := newTestChannel(t, testConfig{}, &fakeModel{})
 	ev := func(seq int64, agent string, typ event.Type, p any) event.Event {
-		return event.Event{Seq: seq, Session: "old", Agent: agent, Type: typ, Payload: event.MustPayload(p)}
+		return event.Event{Seq: seq, Channel: "old", Agent: agent, Type: typ, Payload: event.MustPayload(p)}
 	}
 	evs := []event.Event{
-		ev(1, "", event.SessionCreated, event.SessionCreatedPayload{Dir: s.Dir, RootAgent: "general"}),
+		ev(1, "", event.ChannelCreated, event.ChannelCreatedPayload{Dir: s.Dir, RootAgent: "general"}),
 		ev(2, "r", event.AgentSpawned, event.AgentSpawnedPayload{ID: "r", Archetype: "general", Label: "main"}),
 		ev(3, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "r", Archetype: "general", Label: "Scout", Depth: 1}),
 		ev(4, "c2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c2", Parent: "r", Archetype: "general", Label: "scout", Depth: 1}),

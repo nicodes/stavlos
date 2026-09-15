@@ -81,9 +81,9 @@ type Line struct {
 	callID    string
 	Tool      string   // raw tool name on a LineTool line
 	Note      bool     // the agent's own text, which reaches no one: drawn dimmed
-	Agent     string   // in the session chat: the agent this line links to
+	Agent     string   // in the channel chat: the agent this line links to
 	Who       string   // the @name this line leads with, whose colour its glyph and name take: an agent\'s name, or "user"
-	Names     []string // @names coloured wherever this line mentions them (a session chat post\'s recipients)
+	Names     []string // @names coloured wherever this line mentions them (a channel chat post\'s recipients)
 	Diff      byte     // a patch diff line: '+' added, '-' removed, '@' a hunk's anchor, 'f' a file header, 0 otherwise
 	Indent    int      // extra indent, two columns each (a chat reply's later lines, past its glyph)
 	TurnStart bool     // first line of the first item after a turn starts or ends: an agent\'s chat spaces turns apart there
@@ -102,7 +102,7 @@ const (
 // Leader glyphs for chat items (see the glyph table in docs).
 const (
 	GlyphChild      = "⑂" // a child agent reported back (same fork as spawn)
-	GlyphReply      = "‹" // a response: an agent's reply in the session chat, a response to or from another agent
+	GlyphReply      = "‹" // a response: an agent's reply in the channel chat, a response to or from another agent
 	GlyphAsk        = "›" // a prompt to or from another agent (the human's own prompts draw › in blue)
 	GlyphSpawn      = "⋙" // a child agent was spawned: agent_create's mark, since its task is the prompt that made it
 	GlyphInfo       = "»" // an info message another agent sent: it needs no reply (the double of a prompt\'s ›)
@@ -188,7 +188,7 @@ type Transcript struct {
 	spawnTask   string    // a spawned agent\'s task, held until its first prompt draws the spawn and the task as one item
 	spawnAs     string    // …and what it was spawned as: "scout (general) · model"
 
-	chat  bool              // the session chat (chat.go), not one agent's transcript
+	chat  bool              // the channel chat (chat.go), not one agent's transcript
 	names map[string]string // in the chat: agent id → name
 	open  map[string]bool   // in the chat: agents a post is still waiting on
 }
@@ -1219,7 +1219,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Model", "→ "+p.Model)}}
 	}),
 
-	event.SessionYoloChanged: decoded(func(p event.YoloPayload) []Line { // legacy logs
+	event.ChannelYoloChanged: decoded(func(p event.YoloPayload) []Line { // legacy logs
 		mode := protocol.ModeAsk
 		if p.On {
 			mode = protocol.ModeYolo
@@ -1227,7 +1227,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Mode", "→ "+mode+" · "+protocol.ModeSummary(mode))}}
 	}),
 
-	event.SessionModeChanged: decoded(func(p event.ModePayload) []Line {
+	event.ChannelModeChanged: decoded(func(p event.ModePayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Mode", "→ "+p.Mode+" · "+protocol.ModeSummary(p.Mode))}}
 	}),
 
@@ -1251,7 +1251,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return []Line{{Kind: LineError, Glyph: GlyphToolMCP, Tone: ToneError, Text: titled("MCP", fmt.Sprintf("%s failed: %s", p.Server, p.Error))}}
 	}),
 
-	event.SessionDirAdded: decoded(dirAddedLines),
+	event.ChannelDirAdded: decoded(dirAddedLines),
 	event.AgentDirAdded:   decoded(dirAddedLines), // an older log's per-agent set
 
 	event.MCPStopped: decoded(func(p event.MCPRefPayload) []Line {
@@ -1871,7 +1871,7 @@ func (t *Transcript) Notice(lines ...string) {
 	t.appendItem(ls)
 }
 
-// dirAddedLines notes a directory joining the session's working set, in the
+// dirAddedLines notes a directory joining the channel's working set, in the
 // chat of the agent whose boundary prompt added it.
 func dirAddedLines(p event.DirAddedPayload) []Line {
 	return []Line{{Kind: LineDim, Glyph: GlyphToolFiles, Text: titled("Dirs", fmt.Sprintf("+ %s (%s)", format.ShortHome(p.Dir), p.Source))}}

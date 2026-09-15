@@ -21,7 +21,7 @@ var ansiRE = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
 func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
 
 func mk(seq int64, agent string, typ event.Type, payload any) event.Event {
-	return event.Event{Seq: seq, Session: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
+	return event.Event{Seq: seq, Channel: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
 }
 
 // renderLines renders (collapsed) and returns trimmed, ANSI-free lines.
@@ -918,13 +918,13 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 		mk(2, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "go"}),
 		mk(3, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "done"}}}),
 		mk(4, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}),
-		mk(5, "", event.SessionModeChanged, event.ModePayload{Mode: "auto"}),
+		mk(5, "", event.ChannelModeChanged, event.ModePayload{Mode: "auto"}),
 		mk(6, "a", event.TurnStarted, event.TurnPayload{Turn: 2}),
 		mk(7, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "again"}),
 	} {
 		between.Apply(ev)
 	}
-	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user go\n§ Aside done\n⇄ Mode → auto · allows inside the session's directories, denies outside them\n\n› @user again" {
+	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user go\n§ Aside done\n⇄ Mode → auto · allows inside the channel's directories, denies outside them\n\n› @user again" {
 		t.Fatalf("a between-turn mode change:\n%s", got)
 	}
 	// the loader keeps one blank row above it

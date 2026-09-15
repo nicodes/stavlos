@@ -41,7 +41,7 @@ var (
 	// Todo are the tools GroupTodo stands for.
 	Todo = []string{TodoAdd, TodoUpdate}
 	// Messaging is offered to every agent: any agent may message any other
-	// in its session, or the human, and see the tree.
+	// in its channel, or the human, and see the tree.
 	Messaging = []string{Message, AgentStatus}
 	// Orchestration is implied by a non-empty spawn list.
 	Orchestration = []string{AgentCreate, AgentCancel}

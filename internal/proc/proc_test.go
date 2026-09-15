@@ -12,7 +12,7 @@ func TestEnvScrub(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "sk-1")
 	t.Setenv("MY_APIKEY", "x")
 	t.Setenv("AWS_SECRET_ACCESS_KEY", "x")
-	t.Setenv("AWS_SESSION_TOKEN", "x")
+	t.Setenv("AWS_CHANNEL_TOKEN", "x")
 	t.Setenv("GITHUB_TOKEN", "gh")
 	t.Setenv("DB_PASSWORD", "x")
 	t.Setenv("http_passwd", "x")
@@ -31,7 +31,7 @@ func TestEnvScrub(t *testing.T) {
 		}
 		return false
 	}
-	for _, gone := range []string{"OPENAI_API_KEY", "MY_APIKEY", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN", "DB_PASSWORD", "http_passwd", "GOOGLE_APPLICATION_CREDENTIALS", "SSH_PRIVATE_KEY", "STAVLOS_WEB_ALLOW_LOCAL", "TOKENIZER_PARALLELISM"} {
+	for _, gone := range []string{"OPENAI_API_KEY", "MY_APIKEY", "AWS_SECRET_ACCESS_KEY", "AWS_CHANNEL_TOKEN", "DB_PASSWORD", "http_passwd", "GOOGLE_APPLICATION_CREDENTIALS", "SSH_PRIVATE_KEY", "STAVLOS_WEB_ALLOW_LOCAL", "TOKENIZER_PARALLELISM"} {
 		if has(gone) {
 			t.Errorf("%s should be scrubbed", gone)
 		}

@@ -126,9 +126,9 @@ func newHarness(t *testing.T, data string, fm *fakeModel) *harness {
 	return h
 }
 
-// recentEvents lists every session event for the dump on timeout.
+// recentEvents lists every channel event for the dump on timeout.
 func (h *harness) recentEvents() []string {
-	rows, _ := h.d.Log.Sessions(context.Background())
+	rows, _ := h.d.Log.Channels(context.Background())
 	var out []string
 	for _, r := range rows {
 		evs, _ := h.d.Log.Read(context.Background(), r.ID, 1, 0)
@@ -170,12 +170,12 @@ func (h *harness) waitFor(t event.Type, agent string) event.Event {
 }
 
 // waitTree polls the agent tree until cond holds (or 10 s pass).
-func (h *harness) waitTree(session string, cond func([]protocol.AgentInfo) bool) []protocol.AgentInfo {
+func (h *harness) waitTree(channel string, cond func([]protocol.AgentInfo) bool) []protocol.AgentInfo {
 	h.t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	var agents []protocol.AgentInfo
 	for time.Now().Before(deadline) {
-		agents, _ = h.c.Tree(context.Background(), session)
+		agents, _ = h.c.Tree(context.Background(), channel)
 		if cond(agents) {
 			return agents
 		}
@@ -240,7 +240,7 @@ func TestEndToEnd(t *testing.T) {
 	defer h.close()
 	ctx := context.Background()
 
-	s, err := h.c.CreateSession(ctx, work, "", "")
+	s, err := h.c.CreateChannel(ctx, work, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,12 +336,12 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
-	s, err := h.c.CreateSession(ctx, work, "", "")
+	s, err := h.c.CreateChannel(ctx, work, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = h.c.Subscribe(ctx, s.ID, 0)
-	_ = h.c.SetSessionMode(ctx, s.ID, "auto") // chained commands ask under policy; auto answers inside the directory
+	_ = h.c.SetChannelMode(ctx, s.ID, "auto") // chained commands ask under policy; auto answers inside the directory
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
@@ -399,9 +399,9 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	fm2 := &fakeModel{}
 	h2 := newHarness(t, data, fm2)
 	defer h2.close()
-	list, err := h2.c.Sessions(ctx, work, false)
+	list, err := h2.c.Channels(ctx, work, false)
 	if err != nil || len(list) != 1 {
-		t.Fatalf("sessions after restart: %v %v", list, err)
+		t.Fatalf("channels after restart: %v %v", list, err)
 	}
 	evs, _ := h2.d.Log.Read(ctx, s.ID, 1, 0)
 	last := evs[len(evs)-1]
@@ -427,15 +427,6 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	_ = e.Decode(&te)
 	if te.Reason != "end_turn" {
 		t.Fatalf("%+v", te)
-	}
-	// fork from the current offset yields a new session with the same tree
-	f, err := h2.c.ForkSession(ctx, s.ID, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fa, err := h2.c.Tree(ctx, f.ID)
-	if err != nil || len(fa) != 1 || fa[0].ID == root || fa[0].Turn != 3 {
-		t.Fatalf("fork tree %+v %v", fa, err)
 	}
 }
 
@@ -468,7 +459,7 @@ func TestChildResponseWakesParent(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -483,8 +474,8 @@ func TestChildResponseWakesParent(t *testing.T) {
 	if len(agents) != 2 || agents[0].State != "waiting" || len(agents[0].Awaiting) != 1 || agents[0].Awaiting[0] != agents[1].ID {
 		t.Fatalf("parent idle with a question out should read waiting on the child: %+v", agents)
 	}
-	if list, _ := h.c.Sessions(ctx, work, false); len(list) != 1 || list[0].State != "working" { // the child still runs
-		t.Fatalf("session state while a child works: %+v", list)
+	if list, _ := h.c.Channels(ctx, work, false); len(list) != 1 || list[0].State != "working" { // the child still runs
+		t.Fatalf("channel state while a child works: %+v", list)
 	}
 	close(release)
 	e = h.waitFor(event.TurnEnded, root)
@@ -528,9 +519,9 @@ func TestShellBackgroundWakes(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
-	_ = h.c.SetSessionMode(ctx, s.ID, "auto")
+	_ = h.c.SetChannelMode(ctx, s.ID, "auto")
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
@@ -594,9 +585,9 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
-	_ = h.c.SetSessionMode(ctx, s.ID, "auto")
+	_ = h.c.SetChannelMode(ctx, s.ID, "auto")
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
@@ -630,9 +621,9 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	}
 	h2 := newHarness(t, t.TempDir(), fm2)
 	defer h2.close()
-	s2, _ := h2.c.CreateSession(ctx, work, "", "")
+	s2, _ := h2.c.CreateChannel(ctx, work, "", "")
 	_ = h2.c.Subscribe(ctx, s2.ID, 0)
-	_ = h2.c.SetSessionMode(ctx, s2.ID, "auto")
+	_ = h2.c.SetChannelMode(ctx, s2.ID, "auto")
 	agents, _ = h2.c.Tree(ctx, s2.ID)
 	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "run it")
 	h2.waitFor(event.TurnEnded, agents[0].ID)
@@ -668,9 +659,9 @@ func TestShellKillStopsJob(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
-	_ = h.c.SetSessionMode(ctx, s.ID, "auto")
+	_ = h.c.SetChannelMode(ctx, s.ID, "auto")
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	start := time.Now()
@@ -716,7 +707,7 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -744,11 +735,11 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	}
 }
 
-// TestAgentsMessageAcrossTheSession: a child messages its parent, which is
+// TestAgentsMessageAcrossTheChannel: a child messages its parent, which is
 // waiting on it, so the message is the answer; the parent sees who sent it,
 // agent_status shows the whole tree, and a second message to the parent, no
 // longer waiting, is a new message (a steer) rather than an answer.
-func TestAgentsMessageAcrossTheSession(t *testing.T) {
+func TestAgentsMessageAcrossTheChannel(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
 	fm := &fakeModel{}
@@ -812,7 +803,7 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	rootID = agents[0].ID
@@ -883,7 +874,7 @@ func TestVariants(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -938,7 +929,7 @@ func TestVariants(t *testing.T) {
 	}
 }
 
-// TestYolo: with the session in yolo, ask-gated calls run without a prompt,
+// TestYolo: with the channel in yolo, ask-gated calls run without a prompt,
 // a prompt already waiting is approved when yolo turns on, and a deny rule
 // still denies.
 func TestYolo(t *testing.T) {
@@ -978,7 +969,7 @@ func TestYolo(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -989,10 +980,10 @@ func TestYolo(t *testing.T) {
 		t.Fatalf("one prompt should be waiting: %+v", ps)
 	}
 	// yolo on: the waiting prompt is approved and logged
-	if err := h.c.SetSessionMode(ctx, s.ID, "yolo"); err != nil {
+	if err := h.c.SetChannelMode(ctx, s.ID, "yolo"); err != nil {
 		t.Fatal(err)
 	}
-	e := h.waitFor(event.SessionModeChanged, "")
+	e := h.waitFor(event.ChannelModeChanged, "")
 	var mp event.ModePayload
 	_ = e.Decode(&mp)
 	if mp.Mode != "yolo" {
@@ -1010,8 +1001,8 @@ func TestYolo(t *testing.T) {
 		t.Fatalf("prompt queue should be drained: %+v", ps)
 	}
 	rc, _ := h.c.Reconcile(ctx, s.ID)
-	if rc.Session.Mode != "yolo" {
-		t.Fatalf("session info should show yolo: %+v", rc.Session)
+	if rc.Channel.Mode != "yolo" {
+		t.Fatalf("channel info should show yolo: %+v", rc.Channel)
 	}
 
 	// turn 2 runs with no prompt at all
@@ -1034,14 +1025,14 @@ func TestYolo(t *testing.T) {
 		}
 	}
 	// back to ask
-	if err := h.c.SetSessionMode(ctx, s.ID, "ask"); err != nil {
+	if err := h.c.SetChannelMode(ctx, s.ID, "ask"); err != nil {
 		t.Fatal(err)
 	}
 	rc, _ = h.c.Reconcile(ctx, s.ID)
-	if rc.Session.Mode != "ask" {
-		t.Fatalf("mode should be ask: %+v", rc.Session)
+	if rc.Channel.Mode != "ask" {
+		t.Fatalf("mode should be ask: %+v", rc.Channel)
 	}
-	if err := h.c.SetSessionMode(ctx, s.ID, "turbo"); err == nil {
+	if err := h.c.SetChannelMode(ctx, s.ID, "turbo"); err == nil {
 		t.Fatal("an unknown mode should be rejected")
 	}
 }
@@ -1086,13 +1077,13 @@ func TestAutoMode(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
 	h.waitFor(event.PromptRequested, root) // the inside command waits in ask mode
-	if err := h.c.SetSessionMode(ctx, s.ID, "auto"); err != nil {
+	if err := h.c.SetChannelMode(ctx, s.ID, "auto"); err != nil {
 		t.Fatal(err)
 	}
 	// auto approves the waiting inside command, then denies the outside read
@@ -1109,12 +1100,12 @@ func TestAutoMode(t *testing.T) {
 		t.Fatalf("auto should leave no boundary prompt waiting: %d", n)
 	}
 	rc, _ := h.c.Reconcile(ctx, s.ID)
-	if rc.Session.Mode != "auto" {
-		t.Fatalf("%+v", rc.Session)
+	if rc.Channel.Mode != "auto" {
+		t.Fatalf("%+v", rc.Channel)
 	}
 }
 
-func TestSessionListTitles(t *testing.T) {
+func TestChannelListTitles(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
 	fm := &fakeModel{}
@@ -1122,28 +1113,28 @@ func TestSessionListTitles(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
-	list, err := h.c.Sessions(ctx, work, false)
+	list, err := h.c.Channels(ctx, work, false)
 	if err != nil || len(list) != 1 || list[0].Title != "" {
-		t.Fatalf("fresh session should have no title: %+v %v", list, err)
+		t.Fatalf("fresh channel should have no title: %+v %v", list, err)
 	}
 	agents, _ := h.c.Tree(ctx, s.ID)
 	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "fix the login bug\nand add tests")
 	h.waitFor(event.TurnEnded, agents[0].ID)
-	list, _ = h.c.Sessions(ctx, work, false)
+	list, _ = h.c.Channels(ctx, work, false)
 	if len(list) != 1 || list[0].Title != "fix the login bug" {
 		t.Fatalf("title should be the first prompt's first line: %+v", list)
 	}
-	// a second session in the same directory lists first (newest)
-	s2, _ := h.c.CreateSession(ctx, work, "", "")
-	list, _ = h.c.Sessions(ctx, work, false)
+	// a second channel in the same directory lists first (newest)
+	s2, _ := h.c.CreateChannel(ctx, work, "", "")
+	list, _ = h.c.Channels(ctx, work, false)
 	if len(list) != 2 || list[0].ID != s2.ID || list[1].Title != "fix the login bug" {
 		t.Fatalf("newest first with titles: %+v", list)
 	}
 }
 
-// TestRecoveredAgentWithMissingPresetFallsBack: a session whose root was
+// TestRecoveredAgentWithMissingPresetFallsBack: a channel whose root was
 // created under a preset that no longer exists resumes as the configured
 // root preset, with its full tool set.
 func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
@@ -1157,7 +1148,7 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	fm := &fakeModel{}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
-	s, err := h.c.CreateSession(ctx, work, "", "coder")
+	s, err := h.c.CreateChannel(ctx, work, "", "coder")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1181,7 +1172,7 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	}}
 	h2 := newHarness(t, data, fm2)
 	defer h2.close()
-	if _, err := h2.c.ResumeSession(ctx, s.ID); err != nil {
+	if _, err := h2.c.ResumeChannel(ctx, s.ID); err != nil {
 		t.Fatal(err)
 	}
 	agents, _ = h2.c.Tree(ctx, s.ID)
@@ -1244,7 +1235,7 @@ func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -1297,7 +1288,7 @@ func TestTodoListLogsProjectsAndRecovers(t *testing.T) {
 	}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -1387,7 +1378,7 @@ func TestFullAgentIDs(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -1462,7 +1453,7 @@ func TestRoles(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, err := h.c.CreateSession(ctx, work, "", "")
+	s, err := h.c.CreateChannel(ctx, work, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1589,7 +1580,7 @@ func TestMCPServersPerAgent(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, err := h.c.CreateSession(ctx, work, "", "")
+	s, err := h.c.CreateChannel(ctx, work, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1652,10 +1643,10 @@ func TestMCPServersPerAgent(t *testing.T) {
 	}
 }
 
-// TestWorkingDirectories: the session has one working set, shared by every
-// agent. Reads inside the session directory and a directory the human added
+// TestWorkingDirectories: the channel has one working set, shared by every
+// agent. Reads inside the channel directory and a directory the human added
 // run without a boundary prompt; a path outside asks (naming the directory)
-// even though read is allowed, and "allow_always" adds it to the session,
+// even though read is allowed, and "allow_always" adds it to the channel,
 // so a child created afterwards reads there without asking; the human edits
 // the set; it survives a restart.
 func TestWorkingDirectories(t *testing.T) {
@@ -1676,9 +1667,9 @@ func TestWorkingDirectories(t *testing.T) {
 	fm.steps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
 			if !strings.Contains(req.System, "working directories, shared by every agent: "+work+", "+shared) {
-				t.Errorf("system prompt should list the session's directories:\n%s", req.System)
+				t.Errorf("system prompt should list the channel's directories:\n%s", req.System)
 			}
-			return call("c1", "read", `{"path":"in.txt"}`) // inside the session dir
+			return call("c1", "read", `{"path":"in.txt"}`) // inside the channel dir
 		},
 		func(model.Request) model.Response { return call("c2", "read", `{"path":"`+shared+`/lib.txt"}`) }, // inside an added dir
 		func(req model.Request) model.Response {
@@ -1703,7 +1694,7 @@ func TestWorkingDirectories(t *testing.T) {
 		},
 	}
 	fm.childSteps = []func(model.Request) model.Response{
-		func(model.Request) model.Response { return call("k1", "read", `{"path":"`+outside+`/secret.txt"}`) }, // the session's set: no prompt
+		func(model.Request) model.Response { return call("k1", "read", `{"path":"`+outside+`/secret.txt"}`) }, // the channel's set: no prompt
 		func(req model.Request) model.Response {
 			if last := req.Messages[len(req.Messages)-1].Blocks[0]; last.IsError || !strings.Contains(last.Content, "s") {
 				t.Errorf("the child reads inside the shared set: %+v", last)
@@ -1713,15 +1704,15 @@ func TestWorkingDirectories(t *testing.T) {
 	}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
-	s, err := h.c.CreateSession(ctx, work, "", "")
+	s, err := h.c.CreateChannel(ctx, work, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = h.c.Subscribe(ctx, s.ID, 0)
-	if len(s.Dirs) != 1 || s.Dirs[0].Path != work || s.Dirs[0].Source != "session" {
+	if len(s.Dirs) != 1 || s.Dirs[0].Path != work || s.Dirs[0].Source != "channel" {
 		t.Fatalf("dirs %+v", s.Dirs)
 	}
-	if err := h.c.AddSessionDir(ctx, s.ID, shared); err != nil {
+	if err := h.c.AddChannelDir(ctx, s.ID, shared); err != nil {
 		t.Fatal(err)
 	}
 	agents, _ := h.c.Tree(ctx, s.ID)
@@ -1731,7 +1722,7 @@ func TestWorkingDirectories(t *testing.T) {
 	e := h.waitFor(event.PromptRequested, root)
 	var pr event.PromptRequestedPayload
 	_ = e.Decode(&pr)
-	if pr.Tool != "read" || !strings.Contains(pr.Question, "outside the session's directories") || !strings.Contains(pr.Question, outside) {
+	if pr.Tool != "read" || !strings.Contains(pr.Question, "outside the channel's directories") || !strings.Contains(pr.Question, outside) {
 		t.Fatalf("boundary prompt %+v", pr)
 	}
 	pending := h.d.esc.Pending(s.ID)
@@ -1744,7 +1735,7 @@ func TestWorkingDirectories(t *testing.T) {
 	if err := h.c.ReplyPrompt(ctx, pending[0].ID, "allow_always"); err != nil {
 		t.Fatal(err)
 	}
-	e = h.waitFor(event.SessionDirAdded, root)
+	e = h.waitFor(event.ChannelDirAdded, root)
 	var dp event.DirAddedPayload
 	_ = e.Decode(&dp)
 	if dp.Dir != outside || dp.Source != "human" {
@@ -1770,25 +1761,25 @@ func TestWorkingDirectories(t *testing.T) {
 			}
 		}
 	}
-	// the human edits the set: add, remove (the session directory refuses),
-	// and a relative path inside the session directory is already covered
+	// the human edits the set: add, remove (the channel directory refuses),
+	// and a relative path inside the channel directory is already covered
 	extra := t.TempDir()
-	if err := h.c.AddSessionDir(ctx, s.ID, extra); err != nil {
+	if err := h.c.AddChannelDir(ctx, s.ID, extra); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.AddSessionDir(ctx, s.ID, "sub/dir"); err != nil {
+	if err := h.c.AddChannelDir(ctx, s.ID, "sub/dir"); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.RemoveSessionDir(ctx, s.ID, shared); err != nil {
+	if err := h.c.RemoveChannelDir(ctx, s.ID, shared); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.RemoveSessionDir(ctx, s.ID, work); err == nil || !strings.Contains(err.Error(), "session directory") {
-		t.Fatalf("removing the session directory: %v", err)
+	if err := h.c.RemoveChannelDir(ctx, s.ID, work); err == nil || !strings.Contains(err.Error(), "channel directory") {
+		t.Fatalf("removing the channel directory: %v", err)
 	}
-	if err := h.c.RemoveSessionDir(ctx, s.ID, "/never/there"); err == nil {
+	if err := h.c.RemoveChannelDir(ctx, s.ID, "/never/there"); err == nil {
 		t.Fatal("removing an unknown directory should fail")
 	}
-	dirsOf := func(list func(context.Context, string, bool) ([]protocol.SessionInfo, error)) string {
+	dirsOf := func(list func(context.Context, string, bool) ([]protocol.ChannelInfo, error)) string {
 		ss, _ := list(ctx, work, false)
 		for _, x := range ss {
 			if x.ID == s.ID {
@@ -1801,8 +1792,8 @@ func TestWorkingDirectories(t *testing.T) {
 		}
 		return ""
 	}
-	want := work + ":session " + outside + ":human " + extra + ":human"
-	if got := dirsOf(h.c.Sessions); got != want {
+	want := work + ":channel " + outside + ":human " + extra + ":human"
+	if got := dirsOf(h.c.Channels); got != want {
 		t.Fatalf("edited dirs: %s", got)
 	}
 	h.close()
@@ -1811,7 +1802,7 @@ func TestWorkingDirectories(t *testing.T) {
 	h2 := newHarness(t, data, &fakeModel{})
 	defer h2.close()
 	_, _ = h2.c.Tree(ctx, s.ID)
-	if got := dirsOf(h2.c.Sessions); got != want {
+	if got := dirsOf(h2.c.Channels); got != want {
 		t.Fatalf("recovered dirs: %s", got)
 	}
 }
@@ -1846,7 +1837,7 @@ func TestBoundaryPromptEditedDir(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -1860,7 +1851,7 @@ func TestBoundaryPromptEditedDir(t *testing.T) {
 	if err := h.c.ReplyPromptDir(ctx, pending[0].ID, "allow_always", outside); err != nil {
 		t.Fatal(err)
 	}
-	e := h.waitFor(event.SessionDirAdded, root)
+	e := h.waitFor(event.ChannelDirAdded, root)
 	var dp event.DirAddedPayload
 	_ = e.Decode(&dp)
 	if dp.Dir != outside {
@@ -1898,7 +1889,7 @@ func TestDenyReasonReachesTheAgent(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -1949,7 +1940,7 @@ func TestAllowPrefix(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -2014,7 +2005,7 @@ func TestWebSearchAlwaysOffered(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
@@ -2035,7 +2026,7 @@ func TestWebSearchAlwaysOffered(t *testing.T) {
 	}
 	h2 := newHarness(t, t.TempDir(), fm2)
 	defer h2.close()
-	s2, _ := h2.c.CreateSession(ctx, work, "", "")
+	s2, _ := h2.c.CreateChannel(ctx, work, "", "")
 	_ = h2.c.Subscribe(ctx, s2.ID, 0)
 	agents, _ = h2.c.Tree(ctx, s2.ID)
 	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
@@ -2067,7 +2058,7 @@ func TestManualCompact(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -2142,7 +2133,7 @@ func TestAskUser(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -2288,7 +2279,7 @@ func TestSlowClientDoesNotStallTheDaemon(t *testing.T) {
 	h := newHarness(t, t.TempDir(), &fakeModel{})
 	defer h.close()
 	ctx := context.Background()
-	s, err := h.c.CreateSession(ctx, t.TempDir(), "", "")
+	s, err := h.c.CreateChannel(ctx, t.TempDir(), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2300,7 +2291,7 @@ func TestSlowClientDoesNotStallTheDaemon(t *testing.T) {
 	}
 	defer stalled.Close()
 	if _, err := stalled.Write([]byte(`{"jsonrpc":"2.0","v":1,"id":1,"method":"attach","params":{"client":"stalled","tier":"interactive"}}` + "\n" +
-		`{"jsonrpc":"2.0","v":1,"id":2,"method":"subscribe","params":{"session":"` + s.ID + `","from":1}}` + "\n")); err != nil {
+		`{"jsonrpc":"2.0","v":1,"id":2,"method":"subscribe","params":{"channel":"` + s.ID + `","from":1}}` + "\n")); err != nil {
 		t.Fatal(err)
 	}
 	waitSubs := time.Now().Add(5 * time.Second)
@@ -2322,7 +2313,7 @@ func TestSlowClientDoesNotStallTheDaemon(t *testing.T) {
 	go func() {
 		var err error
 		for i := 0; i < 600 && err == nil; i++ {
-			last, err = h.d.Append(ctx, event.Event{Session: s.ID, Type: "test.noise", Payload: payload})
+			last, err = h.d.Append(ctx, event.Event{Channel: s.ID, Type: "test.noise", Payload: payload})
 		}
 		appended <- err
 	}()
@@ -2362,7 +2353,7 @@ func TestSubscribeHandoverIsContiguous(t *testing.T) {
 	h := newHarness(t, t.TempDir(), &fakeModel{})
 	defer h.close()
 	ctx := context.Background()
-	s, err := h.c.CreateSession(ctx, t.TempDir(), "", "")
+	s, err := h.c.CreateChannel(ctx, t.TempDir(), "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2374,7 +2365,7 @@ func TestSubscribeHandoverIsContiguous(t *testing.T) {
 		go func() {
 			var last event.Event
 			for i := 0; i < 400; i++ {
-				last, _ = h.d.Append(ctx, event.Event{Session: s.ID, Type: "test.noise"})
+				last, _ = h.d.Append(ctx, event.Event{Channel: s.ID, Type: "test.noise"})
 			}
 			appended <- last.Seq
 		}()
@@ -2438,11 +2429,11 @@ func TestWireErrors(t *testing.T) {
 	}{
 		{`{"jsonrpc":"2.0","id":1,"method":"daemon.status"}`, protocol.ErrVersion},
 		{`{"jsonrpc":"2.0","id":2,"v":1,"method":"no.such"}`, protocol.ErrMethodNotFound},
-		{`{"jsonrpc":"2.0","id":3,"v":1,"method":"session.resume","params":{"id":7}}`, protocol.ErrInvalidParams},
-		{`{"jsonrpc":"2.0","id":4,"v":1,"method":"session.resume","params":{"id":"s-missing"}}`, protocol.ErrNotFound},
+		{`{"jsonrpc":"2.0","id":3,"v":1,"method":"channel.resume","params":{"id":7}}`, protocol.ErrInvalidParams},
+		{`{"jsonrpc":"2.0","id":4,"v":1,"method":"channel.resume","params":{"id":"s-missing"}}`, protocol.ErrNotFound},
 		{`{"jsonrpc":"2.0","id":5,"v":1,"method":"agent.send","params":{"agent":"a-missing","kind":"prompt"}}`, protocol.ErrNotFound},
 		{`{"jsonrpc":"2.0","id":6,"v":1,"method":"prompt.reply","params":{"id":"p-missing","answer":"allow"}}`, protocol.ErrConflict},
-		{`{"jsonrpc":"2.0","id":7,"v":1,"method":"session.create","params":{"dir":"/definitely/not/here"}}`, protocol.ErrInvalidParams},
+		{`{"jsonrpc":"2.0","id":7,"v":1,"method":"channel.create","params":{"dir":"/definitely/not/here"}}`, protocol.ErrInvalidParams},
 	}
 	for _, c := range cases {
 		r := ask(c.line)
@@ -2453,21 +2444,21 @@ func TestWireErrors(t *testing.T) {
 	if r := ask(`{"jsonrpc":"2.0","id":8,"v":1,"method":"daemon.status"}`); r.Error != nil || len(r.Result) == 0 {
 		t.Fatalf("status with the version: %+v", r)
 	}
-	if r := ask(`{"jsonrpc":"2.0","id":9,"v":1,"method":"session.resume","params":{"id":"s-missing"}}`); r.Error == nil || r.Error.Message != `session "s-missing" not found` {
+	if r := ask(`{"jsonrpc":"2.0","id":9,"v":1,"method":"channel.resume","params":{"id":"s-missing"}}`); r.Error == nil || r.Error.Message != `channel "s-missing" not found` {
 		t.Fatalf("message: %+v", r.Error)
 	}
 }
 
-// TestSessionPost: a chat message with no mention reaches the root, is
-// logged once on the session with who it went to, and a mention of no agent
+// TestChannelPost: a chat message with no mention reaches the root, is
+// logged once on the channel with who it went to, and a mention of no agent
 // is refused.
-func TestSessionPost(t *testing.T) {
+func TestChannelPost(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
 	h := newHarness(t, t.TempDir(), &fakeModel{})
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
@@ -2487,7 +2478,7 @@ func TestSessionPost(t *testing.T) {
 }
 
 // TestAutoDeniesAWaitingBoundaryPrompt: a boundary prompt waiting in ask
-// mode is denied, with the auto mode note, when the session switches to
+// mode is denied, with the auto mode note, when the channel switches to
 // auto.
 func TestAutoDeniesAWaitingBoundaryPrompt(t *testing.T) {
 	setupConfig(t)
@@ -2505,12 +2496,12 @@ func TestAutoDeniesAWaitingBoundaryPrompt(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateSession(ctx, work, "", "")
+	s, _ := h.c.CreateChannel(ctx, work, "", "")
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
 	h.waitFor(event.PromptRequested, agents[0].ID) // the outside read waits in ask mode
-	if err := h.c.SetSessionMode(ctx, s.ID, "auto"); err != nil {
+	if err := h.c.SetChannelMode(ctx, s.ID, "auto"); err != nil {
 		t.Fatal(err)
 	}
 	select {

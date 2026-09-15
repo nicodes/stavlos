@@ -26,7 +26,7 @@ import (
 // asks a configured search API for results to fetch from. Both run in the
 // daemon, so every agent gets the same behaviour whatever its model, and
 // both pass through the permission path (web_fetch's policy argument is
-// the URL, so rules and session allows work per host).
+// the URL, so rules and channel allows work per host).
 
 const (
 	webTimeout      = 10 * time.Second
@@ -54,7 +54,7 @@ type webFetchInput struct {
 
 // Subject is the URL as it will be fetched: lower-case host, https, no
 // credentials, fragment or default port, a GitHub blob rewritten to the raw
-// file. Policy, session allows and the fetch itself see one string, so a
+// file. Policy, channel allows and the fetch itself see one string, so a
 // host rule cannot be dodged by spelling. An unparseable URL is matched as
 // written (the fetch then fails on it anyway).
 func (webFetchTool) Subject(in json.RawMessage) policy.Subject {

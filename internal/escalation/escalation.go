@@ -242,20 +242,20 @@ func (m *Manager) answer(id string, info protocol.PromptInfo, client string, a A
 	return nil
 }
 
-// AnswerAll answers every open prompt of one kind in a session, ignoring
-// claims (used when a session switches to yolo: waiting permissions are
+// AnswerAll answers every open prompt of one kind in a channel, ignoring
+// claims (used when a channel switches to yolo: waiting permissions are
 // allowed on the spot). Returns how many were answered.
-func (m *Manager) AnswerAll(session string, kind protocol.PromptKind, answer, client string) int {
-	return m.AnswerWhere(session, kind, answer, client, nil)
+func (m *Manager) AnswerAll(channel string, kind protocol.PromptKind, answer, client string) int {
+	return m.AnswerWhere(channel, kind, answer, client, nil)
 }
 
-// AnswerWhere answers the session's open prompts of one kind that keep
+// AnswerWhere answers the channel's open prompts of one kind that keep
 // admits (nil = all of them).
-func (m *Manager) AnswerWhere(session string, kind protocol.PromptKind, answer, client string, keep func(protocol.PromptInfo) bool) int {
+func (m *Manager) AnswerWhere(channel string, kind protocol.PromptKind, answer, client string, keep func(protocol.PromptInfo) bool) int {
 	m.mu.Lock()
 	var ids []string
 	for id, p := range m.pend {
-		if !p.done && p.info.Session == session && p.info.Kind == kind && (keep == nil || keep(p.info)) {
+		if !p.done && p.info.Channel == channel && p.info.Kind == kind && (keep == nil || keep(p.info)) {
 			ids = append(ids, id)
 		}
 	}
@@ -281,13 +281,13 @@ func (m *Manager) AnswerWhere(session string, kind protocol.PromptKind, answer, 
 	return n
 }
 
-// Pending lists open prompts, optionally filtered by session.
-func (m *Manager) Pending(session string) []protocol.PromptInfo {
+// Pending lists open prompts, optionally filtered by channel.
+func (m *Manager) Pending(channel string) []protocol.PromptInfo {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []protocol.PromptInfo
 	for _, p := range m.pend {
-		if session == "" || p.info.Session == session {
+		if channel == "" || p.info.Channel == channel {
 			out = append(out, p.info)
 		}
 	}

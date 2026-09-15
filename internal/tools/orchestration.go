@@ -35,13 +35,13 @@ func jsonOut(v any) Result {
 type spawnTool struct{}
 
 func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AgentCreate, Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its answer (a message to you) wakes you between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive for the rest of the session: message it again for follow-ups (it keeps its context). There is nothing to clean up.",
+	return model.ToolDef{Name: toolname.AgentCreate, Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its answer (a message to you) wakes you between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive in the channel: message it again for follow-ups (it keeps its context). There is nothing to clean up.",
 		Schema: schemaOf(spawnInput{})}
 }
 
 type spawnInput struct {
 	Archetype string `json:"archetype" desc:"Preset name of the child (see the list in your instructions)" req:"true"`
-	Label     string `json:"label" desc:"Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the session gets a suffix (auth-explorer-2); the result says the name it got" req:"true"`
+	Label     string `json:"label" desc:"Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the channel gets a suffix (auth-explorer-2); the result says the name it got" req:"true"`
 	Task      string `json:"task" desc:"The complete task description; the child has no other context" req:"true"`
 	Model     string `json:"model" desc:"Optional provider/model-id override for this child"`
 }
@@ -98,7 +98,7 @@ const (
 type messageTool struct{}
 
 func (messageTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Message, Description: "Send text to another agent in this session (a child, a sibling, or your parent) by name, or to the human as \"user\". kind says what it is. request (the default) asks for something: it reaches them at their next step, mid-turn if they are busy, they owe you a reply, and their response wakes you. response answers a request someone sent you (a task, a question): it settles it and wakes the agent waiting on it between turns. info tells them something that needs no reply (thanks, an acknowledgement, a closing note): nobody owes or waits, and it does not wake an idle agent. A question back to an agent waiting on you is a request; your answer is a response. What you send the user is always a response. agent_status lists every agent.",
+	return model.ToolDef{Name: toolname.Message, Description: "Send text to another agent in this channel (a child, a sibling, or your parent) by name, or to the human as \"user\". kind says what it is. request (the default) asks for something: it reaches them at their next step, mid-turn if they are busy, they owe you a reply, and their response wakes you. response answers a request someone sent you (a task, a question): it settles it and wakes the agent waiting on it between turns. info tells them something that needs no reply (thanks, an acknowledgement, a closing note): nobody owes or waits, and it does not wake an idle agent. A question back to an agent waiting on you is a request; your answer is a response. What you send the user is always a response. agent_status lists every agent.",
 		Schema: schemaOf(messageInput{})}
 }
 
@@ -164,12 +164,12 @@ func (cancelTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 type statusTool struct{}
 
 func (statusTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AgentStatus, Description: "State, turn count, and cost of one agent, or of every agent in the session (the whole tree, parents before children; your own row is marked).",
+	return model.ToolDef{Name: toolname.AgentStatus, Description: "State, turn count, and cost of one agent, or of every agent in the channel (the whole tree, parents before children; your own row is marked).",
 		Schema: schemaOf(statusInput{})}
 }
 
 type statusInput struct {
-	ID string `json:"id" desc:"Agent name or id; omit for the whole session"`
+	ID string `json:"id" desc:"Agent name or id; omit for the whole channel"`
 }
 
 func (statusTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }

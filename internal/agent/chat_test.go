@@ -22,7 +22,7 @@ func TestPostDeliversByMention(t *testing.T) {
 		reply(call("c2", "agent_create", `{"archetype":"general","label":"lookout","task":"watch"}`)),
 		reply(text("delegated")),
 	}}
-	s, h := newTestSession(t, testConfig{}, fm)
+	s, h := newTestChannel(t, testConfig{}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "delegate")
 	waitUntil(t, h, func() bool { return len(s.Agents()) == 3 && s.Busy() == 0 })
@@ -76,7 +76,7 @@ func TestMessageAnswersTheLatestPost(t *testing.T) {
 		reply(call("c2", "message", `{"to":"user","text":"two"}`)), reply(text("n")),
 		reply(call("c3", "message", `{"to":"user","text":"three"}`)), reply(text("n")),
 	}}
-	s, h := newTestSession(t, testConfig{}, fm)
+	s, h := newTestChannel(t, testConfig{}, fm)
 	root := s.Root()
 	ctx := context.Background()
 	sent := func(n int) bool {
@@ -128,7 +128,7 @@ func TestNoReplyNote(t *testing.T) {
 			reply(text("done")),
 		},
 	}
-	s, h := newTestSession(t, testConfig{}, fm)
+	s, h := newTestChannel(t, testConfig{}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "delegate")
 	waitUntil(t, h, func() bool { return len(s.Agents()) == 2 })

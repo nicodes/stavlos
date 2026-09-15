@@ -29,7 +29,7 @@ func chatItem(c *Transcript, i int) string {
 	return strings.Join(out, "|")
 }
 
-// TestChatKeepsOnlyPostsAndReplies: the session chat shows the human's posts
+// TestChatKeepsOnlyPostsAndReplies: the channel chat shows the human's posts
 // and agents' messages to the human, linked to the agent; tool calls,
 // prompts and notices stay in the agents' own chats.
 func TestChatKeepsOnlyPostsAndReplies(t *testing.T) {

@@ -25,15 +25,15 @@ type Command struct {
 var commands = []Command{
 	{Name: "/queue", Args: "<text>", Desc: "send after the current turn ends (plain enter reaches a busy agent at its next step)"},
 	{Name: "/providers", Args: "[openai|xai]", Desc: "manage providers: sign in with ChatGPT or Grok (enter) or sign out (ctrl+d); a name jumps to its sign-in", Aliases: []string{"/provider", "/connect", "/login"}, Direct: true},
-	{Name: "/models", Desc: "pick a model: enter sets the selected agent's, ctrl+s the session default", Aliases: []string{"/model"}, Direct: true},
+	{Name: "/models", Desc: "pick a model: enter sets the selected agent's, ctrl+s the channel default", Aliases: []string{"/model"}, Direct: true},
 	{Name: "/variants", Args: "[name|default]", Desc: "pick a model variant (reasoning effort) for the selected agent; no arg opens a picker", Aliases: []string{"/variant"}, Direct: true},
 	{Name: "/roles", Args: "[name]", Desc: "pick the selected agent's role (preset); a name sets it directly", Aliases: []string{"/role", "/presets"}, Direct: true},
-	{Name: "/mode", Desc: "permission mode for the session: ask, auto (free inside the session's directories) or yolo", Direct: true},
-	{Name: "/auto", Args: "[on|off]", Desc: "auto mode: approve permissions inside the session's directories, deny outside (no arg toggles)", Direct: true},
+	{Name: "/mode", Desc: "permission mode for the channel: ask, auto (free inside the channel's directories) or yolo", Direct: true},
+	{Name: "/auto", Args: "[on|off]", Desc: "auto mode: approve permissions inside the channel's directories, deny outside (no arg toggles)", Direct: true},
 	{Name: "/yolo", Args: "[on|off]", Desc: "yolo mode: approve every permission, directories included (no arg toggles)", Direct: true},
-	{Name: "/sessions", Desc: "pick a session of this directory to resume where it left off", Aliases: []string{"/resume", "/session"}, Direct: true},
+	{Name: "/channels", Desc: "pick a channel of this directory to resume where it left off", Aliases: []string{"/resume", "/channel"}, Direct: true},
 	{Name: "/tree", Desc: "toggle the agent sidebar (also ctrl+b)", Direct: true},
-	{Name: "/chat", Desc: "the session chat: talk to every agent, @name addresses one (the sidebar opens an agent's own chat)", Direct: true},
+	{Name: "/chat", Desc: "the channel chat: talk to every agent, @name addresses one (the sidebar opens an agent's own chat)", Direct: true},
 	{Name: "/compact", Desc: "summarise the selected agent's completed turns now to free context (automatic at 80% of the window)", Direct: true},
 	{Name: "/help", Desc: "show or hide the key bar at the bottom (off by default)", Aliases: []string{"/h", "/?"}, Direct: true},
 }
@@ -154,7 +154,7 @@ func nameByte(b byte) bool {
 }
 
 // mentionMatches are the live agents whose name starts with the @name being
-// typed in the session chat's input, in tree order.
+// typed in the channel chat's input, in tree order.
 func (m *Model) mentionMatches() []protocol.AgentInfo {
 	if !m.superChat || m.focus != focusInput {
 		return nil

@@ -9,16 +9,16 @@ import (
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// orchestrator implements tools.Orchestrator on top of a session (PRD §6.4).
-// Messages and status reach any agent in the session: a child, a
+// orchestrator implements tools.Orchestrator on top of a channel (PRD §6.4).
+// Messages and status reach any agent in the channel: a child, a
 // sibling, or the caller's parent. Lifecycle (cancel, kill) stays with the
 // parent that created the agent.
-type orchestrator struct{ s *Session }
+type orchestrator struct{ s *Channel }
 
 // senderLabel turns an envelope source into the From shown to the
 // recipient: the sender's name for "agent:<id>", "" for humans. Names are
-// unique in the session and never reused, so the name alone addresses it.
-func (s *Session) senderLabel(source string) string {
+// unique in the channel and never reused, so the name alone addresses it.
+func (s *Channel) senderLabel(source string) string {
 	id, ok := strings.CutPrefix(source, "agent:")
 	if !ok {
 		return ""
@@ -29,7 +29,7 @@ func (s *Session) senderLabel(source string) string {
 	return id
 }
 
-// peer resolves any other live agent in the same session.
+// peer resolves any other live agent in the same channel.
 func (o orchestrator) peer(caller, id string) (*Agent, error) {
 	c, ok := o.s.resolve(id)
 	if !ok {
@@ -61,7 +61,7 @@ func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task,
 }
 
 // Message sends the caller's text to the human or to another agent in the
-// session, as the caller said it is: a request (the recipient owes a reply,
+// channel, as the caller said it is: a request (the recipient owes a reply,
 // the caller waits on it; it reaches the recipient at its next step, mid-turn
 // if busy, a new turn if idle), a response (it settles what the caller owed
 // and is delivered between turns, clearing the recipient's wait) or info
@@ -74,7 +74,7 @@ func (o orchestrator) Message(caller, to, text, kind string) (string, error) {
 		if hasFrom {
 			post = from.currentPost()
 		}
-		if _, err := o.s.host.Append(context.Background(), event.Event{Session: o.s.ID, Agent: caller, Type: event.MessageToUser,
+		if _, err := o.s.host.Append(context.Background(), event.Event{Channel: o.s.ID, Agent: caller, Type: event.MessageToUser,
 			Payload: event.MustPayload(event.ChatPayload{From: o.s.senderLabel("agent:" + caller), Text: text, Post: post})}); err != nil {
 			return "", err
 		}
@@ -124,7 +124,7 @@ func (o orchestrator) Message(caller, to, text, kind string) (string, error) {
 // put in its mailbox, which wakes it between turns. The caller stays alive.
 func (o orchestrator) answer(caller string, c *Agent, text string) error {
 	label := o.s.senderLabel("agent:" + caller)
-	if _, err := o.s.host.Append(context.Background(), event.Event{Session: o.s.ID, Agent: c.ID, Type: event.ResponseReceived,
+	if _, err := o.s.host.Append(context.Background(), event.Event{Channel: o.s.ID, Agent: c.ID, Type: event.ResponseReceived,
 		Payload: event.MustPayload(event.ResponsePayload{From: caller, FromLabel: label, Text: text})}); err != nil {
 		return err
 	}
@@ -141,8 +141,8 @@ func (o orchestrator) Cancel(parent, id string) error {
 	return nil
 }
 
-// Status describes one agent (any in the session) or, with no id, the
-// whole session tree in pre-order.
+// Status describes one agent (any in the channel) or, with no id, the
+// whole channel tree in pre-order.
 func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 	if _, ok := o.s.Agent(caller); !ok {
 		return nil, fmt.Errorf("unknown agent %q", caller)

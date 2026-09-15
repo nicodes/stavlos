@@ -9,13 +9,13 @@ import (
 	"github.com/nicodes/stavlos/internal/tui/format"
 )
 
-// The session chat (docs/super-chat.md) is a Transcript of its own, fed the
+// The channel chat (docs/super-chat.md) is a Transcript of its own, fed the
 // events of every agent: it keeps the human's posts and the agents'
 // messages to the human in the order they happen, each message an item of
 // its own linked to its agent. Tool calls, prompts and notices stay in the
 // agents' own chats.
 
-// NewChat returns an empty session chat.
+// NewChat returns an empty channel chat.
 func NewChat() *Transcript {
 	t := NewTranscript()
 	t.chat = true
@@ -23,7 +23,7 @@ func NewChat() *Transcript {
 	return t
 }
 
-// ChatEvent reports whether the session chat reads events of type typ.
+// ChatEvent reports whether the channel chat reads events of type typ.
 func ChatEvent(typ event.Type) bool {
 	switch typ {
 	case event.AgentSpawned, event.AgentRoleChanged, event.ChatPosted, event.MessageToUser, event.AgentKilled:
@@ -42,7 +42,7 @@ func ItemAgent(lines []Line, item int) string {
 	return ""
 }
 
-// applyChat folds one session event into the chat.
+// applyChat folds one channel event into the chat.
 func (t *Transcript) applyChat(ev event.Event) {
 	switch ev.Type {
 	case event.AgentSpawned:

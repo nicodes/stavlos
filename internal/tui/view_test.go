@@ -93,7 +93,7 @@ func TestFooterRight(t *testing.T) {
 	}
 	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5", tokens: 12_345, cost: 0.0123}))
 	if got != "12k tokens · $0.0123" {
-		t.Fatalf("session: %q", got)
+		t.Fatalf("channel: %q", got)
 	}
 }
 
@@ -139,12 +139,12 @@ func TestInputBoxAndPromptWidth(t *testing.T) {
 	}
 }
 
-func TestHomeAndSessionViews(t *testing.T) {
+func TestHomeAndChannelViews(t *testing.T) {
 	m := newModel(context.Background(), nil, "sess-1234-5678")
 	m.width, m.height = 100, 30
 	m.reconciled = true
 	m.loading = false
-	m.session.Dir = "/tmp/proj"
+	m.channel.Dir = "/tmp/proj"
 	m.layout()
 
 	home := m.View()
@@ -156,11 +156,11 @@ func TestHomeAndSessionViews(t *testing.T) {
 	if !strings.Contains(plain, "███████ ████████") || strings.Contains(plain, "sign in with ChatGPT or Grok") || !strings.Contains(plain, "Get started /providers") {
 		t.Fatalf("home view:\n%s", plain)
 	}
-	if strings.Contains(plain, "session ") {
+	if strings.Contains(plain, "channel ") {
 		t.Fatal("home view must not show the sidebar")
 	}
-	if !strings.Contains(plain, format.ShortHome(m.session.Dir)) {
-		t.Fatalf("home view should name the session directory above the meta row:\n%s", plain)
+	if !strings.Contains(plain, format.ShortHome(m.channel.Dir)) {
+		t.Fatalf("home view should name the channel directory above the meta row:\n%s", plain)
 	}
 	if !strings.Contains(plain, "Giddy up!") {
 		t.Fatalf("home view should carry the tagline:\n%s", plain)
@@ -192,19 +192,19 @@ func TestHomeAndSessionViews(t *testing.T) {
 		}
 	}
 
-	// A user message moves to the session state; ctrl+b shows the sidebar.
+	// A user message moves to the channel state; ctrl+b shows the sidebar.
 	m.agents = []protocol.AgentInfo{{ID: "a1", Label: "root", Archetype: "coder", Model: "anthropic/claude-x", State: "idle"}}
-	m.session.Model = "anthropic/claude-x"
+	m.channel.Model = "anthropic/claude-x"
 	m.transcript("a1").Notice("hello")
 	m.showTree = true
 	m.layout()
 	sess := stripANSI(m.View())
 	if !strings.Contains(sess, "hello") || !strings.Contains(sess, "Stavlos") || !strings.Contains(sess, "\nidle ") || !strings.Contains(sess, "$0.00") {
-		t.Fatalf("session view:\n%s", sess)
+		t.Fatalf("channel view:\n%s", sess)
 	}
 	m.width = 90 // too narrow: sidebar auto-hides
 	m.layout()
-	if strings.Contains(stripANSI(m.View()), "session  sess-123") {
+	if strings.Contains(stripANSI(m.View()), "channel  sess-123") {
 		t.Fatal("sidebar should auto-hide below 100 columns")
 	}
 }
@@ -246,7 +246,7 @@ func TestAgentRows(t *testing.T) {
 
 	// The async tab counts what the selected agent waits on (agents and
 	// jobs), and lists them once focused.
-	m := sessionModel()
+	m := channelModel()
 	m.spawned = spawned
 	m.agents = agents
 	m.selected = 0
@@ -308,7 +308,7 @@ func TestMonitorRows(t *testing.T) {
 
 	// The section reads the selected agent's Monitors; unfocused it is one
 	// summary line, focused it lists one row per job.
-	m := sessionModel()
+	m := channelModel()
 	m.agents = []protocol.AgentInfo{{ID: "root", Label: "coder", Archetype: "coder", State: "idle", Monitors: monitors[:3]}}
 	m.selected = 0
 	view := stripANSI(m.sectionsView(100))
@@ -417,9 +417,9 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 	}
 }
 
-// sessionModel is a model in the session state (one transcript item) at a
+// channelModel is a model in the channel state (one transcript item) at a
 // size where the sidebar fits.
-func sessionModel() Model {
+func channelModel() Model {
 	m := newModel(context.Background(), nil, "s")
 	m.width, m.height = 120, 40
 	m.reconciled, m.loading = true, false
@@ -445,7 +445,7 @@ func TestTabCyclesFocus(t *testing.T) {
 	right := tea.KeyMsg{Type: tea.KeyRight}
 	left := tea.KeyMsg{Type: tea.KeyLeft}
 	t.Run("chat, input, strip and meta row", func(t *testing.T) {
-		m := sessionModel()
+		m := channelModel()
 		if m.focus != focusInput {
 			t.Fatalf("default focus %v", m.focus)
 		}
@@ -527,7 +527,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		}
 	})
 	t.Run("with the sidebar", func(t *testing.T) {
-		m := sessionModel()
+		m := channelModel()
 		// Sidebar shown: input → tabs → meta row → sidebar → chat → input.
 		m.showTree = true
 		m.layout()
@@ -548,7 +548,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		}
 	})
 	t.Run("with a pending prompt", func(t *testing.T) {
-		m := sessionModel()
+		m := channelModel()
 		// Pending prompt: strip (highlighting permission) → meta → chat → input.
 		m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
 		if m.focus != focusInput {
@@ -564,7 +564,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		}
 	})
 	t.Run("the strip lands on its leftmost tab", func(t *testing.T) {
-		m := sessionModel()
+		m := channelModel()
 		// Whatever the tabs hold, landing on the strip always highlights the
 		// leftmost tab; ←/→ move from there.
 		m.prompts = nil
@@ -597,7 +597,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // strip → input
 	})
 	t.Run("tab never cycles agents", func(t *testing.T) {
-		m := sessionModel()
+		m := channelModel()
 		// Tab never cycles agents any more; ctrl+n still does.
 		press(&m, tab, tab)
 		if m.selected != 0 {
@@ -625,7 +625,7 @@ func equalFocus(a, b []focus) bool {
 func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	y := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}
 	space := tea.KeyMsg{Type: tea.KeySpace}
-	m := sessionModel()
+	m := channelModel()
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
 
 	// Input focus: y is typed, the prompt is untouched.
@@ -709,7 +709,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 // (role)", and the options are the fixed set — with a prefix row only for
 // a simple shell command whose prefix can be derived.
 func TestPermissionDialogOptions(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents[0].Archetype = "general"
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"go test ./... -run TestRoles"}`), Prefix: "go test"}}
 	m.setFocus(focusPermission)
@@ -717,8 +717,8 @@ func TestPermissionDialogOptions(t *testing.T) {
 	want := []string{
 		"$ go test ./... -run TestRoles  coder (general)",
 		"▸ ● Allow once",
-		"  ○ Allow for this session  this exact command",
-		"  ○ Allow go test for this session  every command starting with it",
+		"  ○ Allow for this channel  this exact command",
+		"  ○ Allow go test for this channel  every command starting with it",
 		"  ○ Deny  with an optional reason",
 	}
 	for _, w := range want {
@@ -747,11 +747,11 @@ func TestPermissionDialogOptions(t *testing.T) {
 	// again
 	m.promptBusy = ""
 	m.prompts = []protocol.PromptInfo{{ID: "p2", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"go test && rm -rf x"}`)}}
-	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); strings.Contains(body, "for this session  every") || !strings.Contains(body, "▸ ● Allow once") {
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); strings.Contains(body, "for this channel  every") || !strings.Contains(body, "▸ ● Allow once") {
 		t.Fatalf("compound command:\n%s", body)
 	}
 	m.prompts = []protocol.PromptInfo{{ID: "p3", Kind: "permission", Tool: "read", Agent: "a", Input: []byte(`{"path":"/repo/x"}`)}}
-	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); strings.Contains(body, "every command") || !strings.Contains(body, "Allow for this session  this exact call") {
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); strings.Contains(body, "every command") || !strings.Contains(body, "Allow for this channel  this exact call") {
 		t.Fatalf("read:\n%s", body)
 	}
 	if len(permOptions(&m.prompts[0])) != 3 {
@@ -760,7 +760,7 @@ func TestPermissionDialogOptions(t *testing.T) {
 	// web_fetch: the subject is the URL, the prefix row is the host
 	m.prompts = []protocol.PromptInfo{{ID: "p4", Kind: "permission", Tool: "web_fetch", Agent: "a", Input: []byte(`{"url":"https://pkg.go.dev/net/http"}`), Prefix: "pkg.go.dev"}}
 	body = stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
-	for _, w := range []string{"↓ https://pkg.go.dev/net/http  coder (general)", "○ Allow for this session  this exact URL", "○ Allow pkg.go.dev for this session  every page on this host"} {
+	for _, w := range []string{"↓ https://pkg.go.dev/net/http  coder (general)", "○ Allow for this channel  this exact URL", "○ Allow pkg.go.dev for this channel  every page on this host"} {
 		if !strings.Contains(body, w) {
 			t.Fatalf("missing %q:\n%s", w, body)
 		}
@@ -769,7 +769,7 @@ func TestPermissionDialogOptions(t *testing.T) {
 
 func TestChatCursorMovesAndRenders(t *testing.T) {
 	markCursorForTest(t)
-	m := sessionModel()
+	m := channelModel()
 	tr := m.transcript("a")
 	for i := 0; i < 8; i++ {
 		tr.Apply(mk(int64(i+1), "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "msg " + string(rune('A'+i))}))
@@ -904,7 +904,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	m := newModel(context.Background(), nil, "s")
 	m.width, m.height = 120, 40
 	m.reconciled = true
-	m.transcript("root").Notice("hello") // a session, not the home screen (which has no strip)
+	m.transcript("root").Notice("hello") // a channel, not the home screen (which has no strip)
 	m.agents = []protocol.AgentInfo{
 		{ID: "root", Label: "coder", Archetype: "coder", State: "waiting", Awaiting: []string{"c1", "c2"}},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running"},
@@ -978,7 +978,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 }
 
 func TestSectionTabStrip(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents = []protocol.AgentInfo{
 		{ID: "root", Label: "coder", Archetype: "coder", State: "working", Awaiting: []string{"c1"}, Monitors: []protocol.MonitorInfo{{ID: "j1", Kind: "command", Label: "go test", State: "running"}}},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "working"},
@@ -986,7 +986,7 @@ func TestSectionTabStrip(t *testing.T) {
 	m.selected = 0
 	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`), Prefix: "make test"}}
 
-	// unfocused: the session's tabs over the agent's, counts only
+	// unfocused: the channel's tabs over the agent's, counts only
 	v := stripANSI(m.sectionsView(100))
 	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · ? 0 · dirs 0\nasync 2 · due 0 · todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
@@ -1026,8 +1026,8 @@ func TestSectionTabStrip(t *testing.T) {
 	}
 }
 
-func TestSessionViewFillsHeight(t *testing.T) {
-	m := sessionModel()
+func TestChannelViewFillsHeight(t *testing.T) {
+	m := channelModel()
 	m.showTree = false
 	for _, f := range []focus{focusInput, focusAsync, focusPermission} {
 		m.focus = f
@@ -1058,7 +1058,7 @@ func TestSessionViewFillsHeight(t *testing.T) {
 }
 
 func TestPermissionShowsWholeCommand(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	long := "for f in $(ls /very/long/path/to/somewhere/deep/in/the/tree); do echo processing \"$f\" && sleep 1 && rm -f \"$f\".bak; done"
 	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":` + strconv.Quote(long+"\necho second line") + `}`)}}
 	m.focus = focusPermission
@@ -1081,11 +1081,11 @@ func TestPermissionShowsWholeCommand(t *testing.T) {
 }
 
 func TestMetaRowAndStripRepo(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	m.hideKeys = false // the key bar is off by default; this test checks the row above it
-	m.session.Dir = "/repo/project"
-	m.session.Model, m.agents[0].Model = "chatgpt/gpt-5", "chatgpt/gpt-5"
+	m.channel.Dir = "/repo/project"
+	m.channel.Model, m.agents[0].Model = "chatgpt/gpt-5", "chatgpt/gpt-5"
 	m.agents[0].Tokens, m.agents[0].CostUSD = 1500, 0.02
 	m.width, m.height = 100, 30
 	m.layout()
@@ -1107,7 +1107,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens · $0.02") || strings.Contains(row, "%") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
 		t.Fatalf("meta row: %q", row)
 	}
-	// with a window: "used% · used/window" and the cost; the session's tokens are in the sidebar
+	// with a window: "used% · used/window" and the cost; the channel's tokens are in the sidebar
 	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
 	if right := stripANSI(m.footerRightView()); right != "31% · 62k/200k · $0.02" {
 		t.Fatalf("meta right: %q", right)
@@ -1171,7 +1171,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 }
 
 func TestTurnIndicatorFollowsPrompts(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	m.transcript("a").Apply(event.Event{Seq: 1, Agent: "a", Type: event.TurnStarted, Time: time.Now(), Payload: event.MustPayload(event.TurnPayload{Turn: 1})})
 	m.refreshViewport()
@@ -1195,7 +1195,7 @@ func TestFirstPermissionOpensItsTabWhenIdle(t *testing.T) {
 		return protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: id, Kind: "permission", Agent: "a", Tool: "shell"}}
 	}
 	// idle input: the first prompt opens the permission tab
-	m := sessionModel()
+	m := channelModel()
 	m.applyPromptNotification(req("p1"))
 	if m.focus != focusPermission {
 		t.Fatalf("idle input should jump to the permission tab: focus=%v", m.focus)
@@ -1207,14 +1207,14 @@ func TestFirstPermissionOpensItsTabWhenIdle(t *testing.T) {
 		t.Fatalf("second prompt should not steal focus: %v", m.focus)
 	}
 	// a draft in the input is never interrupted
-	m = sessionModel()
+	m = channelModel()
 	m.input.SetValue("half a thou")
 	m.applyPromptNotification(req("p3"))
 	if m.focus != focusInput {
 		t.Fatalf("typing should keep focus: %v", m.focus)
 	}
 	// nor is another section
-	m = sessionModel()
+	m = channelModel()
 	m.setFocus(focusChat)
 	m.applyPromptNotification(req("p4"))
 	if m.focus != focusChat {
@@ -1223,11 +1223,11 @@ func TestFirstPermissionOpensItsTabWhenIdle(t *testing.T) {
 }
 
 func TestParentAgentCreateLineFollowsChildEvents(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "coder"}}
 	m.selected = 0
 	ev := func(seq int64, agent string, typ event.Type, p any) event.Event {
-		return event.Event{Seq: seq, Session: "s", Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+		return event.Event{Seq: seq, Channel: "s", Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
 	m.applyEvent(ev(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}))
 	m.applyEvent(ev(2, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Input: json.RawMessage(`{"archetype":"explorer","label":"scout","task":"look"}`)}))
@@ -1293,7 +1293,7 @@ func TestLastSnippet(t *testing.T) {
 }
 
 func TestHelpTogglesKeyBar(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	m.width, m.height = 100, 30
 	m.layout()
@@ -1316,7 +1316,7 @@ func TestHelpTogglesKeyBar(t *testing.T) {
 }
 
 func TestEscTwiceCancelsTheTurn(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents[0].State = "running"
 	esc := tea.KeyMsg{Type: tea.KeyEsc}
 	// text in the input: esc clears it and does not arm
@@ -1354,7 +1354,7 @@ func TestEscTwiceCancelsTheTurn(t *testing.T) {
 }
 
 func TestFocusAlwaysLandsLeftmost(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
 	press(&m, tab, right) // input → strip, highlight moved to agents
@@ -1375,7 +1375,7 @@ func TestFocusAlwaysLandsLeftmost(t *testing.T) {
 		t.Fatalf("meta row should land on the mode tag (ASK): focus=%v sel=%v", m.focus, m.metaSel)
 	}
 	// with YOLO on, the leftmost part of the meta row is the YOLO tag
-	m.session.Mode = protocol.ModeYolo
+	m.channel.Mode = protocol.ModeYolo
 	press(&m, tab, tab, tab, tab) // meta row → chat → input → strip → meta row
 	if m.focus != focusMeta || m.metaSel != metaYolo {
 		t.Fatalf("meta row with YOLO should land on YOLO: focus=%v sel=%v", m.focus, m.metaSel)
@@ -1383,7 +1383,7 @@ func TestFocusAlwaysLandsLeftmost(t *testing.T) {
 }
 
 func TestTodoTabAndDialog(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents[0].Archetype = "general"
 	// empty: the tab reads (0) and its dialog says so
 	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "async 0 · due 0 · todo 0") {
@@ -1432,7 +1432,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	// clicking the todo label on the strip opens the dialog
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	lay := m.rows()
-	x := len("async 0 · due 0 · ") + 1 // the agent's row, under the session's
+	x := len("async 0 · due 0 · ") + 1 // the agent's row, under the channel's
 	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.strip + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.strip + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
@@ -1460,7 +1460,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 }
 
 func TestOverlayClosesBackToItsOrigin(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	// opened from the meta row: closing leaves the meta row focused, the input blurred
 	m.setFocus(focusMeta)
 	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles"))
@@ -1481,7 +1481,7 @@ func TestOverlayClosesBackToItsOrigin(t *testing.T) {
 }
 
 func TestCtrlCTwiceQuits(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.input.SetValue("draft")
 	m.setFocus(focusChat)
 	c := tea.KeyMsg{Type: tea.KeyCtrlC}
@@ -1515,41 +1515,41 @@ func TestCtrlCTwiceQuits(t *testing.T) {
 	}
 }
 
-func TestSessionItemAndBind(t *testing.T) {
+func TestChannelItemAndBind(t *testing.T) {
 	created := time.Now().Add(-3 * time.Hour).Format(time.RFC3339)
-	it := sessionItem(protocol.SessionInfo{ID: "s1", Title: "fix the login bug", Created: created, Model: "openai/gpt-5", CostUSD: 0.12, Live: 2}, false)
+	it := channelItem(protocol.ChannelInfo{ID: "s1", Title: "fix the login bug", Created: created, Model: "openai/gpt-5", CostUSD: 0.12, Live: 2}, false)
 	if it.label != "fix the login bug" || !strings.HasPrefix(it.hint, "3h00m ago · openai/gpt-5 · $0.12 · 2 live") || it.good {
 		t.Fatalf("item: %+v", it)
 	}
-	it = sessionItem(protocol.SessionInfo{ID: "s2", Created: created}, true)
-	if it.label != "(empty session)" || !strings.HasSuffix(it.hint, "current") || !it.good {
+	it = channelItem(protocol.ChannelInfo{ID: "s2", Created: created}, true)
+	if it.label != "(empty channel)" || !strings.HasSuffix(it.hint, "current") || !it.good {
 		t.Fatalf("current empty item: %+v", it)
 	}
 
-	// binding another session starts every per-session piece of state over
-	m := sessionModel()
+	// binding another channel starts every per-channel piece of state over
+	m := channelModel()
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a"}}
 	m.chatCursor = 3
 	m.seq = 42
 	m.reconciled = true
-	m.bindSession(protocol.SessionInfo{ID: "other", Dir: "/x"})
-	if m.sessionID != "other" || m.session.Dir != "/x" || len(m.agents) != 0 || len(m.transcripts) != 0 || m.seq != 0 || len(m.prompts) != 0 || m.chatCursor != 0 || m.reconciled || m.focus != focusInput {
-		t.Fatalf("state after bind: id=%s agents=%d transcripts=%d seq=%d prompts=%d cursor=%d reconciled=%v focus=%v", m.sessionID, len(m.agents), len(m.transcripts), m.seq, len(m.prompts), m.chatCursor, m.reconciled, m.focus)
+	m.bindChannel(protocol.ChannelInfo{ID: "other", Dir: "/x"})
+	if m.channelID != "other" || m.channel.Dir != "/x" || len(m.agents) != 0 || len(m.transcripts) != 0 || m.seq != 0 || len(m.prompts) != 0 || m.chatCursor != 0 || m.reconciled || m.focus != focusInput {
+		t.Fatalf("state after bind: id=%s agents=%d transcripts=%d seq=%d prompts=%d cursor=%d reconciled=%v focus=%v", m.channelID, len(m.agents), len(m.transcripts), m.seq, len(m.prompts), m.chatCursor, m.reconciled, m.focus)
 	}
 	if !m.isHome() {
-		t.Fatal("a freshly bound session shows the home screen until its history replays")
+		t.Fatal("a freshly bound channel shows the home screen until its history replays")
 	}
 }
 
-func TestSessionsPickerSkipsEmptySessions(t *testing.T) {
-	m := sessionModel()
-	m.sessionID = "cur"
-	m.onSessions(sessionsMsg{sessions: []protocol.SessionInfo{
+func TestChannelsPickerSkipsEmptyChannels(t *testing.T) {
+	m := channelModel()
+	m.channelID = "cur"
+	m.onChannels(channelsMsg{channels: []protocol.ChannelInfo{
 		{ID: "cur", Created: time.Now().Format(time.RFC3339)},
 		{ID: "empty", Created: time.Now().Format(time.RFC3339)},
 		{ID: "old", Title: "fix the login bug", Created: time.Now().Format(time.RFC3339)},
 	}})
-	if m.ov == nil || m.ov.kind != ovSessions {
+	if m.ov == nil || m.ov.kind != ovChannels {
 		t.Fatal("picker should open")
 	}
 	var ids []string
@@ -1557,12 +1557,12 @@ func TestSessionsPickerSkipsEmptySessions(t *testing.T) {
 		ids = append(ids, it.id)
 	}
 	if strings.Join(ids, " ") != "cur old" {
-		t.Fatalf("picker rows %v: the untouched session should be left out, the current one kept", ids)
+		t.Fatalf("picker rows %v: the untouched channel should be left out, the current one kept", ids)
 	}
 }
 
 func TestMouseHoverMovesChatCursor(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	tr := m.transcript("a")
 	for i := 0; i < 6; i++ {
@@ -1618,7 +1618,7 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 }
 
 func TestMouseClickTogglesItem(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	tr := m.transcript("a")
 	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "list the files"}))
@@ -1651,7 +1651,7 @@ func TestMouseClickTogglesItem(t *testing.T) {
 }
 
 func TestMouseClicksFocusTabsAndInput(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	m.agents = []protocol.AgentInfo{
 		{ID: "a", Label: "main", Archetype: "coder", State: "working", Awaiting: []string{"c1", "c2"}},
@@ -1724,10 +1724,10 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 }
 
 func TestMetaRowHits(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "coder", Model: "openai/gpt-5", Variant: "high"}}
 	m.selected = 0
-	m.session.Mode = protocol.ModeYolo
+	m.channel.Mode = protocol.ModeYolo
 	// "YOLO · main (coder) · openai/gpt-5 · high"
 	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "YOLO", metaNone, lipgloss.NewStyle()))
 	at := func(sub string) int { return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1 } // a column, not a byte offset
@@ -1743,7 +1743,7 @@ func TestMetaRowHits(t *testing.T) {
 		}
 	}
 	// in ask mode the row starts with the ASK tag; a missing variant reads "default"
-	m.session.Mode = protocol.ModeAsk
+	m.channel.Mode = protocol.ModeAsk
 	m.agents[0].Variant = ""
 	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "ASK", metaNone, lipgloss.NewStyle()))
 	if !strings.HasPrefix(row, "ASK · main") || m.metaHit(0) != metaYolo || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "main")])) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
@@ -1752,7 +1752,7 @@ func TestMetaRowHits(t *testing.T) {
 }
 
 func TestDialogRowsTakeTheMouse(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.width, m.height = 100, 40
 	m.layout()
 	o := newOverlay(ovVariants, overlayList, "Variant")
@@ -1789,9 +1789,9 @@ func TestDialogRowsTakeTheMouse(t *testing.T) {
 }
 
 func TestModeChangeShowsInEveryChat(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main"}, {ID: "b", Parent: "a", Label: "scout"}}
-	m.applyEvent(event.Event{Seq: 9, Session: "s", Type: event.SessionModeChanged, Time: time.Now(), Payload: event.MustPayload(event.ModePayload{Mode: "auto"})})
+	m.applyEvent(event.Event{Seq: 9, Channel: "s", Type: event.ChannelModeChanged, Time: time.Now(), Payload: event.MustPayload(event.ModePayload{Mode: "auto"})})
 	for _, id := range []string{"a", "b"} {
 		found := false
 		for _, l := range m.transcript(id).All() {
@@ -1803,13 +1803,13 @@ func TestModeChangeShowsInEveryChat(t *testing.T) {
 			t.Fatalf("agent %s chat lacks the mode line", id)
 		}
 	}
-	if m.session.Mode != "auto" || m.modeTag() != "AUTO" {
-		t.Fatalf("session mode should follow the event: %q", m.session.Mode)
+	if m.channel.Mode != "auto" || m.modeTag() != "AUTO" {
+		t.Fatalf("channel mode should follow the event: %q", m.channel.Mode)
 	}
 	// legacy yolo events still replay
-	m.applyEvent(event.Event{Seq: 10, Session: "s", Type: event.SessionYoloChanged, Time: time.Now(), Payload: event.MustPayload(event.YoloPayload{On: true})})
-	if m.session.Mode != "yolo" || m.modeTag() != "YOLO" {
-		t.Fatalf("legacy yolo event: %q", m.session.Mode)
+	m.applyEvent(event.Event{Seq: 10, Channel: "s", Type: event.ChannelYoloChanged, Time: time.Now(), Payload: event.MustPayload(event.YoloPayload{On: true})})
+	if m.channel.Mode != "yolo" || m.modeTag() != "YOLO" {
+		t.Fatalf("legacy yolo event: %q", m.channel.Mode)
 	}
 	// /mode lists the three modes with the current one marked
 	m.openMode()
@@ -1819,7 +1819,7 @@ func TestModeChangeShowsInEveryChat(t *testing.T) {
 }
 
 func TestDragSelectsAndCopies(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	tr := m.transcript("a")
 	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "first line here"}))
@@ -1881,7 +1881,7 @@ func TestDragSelectsAndCopies(t *testing.T) {
 }
 
 func TestInputGrowsWithTheMessage(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	m.width, m.height = 60, 30
 	m.layout()
@@ -1926,7 +1926,7 @@ func TestInputGrowsWithTheMessage(t *testing.T) {
 }
 
 func TestInputNewlineAndHistoryKeys(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.history = []string{"older prompt"}
 	m.histIdx = len(m.history)
 	type_ := func(s string) {
@@ -1953,7 +1953,7 @@ func TestInputNewlineAndHistoryKeys(t *testing.T) {
 }
 
 func TestInputShowsOneChevron(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.width, m.height = 60, 30
 	m.input.SetValue("first line\nsecond line\nthird")
 	m.layout()
@@ -1969,7 +1969,7 @@ func TestInputShowsOneChevron(t *testing.T) {
 }
 
 func TestPastedMessageKeepsItsFirstLineInView(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.width, m.height = 80, 30
 	m.layout()
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("Use subagents to summarize the repo.\nThen compare all responses and\ngive me the highlights."), Paste: true})
@@ -1984,7 +1984,7 @@ func TestPastedMessageKeepsItsFirstLineInView(t *testing.T) {
 }
 
 func TestPasteWithCarriageReturns(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.width, m.height = 80, 30
 	m.layout()
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("first line\r\nsecond line\rthird line"), Paste: true})
@@ -1999,7 +1999,7 @@ func TestPasteWithCarriageReturns(t *testing.T) {
 // TestInputNeverHidesRows: for messages of many shapes the input is tall
 // enough that every wrapped row is drawn (the textarea never scrolls).
 func TestInputNeverHidesRows(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.width, m.height = 80, 40
 	m.layout()
 	w := m.input.Width()
@@ -2036,13 +2036,13 @@ func TestInputNeverHidesRows(t *testing.T) {
 	}
 }
 
-func TestStartScreenHistoryComesFromEarlierSessions(t *testing.T) {
+func TestStartScreenHistoryComesFromEarlierChannels(t *testing.T) {
 	m := newModel(context.Background(), nil, "cur")
 	m.width, m.height = 100, 40
 	m.reconciled = true
 	m.layout()
 	now := time.Now()
-	nm, _ := m.Update(sessionsMsg{purpose: sessionsHistory, sessions: []protocol.SessionInfo{
+	nm, _ := m.Update(channelsMsg{purpose: channelsHistory, channels: []protocol.ChannelInfo{
 		{ID: "cur", Title: "the one we are in", Created: now.Format(time.RFC3339)},
 		{ID: "empty", Created: now.Format(time.RFC3339)},
 		{ID: "s1", Title: "fix the login bug", Created: now.Add(-2 * time.Hour).Format(time.RFC3339)},
@@ -2055,7 +2055,7 @@ func TestStartScreenHistoryComesFromEarlierSessions(t *testing.T) {
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
 	if m.input.Value() != "fix the login bug" {
-		t.Fatalf("↑ should recall the most recent earlier session's first prompt: %q", m.input.Value())
+		t.Fatalf("↑ should recall the most recent earlier channel's first prompt: %q", m.input.Value())
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
 	if m.input.Value() != "add a README section" {
@@ -2069,17 +2069,17 @@ func TestStartScreenHistoryComesFromEarlierSessions(t *testing.T) {
 	if m.input.Value() != "" {
 		t.Fatalf("↓ past the newest restores the empty draft: %q", m.input.Value())
 	}
-	// a session that already has its own history is left alone
+	// a channel that already has its own history is left alone
 	m.history = []string{"typed here"}
 	m.histIdx = 1
-	m.seedHistory([]protocol.SessionInfo{{ID: "x", Title: "elsewhere"}})
+	m.seedHistory([]protocol.ChannelInfo{{ID: "x", Title: "elsewhere"}})
 	if len(m.history) != 1 {
 		t.Fatal("seeding must not touch an existing history")
 	}
 }
 
 func TestStatusShowsAboveTheDivider(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = false
 	m.width, m.height = 80, 30
 	m.setStatus("copied 12 characters", false)
@@ -2108,13 +2108,13 @@ func TestStatusShowsAboveTheDivider(t *testing.T) {
 }
 
 func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = true
 	m.width, m.height = 120, 40
 	m.layout()
 	m.refreshViewport()
 	lines := strings.Split(stripANSI(m.View()), "\n")
-	// the sidebar's header (the app name over the session directory) is at
+	// the sidebar's header (the app name over the channel directory) is at
 	// the left edge, the chat to its right
 	found := false
 	for _, l := range lines {
@@ -2166,7 +2166,7 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 }
 
 func TestSidebarRowsLeaveOneColumn(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = true
 	m.width, m.height = 120, 40
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "a-very-long-agent-label-that-will-not-fit-here", Archetype: "general", State: "idle"}}
@@ -2250,26 +2250,26 @@ func TestSidebarNav(t *testing.T) {
 			t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
 		}
 	})
-	t.Run("the sessions section", func(t *testing.T) {
+	t.Run("the channels section", func(t *testing.T) {
 		m := sidebarNavModel()
 		m.prompts = nil
-		// the sessions section: folded by default with the count, space on its
-		// heading unfolds it, ↓ walks into it, space on a session resumes it;
+		// the channels section: folded by default with the count, space on its
+		// heading unfolds it, ↓ walks into it, space on a channel resumes it;
 		// a click does the same
-		m.navSessions = []protocol.SessionInfo{
+		m.navChannels = []protocol.ChannelInfo{
 			{ID: "s-old", Title: "fix the login bug\nplease", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
 			{ID: "s-older", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
 		}
 		m.setFocus(focusSidebar)
 		body, items := m.sidebarBody(sidebarWidth - 1)
-		if len(body) != len(m.agents)+3 || !strings.HasPrefix(stripANSI(body[0]), "  # chat") || items[0] != 0 || items[len(m.agents)+2] != len(m.agents)+1 || !strings.HasPrefix(stripANSI(body[len(m.agents)+2]), "sessions 2 ▸") {
-			t.Fatalf("folded sessions section:\n%s\n%v", strings.Join(body, "\n"), items)
+		if len(body) != len(m.agents)+3 || !strings.HasPrefix(stripANSI(body[0]), "  # chat") || items[0] != 0 || items[len(m.agents)+2] != len(m.agents)+1 || !strings.HasPrefix(stripANSI(body[len(m.agents)+2]), "channels 2 ▸") {
+			t.Fatalf("folded channels section:\n%s\n%v", strings.Join(body, "\n"), items)
 		}
 		for m.sbCursor != len(m.agents)+1 {
 			press(&m, tea.KeyMsg{Type: tea.KeyDown})
 		}
-		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd != nil || !m.navSessionsOpen || m.focus != focusSidebar {
-			t.Fatalf("space on the heading should unfold: open=%v focus=%v", m.navSessionsOpen, m.focus)
+		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd != nil || !m.navChannelsOpen || m.focus != focusSidebar {
+			t.Fatalf("space on the heading should unfold: open=%v focus=%v", m.navChannelsOpen, m.focus)
 		}
 		body, items = m.sidebarBody(sidebarWidth - 1)
 		plainBody := make([]string, len(body))
@@ -2277,20 +2277,20 @@ func TestSidebarNav(t *testing.T) {
 			plainBody[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if len(body) != na+5 || !strings.HasPrefix(plainBody[na+2], "sessions ▾") || !strings.HasPrefix(plainBody[na+3], "  ● fix the login bug") || strings.Contains(plainBody[na+3], "\n") || !strings.HasSuffix(plainBody[na+3], "2h00m") || !strings.HasPrefix(plainBody[na+4], "  ○ docs sweep") || !strings.HasSuffix(plainBody[na+4], "26h00m") || items[na+4] != na+3 {
-			t.Fatalf("open sessions section:\n%s\n%v", strings.Join(plainBody, "\n"), items)
+		if len(body) != na+5 || !strings.HasPrefix(plainBody[na+2], "channels ▾") || !strings.HasPrefix(plainBody[na+3], "  ● fix the login bug") || strings.Contains(plainBody[na+3], "\n") || !strings.HasSuffix(plainBody[na+3], "2h00m") || !strings.HasPrefix(plainBody[na+4], "  ○ docs sweep") || !strings.HasSuffix(plainBody[na+4], "26h00m") || items[na+4] != na+3 {
+			t.Fatalf("open channels section:\n%s\n%v", strings.Join(plainBody, "\n"), items)
 		}
 		for _, r := range plainBody[na+3:] {
 			if w := ansi.StringWidth(r); w != sidebarWidth-1 {
-				t.Fatalf("session rows fill the width: %d %q", w, r)
+				t.Fatalf("channel rows fill the width: %d %q", w, r)
 			}
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown})
 		if m.sbCursor != na+3 {
-			t.Fatalf("cursor should walk into the sessions: %d", m.sbCursor)
+			t.Fatalf("cursor should walk into the channels: %d", m.sbCursor)
 		}
 		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "resuming docs sweep") {
-			t.Fatalf("space on a session should resume it: cmd=%v status=%q", cmd != nil, m.status)
+			t.Fatalf("space on a channel should resume it: cmd=%v status=%q", cmd != nil, m.status)
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the chat row
 		if m.sbCursor != 0 {
@@ -2300,7 +2300,7 @@ func TestSidebarNav(t *testing.T) {
 		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
-		if m.navSessionsOpen {
+		if m.navChannelsOpen {
 			t.Fatal("a click on the heading should fold the section")
 		}
 	})
@@ -2336,14 +2336,14 @@ func TestSidebarNav(t *testing.T) {
 	})
 }
 
-// sidebarNavModel is a session with the sidebar open: a root waiting on
+// sidebarNavModel is a channel with the sidebar open: a root waiting on
 // its children, one blocked on a permission and one on a question.
 func sidebarNavModel() Model {
-	m := sessionModel()
+	m := channelModel()
 	m.showTree = true
 	m.width, m.height = 120, 40
-	m.session.Dir = "/home/x/Work/proj"
-	m.session.Created = time.Now().Add(-12 * time.Minute).UTC().Format(time.RFC3339)
+	m.channel.Dir = "/home/x/Work/proj"
+	m.channel.Created = time.Now().Add(-12 * time.Minute).UTC().Format(time.RFC3339)
 	m.agents = []protocol.AgentInfo{
 		{ID: "a", Label: "main", Archetype: "general", State: "waiting", Awaiting: []string{"b", "c"}, CostUSD: 0.20, Tokens: 1200},
 		{ID: "b", Parent: "a", Depth: 1, Label: "world-politics", Archetype: "general", State: "blocked", CostUSD: 0.05, Tokens: 300},
@@ -2360,7 +2360,7 @@ func sidebarNavModel() Model {
 }
 
 func TestRoleAwareDialogs(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents = []protocol.AgentInfo{
 		{ID: "root", Label: "main", Archetype: "lead", Model: "openai/gpt-5", Awaiting: []string{"c1"}},
 		{ID: "c1", Parent: "root", Label: "scout", Archetype: "reviewer", Model: "openai/gpt-5", Variant: "high"},
@@ -2430,7 +2430,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 }
 
 func TestMCPTabAndDialog(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo 0 · mcp 0") || !strings.Contains(sv, "? 0 · dirs 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
@@ -2494,8 +2494,8 @@ func TestMCPTabAndDialog(t *testing.T) {
 }
 
 func TestDirsTabAndBoundaryPrompt(t *testing.T) {
-	m := sessionModel()
-	m.session.Dirs = []protocol.DirInfo{{Path: "/repo", Source: "session"}, {Path: "/srv/shared", Source: "human"}, {Path: "/tmp/build", Source: "human"}}
+	m := channelModel()
+	m.channel.Dirs = []protocol.DirInfo{{Path: "/repo", Source: "channel"}, {Path: "/srv/shared", Source: "human"}, {Path: "/tmp/build", Source: "human"}}
 	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "dirs 3") {
 		t.Fatalf("strip:\n%s", sv)
 	}
@@ -2510,7 +2510,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	if !strings.Contains(dv, "a add directory · space edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
 		t.Fatalf("dirs dialog should carry its own hints (without esc):\n%s", dv)
 	}
-	if repo := findLine(lines, "▸ /repo  session"); repo < 0 || strings.Contains(lines[repo], "◆") || !inOrder(dv, "Dirs 3", "▸ /repo  session", "/srv/shared  human", "/tmp/build  human") {
+	if repo := findLine(lines, "▸ /repo  channel"); repo < 0 || strings.Contains(lines[repo], "◆") || !inOrder(dv, "Dirs 3", "▸ /repo  channel", "/srv/shared  human", "/tmp/build  human") {
 		t.Fatalf("dirs dialog:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
@@ -2519,7 +2519,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	}
 	// editing: enter on a row opens the path field prefilled, esc cancels it
 	// without closing the dialog; a opens it empty; ctrl+d removes; the
-	// session row refuses both
+	// channel row refuses both
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if m.dirEdit != "/srv/shared" || m.dirInput.Value() != "/srv/shared" || !m.dirInput.Focused() {
 		t.Fatalf("edit: %q %q", m.dirEdit, m.dirInput.Value())
@@ -2545,7 +2545,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if m.dirEdit != "" || !strings.Contains(m.status, "cannot be changed") {
-		t.Fatalf("the session row must not be editable: %q %q", m.dirEdit, m.status)
+		t.Fatalf("the channel row must not be editable: %q %q", m.dirEdit, m.status)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.focus != focusTabs || m.tabSel != 2 {
@@ -2555,7 +2555,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "read", Agent: "a", Input: []byte(`{"path":"/etc/hosts"}`), Dir: "/etc"}}
 	m.setFocus(focusPermission)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
-	for _, w := range []string{"☰ /etc/hosts  coder", "outside the session's directories · /etc", "▸ ● Allow once", "  ○ Allow and add /etc  every agent in the session can use it", "  ○ Allow and add another directory…  type the path", "  ○ Deny"} {
+	for _, w := range []string{"☰ /etc/hosts  coder", "outside the channel's directories · /etc", "▸ ● Allow once", "  ○ Allow and add /etc  every agent in the channel can use it", "  ○ Allow and add another directory…  type the path", "  ○ Deny"} {
 		if !strings.Contains(body, w) {
 			t.Fatalf("boundary prompt body missing %q:\n%s", w, body)
 		}
@@ -2591,7 +2591,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	m.promptBusy = ""
 	// the chat notes an added directory
 	tr := m.transcript("a")
-	tr.Apply(event.Event{Agent: "a", Type: event.SessionDirAdded, Payload: event.MustPayload(event.DirAddedPayload{Dir: "/etc", Source: "human"})})
+	tr.Apply(event.Event{Agent: "a", Type: event.ChannelDirAdded, Payload: event.MustPayload(event.DirAddedPayload{Dir: "/etc", Source: "human"})})
 	m.setFocus(focusInput)
 	m.refreshViewport()
 	if v := stripANSI(m.vp.View()); !strings.Contains(v, "◆ Dirs + /etc (human)") {
@@ -2625,7 +2625,7 @@ func TestDialogHintsWrap(t *testing.T) {
 }
 
 func TestEnterReturnsToInputAndSpaceSelects(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents[0].Todos = []event.TodoItem{{ID: "t1", Text: "x", Status: "pending"}}
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
@@ -2695,7 +2695,7 @@ func TestEnterReturnsToInputAndSpaceSelects(t *testing.T) {
 }
 
 func TestArrowsMoveWithinTheDraftBeforeHistory(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.pushHistory("older message")
 	up := tea.KeyMsg{Type: tea.KeyUp}
 	down := tea.KeyMsg{Type: tea.KeyDown}
@@ -2740,7 +2740,7 @@ func TestArrowsMoveWithinTheDraftBeforeHistory(t *testing.T) {
 }
 
 func TestDenyTakesAnOptionalReason(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"rm x"}`)}}
 	m.setFocus(focusPermission)
 	up, space := tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeySpace}
@@ -2777,7 +2777,7 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 }
 
 func TestQuestionsTabAndDialog(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents[0].Archetype = "general"
 	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "! 0 · ? 0 · dirs 0\nasync") {
 		t.Fatalf("strip:\n%s", sv)
@@ -2869,10 +2869,10 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 }
 
 // TestControlsNeverReachTheTerminal: escape sequences in a model's text,
-// an agent's label or a session title are removed on the way in, and a
+// an agent's label or a channel title are removed on the way in, and a
 // permission subject shows them as carets so nothing can hide.
 func TestControlsNeverReachTheTerminal(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	m.agents[0].Archetype = "general"
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"rm -rf ~ \u001b[2K\u001b[1Gls -la"}`)}}
 	m.setFocus(focusPermission)
@@ -2899,7 +2899,7 @@ func TestControlsNeverReachTheTerminal(t *testing.T) {
 }
 
 // TestTabRowsMoveVertically: ↑/↓ on the strip move the highlight between the
-// session's row and the agent's, keeping the column where the row allows.
+// channel's row and the agent's, keeping the column where the row allows.
 func TestTabRowsMoveVertically(t *testing.T) {
 	for _, c := range []struct {
 		sel  int

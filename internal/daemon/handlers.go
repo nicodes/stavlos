@@ -30,8 +30,8 @@ func typed[P any](fn func(ctx context.Context, c *conn, p P) (any, error)) handl
 	}
 }
 
-// errNotFound marks a missing session, agent or prompt; wrap it with %w so
-// the message reads "session "x" not found".
+// errNotFound marks a missing channel, agent or prompt; wrap it with %w so
+// the message reads "channel "x" not found".
 var errNotFound = errors.New("not found")
 
 // codedError carries an explicit wire code for errors that are neither the
@@ -100,40 +100,33 @@ var handlers = map[string]handler{
 		return protocol.AttachResult{ClientID: c.cl.id, Version: protocol.Version}, nil
 	}),
 
-	protocol.MSessionList: typed(func(ctx context.Context, c *conn, p protocol.SessionListParams) (any, error) {
-		list, err := c.d.SessionList(ctx, p.Dir, p.IncludeArchived)
+	protocol.MChannelList: typed(func(ctx context.Context, c *conn, p protocol.ChannelListParams) (any, error) {
+		list, err := c.d.ChannelList(ctx, p.Dir, p.IncludeArchived)
 		if err != nil {
 			return nil, internal(err)
 		}
-		return protocol.SessionListResult{Sessions: list}, nil
+		return protocol.ChannelListResult{Channels: list}, nil
 	}),
-	protocol.MSessionCreate: typed(func(ctx context.Context, c *conn, p protocol.SessionCreateParams) (any, error) {
-		s, err := c.d.CreateSession(ctx, p.Dir, p.Model, p.RootAgent)
+	protocol.MChannelCreate: typed(func(ctx context.Context, c *conn, p protocol.ChannelCreateParams) (any, error) {
+		s, err := c.d.CreateChannel(ctx, p.Dir, p.Model, p.RootAgent)
 		if err != nil {
 			return nil, err
 		}
 		return s.Info(), nil
 	}),
-	protocol.MSessionResume: typed(func(_ context.Context, c *conn, p protocol.SessionRef) (any, error) {
-		s, err := c.d.session(p.ID)
+	protocol.MChannelResume: typed(func(_ context.Context, c *conn, p protocol.ChannelRef) (any, error) {
+		s, err := c.d.channel(p.ID)
 		if err != nil {
 			return nil, err
 		}
 		c.d.maybeTrustPrompt(s)
 		return s.Info(), nil
 	}),
-	protocol.MSessionFork: typed(func(ctx context.Context, c *conn, p protocol.SessionForkParams) (any, error) {
-		s, err := c.d.ForkSession(ctx, p.ID, p.Seq)
-		if err != nil {
-			return nil, err
-		}
-		return s.Info(), nil
+	protocol.MChannelArchive: typed(func(ctx context.Context, c *conn, p protocol.ChannelRef) (any, error) {
+		return okResult, c.d.ArchiveChannel(ctx, p.ID)
 	}),
-	protocol.MSessionArchive: typed(func(ctx context.Context, c *conn, p protocol.SessionRef) (any, error) {
-		return okResult, c.d.ArchiveSession(ctx, p.ID)
-	}),
-	protocol.MSessionSetModel: typed(func(ctx context.Context, c *conn, p protocol.SessionSetModelParams) (any, error) {
-		s, err := c.d.session(p.ID)
+	protocol.MChannelSetModel: typed(func(ctx context.Context, c *conn, p protocol.ChannelSetModelParams) (any, error) {
+		s, err := c.d.channel(p.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -143,8 +136,8 @@ var handlers = map[string]handler{
 		c.d.rememberModel(s, p.Model)
 		return okResult, nil
 	}),
-	protocol.MSessionPost: typed(func(ctx context.Context, c *conn, p protocol.SessionPostParams) (any, error) {
-		s, err := c.d.session(p.ID)
+	protocol.MChannelPost: typed(func(ctx context.Context, c *conn, p protocol.ChannelPostParams) (any, error) {
+		s, err := c.d.channel(p.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -152,10 +145,10 @@ var handlers = map[string]handler{
 		if err != nil {
 			return nil, err
 		}
-		return protocol.SessionPostResult{To: to}, nil
+		return protocol.ChannelPostResult{To: to}, nil
 	}),
-	protocol.MSessionSetMode: typed(func(ctx context.Context, c *conn, p protocol.SessionSetModeParams) (any, error) {
-		s, err := c.d.session(p.ID)
+	protocol.MChannelSetMode: typed(func(ctx context.Context, c *conn, p protocol.ChannelSetModeParams) (any, error) {
+		s, err := c.d.channel(p.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -164,7 +157,7 @@ var handlers = map[string]handler{
 		}
 		// Anything already waiting is answered as the new mode would have, so
 		// the agents move: yolo allows every permission prompt; auto allows
-		// the ones inside the session's directories and denies the ones outside.
+		// the ones inside the channel's directories and denies the ones outside.
 		switch p.Mode {
 		case protocol.ModeYolo:
 			c.d.esc.AnswerAll(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "yolo")
@@ -176,14 +169,14 @@ var handlers = map[string]handler{
 	}),
 
 	protocol.MAgentTree: typed(func(_ context.Context, c *conn, p protocol.AgentTreeParams) (any, error) {
-		s, err := c.d.session(p.Session)
+		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return nil, err
 		}
 		return protocol.AgentTreeResult{Agents: tree(s)}, nil
 	}),
 	protocol.MAgentSend: typed(func(ctx context.Context, c *conn, p protocol.AgentSendParams) (any, error) {
-		s, _, err := c.d.agentSession(p.Agent)
+		s, _, err := c.d.agentChannel(p.Agent)
 		if err != nil {
 			return nil, err
 		}
@@ -203,7 +196,7 @@ var handlers = map[string]handler{
 		return okResult, err
 	}),
 	protocol.MAgentSpawn: typed(func(ctx context.Context, c *conn, p protocol.AgentSpawnParams) (any, error) {
-		s, _, err := c.d.agentSession(p.Parent)
+		s, _, err := c.d.agentChannel(p.Parent)
 		if err != nil {
 			return nil, err
 		}
@@ -214,7 +207,7 @@ var handlers = map[string]handler{
 		return protocol.AgentSpawnResult{ID: id}, nil
 	}),
 	protocol.MAgentSetModel: typed(func(ctx context.Context, c *conn, p protocol.AgentSetModelParams) (any, error) {
-		s, a, err := c.d.agentSession(p.Agent)
+		s, a, err := c.d.agentChannel(p.Agent)
 		if err != nil {
 			return nil, err
 		}
@@ -222,28 +215,28 @@ var handlers = map[string]handler{
 			return nil, err
 		}
 		if a.Parent == "" && s.Model() == "" {
-			// Root picked a model in a session that had none: adopt it.
+			// Root picked a model in a channel that had none: adopt it.
 			_ = s.SetModel(ctx, p.Model)
 			c.d.rememberModel(s, p.Model)
 		}
 		return okResult, nil
 	}),
 	protocol.MAgentSetRole: typed(func(ctx context.Context, c *conn, p protocol.AgentSetRoleParams) (any, error) {
-		_, a, err := c.d.agentSession(p.Agent)
+		_, a, err := c.d.agentChannel(p.Agent)
 		if err != nil {
 			return nil, err
 		}
 		return okResult, a.SetRole(ctx, p.Role)
 	}),
 	protocol.MAgentSetVariant: typed(func(ctx context.Context, c *conn, p protocol.AgentSetVariantParams) (any, error) {
-		_, a, err := c.d.agentSession(p.Agent)
+		_, a, err := c.d.agentChannel(p.Agent)
 		if err != nil {
 			return nil, err
 		}
 		return okResult, a.SetVariant(ctx, p.Variant)
 	}),
 	protocol.MAgentCompact: typed(func(ctx context.Context, c *conn, p protocol.AgentCompactParams) (any, error) {
-		_, a, err := c.d.agentSession(p.Agent)
+		_, a, err := c.d.agentChannel(p.Agent)
 		if err != nil {
 			return nil, err
 		}
@@ -253,15 +246,15 @@ var handlers = map[string]handler{
 		}
 		return protocol.AgentCompactResult{Status: status}, nil
 	}),
-	protocol.MSessionAddDir: typed(func(ctx context.Context, c *conn, p protocol.SessionDirParams) (any, error) {
-		s, err := c.d.session(p.ID)
+	protocol.MChannelAddDir: typed(func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (any, error) {
+		s, err := c.d.channel(p.ID)
 		if err != nil {
 			return nil, err
 		}
 		return okResult, s.AddDir(ctx, p.Dir)
 	}),
-	protocol.MSessionRemoveDir: typed(func(ctx context.Context, c *conn, p protocol.SessionDirParams) (any, error) {
-		s, err := c.d.session(p.ID)
+	protocol.MChannelRemoveDir: typed(func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (any, error) {
+		s, err := c.d.channel(p.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -272,7 +265,7 @@ var handlers = map[string]handler{
 	}),
 
 	protocol.MPromptList: typed(func(_ context.Context, c *conn, p protocol.PromptListParams) (any, error) {
-		return protocol.PromptListResult{Prompts: c.d.esc.Pending(p.Session)}, nil
+		return protocol.PromptListResult{Prompts: c.d.esc.Pending(p.Channel)}, nil
 	}),
 	protocol.MPromptClaim: typed(func(_ context.Context, c *conn, p protocol.PromptClaimParams) (any, error) {
 		if err := c.d.esc.Claim(p.ID, c.cl.id); err != nil {
@@ -323,10 +316,10 @@ var handlers = map[string]handler{
 	}),
 
 	protocol.MSubscribe: typed(func(ctx context.Context, c *conn, p protocol.SubscribeParams) (any, error) {
-		if _, err := c.d.session(p.Session); err != nil {
+		if _, err := c.d.channel(p.Channel); err != nil {
 			return nil, err
 		}
-		last, err := c.d.subscribe(ctx, c.cl, p.Session, p.From)
+		last, err := c.d.subscribe(ctx, c.cl, p.Channel, p.From)
 		if err != nil {
 			return nil, internal(err)
 		}
@@ -334,22 +327,22 @@ var handlers = map[string]handler{
 	}),
 	protocol.MUnsubscribe: typed(func(_ context.Context, c *conn, p protocol.SubscribeParams) (any, error) {
 		c.cl.mu.Lock()
-		delete(c.cl.subs, p.Session)
+		delete(c.cl.subs, p.Channel)
 		c.cl.mu.Unlock()
 		return okResult, nil
 	}),
-	protocol.MReconcile: typed(func(ctx context.Context, c *conn, p protocol.SessionRef) (any, error) {
-		s, err := c.d.session(p.ID)
+	protocol.MReconcile: typed(func(ctx context.Context, c *conn, p protocol.ChannelRef) (any, error) {
+		s, err := c.d.channel(p.ID)
 		if err != nil {
 			return nil, err
 		}
 		seq, _ := c.d.Log.LastSeq(ctx, p.ID)
 		info := s.Info()
 		info.Seq = seq
-		return protocol.ReconcileResult{Session: info, Agents: tree(s), Prompts: c.d.esc.Pending(p.ID), Seq: seq}, nil
+		return protocol.ReconcileResult{Channel: info, Agents: tree(s), Prompts: c.d.esc.Pending(p.ID), Seq: seq}, nil
 	}),
 	protocol.MPresets: typed(func(_ context.Context, c *conn, p protocol.PresetsParams) (any, error) {
-		s, err := c.d.session(p.Session)
+		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return nil, err
 		}

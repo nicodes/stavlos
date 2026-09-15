@@ -210,7 +210,7 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 	return res, nil
 }
 
-func tree(s *agent.Session) []protocol.AgentInfo {
+func tree(s *agent.Channel) []protocol.AgentInfo {
 	var out []protocol.AgentInfo
 	for _, a := range s.Agents() {
 		out = append(out, a.Info())
@@ -222,8 +222,8 @@ func tree(s *agent.Session) []protocol.AgentInfo {
 // deduplicated per subscription by seq, so the handover cannot double-send.
 
 // rememberModel makes the first model a user picks the global default when
-// no config layer has set one, so the next session does not start empty.
-func (d *Daemon) rememberModel(s *agent.Session, modelID string) {
+// no config layer has set one, so the next channel does not start empty.
+func (d *Daemon) rememberModel(s *agent.Channel, modelID string) {
 	if s.Config().Model != "" {
 		return
 	}
@@ -233,7 +233,7 @@ func (d *Daemon) rememberModel(s *agent.Session, modelID string) {
 	}
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	for _, ss := range d.sessions {
+	for _, ss := range d.channels {
 		if cfg, err := config.Load(ss.Dir, d.trust); err == nil {
 			ss.SetConfig(cfg)
 		}
