@@ -1729,6 +1729,9 @@ func TestWorkingDirectories(t *testing.T) {
 	if len(pending) != 1 || pending[0].Dir != outside {
 		t.Fatalf("pending %+v", pending)
 	}
+	if list, _ := h.c.Channels(ctx, work, false); len(list) != 1 || list[0].Permissions != 1 || list[0].Questions != 0 {
+		t.Fatalf("the channel list counts the waiting permission: %+v", list)
+	}
 	if err := h.c.ClaimPrompt(ctx, pending[0].ID); err != nil {
 		t.Fatal(err)
 	}
