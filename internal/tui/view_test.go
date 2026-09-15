@@ -1533,7 +1533,7 @@ func TestChannelItemAndBind(t *testing.T) {
 	m.seq = 42
 	m.reconciled = true
 	m.bindChannel(protocol.ChannelInfo{ID: "other", Dir: "/x"})
-	if m.channelID != "other" || m.channel.Dir != "/x" || len(m.agents) != 0 || len(m.transcripts) != 0 || m.seq != 0 || len(m.prompts) != 0 || m.chatCursor != 0 || m.reconciled || m.focus != focusInput {
+	if m.channelID != "other" || m.channel.Dir != "/x" || len(m.agents) != 0 || len(m.transcripts) != 0 || m.seq != 0 || len(m.prompts) != 1 || m.chatCursor != 0 || m.reconciled || m.focus != focusInput {
 		t.Fatalf("state after bind: id=%s agents=%d transcripts=%d seq=%d prompts=%d cursor=%d reconciled=%v focus=%v", m.channelID, len(m.agents), len(m.transcripts), m.seq, len(m.prompts), m.chatCursor, m.reconciled, m.focus)
 	}
 	if !m.isHome() {
@@ -2183,8 +2183,13 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" || !strings.HasPrefix(sb[6], "channels") || strings.Contains(strings.Join(sb, "\n"), "need you") {
-			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:7], "\n"))
+		if header != 9 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" ||
+			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1 · ? 1/1 · dirs 0") || strings.TrimSpace(sb[7]) != "" || !strings.HasPrefix(sb[8], "channels") || strings.Contains(strings.Join(sb, "\n"), "need you") {
+			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:9], "\n"))
+		}
+		// with the sidebar showing, the footer strip keeps only the agent's row
+		if sv := stripANSI(m.sectionsView(120)); strings.Contains(sv, "dirs") || !strings.HasPrefix(sv, "async") || strings.Count(sv, "\n") != 0 {
+			t.Fatalf("strip with the sidebar:\n%s", sv)
 		}
 		rows := m.treeRows(sidebarWidth - 1)
 		plain := make([]string, len(rows))
@@ -2257,9 +2262,10 @@ func TestSidebarNav(t *testing.T) {
 		// agents under it; space on another opens it, and so does a click
 		m.channel.Name = "proj"
 		m.navChannels = resumable([]protocol.ChannelInfo{
-			{ID: "s-old", Name: "proj-2", Title: "fix the login bug", State: "working", Permissions: 2, Questions: 1, Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
-			{ID: "s-older", Name: "docs", Title: "docs sweep", Questions: 1, Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
+			{ID: "s-old", Name: "proj-2", Title: "fix the login bug", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
+			{ID: "s-older", Name: "docs", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
 		}, m.channelID)
+		m.prompts = []protocol.PromptInfo{{ID: "p1", Channel: "s-old", Kind: "permission"}, {ID: "q1", Channel: "s-older", Kind: "question"}} // waiting in the other channels
 		m.setFocus(focusSidebar)
 		body, items := m.sidebarBody(sidebarWidth - 1)
 		plain := make([]string, len(body))
@@ -2364,7 +2370,7 @@ func TestSidebarNav(t *testing.T) {
 		m.setFocus(focusInput)
 		// the swarm line reads idle when nothing is happening
 		m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "general", State: "idle"}}
-		if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 7 {
+		if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 9 {
 			t.Fatalf("idle swarm line: %q header %d", sl, len(m.sidebarHeader(sidebarWidth-1)))
 		}
 	})
@@ -2385,8 +2391,8 @@ func sidebarNavModel() Model {
 		{ID: "d", Parent: "a", Depth: 1, Label: "asker", Archetype: "general", State: "blocked"},
 	}
 	m.prompts = []protocol.PromptInfo{
-		{ID: "p", Kind: "permission", Agent: "b", Tool: "shell"},
-		{ID: "q", Kind: "question", Agent: "d", Questions: []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}},
+		{ID: "p", Channel: m.channelID, Kind: "permission", Agent: "b", Tool: "shell"},
+		{ID: "q", Channel: m.channelID, Kind: "question", Agent: "d", Questions: []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}},
 	}
 	m.selected = 0
 	m.layout()
@@ -2951,5 +2957,63 @@ func TestTabRowsMoveVertically(t *testing.T) {
 		if got := otherRowTab(c.sel, c.down); got != c.want {
 			t.Errorf("otherRowTab(%d, %v) = %d, want %d", c.sel, c.down, got, c.want)
 		}
+	}
+}
+
+// TestPromptsAcrossChannels: every channel's prompts are kept, through a
+// switch too; the tabs count and show them all, while opening a channel or an
+// agent that waits on the human opens its dialog on its own prompts only.
+func TestPromptsAcrossChannels(t *testing.T) {
+	m := sidebarNavModel()
+	here := m.channelID
+	which := []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}
+	m.prompts = []protocol.PromptInfo{
+		{ID: "p-here", Channel: here, Kind: "permission", Agent: "b", Tool: "shell"},
+		{ID: "p-away", Channel: "elsewhere", ChannelName: "docs", Agent: "x9", From: "writer", Kind: "permission", Tool: "shell"},
+		{ID: "q-here", Channel: here, Kind: "question", Agent: "d", Questions: which},
+	}
+	m.applyPromptNotification(protocol.PromptNotification{Action: protocol.ActionRequested, Prompt: protocol.PromptInfo{ID: "q-away", Channel: "elsewhere", Kind: "question", Agent: "x9", Questions: which}})
+	if perms, questions := m.promptCounts(); len(m.prompts) != 4 || perms != 2 || questions != 2 || m.focus != focusInput {
+		t.Fatalf("another channel's prompt is kept and does not pop a dialog: %d prompts, %d %d, focus %v", len(m.prompts), perms, questions, m.focus)
+	}
+	if who := m.promptWho(&m.prompts[1]); who != "@writer · #docs" {
+		t.Fatalf("another channel's prompt names its agent and channel: %q", who)
+	}
+	// opening @world-politics (b) from the sidebar opens the permission dialog on its own prompt
+	m.setFocus(focusSidebar)
+	m.sidebarSelect(m.channelRow() + 2)
+	if perms, _ := m.promptCountsIn(m.scope); m.focus != focusPermission || m.currentPrompt().ID != "p-here" || m.scope.agent != "b" || perms != 1 {
+		t.Fatalf("agent open: focus=%v prompt=%s scope=%+v perms=%d", m.focus, m.currentPrompt().ID, m.scope, perms)
+	}
+	if !strings.Contains(stripANSI(m.tabDialogTitle()), "1/1") {
+		t.Fatalf("the scoped dialog counts what it shows: %q", m.tabDialogTitle())
+	}
+	// closing drops the scope; the tab then opens on every channel's
+	m.closeDialog()
+	if m.scope != (promptScope{}) {
+		t.Fatalf("scope after close: %+v", m.scope)
+	}
+	m.openTab(focusPermission)
+	if perms, _ := m.promptCountsIn(m.scope); perms != 2 {
+		t.Fatalf("a tab shows every channel's: %d", perms)
+	}
+	m.closeDialog()
+	// @asker (d) waits on a question only: its open goes to the questions dialog
+	m.setFocus(focusSidebar)
+	m.sidebarSelect(m.channelRow() + 4)
+	if m.focus != focusQuestions || m.currentQuestion().ID != "q-here" {
+		t.Fatalf("agent with a question: focus=%v", m.focus)
+	}
+	m.closeDialog()
+	// opening this channel goes to its permission, not the other channel's
+	m.setFocus(focusSidebar)
+	m.sidebarSelect(m.channelRow())
+	if perms, _ := m.promptCountsIn(m.scope); m.focus != focusPermission || m.scope.channel != here || perms != 1 {
+		t.Fatalf("channel open: focus=%v scope=%+v perms=%d", m.focus, m.scope, perms)
+	}
+	// a switch keeps every channel's prompts
+	m.bindChannel(protocol.ChannelInfo{ID: "elsewhere", Dir: "/x"})
+	if len(m.prompts) != 4 {
+		t.Fatalf("prompts after a switch: %d", len(m.prompts))
 	}
 }

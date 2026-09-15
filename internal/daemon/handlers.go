@@ -342,7 +342,7 @@ var handlers = map[string]handler{
 		seq, _ := c.d.Log.LastSeq(ctx, p.ID)
 		info := s.Info()
 		info.Seq = seq
-		return protocol.ReconcileResult{Channel: info, Agents: tree(s), Prompts: c.d.esc.Pending(p.ID), Seq: seq}, nil
+		return protocol.ReconcileResult{Channel: info, Agents: tree(s), Prompts: c.d.esc.Pending("") /* every channel's: the permission and questions tabs span channels */, Seq: seq}, nil
 	}),
 	protocol.MPresets: typed(func(_ context.Context, c *conn, p protocol.PresetsParams) (any, error) {
 		s, err := c.d.channel(p.Channel)

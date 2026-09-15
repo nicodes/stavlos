@@ -31,7 +31,7 @@ func cleanAgents(agents []protocol.AgentInfo) []protocol.AgentInfo {
 }
 
 func cleanPrompt(p *protocol.PromptInfo) {
-	p.Question, p.Dir, p.Prefix = textsafe.Clean(p.Question), textsafe.Clean(p.Dir), textsafe.Clean(p.Prefix)
+	p.Question, p.Dir, p.Prefix, p.From, p.ChannelName = textsafe.Clean(p.Question), textsafe.Clean(p.Dir), textsafe.Clean(p.Prefix), textsafe.Clean(p.From), textsafe.Clean(p.ChannelName)
 	for i := range p.Options {
 		p.Options[i] = textsafe.Clean(p.Options[i])
 	}

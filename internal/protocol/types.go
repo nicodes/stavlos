@@ -400,20 +400,22 @@ type VariantsResult struct {
 
 // PromptInfo is a pending permission/question/trust prompt.
 type PromptInfo struct {
-	ID        string          `json:"id"`
-	Channel   string          `json:"channel"`
-	Agent     string          `json:"agent,omitempty"`
-	Kind      PromptKind      `json:"kind"` // permission | question | trust
-	Tool      string          `json:"tool,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
-	Question  string          `json:"question,omitempty"`
-	Options   []string        `json:"options,omitempty"`
-	ClaimedBy string          `json:"claimed_by,omitempty"`
-	Escalated bool            `json:"escalated"` // visible to fallback tier
-	Created   string          `json:"created"`
-	Dir       string          `json:"dir,omitempty"`       // a boundary prompt: the call reaches outside the channel's directories; "allow_always" adds this one
-	Prefix    string          `json:"prefix,omitempty"`    // what "allow_prefix" would remember for this call (a command prefix, a host); "" when the call has none
-	Questions []Question      `json:"questions,omitempty"` // kind question: the batch an ask_user call raised, answered together
+	ID          string          `json:"id"`
+	Channel     string          `json:"channel"`
+	Agent       string          `json:"agent,omitempty"`
+	From        string          `json:"from,omitempty"`         // the asking agent\'s name, for a client that does not hold its channel\'s tree
+	ChannelName string          `json:"channel_name,omitempty"` // the channel\'s name, likewise
+	Kind        PromptKind      `json:"kind"`                   // permission | question | trust
+	Tool        string          `json:"tool,omitempty"`
+	Input       json.RawMessage `json:"input,omitempty"`
+	Question    string          `json:"question,omitempty"`
+	Options     []string        `json:"options,omitempty"`
+	ClaimedBy   string          `json:"claimed_by,omitempty"`
+	Escalated   bool            `json:"escalated"` // visible to fallback tier
+	Created     string          `json:"created"`
+	Dir         string          `json:"dir,omitempty"`       // a boundary prompt: the call reaches outside the channel's directories; "allow_always" adds this one
+	Prefix      string          `json:"prefix,omitempty"`    // what "allow_prefix" would remember for this call (a command prefix, a host); "" when the call has none
+	Questions   []Question      `json:"questions,omitempty"` // kind question: the batch an ask_user call raised, answered together
 }
 
 // Question is one entry of an ask_user batch: a checklist. Options are

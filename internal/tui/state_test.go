@@ -9,15 +9,13 @@ import (
 )
 
 // TestBindChannelStartsOver: switching channels leaves nothing of the old
-// one behind — not the agents and transcripts, and not a half-answered
-// question, an open reason row, an armed esc or a cursor — while display
-// choices stay.
+// one behind — not the agents and transcripts, an open dirs edit, an armed
+// esc or a cursor — while display choices and the prompts (every channel's)
+// stay.
 func TestBindChannelStartsOver(t *testing.T) {
 	m := channelModel()
 	m.prompts = []protocol.PromptInfo{{ID: "p"}}
-	m.promptBusy, m.permSel, m.permFor, m.permEdit, m.dirEdit = "p", 2, "p", "deny", "add"
-	m.q = questionState{id: "q", idx: 1, typing: true}
-	m.claimedByUs["p"] = true
+	m.dirEdit = "add"
 	m.mcpOpen = map[string]bool{"github": true}
 	m.chatCursor, m.agCursor, m.selected = 3, 2, 1
 	m.cancelArmed, m.quitArmed = time.Now(), time.Now()
@@ -31,6 +29,9 @@ func TestBindChannelStartsOver(t *testing.T) {
 	want.itemRows, want.renders = m.itemRows, m.renders // drawn by the refresh inside bindChannel
 	if !reflect.DeepEqual(m.channelState, want) {
 		t.Fatalf("channel state after bind:\n%+v\nwant\n%+v", m.channelState, want)
+	}
+	if len(m.prompts) != 1 {
+		t.Fatal("prompts are every channel's: they survive a switch")
 	}
 	if !m.showTree || !m.details || !m.follow {
 		t.Fatalf("display choices should survive: tree=%v details=%v follow=%v", m.showTree, m.details, m.follow)

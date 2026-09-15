@@ -422,7 +422,7 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 	go func() {
 		input, _ := json.Marshal(map[string]any{"dir": s.Dir, "hash": cfg.TrustHash, "files": cfg.TrustFiles})
 		ans := d.esc.Request(context.Background(), protocol.PromptInfo{
-			ID: id, Channel: s.ID, Kind: protocol.PromptTrust, Input: input,
+			ID: id, Channel: s.ID, ChannelName: s.Name(), Kind: protocol.PromptTrust, Input: input,
 			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, presets, skills and AGENTS.md.", s.Dir),
 			Options:  []string{"trust", "skip"},
 		})

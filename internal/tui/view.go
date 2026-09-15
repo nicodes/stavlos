@@ -534,7 +534,9 @@ func (m Model) sidebarView(height int) string {
 // sidebarHeader is what precedes the tree: the app name, a blank, the
 // channel directory, the channel's tokens and cost (the rollup of what
 // the meta row shows per agent), the swarm state ("3 working · 1
-// waiting", or "idle"), a blank, and the "channels" heading. The tree's
+// waiting", or "idle"), a blank, the ! ? dirs tabs (sidebarTabsRow; the
+// footer strip keeps only the agent's row while the sidebar shows), a blank,
+// and the "channels" heading. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	dir := format.ShortHome(m.channel.Dir)
@@ -542,6 +544,7 @@ func (m Model) sidebarHeader(width int) []string {
 		dir = "—"
 	}
 	usage := format.Tokens(m.totalTokens()) + " tokens · $" + format.Cost(m.totalCost())
+	labels, _ := m.tabLabels(m.currentPrompt())
 	return []string{
 		theme.StyleAccent.Bold(true).Render("Stavlos"),
 		"",
@@ -549,8 +552,22 @@ func (m Model) sidebarHeader(width int) []string {
 		theme.StyleDim.Render(format.Trunc(usage, width)),
 		theme.StyleDim.Render(format.Trunc(m.swarmLine(), width)),
 		"",
+		ansi.Truncate(strings.Split(labels, "\n")[0], width, "…"),
+		"",
 		theme.StyleBold.Render("channels") + m.sidebarFocusHint(),
 	}
+}
+
+// sidebarTabsRow is the sidebar header row that holds the ! ? dirs tabs.
+const sidebarTabsRow = 6
+
+// stripRows is how many tab rows the footer strip draws: both, or only the
+// agent's while the sidebar shows the ! ? dirs row.
+func (m Model) stripRows() int {
+	if m.sidebarVisible() {
+		return len(tabRows) - 1
+	}
+	return len(tabRows)
 }
 
 // sidebarBody is everything under the header: the + channel row, then the
@@ -574,7 +591,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	}
 	other := func(s protocol.ChannelInfo, idx int) {
 		dot := stateDot(string(s.State))
-		if mark := promptMark(s.Permissions, s.Questions); mark != "" {
+		if mark := promptMark(m.promptCountsIn(promptScope{channel: s.ID})); mark != "" {
 			dot = mark
 		}
 		channel(dot, channelLabel(s), theme.StyleDim, idx)
@@ -593,7 +610,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		style = theme.StyleSelected
 	}
 	dot := stateDot(string(protocol.RollUp(states)))
-	if mark := promptMark(m.promptCounts()); mark != "" {
+	if mark := promptMark(m.promptCountsIn(promptScope{channel: m.channelID})); mark != "" {
 		dot = mark
 	}
 	channel(dot, channelLabel(m.channel), style, here)
@@ -800,7 +817,7 @@ func (m Model) tabDialogTitle() string {
 // "2/3": the second question of three) and "0" otherwise; todo and mcp
 // read done/total and connected/listed; the rest are plain counts.
 func (m Model) tabTexts() []string {
-	perms, questions := m.promptCounts()
+	perms, questions := m.promptCountsIn(m.scope) // an open, scoped dialog counts what it shows
 	permKind := string(protocol.PromptPermission)
 	if p := m.currentPrompt(); p != nil && p.Kind != protocol.PromptPermission {
 		permKind = string(p.Kind) // "trust"
@@ -953,13 +970,13 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) (lines []string,
 	// the checklist below. Position in the batch is in the dialog title.
 	head := cur.Question
 	if p.Agent != "" {
-		head += "  " + m.agentWhoLabel(p.Agent)
+		head += "  " + m.promptWho(p)
 	}
 	qlines := strings.Split(ansi.Wrap(head, width, ""), "\n")
 	for i, l := range qlines {
 		if i == len(qlines)-1 && p.Agent != "" {
-			if k := strings.LastIndex(l, "  "+m.agentWhoLabel(p.Agent)); k >= 0 {
-				lines = append(lines, theme.StyleBold.Render(l[:k])+"  "+theme.StyleDim.Render(m.agentWhoLabel(p.Agent)))
+			if k := strings.LastIndex(l, "  "+m.promptWho(p)); k >= 0 {
+				lines = append(lines, theme.StyleBold.Render(l[:k])+"  "+theme.StyleDim.Render(m.promptWho(p)))
 				continue
 			}
 		}
@@ -1017,6 +1034,7 @@ func answered(answers []string) int {
 func (m Model) sectionTabs(p *protocol.PromptInfo, width int) string {
 	labels, _ := m.tabLabels(p)
 	rows := strings.Split(labels, "\n")
+	rows = rows[len(rows)-m.stripRows():] // the ! ? dirs row sits in the sidebar while it shows
 	for i := range rows {
 		rows[i] = ansi.Truncate(rows[i], width, "…") // the channel directory lives in the dirs tab
 	}
@@ -1102,7 +1120,7 @@ func (m Model) cursorRows(rows []string) []string {
 func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, optStart int) {
 	who := ""
 	if p.Agent != "" {
-		who = m.agentWhoLabel(p.Agent)
+		who = m.promptWho(p)
 	}
 	switch p.Kind {
 	case "trust":
@@ -1214,6 +1232,24 @@ func (m Model) agentWhoLabel(id string) string {
 		return a.Label
 	}
 	return id
+}
+
+// promptWho names who a prompt waits for: "label (role)" for an agent of this
+// channel, else "@name" from the prompt, with "#channel" after it when the
+// prompt is another channel's.
+func (m Model) promptWho(p *protocol.PromptInfo) string {
+	var parts []string
+	if who := m.agentWhoLabel(p.Agent); m.findAgent(p.Agent) >= 0 {
+		parts = append(parts, who)
+	} else if p.From != "" {
+		parts = append(parts, "@"+p.From)
+	} else if who != "" {
+		parts = append(parts, who)
+	}
+	if p.Channel != "" && p.Channel != m.channelID && p.ChannelName != "" {
+		parts = append(parts, "#"+p.ChannelName)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // fullToolArg is toolArg without the one-line flattening for the tools
