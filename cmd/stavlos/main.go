@@ -126,10 +126,10 @@ func startChannel(ctx context.Context, name string, args []string, fresh bool) e
 	defer c.Close()
 	d := cwd(*dir)
 	var s protocol.ChannelInfo
-	if list, lerr := c.Channels(ctx, d, false); lerr == nil && len(list) > 0 && (!fresh || list[0].Title == "" && *modelID == "" && *root == "") {
-		s, err = c.ResumeChannel(ctx, list[0].ID)
+	if res, lerr := client.Do(ctx, c, protocol.ChannelList, protocol.ChannelListParams{Dir: d}); lerr == nil && len(res.Channels) > 0 && (!fresh || res.Channels[0].Title == "" && *modelID == "" && *root == "") {
+		s, err = client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{ID: res.Channels[0].ID})
 	} else {
-		s, err = c.CreateChannel(ctx, d, *modelID, *root)
+		s, err = client.Do(ctx, c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: d, Model: *modelID, RootAgent: *root})
 	}
 	if err != nil {
 		return err
@@ -152,13 +152,13 @@ func cmdOpen(ctx context.Context, _ string, args []string) error {
 	}
 	defer c.Close()
 	want := strings.TrimPrefix(args[0], "#")
-	list, err := c.Channels(ctx, "", false)
+	res, err := client.Do(ctx, c, protocol.ChannelList, protocol.ChannelListParams{})
 	if err != nil {
 		return err
 	}
-	for _, ch := range list {
+	for _, ch := range res.Channels {
 		if ch.ID == want || ch.Name == want {
-			s, err := c.ResumeChannel(ctx, ch.ID)
+			s, err := client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{ID: ch.ID})
 			if err != nil {
 				return err
 			}
@@ -174,11 +174,11 @@ func cmdChannels(ctx context.Context, _ string, _ []string) error {
 		return err
 	}
 	defer c.Close()
-	list, err := c.Channels(ctx, "", true)
+	res, err := client.Do(ctx, c, protocol.ChannelList, protocol.ChannelListParams{IncludeArchived: true})
 	if err != nil {
 		return err
 	}
-	for _, s := range list {
+	for _, s := range res.Channels {
 		archived := ""
 		if s.Archived {
 			archived = " (archived)"
@@ -208,7 +208,7 @@ func cmdStatus(ctx context.Context, _ string, _ []string) error {
 		return err
 	}
 	defer c.Close()
-	st, err := c.Status(ctx)
+	st, err := client.Do(ctx, c, protocol.DaemonStatus, protocol.None{})
 	if err != nil {
 		return err
 	}
@@ -230,7 +230,7 @@ func cmdTrust(ctx context.Context, _ string, args []string) error {
 	if len(args) > 0 {
 		d = cwd(args[0])
 	}
-	st, err := c.TrustStatus(ctx, d)
+	st, err := client.Do(ctx, c, protocol.TrustStatus, protocol.TrustStatusParams{Dir: d})
 	if err != nil {
 		return err
 	}
@@ -245,7 +245,7 @@ func cmdTrust(ctx context.Context, _ string, args []string) error {
 	fmt.Print("Trust it? [y/N] ")
 	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 	ok := strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "y")
-	if err := c.TrustReply(ctx, d, st.Hash, ok); err != nil {
+	if _, err := client.Do(ctx, c, protocol.TrustReply, protocol.TrustReplyParams{Dir: d, Hash: st.Hash, Trust: ok}); err != nil {
 		return err
 	}
 	if ok {
@@ -263,11 +263,11 @@ func cmdTree(ctx context.Context, _ string, args []string) error {
 		return err
 	}
 	defer c.Close()
-	agents, err := c.Tree(ctx, args[0])
+	tree, err := client.Do(ctx, c, protocol.AgentTree, protocol.AgentTreeParams{Channel: args[0]})
 	if err != nil {
 		return err
 	}
-	for _, a := range agents {
+	for _, a := range tree.Agents {
 		fmt.Printf("%s%s  %s (%s) %s turn=%d $%.4f %s\n", strings.Repeat("  ", a.Depth), a.ID, a.Label, a.Archetype, a.State, a.Turn, a.CostUSD, a.Model)
 	}
 	return nil
@@ -284,7 +284,8 @@ func cmdSend(ctx context.Context, cmd string, args []string) error {
 	}
 	defer c.Close()
 	kind := map[string]protocol.Kind{"send": protocol.KindPrompt, "steer": protocol.KindSteer, "cancel": protocol.KindCancel, "kill": protocol.KindKill}[cmd]
-	return c.Send(ctx, args[0], kind, strings.Join(args[1:], " "))
+	_, err = client.Do(ctx, c, protocol.AgentSend, protocol.AgentSendParams{Agent: args[0], Kind: kind, Text: strings.Join(args[1:], " ")})
+	return err
 }
 
 func cmdPlugin(context.Context, string, []string) error {
@@ -346,7 +347,7 @@ func connect(ctx context.Context, autostart bool) (*client.Client, error) {
 }
 
 func attach(ctx context.Context, c *client.Client) (*client.Client, error) {
-	if _, err := c.Attach(ctx, fmt.Sprintf("tui:%d", os.Getpid()), protocol.TierInteractive); err != nil {
+	if _, err := client.Do(ctx, c, protocol.Attach, protocol.AttachParams{Client: fmt.Sprintf("tui:%d", os.Getpid()), Tier: protocol.TierInteractive}); err != nil {
 		c.Close()
 		if isVersionError(err) && os.Getenv("STAVLOS_KEEP_DAEMON") == "" {
 			return replaceIncompatible(ctx, err)
@@ -399,7 +400,7 @@ func waitExit(pid int, d time.Duration) bool {
 }
 
 func replaceStale(ctx context.Context, c *client.Client) (*client.Client, error) {
-	st, err := c.Status(ctx)
+	st, err := client.Do(ctx, c, protocol.DaemonStatus, protocol.None{})
 	if err != nil {
 		return nil, nil // very old daemon without status; leave it
 	}
@@ -408,7 +409,7 @@ func replaceStale(ctx context.Context, c *client.Client) (*client.Client, error)
 	}
 	fmt.Fprintf(os.Stderr, "daemon build %s differs from this binary (%s); restarting it\n", short(st.Build), short(buildid.ID()))
 	sock := paths.Socket()
-	if err := c.Shutdown(ctx); err != nil {
+	if _, err := client.Do(ctx, c, protocol.DaemonShutdown, protocol.None{}); err != nil {
 		// A daemon that cannot shut down on request is stopped by the pid
 		// the kernel reports for the socket, not the one it reports itself.
 		if pid, perr := socketPeerPID(sock); perr == nil {
@@ -439,7 +440,7 @@ func restartDaemon(ctx context.Context, sock string) (*client.Client, error) {
 		if err != nil {
 			continue
 		}
-		if _, err := nc.Attach(ctx, fmt.Sprintf("tui:%d", os.Getpid()), protocol.TierInteractive); err != nil {
+		if _, err := client.Do(ctx, nc, protocol.Attach, protocol.AttachParams{Client: fmt.Sprintf("tui:%d", os.Getpid()), Tier: protocol.TierInteractive}); err != nil {
 			nc.Close()
 			return nil, err
 		}

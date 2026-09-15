@@ -154,7 +154,7 @@ func newHarness(t *testing.T, data string, fm *fakeModel) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Attach(ctx, "test", protocol.TierInteractive); err != nil {
+	if _, err := rpc.Do(ctx, c, protocol.Attach, protocol.AttachParams{Client: "test", Tier: protocol.TierInteractive}); err != nil {
 		t.Fatal(err)
 	}
 	h := &harness{t: t, d: d, c: c, fm: fm, sock: sock, data: data, cancel: cancel, evs: make(chan event.Event, 1000)}
@@ -230,7 +230,7 @@ func (h *harness) waitTree(channel string, cond func([]protocol.AgentInfo) bool)
 	deadline := time.Now().Add(10 * time.Second)
 	var agents []protocol.AgentInfo
 	for time.Now().Before(deadline) {
-		agents, _ = h.c.Tree(context.Background(), channel)
+		agents, _ = tree(context.Background(), h.c, channel)
 		if cond(agents) {
 			return agents
 		}
@@ -295,14 +295,14 @@ func TestEndToEnd(t *testing.T) {
 	defer h.close()
 	ctx := context.Background()
 
-	s, err := h.c.CreateChannel(ctx, work, "", "")
+	s, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.Subscribe(ctx, s.ID, 0); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0})); err != nil {
 		t.Fatal(err)
 	}
-	agents, err := h.c.Tree(ctx, s.ID)
+	agents, err := tree(ctx, h.c, s.ID)
 	if err != nil || len(agents) != 1 || agents[0].Archetype != "general" || agents[0].Model != "fake/m1" {
 		t.Fatalf("tree %v %v", agents, err)
 	}
@@ -310,19 +310,19 @@ func TestEndToEnd(t *testing.T) {
 
 	// permission prompt round trip
 	// Prompts are fetched via prompt.list; the harness reader only keeps events.
-	if err := h.c.Send(ctx, root, protocol.KindPrompt, "go"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"})); err != nil {
 		t.Fatal(err)
 	}
 	h.waitFor(event.ToolFinished, root) // echo hello (allowed)
 	h.waitFor(event.AskRequested, root)
-	ps, err := h.c.Prompts(ctx, s.ID)
+	ps, err := prompts(ctx, h.c, s.ID)
 	if err != nil || len(ps) != 1 || ps[0].Tool != "shell" {
 		t.Fatalf("prompts %v %v", ps, err)
 	}
-	if err := h.c.ClaimPrompt(ctx, ps[0].ID); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: ps[0].ID})); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.ReplyPrompt(ctx, ps[0].ID, "allow"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: ps[0].ID, Answer: "allow"})); err != nil {
 		t.Fatal(err)
 	}
 	e := h.waitFor(event.TurnEnded, root)
@@ -336,7 +336,7 @@ func TestEndToEnd(t *testing.T) {
 	}
 
 	// turn 2: spawn + wait
-	if err := h.c.Send(ctx, root, protocol.KindPrompt, "delegate"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "delegate"})); err != nil {
 		t.Fatal(err)
 	}
 	sp := h.waitFor(event.AgentSpawned, "")
@@ -355,10 +355,10 @@ func TestEndToEnd(t *testing.T) {
 	if te.Reason != "end_turn" {
 		t.Fatalf("turn 3 ended %+v", te)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if len(agents) == 2 && agents[1].State != "idle" {
 		h.waitFor(event.TurnEnded, agents[1].ID) // the child's own turn may still be closing
-		agents, _ = h.c.Tree(ctx, s.ID)
+		agents, _ = tree(ctx, h.c, s.ID)
 	}
 	if len(agents) != 2 || agents[1].State != "idle" || agents[0].CostUSD != 0 {
 		t.Fatalf("tree after (the child stays alive, idle): %+v", agents)
@@ -376,7 +376,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("usage events %d", nUsage)
 	}
 	// reconcile
-	rc, err := h.c.Reconcile(ctx, s.ID)
+	rc, err := rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{ID: s.ID})
 	if err != nil || rc.Seq != evs[len(evs)-1].Seq || len(rc.Agents) != 2 {
 		t.Fatalf("reconcile %+v %v", rc, err)
 	}
@@ -392,18 +392,18 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
-	s, err := h.c.CreateChannel(ctx, work, "", "")
+	s, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	_ = h.c.SetChannelMode(ctx, s.ID, "auto") // chained commands ask under policy; auto answers inside the directory
-	agents, _ := h.c.Tree(ctx, s.ID)
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"})) // chained commands ask under policy; auto answers inside the directory
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.ToolStarted, root)
 	time.Sleep(300 * time.Millisecond)
-	_ = h.c.Send(ctx, root, protocol.KindCancel, "")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindCancel, Text: ""}))
 	e := h.waitFor(event.ToolFinished, root)
 	var tf event.ToolFinishedPayload
 	_ = e.Decode(&tf)
@@ -416,7 +416,7 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	if te.Reason != "cancelled" {
 		t.Fatalf("%+v", te)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if agents[0].State != "idle" {
 		t.Fatalf("state after cancel %s", agents[0].State)
 	}
@@ -445,7 +445,7 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 		},
 	}
 	fm.mu.Unlock()
-	_ = h.c.Send(ctx, root, protocol.KindSteer, "steer while idle")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindSteer, Text: "steer while idle"}))
 	h.waitFor(event.TurnStarted, root)
 	time.Sleep(200 * time.Millisecond)
 	h.close()
@@ -455,7 +455,7 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	fm2 := &fakeModel{}
 	h2 := newHarness(t, data, fm2)
 	defer h2.close()
-	list, err := h2.c.Channels(ctx, work, false)
+	list, err := channels(ctx, h2.c, work, false)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("channels after restart: %v %v", list, err)
 	}
@@ -464,7 +464,7 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	if last.Type != event.TurnAborted {
 		t.Fatalf("last event after restart: %s", last.Type)
 	}
-	agents, err = h2.c.Tree(ctx, s.ID)
+	agents, err = tree(ctx, h2.c, s.ID)
 	if err != nil || agents[0].State != "idle" || agents[0].Turn != 2 {
 		t.Fatalf("recovered tree %+v %v", agents, err)
 	}
@@ -477,8 +477,8 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 		return text("alive")
 	}}
 	fm2.mu.Unlock()
-	_ = h2.c.Subscribe(ctx, s.ID, last.Seq+1) // live only; no replay of the old turns
-	_ = h2.c.Send(ctx, root, protocol.KindPrompt, "still there?")
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: last.Seq + 1})) // live only; no replay of the old turns
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "still there?"}))
 	e = h2.waitFor(event.TurnEnded, root)
 	_ = e.Decode(&te)
 	if te.Reason != "end_turn" {
@@ -515,22 +515,22 @@ func TestChildResponseWakesParent(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "delegate"}))
 	e := h.waitFor(event.TurnEnded, root)
 	var te event.TurnEndedPayload
 	_ = e.Decode(&te)
 	if te.Turn != 1 {
 		t.Fatalf("%+v", te)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if len(agents) != 2 || agents[0].State != "waiting" || len(agents[0].Awaiting) != 1 || agents[0].Awaiting[0] != agents[1].ID {
 		t.Fatalf("parent idle with a question out should read waiting on the child: %+v", agents)
 	}
-	if list, _ := h.c.Channels(ctx, work, false); len(list) != 1 || list[0].State != "working" { // the child still runs
+	if list, _ := channels(ctx, h.c, work, false); len(list) != 1 || list[0].State != "working" { // the child still runs
 		t.Fatalf("channel state while a child works: %+v", list)
 	}
 	close(release)
@@ -575,19 +575,19 @@ func TestShellBackgroundWakes(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	_ = h.c.SetChannelMode(ctx, s.ID, "auto")
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "run it"}))
 	e := h.waitFor(event.JobStarted, root)
 	var ms event.JobStartedPayload
 	_ = e.Decode(&ms)
 	if ms.ID == "" || ms.Command == "" {
 		t.Fatalf("%+v", ms)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Kind != "command" {
 		t.Fatalf("monitors in tree: %+v", agents[0].Monitors)
 	}
@@ -605,7 +605,7 @@ func TestShellBackgroundWakes(t *testing.T) {
 	if te.Reason != "end_turn" {
 		t.Fatalf("%+v", te)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if len(agents[0].Monitors) != 0 {
 		t.Fatalf("monitor should be gone: %+v", agents[0].Monitors)
 	}
@@ -641,14 +641,14 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	_ = h.c.SetChannelMode(ctx, s.ID, "auto")
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "run it"}))
 	h.waitFor(event.JobStarted, root)
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Label != "echo early; sleep 2; echo late; exit 2" {
 		t.Fatalf("monitors in tree: %+v", agents[0].Monitors)
 	}
@@ -677,11 +677,11 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	}
 	h2 := newHarness(t, t.TempDir(), fm2)
 	defer h2.close()
-	s2, _ := h2.c.CreateChannel(ctx, work, "", "")
-	_ = h2.c.Subscribe(ctx, s2.ID, 0)
-	_ = h2.c.SetChannelMode(ctx, s2.ID, "auto")
-	agents, _ = h2.c.Tree(ctx, s2.ID)
-	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "run it")
+	s2, _ := rpc.Do(ctx, h2.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s2.ID, From: 0}))
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s2.ID, Mode: "auto"}))
+	agents, _ = tree(ctx, h2.c, s2.ID)
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.AgentSend, protocol.AgentSendParams{Agent: agents[0].ID, Kind: protocol.KindPrompt, Text: "run it"}))
 	h2.waitFor(event.TurnEnded, agents[0].ID)
 	evs, _ := h2.d.Log.Read(ctx, s2.ID, 1, 0)
 	for _, e := range evs {
@@ -715,19 +715,19 @@ func TestShellKillStopsJob(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	_ = h.c.SetChannelMode(ctx, s.ID, "auto")
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 	start := time.Now()
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.JobStopped, root)
 	h.waitFor(event.TurnEnded, root)
 	if time.Since(start) > 5*time.Second {
 		t.Fatal("stop did not kill the command promptly")
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if len(agents[0].Monitors) != 0 {
 		t.Fatalf("%+v", agents[0].Monitors)
 	}
@@ -763,24 +763,24 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "one")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "one"}))
 	h.waitFor(event.TurnEnded, root)
-	if err := h.c.SetAgentRole(ctx, root, "nope"); err == nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetRole, protocol.AgentSetRoleParams{Agent: root, Role: "nope"})); err == nil {
 		t.Fatal("unknown role accepted")
 	}
-	if err := h.c.SetAgentRole(ctx, root, "explorer"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetRole, protocol.AgentSetRoleParams{Agent: root, Role: "explorer"})); err != nil {
 		t.Fatal(err)
 	}
 	h.waitFor(event.AgentUpdated, root)
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if agents[0].Archetype != "explorer" || agents[0].Label != "main" { // the root keeps its "main" label
 		t.Fatalf("tree after role change: %+v", agents[0])
 	}
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "two")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "two"}))
 	var te event.TurnEndedPayload
 	for te.Turn != 2 {
 		e := h.waitFor(event.TurnEnded, root)
@@ -859,11 +859,11 @@ func TestAgentsMessageAcrossTheChannel(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	rootID = agents[0].ID
-	_ = h.c.Send(ctx, rootID, protocol.KindPrompt, "delegate")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: rootID, Kind: protocol.KindPrompt, Text: "delegate"}))
 
 	// The parent's logged answer (it carries the sender's name), the end of
 	// its turn 2 and the child's second message (after its status check)
@@ -929,18 +929,21 @@ func TestVariants(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 
-	if vs, err := h.c.Variants(ctx, "fake/m1"); err != nil || len(vs) != 2 || vs[1] != "high" {
+	if vs, err := func() ([]string, error) {
+		r, err := rpc.Do(ctx, h.c, protocol.Variants, protocol.VariantsParams{Model: "fake/m1"})
+		return r.Variants, err
+	}(); err != nil || len(vs) != 2 || vs[1] != "high" {
 		t.Fatalf("variants: %v %v", vs, err)
 	}
-	if err := h.c.SetAgentVariant(ctx, root, "extreme"); err == nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetVariant, protocol.AgentSetVariantParams{Agent: root, Variant: "extreme"})); err == nil {
 		t.Fatal("unknown variant should be rejected")
 	}
-	if err := h.c.SetAgentVariant(ctx, root, "high"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetVariant, protocol.AgentSetVariantParams{Agent: root, Variant: "high"})); err != nil {
 		t.Fatal(err)
 	}
 	e := h.waitFor(event.AgentUpdated, root)
@@ -949,12 +952,12 @@ func TestVariants(t *testing.T) {
 	if vp.Variant == nil || *vp.Variant != "high" {
 		t.Fatalf("%+v", vp)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if agents[0].Variant != "high" {
 		t.Fatalf("tree variant: %+v", agents[0])
 	}
 
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	sp := h.waitFor(event.AgentSpawned, "")
 	var spp event.AgentSpawnedPayload
 	_ = sp.Decode(&spp)
@@ -970,15 +973,15 @@ func TestVariants(t *testing.T) {
 		t.Fatalf("variants seen by the model: %v", seen)
 	}
 	// the child (same model) inherited the variant and it shows in the tree
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if len(agents) != 2 || agents[1].Variant != "high" {
 		t.Fatalf("child variant: %+v", agents)
 	}
 	// back to the default
-	if err := h.c.SetAgentVariant(ctx, root, ""); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetVariant, protocol.AgentSetVariantParams{Agent: root, Variant: ""})); err != nil {
 		t.Fatal(err)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if agents[0].Variant != "" {
 		t.Fatalf("reset: %+v", agents[0])
 	}
@@ -1024,18 +1027,18 @@ func TestYolo(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, root)
-	if ps, _ := h.c.Prompts(ctx, s.ID); len(ps) != 1 {
+	if ps, _ := prompts(ctx, h.c, s.ID); len(ps) != 1 {
 		t.Fatalf("one prompt should be waiting: %+v", ps)
 	}
 	// yolo on: the waiting prompt is approved and logged
-	if err := h.c.SetChannelMode(ctx, s.ID, "yolo"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "yolo"})); err != nil {
 		t.Fatal(err)
 	}
 	e := h.waitFor(event.ChannelUpdated, "")
@@ -1052,16 +1055,16 @@ func TestYolo(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(work, "first")); err != nil {
 		t.Fatal("the waiting command should have run once yolo turned on")
 	}
-	if ps, _ := h.c.Prompts(ctx, s.ID); len(ps) != 0 {
+	if ps, _ := prompts(ctx, h.c, s.ID); len(ps) != 0 {
 		t.Fatalf("prompt queue should be drained: %+v", ps)
 	}
-	rc, _ := h.c.Reconcile(ctx, s.ID)
+	rc, _ := rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{ID: s.ID})
 	if rc.Channel.Mode != "yolo" {
 		t.Fatalf("channel info should show yolo: %+v", rc.Channel)
 	}
 
 	// turn 2 runs with no prompt at all
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "again")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "again"}))
 	for te.Turn != 2 {
 		e = h.waitFor(event.TurnEnded, root)
 		_ = e.Decode(&te)
@@ -1080,14 +1083,14 @@ func TestYolo(t *testing.T) {
 		t.Fatalf("only turn 1's prompt should have been raised, not one in yolo: %d", asks)
 	}
 	// back to ask
-	if err := h.c.SetChannelMode(ctx, s.ID, "ask"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "ask"})); err != nil {
 		t.Fatal(err)
 	}
-	rc, _ = h.c.Reconcile(ctx, s.ID)
+	rc, _ = rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{ID: s.ID})
 	if rc.Channel.Mode != "ask" {
 		t.Fatalf("mode should be ask: %+v", rc.Channel)
 	}
-	if err := h.c.SetChannelMode(ctx, s.ID, "turbo"); err == nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "turbo"})); err == nil {
 		t.Fatal("an unknown mode should be rejected")
 	}
 }
@@ -1132,13 +1135,13 @@ func TestAutoMode(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, root) // the inside command waits in ask mode
-	if err := h.c.SetChannelMode(ctx, s.ID, "auto"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"})); err != nil {
 		t.Fatal(err)
 	}
 	// auto approves the waiting inside command, then denies the outside read
@@ -1154,7 +1157,7 @@ func TestAutoMode(t *testing.T) {
 	if n := len(h.d.esc.Pending(s.ID)); n != 0 {
 		t.Fatalf("auto should leave no boundary prompt waiting: %d", n)
 	}
-	rc, _ := h.c.Reconcile(ctx, s.ID)
+	rc, _ := rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{ID: s.ID})
 	if rc.Channel.Mode != "auto" {
 		t.Fatalf("%+v", rc.Channel)
 	}
@@ -1168,22 +1171,22 @@ func TestChannelListTitles(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	list, err := h.c.Channels(ctx, work, false)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	list, err := channels(ctx, h.c, work, false)
 	if err != nil || len(list) != 1 || list[0].Title != "" {
 		t.Fatalf("fresh channel should have no title: %+v %v", list, err)
 	}
-	agents, _ := h.c.Tree(ctx, s.ID)
-	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "fix the login bug\nand add tests")
+	agents, _ := tree(ctx, h.c, s.ID)
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: agents[0].ID, Kind: protocol.KindPrompt, Text: "fix the login bug\nand add tests"}))
 	h.waitFor(event.TurnEnded, agents[0].ID)
-	list, _ = h.c.Channels(ctx, work, false)
+	list, _ = channels(ctx, h.c, work, false)
 	if len(list) != 1 || list[0].Title != "fix the login bug" {
 		t.Fatalf("title should be the first prompt's first line: %+v", list)
 	}
 	// a second channel in the same directory lists first (newest)
-	s2, _ := h.c.CreateChannel(ctx, work, "", "")
-	list, _ = h.c.Channels(ctx, work, false)
+	s2, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	list, _ = channels(ctx, h.c, work, false)
 	if len(list) != 2 || list[0].ID != s2.ID || list[1].Title != "fix the login bug" {
 		t.Fatalf("newest first with titles: %+v", list)
 	}
@@ -1203,11 +1206,11 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	fm := &fakeModel{}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
-	s, err := h.c.CreateChannel(ctx, work, "", "coder")
+	s, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: "coder"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	agents, _ := h.c.Tree(ctx, s.ID)
+	agents, _ := tree(ctx, h.c, s.ID)
 	if agents[0].Archetype != "coder" {
 		t.Fatalf("root should start as coder: %+v", agents[0])
 	}
@@ -1227,17 +1230,17 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	}}
 	h2 := newHarness(t, data, fm2)
 	defer h2.close()
-	if _, err := h2.c.ResumeChannel(ctx, s.ID); err != nil {
+	if _, err := rpc.Do(ctx, h2.c, protocol.ChannelResume, protocol.ChannelRef{ID: s.ID}); err != nil {
 		t.Fatal(err)
 	}
-	agents, _ = h2.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h2.c, s.ID)
 	// Recovery never widens: the agent keeps its archetype name, runs
 	// read-only, and says why.
 	if agents[0].Archetype != "coder" || !strings.Contains(agents[0].LastError, "no longer exists") {
 		t.Fatalf("root should come back read-only under its old name: %+v", agents[0])
 	}
-	_ = h2.c.Subscribe(ctx, s.ID, 0)
-	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "hello")
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.AgentSend, protocol.AgentSendParams{Agent: agents[0].ID, Kind: protocol.KindPrompt, Text: "hello"}))
 	h2.waitFor(event.TurnEnded, agents[0].ID)
 	got := " " + strings.Join(offered, " ") + " "
 	for _, gone := range []string{" shell ", " apply_patch ", " agent_create "} {
@@ -1290,17 +1293,17 @@ func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "delegate")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "delegate"}))
 	var te event.TurnEndedPayload
 	for te.Turn != 1 {
 		e := h.waitFor(event.TurnEnded, root)
 		_ = e.Decode(&te)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if agents[0].State != "waiting" {
 		t.Fatalf("two questions out: %+v", agents[0])
 	}
@@ -1309,7 +1312,7 @@ func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
 		e := h.waitFor(event.TurnEnded, root)
 		_ = e.Decode(&te)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if agents[0].State != "idle" {
 		t.Fatalf("one answer should settle both prompts; parent still %s", agents[0].State)
 	}
@@ -1343,13 +1346,13 @@ func TestTodoListLogsProjectsAndRecovers(t *testing.T) {
 	}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.TurnEnded, root)
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	todos := agents[0].Todos
 	if len(todos) != 2 || todos[0].ID != "t1" || todos[0].Status != "in_progress" || todos[1].Text != "Fix the bug" || todos[1].Status != "pending" {
 		t.Fatalf("todos %+v", todos)
@@ -1380,14 +1383,14 @@ func TestTodoListLogsProjectsAndRecovers(t *testing.T) {
 	}
 	h2 := newHarness(t, data, fm2)
 	defer h2.close()
-	_ = h2.c.Subscribe(ctx, s.ID, evs[len(evs)-1].Seq+1) // live only; no replay of the old turn
-	agents, _ = h2.c.Tree(ctx, s.ID)
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: evs[len(evs)-1].Seq + 1})) // live only; no replay of the old turn
+	agents, _ = tree(ctx, h2.c, s.ID)
 	if len(agents[0].Todos) != 2 || agents[0].Todos[0].Status != "in_progress" {
 		t.Fatalf("recovered todos %+v", agents[0].Todos)
 	}
-	_ = h2.c.Send(ctx, root, protocol.KindPrompt, "more")
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "more"}))
 	h2.waitFor(event.TurnEnded, root)
-	agents, _ = h2.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h2.c, s.ID)
 	if len(agents[0].Todos) != 3 || agents[0].Todos[2].ID != "t3" {
 		t.Fatalf("todos after recovery %+v", agents[0].Todos)
 	}
@@ -1433,11 +1436,11 @@ func TestFullAgentIDs(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitInput(event.InputResponse, root)
 	h.waitFor(event.TurnEnded, root) // the "thanks" turn
 	if fm.callCount() < 3 {
@@ -1508,39 +1511,39 @@ func TestRoles(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, err := h.c.CreateChannel(ctx, work, "", "")
+	s, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 	// the root runs the configured primary role on its default variant
 	if agents[0].Archetype != "lead" || agents[0].Model != "fake/m1" || agents[0].Variant != "high" {
 		t.Fatalf("root %+v", agents[0])
 	}
 	// whitelists bound the switches
-	if err := h.c.SetAgentVariant(ctx, root, "low"); err == nil || !strings.Contains(err.Error(), "does not allow variant") {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetVariant, protocol.AgentSetVariantParams{Agent: root, Variant: "low"})); err == nil || !strings.Contains(err.Error(), "does not allow variant") {
 		t.Fatalf("variant outside the role: %v", err)
 	}
-	if err := h.c.SetAgentModel(ctx, root, "fake/m2"); err == nil || !strings.Contains(err.Error(), "does not allow model") {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetModel, protocol.AgentSetModelParams{Agent: root, Model: "fake/m2"})); err == nil || !strings.Contains(err.Error(), "does not allow model") {
 		t.Fatalf("model outside the role: %v", err)
 	}
-	if err := h.c.SetAgentRole(ctx, root, "limited"); err == nil || !strings.Contains(err.Error(), "subagent-only") {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetRole, protocol.AgentSetRoleParams{Agent: root, Role: "limited"})); err == nil || !strings.Contains(err.Error(), "subagent-only") {
 		t.Fatalf("subagent-only role on the main agent: %v", err)
 	}
 
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	var sp event.AgentSpawnedPayload
 	for sp.Parent == "" { // the subscription replays the root's own spawn first
 		e := h.waitFor(event.AgentSpawned, "")
 		_ = e.Decode(&sp)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if len(agents) != 2 || agents[1].Archetype != "limited" || agents[1].Model != "fake/m2" || agents[1].Variant != "" {
 		t.Fatalf("child should start on its role's default model: %+v", agents)
 	}
-	if err := h.c.SetAgentRole(ctx, agents[1].ID, "boss"); err == nil || !strings.Contains(err.Error(), "primary-only") {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetRole, protocol.AgentSetRoleParams{Agent: agents[1].ID, Role: "boss"})); err == nil || !strings.Contains(err.Error(), "primary-only") {
 		t.Fatalf("primary-only role on a subagent: %v", err)
 	}
 	// the child's second turn is over its limit: the parent is answered
@@ -1554,10 +1557,10 @@ func TestRoles(t *testing.T) {
 		_ = e.Decode(&te)
 	}
 	// switching the root to a role without a whitelist keeps its model and variant
-	if err := h.c.SetAgentRole(ctx, root, "general"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetRole, protocol.AgentSetRoleParams{Agent: root, Role: "general"})); err != nil {
 		t.Fatal(err)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if agents[0].Archetype != "general" || agents[0].Model != "fake/m1" || agents[0].Variant != "high" {
 		t.Fatalf("after /roles general: %+v", agents[0])
 	}
@@ -1587,7 +1590,7 @@ func dialAndReport(sock string) {
 		return
 	}
 	defer c.Close()
-	_, err = c.Status(context.Background())
+	_, err = rpc.Do(context.Background(), c, protocol.DaemonStatus, protocol.None{})
 	var pe *protocol.Error
 	if errors.As(err, &pe) {
 		fmt.Println("code", pe.Code)
@@ -1609,7 +1612,7 @@ func TestProcessesTheDaemonRunsAreRefused(t *testing.T) {
 	if err != nil || !strings.Contains(string(out), fmt.Sprint("code ", protocol.ErrForbidden)) {
 		t.Fatalf("child: %v %s", err, out)
 	}
-	if _, err := h.c.Status(context.Background()); err != nil {
+	if _, err := rpc.Do(context.Background(), h.c, protocol.DaemonStatus, protocol.None{}); err != nil {
 		t.Fatalf("the harness's own client was refused: %v", err)
 	}
 }
@@ -1673,18 +1676,18 @@ func TestMCPServersPerAgent(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, err := h.c.CreateChannel(ctx, work, "", "")
+	s, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 	// before the first turn the servers are listed but pending
 	if len(agents[0].MCP) != 2 || agents[0].MCP[0].Name != "echo" || agents[0].MCP[0].State != "pending" {
 		t.Fatalf("pending servers %+v", agents[0].MCP)
 	}
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	e := h.waitFor(event.MCPStarted, root)
 	var sp event.MCPStartedPayload
 	_ = e.Decode(&sp)
@@ -1698,7 +1701,7 @@ func TestMCPServersPerAgent(t *testing.T) {
 		t.Fatalf("mcp.failed %+v", fp)
 	}
 	h.waitFor(event.TurnEnded, root)
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	byName := map[string]protocol.MCPInfo{}
 	for _, m := range agents[0].MCP {
 		byName[m.Name] = m
@@ -1714,10 +1717,10 @@ func TestMCPServersPerAgent(t *testing.T) {
 	fm.mu.Lock()
 	fm.steps = append(fm.steps, func(model.Request) model.Response { return text("idle now") })
 	fm.mu.Unlock()
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "one more")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "one more"}))
 	h.waitFor(event.TurnEnded, root)
 	h.waitFor(event.MCPStopped, root)
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	for _, m := range agents[0].MCP {
 		if m.Name == "echo" && m.State != "pending" {
 			t.Fatalf("idle stop should leave the server pending for the next turn: %+v", m)
@@ -1725,12 +1728,12 @@ func TestMCPServersPerAgent(t *testing.T) {
 	}
 	agent.MCPIdleAfter = 10 * time.Minute
 	// a role without MCP: the next turn stops the server
-	if err := h.c.SetAgentRole(ctx, root, "general"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetRole, protocol.AgentSetRoleParams{Agent: root, Role: "general"})); err != nil {
 		t.Fatal(err)
 	}
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "again")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "again"}))
 	h.waitFor(event.TurnEnded, root)
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if len(agents[0].MCP) != 0 {
 		t.Fatalf("servers should be gone after the role change: %+v", agents[0].MCP)
 	}
@@ -1797,20 +1800,20 @@ func TestWorkingDirectories(t *testing.T) {
 	}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
-	s, err := h.c.CreateChannel(ctx, work, "", "")
+	s, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_ = h.c.Subscribe(ctx, s.ID, 0)
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
 	if len(s.Dirs) != 1 || s.Dirs[0].Path != work || s.Dirs[0].Source != "channel" {
 		t.Fatalf("dirs %+v", s.Dirs)
 	}
-	if err := h.c.AddChannelDir(ctx, s.ID, shared); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: s.ID, Dir: shared})); err != nil {
 		t.Fatal(err)
 	}
-	agents, _ := h.c.Tree(ctx, s.ID)
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	// the only prompt is the boundary one, and it names the directory
 	e := h.waitFor(event.AskRequested, root)
 	var pr event.AskRequestedPayload
@@ -1822,13 +1825,13 @@ func TestWorkingDirectories(t *testing.T) {
 	if len(pending) != 1 || pending[0].Dir != outside {
 		t.Fatalf("pending %+v", pending)
 	}
-	if list, _ := h.c.Channels(ctx, work, false); len(list) != 1 || list[0].Permissions != 1 || list[0].Questions != 0 {
+	if list, _ := channels(ctx, h.c, work, false); len(list) != 1 || list[0].Permissions != 1 || list[0].Questions != 0 {
 		t.Fatalf("the channel list counts the waiting permission: %+v", list)
 	}
-	if err := h.c.ClaimPrompt(ctx, pending[0].ID); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: pending[0].ID})); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.ReplyPrompt(ctx, pending[0].ID, "allow_always"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: pending[0].ID, Answer: "allow_always"})); err != nil {
 		t.Fatal(err)
 	}
 	e = h.waitFor(event.ChannelDirAdded, root)
@@ -1850,7 +1853,7 @@ func TestWorkingDirectories(t *testing.T) {
 			t.Fatalf("the child should finish its read without a prompt: %+v, pending %+v", kid, h.d.esc.Pending(s.ID))
 		}
 		time.Sleep(20 * time.Millisecond)
-		agents, _ = h.c.Tree(ctx, s.ID)
+		agents, _ = tree(ctx, h.c, s.ID)
 		for _, a := range agents {
 			if a.Label == "kid" {
 				kid = a
@@ -1860,23 +1863,23 @@ func TestWorkingDirectories(t *testing.T) {
 	// the human edits the set: add, remove (the channel directory refuses),
 	// and a relative path inside the channel directory is already covered
 	extra := t.TempDir()
-	if err := h.c.AddChannelDir(ctx, s.ID, extra); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: s.ID, Dir: extra})); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.AddChannelDir(ctx, s.ID, "sub/dir"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: s.ID, Dir: "sub/dir"})); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.RemoveChannelDir(ctx, s.ID, shared); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: s.ID, Dir: shared})); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.RemoveChannelDir(ctx, s.ID, work); err == nil || !strings.Contains(err.Error(), "channel directory") {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: s.ID, Dir: work})); err == nil || !strings.Contains(err.Error(), "channel directory") {
 		t.Fatalf("removing the channel directory: %v", err)
 	}
-	if err := h.c.RemoveChannelDir(ctx, s.ID, "/never/there"); err == nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: s.ID, Dir: "/never/there"})); err == nil {
 		t.Fatal("removing an unknown directory should fail")
 	}
-	dirsOf := func(list func(context.Context, string, bool) ([]protocol.ChannelInfo, error)) string {
-		ss, _ := list(ctx, work, false)
+	dirsOf := func(c *rpc.Client) string {
+		ss, _ := channels(ctx, c, work, false)
 		for _, x := range ss {
 			if x.ID == s.ID {
 				var out []string
@@ -1889,7 +1892,7 @@ func TestWorkingDirectories(t *testing.T) {
 		return ""
 	}
 	want := work + ":channel " + outside + ":human " + extra + ":human"
-	if got := dirsOf(h.c.Channels); got != want {
+	if got := dirsOf(h.c); got != want {
 		t.Fatalf("edited dirs: %s", got)
 	}
 	h.close()
@@ -1897,8 +1900,8 @@ func TestWorkingDirectories(t *testing.T) {
 	// restart: the set comes back
 	h2 := newHarness(t, data, &fakeModel{})
 	defer h2.close()
-	_, _ = h2.c.Tree(ctx, s.ID)
-	if got := dirsOf(h2.c.Channels); got != want {
+	_, _ = tree(ctx, h2.c, s.ID)
+	if got := dirsOf(h2.c); got != want {
 		t.Fatalf("recovered dirs: %s", got)
 	}
 }
@@ -1933,18 +1936,18 @@ func TestBoundaryPromptEditedDir(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, root)
 	pending := h.d.esc.Pending(s.ID)
 	if len(pending) != 1 || pending[0].Dir != filepath.Join(outside, "sub") {
 		t.Fatalf("offered dir %+v", pending)
 	}
-	_ = h.c.ClaimPrompt(ctx, pending[0].ID)
-	if err := h.c.ReplyPromptDir(ctx, pending[0].ID, "allow_always", outside); err != nil {
+	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: pending[0].ID}))
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: pending[0].ID, Answer: "allow_always", Dir: outside})); err != nil {
 		t.Fatal(err)
 	}
 	e := h.waitFor(event.ChannelDirAdded, root)
@@ -1985,21 +1988,21 @@ func TestDenyReasonReachesTheAgent(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, root)
 	p := h.d.esc.Pending(s.ID)[0]
-	_ = h.c.ClaimPrompt(ctx, p.ID)
-	if err := h.c.DenyPrompt(ctx, p.ID, "use apply_patch instead"); err != nil {
+	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerDeny, Reason: "use apply_patch instead"})); err != nil {
 		t.Fatal(err)
 	}
 	h.waitFor(event.AskRequested, root)
 	p = h.d.esc.Pending(s.ID)[0]
-	_ = h.c.ClaimPrompt(ctx, p.ID)
-	if err := h.c.DenyPrompt(ctx, p.ID, ""); err != nil {
+	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerDeny, Reason: ""})); err != nil {
 		t.Fatal(err)
 	}
 	h.waitFor(event.TurnEnded, root)
@@ -2036,18 +2039,18 @@ func TestAllowPrefix(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, root)
 	p := h.d.esc.Pending(s.ID)[0]
-	_ = h.c.ClaimPrompt(ctx, p.ID)
+	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
 	if p.Prefix != "touch" {
 		t.Fatalf("prompt prefix %q", p.Prefix)
 	}
-	if err := h.c.AllowPromptPrefix(ctx, p.ID); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerAllowPrefix})); err != nil {
 		t.Fatal(err)
 	}
 	// the second echo runs without a prompt; the chained one asks
@@ -2056,8 +2059,8 @@ func TestAllowPrefix(t *testing.T) {
 	if !strings.Contains(string(p.Input), "touch three; touch four") {
 		t.Fatalf("second prompt should be the chained command: %s", p.Input)
 	}
-	_ = h.c.ClaimPrompt(ctx, p.ID)
-	if err := h.c.DenyPrompt(ctx, p.ID, ""); err != nil {
+	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerDeny, Reason: ""})); err != nil {
 		t.Fatal(err)
 	}
 	h.waitFor(event.TurnEnded, root)
@@ -2101,10 +2104,10 @@ func TestWebSearchAlwaysOffered(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
-	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: agents[0].ID, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.TurnEnded, agents[0].ID)
 
 	t.Setenv("STAVLOS_TEST_SEARCH_KEY", "k-123")
@@ -2122,10 +2125,10 @@ func TestWebSearchAlwaysOffered(t *testing.T) {
 	}
 	h2 := newHarness(t, t.TempDir(), fm2)
 	defer h2.close()
-	s2, _ := h2.c.CreateChannel(ctx, work, "", "")
-	_ = h2.c.Subscribe(ctx, s2.ID, 0)
-	agents, _ = h2.c.Tree(ctx, s2.ID)
-	_ = h2.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
+	s2, _ := rpc.Do(ctx, h2.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s2.ID, From: 0}))
+	agents, _ = tree(ctx, h2.c, s2.ID)
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.AgentSend, protocol.AgentSendParams{Agent: agents[0].ID, Kind: protocol.KindPrompt, Text: "go"}))
 	h2.waitFor(event.TurnEnded, agents[0].ID)
 }
 
@@ -2154,21 +2157,27 @@ func TestManualCompact(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	if _, err := h.c.CompactAgent(ctx, root); err == nil {
+	if _, err := func() (string, error) {
+		r, err := rpc.Do(ctx, h.c, protocol.AgentCompact, protocol.AgentCompactParams{Agent: root})
+		return r.Status, err
+	}(); err == nil {
 		t.Fatal("nothing to compact before any turn")
 	}
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "one")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "one"}))
 	h.waitFor(event.TurnEnded, root)
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "two")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "two"}))
 	h.waitFor(event.TurnEnded, root)
-	if agents, _ = h.c.Tree(ctx, s.ID); agents[0].Context <= 0 {
+	if agents, _ = tree(ctx, h.c, s.ID); agents[0].Context <= 0 {
 		t.Fatalf("the tree should carry the context estimate after a turn: %+v", agents[0])
 	}
-	status, err := h.c.CompactAgent(ctx, root)
+	status, err := func() (string, error) {
+		r, err := rpc.Do(ctx, h.c, protocol.AgentCompact, protocol.AgentCompactParams{Agent: root})
+		return r.Status, err
+	}()
 	if err != nil || status != "compacted" {
 		t.Fatalf("compact: %q %v", status, err)
 	}
@@ -2188,7 +2197,7 @@ func TestManualCompact(t *testing.T) {
 	if !started {
 		t.Fatal("compaction.started should precede compacted")
 	}
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "three")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "three"}))
 	h.waitFor(event.TurnEnded, root)
 }
 
@@ -2229,18 +2238,18 @@ func TestAskUser(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	e := h.waitFor(event.AskRequested, root)
 	var pr event.AskRequestedPayload
 	_ = e.Decode(&pr)
 	if pr.Kind != "question" || pr.Tool != "ask_user" || !strings.Contains(pr.Question, "Which backend?") {
 		t.Fatalf("prompt %+v", pr)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
+	agents, _ = tree(ctx, h.c, s.ID)
 	if agents[0].State != "blocked" {
 		t.Fatalf("an asking agent is blocked: %+v", agents[0].State)
 	}
@@ -2248,13 +2257,13 @@ func TestAskUser(t *testing.T) {
 	if len(p.Questions) != 2 || p.Questions[0].Options[0].Label != "Postgres" {
 		t.Fatalf("pending %+v", p)
 	}
-	_ = h.c.ClaimPrompt(ctx, p.ID)
-	if err := h.c.AnswerQuestions(ctx, p.ID, []string{"Postgres", "stavlos"}); err != nil {
+	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerAnswered, Answers: []string{"Postgres", "stavlos"}})); err != nil {
 		t.Fatal(err)
 	}
 	// the second question is cancelled instead of answered
 	h.waitFor(event.AskRequested, root)
-	_ = h.c.Send(ctx, root, protocol.KindCancel, "")
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindCancel, Text: ""}))
 	for {
 		var r event.AskResolvedPayload
 		if _ = h.waitFor(event.AskResolved, root).Decode(&r); r.Outcome == event.AskWithdrawn {
@@ -2279,24 +2288,24 @@ func TestTrustReplyChecksTheHash(t *testing.T) {
 	h := newHarness(t, t.TempDir(), &fakeModel{})
 	defer h.close()
 	ctx := context.Background()
-	st, err := h.c.TrustStatus(ctx, work)
+	st, err := rpc.Do(ctx, h.c, protocol.TrustStatus, protocol.TrustStatusParams{Dir: work})
 	if err != nil || !st.Pending || st.Hash == "" {
 		t.Fatalf("status %+v %v", st, err)
 	}
-	if err := h.c.TrustReply(ctx, work, "stale", true); err == nil || !strings.Contains(err.Error(), "changed") {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.TrustReply, protocol.TrustReplyParams{Dir: work, Hash: "stale", Trust: true})); err == nil || !strings.Contains(err.Error(), "changed") {
 		t.Fatalf("a stale hash should be refused: %v", err)
 	}
-	if err := h.c.TrustReply(ctx, t.TempDir(), st.Hash, true); err == nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.TrustReply, protocol.TrustReplyParams{Dir: t.TempDir(), Hash: st.Hash, Trust: true})); err == nil {
 		t.Fatal("a directory without project config should be refused")
 	}
-	if st2, _ := h.c.TrustStatus(ctx, work); !st2.Pending {
+	if st2, _ := rpc.Do(ctx, h.c, protocol.TrustStatus, protocol.TrustStatusParams{Dir: work}); !st2.Pending {
 		t.Fatal("nothing should be trusted yet")
 	}
 	// The right hash, through an unnormalised path, trusts the directory.
-	if err := h.c.TrustReply(ctx, work+"/./", st.Hash, true); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.TrustReply, protocol.TrustReplyParams{Dir: work + "/./", Hash: st.Hash, Trust: true})); err != nil {
 		t.Fatal(err)
 	}
-	if st3, _ := h.c.TrustStatus(ctx, work); st3.Pending {
+	if st3, _ := rpc.Do(ctx, h.c, protocol.TrustStatus, protocol.TrustStatusParams{Dir: work}); st3.Pending {
 		t.Fatal("should be trusted now")
 	}
 }
@@ -2362,7 +2371,7 @@ func attached(t *testing.T, sock string) *rpc.Client {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Attach(context.Background(), "extra", protocol.TierInteractive); err != nil {
+	if _, err := rpc.Do(context.Background(), c, protocol.Attach, protocol.AttachParams{Client: "extra", Tier: protocol.TierInteractive}); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { c.Close() })
@@ -2380,7 +2389,7 @@ func TestSlowClientDoesNotStallTheDaemon(t *testing.T) {
 	h := newHarness(t, t.TempDir(), &fakeModel{})
 	defer h.close()
 	ctx := context.Background()
-	s, err := h.c.CreateChannel(ctx, t.TempDir(), "", "")
+	s, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: t.TempDir(), Model: "", RootAgent: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2402,7 +2411,7 @@ func TestSlowClientDoesNotStallTheDaemon(t *testing.T) {
 	good := attached(t, h.sock)
 	stop := make(chan struct{})
 	events, wait := collect(good, stop)
-	if err := good.Subscribe(ctx, s.ID, 0); err != nil {
+	if err := errOf(rpc.Do(ctx, good, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0})); err != nil {
 		t.Fatal(err)
 	}
 	// 600 events of 8 KB overflow the stalled socket many times over.
@@ -2457,7 +2466,7 @@ func TestSubscribeHandoverIsContiguous(t *testing.T) {
 	h := newHarness(t, t.TempDir(), &fakeModel{})
 	defer h.close()
 	ctx := context.Background()
-	s, err := h.c.CreateChannel(ctx, t.TempDir(), "", "")
+	s, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: t.TempDir(), Model: "", RootAgent: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2476,7 +2485,7 @@ func TestSubscribeHandoverIsContiguous(t *testing.T) {
 			appended <- last.Seq
 		}()
 		time.Sleep(time.Duration(round) * time.Millisecond)
-		if err := c.Subscribe(ctx, s.ID, 0); err != nil {
+		if err := errOf(rpc.Do(ctx, c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0})); err != nil {
 			t.Fatal(err)
 		}
 		final := <-appended
@@ -2564,11 +2573,14 @@ func TestChannelPost(t *testing.T) {
 	h := newHarness(t, t.TempDir(), &fakeModel{})
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
-	to, err := h.c.Post(ctx, s.ID, "hello there")
+	to, err := func() ([]string, error) {
+		r, err := rpc.Do(ctx, h.c, protocol.ChannelPost, protocol.ChannelPostParams{ID: s.ID, Text: "hello there"})
+		return r.To, err
+	}()
 	if err != nil || len(to) != 1 || to[0] != "main" {
 		t.Fatalf("to %v err %v", to, err)
 	}
@@ -2578,7 +2590,10 @@ func TestChannelPost(t *testing.T) {
 		t.Fatalf("chat.posted %+v on %q", p, e.Agent)
 	}
 	h.waitFor(event.TurnEnded, root)
-	if _, err := h.c.Post(ctx, s.ID, "@nobody hi"); err == nil || !strings.Contains(err.Error(), "@nobody") {
+	if _, err := func() ([]string, error) {
+		r, err := rpc.Do(ctx, h.c, protocol.ChannelPost, protocol.ChannelPostParams{ID: s.ID, Text: "@nobody hi"})
+		return r.To, err
+	}(); err == nil || !strings.Contains(err.Error(), "@nobody") {
 		t.Fatalf("an unknown mention should be refused: %v", err)
 	}
 }
@@ -2602,12 +2617,12 @@ func TestAutoDeniesAWaitingBoundaryPrompt(t *testing.T) {
 	h := newHarness(t, t.TempDir(), fm)
 	defer h.close()
 	ctx := context.Background()
-	s, _ := h.c.CreateChannel(ctx, work, "", "")
-	_ = h.c.Subscribe(ctx, s.ID, 0)
-	agents, _ := h.c.Tree(ctx, s.ID)
-	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
+	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
+	agents, _ := tree(ctx, h.c, s.ID)
+	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: agents[0].ID, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, agents[0].ID) // the outside read waits in ask mode
-	if err := h.c.SetChannelMode(ctx, s.ID, "auto"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"})); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -2633,49 +2648,67 @@ func TestChannelNames(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	a, err := h.c.CreateChannel(ctx, dir, "", "")
+	a, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: dir, Model: "", RootAgent: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := h.c.CreateChannel(ctx, dir, "", "")
+	b, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: dir, Model: "", RootAgent: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if a.Name != "proj" || b.Name != "proj-2" {
 		t.Fatalf("names %q %q", a.Name, b.Name)
 	}
-	if err := h.c.RenameChannel(ctx, b.ID, "#Docs Site"); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRename, protocol.ChannelRenameParams{ID: b.ID, Name: "#Docs Site"})); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.RenameChannel(ctx, a.ID, "docs-site"); err == nil || !strings.Contains(err.Error(), "taken") {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRename, protocol.ChannelRenameParams{ID: a.ID, Name: "docs-site"})); err == nil || !strings.Contains(err.Error(), "taken") {
 		t.Fatalf("a taken name: %v", err)
 	}
-	if err := h.c.RenameChannel(ctx, a.ID, "!!"); err == nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRename, protocol.ChannelRenameParams{ID: a.ID, Name: "!!"})); err == nil {
 		t.Fatal("a name with nothing left should be refused")
 	}
 	// a channel created under a chosen name keeps it, normalised; a taken
 	// one is refused before anything starts
-	if n, err := h.c.CreateNamedChannel(ctx, dir, "Site Ops"); err != nil || n.Name != "site-ops" {
+	if n, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: dir, Name: "Site Ops"}); err != nil || n.Name != "site-ops" {
 		t.Fatalf("named create: %+v %v", n, err)
 	}
-	if _, err := h.c.CreateNamedChannel(ctx, dir, "#proj"); err == nil || !strings.Contains(err.Error(), "taken") {
+	if _, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: dir, Name: "#proj"}); err == nil || !strings.Contains(err.Error(), "taken") {
 		t.Fatalf("a taken name on create: %v", err)
 	}
-	names := func(list func(context.Context, string, bool) ([]protocol.ChannelInfo, error)) map[string]bool {
-		ss, _ := list(ctx, dir, false)
+	names := func(c *rpc.Client) map[string]bool {
+		ss, _ := channels(ctx, c, dir, false)
 		out := map[string]bool{}
 		for _, s := range ss {
 			out[s.Name] = true
 		}
 		return out
 	}
-	if got := names(h.c.Channels); len(got) != 3 || !got["proj"] || !got["docs-site"] || !got["site-ops"] {
+	if got := names(h.c); len(got) != 3 || !got["proj"] || !got["docs-site"] || !got["site-ops"] {
 		t.Fatalf("names %v", got)
 	}
 	h.close()
 	h2 := newHarness(t, data, &fakeModel{})
 	defer h2.close()
-	if got := names(h2.c.Channels); len(got) != 3 || !got["proj"] || !got["docs-site"] || !got["site-ops"] {
+	if got := names(h2.c); len(got) != 3 || !got["proj"] || !got["docs-site"] || !got["site-ops"] {
 		t.Fatalf("names after a restart %v", got)
 	}
+}
+
+// errOf is the error of a call whose result the test does not need.
+func errOf[R any](_ R, err error) error { return err }
+
+func tree(ctx context.Context, c *rpc.Client, channel string) ([]protocol.AgentInfo, error) {
+	r, err := rpc.Do(ctx, c, protocol.AgentTree, protocol.AgentTreeParams{Channel: channel})
+	return r.Agents, err
+}
+
+func channels(ctx context.Context, c *rpc.Client, dir string, archived bool) ([]protocol.ChannelInfo, error) {
+	r, err := rpc.Do(ctx, c, protocol.ChannelList, protocol.ChannelListParams{Dir: dir, IncludeArchived: archived})
+	return r.Channels, err
+}
+
+func prompts(ctx context.Context, c *rpc.Client, channel string) ([]protocol.PromptInfo, error) {
+	r, err := rpc.Do(ctx, c, protocol.PromptList, protocol.PromptListParams{Channel: channel})
+	return r.Prompts, err
 }

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/pkg/client"
 )
 
@@ -44,7 +45,7 @@ func authCmd(ctx context.Context, args []string) error {
 }
 
 func listProviders(ctx context.Context, c *client.Client) error {
-	r, err := c.Providers(ctx)
+	r, err := client.Do(ctx, c, protocol.ProviderList, protocol.None{})
 	if err != nil {
 		return err
 	}
@@ -66,7 +67,7 @@ func listProviders(ctx context.Context, c *client.Client) error {
 // loginFlow picks a provider (or uses want) and runs the device-code login:
 // prints a URL and a code, then waits for the user to finish in a browser.
 func loginFlow(ctx context.Context, c *client.Client, want string) (string, error) {
-	r, err := c.Providers(ctx)
+	r, err := client.Do(ctx, c, protocol.ProviderList, protocol.None{})
 	if err != nil {
 		return "", err
 	}
@@ -108,7 +109,7 @@ func loginFlow(ctx context.Context, c *client.Client, want string) (string, erro
 			method = mp.id
 		}
 	}
-	start, err := c.LoginStart(ctx, chosen.id, method)
+	start, err := client.Do(ctx, c, protocol.ProviderLoginStart, protocol.LoginStartParams{Provider: chosen.id, Method: method})
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +120,7 @@ func loginFlow(ctx context.Context, c *client.Client, want string) (string, erro
 	}
 	openBrowser(start.URL)
 	fmt.Print("Waiting for you to finish signing in… (ctrl+c to cancel)\n")
-	info, err := c.LoginWait(ctx, start.ID)
+	info, err := client.Do(ctx, c, protocol.ProviderLoginWait, protocol.LoginWaitParams{ID: start.ID})
 	if err != nil {
 		return "", err
 	}
@@ -143,7 +144,7 @@ func openBrowser(url string) {
 }
 
 func logoutFlow(ctx context.Context, c *client.Client, want string) error {
-	r, err := c.Providers(ctx)
+	r, err := client.Do(ctx, c, protocol.ProviderList, protocol.None{})
 	if err != nil {
 		return err
 	}
@@ -172,7 +173,7 @@ func logoutFlow(ctx context.Context, c *client.Client, want string) error {
 			return err
 		}
 	}
-	if err := c.DisconnectProvider(ctx, chosen.id); err != nil {
+	if _, err := client.Do(ctx, c, protocol.ProviderDisconnect, protocol.ProviderRef{Provider: chosen.id}); err != nil {
 		return err
 	}
 	fmt.Printf("signed out of %s\n", chosen.label)
