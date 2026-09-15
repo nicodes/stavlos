@@ -10,6 +10,7 @@
 //	stavlos tree <session>  print the agent tree
 //	stavlos send|steer|cancel|kill <agent> [text]
 //	stavlos auth login      sign in to a subscription (tokens go to auth.json)
+//	stavlos version         print the version (also --version)
 //	stavlos plugin ...      (roadmap)
 package main
 
@@ -45,39 +46,50 @@ func main() {
 }
 
 func run(args []string) error {
-	ctx := context.Background()
-	cmd := ""
-	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
-		cmd, args = args[0], args[1:]
-	}
+	cmd, args := commandOf(args)
 	if f, ok := subcommands[cmd]; ok {
-		return f(ctx, cmd, args)
+		return f(context.Background(), cmd, args)
 	}
 	return fmt.Errorf("unknown command %q\n%s", cmd, usage)
 }
 
+// commandOf splits the command word off args. A first argument naming a
+// command (including --help and --version) is that command; any other
+// word is an unknown command; leading flags belong to a new session.
+func commandOf(args []string) (cmd string, rest []string) {
+	if len(args) == 0 {
+		return "", nil
+	}
+	if _, ok := subcommands[args[0]]; ok || !strings.HasPrefix(args[0], "-") {
+		return args[0], args[1:]
+	}
+	return "", args
+}
+
 // subcommands maps each command word to its handler; "" starts a session.
 var subcommands = map[string]func(ctx context.Context, cmd string, args []string) error{
-	"":         cmdNew,
-	"new":      cmdNew,
-	"resume":   cmdResume,
-	"sessions": cmdSessions,
-	"daemon":   cmdDaemon,
-	"status":   cmdStatus,
-	"init":     func(_ context.Context, _ string, args []string) error { return initConfig(args) },
-	"auth":     cmdAuth,
-	"provider": cmdAuth,
-	"connect":  cmdAuth,
-	"trust":    cmdTrust,
-	"tree":     cmdTree,
-	"send":     cmdSend,
-	"steer":    cmdSend,
-	"cancel":   cmdSend,
-	"kill":     cmdSend,
-	"plugin":   cmdPlugin,
-	"help":     cmdHelp,
-	"-h":       cmdHelp,
-	"--help":   cmdHelp,
+	"":          cmdNew,
+	"new":       cmdNew,
+	"resume":    cmdResume,
+	"sessions":  cmdSessions,
+	"daemon":    cmdDaemon,
+	"status":    cmdStatus,
+	"init":      func(_ context.Context, _ string, args []string) error { return initConfig(args) },
+	"auth":      cmdAuth,
+	"provider":  cmdAuth,
+	"connect":   cmdAuth,
+	"trust":     cmdTrust,
+	"tree":      cmdTree,
+	"send":      cmdSend,
+	"steer":     cmdSend,
+	"cancel":    cmdSend,
+	"kill":      cmdSend,
+	"plugin":    cmdPlugin,
+	"help":      cmdHelp,
+	"-h":        cmdHelp,
+	"--help":    cmdHelp,
+	"version":   cmdVersion,
+	"--version": cmdVersion,
 }
 
 // cmdNew starts a session in a directory (reusing its newest session while
@@ -271,6 +283,13 @@ func cmdHelp(context.Context, string, []string) error {
 	return nil
 }
 
+// cmdVersion prints the version, commit, toolchain and build id of this
+// binary; it does not contact the daemon.
+func cmdVersion(context.Context, string, []string) error {
+	fmt.Print(buildid.Read())
+	return nil
+}
+
 const usage = `usage:
   stavlos [--model p/m] [--root archetype] [--dir d]   new session + TUI
   stavlos resume [session-id]                           resume + TUI
@@ -278,6 +297,7 @@ const usage = `usage:
   stavlos send|steer|cancel|kill <agent> [text]
   stavlos auth login [provider] | auth list | auth logout [provider]
   stavlos trust [dir] | init [--model p/m] | daemon
+  stavlos version | --version | help
 `
 
 func cwd(d string) string {
