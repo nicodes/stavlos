@@ -295,10 +295,12 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
+	// dim like the rule it sits on: only the context bar's warning colour stands out
+	cost := theme.StyleDim.Render(" · $" + format.Cost(f.cost))
 	if bar := contextBar(f.context, f.window); bar != "" {
-		return bar + " · $" + format.Cost(f.cost) // the channel's total tokens are in the sidebar
+		return bar + cost // the channel's total tokens are in the sidebar
 	}
-	return format.Tokens(f.tokens) + " tokens · $" + format.Cost(f.cost)
+	return theme.StyleDim.Render(format.Tokens(f.tokens)+" tokens") + cost
 }
 
 // contextBar reads how full the model's context is — "31% · 62k/200k" — which
