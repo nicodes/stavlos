@@ -76,7 +76,7 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 		}
 		return out
 	}
-	if k := kinds(0); k[LineText] != 2 || k[LineDim] != 0 || k[LineLabel] != 0 || !strings.HasPrefix(lines[1].Text, "**@main** as scout (explorer) · m") {
+	if k := kinds(0); k[LineText] != 2 || k[LineDim] != 0 || k[LineLabel] != 0 || !strings.HasPrefix(lines[1].Text, "@main → @scout (explorer) · m") {
 		t.Fatalf("spawn item (the spawn over its task): %v %+v", k, lines[1])
 	}
 	if k := kinds(1); k[LineText] != 2 || k[LineBlank] != 2 {
@@ -378,7 +378,7 @@ func TestNotesAndReminders(t *testing.T) {
 // block the human's own input gets.
 func TestOnlyHumanInputIsBlue(t *testing.T) {
 	for kind, glyph := range map[event.InputKind]string{event.InputRequest: GlyphAsk, event.InputInfo: GlyphInfo} {
-		lines := InputLines(event.Input{Kind: kind, Text: "look at the parser", From: "a1", FromName: "main"})
+		lines := InputLines(event.Input{Kind: kind, Text: "look at the parser", From: "a1", FromName: "main"}, "")
 		var texts []string
 		for _, l := range lines {
 			if l.Block == BlockUser || l.Block == BlockSteer {
@@ -388,12 +388,12 @@ func TestOnlyHumanInputIsBlue(t *testing.T) {
 				texts = append(texts, l.Text)
 			}
 		}
-		if strings.Join(texts, "|") != "**@main** look at the parser" || lines[1].Glyph != glyph {
+		if strings.Join(texts, "|") != "@main look at the parser" || lines[1].Glyph != glyph {
 			t.Fatalf("%s from an agent: %+v", kind, lines)
 		}
 	}
 	for _, kind := range []event.InputKind{event.InputPrompt, event.InputSteer} {
-		human := InputLines(event.Input{Kind: kind, Text: "and the tests"})
+		human := InputLines(event.Input{Kind: kind, Text: "and the tests"}, "")
 		if human[1].Block != BlockUser || !human[1].Lead {
 			t.Fatalf("the human's %s stays the blue user block: %+v", kind, human)
 		}
@@ -422,8 +422,8 @@ func TestMessageArrows(t *testing.T) {
 			t.Errorf("%q: glyph %q, want %q", c.line.Text, g, c.want)
 		}
 	}
-	resp := InputLines(event.Input{Kind: event.InputResponse, Text: "done", From: "a2", FromName: "scout"})
-	if resp[1].Glyph != GlyphAsk || resp[1].Text != "**@scout** done" {
+	resp := InputLines(event.Input{Kind: event.InputResponse, Text: "done", From: "a2", FromName: "scout"}, "")
+	if resp[1].Glyph != GlyphAsk || resp[1].Text != "@scout done" {
 		t.Fatalf("a response from an agent reads › @scout: %+v", resp)
 	}
 }
@@ -452,7 +452,7 @@ func TestTurnStartMarksItems(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(marked, "|") != "**@user** one|**@user** two" {
+	if strings.Join(marked, "|") != "@user one|@user two" {
 		t.Fatalf("turn starts: %q", marked)
 	}
 }
@@ -474,14 +474,14 @@ func TestWhoNamesTheLine(t *testing.T) {
 	cases := map[string][]Line{
 		"scout": toolStartedLines("message", "c1", json.RawMessage(`{"to":"@scout","text":"look"}`)),
 		"user":  toolStartedLines("message", "c2", json.RawMessage(`{"to":"user","text":"done"}`)),
-		"main":  InputLines(event.Input{Kind: event.InputRequest, Text: "go", From: "a1", FromName: "main"}),
+		"main":  InputLines(event.Input{Kind: event.InputRequest, Text: "go", From: "a1", FromName: "main"}, ""),
 	}
 	for want, lines := range cases {
 		if got := who(lines); got != want {
 			t.Errorf("who %q, want %q: %+v", got, want, lines)
 		}
 	}
-	human := InputLines(event.Input{Kind: event.InputPrompt, Text: "hi"})
+	human := InputLines(event.Input{Kind: event.InputPrompt, Text: "hi"}, "")
 	if who(human) != "user" {
 		t.Errorf("the human's prompt: %+v", human)
 	}
@@ -589,7 +589,7 @@ func TestInfoMessagesDrawDoubleArrows(t *testing.T) {
 		}
 	}
 	for kind, want := range map[event.InputKind]string{event.InputInfo: GlyphInfo, event.InputRequest: GlyphAsk, event.InputResponse: GlyphAsk} {
-		lines := InputLines(event.Input{Kind: kind, Text: "fyi", From: "a1", FromName: "main"})
+		lines := InputLines(event.Input{Kind: kind, Text: "fyi", From: "a1", FromName: "main"}, "")
 		if lines[1].Glyph != want {
 			t.Errorf("received %q: glyph %q, want %q", kind, lines[1].Glyph, want)
 		}

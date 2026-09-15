@@ -520,9 +520,10 @@ func renderLine(l transcript.Line, o Options, lit bool) string {
 	return b.String()
 }
 
-// paintNames draws a post's leading @names, each bold in that agent's
-// colour, and the rest of the text in style: the names at the front are the
-// recipients, and an @ after them belongs to the message.
+// paintNames draws a message's leading @names, each bold in that one's
+// colour, and the rest of the text in style: the sender, a dim → and the
+// recipients ("@user → @main @scout …"); an @ after them belongs to the
+// message.
 func paintNames(text string, names []string, style func(...string) string, who func(string) lipgloss.Style) string {
 	var b strings.Builder
 	i := 0
@@ -547,6 +548,10 @@ func paintNames(text string, names []string, style func(...string) string, who f
 		}
 		b.WriteString(who(name).Bold(true).Render(text[i:j]) + text[j:k])
 		i = k
+		if arrow, ok := strings.CutPrefix(text[i:], "→ "); ok {
+			b.WriteString(theme.StyleDim.Render("→") + " ")
+			i = len(text) - len(strings.TrimLeft(arrow, " "))
+		}
 	}
 	if i < len(text) {
 		b.WriteString(style(text[i:]))

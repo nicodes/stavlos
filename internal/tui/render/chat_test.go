@@ -28,7 +28,7 @@ func TestChatRendersInOrder(t *testing.T) {
 	ap(5, "a", event.ChatMessage, event.ChatPayload{From: "main", Text: "Go 1.27\nSQLite event log", Post: "p1"})
 	ap(6, "b", event.ChatMessage, event.ChatPayload{From: "scout", Text: "All pass", Post: "p2"})
 	got := strings.Join(renderWith(c.All(), Options{Width: 80}), "\n")
-	want := "› @main what's the stack?\n\n› @scout check the tests\n\n‹ @main Go 1.27\n  SQLite event log\n\n‹ @scout All pass"
+	want := "› @user → @main what's the stack?\n\n› @user → @scout check the tests\n\n‹ @main → @user Go 1.27\n  SQLite event log\n\n‹ @scout → @user All pass"
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -51,8 +51,9 @@ func TestChatLongReplyExpands(t *testing.T) {
 	}
 }
 
-// TestChatPostColoursItsRecipients: a post shows its recipients in front,
-// each in its colour (the arrow takes the first), and its message as typed.
+// TestChatPostColoursItsRecipients: a post shows its sender and recipients
+// in front, "@user → @main @scout", each in its colour (the glyph takes the
+// sender's), and its message as typed.
 func TestChatPostColoursItsRecipients(t *testing.T) {
 	c, ap := chatFeed()
 	ap(1, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "sync up with @Scout", To: []string{"main", "scout"}})
@@ -62,10 +63,10 @@ func TestChatPostColoursItsRecipients(t *testing.T) {
 		return lipgloss.NewStyle()
 	}
 	got := strings.Join(renderWith(c.All(), Options{Width: 80, WhoStyle: whoStyle}), "\n")
-	if got != "› @main @scout sync up with @Scout" { // the message's own @Scout is left alone
+	if got != "› @user → @main @scout sync up with @Scout" { // the message's own @Scout is left alone
 		t.Fatalf("post: %q", got)
 	}
-	if strings.Join(asked, ",") != "main,main,scout" { // the arrow, then each leading @name
+	if strings.Join(asked, ",") != "user,user,main,scout" { // the glyph, then each leading @name
 		t.Fatalf("colours asked for %v", asked)
 	}
 }
