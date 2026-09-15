@@ -26,7 +26,7 @@ func NewChat() *Transcript {
 // ChatEvent reports whether the channel chat reads events of type typ.
 func ChatEvent(typ event.Type) bool {
 	switch typ {
-	case event.AgentSpawned, event.AgentRoleChanged, event.ChatPosted, event.MessageToUser, event.AgentKilled:
+	case event.AgentSpawned, event.AgentUpdated, event.ChatPosted, event.ChatMessage, event.AgentKilled:
 		return true
 	}
 	return false
@@ -48,12 +48,12 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.AgentSpawned:
 		var p event.AgentSpawnedPayload
 		if ev.Decode(&p) == nil && p.ID != "" {
-			t.names[p.ID] = p.Label
+			t.names[p.ID] = p.Name
 		}
-	case event.AgentRoleChanged:
-		var p event.RoleChangedPayload
-		if ev.Decode(&p) == nil && p.Label != "" {
-			t.names[ev.Agent] = p.Label
+	case event.AgentUpdated:
+		var p event.AgentUpdatedPayload
+		if ev.Decode(&p) == nil && p.Name != nil {
+			t.names[ev.Agent] = *p.Name
 		}
 	case event.AgentKilled:
 		delete(t.open, t.names[ev.Agent]) // no reply is coming
@@ -74,7 +74,7 @@ func (t *Transcript) applyChat(ev event.Event) {
 				t.open[n] = true
 			}
 		}
-	case event.MessageToUser:
+	case event.ChatMessage:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
 			t.reply(ev.Agent, p)

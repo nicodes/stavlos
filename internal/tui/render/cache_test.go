@@ -1,7 +1,6 @@
 package render
 
 import (
-	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,6 +9,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/transcript"
+	"github.com/nicodes/stavlos/internal/tui/transcript/evtest"
 )
 
 // TestRenderMatchesRenderAll: the cached render is exactly the uncached
@@ -46,21 +46,21 @@ func TestRenderMatchesRenderAll(t *testing.T) {
 	}
 	check("empty")
 	tr.Apply(mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}))
-	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "build **it**\nplease"}))
-	tr.Apply(mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"make"}`)}))
+	evtest.Apply(tr, evtest.Prompt("a", "build **it**\nplease"))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"make"}`))
 	check("running call")
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "shell", Text: "compiling\nlinking\n"})
 	check("stream under the call")
-	tr.Apply(mk(4, "a", event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
-	tr.Apply(mk(5, "a", event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
-	tr.Apply(mk(6, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "1\n2\n3\n4\n5\n6"}))
+	tr.Apply(mk(4, "a", event.AskRequested, event.AskRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
+	tr.Apply(mk(5, "a", event.AskResolved, event.AskResolvedPayload{ID: "p1", Outcome: event.AskAnswered, Answer: "allow"}))
+	tr.Apply(mk(6, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "1\n2\n3\n4\n5\n6"}))
 	check("finished call")
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Text: "Here is a long answer that wraps across the narrow width more than once"})
 	check("text stream")
 	tr.Apply(mk(7, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "# Done\nall good"}}}))
 	tr.Apply(mk(8, "a", event.CompactionStarted, event.CompactionPayload{Before: 1000}))
 	check("compacting")
-	tr.Apply(mk(9, "a", event.Compacted, event.CompactedPayload{Summary: "S", Before: 1000, After: 100}))
+	tr.Apply(mk(9, "a", event.CompactionDone, event.CompactionPayload{Summary: "S", Before: 1000, After: 100}))
 	tr.Apply(mk(10, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: event.ReasonCancelled}))
 	check("ended")
 }
@@ -71,8 +71,8 @@ func TestRenderMatchesRenderAll(t *testing.T) {
 func TestRenderReusesUnchangedItems(t *testing.T) {
 	tr := transcript.NewTranscript()
 	cache := &Cache{}
-	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "hi"}))
-	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
+	evtest.Apply(tr, evtest.Prompt("a", "hi"))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"ls"}`))
 	tr.Apply(mk(3, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "working on it"}}}))
 	o := Options{Width: 80, Focused: true, Cursor: 0}
 	misses := func(step string, want int, o Options) {
@@ -91,7 +91,7 @@ func TestRenderReusesUnchangedItems(t *testing.T) {
 	misses("streamed token", 0, o)
 	o.Cursor = 1
 	misses("cursor moved", 2, o)
-	tr.Apply(mk(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a"}))
+	tr.Apply(mk(4, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a"}))
 	misses("call finished", 1, o)
 	o.Width = 60
 	misses("resized", 3, o)

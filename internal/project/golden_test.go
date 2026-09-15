@@ -41,21 +41,41 @@ func dump(h []model.Message) string {
 	return sb.String()
 }
 
-func user(seq int64, text string) event.Event {
-	return ev(seq, event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: text})
+func ev(seq int64, t event.Type, p any) event.Event {
+	return event.Event{Seq: seq, Type: t, Payload: event.MustPayload(p)}
 }
-func assistant(seq int64, blocks ...model.Block) event.Event {
-	return ev(seq, event.AssistantMessage, event.AssistantMessagePayload{Blocks: blocks})
+
+// user is a human prompt queued and taken at seq: two events, seq and seq+0.5
+// in spirit, numbered seq*10 and seq*10+1 so cases stay readable.
+func user(seq int64, text string) []event.Event {
+	return input(seq, event.Input{ID: text, Kind: event.InputPrompt, Text: text})
+}
+
+func input(seq int64, in event.Input) []event.Event {
+	return []event.Event{ev(seq*10, event.InputQueued, in), ev(seq*10+1, event.InputTaken, event.InputTakenPayload{IDs: []string{in.ID}})}
+}
+
+func assistant(seq int64, blocks ...model.Block) []event.Event {
+	return []event.Event{ev(seq*10, event.AssistantMessage, event.AssistantMessagePayload{Blocks: blocks})}
 }
 func use(id, name string) model.Block {
 	return model.Block{Type: model.BlockToolUse, ID: id, Name: name, Input: json.RawMessage(`{}`)}
 }
 func txt(s string) model.Block { return model.Block{Type: model.BlockText, Text: s} }
-func result(seq int64, id, out string) event.Event {
-	return ev(seq, event.ToolCallFinished, event.ToolFinishedPayload{CallID: id, Output: out})
+func result(seq int64, id, out string) []event.Event {
+	return []event.Event{ev(seq*10, event.ToolFinished, event.ToolFinishedPayload{CallID: id, Output: out})}
 }
-func ended(seq int64, reason event.TurnReason) event.Event {
-	return ev(seq, event.TurnEnded, event.TurnEndedPayload{Reason: reason})
+func ended(seq int64, reason event.TurnReason) []event.Event {
+	return []event.Event{ev(seq*10, event.TurnEnded, event.TurnEndedPayload{Reason: reason})}
+}
+func one(seq int64, t event.Type, p any) []event.Event { return []event.Event{ev(seq*10, t, p)} }
+
+func cat(parts ...[]event.Event) []event.Event {
+	var out []event.Event
+	for _, p := range parts {
+		out = append(out, p...)
+	}
+	return out
 }
 
 // TestProjectGolden pins Project's repair and shaping rules.
@@ -67,70 +87,76 @@ func TestProjectGolden(t *testing.T) {
 	}{
 		{
 			name: "plain exchange",
-			evs:  []event.Event{user(1, "hi"), assistant(2, txt("hello")), user(3, "more"), assistant(4, txt("yes"))},
+			evs:  cat(user(1, "hi"), assistant(2, txt("hello")), user(3, "more"), assistant(4, txt("yes"))),
 			want: "user: text(hi)\nassistant: text(hello)\nuser: text(more)\nassistant: text(yes)",
 		},
 		{
 			name: "tool call and result",
-			evs:  []event.Event{user(1, "go"), assistant(2, use("c1", "read")), result(3, "c1", "file"), assistant(4, txt("done"))},
+			evs:  cat(user(1, "go"), assistant(2, use("c1", "read")), result(3, "c1", "file"), assistant(4, txt("done"))),
 			want: "user: text(go)\nassistant: use[c1](read)\nuser: result[c1](file)\nassistant: text(done)",
 		},
 		{
-			name: "dangling call at the end reads as still running",
-			evs:  []event.Event{user(1, "go"), assistant(2, use("c1", "shell"))},
-			want: "user: text(go)\nassistant: use[c1](shell)\nuser: result[c1](Tool call is still running before it completed.)!~",
+			name: "a queued input is not history until it is taken",
+			evs:  cat(user(1, "go"), assistant(2, txt("ok")), one(3, event.InputQueued, event.Input{ID: "later", Kind: event.InputPrompt, Text: "later"})),
+			want: "user: text(go)\nassistant: text(ok)",
 		},
 		{
 			name: "cancelled turn repairs the open call and orders results before text",
-			evs: []event.Event{user(1, "go"), assistant(2, use("c1", "shell"), use("c2", "read")), result(3, "c2", "f"),
-				ended(4, "cancelled"), user(5, "stop")},
+			evs: cat(user(1, "go"), assistant(2, use("c1", "shell"), use("c2", "read")), result(3, "c2", "f"),
+				ended(4, "cancelled"), user(5, "stop")),
 			want: "user: text(go)\nassistant: use[c1](shell) use[c2](read)\nuser: result[c2](f) result[c1](Tool call was cancelled before it completed.)!~ text(stop)",
 		},
 		{
 			name: "error and abort reasons",
-			evs: []event.Event{user(1, "a"), assistant(2, use("c1", "x")), ended(3, "error"),
-				user(4, "b"), assistant(5, use("c2", "y")), ev(6, event.TurnAborted, event.TurnPayload{Turn: 2}), user(7, "c")},
+			evs: cat(user(1, "a"), assistant(2, use("c1", "x")), ended(3, "error"),
+				user(4, "b"), assistant(5, use("c2", "y")), one(6, event.TurnAborted, event.TurnPayload{Turn: 2}), user(7, "c")),
 			want: "user: text(a)\nassistant: use[c1](x)\nuser: result[c1](Tool call failed before it completed.)!~ text(b)\nassistant: use[c2](y)\nuser: result[c2](Tool call was interrupted by a daemon restart before it completed.)!~ text(c)",
 		},
 		{
-			name: "a new message abandons open calls; a result for an unknown call is dropped",
-			evs:  []event.Event{user(1, "a"), assistant(2, use("c1", "x")), user(3, "b"), result(4, "zz", "ignored"), assistant(5, txt("ok"))},
+			name: "a new input abandons open calls; a result for an unknown call is dropped",
+			evs:  cat(user(1, "a"), assistant(2, use("c1", "x")), user(3, "b"), result(4, "zz", "ignored"), assistant(5, txt("ok"))),
 			want: "user: text(a)\nassistant: use[c1](x)\nuser: result[c1](Tool call was abandoned before it completed.)!~ text(b)\nassistant: text(ok)",
 		},
 		{
 			name: "denied and cancelled results get default text and error flags",
-			evs: []event.Event{user(1, "a"), assistant(2, use("c1", "x"), use("c2", "y")),
-				ev(3, event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Denied: true}),
-				ev(4, event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c2", Cancelled: true}), ended(5, "cancelled")},
+			evs: cat(user(1, "a"), assistant(2, use("c1", "x"), use("c2", "y")),
+				one(3, event.ToolFinished, event.ToolFinishedPayload{CallID: "c1", Denied: true}),
+				one(4, event.ToolFinished, event.ToolFinishedPayload{CallID: "c2", Cancelled: true}), ended(5, "cancelled")),
 			want: "user: text(a)\nassistant: use[c1](x) use[c2](y)\nuser: result[c1](Permission denied by policy.)! result[c2](Tool call was cancelled.)!~",
 		},
 		{
 			name: "empty text is dropped and an all-empty assistant message vanishes",
-			evs:  []event.Event{user(1, "a"), assistant(2, txt("  "), txt("real")), user(3, "b"), assistant(4, txt("")), user(5, "c")},
+			evs:  cat(user(1, "a"), assistant(2, txt("  "), txt("real")), user(3, "b"), assistant(4, txt("")), user(5, "c")),
 			want: "user: text(a)\nassistant: text(real)\nuser: text(b) text(c)",
 		},
 		{
-			name: "messages from agents are labelled",
-			evs: []event.Event{ev(1, event.UserMessage, event.UserMessagePayload{Kind: "agent_response", Text: "found", From: "scout"}),
-				assistant(2, txt("ok"))},
-			want: "user: text([message from agent scout — another agent's output, not the human's instruction]\nfound)\nassistant: text(ok)",
+			name: "messages from agents are framed by kind",
+			evs: cat(input(1, event.Input{ID: "r", Kind: event.InputResponse, Text: "found", From: "a1", FromName: "scout"}),
+				input(2, event.Input{ID: "i", Kind: event.InputInfo, Text: "fyi", From: "a1", FromName: "scout"}), assistant(3, txt("ok"))),
+			want: "user: text([message from agent scout, an answer to you — another agent's output, not the human's instruction]\nfound) text([message from agent scout, no reply needed — another agent's output, not the human's instruction]\nfyi)\nassistant: text(ok)",
+		},
+		{
+			name: "a job's result reads with its output",
+			evs: cat(one(1, event.JobFinished, event.JobFinishedPayload{ID: "m1", Summary: "background command exited 2", Output: "FAIL"}),
+				input(2, event.Input{ID: "j", Kind: event.InputJob, Job: "m1"})),
+			want: "user: text(Job m1: background command exited 2\n\nFAIL)",
 		},
 		{
 			name: "history starting with the assistant gets a user opener",
-			evs:  []event.Event{assistant(1, txt("hello"))},
+			evs:  assistant(1, txt("hello")),
 			want: "user: text((continue))\nassistant: text(hello)",
 		},
 		{
 			name: "compaction replaces the covered prefix and drops results for compacted calls",
-			evs: []event.Event{user(1, "a"), assistant(2, use("c1", "x")), result(3, "c1", "r1"), assistant(4, txt("b")), ended(5, "end_turn"),
+			evs: cat(user(1, "a"), assistant(2, use("c1", "x")), result(3, "c1", "r1"), assistant(4, txt("b")), ended(5, "end_turn"),
 				user(6, "c"), assistant(7, txt("d")),
-				ev(8, event.Compacted, event.CompactedPayload{FromSeq: 1, ToSeq: 5, Summary: "S"}),
-				result(9, "c1", "late"), user(10, "e")},
+				one(8, event.CompactionDone, event.CompactionPayload{FromSeq: 10, ToSeq: 50, Summary: "S"}),
+				result(9, "c1", "late"), user(10, "e")),
 			want: "user: text([The earlier part of this conversation was compacted. Summary follows.]\n\nS)\nassistant: text(Understood. I will continue from that summary.)\nuser: text(c)\nassistant: text(d)\nuser: text(e)",
 		},
 		{
 			name: "thinking blocks survive",
-			evs:  []event.Event{user(1, "a"), assistant(2, model.Block{Type: model.BlockThinking, Text: "hm", Opaque: "sig"}, txt("b"))},
+			evs:  cat(user(1, "a"), assistant(2, model.Block{Type: model.BlockThinking, Text: "hm", Opaque: "sig"}, txt("b"))),
 			want: "user: text(a)\nassistant: think(hm) text(b)",
 		},
 	}
@@ -143,23 +169,52 @@ func TestProjectGolden(t *testing.T) {
 	}
 }
 
+// TestCut: a compaction cuts at a turn boundary, the whole history or its
+// older two thirds, and the builder applies the result like any event.
+func TestCut(t *testing.T) {
+	b := NewBuilder()
+	for _, e := range cat(user(1, "a"), assistant(2, txt("b")), ended(3, "end_turn"), user(4, "c"), assistant(5, txt("d")), ended(6, "end_turn"), user(7, "e")) {
+		b.Apply(e)
+	}
+	if _, ok := NewBuilder().Cut(true); ok {
+		t.Fatal("an empty history has nothing to cut")
+	}
+	all, ok := b.Cut(true)
+	if !ok || all.ToSeq != 60 || len(all.Old) != 4 || all.FromSeq != 11 || all.Before <= 0 {
+		t.Fatalf("all: %+v %v", all, ok)
+	}
+	older, ok := b.Cut(false)
+	if !ok || older.ToSeq != 30 || len(older.Old) != 2 {
+		t.Fatalf("older: %+v %v", older, ok)
+	}
+	if older.After("S") <= 0 {
+		t.Fatal("after")
+	}
+	b.Apply(ev(80, event.CompactionDone, event.CompactionPayload{ToSeq: older.ToSeq, Summary: "S"}))
+	if got := dump(b.History()); !strings.HasSuffix(got, "user: text(c)\nassistant: text(d)\nuser: text(e)") || !strings.Contains(got, "S)") {
+		t.Fatalf("after compaction:\n%s", got)
+	}
+	again, ok := b.Cut(true)
+	if !ok || again.ToSeq != 60 {
+		t.Fatalf("the later boundary survives the compaction: %+v %v", again, ok)
+	}
+}
+
 func TestEstimateAndTranscript(t *testing.T) {
-	h := Project([]event.Event{user(1, "12345678"), assistant(2, use("c1", "read")), result(3, "c1", "abcd")})
+	h := Project(cat(user(1, "12345678"), assistant(2, use("c1", "read")), result(3, "c1", "abcd")))
 	// system 4 + text 8+8 + use 2+8 + result 4+8 = 42 → /4
 	if got := EstimateTokens(h, "sys!", nil); got != 10 {
 		t.Fatalf("estimate %d", got)
 	}
-	// Tool definitions and thinking signatures count: both travel with the call.
 	defs := []model.ToolDef{{Name: "read", Description: "Read a file.", Schema: json.RawMessage(`{"type":"object"}`)}}
 	if got := EstimateTokens(h, "sys!", defs); got != 10+(4+12+17+8)/4 {
 		t.Fatalf("estimate with tools %d", got)
 	}
-	sig := Project([]event.Event{user(1, "a"), assistant(2, model.Block{Type: model.BlockThinking, Opaque: strings.Repeat("s", 80)}, txt("b"))})
-	if EstimateTokens(sig, "", nil) <= EstimateTokens(Project([]event.Event{user(1, "a"), assistant(2, txt("b"))}), "", nil) {
+	sig := Project(cat(user(1, "a"), assistant(2, model.Block{Type: model.BlockThinking, Opaque: strings.Repeat("s", 80)}, txt("b"))))
+	if EstimateTokens(sig, "", nil) <= EstimateTokens(Project(cat(user(1, "a"), assistant(2, txt("b")))), "", nil) {
 		t.Fatal("a signature should add to the estimate")
 	}
-	want := "user: 12345678\nassistant calls read {}\ntool result: abcd\n"
-	if got := Transcript(h); got != want {
+	if got := Transcript(h); got != "user: 12345678\nassistant calls read {}\ntool result: abcd\n" {
 		t.Fatalf("transcript %q", got)
 	}
 }

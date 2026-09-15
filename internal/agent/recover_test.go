@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"sort"
 	"strings"
 	"testing"
 
@@ -16,32 +15,38 @@ import (
 )
 
 // snapshot is the part of an agent's view that recovery must reproduce:
-// everything except live-only fields (monitors, MCP, context estimates).
+// everything except live-only fields (jobs, MCP, context estimates).
 type snapshot struct {
 	ID, Parent, Archetype, Label, Model, Variant, State string
 	Depth, Turn, Queued, Tokens                         int
 	CostUSD                                             float64
 	LastError                                           string
-	Awaiting                                            []string
+	Awaiting, Due                                       []string
 	Todos                                               []event.TodoItem
 	Dirs                                                []protocol.DirInfo
 	Children                                            []string
-	Owed, Remind                                        []string
+	Inbox                                               []string
 	LastPost                                            string
 	Nudges                                              int
-	Armed                                               []string
 }
 
 func snap(s *Channel) []snapshot {
 	var out []snapshot
 	for _, a := range s.Agents() {
 		in := a.Info()
+		s.mu.Lock()
+		st := a.state()
+		var inbox []string
+		for _, i := range st.inbox {
+			inbox = append(inbox, string(i.Kind)+":"+i.Text)
+		}
 		out = append(out, snapshot{
 			ID: in.ID, Parent: in.Parent, Archetype: in.Archetype, Label: in.Label, Model: in.Model, Variant: in.Variant, State: string(in.State),
 			Depth: in.Depth, Turn: in.Turn, Queued: in.Queued, Tokens: in.Tokens, CostUSD: in.CostUSD, LastError: in.LastError,
-			Awaiting: in.Awaiting, Todos: in.Todos, Dirs: s.Info().Dirs, Children: a.Children(), Armed: a.armedIDs(),
-			Owed: a.replyState(a.owed), Remind: append([]string(nil), a.remind...), LastPost: a.currentPost(), Nudges: a.nudgeCount(),
+			Awaiting: in.Awaiting, Due: in.Due, Todos: in.Todos, Dirs: s.dirInfosLocked(), Children: append([]string(nil), st.children...),
+			Inbox: inbox, LastPost: st.lastPost, Nudges: st.nudges,
 		})
+		s.mu.Unlock()
 	}
 	return out
 }
@@ -93,7 +98,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 	close(release)
 	h.waitFor(t, event.TurnEnded, root.ID) // turn 2
 	runTurn(t, s, h, "follow up")          // turn 3
-	waitUntil(t, h, func() bool { return child.StateOf() == StateIdle && s.Busy() == 0 })
+	waitUntil(t, h, func() bool { return stateOf(child) == StateIdle && busy(s) == 0 })
 	// Turn 4: the root messages the child by a prefix of its id and starts a
 	// background job that exits; the child answers. Both leave state the
 	// replay must reproduce: an expectation keyed on the resolved id (then
@@ -107,7 +112,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 	_ = s.SetMode(ctx, protocol.ModeYolo)
 	runTurn(t, s, h, "ask the child")
 	waitUntil(t, h, func() bool {
-		return root.Info().Turn >= 5 && root.StateOf() == StateIdle && child.StateOf() == StateIdle && s.Busy() == 0 && len(root.Info().Awaiting) == 0 && len(root.armedIDs()) == 0
+		return root.Info().Turn >= 5 && stateOf(root) == StateIdle && stateOf(child) == StateIdle && busy(s) == 0 && len(root.Info().Awaiting) == 0 && len(root.Info().Monitors) == 0
 	})
 	s.Stop()
 	before := snap(s)
@@ -125,8 +130,8 @@ func TestRecoverRoundTrip(t *testing.T) {
 		aj, _ := json.MarshalIndent(after, "", " ")
 		t.Fatalf("recovered view differs\nlive:\n%s\nrecovered:\n%s\nlog:\n%s", bj, aj, h.dump())
 	}
-	if s2.Mode() != mode || s2.Model() != modelID || s2.Live() != 2 {
-		t.Fatalf("channel: mode %s model %s live %d", s2.Mode(), s2.Model(), s2.Live())
+	if s2.Mode() != mode || s2.Model() != modelID || live(s2) != 2 {
+		t.Fatalf("channel: mode %s model %s live %d", s2.Mode(), s2.Model(), live(s2))
 	}
 	if len(h2.all()) != 0 {
 		t.Fatalf("recovery of a clean log should log nothing, got\n%s", h2.dump())
@@ -146,11 +151,16 @@ func TestRecoverAbortsOpenTurns(t *testing.T) {
 	_ = s.SetMode(context.Background(), protocol.ModeYolo)
 	root := s.Root()
 	_ = root.Prompt(context.Background(), "go", "human:test")
-	h.waitFor(t, event.ToolCallFinished, root.ID)
+	h.waitFor(t, event.ToolFinished, root.ID)
 	waitUntil(t, h, func() bool { return len(fm.requests()) == 2 }) // blocked in the second model call
-	s.Stop()                                                        // the daemon dies here
+	// The daemon dies here: once the channel is stopped nothing more is
+	// logged, so the log is the crash's; then the blocked call may return.
+	stopped := make(chan struct{})
+	go func() { s.Stop(); close(stopped) }()
+	waitUntil(t, h, func() bool { s.mu.Lock(); defer s.mu.Unlock(); return s.stopped })
 	evs := h.all()
-	close(gate) // the orphaned turn may still log into h; evs is the log as the crash left it
+	close(gate)
+	<-stopped
 
 	// The lost job wakes the recovered agent at once: its next turn opens
 	// with the loss report.
@@ -177,7 +187,7 @@ func TestRecoverAbortsOpenTurns(t *testing.T) {
 	for _, e := range h2.all() {
 		types = append(types, string(e.Type))
 	}
-	if !strings.HasPrefix(strings.Join(types, " "), "monitor.fired turn.aborted turn.started") {
+	if !strings.HasPrefix(strings.Join(types, " "), "turn.aborted job.finished input.queued turn.started") {
 		t.Fatalf("recovery logged %v", types)
 	}
 	if in := r.Info(); in.State != "idle" || len(in.Monitors) != 0 || in.LastError != "" {
@@ -195,13 +205,15 @@ func TestRecoverArchivedAndKilled(t *testing.T) {
 	s, h := newTestChannel(t, testConfig{}, fm)
 	runTurn(t, s, h, "go")
 	child := s.Agents()[1]
-	waitUntil(t, h, func() bool { return s.Busy() == 0 })
+	waitUntil(t, h, func() bool { return busy(s) == 0 })
 	if err := s.Kill(child.ID); err != nil {
 		t.Fatal(err)
 	}
-	<-child.Done()
+	<-child.ctx.Done()
 	s.Stop()
-	_ = s.Root().Prompt(context.Background(), "after restart", "human:test")
+	// A prompt that reached the log as the daemon stopped.
+	_, _ = h.Append(context.Background(), event.Event{Channel: s.ID, Agent: s.Root().ID, Type: event.InputQueued,
+		Payload: event.MustPayload(event.Input{ID: "late", Kind: event.InputPrompt, Text: "after restart"})})
 
 	fm.steps = []step{reply(text("resumed"))}
 	h2 := newFakeHost(fm)
@@ -216,7 +228,7 @@ func TestRecoverArchivedAndKilled(t *testing.T) {
 	if end.Turn != 2 {
 		t.Fatalf("queued prompt did not run: %+v", end)
 	}
-	if c := s2.Agents()[1]; c.Alive() || s2.Live() != 1 {
+	if c := s2.Agents()[1]; c.Alive() || live(s2) != 1 {
 		t.Fatalf("killed child came back alive")
 	}
 
@@ -228,8 +240,8 @@ func TestRecoverArchivedAndKilled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !s3.Archived() || s3.Live() != 0 {
-		t.Fatalf("archived %v live %d", s3.Archived(), s3.Live())
+	if !s3.Archived() || live(s3) != 0 {
+		t.Fatalf("archived %v live %d", s3.Archived(), live(s3))
 	}
 }
 
@@ -252,10 +264,13 @@ func TestRecoverMissingRoleIsReadOnly(t *testing.T) {
 	if in.Archetype != "lead" || !strings.Contains(in.LastError, "no longer exists") {
 		t.Fatalf("%+v", in)
 	}
-	if p := r.Preset(); strings.Join(p.Tools, ",") != "read" || len(p.Spawn) != 0 || len(p.MCP) != 0 {
+	if p := r.role().preset; strings.Join(p.Tools, ",") != "read" || len(p.Spawn) != 0 || len(p.MCP) != 0 {
 		t.Fatalf("fallback preset %+v", p)
 	}
-	if ok, _ := s2.canSpawn(r); ok {
+	s2.mu.Lock()
+	ok, _ := s2.canSpawnLocked(r.state())
+	s2.mu.Unlock()
+	if ok {
 		t.Fatal("a read-only fallback must not spawn")
 	}
 }
@@ -299,25 +314,4 @@ func TestRecoverKeepsChannelAllows(t *testing.T) {
 	if len(fin) != 4 || fin[0].Denied || fin[1].Denied || !fin[2].Denied || !strings.Contains(fin[2].Output, "Denied by policy") || !fin[3].Denied {
 		t.Fatalf("%+v", fin)
 	}
-}
-
-// replyState lists the parties set in one of an agent's reply maps, sorted.
-func (a *Agent) replyState(m map[string]bool) []string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	var out []string
-	for p, on := range m {
-		if on {
-			out = append(out, p)
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-// nudgeCount reads the agent's reminder turns in a row.
-func (a *Agent) nudgeCount() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.nudges
 }

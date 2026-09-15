@@ -10,10 +10,12 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
@@ -26,10 +28,9 @@ import (
 
 // MCP servers are agent-level: an agent whose role lists a server starts
 // its own process at its next turn, calls its tools as mcp__<server>__<tool>,
-// and takes the process down when it is killed or its role stops listing
-// the server. Nothing is shared between agents, so a stateful server (a
-// browser, a filesystem view) belongs to one agent. Processes die with the
-// daemon; recovery starts them again at the agent's next turn.
+// and takes the process down when it is killed, idles, or its role stops
+// listing the server. Processes are runtime state, not log state: they die
+// with the daemon and start again at the agent's next turn.
 
 const (
 	mcpStartTimeout = 30 * time.Second
@@ -38,15 +39,22 @@ const (
 )
 
 // MCPIdleAfter is how long an agent may sit idle before its MCP servers
-// are stopped; they start again at its next turn. Agents are never killed
-// by the model, so this is what keeps an idle child cheap. A variable so
-// tests can shorten it.
+// are stopped; they start again at its next turn. A variable so tests can
+// shorten it.
 var MCPIdleAfter = 10 * time.Minute
 
-// mcpServer is one running (or failed) server owned by an agent.
+// mcpSet is an agent's servers. Its lock is never held while taking the
+// channel's: events are committed after it is released.
+type mcpSet struct {
+	mu      sync.Mutex
+	servers map[string]*mcpServer
+	idle    *time.Timer
+}
+
+// mcpServer is one running (or failed) server.
 type mcpServer struct {
 	name    string
-	state   protocol.MCPState // starting | connected | failed | stopped
+	state   protocol.MCPState
 	err     string
 	started time.Time
 	session *mcp.ClientSession
@@ -78,31 +86,28 @@ func mcpToolName(server, tool string) string {
 	return name
 }
 
-// ensureMCP starts every server the role lists that is not running yet.
-// It blocks the turn for at most mcpStartTimeout per server; a server that
-// fails is logged and skipped, and the turn goes on without it.
-func (a *Agent) ensureMCP(ctx context.Context, cfg *config.Effective) {
-	a.mu.Lock()
-	if a.mcps == nil {
-		a.mcps = map[string]*mcpServer{}
+// ensureMCP starts every server listed that is not running and stops the
+// ones no longer listed. It blocks the turn for at most mcpStartTimeout per
+// server; a server that fails is logged and skipped.
+func (a *Agent) ensureMCP(ctx context.Context, cfg *config.Effective, listed []string) {
+	a.mcp.mu.Lock()
+	if a.mcp.servers == nil {
+		a.mcp.servers = map[string]*mcpServer{}
 	}
-	listed := append([]string(nil), a.preset.MCP...)
-	var start []string
+	var start, stop []string
 	for _, name := range listed {
-		if s, ok := a.mcps[name]; !ok || s.state == protocol.MCPStopped {
+		if s, ok := a.mcp.servers[name]; !ok || s.state == protocol.MCPStopped {
 			start = append(start, name)
 		}
 	}
-	// Servers the role no longer lists go down.
-	var stop []string
-	for name := range a.mcps {
+	for name := range a.mcp.servers {
 		if !contains(listed, name) {
 			stop = append(stop, name)
 		}
 	}
-	a.mu.Unlock()
+	a.mcp.mu.Unlock()
 	for _, name := range stop {
-		a.stopMCP(name)
+		a.stopMCP(name, true)
 	}
 	for _, name := range start {
 		a.startMCP(ctx, cfg, name)
@@ -111,22 +116,22 @@ func (a *Agent) ensureMCP(ctx context.Context, cfg *config.Effective) {
 
 // startMCP launches one server and lists its tools.
 func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string) {
-	s := &mcpServer{name: name, state: protocol.MCPStarting, started: time.Now(), tools: map[string]*mcp.Tool{}}
-	a.mu.Lock()
-	a.mcps[name] = s
-	a.mu.Unlock()
+	srv := &mcpServer{name: name, state: protocol.MCPStarting, started: time.Now(), tools: map[string]*mcp.Tool{}}
+	a.mcp.mu.Lock()
+	a.mcp.servers[name] = srv
+	a.mcp.mu.Unlock()
 	fail := func(err error) {
-		a.mu.Lock()
-		s.state, s.err = protocol.MCPFailed, err.Error()
-		a.mu.Unlock()
-		_, _ = a.record(context.Background(), event.MCPFailed, event.MCPFailedPayload{Server: name, Error: err.Error()})
+		a.mcp.mu.Lock()
+		srv.state, srv.err = protocol.MCPFailed, err.Error()
+		a.mcp.mu.Unlock()
+		_ = a.record(event.MCPFailed, event.MCPFailedPayload{Server: name, Error: err.Error()})
 	}
 	def, ok := cfg.MCP[name]
-	if !ok {
+	switch {
+	case !ok:
 		fail(fmt.Errorf("server %q is not defined under mcp in stavlos.json", name))
 		return
-	}
-	if def.Command == "" {
+	case def.Command == "":
 		fail(fmt.Errorf("server %q has no command (remote servers are not supported yet)", name))
 		return
 	}
@@ -163,116 +168,124 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 			return
 		}
 		n := mcpToolName(name, t.Name)
-		a.mu.Lock()
-		if _, dup := s.tools[n]; !dup {
-			s.order = append(s.order, n)
+		a.mcp.mu.Lock()
+		if _, dup := srv.tools[n]; !dup {
+			srv.order = append(srv.order, n)
 		}
-		s.tools[n] = t
-		a.mu.Unlock()
+		srv.tools[n] = t
+		a.mcp.mu.Unlock()
 		names = append(names, n)
 	}
-	a.mu.Lock()
-	s.session, s.state = session, protocol.MCPConnected
-	a.mu.Unlock()
-	_, _ = a.record(context.Background(), event.MCPStarted, event.MCPStartedPayload{Server: name, Tools: names})
-	// A server that exits on its own is reported once, so the tab and the
-	// chat show it; the agent's next turn starts it again.
+	a.mcp.mu.Lock()
+	srv.session, srv.state = session, protocol.MCPConnected
+	a.mcp.mu.Unlock()
+	_ = a.record(event.MCPStarted, event.MCPStartedPayload{Server: name, Tools: names})
+	// A server that exits on its own is reported once; the agent's next turn
+	// starts it again.
 	go func() {
 		err := session.Wait()
-		a.mu.Lock()
-		if s.state != protocol.MCPConnected {
-			a.mu.Unlock()
+		a.mcp.mu.Lock()
+		if srv.state != protocol.MCPConnected {
+			a.mcp.mu.Unlock()
 			return
 		}
-		s.state, s.session = protocol.MCPStopped, nil
-		s.err = "exited"
+		srv.state, srv.session, srv.err = protocol.MCPStopped, nil, "exited"
 		if err != nil {
-			s.err = err.Error()
+			srv.err = err.Error()
 		}
-		a.mu.Unlock()
-		_, _ = a.record(context.Background(), event.MCPFailed, event.MCPFailedPayload{Server: name, Error: "server exited: " + s.err})
+		why := srv.err
+		a.mcp.mu.Unlock()
+		_ = a.record(event.MCPFailed, event.MCPFailedPayload{Server: name, Error: "server exited: " + why})
 	}()
 }
 
 // armMCPIdle schedules the idle stop after a turn ends; disarmMCPIdle
 // cancels it when the next turn starts.
 func (a *Agent) armMCPIdle() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if len(a.mcps) == 0 {
+	a.mcp.mu.Lock()
+	defer a.mcp.mu.Unlock()
+	if len(a.mcp.servers) == 0 {
 		return
 	}
-	if a.mcpIdle != nil {
-		a.mcpIdle.Stop()
+	if a.mcp.idle != nil {
+		a.mcp.idle.Stop()
 	}
-	a.mcpIdle = time.AfterFunc(MCPIdleAfter, func() {
-		a.mu.Lock()
-		idle := a.state == StateIdle && len(a.prompts)+len(a.steers)+len(a.responses) == 0
-		a.mu.Unlock()
+	a.mcp.idle = time.AfterFunc(MCPIdleAfter, func() {
+		a.s.mu.Lock()
+		st := a.state()
+		idle := !st.inTurn && !st.startsTurn()
+		a.s.mu.Unlock()
 		if idle {
-			a.stopMCP("")
+			a.stopMCP("", true)
 		}
 	})
 }
 
 func (a *Agent) disarmMCPIdle() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.mcpIdle != nil {
-		a.mcpIdle.Stop()
-		a.mcpIdle = nil
+	a.mcp.mu.Lock()
+	defer a.mcp.mu.Unlock()
+	if a.mcp.idle != nil {
+		a.mcp.idle.Stop()
+		a.mcp.idle = nil
 	}
 }
 
 // hasMCP reports whether the agent has any server entries.
 func (a *Agent) hasMCP() bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return len(a.mcps) > 0
+	a.mcp.mu.Lock()
+	defer a.mcp.mu.Unlock()
+	return len(a.mcp.servers) > 0
 }
 
-// stopMCP stops one server ("" = all) and drops it from the agent.
-func (a *Agent) stopMCP(name string) {
-	a.mu.Lock()
+// stopMCP stops one server ("" = all) and drops it, logging mcp.stopped for
+// the ones that were up when log is set.
+func (a *Agent) stopMCP(name string, log bool) {
+	a.mcp.mu.Lock()
 	var victims []*mcpServer
-	for n, s := range a.mcps {
+	for n, srv := range a.mcp.servers {
 		if name == "" || n == name {
-			victims = append(victims, s)
-			delete(a.mcps, n)
+			victims = append(victims, srv)
+			delete(a.mcp.servers, n)
 		}
 	}
-	a.mu.Unlock()
-	for _, s := range victims {
-		a.mu.Lock()
-		sess, wasUp := s.session, s.state == protocol.MCPConnected
-		s.state, s.session = protocol.MCPStopped, nil
-		a.mu.Unlock()
-		if sess != nil {
-			_ = sess.Close()
+	type closed struct {
+		name string
+		up   bool
+		sess *mcp.ClientSession
+	}
+	var done []closed
+	for _, srv := range victims {
+		done = append(done, closed{srv.name, srv.state == protocol.MCPConnected, srv.session})
+		srv.state, srv.session = protocol.MCPStopped, nil
+	}
+	a.mcp.mu.Unlock()
+	for _, c := range done {
+		if c.sess != nil {
+			_ = c.sess.Close()
 		}
-		if wasUp {
-			_, _ = a.record(context.Background(), event.MCPStopped, event.MCPRefPayload{Server: s.name})
+		if c.up && log {
+			_ = a.record(event.MCPStopped, event.MCPRefPayload{Server: c.name})
 		}
 	}
 }
 
 // mcpDefs is the tool list of every connected server, for the model.
 func (a *Agent) mcpDefs() []model.ToolDef {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	servers := make([]string, 0, len(a.mcps))
-	for n := range a.mcps {
+	a.mcp.mu.Lock()
+	defer a.mcp.mu.Unlock()
+	servers := make([]string, 0, len(a.mcp.servers))
+	for n := range a.mcp.servers {
 		servers = append(servers, n)
 	}
 	sort.Strings(servers)
 	var defs []model.ToolDef
 	for _, n := range servers {
-		s := a.mcps[n]
-		if s.state != protocol.MCPConnected {
+		srv := a.mcp.servers[n]
+		if srv.state != protocol.MCPConnected {
 			continue
 		}
-		for _, tn := range s.order {
-			t := s.tools[tn]
+		for _, tn := range srv.order {
+			t := srv.tools[tn]
 			schema, err := json.Marshal(t.InputSchema)
 			if err != nil || t.InputSchema == nil {
 				schema = json.RawMessage(`{"type":"object"}`)
@@ -292,45 +305,40 @@ func (a *Agent) mcpTool(name string) (tools.Tool, bool) {
 	if !strings.HasPrefix(name, mcpNamePrefix) {
 		return nil, false
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	for _, s := range a.mcps {
-		if t, ok := s.tools[name]; ok && s.state == protocol.MCPConnected {
-			return mcpTool{server: s.name, session: s.session, tool: t, name: name}, true
+	a.mcp.mu.Lock()
+	defer a.mcp.mu.Unlock()
+	for _, srv := range a.mcp.servers {
+		if t, ok := srv.tools[name]; ok && srv.state == protocol.MCPConnected {
+			return mcpTool{server: srv.name, session: srv.session, tool: t, name: name}, true
 		}
 	}
 	return nil, false
 }
 
-// mcpInfoLocked reports every server the role lists (pending when not
-// started yet); the caller holds a.mu.
-func (a *Agent) mcpInfoLocked() []protocol.MCPInfo {
+// mcpInfo reports every server listed (pending when not started yet).
+func (a *Agent) mcpInfo(listed []string) []protocol.MCPInfo {
+	a.mcp.mu.Lock()
+	defer a.mcp.mu.Unlock()
 	var out []protocol.MCPInfo
 	seen := map[string]bool{}
-	add := func(name string) {
+	for _, name := range listed {
 		if seen[name] {
-			return
+			continue
 		}
 		seen[name] = true
 		info := protocol.MCPInfo{Name: name, State: protocol.MCPPending}
-		if s, ok := a.mcps[name]; ok {
-			info.State, info.Error = s.state, s.err
-			info.Tools = append([]string(nil), s.order...)
-			if !s.started.IsZero() {
-				info.Started = s.started.UTC().Format(time.RFC3339)
-			}
+		if srv, ok := a.mcp.servers[name]; ok {
+			info.State, info.Error = srv.state, srv.err
+			info.Tools = append([]string(nil), srv.order...)
+			info.Started = srv.started.UTC().Format(time.RFC3339)
 		}
 		out = append(out, info)
-	}
-	for _, n := range a.preset.MCP {
-		add(n)
 	}
 	return out
 }
 
-// mcpTool adapts one server tool to the tools.Tool interface. It carries
-// the session it was resolved with (under the agent's lock): a server that
-// exits meanwhile fails the call instead of racing the field.
+// mcpTool adapts one server tool to tools.Tool. It carries the session it
+// was resolved with: a server that exits meanwhile fails the call.
 type mcpTool struct {
 	server  string
 	session *mcp.ClientSession
@@ -354,8 +362,7 @@ func (t mcpTool) Subject(in json.RawMessage) policy.Subject {
 }
 
 func (t mcpTool) Run(ctx context.Context, in json.RawMessage, env *tools.Env) tools.Result {
-	sess := t.session
-	if sess == nil {
+	if t.session == nil {
 		return tools.Result{Output: fmt.Sprintf("MCP server %s is not connected", t.server), IsError: true}
 	}
 	cctx, cancel := context.WithTimeout(ctx, mcpCallTimeout)
@@ -366,11 +373,11 @@ func (t mcpTool) Run(ctx context.Context, in json.RawMessage, env *tools.Env) to
 			return tools.Result{Output: "arguments must be a JSON object: " + err.Error(), IsError: true}
 		}
 	}
-	res, err := sess.CallTool(cctx, &mcp.CallToolParams{Name: t.tool.Name, Arguments: args})
+	res, err := t.session.CallTool(cctx, &mcp.CallToolParams{Name: t.tool.Name, Arguments: args})
 	if err != nil {
 		return tools.Result{Output: fmt.Sprintf("%s: %v", t.name, err), IsError: true}
 	}
-	return tools.Result{Output: tools.Clip(mcpResultText(res), env.MaxOutput), IsError: res.IsError}
+	return tools.Result{Output: clip.Middle(mcpResultText(res), env.MaxOutput), IsError: res.IsError}
 }
 
 // mcpResultText flattens a tool result: text blocks as they are, other
@@ -430,10 +437,7 @@ type limitedWriter struct {
 
 func (w *limitedWriter) Write(p []byte) (int, error) {
 	if room := w.max - w.sb.Len(); room > 0 {
-		if len(p) > room {
-			p = p[:room]
-		}
-		w.sb.Write(p)
+		w.sb.Write(p[:min(len(p), room)])
 	}
 	return len(p), nil
 }

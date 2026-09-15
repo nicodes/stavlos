@@ -176,7 +176,7 @@ var handlers = map[string]handler{
 		if err != nil {
 			return nil, err
 		}
-		return protocol.AgentTreeResult{Agents: tree(s)}, nil
+		return protocol.AgentTreeResult{Agents: s.Tree()}, nil
 	}),
 	protocol.MAgentSend: typed(func(ctx context.Context, c *conn, p protocol.AgentSendParams) (any, error) {
 		s, _, err := c.d.agentChannel(p.Agent)
@@ -342,7 +342,7 @@ var handlers = map[string]handler{
 		seq, _ := c.d.Log.LastSeq(ctx, p.ID)
 		info := s.Info()
 		info.Seq = seq
-		return protocol.ReconcileResult{Channel: info, Agents: tree(s), Prompts: c.d.esc.Pending("") /* every channel's: the permission and questions tabs span channels */, Seq: seq}, nil
+		return protocol.ReconcileResult{Channel: info, Agents: s.Tree(), Prompts: c.d.esc.Pending("") /* every channel's: the permission and questions tabs span channels */, Seq: seq}, nil
 	}),
 	protocol.MPresets: typed(func(_ context.Context, c *conn, p protocol.PresetsParams) (any, error) {
 		s, err := c.d.channel(p.Channel)

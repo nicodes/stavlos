@@ -78,7 +78,6 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 	d.esc = escalation.New(escalation.Config{
 		ClaimTimeout: gcfg.Escalation.ClaimTimeout, AnswerTimeout: gcfg.Escalation.AnswerTimeout, Default: string(gcfg.Escalation.Default),
 	}, sinkFunc(d.notifyPrompt))
-	d.esc.Record = d.recordPrompt
 	if err := d.recover(ctx); err != nil {
 		return nil, err
 	}
@@ -87,11 +86,9 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 
 // Close stops channels and the log and releases the data directory.
 func (d *Daemon) Close() {
-	d.mu.Lock()
-	for _, s := range d.channels {
+	for _, s := range d.channelList() {
 		s.Stop()
 	}
-	d.mu.Unlock()
 	d.Log.Close()
 	if d.lock != nil {
 		d.lock.Close() // releases the flock
@@ -132,14 +129,10 @@ func (d *Daemon) recover(ctx context.Context) error {
 
 // --- agent.Host ---
 
-// Append logs an event. Delivery to clients happens in committed, as the
-// log commits it.
-func (d *Daemon) Append(ctx context.Context, e event.Event) (event.Event, error) {
-	out, err := d.Log.Append(ctx, e)
-	if err != nil {
-		return e, err
-	}
-	return out[0], nil
+// Append logs events in one transaction. Delivery to clients happens in
+// committed, as the log commits them.
+func (d *Daemon) Append(ctx context.Context, evs ...event.Event) ([]event.Event, error) {
+	return d.Log.Append(ctx, evs...)
 }
 
 // committed fans committed events out to subscribed clients. The log calls
@@ -189,35 +182,6 @@ func (d *Daemon) notifyPrompt(n protocol.PromptNotification, tiers []protocol.Ti
 	}
 }
 
-func (d *Daemon) recordPrompt(action protocol.PromptAction, info protocol.PromptInfo, answer, clientID string) {
-	if info.Channel == "" {
-		return
-	}
-	var t event.Type
-	var payload any
-	switch action {
-	case protocol.ActionRequested:
-		rp := event.PromptRequestedPayload{ID: info.ID, Kind: string(info.Kind), Tool: info.Tool, Input: info.Input, Question: info.Question, Options: info.Options}
-		if len(info.Questions) > 0 {
-			rp.Questions, _ = json.Marshal(info.Questions)
-		}
-		t, payload = event.PromptRequested, rp
-	case protocol.ActionEscalated:
-		t, payload = event.PromptEscalated, event.PromptRefPayload{ID: info.ID}
-	case protocol.ActionClaimed:
-		t, payload = event.PromptClaimed, event.PromptRefPayload{ID: info.ID, Client: clientID}
-	case protocol.ActionAnswered:
-		t, payload = event.PromptAnswered, event.PromptAnsweredPayload{ID: info.ID, Answer: answer, Client: clientID}
-	case protocol.ActionWithdrawn:
-		t, payload = event.PromptWithdrawn, event.PromptRefPayload{ID: info.ID}
-	case protocol.ActionDefaulted:
-		t, payload = event.PromptDefaulted, event.PromptAnsweredPayload{ID: info.ID, Answer: answer}
-	default:
-		return
-	}
-	_, _ = d.Append(context.Background(), event.Event{Channel: info.Channel, Agent: info.Agent, Type: t, Payload: event.MustPayload(payload)})
-}
-
 // --- channels ---
 
 func (d *Daemon) channel(id string) (*agent.Channel, error) {
@@ -230,11 +194,23 @@ func (d *Daemon) channel(id string) (*agent.Channel, error) {
 	return s, nil
 }
 
-// agentChannel finds the channel owning an agent.
-func (d *Daemon) agentChannel(agentID string) (*agent.Channel, *agent.Agent, error) {
+// channelList snapshots the channels. d.mu is never held while a channel is
+// called: a channel holds its own lock while it appends, the log's writer
+// delivers the commit to clients under d.mu, and holding d.mu across a
+// channel call would close that loop into a deadlock.
+func (d *Daemon) channelList() []*agent.Channel {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+	out := make([]*agent.Channel, 0, len(d.channels))
 	for _, s := range d.channels {
+		out = append(out, s)
+	}
+	return out
+}
+
+// agentChannel finds the channel owning an agent.
+func (d *Daemon) agentChannel(agentID string) (*agent.Channel, *agent.Agent, error) {
+	for _, s := range d.channelList() {
 		if a, ok := s.Agent(agentID); ok {
 			return s, a, nil
 		}
@@ -679,15 +655,14 @@ func (d *Daemon) removeClient(id string) {
 
 // Status for daemon.status.
 func (d *Daemon) Status() protocol.DaemonStatusResult {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	channels := d.channelList()
 	n := 0
-	for _, s := range d.channels {
+	for _, s := range channels {
 		n += len(s.Agents())
 	}
 	provs := d.Registry.Providers()
 	sort.Strings(provs)
-	return protocol.DaemonStatusResult{Version: protocol.Version, Build: buildid.ID(), PID: os.Getpid(), DataDir: d.DataDir, Channels: len(d.channels), Agents: n, Providers: provs}
+	return protocol.DaemonStatusResult{Version: protocol.Version, Build: buildid.ID(), PID: os.Getpid(), DataDir: d.DataDir, Channels: len(channels), Agents: n, Providers: provs}
 }
 
 // errTrustChanged: a trust reply carried a hash that no longer matches the

@@ -1,11 +1,14 @@
 package tui
 
 import (
+	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/tui/render"
 )
 
@@ -55,6 +58,34 @@ func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
 
 func mk(seq int64, agent string, typ event.Type, payload any) event.Event {
 	return event.Event{Seq: seq, Channel: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
+}
+
+// userMsg is the human's message typed into an agent's chat: queued, then
+// taken by a model call (when the chat draws it).
+func userMsg(seq int64, agent, text string) []event.Event {
+	id := fmt.Sprintf("in%d", seq)
+	return []event.Event{
+		mk(seq, agent, event.InputQueued, event.Input{ID: id, Kind: event.InputPrompt, Text: text}),
+		mk(seq, agent, event.InputTaken, event.InputTakenPayload{IDs: []string{id}}),
+	}
+}
+
+// toolCall is an assistant message calling one tool, then its tool.started:
+// the call's input travels in the assistant message.
+func toolCall(seq int64, agent, id, name, input string) []event.Event {
+	return []event.Event{
+		mk(seq, agent, event.AssistantMessage, event.AssistantMessagePayload{Blocks: []model.Block{{Type: model.BlockToolUse, ID: id, Name: name, Input: json.RawMessage(input)}}}),
+		mk(seq, agent, event.ToolStarted, event.ToolStartedPayload{CallID: id, Name: name}),
+	}
+}
+
+// feed applies event sequences in order.
+func feed(apply func(event.Event), seqs ...[]event.Event) {
+	for _, evs := range seqs {
+		for _, e := range evs {
+			apply(e)
+		}
+	}
 }
 
 // markCursorForTest swaps the (background colour) cursor highlight for a

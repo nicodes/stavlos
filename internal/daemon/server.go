@@ -221,14 +221,6 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 	return res, nil
 }
 
-func tree(s *agent.Channel) []protocol.AgentInfo {
-	var out []protocol.AgentInfo
-	for _, a := range s.Agents() {
-		out = append(out, a.Info())
-	}
-	return out
-}
-
 // subscribe replays from the requested offset, then goes live. Delivery is
 // deduplicated per subscription by seq, so the handover cannot double-send.
 
@@ -242,9 +234,7 @@ func (d *Daemon) rememberModel(s *agent.Channel, modelID string) {
 		log.Printf("could not save default model: %v", err)
 		return
 	}
-	d.mu.RLock()
-	defer d.mu.RUnlock()
-	for _, ss := range d.channels {
+	for _, ss := range d.channelList() {
 		if cfg, err := config.Load(ss.Dir, d.trust); err == nil {
 			ss.SetConfig(cfg)
 		}

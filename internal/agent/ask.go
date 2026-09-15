@@ -7,36 +7,29 @@ import (
 
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
-	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// askAPI raises an ask_user batch as one question prompt through the
-// escalation path permissions use, and blocks the turn until it is
-// answered or withdrawn (a cancel). Questions never fall to the headless
-// default.
+// askAPI raises an ask_user batch as one question prompt through the path
+// permissions use, and blocks the turn until it is answered or withdrawn
+// (a cancel). Questions never fall to the headless default.
 type askAPI struct{ a *Agent }
-
-func (a *Agent) askAPI() tools.Asker { return askAPI{a: a} }
 
 func (k askAPI) Ask(ctx context.Context, qs []protocol.Question) ([]string, error) {
 	a := k.a
+	rv := a.role()
 	texts := make([]string, 0, len(qs))
 	for _, q := range qs {
 		texts = append(texts, q.Question)
 	}
-	a.setState(StateBlocked)
-	ans := a.s.host.Prompt(ctx, protocol.PromptInfo{
-		ID: NewID("p"), Channel: a.s.ID, ChannelName: a.s.Name(), Agent: a.ID, From: a.LabelNow(), Kind: protocol.PromptQuestion, Tool: toolname.AskUser,
-		Question:  fmt.Sprintf("%s asks: %s", a.LabelNow(), strings.Join(texts, " | ")),
-		Questions: qs,
-	})
-	a.setState(StateRunning)
+	ans := a.ask(ctx, protocol.PromptInfo{
+		ID: NewID("p"), Channel: a.s.ID, ChannelName: a.s.Name(), Agent: a.ID, From: rv.name, Kind: protocol.PromptQuestion, Tool: toolname.AskUser,
+		Question: fmt.Sprintf("%s asks: %s", rv.name, strings.Join(texts, " | ")), Questions: qs,
+	}, "")
 	if ans.Withdrawn {
 		return nil, fmt.Errorf("the question was withdrawn before it was answered")
 	}
 	if len(ans.Answers) == 0 && ans.Value != "" && ans.Value != protocol.AnswerAnswered {
-		// A single free-text reply (an older client): it answers the first question.
-		return []string{ans.Value}, nil
+		return []string{ans.Value}, nil // a single free-text reply answers the first question
 	}
 	return ans.Answers, nil
 }

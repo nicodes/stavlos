@@ -3,6 +3,7 @@ package agent
 import (
 	"testing"
 
+	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/policy"
 )
 
@@ -14,14 +15,14 @@ func TestPrefixFor(t *testing.T) {
 		t.Fatal("prefixCovers")
 	}
 	var p permits
-	p.rememberPrefix("shell", "go test")
-	p.rememberPrefix("shell", "go test") // once
-	p.rememberCall("read", "/etc/hosts")
+	p.apply(event.PermitPayload{Tool: "shell", Prefix: "go test"})
+	p.apply(event.PermitPayload{Tool: "shell", Prefix: "go test"}) // once
+	p.apply(event.PermitPayload{Tool: "read", Call: "/etc/hosts"})
 	if len(p.prefixes["shell"]) != 1 || !p.covers("shell", policy.Command("go test ./...")) || p.covers("shell", policy.Command("go build")) || !p.covers("read", policy.Path("/etc/hosts")) || p.covers("read", policy.Path("/etc/passwd")) {
 		t.Fatal("permits")
 	}
 	// A patch is covered only when every path it touches is.
-	p.rememberCall("apply_patch", "a.go")
+	p.apply(event.PermitPayload{Tool: "apply_patch", Call: "a.go"})
 	if !p.covers("apply_patch", policy.Path("a.go")) || p.covers("apply_patch", policy.Path("a.go", "../../.bashrc")) || p.covers("apply_patch", policy.Path()) {
 		t.Fatal("a permit for one path covered another")
 	}

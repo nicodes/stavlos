@@ -3,180 +3,136 @@ package agent
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
 // orchestrator implements tools.Orchestrator on top of a channel (PRD §6.4).
-// Messages and status reach any agent in the channel: a child, a
-// sibling, or the caller's parent. Lifecycle (cancel, kill) stays with the
-// parent that created the agent.
+// Messages and status reach any agent in the channel: a child, a sibling,
+// or the caller's parent. Cancelling stays with the parent.
 type orchestrator struct{ s *Channel }
 
-// senderLabel turns an envelope source into the From shown to the
-// recipient: the sender's name for "agent:<id>", "" for humans. Names are
-// unique in the channel and never reused, so the name alone addresses it.
-func (s *Channel) senderLabel(source string) string {
-	id, ok := strings.CutPrefix(source, "agent:")
-	if !ok {
-		return ""
-	}
-	if a, ok := s.Agent(id); ok {
-		return a.LabelNow()
-	}
-	return id
-}
-
-// peer resolves any other live agent in the same channel.
-func (o orchestrator) peer(caller, id string) (*Agent, error) {
-	c, ok := o.s.resolve(id)
-	if !ok {
-		return nil, fmt.Errorf("unknown agent %q", id)
-	}
-	if c.ID == caller {
-		return nil, fmt.Errorf("agent %q is you", id)
-	}
-	return c, nil
-}
-
-func (o orchestrator) child(parent, id string) (*Agent, error) {
-	c, ok := o.s.resolve(id)
-	if !ok {
-		return nil, fmt.Errorf("unknown agent %q", id)
-	}
-	if c.Parent != parent {
-		return nil, fmt.Errorf("agent %q is not your child", id)
-	}
-	return c, nil
-}
-
-func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task, modelID string) (id, name string, err error) {
-	a, err := o.s.spawn(ctx, parent, archetype, label, task, modelID)
+func (o orchestrator) Spawn(ctx context.Context, parent, role, label, task, modelID string) (id, name string, err error) {
+	a, err := o.s.spawn(ctx, parent, role, label, task, modelID)
 	if err != nil {
 		return "", "", err
 	}
-	return a.ID, a.LabelNow(), nil
+	return a.ID, a.Name(), nil
 }
 
-// Message sends the caller's text to the human or to another agent in the
-// channel, as the caller said it is: a request (the recipient owes a reply,
-// the caller waits on it; it reaches the recipient at its next step, mid-turn
-// if busy, a new turn if idle), a response (it settles what the caller owed
-// and is delivered between turns, clearing the recipient's wait) or info
-// (nobody owes or waits, and it never wakes the recipient). What goes to the
-// human is always a response.
+// Message sends the caller's text to the human or to another agent, as the
+// caller says it is: a request (the recipient owes a reply and the caller
+// waits; it reaches the recipient at its next model call), a response (it
+// settles what the caller owed and wakes the recipient between turns) or
+// info (nobody owes or waits, and it never wakes the recipient). A message
+// to the human is always a response. The bookkeeping is the input's apply,
+// so a request's wait exists the moment it is delivered.
 func (o orchestrator) Message(caller, to, text, kind string) (string, error) {
-	from, hasFrom := o.s.Agent(caller)
+	s := o.s
+	s.mu.Lock()
+	from := s.st.agents[caller]
+	if from == nil {
+		s.mu.Unlock()
+		return "", fmt.Errorf("unknown agent %q", caller)
+	}
 	if to == tools.User {
-		post := "" // the chat post this answers, so the chat can place it
-		if hasFrom {
-			post = from.currentPost()
-		}
-		if _, err := o.s.host.Append(context.Background(), event.Event{Channel: o.s.ID, Agent: caller, Type: event.MessageToUser,
-			Payload: event.MustPayload(event.ChatPayload{From: o.s.senderLabel("agent:" + caller), Text: text, Post: post})}); err != nil {
+		_, err := s.commitLocked(context.Background(), s.event(caller, event.ChatMessage, event.ChatPayload{From: from.name, Text: text, Post: from.lastPost}))
+		s.mu.Unlock()
+		if err != nil {
 			return "", err
-		}
-		if hasFrom {
-			from.settle(tools.User)
 		}
 		return "message delivered to the user", nil
 	}
-	c, err := o.peer(caller, to)
+	c, ok := s.resolveLocked(to)
+	switch {
+	case !ok:
+		s.mu.Unlock()
+		return "", fmt.Errorf("unknown agent %q", to)
+	case c.id == caller:
+		s.mu.Unlock()
+		return "", fmt.Errorf("agent %q is you", to)
+	case c.killed:
+		s.mu.Unlock()
+		return "", fmt.Errorf("agent %q is killed", to)
+	}
+	in := event.Input{ID: NewID("i"), Kind: event.InputRequest, Text: text, From: caller, FromName: from.name}
+	result := "request delivered to " + c.name + "; its response wakes you between turns"
+	switch kind {
+	case tools.KindResponse:
+		in.Kind, result = event.InputResponse, "response delivered to "+c.name
+	case tools.KindInfo:
+		in.Kind, result = event.InputInfo, "info delivered to "+c.name+"; it needs no reply and does not wake it"
+	}
+	wake, err := s.commitLocked(context.Background(), s.event(c.id, event.InputQueued, in))
+	s.mu.Unlock()
+	signal(wake)
 	if err != nil {
 		return "", err
 	}
-	if !c.Alive() {
-		return "", fmt.Errorf("agent %q is %s", to, c.StateOf())
-	}
-	switch kind {
-	case tools.KindResponse:
-		if err := o.answer(caller, c, text); err != nil {
-			return "", err
-		}
-		if hasFrom {
-			from.settle(c.ID)
-		}
-		return "response delivered to " + c.LabelNow(), nil
-	case tools.KindInfo:
-		if err := c.note(context.Background(), text, "agent:"+caller); err != nil {
-			return "", err
-		}
-		return "info delivered to " + c.LabelNow() + "; it needs no reply and does not wake it", nil
-	}
-	// A request. The expectation is registered before delivery: a recipient
-	// that responds (or hits its turn limit) at once must find its asker
-	// waiting.
-	if hasFrom {
-		from.expect(c.ID)
-	}
-	if err := c.Steer(context.Background(), text, "agent:"+caller); err != nil {
-		if hasFrom {
-			from.forget(c.ID)
-		}
-		return "", err
-	}
-	return "request delivered to " + c.LabelNow() + "; its response wakes you between turns", nil
-}
-
-// answer delivers the caller's text to c as an answer: logged on c, then
-// put in its mailbox, which wakes it between turns. The caller stays alive.
-func (o orchestrator) answer(caller string, c *Agent, text string) error {
-	label := o.s.senderLabel("agent:" + caller)
-	if _, err := o.s.host.Append(context.Background(), event.Event{Channel: o.s.ID, Agent: c.ID, Type: event.ResponseReceived,
-		Payload: event.MustPayload(event.ResponsePayload{From: caller, FromLabel: label, Text: text})}); err != nil {
-		return err
-	}
-	c.deliverResponse(caller, label, text)
-	return nil
+	return result, nil
 }
 
 func (o orchestrator) Cancel(parent, id string) error {
-	c, err := o.child(parent, id)
-	if err != nil {
-		return err
+	s := o.s
+	s.mu.Lock()
+	c, ok := s.resolveLocked(id)
+	if !ok || c.parent != parent {
+		s.mu.Unlock()
+		if !ok {
+			return fmt.Errorf("unknown agent %q", id)
+		}
+		return fmt.Errorf("agent %q is not your child", id)
 	}
-	c.Cancel()
+	h := s.agents[c.id]
+	s.mu.Unlock()
+	h.Cancel()
 	return nil
 }
 
 // Status describes one agent (any in the channel) or, with no id, the
 // whole channel tree in pre-order.
 func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
-	if _, ok := o.s.Agent(caller); !ok {
+	s := o.s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.st.agents[caller]; !ok {
 		return nil, fmt.Errorf("unknown agent %q", caller)
 	}
-	var agents []*Agent
+	ids := s.preorderLocked()
 	if id != "" {
-		c, ok := o.s.resolve(id)
+		c, ok := s.resolveLocked(id)
 		if !ok {
 			return nil, fmt.Errorf("unknown agent %q", id)
 		}
-		agents = []*Agent{c}
-	} else {
-		agents = o.s.Agents()
+		ids = []string{c.id}
 	}
-	var out []tools.ChildStatus
-	for _, c := range agents {
-		in := c.Info()
-		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: in.Label, Archetype: in.Archetype, State: string(in.State), Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller})
+	out := make([]tools.ChildStatus, 0, len(ids))
+	for _, aid := range ids {
+		a := s.st.agents[aid]
+		out = append(out, tools.ChildStatus{ID: aid, Parent: a.parent, Label: a.name, Archetype: a.role, State: string(a.status()), Turn: a.turn, CostUSD: a.cost, You: aid == caller})
 	}
 	return out, nil
 }
 
 func (o orchestrator) CanSpawn(agent string) (bool, string) {
-	a, ok := o.s.Agent(agent)
+	s := o.s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.st.agents[agent]
 	if !ok {
 		return false, "unknown agent"
 	}
-	return o.s.canSpawn(a)
+	return s.canSpawnLocked(a)
 }
 
 func (o orchestrator) Archetypes(agent string) []string {
-	a, ok := o.s.Agent(agent)
+	s := o.s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.st.agents[agent]
 	if !ok {
 		return nil
 	}
-	return append([]string(nil), a.Preset().Spawn...)
+	return append([]string(nil), s.roleLocked(a).preset.Spawn...)
 }

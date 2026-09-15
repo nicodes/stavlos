@@ -19,14 +19,10 @@ import (
 
 // Working directories (PRD §10.7): the channel has one working set, shared
 // by every agent: the channel directory and what the human adds, in the dirs
-// tab or by answering a boundary prompt. Roles carry none and agent_create
-// grants none: one set is what a person can keep track of. A tool call that
-// reaches outside the set asks first, even when policy allows the tool.
-// File paths are resolved the way the tools open them (tools.ResolvePath:
-// symlinks followed, nothing expanded); shell commands are inspected as
-// text — absolute, ~, $HOME-style and parent-relative arguments, cd and
-// redirect targets. That is string inspection, not a sandbox: it catches
-// the model's ordinary behaviour, not an adversary's.
+// tab or by answering a boundary prompt. A tool call that reaches outside
+// the set asks first, even when policy allows the tool. File paths are
+// resolved the way the tools open them (tools.ResolvePath); shell commands
+// are inspected as text, and the sandbox enforces the boundary for writes.
 
 type dirEntry struct{ path, source string }
 
@@ -46,39 +42,37 @@ func resolveDir(base, d string) string {
 	return filepath.Clean(d)
 }
 
-// dirList is the channel's working set: the channel directory, then the
-// added directories in the order they came.
-func (s *Channel) dirList() []dirEntry {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return append([]dirEntry{{s.Dir, "channel"}}, s.dirs...)
+// dirPaths is the working set: the channel directory, then the added
+// directories in the order they came.
+func (s *Channel) dirPaths() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.dirPathsLocked()
 }
 
-// dirPaths is the working set as paths.
-func (s *Channel) dirPaths() []string {
-	var out []string
-	for _, d := range s.dirList() {
+func (s *Channel) dirPathsLocked() []string {
+	out := []string{s.Dir}
+	for _, d := range s.st.dirs {
 		out = append(out, d.path)
 	}
 	return out
 }
 
-// dirInfos is the working set for clients.
-func (s *Channel) dirInfos() []protocol.DirInfo {
-	var out []protocol.DirInfo
-	for _, d := range s.dirList() {
+func (s *Channel) dirInfosLocked() []protocol.DirInfo {
+	out := []protocol.DirInfo{{Path: s.Dir, Source: "channel"}}
+	for _, d := range s.st.dirs {
 		out = append(out, protocol.DirInfo{Path: d.path, Source: d.source})
 	}
 	return out
 }
 
-// inDirs reports whether an absolute path lies in the working set. Both
-// sides are compared with symlinks resolved, so a working directory that
-// is itself a link (or reached through one) still contains its files.
-func (s *Channel) inDirs(p string) bool {
+// inDirs reports whether an absolute path lies in dirs. Both sides are
+// compared with symlinks resolved, so a working directory that is itself a
+// link (or reached through one) still contains its files.
+func inDirs(dirs []string, p string) bool {
 	p = tools.ResolvePath("", p)
-	for _, d := range s.dirList() {
-		dir := tools.ResolvePath("", d.path)
+	for _, d := range dirs {
+		dir := tools.ResolvePath("", d)
 		if p == dir || strings.HasPrefix(p, dir+string(filepath.Separator)) {
 			return true
 		}
@@ -86,31 +80,18 @@ func (s *Channel) inDirs(p string) bool {
 	return false
 }
 
-// addDir puts a directory in the working set and logs it on agent, the one
-// whose boundary prompt added it ("" for the dirs tab). A directory already
+// addDir puts a directory in the working set, logged on agent (the one
+// whose boundary prompt added it, "" for the dirs tab). A directory already
 // inside the set is a no-op.
 func (s *Channel) addDir(ctx context.Context, agent, dir, source string) error {
 	dir = filepath.Clean(dir)
-	if s.inDirs(dir) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if inDirs(s.dirPathsLocked(), dir) {
 		return nil
 	}
-	if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Agent: agent, Type: event.ChannelDirAdded,
-		Payload: event.MustPayload(event.DirAddedPayload{Dir: dir, Source: source})}); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	s.applyDirAdded(dir, source)
-	s.mu.Unlock()
-	return nil
-}
-
-// applyDirAdded installs an added directory; the caller holds s.mu or is
-// replaying the log.
-func (s *Channel) applyDirAdded(dir, source string) {
-	if dir == filepath.Clean(s.Dir) || slices.ContainsFunc(s.dirs, func(e dirEntry) bool { return e.path == dir }) {
-		return
-	}
-	s.dirs = append(s.dirs, dirEntry{dir, source})
+	_, err := s.commitLocked(ctx, s.event(agent, event.ChannelDirAdded, event.DirPayload{Dir: dir, Source: source}))
+	return err
 }
 
 // AddDir is the human's add (an absolute path, ~, or a path relative to the
@@ -129,52 +110,40 @@ func (s *Channel) RemoveDir(ctx context.Context, dir string) error {
 	if dir == filepath.Clean(s.Dir) {
 		return fmt.Errorf("the channel directory cannot be removed")
 	}
-	if !slices.ContainsFunc(s.dirList(), func(e dirEntry) bool { return e.path == dir }) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !slices.ContainsFunc(s.st.dirs, func(e dirEntry) bool { return e.path == dir }) {
 		return fmt.Errorf("%s is not one of the channel's directories", dir)
 	}
-	if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Type: event.ChannelDirRemoved, Payload: event.MustPayload(event.DirRefPayload{Dir: dir})}); err != nil {
-		return err
-	}
-	s.mu.Lock()
-	s.applyDirRemoved(dir)
-	s.mu.Unlock()
-	return nil
+	_, err := s.commitLocked(ctx, s.event("", event.ChannelDirRemoved, event.DirPayload{Dir: dir}))
+	return err
 }
 
-// applyDirRemoved forgets a directory; the caller holds s.mu or is
-// replaying the log.
-func (s *Channel) applyDirRemoved(dir string) {
-	s.dirs = slices.DeleteFunc(s.dirs, func(e dirEntry) bool { return e.path == dir })
-}
-
-// outsideDir returns the first directory a tool call reaches outside the
-// working set ("" when it stays inside), as the directory a boundary prompt
-// would add: the path itself when it names a directory, else its parent.
-func (a *Agent) outsideDir(sub policy.Subject) string {
+// outsideDir returns the first directory a tool call reaches outside dirs
+// ("" when it stays inside), as a boundary prompt would offer to add it.
+func outsideDir(sub policy.Subject, base string, dirs []string) string {
 	var paths []string
 	switch sub.Kind {
 	case policy.KindCommand:
-		paths = bashPathCandidates(sub.Primary(), a.s.Dir)
+		paths = bashPathCandidates(sub.Primary(), base)
 	case policy.KindPath:
 		for _, p := range sub.Values {
-			paths = append(paths, tools.ResolvePath(a.s.Dir, p)) // as the tool will open it: no ~ or ${env:} for a model's path
+			paths = append(paths, tools.ResolvePath(base, p)) // as the tool will open it: no ~ or ${env:} for a model's path
 		}
 	case policy.KindText, policy.KindURL, policy.KindID:
 	}
 	for _, p := range paths {
-		if p == "" || a.s.inDirs(p) {
-			continue
+		if p != "" && !inDirs(dirs, p) {
+			return grantDir(p)
 		}
-		return grantDir(p)
 	}
 	return ""
 }
 
 // grantDir is the directory a boundary prompt offers to add for a path:
 // the git checkout containing it when there is one (the repository is the
-// unit people think in, and one answer then covers every package), else
-// the path itself when it is a directory, else its parent. A checkout
-// rooted at the home directory does not count: that would grant everything.
+// unit people think in), else the path itself when it is a directory, else
+// its parent. A checkout rooted at the home directory does not count.
 func grantDir(p string) string {
 	base := p
 	if st, err := os.Stat(p); err != nil || !st.IsDir() {
@@ -281,8 +250,7 @@ func homeOf(name string) string {
 
 // expandShellVars expands variables the way the command's shell will: $PWD
 // is the working directory and the rest come from the environment child
-// processes get, where a scrubbed or unset variable is empty. Guessing
-// otherwise would let "$NOPE/etc/passwd" pass as a relative path.
+// processes get, where a scrubbed or unset variable is empty.
 func expandShellVars(s, base string) string {
 	if !strings.Contains(s, "$") {
 		return s

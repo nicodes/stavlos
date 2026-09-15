@@ -25,15 +25,16 @@ func TestPostDeliversByMention(t *testing.T) {
 	s, h := newTestChannel(t, testConfig{}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "delegate")
-	waitUntil(t, h, func() bool { return len(s.Agents()) == 3 && s.Busy() == 0 })
+	waitUntil(t, h, func() bool { return len(s.Agents()) == 3 && busy(s) == 0 })
 	scout, lookout := s.Agents()[1], s.Agents()[2]
 	ctx := context.Background()
 
 	steers := func(agent string) (out []string) {
-		for _, e := range h.ofType(event.SteerReceived, agent) {
-			var p event.TextPayload
-			_ = e.Decode(&p)
-			out = append(out, p.Source+" "+p.Text)
+		for _, in := range inputsOf(h, event.InputSteer, agent) {
+			if in.Post == "" {
+				t.Fatalf("a post's steer names its post: %+v", in)
+			}
+			out = append(out, in.Text)
 		}
 		return out
 	}
@@ -41,13 +42,13 @@ func TestPostDeliversByMention(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(to, []string{"scout", "lookout"}) {
 		t.Fatalf("to %v err %v", to, err)
 	}
-	if got := steers(scout.ID); len(got) != 1 || got[0] != "human:test check the tests, then ping @main" {
+	if got := steers(scout.ID); len(got) != 1 || got[0] != "check the tests, then ping @main" {
 		t.Fatalf("scout steers %q", got)
 	}
 	if len(steers(lookout.ID)) != 1 || len(steers(root.ID)) != 0 {
 		t.Fatalf("lookout %q root %q", steers(lookout.ID), steers(root.ID))
 	}
-	if to, err := s.Post(ctx, "hi @scout, mail me@example.com", "human:test"); err != nil || !reflect.DeepEqual(to, []string{"main"}) || steers(root.ID)[0] != "human:test hi @scout, mail me@example.com" {
+	if to, err := s.Post(ctx, "hi @scout, mail me@example.com", "human:test"); err != nil || !reflect.DeepEqual(to, []string{"main"}) || steers(root.ID)[0] != "hi @scout, mail me@example.com" {
 		t.Fatalf("no leading name goes to the root, untouched: %v %v %q", to, err, steers(root.ID))
 	}
 	if _, err := s.Post(ctx, "@scout @ghost hi", "human:test"); err == nil || !strings.Contains(err.Error(), "@ghost") || len(steers(scout.ID)) != 1 {
@@ -80,7 +81,7 @@ func TestMessageAnswersTheLatestPost(t *testing.T) {
 	root := s.Root()
 	ctx := context.Background()
 	sent := func(n int) bool {
-		return len(h.ofType(event.MessageToUser, root.ID)) == n && root.StateOf() == StateIdle
+		return len(h.ofType(event.ChatMessage, root.ID)) == n && stateOf(root) == StateIdle
 	}
 	if _, err := s.Post(ctx, "first", "human:test"); err != nil {
 		t.Fatal(err)
@@ -102,7 +103,7 @@ func TestMessageAnswersTheLatestPost(t *testing.T) {
 		posts = append(posts, p.ID)
 	}
 	var answers []string
-	for _, e := range h.ofType(event.MessageToUser, root.ID) {
+	for _, e := range h.ofType(event.ChatMessage, root.ID) {
 		var p event.ChatPayload
 		_ = e.Decode(&p)
 		answers = append(answers, p.Post)
@@ -134,7 +135,7 @@ func TestNoReplyNote(t *testing.T) {
 	waitUntil(t, h, func() bool { return len(s.Agents()) == 2 })
 	child := s.Agents()[1]
 	waitUntil(t, h, func() bool {
-		return len(h.ofType(event.NoteQueued, child.ID)) == 1 && root.StateOf() == StateIdle && child.StateOf() == StateIdle
+		return len(inputsOf(h, event.InputInfo, child.ID)) == 1 && stateOf(root) == StateIdle && stateOf(child) == StateIdle
 	})
 	time.Sleep(50 * time.Millisecond) // the note must not start a turn
 	if in := child.Info(); in.Turn != 1 || len(in.Due) != 0 || in.Queued != 1 || len(root.Info().Awaiting) != 0 {
@@ -168,12 +169,14 @@ func TestNoReplyNote(t *testing.T) {
 	if err := c2.Prompt(context.Background(), "anything else?", "human:test"); err != nil {
 		t.Fatal(err)
 	}
-	waitUntil(t, h2, func() bool { return c2.Info().Turn == 2 && c2.StateOf() == StateIdle })
+	waitUntil(t, h2, func() bool { return c2.Info().Turn == 2 && stateOf(c2) == StateIdle })
 	var kinds []string
-	for _, m := range userMessages(h2, child.ID) {
-		kinds = append(kinds, string(m.Kind))
+	for _, m := range takenIn(append(h.all(), h2.all()...), child.ID) {
+		if m.Turn == 2 {
+			kinds = append(kinds, string(m.Kind))
+		}
 	}
-	if strings.Join(kinds, ",") != "prompt,note" || c2.Info().Queued != 0 || c2.Info().LastError != "" {
+	if strings.Join(kinds, ",") != "info,prompt" || c2.Info().Queued != 0 || c2.Info().LastError != "" {
 		t.Fatalf("turn inputs %v, info %+v", kinds, c2.Info())
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -26,8 +27,14 @@ func created(channel, name string) event.Event {
 	return event.Event{Channel: channel, Type: event.ChannelCreated, Payload: event.MustPayload(event.ChannelCreatedPayload{Name: name, Dir: "/w"})}
 }
 
+// prompt is an input for an agent of channel: the human's when source is
+// "human:…", another agent's request otherwise.
 func prompt(channel, source, text string) event.Event {
-	return event.Event{Channel: channel, Type: event.PromptQueued, Payload: event.MustPayload(event.TextPayload{Text: text, Source: source})}
+	in := event.Input{ID: text, Kind: event.InputPrompt, Text: text}
+	if !strings.HasPrefix(source, "human:") {
+		in.Kind, in.From = event.InputRequest, source
+	}
+	return event.Event{Channel: channel, Agent: "a1", Type: event.InputQueued, Payload: event.MustPayload(in)}
 }
 
 func appendOne(t *testing.T, l *Log, e event.Event) event.Event {
@@ -58,7 +65,7 @@ func TestAppendSeqContiguousPerChannel(t *testing.T) {
 			t.Fatalf("event %d: %+v", i, e)
 		}
 	}
-	var tp event.TextPayload
+	var tp event.Input
 	if err := evs[1].Decode(&tp); err != nil || tp.Text != "x" {
 		t.Fatal("payload round trip")
 	}
@@ -173,7 +180,7 @@ func TestChannelIndex(t *testing.T) {
 		prompt("s1", "human:tui", "  \n"),
 		prompt("s1", "human:tui", "fix the login bug\nand add tests"),
 		prompt("s1", "human:tui", "a later prompt"),
-		{Channel: "s1", Type: event.ChannelRenamed, Payload: event.MustPayload(event.NamePayload{Name: "web"})},
+		{Channel: "s1", Type: event.ChannelUpdated, Payload: event.MustPayload(event.ChannelUpdatedPayload{Name: event.Str("web")})},
 		{Channel: "s1", Type: event.ChannelArchived},
 	} {
 		appendOne(t, l, e)

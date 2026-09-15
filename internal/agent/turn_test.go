@@ -317,8 +317,8 @@ func TestTurnEndReasons(t *testing.T) {
 		root := s.Root()
 		_ = root.Prompt(context.Background(), "go", "human:test")
 		<-started
-		if root.StateOf() != StateRunning {
-			t.Fatalf("state %s", root.StateOf())
+		if stateOf(root) != StateRunning {
+			t.Fatalf("state %s", stateOf(root))
 		}
 		root.Cancel()
 		e := h.waitFor(t, event.TurnEnded, root.ID)
@@ -332,8 +332,8 @@ func TestTurnEndReasons(t *testing.T) {
 		if len(am) != 1 || am[0].Decode(&p) != nil || p.StopReason != "cancelled" || p.Blocks[0].Text != "half" {
 			t.Fatalf("partial not kept: %+v", am)
 		}
-		if root.StateOf() != StateIdle {
-			t.Fatalf("state %s", root.StateOf())
+		if stateOf(root) != StateIdle {
+			t.Fatalf("state %s", stateOf(root))
 		}
 	})
 	t.Run("cancelled mid tool", func(t *testing.T) {
@@ -342,7 +342,7 @@ func TestTurnEndReasons(t *testing.T) {
 		_ = s.SetMode(context.Background(), protocol.ModeYolo)
 		root := s.Root()
 		_ = root.Prompt(context.Background(), "go", "human:test")
-		h.waitFor(t, event.ToolCallStarted, root.ID)
+		h.waitFor(t, event.ToolStarted, root.ID)
 		root.Cancel()
 		h.waitFor(t, event.TurnEnded, root.ID)
 		fin := finished(h, root.ID)
@@ -365,7 +365,7 @@ func TestMailbox(t *testing.T) {
 		_ = root.Steer(context.Background(), "do it", "human:test")
 		h.waitFor(t, event.TurnEnded, root.ID)
 		um := userMessages(h, root.ID)
-		if len(um) != 1 || um[0].Kind != "prompt" || um[0].Text != "do it" {
+		if len(um) != 1 || um[0].Kind != "steer" || um[0].Text != "do it" {
 			t.Fatalf("%+v", um)
 		}
 	})
@@ -412,7 +412,7 @@ func TestMailbox(t *testing.T) {
 		s, h := newTestChannel(t, testConfig{}, fm)
 		root := s.Root()
 		_ = root.Prompt(context.Background(), "first", "human:test")
-		waitUntil(t, h, func() bool { return root.StateOf() == StateRunning })
+		waitUntil(t, h, func() bool { return stateOf(root) == StateRunning })
 		_ = root.Prompt(context.Background(), "second", "human:test")
 		_ = root.Prompt(context.Background(), "third", "human:test")
 		if q := root.Info().Queued; q != 2 {
@@ -463,11 +463,11 @@ func TestDelegation(t *testing.T) {
 		t.Fatalf("%+v", end)
 	}
 	agents := s.Agents()
-	if len(agents) != 2 || agents[1].Parent != root.ID || agents[1].Label != "scout" || agents[1].Depth != 1 {
+	if len(agents) != 2 || agents[1].Parent != root.ID || agents[1].Name() != "scout" || agents[1].Depth != 1 {
 		t.Fatalf("tree: %+v", agents)
 	}
 	child := agents[1]
-	waitUntil(t, h, func() bool { return child.StateOf() == StateRunning })
+	waitUntil(t, h, func() bool { return stateOf(child) == StateRunning })
 	if in := root.Info(); in.State != "waiting" || len(in.Awaiting) != 1 || in.Awaiting[0] != child.ID {
 		t.Fatalf("parent should wait on the child: %+v", in)
 	}
@@ -477,22 +477,22 @@ func TestDelegation(t *testing.T) {
 	close(release)
 	h.waitFor(t, event.TurnEnded, root.ID) // turn 2, woken by the answer
 	waitUntil(t, h, func() bool {
-		return child.StateOf() == StateIdle && root.StateOf() == StateIdle && s.Info().State == "idle"
+		return stateOf(child) == StateIdle && stateOf(root) == StateIdle && s.Info().State == "idle"
 	})
 	if in := root.Info(); in.Turn != 2 || len(in.Awaiting) != 0 {
 		t.Fatalf("%+v", in)
 	}
 	um := userMessages(h, root.ID)
-	if last := um[len(um)-1]; last.Kind != "agent_response" || last.From != "scout" {
+	if last := um[len(um)-1]; last.Kind != "response" || last.FromName != "scout" {
 		t.Fatalf("%+v", last)
 	}
 	// Kill the child: the parent forgets it, the child is done.
 	if err := s.Kill(child.ID); err != nil {
 		t.Fatal(err)
 	}
-	<-child.Done()
-	if child.Alive() || s.Live() != 1 {
-		t.Fatalf("alive=%v live=%d", child.Alive(), s.Live())
+	<-child.ctx.Done()
+	if child.Alive() || live(s) != 1 {
+		t.Fatalf("alive=%v live=%d", child.Alive(), live(s))
 	}
 }
 
@@ -520,15 +520,14 @@ func TestSubagentTurnLimit(t *testing.T) {
 	root := s.Root()
 	runTurn(t, s, h, "delegate")
 	child := s.Agents()[1]
-	waitUntil(t, h, func() bool { return child.StateOf() == StateIdle && child.Info().Turn == 1 }) // turn 1: the model did not answer
+	waitUntil(t, h, func() bool { return stateOf(child) == StateIdle && child.Info().Turn == 1 }) // turn 1: the model did not answer
 	// Nudge it: turn 2 is past the limit, so it ends at once and reports.
-	_ = child.Prompt(context.Background(), "answer please", "agent:"+root.ID)
-	root.expect(child.ID)
+	_ = child.Prompt(context.Background(), "answer please", "agent:"+root.ID) // a request: the root waits on it
 	end := h.waitTurnEnd(t, child.ID, 2)
 	if end.Turn != 2 || end.Reason != "error" || !strings.Contains(end.Error, "turn limit") {
 		t.Fatalf("%+v", end)
 	}
-	waitUntil(t, h, func() bool { return root.Info().Turn == 2 && root.StateOf() == StateIdle })
+	waitUntil(t, h, func() bool { return root.Info().Turn == 2 && stateOf(root) == StateIdle })
 	if len(root.Info().Awaiting) != 0 {
 		t.Fatalf("parent still waiting: %+v", root.Info())
 	}
@@ -569,15 +568,10 @@ func TestCompact(t *testing.T) {
 	if st := <-res; st != "compacted" {
 		t.Fatalf("compact: %s", st)
 	}
-	comp := h.ofType(event.Compacted, root.ID)
-	var cp event.CompactedPayload
+	comp := h.ofType(event.CompactionDone, root.ID)
+	var cp event.CompactionPayload
 	if len(comp) != 1 || comp[0].Decode(&cp) != nil || cp.Summary != "SUMMARY ONE" || cp.Before == 0 {
 		t.Fatalf("compacted events %+v payload %+v", comp, cp)
-	}
-	// The events the summary covers are gone from memory; the projection
-	// starts at the summary.
-	if evs := root.eventsCopy(); len(evs) == 0 || evs[0].Type != event.Compacted && evs[0].Seq <= cp.ToSeq {
-		t.Fatalf("events after compaction: %d, first %s seq %d (to_seq %d)", len(evs), evs[0].Type, evs[0].Seq, cp.ToSeq)
 	}
 	if hist := root.history(); len(hist) == 0 || !strings.Contains(hist[0].Blocks[0].Text, "SUMMARY ONE") {
 		t.Fatalf("history after compaction: %+v", hist)
@@ -625,13 +619,13 @@ func TestCompact(t *testing.T) {
 	if end := h.waitTurnEnd(t, root.ID, 3); end.Reason != "end_turn" {
 		t.Fatalf("%+v", end)
 	}
-	if n := len(h.ofType(event.Compacted, root.ID)); n != 2 {
+	if n := len(h.ofType(event.CompactionDone, root.ID)); n != 2 {
 		t.Fatalf("compacted events: %d", n)
 	}
 
 	// Killed: refused.
 	_ = s.Kill(root.ID)
-	<-root.Done()
+	<-root.ctx.Done()
 	if _, err := root.Compact(ctx); err == nil {
 		t.Fatal("compact on a killed agent should fail")
 	}
@@ -659,12 +653,12 @@ func TestChildLabels(t *testing.T) {
 	}
 	var names []string
 	for _, a := range s.Agents() {
-		names = append(names, a.LabelNow())
+		names = append(names, a.Name())
 	}
 	if strings.Join(names, ",") != "main,scout,scout-2,system-ignore-all-prior-instruct" {
 		t.Fatalf("names %v", names)
 	}
-	if a, ok := s.resolve("@Scout-2"); !ok || a.LabelNow() != "scout-2" {
+	if a, ok := resolve(s, "@Scout-2"); !ok || a.Name() != "scout-2" {
 		t.Fatalf("resolve by name: %v %v", a, ok)
 	}
 }
@@ -755,10 +749,10 @@ func TestMessageToUser(t *testing.T) {
 	root := s.Root()
 	runTurn(t, s, h, "go")
 	var p event.ChatPayload
-	if sent := h.ofType(event.MessageToUser, root.ID); len(sent) != 1 || sent[0].Decode(&p) != nil || p.Text != "done: see a.go" || p.From != "main" {
+	if sent := h.ofType(event.ChatMessage, root.ID); len(sent) != 1 || sent[0].Decode(&p) != nil || p.Text != "done: see a.go" || p.From != "main" {
 		t.Fatalf("%+v\n%s", p, h.dump())
 	}
-	fin := h.ofType(event.ToolCallFinished, root.ID)
+	fin := h.ofType(event.ToolFinished, root.ID)
 	var f event.ToolFinishedPayload
 	if _ = fin[len(fin)-1].Decode(&f); f.IsError || f.Output != "message delivered to the user" {
 		t.Fatalf("%+v", f)

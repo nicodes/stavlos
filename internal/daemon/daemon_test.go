@@ -36,6 +36,14 @@ type fakeModel struct {
 }
 
 func (f *fakeModel) Complete(ctx context.Context, req model.Request, onDelta func(model.Delta)) (model.Response, error) {
+	// The per-request state note (turn budget, todo list, fan-out) is moved
+	// from the last message to the end of the system prompt, so steps read
+	// the history as the log has it and the note where they look for it.
+	var note string
+	req.Messages, note = withoutNote(req.Messages)
+	if note != "" {
+		req.System += "\n" + note
+	}
 	f.mu.Lock()
 	f.calls = append(f.calls, req)
 	q := &f.steps
@@ -55,9 +63,37 @@ func (f *fakeModel) Complete(ctx context.Context, req model.Request, onDelta fun
 	if ctx.Err() != nil {
 		return model.Response{}, ctx.Err()
 	}
-	r := step(req)
-	r.Usage = model.Usage{InputTokens: 10, OutputTokens: 5}
-	return r, nil
+	// A step may block (a test holding the model mid-call); a cancelled call
+	// or a stopping daemon still returns, as a real provider's would.
+	done := make(chan model.Response, 1)
+	go func() { done <- step(req) }()
+	select {
+	case r := <-done:
+		r.Usage = model.Usage{InputTokens: 10, OutputTokens: 5}
+		return r, nil
+	case <-ctx.Done():
+		return model.Response{}, ctx.Err()
+	}
+}
+
+// withoutNote drops the per-request harness state note the runtime appends
+// to the last user message, so steps inspect the history itself.
+func withoutNote(msgs []model.Message) ([]model.Message, string) {
+	if len(msgs) == 0 {
+		return msgs, ""
+	}
+	last := msgs[len(msgs)-1]
+	n := len(last.Blocks)
+	if n == 0 || !strings.HasPrefix(last.Blocks[n-1].Text, "[harness state") {
+		return msgs, ""
+	}
+	note := last.Blocks[n-1].Text
+	out := append([]model.Message(nil), msgs...)
+	out[len(out)-1].Blocks = last.Blocks[:n-1]
+	if n == 1 {
+		out = out[:len(out)-1]
+	}
+	return out, note
 }
 
 type fakeProvider struct{ m *fakeModel }
@@ -155,6 +191,17 @@ func (h *harness) close() {
 }
 
 // waitFor blocks until an event of type t for agent (or any if "") arrives.
+// waitInput waits for an input of kind queued for agent.
+func (h *harness) waitInput(kind event.InputKind, agent string) event.Input {
+	h.t.Helper()
+	for {
+		var in event.Input
+		if _ = h.waitFor(event.InputQueued, agent).Decode(&in); in.Kind == kind {
+			return in
+		}
+	}
+}
+
 func (h *harness) waitFor(t event.Type, agent string) event.Event {
 	h.t.Helper()
 	deadline := time.After(10 * time.Second)
@@ -259,8 +306,8 @@ func TestEndToEnd(t *testing.T) {
 	if err := h.c.Send(ctx, root, protocol.KindPrompt, "go"); err != nil {
 		t.Fatal(err)
 	}
-	h.waitFor(event.ToolCallFinished, root) // echo hello (allowed)
-	h.waitFor(event.PromptRequested, root)
+	h.waitFor(event.ToolFinished, root) // echo hello (allowed)
+	h.waitFor(event.AskRequested, root)
 	ps, err := h.c.Prompts(ctx, s.ID)
 	if err != nil || len(ps) != 1 || ps[0].Tool != "shell" {
 		t.Fatalf("prompts %v %v", ps, err)
@@ -288,10 +335,10 @@ func TestEndToEnd(t *testing.T) {
 	sp := h.waitFor(event.AgentSpawned, "")
 	var spp event.AgentSpawnedPayload
 	_ = sp.Decode(&spp)
-	if spp.Parent != root || spp.Label != "scout" || spp.Model != "fake/m1" || spp.Depth != 1 {
+	if spp.Parent != root || spp.Name != "scout" || spp.Model != "fake/m1" || spp.Depth != 1 {
 		t.Fatalf("spawned %+v", spp)
 	}
-	h.waitFor(event.ResponseReceived, root)
+	h.waitInput(event.InputResponse, root)
 	// turn 2 may end before or after the child answers; wait for turn 3,
 	// the one started by the response.
 	for te.Turn != 3 {
@@ -313,7 +360,8 @@ func TestEndToEnd(t *testing.T) {
 	evs, _ := h.d.Log.Read(ctx, s.ID, 1, 0)
 	nUsage := 0
 	for _, e := range evs {
-		if e.Type == event.Usage {
+		var am event.AssistantMessagePayload
+		if e.Type == event.AssistantMessage && e.Decode(&am) == nil && am.Usage.InputTokens > 0 {
 			nUsage++
 		}
 	}
@@ -346,10 +394,10 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
-	h.waitFor(event.ToolCallStarted, root)
+	h.waitFor(event.ToolStarted, root)
 	time.Sleep(300 * time.Millisecond)
 	_ = h.c.Send(ctx, root, protocol.KindCancel, "")
-	e := h.waitFor(event.ToolCallFinished, root)
+	e := h.waitFor(event.ToolFinished, root)
 	var tf event.ToolFinishedPayload
 	_ = e.Decode(&tf)
 	if !tf.Cancelled || !strings.Contains(tf.Output, "start") {
@@ -526,18 +574,18 @@ func TestShellBackgroundWakes(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
-	e := h.waitFor(event.MonitorStarted, root)
-	var ms event.MonitorStartedPayload
+	e := h.waitFor(event.JobStarted, root)
+	var ms event.JobStartedPayload
 	_ = e.Decode(&ms)
-	if ms.Kind != "command" {
+	if ms.ID == "" || ms.Command == "" {
 		t.Fatalf("%+v", ms)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
 	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Kind != "command" {
 		t.Fatalf("monitors in tree: %+v", agents[0].Monitors)
 	}
-	e = h.waitFor(event.MonitorFired, root)
-	var mf event.MonitorFiredPayload
+	e = h.waitFor(event.JobFinished, root)
+	var mf event.JobFinishedPayload
 	_ = e.Decode(&mf)
 	if mf.ExitCode != 3 || !mf.IsError || !strings.Contains(mf.Output, "two") {
 		t.Fatalf("%+v", mf)
@@ -592,13 +640,13 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "run it")
-	h.waitFor(event.MonitorStarted, root)
+	h.waitFor(event.JobStarted, root)
 	agents, _ = h.c.Tree(ctx, s.ID)
 	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Label != "echo early; sleep 2; echo late; exit 2" {
 		t.Fatalf("monitors in tree: %+v", agents[0].Monitors)
 	}
-	e := h.waitFor(event.MonitorFired, root)
-	var mf event.MonitorFiredPayload
+	e := h.waitFor(event.JobFinished, root)
+	var mf event.JobFinishedPayload
 	_ = e.Decode(&mf)
 	if mf.ExitCode != 2 || !mf.IsError || mf.Output != "early\nlate\n" {
 		t.Fatalf("%+v", mf)
@@ -630,7 +678,7 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	h2.waitFor(event.TurnEnded, agents[0].ID)
 	evs, _ := h2.d.Log.Read(ctx, s2.ID, 1, 0)
 	for _, e := range evs {
-		if e.Type == event.MonitorStarted {
+		if e.Type == event.JobStarted {
 			t.Fatal("a quick command must not become a job")
 		}
 	}
@@ -667,7 +715,7 @@ func TestShellKillStopsJob(t *testing.T) {
 	root := agents[0].ID
 	start := time.Now()
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
-	h.waitFor(event.MonitorStopped, root)
+	h.waitFor(event.JobStopped, root)
 	h.waitFor(event.TurnEnded, root)
 	if time.Since(start) > 5*time.Second {
 		t.Fatal("stop did not kill the command promptly")
@@ -720,7 +768,7 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	if err := h.c.SetAgentRole(ctx, root, "explorer"); err != nil {
 		t.Fatal(err)
 	}
-	h.waitFor(event.AgentRoleChanged, root)
+	h.waitFor(event.AgentUpdated, root)
 	agents, _ = h.c.Tree(ctx, s.ID)
 	if agents[0].Archetype != "explorer" || agents[0].Label != "main" { // the root keeps its "main" label
 		t.Fatalf("tree after role change: %+v", agents[0])
@@ -755,7 +803,7 @@ func TestAgentsMessageAcrossTheChannel(t *testing.T) {
 			seen := false
 			for _, m := range req.Messages {
 				for _, b := range m.Blocks {
-					seen = seen || (strings.HasPrefix(b.Text, "[message from agent scout — ") && strings.Contains(b.Text, "which branch?"))
+					seen = seen || (strings.HasPrefix(b.Text, "[message from agent scout") && strings.Contains(b.Text, "which branch?"))
 				}
 			}
 			if !seen {
@@ -814,20 +862,19 @@ func TestAgentsMessageAcrossTheChannel(t *testing.T) {
 	// its turn 2 and the child's second message (after its status check)
 	// race each other, so one loop watches for all three: a separate wait
 	// for the answer would throw away a steer that landed first.
-	var um event.UserMessagePayload
+	var um event.Input
 	var turn2, responded bool
 	deadline := time.After(10 * time.Second)
-	for um.From == "" || !turn2 || !responded {
+	for um.FromName == "" || !turn2 || !responded {
 		select {
 		case e := <-h.evs:
+			var in event.Input
+			if e.Type == event.InputQueued {
+				_ = e.Decode(&in)
+			}
 			switch {
-			case e.Type == event.UserMessage && e.Agent == rootID && um.From == "":
-				// the answer, not the child's later message: when both land
-				// before the parent wakes, its turn logs the prompt first
-				var got event.UserMessagePayload
-				if _ = e.Decode(&got); got.Kind == event.MsgAgentResponse {
-					um = got
-				}
+			case e.Type == event.InputQueued && e.Agent == rootID && in.Kind == event.InputResponse && um.FromName == "":
+				um = in // the answer, not the child's later message
 			case e.Type == event.TurnEnded && e.Agent == rootID:
 				var te event.TurnEndedPayload
 				if _ = e.Decode(&te); te.Turn == 2 {
@@ -836,14 +883,14 @@ func TestAgentsMessageAcrossTheChannel(t *testing.T) {
 					}
 					turn2 = true
 				}
-			case e.Type == event.SteerReceived && e.Agent == rootID:
+			case e.Type == event.InputQueued && e.Agent == rootID && in.Kind == event.InputRequest:
 				responded = true
 			}
 		case <-deadline:
 			t.Fatalf("answer %+v, turn 2 ended %v, second message received %v\nevents so far:\n%s", um, turn2, responded, strings.Join(h.recentEvents(), "\n"))
 		}
 	}
-	if um.From != "scout" || um.Text != "which branch?" || um.Kind != "agent_response" {
+	if um.FromName != "scout" || um.Text != "which branch?" || um.Kind != event.InputResponse {
 		t.Fatalf("parent's message: %+v", um)
 	}
 }
@@ -889,10 +936,10 @@ func TestVariants(t *testing.T) {
 	if err := h.c.SetAgentVariant(ctx, root, "high"); err != nil {
 		t.Fatal(err)
 	}
-	e := h.waitFor(event.AgentVariantChanged, root)
-	var vp event.VariantChangedPayload
+	e := h.waitFor(event.AgentUpdated, root)
+	var vp event.AgentUpdatedPayload
 	_ = e.Decode(&vp)
-	if vp.Variant != "high" {
+	if vp.Variant == nil || *vp.Variant != "high" {
 		t.Fatalf("%+v", vp)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
@@ -904,7 +951,7 @@ func TestVariants(t *testing.T) {
 	sp := h.waitFor(event.AgentSpawned, "")
 	var spp event.AgentSpawnedPayload
 	_ = sp.Decode(&spp)
-	h.waitFor(event.ResponseReceived, root)
+	h.waitInput(event.InputResponse, root)
 	var te event.TurnEndedPayload
 	for te.Turn != 2 {
 		e = h.waitFor(event.TurnEnded, root)
@@ -976,7 +1023,7 @@ func TestYolo(t *testing.T) {
 	root := agents[0].ID
 
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
-	h.waitFor(event.PromptRequested, root)
+	h.waitFor(event.AskRequested, root)
 	if ps, _ := h.c.Prompts(ctx, s.ID); len(ps) != 1 {
 		t.Fatalf("one prompt should be waiting: %+v", ps)
 	}
@@ -984,10 +1031,10 @@ func TestYolo(t *testing.T) {
 	if err := h.c.SetChannelMode(ctx, s.ID, "yolo"); err != nil {
 		t.Fatal(err)
 	}
-	e := h.waitFor(event.ChannelModeChanged, "")
-	var mp event.ModePayload
+	e := h.waitFor(event.ChannelUpdated, "")
+	var mp event.ChannelUpdatedPayload
 	_ = e.Decode(&mp)
-	if mp.Mode != "yolo" {
+	if mp.Mode == nil || *mp.Mode != "yolo" {
 		t.Fatalf("%+v", mp)
 	}
 	var te event.TurnEndedPayload
@@ -1016,14 +1063,14 @@ func TestYolo(t *testing.T) {
 		t.Fatal("second command should have run")
 	}
 	evs, _ := h.d.Log.Read(ctx, s.ID, 1, 0)
+	asks := 0
 	for _, ev := range evs {
-		if ev.Type == event.PromptRequested {
-			var p event.PromptRequestedPayload
-			_ = ev.Decode(&p)
-			if p.Tool == "shell" && strings.Contains(string(p.Input), "second") {
-				t.Fatal("no prompt should be raised in yolo")
-			}
+		if ev.Type == event.AskRequested {
+			asks++
 		}
+	}
+	if asks != 1 {
+		t.Fatalf("only turn 1's prompt should have been raised, not one in yolo: %d", asks)
 	}
 	// back to ask
 	if err := h.c.SetChannelMode(ctx, s.ID, "ask"); err != nil {
@@ -1083,7 +1130,7 @@ func TestAutoMode(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
-	h.waitFor(event.PromptRequested, root) // the inside command waits in ask mode
+	h.waitFor(event.AskRequested, root) // the inside command waits in ask mode
 	if err := h.c.SetChannelMode(ctx, s.ID, "auto"); err != nil {
 		t.Fatal(err)
 	}
@@ -1278,7 +1325,7 @@ func TestTodoListLogsProjectsAndRecovers(t *testing.T) {
 			return call("c3", "todo_update", `{"id":"t1","status":"in_progress"}`)
 		},
 		func(req model.Request) model.Response {
-			// the list is projected into the system prompt at every call
+			// the list comes with every request
 			for _, want := range []string{"- t1 [in_progress] Read the code", "- t2 [pending] Fix the bug"} {
 				if !strings.Contains(req.System, want) {
 					t.Errorf("system prompt lacks %q:\n%s", want, req.System)
@@ -1384,7 +1431,7 @@ func TestFullAgentIDs(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
-	h.waitFor(event.ResponseReceived, root)
+	h.waitInput(event.InputResponse, root)
 	h.waitFor(event.TurnEnded, root) // the "thanks" turn
 	if len(fm.calls) < 3 {
 		h.waitFor(event.TurnEnded, root)
@@ -1490,15 +1537,13 @@ func TestRoles(t *testing.T) {
 		t.Fatalf("primary-only role on a subagent: %v", err)
 	}
 	// the child's second turn is over its limit: the parent is answered
-	e := h.waitFor(event.ResponseReceived, root)
-	var rp event.ResponsePayload
-	_ = e.Decode(&rp)
+	rp := h.waitInput(event.InputResponse, root)
 	if !strings.Contains(rp.Text, "turn limit of 1") {
 		t.Fatalf("limit response: %+v", rp)
 	}
 	var te event.TurnEndedPayload
 	for te.Turn != 2 {
-		e = h.waitFor(event.TurnEnded, root)
+		e := h.waitFor(event.TurnEnded, root)
 		_ = e.Decode(&te)
 	}
 	// switching the root to a role without a whitelist keeps its model and variant
@@ -1760,8 +1805,8 @@ func TestWorkingDirectories(t *testing.T) {
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
 	// the only prompt is the boundary one, and it names the directory
-	e := h.waitFor(event.PromptRequested, root)
-	var pr event.PromptRequestedPayload
+	e := h.waitFor(event.AskRequested, root)
+	var pr event.AskRequestedPayload
 	_ = e.Decode(&pr)
 	if pr.Tool != "read" || !strings.Contains(pr.Question, "outside the channel's directories") || !strings.Contains(pr.Question, outside) {
 		t.Fatalf("boundary prompt %+v", pr)
@@ -1780,7 +1825,7 @@ func TestWorkingDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 	e = h.waitFor(event.ChannelDirAdded, root)
-	var dp event.DirAddedPayload
+	var dp event.DirPayload
 	_ = e.Decode(&dp)
 	if dp.Dir != outside || dp.Source != "human" {
 		t.Fatalf("dir added %+v", dp)
@@ -1886,7 +1931,7 @@ func TestBoundaryPromptEditedDir(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
-	h.waitFor(event.PromptRequested, root)
+	h.waitFor(event.AskRequested, root)
 	pending := h.d.esc.Pending(s.ID)
 	if len(pending) != 1 || pending[0].Dir != filepath.Join(outside, "sub") {
 		t.Fatalf("offered dir %+v", pending)
@@ -1896,7 +1941,7 @@ func TestBoundaryPromptEditedDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	e := h.waitFor(event.ChannelDirAdded, root)
-	var dp event.DirAddedPayload
+	var dp event.DirPayload
 	_ = e.Decode(&dp)
 	if dp.Dir != outside {
 		t.Fatalf("the edited directory should be added: %+v", dp)
@@ -1938,13 +1983,13 @@ func TestDenyReasonReachesTheAgent(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
-	h.waitFor(event.PromptRequested, root)
+	h.waitFor(event.AskRequested, root)
 	p := h.d.esc.Pending(s.ID)[0]
 	_ = h.c.ClaimPrompt(ctx, p.ID)
 	if err := h.c.DenyPrompt(ctx, p.ID, "use apply_patch instead"); err != nil {
 		t.Fatal(err)
 	}
-	h.waitFor(event.PromptRequested, root)
+	h.waitFor(event.AskRequested, root)
 	p = h.d.esc.Pending(s.ID)[0]
 	_ = h.c.ClaimPrompt(ctx, p.ID)
 	if err := h.c.DenyPrompt(ctx, p.ID, ""); err != nil {
@@ -1989,7 +2034,7 @@ func TestAllowPrefix(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
-	h.waitFor(event.PromptRequested, root)
+	h.waitFor(event.AskRequested, root)
 	p := h.d.esc.Pending(s.ID)[0]
 	_ = h.c.ClaimPrompt(ctx, p.ID)
 	if p.Prefix != "touch" {
@@ -1999,7 +2044,7 @@ func TestAllowPrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the second echo runs without a prompt; the chained one asks
-	h.waitFor(event.PromptRequested, root)
+	h.waitFor(event.AskRequested, root)
 	p = h.d.esc.Pending(s.ID)[0]
 	if !strings.Contains(string(p.Input), "touch three; touch four") {
 		t.Fatalf("second prompt should be the chained command: %s", p.Input)
@@ -2120,8 +2165,8 @@ func TestManualCompact(t *testing.T) {
 	if err != nil || status != "compacted" {
 		t.Fatalf("compact: %q %v", status, err)
 	}
-	e := h.waitFor(event.Compacted, root)
-	var cp event.CompactedPayload
+	e := h.waitFor(event.CompactionDone, root)
+	var cp event.CompactionPayload
 	_ = e.Decode(&cp)
 	if !strings.Contains(cp.Summary, "SUMMARY") || cp.ToSeq >= e.Seq || cp.FromSeq == 0 || cp.Before <= 0 || cp.After <= 0 {
 		t.Fatalf("compacted payload: %+v", cp)
@@ -2182,10 +2227,10 @@ func TestAskUser(t *testing.T) {
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
-	e := h.waitFor(event.PromptRequested, root)
-	var pr event.PromptRequestedPayload
+	e := h.waitFor(event.AskRequested, root)
+	var pr event.AskRequestedPayload
 	_ = e.Decode(&pr)
-	if pr.Kind != "question" || pr.Tool != "ask_user" || !strings.Contains(string(pr.Questions), "Postgres") {
+	if pr.Kind != "question" || pr.Tool != "ask_user" || !strings.Contains(pr.Question, "Which backend?") {
 		t.Fatalf("prompt %+v", pr)
 	}
 	agents, _ = h.c.Tree(ctx, s.ID)
@@ -2201,9 +2246,14 @@ func TestAskUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	// the second question is cancelled instead of answered
-	h.waitFor(event.PromptRequested, root)
+	h.waitFor(event.AskRequested, root)
 	_ = h.c.Send(ctx, root, protocol.KindCancel, "")
-	h.waitFor(event.PromptWithdrawn, root)
+	for {
+		var r event.AskResolvedPayload
+		if _ = h.waitFor(event.AskResolved, root).Decode(&r); r.Outcome == event.AskWithdrawn {
+			break
+		}
+	}
 	var te event.TurnEndedPayload
 	for te.Turn != 1 {
 		e = h.waitFor(event.TurnEnded, root)
@@ -2351,13 +2401,16 @@ func TestSlowClientDoesNotStallTheDaemon(t *testing.T) {
 	// 600 events of 8 KB overflow the stalled socket many times over.
 	// Before the outbound queue the appends blocked for good on the first
 	// full socket; now they finish.
-	payload := event.MustPayload(event.TextPayload{Text: strings.Repeat("x", 8000)})
+	payload := event.MustPayload(event.Input{Text: strings.Repeat("x", 8000)})
 	var last event.Event
 	appended := make(chan error, 1)
 	go func() {
 		var err error
 		for i := 0; i < 600 && err == nil; i++ {
-			last, err = h.d.Append(ctx, event.Event{Channel: s.ID, Type: "test.noise", Payload: payload})
+			var out []event.Event
+			if out, err = h.d.Append(ctx, event.Event{Channel: s.ID, Type: "test.noise", Payload: payload}); err == nil {
+				last = out[0]
+			}
 		}
 		appended <- err
 	}()
@@ -2409,7 +2462,9 @@ func TestSubscribeHandoverIsContiguous(t *testing.T) {
 		go func() {
 			var last event.Event
 			for i := 0; i < 400; i++ {
-				last, _ = h.d.Append(ctx, event.Event{Channel: s.ID, Type: "test.noise"})
+				if out, err := h.d.Append(ctx, event.Event{Channel: s.ID, Type: "test.noise"}); err == nil {
+					last = out[0]
+				}
 			}
 			appended <- last.Seq
 		}()
@@ -2544,7 +2599,7 @@ func TestAutoDeniesAWaitingBoundaryPrompt(t *testing.T) {
 	_ = h.c.Subscribe(ctx, s.ID, 0)
 	agents, _ := h.c.Tree(ctx, s.ID)
 	_ = h.c.Send(ctx, agents[0].ID, protocol.KindPrompt, "go")
-	h.waitFor(event.PromptRequested, agents[0].ID) // the outside read waits in ask mode
+	h.waitFor(event.AskRequested, agents[0].ID) // the outside read waits in ask mode
 	if err := h.c.SetChannelMode(ctx, s.ID, "auto"); err != nil {
 		t.Fatal(err)
 	}

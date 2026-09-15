@@ -22,17 +22,17 @@ func index(ctx context.Context, tx *sql.Tx, e event.Event) error {
 		}
 		_, err := tx.ExecContext(ctx, `INSERT INTO channels(id, name, dir, created) VALUES(?,?,?,?)`, e.Channel, p.Name, p.Dir, e.Time.UnixNano())
 		return err
-	case event.ChannelRenamed:
-		var p event.NamePayload
-		if err := e.Decode(&p); err != nil {
+	case event.ChannelUpdated:
+		var p event.ChannelUpdatedPayload
+		if err := e.Decode(&p); err != nil || p.Name == nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `UPDATE channels SET name = ? WHERE id = ?`, p.Name, e.Channel)
+		_, err := tx.ExecContext(ctx, `UPDATE channels SET name = ? WHERE id = ?`, *p.Name, e.Channel)
 		return err
 	case event.ChannelArchived:
 		_, err := tx.ExecContext(ctx, `UPDATE channels SET archived = 1 WHERE id = ?`, e.Channel)
 		return err
-	case event.PromptQueued, event.SteerReceived:
+	case event.ChatPosted, event.InputQueued:
 		if title := titleOf(e); title != "" {
 			_, err := tx.ExecContext(ctx, `UPDATE channels SET title = ? WHERE id = ? AND title = ''`, title, e.Channel)
 			return err
@@ -42,13 +42,24 @@ func index(ctx context.Context, tx *sql.Tx, e event.Event) error {
 }
 
 // titleOf is the title an event can give its channel: the first line of the
-// human's message.
+// human's message, a channel post or one typed into an agent's chat.
 func titleOf(e event.Event) string {
-	var p event.TextPayload
-	if e.Decode(&p) != nil || !strings.HasPrefix(p.Source, "human:") {
-		return ""
+	var text string
+	switch e.Type {
+	case event.ChatPosted:
+		var p event.ChatPayload
+		if e.Decode(&p) != nil {
+			return ""
+		}
+		text = p.Text
+	case event.InputQueued:
+		var in event.Input
+		if e.Decode(&in) != nil || in.Kind != event.InputPrompt && in.Kind != event.InputSteer || in.Post != "" {
+			return "" // an agent's input, or a post (titled by its chat.posted)
+		}
+		text = in.Text
 	}
-	t := strings.TrimSpace(p.Text)
+	t := strings.TrimSpace(text)
 	if i := strings.IndexByte(t, '\n'); i >= 0 {
 		t = strings.TrimSpace(t[:i])
 	}
