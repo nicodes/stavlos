@@ -84,6 +84,7 @@ type Line struct {
 	Agent     string   // in the session chat: the agent this line links to
 	Who       string   // the @name this line leads with, whose colour its glyph and name take: an agent\'s name, or "user"
 	Names     []string // @names coloured wherever this line mentions them (a session chat post\'s recipients)
+	Diff      byte     // a patch diff line: '+' added, '-' removed, '@' a hunk's anchor, 'f' a file header, 0 otherwise
 	Indent    int      // extra indent, two columns each (a chat reply's later lines, past its glyph)
 	TurnStart bool     // first line of the first item after a turn starts or ends: an agent\'s chat spaces turns apart there
 }
@@ -1122,15 +1123,22 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			}
 			return lines
 		}
-		return []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID, Tool: p.Name}}
+		call := Line{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID, Tool: p.Name}
+		if p.Name == toolname.ApplyPatch {
+			// the change itself is what matters: the call, then its diff
+			var in struct{ Patch string }
+			_ = json.Unmarshal(p.Input, &in)
+			return append([]Line{call}, DiffLines(in.Patch)...)
+		}
+		return []Line{call}
 	}),
 
 	event.ToolCallFinished: decoded(func(p event.ToolFinishedPayload) []Line {
 		if p.Denied {
 			return nil // the denial reads on the call's own line (see finishCall)
 		}
-		if name := toolname.Canonical(p.Name); (name == toolname.Message || name == toolname.AgentCreate) && !p.IsError {
-			return nil // the text already sits under the call; "delivered" or "created" adds nothing
+		if name := toolname.Canonical(p.Name); (name == toolname.Message || name == toolname.AgentCreate || name == toolname.ApplyPatch) && !p.IsError {
+			return nil // the text or diff already sits under the call; "delivered", "created" or "updated" adds nothing
 		}
 		return OutputLines(strings.TrimRight(p.Output, "\n"))
 	}),
@@ -1647,6 +1655,58 @@ func OutputLines(out string) []Line {
 		lines = append(lines, Line{Kind: LineToolOut, Text: fmt.Sprintf("… +%d lines", total-MaxOutputExpanded), Vis: VisExpanded})
 	}
 	return lines
+}
+
+// MaxDiffExpanded is how many diff lines an expanded patch shows.
+const MaxDiffExpanded = 200
+
+// DiffLines is an apply_patch diff for under its call: a header per file
+// ("a.go", "b.md (new)", "c.txt (deleted)", "→ d.go" for a move), each
+// hunk's "@@" anchor, and the changed and context lines as written. Like a
+// command's output, the first MaxOutputCollapsed lines always show and the
+// rest, up to MaxDiffExpanded, when the item is expanded.
+func DiffLines(patch string) []Line {
+	var out []Line
+	add := func(text string, diff byte) {
+		out = append(out, Line{Kind: LineToolOut, Text: text, Diff: diff})
+	}
+	for _, l := range strings.Split(strings.TrimRight(patch, "\n"), "\n") {
+		switch {
+		case l == "*** Begin Patch" || l == "*** End Patch" || strings.TrimSpace(l) == "*** End of File":
+		case strings.HasPrefix(l, "*** Update File: "):
+			add(strings.TrimPrefix(l, "*** Update File: "), 'f')
+		case strings.HasPrefix(l, "*** Add File: "):
+			add(strings.TrimPrefix(l, "*** Add File: ")+" (new)", 'f')
+		case strings.HasPrefix(l, "*** Delete File: "):
+			add(strings.TrimPrefix(l, "*** Delete File: ")+" (deleted)", 'f')
+		case strings.HasPrefix(l, "*** Move to: "):
+			add("→ "+strings.TrimPrefix(l, "*** Move to: "), 'f')
+		case strings.HasPrefix(l, "@@"):
+			add(l, '@')
+		case strings.HasPrefix(l, "+"):
+			add(l, '+')
+		case strings.HasPrefix(l, "-"):
+			add(l, '-')
+		default:
+			add(l, 0)
+		}
+	}
+	total := len(out)
+	if total > MaxDiffExpanded {
+		out = out[:MaxDiffExpanded]
+	}
+	for i := range out {
+		if i >= MaxOutputCollapsed {
+			out[i].Vis = VisExpanded
+		}
+	}
+	if total > MaxOutputCollapsed {
+		out = append(out, Line{Kind: LineToolOut, Text: fmt.Sprintf("… +%d lines", total-MaxOutputCollapsed), Vis: VisCollapsed})
+	}
+	if total > MaxDiffExpanded {
+		out = append(out, Line{Kind: LineToolOut, Text: fmt.Sprintf("… +%d lines", total-MaxDiffExpanded), Vis: VisExpanded})
+	}
+	return out
 }
 
 // patchFiles summarises the files an apply_patch touches: "a.go, b.md" or

@@ -552,3 +552,30 @@ func TestAgentCreateReadsLikeAPrompt(t *testing.T) {
 		t.Fatalf("lines %q", texts)
 	}
 }
+
+// TestPatchShowsItsDiff: an apply_patch call shows its diff under it (file
+// headers, anchors, changed and context lines) and no success summary.
+func TestPatchShowsItsDiff(t *testing.T) {
+	patch := "*** Begin Patch\n*** Update File: a.go\n*** Move to: b.go\n@@ func run() {\n ctx := x\n-old()\n+new()\n*** Add File: c.md\n+hello\n*** Delete File: d.txt\n*** End Patch"
+	input, _ := json.Marshal(map[string]string{"patch": patch})
+	tr := NewTranscript()
+	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Input: input}))
+	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Output: "updated a.go → b.go\nadded c.md (1 lines)\ndeleted d.txt"}))
+	var got []string
+	for _, l := range tr.All() {
+		if strings.Contains(l.Text, "updated a.go") {
+			t.Fatal("the success summary adds nothing under the diff")
+		}
+		if l.Kind == LineToolOut && l.Vis != VisCollapsed {
+			d := "."
+			if l.Diff != 0 {
+				d = string(rune(l.Diff))
+			}
+			got = append(got, d+"|"+l.Text)
+		}
+	}
+	want := "f|a.go / f|→ b.go / @|@@ func run() { / .| ctx := x / -|-old() / +|+new() / f|c.md (new) / +|+hello / f|d.txt (deleted)"
+	if strings.Join(got, " / ") != want {
+		t.Fatalf("diff:\n%s\nwant:\n%s", strings.Join(got, " / "), want)
+	}
+}

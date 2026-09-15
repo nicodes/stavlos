@@ -608,6 +608,16 @@ func kindStyle(l transcript.Line) (leader, glyph string, style func(...string) s
 		}
 		return "", toolLineGlyph(l), renderToolText
 	case transcript.LineToolOut:
+		switch l.Diff { // a patch's diff: added green, removed red
+		case '+':
+			return "  ", "", theme.StyleStatusOK.Render
+		case '-':
+			return "  ", "", theme.StyleError.Render
+		case '@':
+			return "  ", "", theme.StyleDim.Render
+		case 'f':
+			return "  ", "", theme.StyleBold.Render
+		}
 		return "  ", "", theme.StyleToolOut.Render // under the tool name (after "◆ ")
 	case transcript.LineToolNote:
 		return "  ", "", markdownStyle(theme.StyleDim)
