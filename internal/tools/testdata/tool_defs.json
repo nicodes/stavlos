@@ -291,42 +291,42 @@
     }
   },
   {
-    "description": "Add one step to your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep exactly one in_progress with todo_update as you go. Returns the item's id. Skip the list for single-step or trivial requests.",
-    "name": "todo_add",
+    "description": "Your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep the list honest with update, by id. Keep exactly one item in_progress while you work; mark an item done the moment it is finished and verified, never before; cancel steps you drop; add a new item for a blocker instead of marking the blocked step done. One call can update items and add new ones. Returns the whole list with ids. Skip the list for single-step or trivial requests.",
+    "name": "todo",
     "schema": {
       "properties": {
-        "text": {
-          "description": "The step, imperative and short (\"Run the tests\")",
-          "type": "string"
+        "add": {
+          "description": "New steps to append, in order, each imperative and short (\"Run the tests\")",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "update": {
+          "description": "Changes to existing items, by id: a status (pending | in_progress | done | cancelled), a new text, or both",
+          "items": {
+            "properties": {
+              "id": {
+                "description": "The item's id (t1, t2, …)",
+                "type": "string"
+              },
+              "status": {
+                "description": "pending | in_progress | done | cancelled",
+                "type": "string"
+              },
+              "text": {
+                "description": "New text for the item",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "type": "array"
         }
       },
-      "required": [
-        "text"
-      ],
-      "type": "object"
-    }
-  },
-  {
-    "description": "Update one item on your todo list: set its status (pending, in_progress, done, cancelled) and/or rewrite its text. Mark an item in_progress when you start it and done the moment it is finished and verified, never before; cancel steps you drop. Add a new item for a blocker instead of marking the blocked step done.",
-    "name": "todo_update",
-    "schema": {
-      "properties": {
-        "id": {
-          "description": "The item id returned by todo_add",
-          "type": "string"
-        },
-        "status": {
-          "description": "pending | in_progress | done | cancelled",
-          "type": "string"
-        },
-        "text": {
-          "description": "New text for the item (optional)",
-          "type": "string"
-        }
-      },
-      "required": [
-        "id"
-      ],
       "type": "object"
     }
   },

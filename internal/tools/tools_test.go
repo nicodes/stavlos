@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -149,58 +150,66 @@ func TestShellWaitWindow(t *testing.T) {
 	}
 }
 
-// fakeTodos is an in-memory tools.Todos.
+// fakeTodos is a todo list in memory.
 type fakeTodos struct{ items []event.TodoItem }
 
-func (f *fakeTodos) Add(text string) (string, error) {
-	id := "t" + string(rune('0'+len(f.items)+1))
-	f.items = append(f.items, event.TodoItem{ID: id, Text: text, Status: "pending"})
-	return id, nil
-}
-func (f *fakeTodos) Update(id, status, text string) error {
-	for i := range f.items {
-		if f.items[i].ID == id {
-			if status != "" {
-				f.items[i].Status = event.TodoStatus(status)
+func (f *fakeTodos) Edit(add []string, updates []TodoUpdate) ([]event.TodoItem, error) {
+	items := append([]event.TodoItem(nil), f.items...)
+	for _, u := range updates {
+		found := false
+		for i := range items {
+			if items[i].ID == u.ID {
+				found = true
+				if u.Status != "" {
+					items[i].Status = event.TodoStatus(u.Status)
+				}
+				if u.Text != "" {
+					items[i].Text = u.Text
+				}
 			}
-			if text != "" {
-				f.items[i].Text = text
-			}
-			return nil
+		}
+		if !found {
+			return nil, os.ErrNotExist
 		}
 	}
-	return os.ErrNotExist
+	for _, text := range add {
+		items = append(items, event.TodoItem{ID: "t" + strconv.Itoa(len(items)+1), Text: text, Status: event.TodoPending})
+	}
+	f.items = items
+	return items, nil
 }
+
 func (f *fakeTodos) List() []event.TodoItem { return f.items }
 
-func TestTodoTools(t *testing.T) {
+// TestTodoTool: one call adds steps, updates items by id, or both, and
+// returns the whole list; bad input changes nothing.
+func TestTodoTool(t *testing.T) {
 	ts := Builtin()
 	ctx := context.Background()
-	// unavailable without a list (the preset has no "todo")
-	if r := ts["todo_add"].Run(ctx, json.RawMessage(`{"text":"x"}`), &Env{}); !r.IsError || !strings.Contains(r.Output, "not available") {
+	run := func(env *Env, in string) Result { return ts["todo"].Run(ctx, json.RawMessage(in), env) }
+	if r := run(&Env{}, `{"add":["x"]}`); !r.IsError || !strings.Contains(r.Output, "not available") {
 		t.Fatalf("no list: %+v", r)
 	}
 	f := &fakeTodos{}
 	env := &Env{Todo: f}
-	r := ts["todo_add"].Run(ctx, json.RawMessage(`{"text":"  Run the tests "}`), env)
-	if r.IsError || r.Output != "added t1: Run the tests" || len(f.items) != 1 {
+	if r := run(env, `{"add":["  Run the tests ","Fix the bug"]}`); r.IsError || len(f.items) != 2 || f.items[0].Text != "Run the tests" || !strings.Contains(r.Output, "- t2 [pending] Fix the bug") {
 		t.Fatalf("add: %+v %+v", r, f.items)
 	}
-	if r := ts["todo_add"].Run(ctx, json.RawMessage(`{"text":"  "}`), env); !r.IsError {
-		t.Fatalf("empty text should fail: %+v", r)
+	for in, want := range map[string]string{
+		`{}`:             "nothing to do",
+		`{"add":["  "]}`: "needs text",
+		`{"update":[{"id":"t1","status":"doing"}]}`: "pending, in_progress, done, cancelled",
+		`{"update":[{"id":"t1"}]}`:                  "nothing to change",
+		`{"update":[{"status":"done"}]}`:            "needs the item's id",
+		`{"update":[{"id":"t9","status":"done"}]}`:  "exist",
+	} {
+		if r := run(env, in); !r.IsError || !strings.Contains(r.Output, want) || len(f.items) != 2 {
+			t.Fatalf("%s: want an error with %q, got %+v, list %+v", in, want, r, f.items)
+		}
 	}
-	if r := ts["todo_update"].Run(ctx, json.RawMessage(`{"id":"t1","status":"doing"}`), env); !r.IsError || !strings.Contains(r.Output, "pending, in_progress, done, cancelled") {
-		t.Fatalf("bad status: %+v", r)
-	}
-	if r := ts["todo_update"].Run(ctx, json.RawMessage(`{"id":"t1"}`), env); !r.IsError {
-		t.Fatalf("nothing to change should fail: %+v", r)
-	}
-	r = ts["todo_update"].Run(ctx, json.RawMessage(`{"id":"t1","status":"in_progress","text":"Run all the tests"}`), env)
-	if r.IsError || r.Output != "updated t1 → in_progress" || f.items[0].Status != "in_progress" || f.items[0].Text != "Run all the tests" {
-		t.Fatalf("update: %+v %+v", r, f.items)
-	}
-	if r := ts["todo_update"].Run(ctx, json.RawMessage(`{"id":"t9","status":"done"}`), env); !r.IsError {
-		t.Fatalf("unknown id should fail: %+v", r)
+	r := run(env, `{"update":[{"id":"t1","status":"in_progress","text":"Run all the tests"}],"add":["Ship it"]}`)
+	if r.IsError || f.items[0].Status != "in_progress" || f.items[0].Text != "Run all the tests" || len(f.items) != 3 || !strings.Contains(r.Output, "- t3 [pending] Ship it") {
+		t.Fatalf("update and add: %+v %+v", r, f.items)
 	}
 }
 

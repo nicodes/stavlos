@@ -339,8 +339,7 @@ func Defaults() File {
 			toolname.AgentCancel: allow,
 			toolname.AgentStatus: allow,
 			toolname.ShellKill:   allow,
-			toolname.TodoAdd:     allow,
-			toolname.TodoUpdate:  allow,
+			toolname.Todo:        allow,
 			toolname.AskUser:     allow,
 			toolname.Shell:       ask, // no command is allowed by default: searching is grep and glob
 			toolname.ApplyPatch:  ask,
@@ -717,10 +716,10 @@ type roleFile struct {
 }
 
 // RoleTools are the tools every role offers unless its tools: key removes
-// one (todo stands for todo_add and todo_update). The messaging set and
+// one. The messaging set and
 // ask_user come on top for every agent, shell_kill with shell, and the
 // lifecycle tools with a non-empty spawn list.
-var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.GroupTodo, toolname.WebFetch, toolname.WebSearch}
+var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.Todo, toolname.WebFetch, toolname.WebSearch}
 
 // ReadPreset parses one agents/<name>.md file.
 func ReadPreset(path string) (Preset, error) {
@@ -872,8 +871,6 @@ func keptTool(name string) string {
 		return "comes with spawn: leave spawn empty to remove it"
 	case toolname.ShellKill:
 		return "comes with shell: remove shell instead"
-	case toolname.TodoAdd, toolname.TodoUpdate:
-		return "remove todo, which covers todo_add and todo_update"
 	}
 	return ""
 }
@@ -1037,7 +1034,7 @@ func ProjectHash(dir string) ([]string, string, error) {
 }
 
 // PresetPolicy returns the role's tightening rules from the map form of
-// tools:. Rules on todo cover todo_add and todo_update.
+// tools:.
 func (p Preset) PresetPolicy() *policy.Set {
 	m := map[string]any{}
 	for tool, rules := range p.ToolRules {

@@ -121,7 +121,7 @@ func Builtin() Set {
 		shellTool{}, readTool{}, grepTool{}, globTool{}, patchTool{}, skillTool{},
 		spawnTool{}, messageTool{}, cancelTool{}, statusTool{},
 		shellKillTool{},
-		todoAddTool{}, todoUpdateTool{}, askTool{},
+		todoTool{}, askTool{},
 		webFetchTool{}, webSearchTool{},
 	} {
 		s[t.Def().Name] = t

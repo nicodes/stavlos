@@ -15,9 +15,18 @@ import (
 // Todos is implemented by the agent runtime: the agent's own todo list,
 // logged on every change and shown to the human beside the chat.
 type Todos interface {
-	Add(text string) (string, error)
-	Update(id, status, text string) error
+	// Edit applies updates to existing items, then appends add as new
+	// pending items, as one change; an unknown id changes nothing. It
+	// returns the list after the change.
+	Edit(add []string, updates []TodoUpdate) ([]event.TodoItem, error)
 	List() []event.TodoItem
+}
+
+// TodoUpdate changes one item: its status, its text, or both.
+type TodoUpdate struct {
+	ID     string `json:"id" desc:"The item's id (t1, t2, …)" req:"true"`
+	Status string `json:"status" desc:"pending | in_progress | done | cancelled"`
+	Text   string `json:"text" desc:"New text for the item"`
 }
 
 // TodoStatuses are the states a todo item moves through.
@@ -40,77 +49,65 @@ func validTodoStatus(s string) bool {
 	return false
 }
 
-type todoAddTool struct{}
+type todoTool struct{}
 
-func (todoAddTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.TodoAdd, Description: "Add one step to your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep exactly one in_progress with todo_update as you go. Returns the item's id. Skip the list for single-step or trivial requests.",
-		Schema: schemaOf(todoAddInput{})}
+func (todoTool) Def() model.ToolDef {
+	return model.ToolDef{Name: toolname.Todo, Description: "Your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep the list honest with update, by id. Keep exactly one item in_progress while you work; mark an item done the moment it is finished and verified, never before; cancel steps you drop; add a new item for a blocker instead of marking the blocked step done. One call can update items and add new ones. Returns the whole list with ids. Skip the list for single-step or trivial requests.",
+		Schema: schemaOf(todoInput{})}
 }
 
-type todoAddInput struct {
-	Text string `json:"text" desc:"The step, imperative and short (\"Run the tests\")" req:"true"`
+type todoInput struct {
+	Add    []string     `json:"add" desc:"New steps to append, in order, each imperative and short (\"Run the tests\")"`
+	Update []TodoUpdate `json:"update" desc:"Changes to existing items, by id: a status (pending | in_progress | done | cancelled), a new text, or both"`
 }
 
-func (todoAddTool) Subject(in json.RawMessage) policy.Subject {
-	var a todoAddInput
+func (todoTool) Subject(in json.RawMessage) policy.Subject {
+	var a todoInput
 	_ = decode(in, &a)
-	return policy.Text(a.Text)
+	values := append([]string(nil), a.Add...)
+	for _, u := range a.Update {
+		values = append(values, u.ID)
+	}
+	return policy.Text(strings.Join(values, "\n"))
 }
 
-func (todoAddTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
+func (todoTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if env.Todo == nil {
 		return errf("the todo list is not available to this agent")
 	}
-	var a todoAddInput
+	var a todoInput
 	if err := decode(in, &a); err != nil {
 		return errf("%v", err)
 	}
-	text := strings.TrimSpace(a.Text)
-	if text == "" {
-		return errf("text is required")
+	if len(a.Add) == 0 && len(a.Update) == 0 {
+		return errf("nothing to do: give add, update, or both")
 	}
-	id, err := env.Todo.Add(text)
+	add := make([]string, 0, len(a.Add))
+	for _, text := range a.Add {
+		if text = strings.TrimSpace(text); text == "" {
+			return errf("add: a step needs text")
+		}
+		add = append(add, text)
+	}
+	for i, u := range a.Update {
+		switch {
+		case u.ID == "":
+			return errf("update: every change needs the item's id")
+		case u.Status != "" && !validTodoStatus(u.Status):
+			return errf("update %s: status must be one of %s", u.ID, todoStatusNames())
+		case u.Status == "" && strings.TrimSpace(u.Text) == "":
+			return errf("update %s: nothing to change: give a status, a text, or both", u.ID)
+		}
+		a.Update[i].Text = strings.TrimSpace(u.Text)
+	}
+	items, err := env.Todo.Edit(add, a.Update)
 	if err != nil {
 		return errf("%v", err)
 	}
-	return Result{Output: fmt.Sprintf("added %s: %s", id, text)}
-}
-
-type todoUpdateTool struct{}
-
-func (todoUpdateTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.TodoUpdate, Description: "Update one item on your todo list: set its status (pending, in_progress, done, cancelled) and/or rewrite its text. Mark an item in_progress when you start it and done the moment it is finished and verified, never before; cancel steps you drop. Add a new item for a blocker instead of marking the blocked step done.",
-		Schema: schemaOf(todoUpdateInput{})}
-}
-
-type todoUpdateInput struct {
-	ID     string `json:"id" desc:"The item id returned by todo_add" req:"true"`
-	Status string `json:"status" desc:"pending | in_progress | done | cancelled"`
-	Text   string `json:"text" desc:"New text for the item (optional)"`
-}
-
-func (todoUpdateTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
-
-func (todoUpdateTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	if env.Todo == nil {
-		return errf("the todo list is not available to this agent")
+	var b strings.Builder
+	b.WriteString("todo list:")
+	for _, it := range items {
+		fmt.Fprintf(&b, "\n- %s [%s] %s", it.ID, it.Status, it.Text)
 	}
-	var a todoUpdateInput
-	if err := decode(in, &a); err != nil {
-		return errf("%v", err)
-	}
-	if a.Status != "" && !validTodoStatus(a.Status) {
-		return errf("status must be one of %s", todoStatusNames())
-	}
-	if a.Status == "" && strings.TrimSpace(a.Text) == "" {
-		return errf("nothing to change: give a status, a text, or both")
-	}
-	if err := env.Todo.Update(a.ID, a.Status, strings.TrimSpace(a.Text)); err != nil {
-		return errf("%v", err)
-	}
-	out := "updated " + a.ID
-	if a.Status != "" {
-		out += " → " + a.Status
-	}
-	return Result{Output: out}
+	return Result{Output: b.String()}
 }

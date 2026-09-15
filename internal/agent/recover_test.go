@@ -65,8 +65,8 @@ func TestRecoverRoundTrip(t *testing.T) {
 			reply(text("third")),  // turn 3, after the human's follow-up
 		},
 		childSteps: []step{
-			reply(call("k1", "todo_add", `{"text":"inspect"}`)),
-			reply(call("k2", "todo_update", `{"id":"t1","status":"done"}`)),
+			reply(call("k1", "todo", `{"add":["inspect"]}`)),
+			reply(call("k2", "todo", `{"update":[{"id":"t1","status":"done"}]}`)),
 			func(_ context.Context, req model.Request) (model.Response, error) {
 				<-release
 				parent := req.System[strings.Index(req.System, "created by a parent agent (id ")+len("created by a parent agent (id "):]

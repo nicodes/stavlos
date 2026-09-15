@@ -1453,13 +1453,13 @@ func TestTodoTabAndDialog(t *testing.T) {
 		t.Fatalf("indicator should carry the in-progress item:\n%s", v)
 	}
 	// chat lines for the tools
-	if got := transcript.ToolArg("todo_update", []byte(`{"id":"t2","status":"done"}`)); got != "t2 → done" {
-		t.Fatalf("todo_update arg %q", got)
+	if got := transcript.ToolArg("todo", []byte(`{"update":[{"id":"t2","status":"done"}],"add":["Run the tests"]}`)); got != "t2 → done · Run the tests" {
+		t.Fatalf("todo update arg %q", got)
 	}
-	if got := transcript.ToolArg("todo_add", []byte(`{"text":"Run the tests"}`)); got != "Run the tests" {
-		t.Fatalf("todo_add arg %q", got)
+	if got := transcript.ToolArg("todo", []byte(`{"add":["Run the tests"]}`)); got != "Run the tests" {
+		t.Fatalf("todo add arg %q", got)
 	}
-	if g, _ := transcript.ToolGlyph("todo_add"); g != transcript.GlyphToolTodo {
+	if g, _ := transcript.ToolGlyph("todo"); g != transcript.GlyphToolTodo {
 		t.Fatalf("todo glyph %q", g)
 	}
 }

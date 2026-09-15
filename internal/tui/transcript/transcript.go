@@ -1662,17 +1662,26 @@ func ToolArg(name string, raw json.RawMessage) string {
 			return strings.Join(qs, " · ")
 		}
 		return ""
-	case toolname.TodoAdd:
-		return str("text")
-	case toolname.TodoUpdate:
-		out := str("id")
-		if st := str("status"); st != "" {
-			out += " → " + st
+	case toolname.Todo: // "t2 → done · Run the tests": the updates, then the steps added
+		var a struct {
+			Add    []string
+			Update []struct{ ID, Status, Text string }
 		}
-		if tx := str("text"); tx != "" {
-			out += "  " + tx
+		if json.Unmarshal(raw, &a) != nil {
+			return ""
 		}
-		return out
+		parts := make([]string, 0, len(a.Update)+len(a.Add))
+		for _, u := range a.Update {
+			part := u.ID
+			if u.Status != "" {
+				part += " → " + u.Status
+			}
+			if u.Text != "" {
+				part += "  " + u.Text
+			}
+			parts = append(parts, part)
+		}
+		return strings.Join(append(parts, a.Add...), " · ")
 	case toolname.Message:
 		to := str("to")
 		to = strings.TrimPrefix(to, "@")
@@ -1854,7 +1863,7 @@ const (
 	GlyphJob        = "$" // async jobs are shell commands
 	GlyphToolAgents = "⑂"
 	GlyphToolCreate = "⋙" // agent_create: the triple of a prompt\'s ›, since it makes the agent it prompts
-	GlyphToolTodo   = "□" // todo_add, todo_update
+	GlyphToolTodo   = "□" // todo
 	GlyphToolMCP    = "≡" // mcp__<server>__<tool> and MCP server notices
 	GlyphToolWeb    = "↓" // web_fetch: pulling a page in
 )
@@ -1908,7 +1917,7 @@ func ToolGlyph(tool string) (string, string) {
 		return GlyphToolAgents, " "
 	case tool == toolname.Shell || tool == toolname.ShellKill:
 		return GlyphToolShell, " "
-	case strings.HasPrefix(tool, "todo_"):
+	case tool == toolname.Todo:
 		return GlyphToolTodo, " "
 	case strings.HasPrefix(tool, toolname.MCPPrefix):
 		return GlyphToolMCP, " "
