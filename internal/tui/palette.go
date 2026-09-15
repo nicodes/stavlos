@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -117,6 +118,13 @@ func paletteView(matches []Command, idx, width int) string {
 		rows = append(rows, theme.StyleDim.Render("  ↑/↓ move · tab complete · enter run · esc clear"))
 	}
 	return lipgloss.NewStyle().Width(width).Render(strings.Join(rows, "\n"))
+}
+
+// paletteStep moves the palette's cursor on ↑/↓ while the palette is open;
+// it reports whether it used the key.
+func (m *Model) paletteStep(msg tea.KeyMsg) bool {
+	pm := paletteMatches(m.input.Value())
+	return len(pm) > 0 && stepCursor(msg, &m.palIdx, len(pm), false)
 }
 
 // mentionPrefix is the @name being typed among the names at the front of
