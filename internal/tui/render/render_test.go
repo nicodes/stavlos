@@ -101,7 +101,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look around"}))
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"⑂ Spawned scout (explorer) · m", "task", "▹ look around"})
+	assertSubsequence(t, got, []string{"› Spawned scout (explorer) · m", "task", "▹ look around"})
 }
 
 func TestUserMessageKinds(t *testing.T) {
@@ -799,11 +799,15 @@ func TestTrackedLinesSurviveLaterItems(t *testing.T) {
 		return transcript.Line{}
 	}
 	perm, question := find("**Permission** shell"), find("**Question** which?")
-	if perm.Glyph != transcript.GlyphPrompt || perm.Tone != transcript.ToneNone {
+	if perm.Glyph != transcript.GlyphPermission || perm.Tone != transcript.ToneNone {
 		t.Fatalf("answered permission prompt: %+v", perm)
 	}
-	if question.Tone != transcript.ToneError {
+	if question.Glyph != transcript.GlyphPrompt || question.Tone != transcript.ToneError {
 		t.Fatalf("withdrawn question: %+v", question)
+	}
+	// an answer draws its prompt's mark: ! for a permission, ? for a question
+	if a, w := find("**Answered** allow"), find("**Prompt withdrawn**"); a.Glyph != transcript.GlyphPermission || w.Glyph != transcript.GlyphAnswer {
+		t.Fatalf("answer glyphs: answered %q withdrawn %q", a.Glyph, w.Glyph)
 	}
 	shell, built, read, r2 := find("make"), find("built"), find("x"), find("r2")
 	if shell.Running || built.Item != shell.Item || r2.Item != read.Item || shell.Item == read.Item {

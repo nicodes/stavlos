@@ -97,22 +97,23 @@ const (
 
 // Leader glyphs for chat items (see the glyph table in docs).
 const (
-	GlyphChild     = "⑂" // a child agent reported back (same fork as spawn)
-	GlyphReply     = "‹" // a response: an agent's reply in the session chat, a response to or from another agent
-	GlyphAsk       = "›" // a prompt to or from another agent (the human's own prompts draw › in blue)
-	GlyphSpawn     = "⑂" // a child agent was spawned (fork)
-	GlyphTask      = "▹" // the task handed to a child
-	GlyphFinished  = "✓" // an agent finished
-	GlyphError     = "!" // a turn error
-	GlyphKilled    = "⊘" // an agent was killed
-	GlyphTurn      = "◦" // a turn notice (cancelled, stopped, aborted)
-	GlyphNudge     = "↻" // the harness nudged the agent to reply
-	GlyphModel     = "⇄" // model changed
-	GlyphNotice    = "»" // a local notice (/help, lists)
-	GlyphPrompt    = "?" // a question for the user
-	GlyphAnswer    = "?" // the user's answer (same mark as the question)
-	GlyphFailed    = "✗" // a failed finish
-	GlyphCompacted = "┄┄ compacted ┄┄"
+	GlyphChild      = "⑂" // a child agent reported back (same fork as spawn)
+	GlyphReply      = "‹" // a response: an agent's reply in the session chat, a response to or from another agent
+	GlyphAsk        = "›" // a prompt to or from another agent (the human's own prompts draw › in blue)
+	GlyphSpawn      = "›" // a child agent was spawned: its task is a prompt to it
+	GlyphTask       = "▹" // the task handed to a child
+	GlyphFinished   = "✓" // an agent finished
+	GlyphError      = "!" // a turn error
+	GlyphKilled     = "⊘" // an agent was killed
+	GlyphTurn       = "◦" // a turn notice (cancelled, stopped, aborted)
+	GlyphNudge      = "↻" // the harness nudged the agent to reply
+	GlyphModel      = "⇄" // model changed
+	GlyphNotice     = "»" // a local notice (/help, lists)
+	GlyphPrompt     = "?" // a question for the user
+	GlyphAnswer     = "?" // the user's answer to a question (same mark as the question)
+	GlyphPermission = "!" // a permission or trust prompt, and its answer
+	GlyphFailed     = "✗" // a failed finish
+	GlyphCompacted  = "┄┄ compacted ┄┄"
 	// GlyphCompacting marks the rule of a compaction still running; Render
 	// draws the sweeping bar into it.
 	GlyphCompacting = "┄┄ compacting ┄┄"
@@ -159,13 +160,14 @@ type Transcript struct {
 	flat    []Line   // items flattened; nil when stale
 	start   []int    // start[i]: index of items[i]'s first line in flat
 
-	calls      map[string]lineRef   // tool call id → its LineTool line
-	prompts    map[string]int       // prompt id → item of the tool call it gates
-	promptLine map[string]lineRef   // prompt id → its "?" line (tone flips when settled)
-	monitors   map[string]lineRef   // monitor id → its "started" line, or the shell call it grew from
-	children   map[string]lineRef   // child agent id → the agent_create line that spawned it
-	asks       map[string][]lineRef // agent name → message lines still waiting for its answer
-	monKinds   map[string]string    // monitor id → kind, for the glyph on later events
+	calls       map[string]lineRef   // tool call id → its LineTool line
+	prompts     map[string]int       // prompt id → item of the tool call it gates
+	promptLine  map[string]lineRef   // prompt id → its "?" line (tone flips when settled)
+	monitors    map[string]lineRef   // monitor id → its "started" line, or the shell call it grew from
+	children    map[string]lineRef   // child agent id → the agent_create line that spawned it
+	asks        map[string][]lineRef // agent name → message lines still waiting for its answer
+	monKinds    map[string]string    // monitor id → kind, for the glyph on later events
+	promptKinds map[string]string    // prompt id → kind, so its answer draws the prompt's glyph
 
 	streamTurn  int
 	stream      []streamSeg
@@ -212,7 +214,7 @@ func NewTranscript() *Transcript {
 	return &Transcript{
 		calls: map[string]lineRef{}, prompts: map[string]int{}, promptLine: map[string]lineRef{},
 		monitors: map[string]lineRef{}, monKinds: map[string]string{}, children: map[string]lineRef{},
-		asks: map[string][]lineRef{}, compactItem: -1,
+		asks: map[string][]lineRef{}, promptKinds: map[string]string{}, compactItem: -1,
 	}
 }
 
@@ -241,8 +243,30 @@ func (t *Transcript) Apply(ev event.Event) {
 			return
 		}
 	}
-	t.appendItem(CleanLines(EventLines(ev)))
+	lines := CleanLines(EventLines(ev))
+	t.answerGlyph(ev, lines)
+	t.appendItem(lines)
 	t.afterAppend(ev)
+}
+
+// answerGlyph marks an answer, a default or a withdrawal with its prompt's
+// glyph: ? for a question, ! for a permission or trust prompt (and for one
+// whose kind was never seen).
+func (t *Transcript) answerGlyph(ev event.Event, lines []Line) {
+	switch ev.Type {
+	case event.PromptAnswered, event.PromptDefaulted, event.PromptWithdrawn:
+	default:
+		return
+	}
+	var p event.PromptRefPayload
+	if ev.Decode(&p) != nil || t.promptKinds[p.ID] == string(protocol.PromptQuestion) {
+		return
+	}
+	for i := range lines {
+		if lines[i].Glyph == GlyphAnswer {
+			lines[i].Glyph = GlyphPermission
+		}
+	}
 }
 
 // applyCompaction keeps a compaction as one chat item: the rule with the
@@ -312,6 +336,7 @@ func (t *Transcript) applyPrompt(ev event.Event) bool {
 		if ev.Decode(&p) != nil {
 			return false
 		}
+		t.promptKinds[p.ID] = p.Kind
 		lines := CleanLines(EventLines(ev))
 		var refs []lineRef
 		if item, gated := t.openCallItem(p.Tool); p.Kind == "permission" && gated {
@@ -339,7 +364,9 @@ func (t *Transcript) applyPrompt(ev event.Event) bool {
 	if ev.Type != event.PromptClaimed {
 		delete(t.prompts, p.ID)
 	}
-	t.insertIntoItem(item, nested(CleanLines(EventLines(ev))))
+	lines := CleanLines(EventLines(ev))
+	t.answerGlyph(ev, lines)
+	t.insertIntoItem(item, nested(lines))
 	return true
 }
 
@@ -422,7 +449,7 @@ func (t *Transcript) afterAppend(ev event.Event) {
 }
 
 func isToolLine(l Line) bool   { return l.Kind == LineTool }
-func isPromptLine(l Line) bool { return l.Glyph == GlyphPrompt }
+func isPromptLine(l Line) bool { return l.Glyph == GlyphPrompt || l.Glyph == GlyphPermission }
 func isNotBlank(l Line) bool   { return l.Kind != LineBlank }
 
 // --- item storage ---
@@ -989,7 +1016,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.ReplyMissing: decoded(func(p event.RepliesPayload) []Line {
-		return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneError, Text: titled("Ended without replying", "to "+partyList(p.Names))}}
+		return []Line{{Kind: LineNotice, Glyph: GlyphNudge, Tone: ToneError, Text: titled("Ended without replying", "to "+partyList(p.Names))}}
 	}),
 
 	event.ToolCallStarted: decoded(func(p event.ToolStartedPayload) []Line {
@@ -1145,9 +1172,9 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		case "question":
 			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: titled("Question", format.FirstLine(p.Question))}}
 		case "trust":
-			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: titled("Trust requested", "")}}
+			return []Line{{Kind: LineNotice, Glyph: GlyphPermission, Tone: ToneWorking, Text: titled("Trust requested", "")}}
 		default:
-			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: titled("Permission", p.Tool)}}
+			return []Line{{Kind: LineNotice, Glyph: GlyphPermission, Tone: ToneWorking, Text: titled("Permission", p.Tool)}}
 		}
 	}),
 
