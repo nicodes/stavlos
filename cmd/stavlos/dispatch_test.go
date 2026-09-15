@@ -6,7 +6,7 @@ import (
 )
 
 // TestCommandOf: command words and the dash-spelled commands reach their
-// handler; other leading flags start a channel; unknown words stay unknown.
+// handler; other leading flags open the directory's channel; unknown words stay unknown.
 func TestCommandOf(t *testing.T) {
 	for _, c := range []struct {
 		args     []string
@@ -20,7 +20,7 @@ func TestCommandOf(t *testing.T) {
 		{[]string{"--help"}, "--help", []string{}, true},
 		{[]string{"-h"}, "-h", []string{}, true},
 		{[]string{"--model", "openai/gpt-5.4"}, "", []string{"--model", "openai/gpt-5.4"}, true},
-		{[]string{"resume", "s1"}, "resume", []string{"s1"}, true},
+		{[]string{"open", "proj"}, "open", []string{"proj"}, true},
 		{[]string{"bogus"}, "bogus", []string{}, false},
 	} {
 		cmd, rest := commandOf(c.args)

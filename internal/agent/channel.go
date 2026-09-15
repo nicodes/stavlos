@@ -44,6 +44,7 @@ type Channel struct {
 	cfg      *config.Effective
 	model    string // channel-selected model
 	rootArch string
+	name     string // unique across the daemon (the daemon picks and checks it), shown as #name
 	agents   map[string]*Agent
 	names    map[string]string // agent name → id; a name is never released, so a mention never changes meaning
 	order    []string          // spawn order
@@ -114,15 +115,18 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, rootArch str
 	}
 }
 
-// Start logs ChannelCreated and spawns the root agent.
+// Start logs ChannelCreated under name and spawns the root agent.
 // A channel may start with no model or an unconnected provider: the TUI
 // opens regardless and the first turn reports the problem (PRD §8.4).
-func (s *Channel) Start(ctx context.Context) error {
+func (s *Channel) Start(ctx context.Context, name string) error {
+	s.mu.Lock()
+	s.name = name
+	s.mu.Unlock()
 	if _, ok := s.cfg.Presets[s.rootArch]; !ok {
 		return fmt.Errorf("root preset %q not found", s.rootArch)
 	}
 	if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Type: event.ChannelCreated,
-		Payload: event.MustPayload(event.ChannelCreatedPayload{Dir: s.Dir, Model: s.model, RootAgent: s.rootArch})}); err != nil {
+		Payload: event.MustPayload(event.ChannelCreatedPayload{Name: name, Dir: s.Dir, Model: s.model, RootAgent: s.rootArch})}); err != nil {
 		return err
 	}
 	_, err := s.spawn(ctx, "", s.rootArch, "main", "", "") // the root is always "main (role)"
@@ -134,6 +138,25 @@ func (s *Channel) Config() *config.Effective {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg
+}
+
+// Name is the channel's name, shown as #name.
+func (s *Channel) Name() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.name
+}
+
+// Rename logs the channel's new name and takes it. The daemon has already
+// normalised it and checked no other channel has it.
+func (s *Channel) Rename(ctx context.Context, name string) error {
+	if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Type: event.ChannelRenamed, Payload: event.MustPayload(event.NamePayload{Name: name})}); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.name = name
+	s.mu.Unlock()
+	return nil
 }
 
 // SetConfig swaps the effective config (after a trust decision or edit).
@@ -311,7 +334,7 @@ func (s *Channel) Info() protocol.ChannelInfo {
 	cfg := s.cfg
 	s.mu.RUnlock()
 	return protocol.ChannelInfo{
-		ID: s.ID, Dir: s.Dir, Model: s.Model(), RootAgent: s.rootArch,
+		ID: s.ID, Name: s.Name(), Dir: s.Dir, Model: s.Model(), RootAgent: s.rootArch,
 		Created: s.Created.Format(time.RFC3339), Archived: s.Archived(),
 		Live: s.Live(), CostUSD: s.Cost(), TrustPending: cfg.TrustPending, Mode: s.Mode(),
 		State: s.state(), Dirs: s.dirInfos(),
@@ -499,6 +522,28 @@ func normalizeName(label string) string {
 	name := strings.Trim(b.String(), "-_")
 	if len(name) > maxNameLen {
 		name = strings.TrimRight(name[:maxNameLen], "-_")
+	}
+	return name
+}
+
+// NormalizeName is normalizeName for the daemon, which names channels by the
+// same rules as agents.
+func NormalizeName(label string) string { return normalizeName(label) }
+
+// UniqueName is want normalised (fallback when that leaves nothing, then
+// "agent") with a -2, -3, … suffix while taken reports the name in use.
+func UniqueName(want, fallback string, taken func(string) bool) string {
+	base := normalizeName(want)
+	if base == "" {
+		base = normalizeName(fallback)
+	}
+	if base == "" {
+		base = "agent"
+	}
+	name := base
+	for n := 2; taken(name); n++ {
+		suffix := fmt.Sprintf("-%d", n)
+		name = strings.TrimRight(base[:min(len(base), maxNameLen-len(suffix))], "-_") + suffix
 	}
 	return name
 }

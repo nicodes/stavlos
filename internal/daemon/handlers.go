@@ -125,6 +125,9 @@ var handlers = map[string]handler{
 	protocol.MChannelArchive: typed(func(ctx context.Context, c *conn, p protocol.ChannelRef) (any, error) {
 		return okResult, c.d.ArchiveChannel(ctx, p.ID)
 	}),
+	protocol.MChannelRename: typed(func(ctx context.Context, c *conn, p protocol.ChannelRenameParams) (any, error) {
+		return okResult, c.d.RenameChannel(ctx, p.ID, p.Name)
+	}),
 	protocol.MChannelSetModel: typed(func(ctx context.Context, c *conn, p protocol.ChannelSetModelParams) (any, error) {
 		s, err := c.d.channel(p.ID)
 		if err != nil {

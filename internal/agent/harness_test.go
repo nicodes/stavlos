@@ -308,7 +308,7 @@ func newTestChannel(t *testing.T, tc testConfig, fm *fakeModel) (*Channel, *fake
 	cfg, work := loadTestConfig(t, tc)
 	h := newFakeHost(fm)
 	s := New(h, "s1", work, cfg, "", "")
-	if err := s.Start(context.Background()); err != nil {
+	if err := s.Start(context.Background(), "test"); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(s.Stop)

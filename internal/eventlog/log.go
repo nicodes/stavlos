@@ -21,7 +21,7 @@ import (
 )
 
 // schemaVersion is PRAGMA user_version once migrate has run.
-const schemaVersion = 3
+const schemaVersion = 4
 
 // Log is the event log. Appends go through one writer connection and are
 // serialised so per-channel sequences stay contiguous; reads use a small
@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE TABLE IF NOT EXISTS channels (
   id       TEXT PRIMARY KEY,
+  name     TEXT NOT NULL DEFAULT '',
   dir      TEXT NOT NULL,
   created  TEXT NOT NULL,
   archived INTEGER NOT NULL DEFAULT 0,
@@ -263,6 +264,7 @@ func (l *Log) LastSeq(ctx context.Context, channel string) (int64, error) {
 // LastSeq are read-only here: the log keeps them from the events.
 type ChannelRow struct {
 	ID       string
+	Name     string // unique across the daemon; the daemon keeps it in step with the channel
 	Dir      string
 	Created  time.Time
 	Archived bool
@@ -275,14 +277,14 @@ type execer interface {
 }
 
 func putChannel(ctx context.Context, x execer, s ChannelRow) error {
-	_, err := x.ExecContext(ctx, `INSERT INTO channels(id, dir, created, archived, title) VALUES(?,?,?,?,?)
-ON CONFLICT(id) DO UPDATE SET dir = excluded.dir, archived = excluded.archived`,
-		s.ID, s.Dir, s.Created.UTC().Format(time.RFC3339Nano), boolInt(s.Archived), s.Title)
+	_, err := x.ExecContext(ctx, `INSERT INTO channels(id, name, dir, created, archived, title) VALUES(?,?,?,?,?,?)
+ON CONFLICT(id) DO UPDATE SET name = excluded.name, dir = excluded.dir, archived = excluded.archived`,
+		s.ID, s.Name, s.Dir, s.Created.UTC().Format(time.RFC3339Nano), boolInt(s.Archived), s.Title)
 	return err
 }
 
-// PutChannel inserts a channel index row, or updates its directory and
-// archived flag (the title is never overwritten).
+// PutChannel inserts a channel index row, or updates its name, directory
+// and archived flag (the title is never overwritten).
 func (l *Log) PutChannel(ctx context.Context, s ChannelRow) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -292,7 +294,7 @@ func (l *Log) PutChannel(ctx context.Context, s ChannelRow) error {
 // Channels lists index rows, newest first, with their titles and last seq
 // in the same query.
 func (l *Log) Channels(ctx context.Context) ([]ChannelRow, error) {
-	rows, err := l.r.QueryContext(ctx, `SELECT s.id, s.dir, s.created, s.archived, s.title,
+	rows, err := l.r.QueryContext(ctx, `SELECT s.id, s.name, s.dir, s.created, s.archived, s.title,
   COALESCE((SELECT MAX(e.seq) FROM events e WHERE e.channel = s.id), 0)
 FROM channels s ORDER BY s.created DESC`)
 	if err != nil {
@@ -304,7 +306,7 @@ FROM channels s ORDER BY s.created DESC`)
 		var s ChannelRow
 		var ts string
 		var arch int
-		if err := rows.Scan(&s.ID, &s.Dir, &ts, &arch, &s.Title, &s.LastSeq); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Dir, &ts, &arch, &s.Title, &s.LastSeq); err != nil {
 			return nil, err
 		}
 		s.Created, _ = time.Parse(time.RFC3339Nano, ts)

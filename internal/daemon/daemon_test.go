@@ -2513,3 +2513,55 @@ func TestAutoDeniesAWaitingBoundaryPrompt(t *testing.T) {
 		t.Fatal("the agent was never told")
 	}
 }
+
+// TestChannelNames: a channel is named after its directory, unique across
+// the daemon (a second one gets -2); a rename is normalised and refused when
+// it leaves nothing or another channel has the name; names survive a
+// restart.
+func TestChannelNames(t *testing.T) {
+	setupConfig(t)
+	data := t.TempDir()
+	h := newHarness(t, data, &fakeModel{})
+	ctx := context.Background()
+	dir := filepath.Join(t.TempDir(), "Proj")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a, err := h.c.CreateChannel(ctx, dir, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := h.c.CreateChannel(ctx, dir, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Name != "proj" || b.Name != "proj-2" {
+		t.Fatalf("names %q %q", a.Name, b.Name)
+	}
+	if err := h.c.RenameChannel(ctx, b.ID, "#Docs Site"); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.c.RenameChannel(ctx, a.ID, "docs-site"); err == nil || !strings.Contains(err.Error(), "taken") {
+		t.Fatalf("a taken name: %v", err)
+	}
+	if err := h.c.RenameChannel(ctx, a.ID, "!!"); err == nil {
+		t.Fatal("a name with nothing left should be refused")
+	}
+	names := func(list func(context.Context, string, bool) ([]protocol.ChannelInfo, error)) map[string]bool {
+		ss, _ := list(ctx, dir, false)
+		out := map[string]bool{}
+		for _, s := range ss {
+			out[s.Name] = true
+		}
+		return out
+	}
+	if got := names(h.c.Channels); len(got) != 2 || !got["proj"] || !got["docs-site"] {
+		t.Fatalf("names %v", got)
+	}
+	h.close()
+	h2 := newHarness(t, data, &fakeModel{})
+	defer h2.close()
+	if got := names(h2.c.Channels); len(got) != 2 || !got["proj"] || !got["docs-site"] {
+		t.Fatalf("names after a restart %v", got)
+	}
+}

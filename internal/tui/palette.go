@@ -32,6 +32,7 @@ var commands = []Command{
 	{Name: "/auto", Args: "[on|off]", Desc: "auto mode: approve permissions inside the channel's directories, deny outside (no arg toggles)", Direct: true},
 	{Name: "/yolo", Args: "[on|off]", Desc: "yolo mode: approve every permission, directories included (no arg toggles)", Direct: true},
 	{Name: "/channels", Desc: "pick a channel of this directory to resume where it left off", Aliases: []string{"/resume", "/channel"}, Direct: true},
+	{Name: "/rename", Args: "<name>", Desc: "rename this channel (#name, unique across the daemon)", Direct: true},
 	{Name: "/tree", Desc: "toggle the agent sidebar (also ctrl+b)", Direct: true},
 	{Name: "/chat", Desc: "the channel chat: talk to every agent, @name addresses one (the sidebar opens an agent's own chat)", Direct: true},
 	{Name: "/compact", Desc: "summarise the selected agent's completed turns now to free context (automatic at 80% of the window)", Direct: true},

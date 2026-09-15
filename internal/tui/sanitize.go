@@ -46,7 +46,7 @@ func cleanPrompt(p *protocol.PromptInfo) {
 }
 
 func cleanChannel(s protocol.ChannelInfo) protocol.ChannelInfo {
-	s.Title, s.Dir = textsafe.Clean(s.Title), textsafe.Clean(s.Dir)
+	s.Title, s.Dir, s.Name = textsafe.Clean(s.Title), textsafe.Clean(s.Dir), textsafe.Clean(s.Name)
 	for i := range s.Dirs {
 		s.Dirs[i].Path = textsafe.Clean(s.Dirs[i].Path)
 	}
