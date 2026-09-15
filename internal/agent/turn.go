@@ -132,7 +132,7 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 
 	resp, err := m.Complete(t.ctx, model.Request{Model: bareID(modelID), System: system, Messages: history, Tools: defs, Variant: variant},
 		func(d model.Delta) {
-			s.host.Stream(protocol.StreamNotification{Channel: s.ID, Agent: a.ID, Turn: t.turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName})
+			s.host.Stream(protocol.StreamNotification{Channel: s.ID, Agent: a.ID, Turn: t.turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName, Reset: d.Reset})
 		})
 	msg := event.AssistantMessagePayload{Turn: t.turn, Blocks: resp.Blocks, StopReason: string(resp.StopReason), Model: modelID, Usage: resp.Usage, CostUSD: info.Cost(resp.Usage)}
 	if err != nil {

@@ -107,6 +107,7 @@ type Delta struct {
 	Text     string // visible text
 	Thinking string // thinking summary text, if the provider exposes it
 	ToolName string // a tool call has started (name only; input arrives with the Response)
+	Reset    bool   // the call is being retried: discard everything streamed so far
 }
 
 // Model is the wire-protocol seam. Implementations must honour ctx cancellation

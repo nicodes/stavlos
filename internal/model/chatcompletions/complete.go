@@ -17,16 +17,13 @@ import (
 // watchdog, and an error when the stream ends without a finish reason. On
 // ctx cancellation it returns the partial accumulation with ctx.Err().
 func (m *client) Complete(ctx context.Context, req model.Request, onDelta func(model.Delta)) (model.Response, error) {
-	if onDelta == nil {
-		onDelta = func(model.Delta) {}
-	}
 	body, err := m.p.buildBody(m.id, req)
 	if err != nil {
 		return model.Response{}, fmt.Errorf("%s: %w", m.p.name, err)
 	}
 	return stream.Complete(ctx, stream.Request{
 		Name: m.p.name, Client: m.p.http, URL: m.p.baseURL + "/chat/completions", Body: body, Header: m.p.header,
-	}, newAccumulator(onDelta))
+	}, onDelta, func(d func(model.Delta)) stream.Codec { return newAccumulator(d) })
 }
 
 func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {

@@ -580,6 +580,7 @@ type StreamNotification struct {
 	Text     string `json:"text,omitempty"`
 	Thinking string `json:"thinking,omitempty"`
 	ToolName string `json:"tool_name,omitempty"`
+	Reset    bool   `json:"reset,omitempty"` // the model call is being retried: drop what streamed for this turn
 }
 
 // PromptNotification announces, updates, or withdraws a prompt.

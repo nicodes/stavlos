@@ -51,11 +51,15 @@ type Request struct {
 
 // Tunables; variables so tests can shrink them.
 var (
-	MaxAttempts  = 3                      // attempts before the first byte, for retryable failures
-	RetryDelay   = 500 * time.Millisecond // first backoff; doubles, jittered, capped at maxRetryWait
-	IdleTimeout  = 2 * time.Minute        // no bytes for this long ends the call
-	maxRetryWait = 30 * time.Second
-	maxErrorBody = 2048
+	MaxAttempts = 3                      // attempts before the first byte, for retryable failures
+	RetryDelay  = 500 * time.Millisecond // first backoff; doubles, jittered, capped at maxRetryWait
+	IdleTimeout = 2 * time.Minute        // no bytes for this long ends the call
+	// MidStreamRetries is how many times a call whose stream broke off
+	// (the connection dropped, went idle, or ended without a terminal event)
+	// is sent again, as long as no tool call had begun streaming.
+	MidStreamRetries = 1
+	maxRetryWait     = 30 * time.Second
+	maxErrorBody     = 2048
 )
 
 // ErrIncomplete: the stream ended cleanly but without the provider saying
@@ -72,21 +76,49 @@ func NewHTTPClient() *http.Client {
 	}}
 }
 
-// Complete runs one streaming call. On cancellation it returns the partial
-// response with ctx.Err(); on any other failure the partial response and a
-// "name: …" error.
-func Complete(ctx context.Context, r Request, codec Codec) (model.Response, error) {
+// Complete runs one streaming call. newCodec makes the codec for an
+// attempt, streaming through the delta callback it is given. A stream that
+// breaks off before a tool call began is sent again once, after a Reset
+// delta tells the caller to drop what streamed. On cancellation it returns
+// the partial response with ctx.Err(); on any other failure the partial
+// response and a "name: …" error.
+func Complete(ctx context.Context, r Request, onDelta func(model.Delta), newCodec func(onDelta func(model.Delta)) Codec) (model.Response, error) {
 	if r.Client == nil {
 		r.Client = NewHTTPClient()
 	}
+	if onDelta == nil {
+		onDelta = func(model.Delta) {}
+	}
+	for attempt := 0; ; attempt++ {
+		var streamed, tool bool
+		codec := newCodec(func(d model.Delta) {
+			streamed = true
+			tool = tool || d.ToolName != ""
+			onDelta(d)
+		})
+		res, broke, err := attemptStream(ctx, r, codec)
+		if err == nil || !broke || tool || attempt >= MidStreamRetries || ctx.Err() != nil {
+			return res, err
+		}
+		if streamed {
+			onDelta(model.Delta{Reset: true})
+		}
+	}
+}
+
+// attemptStream is one call; broke reports that its stream broke off after
+// it began (a dropped connection, an idle timeout, a missing terminal
+// event), as opposed to the provider rejecting the call or saying the
+// stream failed.
+func attemptStream(ctx context.Context, r Request, codec Codec) (res model.Response, broke bool, err error) {
 	reqCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	resp, err := post(reqCtx, r)
 	if err != nil {
 		if ctx.Err() != nil {
-			return model.Response{}, ctx.Err()
+			return model.Response{}, false, ctx.Err()
 		}
-		return model.Response{}, err
+		return model.Response{}, false, err
 	}
 	defer resp.Body.Close()
 
@@ -96,18 +128,24 @@ func Complete(ctx context.Context, r Request, codec Codec) (model.Response, erro
 		cancel()
 	})
 	defer watchdog.Stop()
-	done, err := ReadSSE(reqCtx, resp.Body, codec.Feed, func() { watchdog.Reset(IdleTimeout) })
+	var codecFailed bool
+	feed := func(p []byte) error {
+		err := codec.Feed(p)
+		codecFailed = err != nil && !errors.Is(err, io.EOF)
+		return err
+	}
+	done, err := ReadSSE(reqCtx, resp.Body, feed, func() { watchdog.Reset(IdleTimeout) })
 	switch {
 	case ctx.Err() != nil:
-		return codec.Response(), ctx.Err()
+		return codec.Response(), false, ctx.Err()
 	case idle.Load():
-		return incomplete(codec), fmt.Errorf("%s: no data from the provider for %s", r.Name, IdleTimeout)
+		return incomplete(codec), true, fmt.Errorf("%s: no data from the provider for %s", r.Name, IdleTimeout)
 	case err != nil:
-		return codec.Response(), fmt.Errorf("%s: %w", r.Name, err)
+		return codec.Response(), !codecFailed, fmt.Errorf("%s: %w", r.Name, err)
 	case !done && !codec.Terminal():
-		return incomplete(codec), fmt.Errorf("%s: %w", r.Name, ErrIncomplete)
+		return incomplete(codec), true, fmt.Errorf("%s: %w", r.Name, ErrIncomplete)
 	}
-	return codec.Response(), nil
+	return codec.Response(), false, nil
 }
 
 func incomplete(codec Codec) model.Response {
