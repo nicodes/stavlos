@@ -596,6 +596,9 @@ func renderToolText(strs ...string) string {
 		name, rest = s[:i], s[i:]
 	}
 	out := theme.StyleToolName.Render(name)
+	if j := strings.Index(name, " ("); j >= 0 && strings.HasSuffix(name, ")") {
+		out = theme.StyleToolName.Render(name[:j]) + theme.StyleDim.Render(name[j:]) // "Shell (denied)"
+	}
 	if rest == "" {
 		return out
 	}

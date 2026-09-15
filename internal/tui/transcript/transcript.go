@@ -742,7 +742,16 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	case p.Cancelled:
 		l.Suffix = "(cancelled)"
 	case p.Denied:
-		l.Suffix = "(denied)"
+		// next to the tool's name, "Shell (denied: not now)  rm -rf build":
+		// a denial reads on the one line, whatever the tool
+		mark := denialMark(p.Output)
+		if title, arg, ok := strings.Cut(l.Text, "  "); ok && !IsMessage(*l) {
+			l.Text = title + " " + mark + "  " + arg
+		} else if !IsMessage(*l) {
+			l.Text += " " + mark
+		} else {
+			l.Suffix = mark
+		}
 	}
 	// A new message to an agent waits for its answer: yellow until the
 	// answer lands (see answered), like a shell call and its job.
@@ -1094,7 +1103,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 	event.ToolCallFinished: decoded(func(p event.ToolFinishedPayload) []Line {
 		if p.Denied {
-			return deniedLines(p.Output)
+			return nil // the denial reads on the call's own line (see finishCall)
 		}
 		if toolname.Canonical(p.Name) == toolname.Message && !p.IsError {
 			return nil // the text already sits under the call; "delivered" adds nothing
@@ -1260,26 +1269,23 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 // --- helpers ---
 
-// deniedLines is what sits under a denied call instead of its output:
-// "✗ Permission denied · <reason>", so denials stand out in the chat. The
-// reason is the human's, "by policy", or why nobody could answer; a denial
-// the human gave no reason for reads "✗ Permission denied".
-func deniedLines(output string) []Line {
-	reason := strings.TrimSpace(output)
-	for _, cut := range []string{"Permission denied by the user:", "Permission denied by the user.", "Permission denied:", "Denied by policy:"} {
-		if rest, ok := strings.CutPrefix(reason, cut); ok {
-			reason = strings.TrimSpace(rest)
-			if cut == "Denied by policy:" {
-				reason = "by policy" // the command is already on the line above
-			}
-			break
+// denialMark is what a denied call carries next to its name: "(denied)",
+// "(denied: <the human's reason>)", "(denied by policy)" or
+// "(denied: no answer)" when nobody could answer the prompt.
+func denialMark(output string) string {
+	out := strings.TrimSpace(output)
+	switch {
+	case strings.HasPrefix(out, "Denied by policy:"):
+		return "(denied by policy)"
+	case strings.HasPrefix(out, "Permission denied: nobody answered"):
+		return "(denied: no answer)"
+	}
+	if reason, ok := strings.CutPrefix(out, "Permission denied by the user:"); ok {
+		if reason = strings.TrimSuffix(strings.TrimSpace(reason), "."); reason != "" {
+			return "(denied: " + reason + ")"
 		}
 	}
-	text := titled("Permission denied", "")
-	if reason = strings.TrimSuffix(reason, "."); reason != "" {
-		text = titled("Permission denied", "· "+reason)
-	}
-	return []Line{{Kind: LineToolNote, Glyph: GlyphFailed, Text: text}}
+	return "(denied)"
 }
 
 // titled is a status line's text: a bold, capitalised title, then the
