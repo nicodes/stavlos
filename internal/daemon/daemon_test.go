@@ -189,7 +189,7 @@ func setupConfig(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
 	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"shell":{"echo*":"allow","*":"ask"},"write":"allow"}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"policy":{"shell":{"echo*":"allow","*":"ask"},"write":"allow"}}`), 0o644)
 }
 
 func TestEndToEnd(t *testing.T) {
@@ -941,7 +941,7 @@ func TestYolo(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
 	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"shell":{"echo*":"allow","rm*":"deny","*":"ask"}}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"policy":{"shell":{"echo*":"allow","rm*":"deny","*":"ask"}}}`), 0o644)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
@@ -1049,7 +1049,7 @@ func TestAutoMode(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
 	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","policy":{"shell":{"rm*":"deny","*":"ask"}}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"policy":{"shell":{"rm*":"deny","*":"ask"}}}`), 0o644)
 	work := t.TempDir()
 	outside := t.TempDir()
 	os.WriteFile(filepath.Join(outside, "f.txt"), []byte("x"), 0o644)
@@ -1417,7 +1417,7 @@ func TestFullAgentIDs(t *testing.T) {
 func TestRoles(t *testing.T) {
 	setupConfig(t)
 	g := os.Getenv("STAVLOS_CONFIG_DIR")
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","rootAgent":"lead"}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"rootAgent":"lead"}`), 0o644)
 	roles := filepath.Join(g, "roles")
 	os.MkdirAll(roles, 0o755)
 	os.WriteFile(filepath.Join(roles, "lead.md"), []byte("---\ndescription: Leads\nmode: primary\nmodels:\n  - id: fake/m1\n    variants: [high]\nspawn: [limited, boss, general]\n---\nYou lead.\n"), 0o644)
@@ -1556,7 +1556,7 @@ func TestMCPServersPerAgent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg := fmt.Sprintf(`{"model":"fake/m1","rootAgent":"mcpuser","mcp":{"echo":{"command":%q,"env":{"STAVLOS_TEST_MCP_SERVER":"1","GREETING":"${env:STAVLOS_TEST_GREETING}"}}},"policy":{"mcp__echo__*":"allow"}}`, exe)
+	cfg := fmt.Sprintf(`{"model":"fake/m1","reminders":false,"rootAgent":"mcpuser","mcp":{"echo":{"command":%q,"env":{"STAVLOS_TEST_MCP_SERVER":"1","GREETING":"${env:STAVLOS_TEST_GREETING}"}}},"policy":{"mcp__echo__*":"allow"}}`, exe)
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(cfg), 0o644)
 	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
 	os.WriteFile(filepath.Join(g, "roles", "mcpuser.md"), []byte("---\ndescription: Uses MCP\nmcp: [echo, missing]\ntools: [read]\n---\nYou use tools.\n"), 0o644)
@@ -1668,7 +1668,7 @@ func TestWorkingDirectories(t *testing.T) {
 	os.WriteFile(filepath.Join(shared, "lib.txt"), []byte("lib"), 0o644)
 	os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("s"), 0o644)
 	os.WriteFile(filepath.Join(work, "in.txt"), []byte("in"), 0o644)
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","rootAgent":"lead"}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"rootAgent":"lead"}`), 0o644)
 	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
 	os.WriteFile(filepath.Join(g, "roles", "lead.md"), []byte(fmt.Sprintf("---\ndescription: Leads\ndirs: [%q]\nspawn: [general]\n---\nYou lead.\n", shared)), 0o644)
 
@@ -2024,7 +2024,7 @@ func TestWebSearchAlwaysOffered(t *testing.T) {
 	t.Setenv("STAVLOS_TEST_SEARCH_KEY", "k-123")
 	setupConfig(t)
 	g := os.Getenv("STAVLOS_CONFIG_DIR")
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","search":{"provider":"Brave","apiKey":"${env:STAVLOS_TEST_SEARCH_KEY}"}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"search":{"provider":"Brave","apiKey":"${env:STAVLOS_TEST_SEARCH_KEY}"}}`), 0o644)
 	fm2 := &fakeModel{}
 	fm2.steps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {

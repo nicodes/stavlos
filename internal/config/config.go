@@ -37,6 +37,7 @@ type File struct {
 	Env        *EnvConfig     `json:"env,omitempty"`    // what child processes inherit
 	Policy     map[string]any `json:"policy,omitempty"` // tool → verb | {pattern: verb}
 	Plugins    []string       `json:"plugins,omitempty"`
+	Reminders  *bool          `json:"reminders,omitempty"` // remind an agent that ends a turn owing a reply (default true)
 }
 
 type Limits struct {
@@ -221,6 +222,9 @@ type Effective struct {
 	Skills   map[string]Skill
 	AgentsMD string
 	Plugins  []string
+	// Reminders gives an agent that ends a turn owing a reply one reminder
+	// turn (docs/super-chat.md).
+	Reminders bool
 
 	// TrustPending is true when a project layer exists but has not been
 	// confirmed; in that case project content has NOT been merged.
@@ -302,6 +306,7 @@ func LoadGlobal() (*Effective, error) {
 	e.Model = ""
 	e.RootAgent = "general"
 	e.Limits = Limits{MaxDepth: 3, MaxAgents: 6}
+	e.Reminders = true
 	e.Escalation.ClaimTimeout = 30 * time.Second
 	e.Escalation.AnswerTimeout = 3 * time.Minute
 	e.Escalation.Default = policy.Deny
@@ -380,6 +385,9 @@ func (e *Effective) applyFile(f File, layer string) error {
 	}
 	if f.RootAgent != "" {
 		e.RootAgent = f.RootAgent
+	}
+	if f.Reminders != nil {
+		e.Reminders = *f.Reminders
 	}
 	if err := e.applyLimits(f.Limits); err != nil {
 		return err

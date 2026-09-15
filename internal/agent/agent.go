@@ -62,6 +62,9 @@ type Agent struct {
 	steers      []queued              // Steer inbox
 	responses   []response            // answers from other agents, not yet delivered
 	awaiting    map[string]int        // agent id → questions asked of it (a message, a child's task); cleared by its next answer
+	owed        map[string]bool       // parties owed a reply ("user" or an agent id) by the messages taken in (replies.go)
+	reminded    map[string]bool       // owed parties already reminded once
+	remind      []string              // parties a queued reminder names; it starts a turn
 	todos       []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
 	todoSeq     int                   // last todo id issued
 	mcps        map[string]*mcpServer // MCP servers this agent has started (name → server)
@@ -96,7 +99,7 @@ func newAgent(s *Session, id, parent, archetype, label, modelID string, depth in
 	return &Agent{
 		ID: id, Parent: parent, Archetype: archetype, Label: label, Depth: depth,
 		s: s, preset: preset, modelID: modelID, state: StateIdle,
-		wake: make(chan struct{}, 1), armed: map[string]bool{}, wakes: map[string]bool{}, monitors: map[string]*Monitor{}, awaiting: map[string]int{}, done: make(chan struct{}),
+		wake: make(chan struct{}, 1), armed: map[string]bool{}, wakes: map[string]bool{}, monitors: map[string]*Monitor{}, awaiting: map[string]int{}, owed: map[string]bool{}, reminded: map[string]bool{}, done: make(chan struct{}),
 	}
 }
 
@@ -151,27 +154,31 @@ func (a *Agent) takeInputs() []event.UserMessagePayload {
 	if a.state == StateKilled {
 		return nil
 	}
-	if len(a.prompts) == 0 && len(a.steers) == 0 && len(a.wakes) == 0 {
+	if len(a.prompts) == 0 && len(a.steers) == 0 && len(a.wakes) == 0 && len(a.remind) == 0 {
 		return nil
 	}
 	a.wakes = map[string]bool{}
 	var in []event.UserMessagePayload
 	for _, q := range a.prompts {
-		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source)})
+		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source)})
 	}
 	a.prompts = nil
 	for _, q := range a.steers { // idle: a steer is just a prompt, and reads as one
-		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source)})
+		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source)})
 	}
 	a.steers = nil
 	for _, r := range a.responses {
-		in = append(in, event.UserMessagePayload{Kind: event.MsgAgentResponse, Text: r.text, From: r.label})
+		in = append(in, event.UserMessagePayload{Kind: event.MsgAgentResponse, Text: r.text, From: r.label, FromID: r.from})
 	}
 	a.responses = nil
 	for _, r := range a.monDone {
 		in = append(in, event.UserMessagePayload{Kind: event.MsgMonitorFired, Text: monitorText(r)})
 	}
 	a.monDone = nil
+	if len(a.remind) > 0 {
+		in = append(in, event.UserMessagePayload{Kind: event.MsgReminder, Text: a.s.reminderText(a.remind)})
+		a.remind = nil
+	}
 	return in
 }
 
@@ -233,8 +240,9 @@ func (a *Agent) killNow() {
 	a.closeDone()
 	_, _ = a.s.host.Append(context.Background(), event.Event{Session: a.s.ID, Agent: a.ID, Type: event.AgentKilled,
 		Payload: event.MustPayload(event.AgentRefPayload{ID: a.ID})})
-	for _, o := range a.s.Agents() { // nobody will hear back from it now
+	for _, o := range a.s.Agents() { // nobody will hear back from it now, or reply to it
 		o.forget(a.ID)
+		o.settle(a.ID)
 	}
 }
 

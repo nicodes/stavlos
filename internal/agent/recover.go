@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"github.com/nicodes/stavlos/internal/tools"
 	"strings"
 	"time"
 
@@ -70,6 +71,8 @@ func (r *recovery) apply(e event.Event) {
 		r.agentSetting(e)
 	case event.PromptQueued, event.SteerReceived, event.UserMessage, event.ResponseReceived:
 		r.inbox(e)
+	case event.MessageToUser, event.ReminderQueued, event.ReplyMissing:
+		r.replies(e)
 	case event.MonitorStarted, event.MonitorFired, event.MonitorStopped, event.MonitorArmed, event.MonitorDisarmed:
 		r.monitor(e)
 	case event.TurnStarted, event.TurnEnded, event.TurnAborted, event.Usage:
@@ -86,6 +89,8 @@ func (r *recovery) apply(e event.Event) {
 		}
 		for _, o := range r.s.agents {
 			delete(o.awaiting, e.Agent)
+			delete(o.owed, e.Agent)
+			delete(o.reminded, e.Agent)
 		}
 	}
 }
@@ -222,6 +227,7 @@ func (r *recovery) inbox(e event.Event) {
 		if caller, ok := strings.CutPrefix(p.Source, "agent:"); ok {
 			if a, ok := r.s.agents[caller]; ok {
 				a.awaiting[e.Agent]++
+				a.settle(e.Agent) // a message to the agent is a reply to it
 			}
 		}
 	case event.UserMessage:
@@ -230,6 +236,9 @@ func (r *recovery) inbox(e event.Event) {
 		var p event.ResponsePayload
 		_ = e.Decode(&p)
 		r.responses[e.Agent] = append(r.responses[e.Agent], response{p.From, p.FromLabel, p.Text})
+		if from, ok := r.s.agents[p.From]; ok {
+			from.settle(e.Agent)
+		}
 		if a, ok := r.s.agents[e.Agent]; ok {
 			delete(a.awaiting, p.From) // an answer settles every question asked of that agent
 		}
@@ -240,6 +249,10 @@ func (r *recovery) inbox(e event.Event) {
 func (r *recovery) consumed(e event.Event) {
 	var p event.UserMessagePayload
 	_ = e.Decode(&p)
+	a, known := r.s.agents[e.Agent]
+	if known {
+		a.took(p)
+	}
 	switch p.Kind {
 	case event.MsgPrompt:
 		// A consumed prompt came from the prompt queue, or from a steer that
@@ -262,6 +275,37 @@ func (r *recovery) consumed(e event.Event) {
 	case event.MsgMonitorFired:
 		// A job result the turn consumed; open jobs are found from the
 		// monitor events, so nothing to unqueue here.
+	case event.MsgReminder:
+		if known {
+			a.remind = nil
+		}
+	}
+}
+
+// replies folds the reply bookkeeping of replies.go back in: a message to
+// the human settles what is owed to it, a queued reminder marks its parties
+// reminded and waits to start a turn, a missing reply drops its parties.
+func (r *recovery) replies(e event.Event) {
+	a, ok := r.s.agents[e.Agent]
+	if !ok {
+		return
+	}
+	switch e.Type {
+	case event.MessageToUser:
+		a.settle(tools.User)
+	case event.ReminderQueued:
+		var p event.RepliesPayload
+		_ = e.Decode(&p)
+		for _, party := range p.Parties {
+			a.reminded[party] = true
+		}
+		a.remind = append(a.remind, p.Parties...)
+	case event.ReplyMissing:
+		var p event.RepliesPayload
+		_ = e.Decode(&p)
+		for _, party := range p.Parties {
+			a.settle(party)
+		}
 	}
 }
 
@@ -390,9 +434,9 @@ func (r *recovery) resume(ctx context.Context, host Host) error {
 			continue
 		}
 		a.start()
-		// Anything that starts a turn wakes it: prompts, steers, and wakes
-		// (a response or a lost job waiting in the mailbox).
-		if len(a.prompts)+len(a.steers)+len(a.wakes) > 0 {
+		// Anything that starts a turn wakes it: prompts, steers, a queued
+		// reminder, and wakes (a response or a lost job in the mailbox).
+		if len(a.prompts)+len(a.steers)+len(a.wakes)+len(a.remind) > 0 {
 			a.signal()
 		}
 	}

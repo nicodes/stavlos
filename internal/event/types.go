@@ -23,6 +23,8 @@ const (
 	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload (legacy: agents no longer finish; kept for old logs)
 	ResponseReceived    Type = "agent.response"        // ResponsePayload: an answer from another agent, logged on the recipient
 	MessageToUser       Type = "agent.message_to_user" // TextPayload: a message tool call addressed to the human, logged on the sender
+	ReminderQueued      Type = "agent.reminder_queued" // RepliesPayload: a turn ended owing replies; one reminder starts the next turn
+	ReplyMissing        Type = "agent.reply_missing"   // RepliesPayload: a turn ended still owing replies it was reminded of
 	AgentKilled         Type = "agent.killed"          // AgentRefPayload
 	AgentModelChanged   Type = "agent.model_changed"   // ModelChangedPayload
 	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
@@ -264,6 +266,7 @@ const (
 	MsgSteer         MessageKind = "steer"          // delivered mid-turn at a model-call boundary
 	MsgAgentResponse MessageKind = "agent_response" // another agent's answer, from the mailbox
 	MsgMonitorFired  MessageKind = "monitor_fired"  // a background job's exit, from the mailbox
+	MsgReminder      MessageKind = "reminder"       // the harness's one reminder of replies still owed
 )
 
 // UserMessagePayload is the model-visible input to a model call.
@@ -271,9 +274,18 @@ type UserMessagePayload struct {
 	Turn int         `json:"turn"`
 	Kind MessageKind `json:"kind"`
 	Text string      `json:"text"`
-	// From names the sending agent ("scout (a1b2c3d4)") when a prompt or
-	// steer came from another agent in the session; empty for humans.
-	From string `json:"from,omitempty"`
+	// From names the sending agent ("scout") when a prompt, steer or answer
+	// came from another agent in the session; empty for humans. FromID is
+	// its id (logs from before it carry the name only).
+	From   string `json:"from,omitempty"`
+	FromID string `json:"from_id,omitempty"`
+}
+
+// RepliesPayload names the parties a turn ended owing a reply: "user" or
+// agent ids, with the names shown for them.
+type RepliesPayload struct {
+	Parties []string `json:"parties"`
+	Names   []string `json:"names"`
 }
 
 type AssistantMessagePayload struct {

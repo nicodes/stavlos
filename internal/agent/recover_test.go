@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -25,6 +26,7 @@ type snapshot struct {
 	Todos                                               []event.TodoItem
 	Dirs                                                []protocol.DirInfo
 	Children                                            []string
+	Owed, Reminded, Remind                              []string
 	Armed                                               []string
 }
 
@@ -36,6 +38,7 @@ func snap(s *Session) []snapshot {
 			ID: in.ID, Parent: in.Parent, Archetype: in.Archetype, Label: in.Label, Model: in.Model, Variant: in.Variant, State: string(in.State),
 			Depth: in.Depth, Turn: in.Turn, Queued: in.Queued, Tokens: in.Tokens, CostUSD: in.CostUSD, LastError: in.LastError,
 			Awaiting: in.Awaiting, Todos: in.Todos, Dirs: in.Dirs, Children: a.Children(), Armed: a.armedIDs(),
+			Owed: a.replyState(a.owed), Reminded: a.replyState(a.reminded), Remind: append([]string(nil), a.remind...),
 		})
 	}
 	return out
@@ -294,4 +297,18 @@ func TestRecoverKeepsSessionAllows(t *testing.T) {
 	if len(fin) != 4 || fin[0].Denied || fin[1].Denied || !fin[2].Denied || !strings.Contains(fin[2].Output, "Denied by policy") || !fin[3].Denied {
 		t.Fatalf("%+v", fin)
 	}
+}
+
+// replyState lists the parties set in one of an agent's reply maps, sorted.
+func (a *Agent) replyState(m map[string]bool) []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	var out []string
+	for p, on := range m {
+		if on {
+			out = append(out, p)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
