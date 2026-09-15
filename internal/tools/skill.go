@@ -44,30 +44,3 @@ func (skillTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	}
 	return Result{Output: fmt.Sprintf("# Skill: %s\nDirectory: %s\n\n%s", s.Name, s.Dir, s.Body)}
 }
-
-type responseTool struct{}
-
-func (responseTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AgentResponse, Description: "Answer an agent that prompted you. The text lands in that agent's mailbox and wakes it between turns; you stay alive and can be prompted again. Use it once per asker; answer the human in your normal reply instead.",
-		Schema: schemaOf(responseInput{})}
-}
-
-type responseInput struct {
-	To   string `json:"to" desc:"The asking agent's name or id (the message you are answering names it)" req:"true"`
-	Text string `json:"text" desc:"Your answer: what you did or found, with exact paths and results" req:"true"`
-}
-
-func (responseTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
-func (responseTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	var a responseInput
-	if err := decode(in, &a); err != nil {
-		return errf("bad input: %v", err)
-	}
-	if env.Orch == nil {
-		return errf("agent_response is not available to this agent")
-	}
-	if err := env.Orch.Respond(env.Agent, a.To, a.Text); err != nil {
-		return errf("%v", err)
-	}
-	return Result{Output: "response delivered to " + a.To}
-}

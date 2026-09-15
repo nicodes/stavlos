@@ -2451,8 +2451,9 @@ func (m *Model) onAgentKilled(id string) {
 	if parent := m.parentOf[id]; parent != "" {
 		m.transcript(parent).ChildState(id, protocol.AgentKilled)
 	}
+	name := m.agentLabel(id)
 	for _, t := range m.transcripts {
-		t.AskerGone(id)
+		t.AskerGone(name)
 	}
 	if !m.loading {
 		m.refreshViewport()
@@ -2529,7 +2530,7 @@ func changesTree(ev event.Event) bool {
 			return false
 		}
 		name := toolname.Canonical(p.Name)
-		return name == toolname.AgentMessage || name == toolname.AgentCreate
+		return name == toolname.Message || name == toolname.AgentCreate
 	}
 	return false
 }

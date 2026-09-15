@@ -35,7 +35,7 @@ func jsonOut(v any) Result {
 type spawnTool struct{}
 
 func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AgentCreate, Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its agent_response comes back to you as a new message between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive for the rest of the session: agent_message it again for follow-ups (it keeps its context). There is nothing to clean up.",
+	return model.ToolDef{Name: toolname.AgentCreate, Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its answer (a message to you) wakes you between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive for the rest of the session: message it again for follow-ups (it keeps its context). There is nothing to clean up.",
 		Schema: schemaOf(spawnInput{})}
 }
 
@@ -73,21 +73,39 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	return Result{Output: fmt.Sprintf("created %s (%s), id %s; address it by its name", name, a.Archetype, id)}
 }
 
-// --- message / cancel / kill ---
+// --- message / cancel / status ---
+
+// User is the recipient that stands for the human.
+const User = "user"
+
+// Recipient normalises a message's to: the human is always "user" (also
+// spelt "human", "@user"); anything else is an agent name or id with a
+// leading @ dropped.
+func Recipient(to string) string {
+	to = strings.TrimPrefix(strings.TrimSpace(to), "@")
+	if l := strings.ToLower(to); l == User || l == "human" {
+		return User
+	}
+	return to
+}
 
 type messageTool struct{}
 
 func (messageTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AgentMessage, Description: "Send a message to any other agent in this session (a child, a sibling, or your parent). It reaches the agent at its next step: mid-turn if it is busy, as a new turn if it is idle. The recipient sees it as coming from you and answers with agent_response, which wakes you between turns. agent_status lists every agent and its id.",
+	return model.ToolDef{Name: toolname.Message, Description: "Send text to another agent in this session (a child, a sibling, or your parent) by name, or to the human as \"user\". To an agent that is waiting on you, because it gave you a task or asked you something, this is your answer: it wakes that agent between turns. To any other agent it is a new message: it reaches them at their next step, mid-turn if they are busy, and their answer wakes you. agent_status lists every agent.",
 		Schema: schemaOf(messageInput{})}
 }
 
 type messageInput struct {
-	ID   string `json:"id" desc:"Target agent: its name or id (any agent in the session)" req:"true"`
-	Text string `json:"text" desc:"Message" req:"true"`
+	To   string `json:"to" desc:"An agent's name or id, or \"user\" for the human" req:"true"`
+	Text string `json:"text" desc:"The message. The recipient sees only what you put here: include exact paths and results" req:"true"`
 }
 
-func (messageTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
+func (messageTool) Subject(in json.RawMessage) policy.Subject {
+	var a messageInput
+	_ = decode(in, &a)
+	return policy.ID(Recipient(a.To))
+}
 func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
 		return *r
@@ -96,10 +114,14 @@ func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
-	if err := env.Orch.Message(env.Agent, a.ID, a.Text); err != nil {
+	if strings.TrimSpace(a.Text) == "" {
+		return errf("text is required")
+	}
+	out, err := env.Orch.Message(env.Agent, Recipient(a.To), a.Text)
+	if err != nil {
 		return errf("%v", err)
 	}
-	return Result{Output: "delivered"}
+	return Result{Output: out}
 }
 
 type cancelTool struct{}

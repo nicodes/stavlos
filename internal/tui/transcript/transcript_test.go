@@ -37,9 +37,10 @@ func TestToolLine(t *testing.T) {
 		{"shell_kill", `{"id":"m1"}`, "Shell kill  m1"},
 		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
 		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`, "Agent create  scout (explorer)"},
-		{"agent_message", `{"id":"ag_1","text":"go"}`, "Agent message  ag_1"},
+		{"message", `{"to":"scout","text":"go"}`, "Message  → scout"},
+		{"agent_message", `{"id":"ag_1","text":"go"}`, "Message  → ag_1"}, // logs from before message
 		{"agent_cancel", `{"id":"ag_1"}`, "Agent cancel  ag_1"},
-		{"agent_response", `{"to":"ag_2","text":"found it"}`, "Agent response delivered  → ag_2"},
+		{"agent_response", `{"to":"ag_2","text":"found it"}`, "Message  → ag_2"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
 		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
 		{"shell", ``, "Shell"},
@@ -291,57 +292,62 @@ func TestAgentCreateLineTracksChild(t *testing.T) {
 	}
 }
 
-func TestAgentMessageLineWaitsForTheAnswer(t *testing.T) {
+func TestMessageLineWaitsForTheAnswer(t *testing.T) {
 	tr := NewTranscript()
 	mk := func(seq int64, typ event.Type, p any) event.Event {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
-	tone := func(callID string) Tone {
+	send := func(seq int64, callID, to, output string, isErr bool) {
+		tr.Apply(mk(seq, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: callID, Name: "message", Input: json.RawMessage(`{"to":"` + to + `","text":"?"}`)}))
+		tr.Apply(mk(seq+1, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: callID, Name: "message", Output: output, IsError: isErr}))
+	}
+	delivered := func(name string) string {
+		return "message delivered to " + name + "; its answer wakes you between turns"
+	}
+	tone := func(to string) Tone {
 		for _, l := range tr.All() {
-			if l.Kind == LineTool && l.Tool == "agent_message" && strings.Contains(l.Text, callID) {
+			if l.Kind == LineTool && l.Tool == "message" && strings.HasSuffix(l.Text, "→ "+to) {
 				return l.Tone
 			}
 		}
-		t.Fatalf("no agent_message line for %s", callID)
+		t.Fatalf("no message line to %s", to)
 		return ToneNone
 	}
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
-	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "p1", Name: "agent_message", Input: json.RawMessage(`{"id":"a1b2c3d4e5f6","text":"which branch?"}`)}))
-	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "p1", Name: "agent_message", Output: "queued"}))
-	if tone("a1b2c3d4e5f6") != ToneWorking {
-		t.Fatalf("a delivered prompt waits for its answer: %v", tone("a1b2c3d4e5f6"))
+	send(2, "p1", "scout", delivered("scout"), false)
+	if tone("scout") != ToneWorking {
+		t.Fatalf("a delivered message waits for its answer: %v", tone("scout"))
 	}
-	// a second question to a different agent
-	tr.Apply(mk(4, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "p2", Name: "agent_message", Input: json.RawMessage(`{"id":"ffff00001111","text":"and you?"}`)}))
-	tr.Apply(mk(5, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "p2", Name: "agent_message", Output: "queued"}))
+	send(4, "p2", "lookout", delivered("lookout"), false)
 	tr.Apply(mk(6, event.TurnEnded, event.TurnEndedPayload{Turn: 1}))
 	// the first agent answers: only its line settles
 	tr.Apply(mk(7, event.TurnStarted, event.TurnPayload{Turn: 2}))
-	tr.Apply(mk(8, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "agent_response", From: "scout (a1b2c3d4)", Text: "main"}))
-	if tone("a1b2c3d4e5f6") != ToneNone || tone("ffff00001111") != ToneWorking {
-		t.Fatalf("answered → grey, unanswered → still yellow: %v %v", tone("a1b2c3d4e5f6"), tone("ffff00001111"))
+	tr.Apply(mk(8, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "agent_response", From: "scout", Text: "main"}))
+	if tone("scout") != ToneNone || tone("lookout") != ToneWorking {
+		t.Fatalf("answered → grey, unanswered → still yellow: %v %v", tone("scout"), tone("lookout"))
 	}
 	// the second agent is killed before answering: red
-	tr.AskerGone("ffff00001111")
-	if tone("ffff00001111") != ToneError {
-		t.Fatalf("killed before answering → red: %v", tone("ffff00001111"))
+	tr.AskerGone("lookout")
+	if tone("lookout") != ToneError {
+		t.Fatalf("killed before answering → red: %v", tone("lookout"))
 	}
-	// two prompts to one agent, one answer: both settle (a re-prompt is
+	// two messages to one agent, one answer: both settle (a re-prompt is
 	// covered by the same reply)
-	tr.Apply(mk(11, event.ToolCallStarted, event.ToolStartedPayload{Turn: 2, CallID: "p4", Name: "agent_message", Input: json.RawMessage(`{"id":"cafe00000001","text":"report"}`)}))
-	tr.Apply(mk(12, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 2, CallID: "p4", Name: "agent_message", Output: "queued"}))
-	tr.Apply(mk(13, event.ToolCallStarted, event.ToolStartedPayload{Turn: 2, CallID: "p5", Name: "agent_message", Input: json.RawMessage(`{"id":"cafe00000001","text":"send it now"}`)}))
-	tr.Apply(mk(14, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 2, CallID: "p5", Name: "agent_message", Output: "queued"}))
-	tr.Apply(mk(15, event.UserMessage, event.UserMessagePayload{Turn: 3, Kind: "agent_response", From: "inspector (cafe0000)", Text: "here"}))
+	send(9, "p4", "inspector", delivered("inspector"), false)
+	send(11, "p5", "inspector", delivered("inspector"), false)
+	tr.Apply(mk(13, event.UserMessage, event.UserMessagePayload{Turn: 3, Kind: "agent_response", From: "inspector", Text: "here"}))
 	for _, l := range tr.All() {
-		if l.Kind == LineTool && l.Tool == "agent_message" && strings.Contains(l.Text, "cafe00000001") && l.Tone != ToneNone {
-			t.Fatalf("one answer should settle both prompts to that agent: %q tone %v", l.Text, l.Tone)
+		if l.Kind == LineTool && l.Tool == "message" && strings.HasSuffix(l.Text, "→ inspector") && l.Tone != ToneNone {
+			t.Fatalf("one answer should settle both messages to that agent: %q tone %v", l.Text, l.Tone)
 		}
 	}
-	// a failed prompt never waits
-	tr.Apply(mk(9, event.ToolCallStarted, event.ToolStartedPayload{Turn: 2, CallID: "p3", Name: "agent_message", Input: json.RawMessage(`{"id":"deadbeef0000","text":"?"}`)}))
-	tr.Apply(mk(10, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 2, CallID: "p3", Name: "agent_message", Output: "unknown agent", IsError: true}))
-	if tone("deadbeef0000") == ToneWorking {
-		t.Fatal("a refused prompt has nothing to wait for")
+	// nothing to wait for: a refused message, an answer, a message to the user
+	send(14, "p3", "ghost", `unknown agent "ghost"`, true)
+	send(16, "p6", "helper", "answer delivered to helper", false)
+	send(18, "p7", "user", "message delivered to the user", false)
+	for _, to := range []string{"ghost", "helper", "user"} {
+		if tone(to) == ToneWorking {
+			t.Fatalf("a message to %s has nothing to wait for", to)
+		}
 	}
 }

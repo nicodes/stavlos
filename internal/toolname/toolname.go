@@ -21,11 +21,11 @@ const (
 	TodoUpdate = "todo_update"
 	AskUser    = "ask_user"
 
-	AgentCreate   = "agent_create"
-	AgentMessage  = "agent_message"
-	AgentResponse = "agent_response"
-	AgentCancel   = "agent_cancel"
-	AgentStatus   = "agent_status"
+	Message = "message"
+
+	AgentCreate = "agent_create"
+	AgentCancel = "agent_cancel"
+	AgentStatus = "agent_status"
 
 	// GroupTodo is the entry in a role's tools: list that stands for both
 	// todo tools.
@@ -41,8 +41,8 @@ var (
 	// Todo are the tools GroupTodo stands for.
 	Todo = []string{TodoAdd, TodoUpdate}
 	// Messaging is offered to every agent: any agent may message any other
-	// in its session and see the tree.
-	Messaging = []string{AgentMessage, AgentResponse, AgentStatus}
+	// in its session, or the human, and see the tree.
+	Messaging = []string{Message, AgentStatus}
 	// Orchestration is implied by a non-empty spawn list.
 	Orchestration = []string{AgentCreate, AgentCancel}
 	// Async is offered to every agent that has shell.
@@ -60,15 +60,17 @@ var legacy = map[string]string{
 	"bash_async":      Shell,
 	"bash_async_kill": ShellKill,
 	"spawn":           AgentCreate,
-	"agent_prompt":    AgentMessage,
-	"agent_steer":     AgentMessage,
-	"send":            AgentMessage,
-	"steer":           AgentMessage,
+	"agent_message":   Message,
+	"agent_response":  Message,
+	"agent_prompt":    Message,
+	"agent_steer":     Message,
+	"send":            Message,
+	"steer":           Message,
+	"agent_result":    Message,
+	"result":          Message,
 	"agent_kill":      AgentCancel,
 	"kill":            AgentCancel,
 	"cancel":          AgentCancel,
-	"agent_result":    AgentResponse,
-	"result":          AgentResponse,
 	"status":          AgentStatus,
 }
 

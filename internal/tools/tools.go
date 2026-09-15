@@ -86,14 +86,13 @@ type Orchestrator interface {
 	// normalised and made unique in the session); dirs are directories to
 	// grant it, each of which must be inside the parent's own.
 	Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (id, name string, err error)
-	// Message delivers text to any agent in the session at its next step:
-	// mid-turn if it is busy, as a new turn if it is idle.
-	Message(caller, id, text string) error
+	// Message sends text from the caller to an agent (name or id) or to
+	// User. To an agent waiting on the caller it is an answer, delivered
+	// between turns; to any other agent a new message, delivered at its next
+	// step, that the caller then waits on. It returns the tool result.
+	Message(caller, to, text string) (string, error)
 	Cancel(parent, id string) error
 	Status(parent, id string) ([]ChildStatus, error)
-	// Respond delivers the caller's answer to an agent that prompted it; the
-	// recipient is woken between turns. The caller stays alive.
-	Respond(caller, to, text string) error
 	// CanSpawn reports whether depth/fan-out limits currently permit a spawn.
 	CanSpawn(agent string) (bool, string)
 	// Archetypes the caller may spawn.
@@ -120,7 +119,7 @@ type Set map[string]Tool
 func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
-		shellTool{}, readTool{}, patchTool{}, skillTool{}, responseTool{},
+		shellTool{}, readTool{}, patchTool{}, skillTool{},
 		spawnTool{}, messageTool{}, cancelTool{}, statusTool{},
 		shellKillTool{},
 		todoAddTool{}, todoUpdateTool{}, askTool{},
@@ -135,7 +134,7 @@ func Builtin() Set {
 // stay for the agent package's prompt assembly.
 var (
 	OrchestrationNames = toolname.Orchestration // implied by a non-empty spawn list
-	MessagingNames     = toolname.Messaging     // every agent may message any other and see the tree
+	MessagingNames     = toolname.Messaging     // every agent may message any other, or the human, and see the tree
 	AsyncNames         = toolname.Async         // every agent that has shell
 	AskNames           = toolname.Ask           // every agent: asking the human is never a role choice
 	TodoNames          = toolname.Todo          // implied by "todo" in a preset's tool list

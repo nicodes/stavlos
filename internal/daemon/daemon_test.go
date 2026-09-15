@@ -233,7 +233,7 @@ func TestEndToEnd(t *testing.T) {
 			if !strings.Contains(req.Messages[0].Blocks[0].Text, "look around") {
 				t.Errorf("child task missing: %+v", req.Messages[0])
 			}
-			return call("k1", "agent_response", `{"to":"`+parentIDFromSystem(req.System)+`","text":"found it"}`)
+			return call("k1", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"found it"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -462,7 +462,7 @@ func TestChildResponseWakesParent(t *testing.T) {
 	fm.childSteps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
 			<-release
-			return call("k", "agent_response", `{"to":"`+parentIDFromSystem(req.System)+`","text":"late"}`)
+			return call("k", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"late"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -494,7 +494,7 @@ func TestChildResponseWakesParent(t *testing.T) {
 	}
 	// the child is still there, idle, ready for a follow-up; the parent is
 	// plainly idle again now that the answer landed. The child's own turn
-	// ends after its agent_response call returns, so wait for both.
+	// ends after its message call returns, so wait for both.
 	h.waitTree(s.ID, func(agents []protocol.AgentInfo) bool {
 		return len(agents) == 2 && agents[1].State == "idle" && agents[0].State == "idle"
 	})
@@ -744,9 +744,10 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	}
 }
 
-// TestAgentsMessageAcrossTheSession: a child messages its parent (not a
-// child of the caller), the parent sees who sent it, agent_status shows
-// the whole tree, and lifecycle tools are not a subagent's to use.
+// TestAgentsMessageAcrossTheSession: a child messages its parent, which is
+// waiting on it, so the message is the answer; the parent sees who sent it,
+// agent_status shows the whole tree, and a second message to the parent, no
+// longer waiting, is a new message (a steer) rather than an answer.
 func TestAgentsMessageAcrossTheSession(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
@@ -757,11 +758,16 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 			return call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"ask me something"}`)
 		},
 		func(model.Request) model.Response { return text("delegated") },
-		// woken by the child's prompt: the model sees the sender
+		// woken by the child's answer: the model sees the sender
 		func(req model.Request) model.Response {
-			last := req.Messages[len(req.Messages)-1].Blocks[0].Text
-			if !strings.HasPrefix(last, "[message from agent scout (") || !strings.Contains(last, "which branch?") {
-				t.Errorf("parent saw: %q", last)
+			seen := false
+			for _, m := range req.Messages {
+				for _, b := range m.Blocks {
+					seen = seen || (strings.HasPrefix(b.Text, "[message from agent scout — ") && strings.Contains(b.Text, "which branch?"))
+				}
+			}
+			if !seen {
+				t.Errorf("parent should see the child's message with its sender: %+v", req.Messages[len(req.Messages)-1])
 			}
 			return text("main")
 		},
@@ -779,16 +785,16 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 			if pid != rootID {
 				t.Errorf("parent id %q, want %q", pid, rootID)
 			}
-			return call("k1", "agent_message", `{"id":"`+pid+`","text":"which branch?"}`)
+			return call("k1", "message", `{"to":"`+pid+`","text":"which branch?"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if last.IsError || !strings.Contains(last.Content, "delivered") {
-				t.Errorf("agent_message to the parent: %+v", last)
+			if last.IsError || last.Content != "answer delivered to main" {
+				t.Errorf("message to the waiting parent should be an answer: %+v", last)
 			}
-			// one messaging tool for everyone: the old prompt/steer pair is gone
+			// one messaging tool for everyone: the older tools are gone
 			for _, d := range req.Tools {
-				if d.Name == "agent_steer" || d.Name == "agent_prompt" {
+				if d.Name == "agent_message" || d.Name == "agent_response" {
 					t.Errorf("subagent should not be offered %s", d.Name)
 				}
 			}
@@ -800,7 +806,7 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 			if last.IsError || !strings.Contains(flat, `"label":"main"`) || !strings.Contains(flat, `"you":true`) || !strings.Contains(flat, `"parent":"`+rootID+`"`) {
 				t.Errorf("agent_status should list the whole tree with the caller marked: %+v", last)
 			}
-			return call("k4", "agent_response", `{"to":"`+rootID+`","text":"asked"}`)
+			return call("k4", "message", `{"to":"main","text":"asked"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -812,16 +818,16 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 	rootID = agents[0].ID
 	_ = h.c.Send(ctx, rootID, protocol.KindPrompt, "delegate")
 
-	// the parent's logged message carries the sender
+	// the parent's logged answer carries the sender's name
 	var um event.UserMessagePayload
 	for um.From == "" {
 		e := h.waitFor(event.UserMessage, rootID)
 		_ = e.Decode(&um)
 	}
-	if !strings.HasPrefix(um.From, "scout (") || um.Text != "which branch?" || um.Kind != "prompt" {
+	if um.From != "scout" || um.Text != "which branch?" || um.Kind != "agent_response" {
 		t.Fatalf("parent's message: %+v", um)
 	}
-	// The parent's turn 2 ending and the child's agent_response (after its
+	// The parent's turn 2 ending and the child's second message (after its
 	// status check) race each other; either may come first.
 	var turn2, responded bool
 	deadline := time.After(10 * time.Second)
@@ -837,11 +843,11 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 					}
 					turn2 = true
 				}
-			case e.Type == event.ResponseReceived && e.Agent == rootID:
+			case e.Type == event.SteerReceived && e.Agent == rootID:
 				responded = true
 			}
 		case <-deadline:
-			t.Fatalf("turn 2 ended %v, response received %v\nevents so far:\n%s", turn2, responded, strings.Join(h.recentEvents(), "\n"))
+			t.Fatalf("turn 2 ended %v, second message received %v\nevents so far:\n%s", turn2, responded, strings.Join(h.recentEvents(), "\n"))
 		}
 	}
 }
@@ -867,7 +873,7 @@ func TestVariants(t *testing.T) {
 			mu.Lock()
 			seen = append(seen, "child:"+req.Variant)
 			mu.Unlock()
-			return call("k1", "agent_response", `{"to":"`+parentIDFromSystem(req.System)+`","text":"ok"}`)
+			return call("k1", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"ok"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -1234,11 +1240,9 @@ func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
 		func(model.Request) model.Response {
 			return call("c1", "agent_create", `{"archetype":"general","label":"kid","task":"look"}`)
 		},
-		func(req model.Request) model.Response {
-			// impatient: prompt the same child again before it answered
-			out := req.Messages[len(req.Messages)-1].Blocks[0].Content // "spawned kid (general) as <id>"
-			id := strings.TrimSpace(out[strings.LastIndex(out, " ")+1:])
-			return call("c2", "agent_message", `{"id":"`+id+`","text":"send it now"}`)
+		func(model.Request) model.Response {
+			// impatient: message the same child again before it answered
+			return call("c2", "message", `{"to":"kid","text":"send it now"}`)
 		},
 		func(model.Request) model.Response { return text("waiting") },
 		func(model.Request) model.Response { return text("got it") },
@@ -1246,7 +1250,7 @@ func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
 	fm.childSteps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
 			<-release
-			return call("k", "agent_response", `{"to":"`+parentIDFromSystem(req.System)+`","text":"one answer for both"}`)
+			return call("k", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"one answer for both"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -1377,16 +1381,16 @@ func TestFullAgentIDs(t *testing.T) {
 		func(req model.Request) model.Response {
 			parent = parentIDFromSystem(req.System)
 			last := req.Messages[len(req.Messages)-1].Blocks[0].Text
-			// the task names its sender with the whole id, never a shortened one
-			if !strings.Contains(last, "[message from agent main ("+parent+")") {
-				t.Errorf("task should name the parent by full id: %q (parent %s)", last, parent)
+			// the task names its sender by its name, which addresses it
+			if !strings.Contains(last, "[message from agent main — ") {
+				t.Errorf("task should name the parent: %q", last)
 			}
-			// a unique prefix still resolves, for models that shorten anyway
-			return call("k1", "agent_response", `{"to":"`+parent[:8]+`","text":"found it"}`)
+			// a unique id prefix still resolves, for models that use ids
+			return call("k1", "message", `{"to":"`+parent[:8]+`","text":"found it"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if last.IsError || !strings.Contains(last.Content, "response delivered") {
+			if last.IsError || last.Content != "answer delivered to main" {
 				t.Errorf("prefix id should resolve: %+v", last)
 			}
 			return text("done")
@@ -1438,7 +1442,7 @@ func TestRoles(t *testing.T) {
 			if !last.IsError || !strings.Contains(last.Content, "primary-only") {
 				t.Errorf("a primary-only role must not be spawnable: %+v", last)
 			}
-			return call("c3", "agent_message", `{"id":"kid","text":"again"}`) // by name
+			return call("c3", "message", `{"to":"kid","text":"again"}`) // by name
 		},
 		func(model.Request) model.Response { return text("sent") },
 		func(req model.Request) model.Response {
