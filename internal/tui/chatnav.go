@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/render"
 	"github.com/nicodes/stavlos/internal/tui/transcript"
 )
@@ -226,6 +228,13 @@ func (m *Model) refreshViewport() {
 		stats = render.TurnStats(t.TurnStats(time.Now()))
 		active = m.activeTodo()
 	}
+	// Between turns an agent waiting on other agents or on its jobs is still
+	// busy: the indicator keeps its spinner and names what it waits on.
+	if t != nil && !working && !m.superChat {
+		if on, ok := m.waitingOn(); ok {
+			working, verb, active = true, "Waiting", on
+		}
+	}
 	for _, p := range m.prompts {
 		if !m.superChat && p.Agent == m.selectedID() {
 			waiting = true
@@ -280,4 +289,29 @@ func (m *Model) chatCache(id string) *render.Cache {
 		m.renders[id] = c
 	}
 	return c
+}
+
+// waitingOn is what the selected agent waits on between turns, as the
+// indicator names it: the agents whose answer it expects, then its running
+// jobs ("@scout · 1 job"); ok is false unless the daemon reports it waiting
+// (a busy agent has its turn indicator instead).
+func (m *Model) waitingOn() (string, bool) {
+	if a := m.selectedAgent(); a == nil || a.State != protocol.AgentWaiting {
+		return "", false
+	}
+	var parts []string
+	var names []string
+	for _, a := range m.awaitedAgents() {
+		names = append(names, "@"+a.Name)
+	}
+	if len(names) > 0 {
+		parts = append(parts, strings.Join(names, " "))
+	}
+	switch n := len(m.runningJobs()); {
+	case n == 1:
+		parts = append(parts, "1 job")
+	case n > 1:
+		parts = append(parts, fmt.Sprintf("%d jobs", n))
+	}
+	return strings.Join(parts, " · "), len(parts) > 0
 }
