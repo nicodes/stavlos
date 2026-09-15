@@ -1093,6 +1093,9 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.ToolCallFinished: decoded(func(p event.ToolFinishedPayload) []Line {
+		if p.Denied {
+			return deniedLines(p.Output)
+		}
 		if toolname.Canonical(p.Name) == toolname.Message && !p.IsError {
 			return nil // the text already sits under the call; "delivered" adds nothing
 		}
@@ -1256,6 +1259,28 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 }
 
 // --- helpers ---
+
+// deniedLines is what sits under a denied call instead of its output:
+// "✗ Permission denied · <reason>", so denials stand out in the chat. The
+// reason is the human's, "by policy", or why nobody could answer; a denial
+// the human gave no reason for reads "✗ Permission denied".
+func deniedLines(output string) []Line {
+	reason := strings.TrimSpace(output)
+	for _, cut := range []string{"Permission denied by the user:", "Permission denied by the user.", "Permission denied:", "Denied by policy:"} {
+		if rest, ok := strings.CutPrefix(reason, cut); ok {
+			reason = strings.TrimSpace(rest)
+			if cut == "Denied by policy:" {
+				reason = "by policy" // the command is already on the line above
+			}
+			break
+		}
+	}
+	text := titled("Permission denied", "")
+	if reason = strings.TrimSuffix(reason, "."); reason != "" {
+		text = titled("Permission denied", "· "+reason)
+	}
+	return []Line{{Kind: LineToolNote, Glyph: GlyphFailed, Text: text}}
+}
 
 // titled is a status line's text: a bold, capitalised title, then the
 // detail ("**Mode** → yolo · …"), the way tool lines lead with their name.
