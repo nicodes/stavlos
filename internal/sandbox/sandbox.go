@@ -44,9 +44,6 @@ type Spec struct {
 	// writable from the sandbox either way.
 	PrivateTmp bool `json:"private_tmp,omitempty"`
 	Network    bool `json:"network,omitempty"` // TCP connections and listeners allowed
-
-	mounts bool // set by Wrap: the helper runs in a new user and mount namespace
-	probe  bool // set by Probe: the helper exits after setting up
 }
 
 // wire is Spec with the unexported fields, as the helper receives it.
