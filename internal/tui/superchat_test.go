@@ -49,10 +49,10 @@ func TestSuperChatView(t *testing.T) {
 	}
 
 	m.setFocus(focusSidebar)
-	if m.sbCursor != 2 {
+	if m.sbCursor != 3 { // + channel, this channel, then the agents
 		t.Fatalf("the sidebar cursor starts on the shown agent's row: %d", m.sbCursor)
 	}
-	m.sbCursor = 0
+	m.sbCursor = 1 // this channel's row
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
 	if !m.superChat || m.focus != focusInput || !strings.Contains(m.input.Placeholder, "@name") {
 		t.Fatalf("the chat row goes back: super=%v focus=%v placeholder=%q", m.superChat, m.focus, m.input.Placeholder)

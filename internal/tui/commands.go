@@ -332,11 +332,11 @@ func channelsCmd(ctx context.Context, c *client.Client, dir string, purpose chan
 }
 
 // resumable is the sidebar's channels section: the directory's other
-// channels that were ever prompted, in the order given.
+// channels, in the order given.
 func resumable(ss []protocol.ChannelInfo, current string) []protocol.ChannelInfo {
 	var out []protocol.ChannelInfo
 	for _, s := range ss {
-		if s.ID != current && s.Title != "" { // never prompted: nothing to resume
+		if s.ID != current {
 			out = append(out, s)
 		}
 	}
@@ -348,6 +348,15 @@ func resumable(ss []protocol.ChannelInfo, current string) []protocol.ChannelInfo
 type switchedMsg struct {
 	info protocol.ChannelInfo
 	err  error
+}
+
+// newChannelCmd is + channel: a new channel in dir, bound like a resumed one.
+func newChannelCmd(ctx context.Context, c *client.Client, from, dir string) tea.Cmd {
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
+		_ = c.Unsubscribe(ctx, from)
+		info, err := c.CreateChannel(ctx, dir, "", "")
+		return switchedMsg{info, err}
+	})
 }
 
 func switchChannelCmd(ctx context.Context, c *client.Client, from, to string) tea.Cmd {
