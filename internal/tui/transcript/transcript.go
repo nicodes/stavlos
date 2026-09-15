@@ -80,6 +80,7 @@ type Line struct {
 	Tone    Tone   // in progress / error; zero means "as is"
 	callID  string
 	Tool    string // raw tool name on a LineTool line
+	Note    bool   // the agent's own text, which reaches no one: drawn dimmed
 }
 
 // Tone colours a line's glyph by lifecycle: yellow while in progress, red
@@ -665,6 +666,18 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	delete(t.calls, p.CallID)
 }
 
+// partyList reads reply parties for the human: "user" is "you".
+func partyList(names []string) string {
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = n
+		if n == "user" {
+			out[i] = "you"
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
 // messageDelivered starts the result of a message that the sender now
 // waits on (an answer or a message to the user reads differently).
 const messageDelivered = "message delivered to "
@@ -928,6 +941,8 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case event.MsgMonitorFired:
 			return blockWith(BlockChild, "job result", p.Text, GlyphToolMonitors)
+		case event.MsgReminder:
+			return nil // the reminder.queued notice already said it
 		default:
 			return block(BlockUser, string(p.Kind), p.Text)
 		}
@@ -944,7 +959,12 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 					continue
 				}
 				hasText = true
-				lines = append(lines, markdownLines(text)...)
+				// The text a turn ends with reaches no one (replies go
+				// through message): it reads as the agent's notes, dimmed.
+				for _, l := range markdownLines(text) {
+					l.Note = true
+					lines = append(lines, l)
+				}
 			case model.BlockThinking:
 				if ShowThinking {
 					lines = append(lines, thinkingLine(b.Text))
@@ -958,6 +978,14 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			lines = append(lines, Line{Kind: LineBlank})
 		}
 		return lines
+	}),
+
+	event.ReminderQueued: decoded(func(p event.RepliesPayload) []Line {
+		return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "reminded: no reply yet to " + partyList(p.Names)}}
+	}),
+
+	event.ReplyMissing: decoded(func(p event.RepliesPayload) []Line {
+		return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneError, Text: "ended without replying to " + partyList(p.Names)}}
 	}),
 
 	event.ToolCallStarted: decoded(func(p event.ToolStartedPayload) []Line {

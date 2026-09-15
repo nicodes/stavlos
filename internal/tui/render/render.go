@@ -471,8 +471,14 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 func kindStyle(l transcript.Line) (leader, glyph string, style func(...string) string) {
 	switch l.Kind {
 	case transcript.LineText, transcript.LineStream:
+		if l.Note {
+			return "", "", markdownStyle(theme.StyleDim)
+		}
 		return "", "", markdownStyle(lipgloss.NewStyle())
 	case transcript.LineHeading:
+		if l.Note {
+			return "", "", markdownStyle(theme.StyleDim.Bold(true))
+		}
 		return "", "", markdownStyle(theme.StyleBold)
 	case transcript.LineCode:
 		return " ", "", theme.StyleDim.Render

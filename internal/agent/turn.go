@@ -41,6 +41,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	for _, in := range inputs {
 		in.Turn = turn
 		_, _ = a.record(t.bg, event.UserMessage, in)
+		a.took(in)
 	}
 
 	// A subagent past its role's turn limit does not run: the turn ends at
@@ -55,6 +56,7 @@ func (a *Agent) runTurn(inputs []event.UserMessagePayload) {
 	for {
 		if reason, errText, done := t.step(); done {
 			t.end(reason, errText)
+			a.endReplies(t.bg, reason)
 			return
 		}
 	}
@@ -169,7 +171,9 @@ func (t *turnRun) injectSteers() {
 	a.steers = nil
 	a.mu.Unlock()
 	for _, st := range steers {
-		_, _ = a.record(t.bg, event.UserMessage, event.UserMessagePayload{Turn: t.turn, Kind: event.MsgSteer, Text: st.text, From: a.s.senderLabel(st.source)})
+		in := event.UserMessagePayload{Turn: t.turn, Kind: event.MsgSteer, Text: st.text, From: a.s.senderLabel(st.source), FromID: senderID(st.source)}
+		_, _ = a.record(t.bg, event.UserMessage, in)
+		a.took(in)
 	}
 }
 

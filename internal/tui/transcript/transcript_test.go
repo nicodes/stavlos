@@ -351,3 +351,35 @@ func TestMessageLineWaitsForTheAnswer(t *testing.T) {
 		}
 	}
 }
+
+// TestNotesAndReminders: an agent's own text is marked as notes (it reaches
+// no one), input is not, and the reminder bookkeeping reads as notices with
+// the human as "you".
+func TestNotesAndReminders(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "check it"}))
+	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "# Result\nall good"}}}))
+	tr.Apply(mk(3, event.ReminderQueued, event.RepliesPayload{Parties: []string{"user", "a1"}, Names: []string{"user", "scout"}}))
+	tr.Apply(mk(4, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: event.MsgReminder, Text: "[reminder from the harness] ..."}))
+	tr.Apply(mk(5, event.ReplyMissing, event.RepliesPayload{Parties: []string{"user"}, Names: []string{"user"}}))
+	var notes, notices []string
+	for _, l := range tr.All() {
+		switch {
+		case l.Note:
+			notes = append(notes, l.Text)
+		case l.Kind == LineNotice:
+			notices = append(notices, l.Text)
+		case strings.Contains(l.Text, "reminder from the harness"):
+			t.Fatalf("the reminder input is not shown: %+v", l)
+		}
+	}
+	if strings.Join(notes, "|") != "Result|all good" {
+		t.Fatalf("notes %q", notes)
+	}
+	if strings.Join(notices, "|") != "reminded: no reply yet to you, scout|ended without replying to you" {
+		t.Fatalf("notices %q", notices)
+	}
+}

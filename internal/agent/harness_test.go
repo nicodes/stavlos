@@ -266,8 +266,9 @@ func lastUserText(req model.Request) string {
 // testConfig writes a global stavlos.json (and optional role files) into a
 // fresh config dir and loads the effective config for a fresh work dir.
 type testConfig struct {
-	json  string
-	roles map[string]string // name → role file body
+	json      string
+	reminders bool              // remind agents that end a turn owing a reply (off in tests unless set)
+	roles     map[string]string // name → role file body
 }
 
 func loadTestConfig(t *testing.T, tc testConfig) (*config.Effective, string) {
@@ -297,6 +298,7 @@ func loadTestConfig(t *testing.T, tc testConfig) (*config.Effective, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	cfg.Reminders = tc.reminders
 	return cfg, work
 }
 

@@ -24,6 +24,8 @@ Tokens live in `~/.local/share/stavlos/auth.json` (mode 0600) and refresh automa
 
 Type to talk to the selected agent. The input grows as your message wraps; ctrl+j breaks a line and enter sends. If the agent is busy, your message reaches it at its next step. `/queue <text>` waits for the current turn to end instead, and esc pressed twice on an empty input cancels the current turn (the first press warns).
 
+Agents reply with the `message` tool, to you or to another agent. The text an agent ends a turn with is its notes: it reaches no one and shows dimmed in its chat. Every message an agent receives, from you or from another agent, is owed a reply. A turn that ends without one gets a single reminder, and if the next turn still does not reply, the chat marks that the agent ended without replying. `"reminders": false` in `stavlos.json` turns the reminder off.
+
 The meta row under the input shows the selected agent's role, model and variant, then how full its context is (`31% of 200k`, orange from 70%), its tokens and its cost. Context is compacted on its own when an agent's history passes 80% of its model's window: older turns become a summary. `/compact` does it for the selected agent right away, or before its next model call if it is busy. A compaction is an item in the chat: a rule with a sweeping bar while it runs, replaced in place by `┄┄ compacted 84k → 12k tokens ┄┄` and the summary when it is done.
 
 ### Focus and keys

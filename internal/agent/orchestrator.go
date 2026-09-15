@@ -66,10 +66,14 @@ func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task,
 // delivered at its next step (mid-turn if it is busy, a new turn if idle),
 // and the caller now waits on it.
 func (o orchestrator) Message(caller, to, text string) (string, error) {
+	from, hasFrom := o.s.Agent(caller)
 	if to == tools.User {
 		if _, err := o.s.host.Append(context.Background(), event.Event{Session: o.s.ID, Agent: caller, Type: event.MessageToUser,
 			Payload: event.MustPayload(event.TextPayload{Text: text})}); err != nil {
 			return "", err
+		}
+		if hasFrom {
+			from.settle(tools.User)
 		}
 		return "message delivered to the user", nil
 	}
@@ -84,11 +88,13 @@ func (o orchestrator) Message(caller, to, text string) (string, error) {
 		if err := o.answer(caller, c, text); err != nil {
 			return "", err
 		}
+		if hasFrom {
+			from.settle(c.ID)
+		}
 		return "answer delivered to " + c.LabelNow(), nil
 	}
 	// The expectation is registered before delivery: a recipient that
 	// answers (or hits its turn limit) at once must find its asker waiting.
-	from, hasFrom := o.s.Agent(caller)
 	if hasFrom {
 		from.expect(c.ID)
 	}
@@ -97,6 +103,9 @@ func (o orchestrator) Message(caller, to, text string) (string, error) {
 			from.forget(c.ID)
 		}
 		return "", err
+	}
+	if hasFrom {
+		from.settle(c.ID)
 	}
 	return "message delivered to " + c.LabelNow() + "; its answer wakes you between turns", nil
 }
