@@ -451,71 +451,13 @@ func applyHunks(content string, hunks []hunk) (string, error) {
 	}
 	searchFrom := 0
 	for hi, h := range hunks {
-		var old, new []string
-		for _, l := range h.lines {
-			switch l.op {
-			case ' ':
-				old = append(old, l.text)
-				new = append(new, l.text)
-			case '-':
-				old = append(old, l.text)
-			case '+':
-				new = append(new, l.text)
-			}
+		old, new := h.oldNew()
+		at, err := h.locate(lines, old, searchFrom)
+		if err != nil {
+			return "", fmt.Errorf("hunk %d: %v", hi+1, err)
 		}
-		// drop a trailing empty context line the model often adds
-		for len(old) > 0 && old[len(old)-1] == "" && len(new) > 0 && new[len(new)-1] == "" {
-			old, new = old[:len(old)-1], new[:len(new)-1]
-		}
-		if len(old) == 0 {
-			// pure insertion: after the anchor, or at EOF when it has none;
-			// an anchor that is not there is an error, never a silent append.
-			at := len(lines)
-			if h.anchor != "" {
-				i := findLine(lines, h.anchor, searchFrom)
-				if i < 0 {
-					return "", fmt.Errorf("hunk %d: anchor not found: %s", hi+1, h.anchor)
-				}
-				at = i + 1
-			}
-			lines = splice(lines, at, at, new)
-			searchFrom = at + len(new)
-			continue
-		}
-		from := searchFrom
-		if h.anchor != "" {
-			if i := findLine(lines, h.anchor, searchFrom); i >= 0 {
-				from = i
-			}
-		}
-		at := findRun(lines, old, from)
-		if at < 0 && from > 0 {
-			at = findRun(lines, old, 0)
-		}
-		if at < 0 {
-			return "", fmt.Errorf("hunk %d: context not found:\n%s", hi+1, strings.Join(old, "\n"))
-		}
-		if h.eof && at+len(old) != len(lines) {
-			if alt := findRunFrom(lines, old, len(lines)-len(old)); alt >= 0 {
-				at = alt
-			}
-		}
-		// Rebuild the replacement using the file's own text for context
-		// lines, so a whitespace-lenient match never rewrites them.
-		new = new[:0]
-		oi := 0
-		for _, l := range h.lines {
-			switch l.op {
-			case ' ':
-				if oi < len(old) {
-					new = append(new, lines[at+oi])
-				}
-				oi++
-			case '-':
-				oi++
-			case '+':
-				new = append(new, l.text)
-			}
+		if len(old) > 0 {
+			new = h.replacement(lines, old, at)
 		}
 		lines = splice(lines, at, at+len(old), new)
 		searchFrom = at + len(new)
@@ -528,6 +470,84 @@ func applyHunks(content string, hunks []hunk) (string, error) {
 		out = strings.ReplaceAll(out, "\n", "\r\n")
 	}
 	return out, nil
+}
+
+// oldNew is the run of lines a hunk expects to find and the run it leaves,
+// without the trailing empty context line models often add.
+func (h hunk) oldNew() (old, new []string) {
+	for _, l := range h.lines {
+		switch l.op {
+		case ' ':
+			old = append(old, l.text)
+			new = append(new, l.text)
+		case '-':
+			old = append(old, l.text)
+		case '+':
+			new = append(new, l.text)
+		}
+	}
+	for len(old) > 0 && old[len(old)-1] == "" && len(new) > 0 && new[len(new)-1] == "" {
+		old, new = old[:len(old)-1], new[:len(new)-1]
+	}
+	return old, new
+}
+
+// locate is where a hunk applies. A pure insertion goes after its anchor,
+// or at the end of the file when it has none; an anchor that is not there
+// is an error, never a silent append. Otherwise the old run is searched
+// from the anchor (or from), then from the top, and an End of File hunk
+// prefers the run at the end.
+func (h hunk) locate(lines, old []string, from int) (int, error) {
+	anchor := -1
+	if h.anchor != "" {
+		anchor = findLine(lines, h.anchor, from)
+	}
+	if len(old) == 0 {
+		switch {
+		case h.anchor == "":
+			return len(lines), nil
+		case anchor < 0:
+			return 0, fmt.Errorf("anchor not found: %s", h.anchor)
+		}
+		return anchor + 1, nil
+	}
+	if anchor >= 0 {
+		from = anchor
+	}
+	at := findRun(lines, old, from)
+	if at < 0 && from > 0 {
+		at = findRun(lines, old, 0)
+	}
+	if at < 0 {
+		return 0, fmt.Errorf("context not found:\n%s", strings.Join(old, "\n"))
+	}
+	if h.eof && at+len(old) != len(lines) {
+		if alt := findRunFrom(lines, old, len(lines)-len(old)); alt >= 0 {
+			at = alt
+		}
+	}
+	return at, nil
+}
+
+// replacement rebuilds a hunk's new run with the file's own text for its
+// context lines, so a whitespace-lenient match never rewrites them.
+func (h hunk) replacement(lines, old []string, at int) []string {
+	var out []string
+	oi := 0
+	for _, l := range h.lines {
+		switch l.op {
+		case ' ':
+			if oi < len(old) {
+				out = append(out, lines[at+oi])
+			}
+			oi++
+		case '-':
+			oi++
+		case '+':
+			out = append(out, l.text)
+		}
+	}
+	return out
 }
 
 func splice(lines []string, from, to int, repl []string) []string {
