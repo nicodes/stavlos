@@ -3199,14 +3199,18 @@ func (m *Model) refreshViewport() {
 		active = m.activeTodo()
 	}
 	for _, p := range m.prompts {
-		if m.superChat || p.Agent == m.selectedID() {
+		if !m.superChat && p.Agent == m.selectedID() {
 			waiting = true
 			break
 		}
 	}
-	var pending map[int][]string // the session chat's threads still waiting on a reply
+	// The session chat's loader is the turn indicator at its bottom, naming
+	// the agents a post is still waiting on.
 	if t != nil && m.superChat {
-		pending = t.Waiting()
+		if names := t.Waiting(); len(names) > 0 {
+			working, verb = true, transcript.TurnVerbs[t.Items()%len(transcript.TurnVerbs)]
+			active = "@" + strings.Join(names, " @")
+		}
 	}
 	opts := render.Options{
 		Width:    m.vp.Width,
@@ -3218,7 +3222,6 @@ func (m *Model) refreshViewport() {
 		Active:   active,
 		Stats:    stats,
 		Expanded: m.expanded[m.viewID()],
-		Pending:  pending,
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,
 

@@ -2,6 +2,7 @@ package render
 
 import (
 	"encoding/json"
+	"github.com/charmbracelet/x/ansi"
 	"regexp"
 	"strings"
 	"testing"
@@ -828,3 +829,20 @@ func showThinkingForTest(t *testing.T) {
 }
 
 func firstOf(s string, _ map[int]RowRange) string { return s }
+
+// TestFoldedToolCallIsOneRow: a folded call whose command is wider than the
+// chat is cut to one row, so its +N marker ends that row.
+func TestFoldedToolCallIsOneRow(t *testing.T) {
+	tr := transcript.NewTranscript()
+	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"` + strings.Repeat("echo word ", 12) + `"}`)}))
+	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a\nb\nc\nd"}))
+	var rows []string
+	for _, r := range renderWith(tr.All(), Options{Width: 60}) {
+		if strings.TrimSpace(r) != "" {
+			rows = append(rows, r)
+		}
+	}
+	if len(rows) != 1 || !strings.Contains(rows[0], "Shell") || !strings.HasSuffix(strings.TrimRight(rows[0], " "), "+4") || ansi.StringWidth(rows[0]) > 60 {
+		t.Fatalf("folded call should be one row ending in +4:\n%s", strings.Join(rows, "\n"))
+	}
+}

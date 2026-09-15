@@ -12,7 +12,7 @@ A session-wide chat where the human talks to any agent by name and agents talk b
    Old logs replay `agent_message` and `agent_response` calls as `message`.
 3. **Final text is notes.** An agent's final assistant text reaches no one; the system prompt says so. Every reply goes through `message`. The agent's own chat shows the notes dimmed.
 4. **Reminders.** Every message an agent receives, from the human or from an agent, is owed a reply. Whenever a turn ends with replies still owed, and the agent is not waiting on an agent or a job, it gets a reminder turn naming everyone owed. After three in a row with no reply it is left alone until it replies or a new message arrives. Nothing is injected into its prompt; the TUI's due tab lists what is owed.
-5. **The super chat** is the session's default view. It shows only the human's messages and everything sent to `user`, each reply threaded under its post. Tool calls, permission prompts, questions and notices stay in the agents' own chats.
+5. **The super chat** is the session's default view. It shows only the human's messages and everything sent to `user`, in the order they happen, with a loader naming the agents a post still waits on. Tool calls, permission prompts, questions and notices stay in the agents' own chats.
    - `@name` in a message delivers it to that agent as a steer. Several mentions deliver the same text to each. A name that matches no agent refuses the message.
    - A message with no mention goes to `main`.
    - `@` autocompletes names.
