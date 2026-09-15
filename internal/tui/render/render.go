@@ -39,6 +39,9 @@ type Options struct {
 	Cursor   int
 	Focused  bool
 	NoFold   bool // render every item in full (exports, line-level tests)
+	// TurnGaps is an agent's chat: no spacing inside a turn, one blank row
+	// before each item that starts a new turn (or follows one).
+	TurnGaps bool
 	// CompactFrame animates a running compaction's rule (the sweeping bar).
 	CompactFrame int
 }
@@ -73,13 +76,14 @@ type itemRows struct {
 	item   int
 	rows   []string
 	spaced bool
+	turn   bool // it starts a new turn's stretch (Line.TurnStart)
 }
 
 // renderChatItem renders the lines of one item: the details toggle, folding
 // and the cursor highlight apply; blank lines are dropped (assemble spaces
 // items uniformly).
 func renderChatItem(lines []transcript.Line, o Options) itemRows {
-	r := itemRows{item: lines[0].Item, spaced: isSpaced(lines)}
+	r := itemRows{item: lines[0].Item, spaced: isSpaced(lines), turn: lines[0].TurnStart}
 	f, folded := o.folds(lines)[r.item]
 	cur := o.Focused && r.item == o.Cursor
 	for i, l := range lines {
@@ -141,20 +145,23 @@ func assemble(parts []itemRows, o Options) (string, map[int]RowRange) {
 		if len(p.rows) == 0 {
 			continue
 		}
-		if p.spaced {
+		if o.TurnGaps && p.turn || !o.TurnGaps && p.spaced {
 			emit(p.item, "", true)
 		}
 		for _, row := range p.rows {
 			emit(p.item, row, false)
 		}
-		if p.spaced && i != lastPart {
+		if !o.TurnGaps && p.spaced && i != lastPart {
 			emit(p.item, "", true)
 		}
 	}
 	// The ephemeral turn indicator: not an item (no cursor, no fold), gone
 	// as soon as the turn ends.
 	if o.Working {
-		if n > 0 {
+		switch {
+		case n > 0 && o.TurnGaps:
+			b.WriteString("\n") // the running turn: no gap before its indicator
+		case n > 0:
 			b.WriteString("\n\n")
 		}
 		// Gutter + leader, like every chat line.
