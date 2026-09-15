@@ -217,7 +217,7 @@ var handlers = routes(
 		if err != nil {
 			return protocol.AgentSpawnResult{}, err
 		}
-		id, err := s.SpawnFromClient(ctx, p.Parent, p.Archetype, p.Label, p.Task, p.Model)
+		id, err := s.SpawnFromClient(ctx, p.Parent, p.Role, p.Name, p.Task, p.Model)
 		return protocol.AgentSpawnResult{ID: id}, err
 	}),
 	route(protocol.AgentSetModel, func(ctx context.Context, c *conn, p protocol.AgentSetModelParams) (protocol.None, error) {

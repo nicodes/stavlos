@@ -193,7 +193,7 @@ func TestHomeAndChannelViews(t *testing.T) {
 	}
 
 	// A user message moves to the channel state; ctrl+b shows the sidebar.
-	m.agents = []protocol.AgentInfo{{ID: "a1", Label: "root", Archetype: "coder", Model: "anthropic/claude-x", State: "idle"}}
+	m.agents = []protocol.AgentInfo{{ID: "a1", Name: "root", Role: "coder", Model: "anthropic/claude-x", State: "idle"}}
 	m.channel.Model = "anthropic/claude-x"
 	m.transcript("a1").Notice("hello")
 	m.showTree = true
@@ -213,11 +213,11 @@ func TestAgentRows(t *testing.T) {
 	now := time.Now()
 	spawned := map[string]time.Time{"c1": now.Add(-75 * time.Second), "c2": now.Add(-3 * time.Second)}
 	agents := []protocol.AgentInfo{
-		{ID: "root", Label: "coder", Archetype: "coder", State: "waiting", Awaiting: []string{"c1", "c2", "c3"}},
-		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running", Turn: 2, CostUSD: 0.0012},
-		{ID: "c2", Parent: "root", Label: "tester", Archetype: "tester", State: "idle"},
-		{ID: "c3", Parent: "root", Label: "done", Archetype: "explorer", State: "killed"},
-		{ID: "g1", Parent: "c1", Label: "grandchild", Archetype: "explorer", State: "running", Awaiting: []string{"root"}},
+		{ID: "root", Name: "coder", Role: "coder", State: "waiting", Awaiting: []string{"c1", "c2", "c3"}},
+		{ID: "c1", Parent: "root", Name: "scout", Role: "explorer", State: "running", Turn: 2, CostUSD: 0.0012},
+		{ID: "c2", Parent: "root", Name: "tester", Role: "tester", State: "idle"},
+		{ID: "c3", Parent: "root", Name: "done", Role: "explorer", State: "killed"},
+		{ID: "g1", Parent: "c1", Name: "grandchild", Role: "explorer", State: "running", Awaiting: []string{"root"}},
 	}
 	// the tab lists what the agent waits on: c1 and c2 (c3 is dead), not
 	// the grandchild it never asked; the grandchild waits on its grandparent
@@ -309,7 +309,7 @@ func TestMonitorRows(t *testing.T) {
 	// The section reads the selected agent's Monitors; unfocused it is one
 	// summary line, focused it lists one row per job.
 	m := channelModel()
-	m.agents = []protocol.AgentInfo{{ID: "root", Label: "coder", Archetype: "coder", State: "idle", Monitors: monitors[:3]}}
+	m.agents = []protocol.AgentInfo{{ID: "root", Name: "coder", Role: "coder", State: "idle", Monitors: monitors[:3]}}
 	m.selected = 0
 	view := stripANSI(tabsView(m, 100))
 	if !strings.Contains(view, "async 3") || strings.Count(view, "\n") != 1 {
@@ -374,7 +374,7 @@ func TestHistoryNavigation(t *testing.T) {
 func TestSidebarFocusAndSelect(t *testing.T) {
 	m := newModel(context.Background(), nil, "s")
 	m.width, m.height = 120, 40
-	m.agents = []protocol.AgentInfo{{ID: "a", Label: "coder"}, {ID: "b", Label: "scout", Depth: 1}, {ID: "c", Label: "tester", Depth: 1}}
+	m.agents = []protocol.AgentInfo{{ID: "a", Name: "coder"}, {ID: "b", Name: "scout", Depth: 1}, {ID: "c", Name: "tester", Depth: 1}}
 	m.toggleTree()
 	if !m.showTree || m.focus != focusSidebar || m.input.Focused() {
 		t.Fatalf("open should focus the sidebar: show=%v focus=%v inputFocused=%v", m.showTree, m.focus, m.input.Focused())
@@ -423,7 +423,7 @@ func channelModel() Model {
 	m := newModel(context.Background(), nil, "s")
 	m.width, m.height = 120, 40
 	m.reconciled, m.loading = true, false
-	m.agents = []protocol.AgentInfo{{ID: "a", Label: "coder"}, {ID: "b", Label: "scout", Depth: 1}}
+	m.agents = []protocol.AgentInfo{{ID: "a", Name: "coder"}, {ID: "b", Name: "scout", Depth: 1}}
 	m.transcript("a").Notice("hello")
 	m.layout()
 	return m
@@ -568,7 +568,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		// Whatever the tabs hold, landing on the strip always highlights the
 		// leftmost tab; ←/→ move from there.
 		m.prompts = nil
-		m.agents = append(m.agents, protocol.AgentInfo{ID: "c", Parent: "a", Label: "kid", State: "working"})
+		m.agents = append(m.agents, protocol.AgentInfo{ID: "c", Parent: "a", Name: "kid", State: "working"})
 		press(&m, tab) // input → strip
 		if m.focus != focusTabs || m.tabSel != 0 {
 			t.Fatalf("the strip should land on permission even with a child: %v sel %d", m.focus, m.tabSel)
@@ -716,7 +716,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 // a simple shell command whose prefix can be derived.
 func TestPermissionDialogOptions(t *testing.T) {
 	m := channelModel()
-	m.agents[0].Archetype = "general"
+	m.agents[0].Role = "general"
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"go test ./... -run TestRoles"}`), Prefix: "go test"}}
 	m.setFocus(focusPermission)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
@@ -912,9 +912,9 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	m.reconciled = true
 	m.transcript("root").Notice("hello") // a channel, not the home screen (which has no strip)
 	m.agents = []protocol.AgentInfo{
-		{ID: "root", Label: "coder", Archetype: "coder", State: "waiting", Awaiting: []string{"c1", "c2"}},
-		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "running"},
-		{ID: "c2", Parent: "root", Label: "checks", Archetype: "tester", State: "idle"},
+		{ID: "root", Name: "coder", Role: "coder", State: "waiting", Awaiting: []string{"c1", "c2"}},
+		{ID: "c1", Parent: "root", Name: "scout", Role: "explorer", State: "running"},
+		{ID: "c2", Parent: "root", Name: "checks", Role: "tester", State: "idle"},
 	}
 	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
 
@@ -986,8 +986,8 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 func TestSectionTabStrip(t *testing.T) {
 	m := channelModel()
 	m.agents = []protocol.AgentInfo{
-		{ID: "root", Label: "coder", Archetype: "coder", State: "working", Awaiting: []string{"c1"}, Monitors: []protocol.MonitorInfo{{ID: "j1", Kind: "command", Label: "go test", State: "running"}}},
-		{ID: "c1", Parent: "root", Label: "scout", Archetype: "explorer", State: "working"},
+		{ID: "root", Name: "coder", Role: "coder", State: "working", Awaiting: []string{"c1"}, Monitors: []protocol.MonitorInfo{{ID: "j1", Kind: "command", Label: "go test", State: "running"}}},
+		{ID: "c1", Parent: "root", Name: "scout", Role: "explorer", State: "working"},
 	}
 	m.selected = 0
 	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`), Prefix: "make test"}}
@@ -1233,7 +1233,7 @@ func TestFirstPermissionOpensItsTabWhenIdle(t *testing.T) {
 
 func TestParentAgentCreateLineFollowsChildEvents(t *testing.T) {
 	m := channelModel()
-	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "coder"}}
+	m.agents = []protocol.AgentInfo{{ID: "a", Name: "main", Role: "coder"}}
 	m.selected = 0
 	ev := func(seq int64, agent string, typ event.Type, p any) event.Event {
 		return event.Event{Seq: seq, Channel: "s", Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
@@ -1387,7 +1387,7 @@ func TestFocusAlwaysLandsLeftmost(t *testing.T) {
 
 func TestTodoTabAndDialog(t *testing.T) {
 	m := channelModel()
-	m.agents[0].Archetype = "general"
+	m.agents[0].Role = "general"
 	// empty: the tab reads (0) and its dialog says so
 	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 · todo 0") {
 		t.Fatalf("strip:\n%s", sv)
@@ -1659,9 +1659,9 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	m := channelModel()
 	m.showTree = false
 	m.agents = []protocol.AgentInfo{
-		{ID: "a", Label: "main", Archetype: "coder", State: "working", Awaiting: []string{"c1", "c2"}},
-		{ID: "c1", Parent: "a", Label: "scout", Archetype: "explorer", State: "working"},
-		{ID: "c2", Parent: "a", Label: "checks", Archetype: "tester", State: "idle"},
+		{ID: "a", Name: "main", Role: "coder", State: "working", Awaiting: []string{"c1", "c2"}},
+		{ID: "c1", Parent: "a", Name: "scout", Role: "explorer", State: "working"},
+		{ID: "c2", Parent: "a", Name: "checks", Role: "tester", State: "idle"},
 	}
 	m.selected = 0
 	m.width, m.height = 100, 40
@@ -1733,7 +1733,7 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 
 func TestMetaRowHits(t *testing.T) {
 	m := channelModel()
-	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "coder", Model: "openai/gpt-5", Variant: "high"}}
+	m.agents = []protocol.AgentInfo{{ID: "a", Name: "main", Role: "coder", Model: "openai/gpt-5", Variant: "high"}}
 	m.selected = 0
 	m.channel.Mode = protocol.ModeYolo
 	// "main (coder) · openai/gpt-5 · high" (the mode tag leads the input)
@@ -1798,7 +1798,7 @@ func TestDialogRowsTakeTheMouse(t *testing.T) {
 
 func TestModeChangeShowsInEveryChat(t *testing.T) {
 	m := channelModel()
-	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main"}, {ID: "b", Parent: "a", Label: "scout"}}
+	m.agents = []protocol.AgentInfo{{ID: "a", Name: "main"}, {ID: "b", Parent: "a", Name: "scout"}}
 	m.applyEvent(event.Event{Seq: 9, Channel: "s", Type: event.ChannelUpdated, Time: time.Now(), Payload: event.MustPayload(event.ChannelUpdatedPayload{Mode: event.Str("auto")})})
 	for _, id := range []string{"a", "b"} {
 		found := false
@@ -2142,7 +2142,7 @@ func TestSidebarRowsLeaveOneColumn(t *testing.T) {
 	m := channelModel()
 	m.showTree = true
 	m.width, m.height = 120, 40
-	m.agents = []protocol.AgentInfo{{ID: "a", Label: "a-very-long-agent-label-that-will-not-fit-here", Archetype: "general", State: "idle"}}
+	m.agents = []protocol.AgentInfo{{ID: "a", Name: "a-very-long-agent-label-that-will-not-fit-here", Role: "general", State: "idle"}}
 	m.selected = 0
 	m.layout()
 	for _, row := range m.treeRows(sidebarWidth - 1) {
@@ -2407,10 +2407,10 @@ func sidebarNavModel() Model {
 	m.channel.Dir = "/home/x/Work/proj"
 	m.channel.Created = time.Now().Add(-12 * time.Minute).UTC().Format(time.RFC3339)
 	m.agents = []protocol.AgentInfo{
-		{ID: "a", Label: "main", Archetype: "general", State: "waiting", Awaiting: []string{"b", "c"}, CostUSD: 0.20, Tokens: 1200},
-		{ID: "b", Parent: "a", Depth: 1, Label: "world-politics", Archetype: "general", State: "blocked", CostUSD: 0.05, Tokens: 300},
-		{ID: "c", Parent: "a", Depth: 1, Label: "business", Archetype: "general", State: "running"},
-		{ID: "d", Parent: "a", Depth: 1, Label: "asker", Archetype: "general", State: "blocked"},
+		{ID: "a", Name: "main", Role: "general", State: "waiting", Awaiting: []string{"b", "c"}, CostUSD: 0.20, Tokens: 1200},
+		{ID: "b", Parent: "a", Depth: 1, Name: "world-politics", Role: "general", State: "blocked", CostUSD: 0.05, Tokens: 300},
+		{ID: "c", Parent: "a", Depth: 1, Name: "business", Role: "general", State: "running"},
+		{ID: "d", Parent: "a", Depth: 1, Name: "asker", Role: "general", State: "blocked"},
 	}
 	m.prompts = []protocol.PromptInfo{
 		{ID: "p", Channel: m.channelID, Kind: "permission", Agent: "b", Tool: "shell"},
@@ -2424,8 +2424,8 @@ func sidebarNavModel() Model {
 func TestRoleAwareDialogs(t *testing.T) {
 	m := channelModel()
 	m.agents = []protocol.AgentInfo{
-		{ID: "root", Label: "main", Archetype: "lead", Model: "openai/gpt-5", Awaiting: []string{"c1"}},
-		{ID: "c1", Parent: "root", Label: "scout", Archetype: "reviewer", Model: "openai/gpt-5", Variant: "high"},
+		{ID: "root", Name: "main", Role: "lead", Model: "openai/gpt-5", Awaiting: []string{"c1"}},
+		{ID: "c1", Parent: "root", Name: "scout", Role: "reviewer", Model: "openai/gpt-5", Variant: "high"},
 	}
 	m.presets = []protocol.PresetInfo{
 		{Name: "general", Description: "does it all", Mode: "all", Spawn: []string{"general"}},
@@ -2840,7 +2840,7 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 
 func TestQuestionsTabAndDialog(t *testing.T) {
 	m := channelModel()
-	m.agents[0].Archetype = "general"
+	m.agents[0].Role = "general"
 	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "! 0 · ? 0 · dirs 0\nasync") {
 		t.Fatalf("strip:\n%s", sv)
 	}
@@ -2935,7 +2935,7 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 // permission subject shows them as carets so nothing can hide.
 func TestControlsNeverReachTheTerminal(t *testing.T) {
 	m := channelModel()
-	m.agents[0].Archetype = "general"
+	m.agents[0].Role = "general"
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "shell", Agent: "a", Input: []byte(`{"command":"rm -rf ~ \u001b[2K\u001b[1Gls -la"}`)}}
 	m.setFocus(focusPermission)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
@@ -2950,9 +2950,9 @@ func TestControlsNeverReachTheTerminal(t *testing.T) {
 			t.Fatalf("control reached the transcript: %q", l.Text)
 		}
 	}
-	m.setAgents([]protocol.AgentInfo{{ID: "a", Label: "ma\x1b[2Kin", Archetype: "general"}})
-	if m.agents[0].Label != "main" {
-		t.Fatalf("label %q", m.agents[0].Label)
+	m.setAgents([]protocol.AgentInfo{{ID: "a", Name: "ma\x1b[2Kin", Role: "general"}})
+	if m.agents[0].Name != "main" {
+		t.Fatalf("label %q", m.agents[0].Name)
 	}
 	m.upsertPrompt(protocol.PromptInfo{ID: "q", Kind: "question", Question: "pick\x9b2K one"})
 	if p := m.prompts[m.findPrompt("q")]; p.Question != "pick one" {

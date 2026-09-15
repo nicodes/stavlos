@@ -404,7 +404,7 @@ func (m Model) inputBoxView(width int) string {
 func (m Model) metaLeft() (string, []span[metaPart]) {
 	label, role, model, variant, queued := "agent", "", m.channel.Model, "", 0
 	if a := m.selectedAgent(); a != nil {
-		label, role, variant, queued = a.Label, a.Archetype, a.Variant, a.Queued
+		label, role, variant, queued = a.Name, a.Role, a.Variant, a.Queued
 		if a.Model != "" {
 			model = a.Model
 		}
@@ -762,7 +762,7 @@ func (m Model) treeRows(width int) []string {
 		if avail < 4 {
 			avail = 4
 		}
-		text := fmt.Sprintf("@%s (%s)", a.Label, a.Archetype) // an agent reads @name, as it is addressed
+		text := fmt.Sprintf("@%s (%s)", a.Name, a.Role) // an agent reads @name, as it is addressed
 		if agentOutcome(a) == "error" {
 			text += " · error"
 		}
@@ -771,7 +771,7 @@ func (m Model) treeRows(width int) []string {
 		}
 		textW := ansi.StringWidth(text)
 		tint := ""
-		if r := m.roleInfo(a.Archetype); r != nil {
+		if r := m.roleInfo(a.Role); r != nil {
 			tint = r.Color
 		}
 		switch {
@@ -932,7 +932,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		human, owed := m.dueOf()
 		owner, role := "", ""
 		if a := m.selectedAgent(); a != nil {
-			owner, role = a.Label, a.Archetype
+			owner, role = a.Name, a.Role
 		}
 		now := time.Now()
 		sel := agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), now, width-2)
@@ -1299,10 +1299,10 @@ func (m Model) agentWhoLabel(id string) string {
 	}
 	if i := m.findAgent(id); i >= 0 {
 		a := m.agents[i]
-		if a.Archetype != "" {
-			return fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
+		if a.Role != "" {
+			return fmt.Sprintf("%s (%s)", a.Name, a.Role)
 		}
-		return a.Label
+		return a.Name
 	}
 	return id
 }
@@ -1380,7 +1380,7 @@ func (m Model) footerRightView() string {
 		return footerRight(f)
 	}
 	if a := m.selectedAgent(); a != nil {
-		f.label, f.tokens, f.cost = a.Label, a.Tokens, a.CostUSD
+		f.label, f.tokens, f.cost = a.Name, a.Tokens, a.CostUSD
 		f.context, f.window = a.Context, a.ContextWindow
 		if a.Model != "" {
 			f.model = a.Model
@@ -1465,8 +1465,8 @@ func agentRows(agents []protocol.AgentInfo, spawned map[string]time.Time, last m
 		if t, ok := spawned[a.ID]; ok && !t.IsZero() {
 			meta = append(meta, format.Elapsed(now.Sub(t)))
 		}
-		text := fmt.Sprintf("%s (%s)", a.Label, a.Archetype)
-		row := "  " + roleStyle(tint[a.Archetype]).Bold(true).Render(text)
+		text := fmt.Sprintf("%s (%s)", a.Name, a.Role)
+		row := "  " + roleStyle(tint[a.Role]).Bold(true).Render(text)
 		if s := last[a.ID]; s != "" {
 			row += "  " + format.Trunc(s, snippetChars)
 		}

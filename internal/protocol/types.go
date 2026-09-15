@@ -330,8 +330,8 @@ type AgentInfo struct {
 	ID            string           `json:"id"`
 	Channel       string           `json:"channel"`
 	Parent        string           `json:"parent,omitempty"`
-	Archetype     string           `json:"archetype"`
-	Label         string           `json:"label"`
+	Role          string           `json:"role"`
+	Name          string           `json:"name"`
 	Model         string           `json:"model"`
 	Variant       string           `json:"variant,omitempty"` // model variant (reasoning effort); "" = default
 	Depth         int              `json:"depth"`
@@ -365,11 +365,11 @@ type AgentSendParams struct {
 }
 
 type AgentSpawnParams struct {
-	Parent    string `json:"parent"`
-	Archetype string `json:"archetype"`
-	Label     string `json:"label"`
-	Task      string `json:"task"`
-	Model     string `json:"model,omitempty"`
+	Parent string `json:"parent"`
+	Role   string `json:"role"`
+	Name   string `json:"name"`
+	Task   string `json:"task"`
+	Model  string `json:"model,omitempty"`
 }
 type AgentSpawnResult struct {
 	ID string `json:"id"`

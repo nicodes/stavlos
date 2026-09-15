@@ -303,7 +303,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	agents, err := tree(ctx, h.c, s.ID)
-	if err != nil || len(agents) != 1 || agents[0].Archetype != "general" || agents[0].Model != "fake/m1" {
+	if err != nil || len(agents) != 1 || agents[0].Role != "general" || agents[0].Model != "fake/m1" {
 		t.Fatalf("tree %v %v", agents, err)
 	}
 	root := agents[0].ID
@@ -777,7 +777,7 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	}
 	h.waitFor(event.AgentUpdated, root)
 	agents, _ = tree(ctx, h.c, s.ID)
-	if agents[0].Archetype != "explorer" || agents[0].Label != "main" { // the root keeps its "main" label
+	if agents[0].Role != "explorer" || agents[0].Name != "main" { // the root keeps its "main" label
 		t.Fatalf("tree after role change: %+v", agents[0])
 	}
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "two"}))
@@ -850,7 +850,7 @@ func TestAgentsMessageAcrossTheChannel(t *testing.T) {
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			flat := strings.Join(strings.Fields(last.Content), "") // the tool pretty-prints its JSON
-			if last.IsError || !strings.Contains(flat, `"label":"main"`) || !strings.Contains(flat, `"you":true`) || !strings.Contains(flat, `"parent":"`+rootID+`"`) {
+			if last.IsError || !strings.Contains(flat, `"name":"main"`) || !strings.Contains(flat, `"you":true`) || !strings.Contains(flat, `"parent":"`+rootID+`"`) {
 				t.Errorf("agent_status should list the whole tree with the caller marked: %+v", last)
 			}
 			return call("k4", "message", `{"to":"main","text":"asked"}`)
@@ -1211,7 +1211,7 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	agents, _ := tree(ctx, h.c, s.ID)
-	if agents[0].Archetype != "coder" {
+	if agents[0].Role != "coder" {
 		t.Fatalf("root should start as coder: %+v", agents[0])
 	}
 	h.close()
@@ -1236,7 +1236,7 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	agents, _ = tree(ctx, h2.c, s.ID)
 	// Recovery never widens: the agent keeps its archetype name, runs
 	// read-only, and says why.
-	if agents[0].Archetype != "coder" || !strings.Contains(agents[0].LastError, "no longer exists") {
+	if agents[0].Role != "coder" || !strings.Contains(agents[0].LastError, "no longer exists") {
 		t.Fatalf("root should come back read-only under its old name: %+v", agents[0])
 	}
 	_ = errOf(rpc.Do(ctx, h2.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
@@ -1519,7 +1519,7 @@ func TestRoles(t *testing.T) {
 	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 	// the root runs the configured primary role on its default variant
-	if agents[0].Archetype != "lead" || agents[0].Model != "fake/m1" || agents[0].Variant != "high" {
+	if agents[0].Role != "lead" || agents[0].Model != "fake/m1" || agents[0].Variant != "high" {
 		t.Fatalf("root %+v", agents[0])
 	}
 	// whitelists bound the switches
@@ -1540,7 +1540,7 @@ func TestRoles(t *testing.T) {
 		_ = e.Decode(&sp)
 	}
 	agents, _ = tree(ctx, h.c, s.ID)
-	if len(agents) != 2 || agents[1].Archetype != "limited" || agents[1].Model != "fake/m2" || agents[1].Variant != "" {
+	if len(agents) != 2 || agents[1].Role != "limited" || agents[1].Model != "fake/m2" || agents[1].Variant != "" {
 		t.Fatalf("child should start on its role's default model: %+v", agents)
 	}
 	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSetRole, protocol.AgentSetRoleParams{Agent: agents[1].ID, Role: "boss"})); err == nil || !strings.Contains(err.Error(), "primary-only") {
@@ -1561,7 +1561,7 @@ func TestRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 	agents, _ = tree(ctx, h.c, s.ID)
-	if agents[0].Archetype != "general" || agents[0].Model != "fake/m1" || agents[0].Variant != "high" {
+	if agents[0].Role != "general" || agents[0].Model != "fake/m1" || agents[0].Variant != "high" {
 		t.Fatalf("after /roles general: %+v", agents[0])
 	}
 }
@@ -1855,7 +1855,7 @@ func TestWorkingDirectories(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 		agents, _ = tree(ctx, h.c, s.ID)
 		for _, a := range agents {
-			if a.Label == "kid" {
+			if a.Name == "kid" {
 				kid = a
 			}
 		}

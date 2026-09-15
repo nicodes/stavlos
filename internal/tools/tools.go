@@ -101,15 +101,15 @@ type Orchestrator interface {
 }
 
 type ChildStatus struct {
-	ID        string  `json:"id"`
-	Parent    string  `json:"parent,omitempty"`
-	You       bool    `json:"you,omitempty"` // this row is the caller
-	Label     string  `json:"label"`
-	Archetype string  `json:"archetype"`
-	State     string  `json:"state"`
-	Turn      int     `json:"turn"`
-	CostUSD   float64 `json:"cost_usd"`
-	Summary   string  `json:"summary,omitempty"`
+	ID      string  `json:"id"`
+	Parent  string  `json:"parent,omitempty"`
+	You     bool    `json:"you,omitempty"` // this row is the caller
+	Name    string  `json:"name"`
+	Role    string  `json:"role"`
+	State   string  `json:"state"`
+	Turn    int     `json:"turn"`
+	CostUSD float64 `json:"cost_usd"`
+	Summary string  `json:"summary,omitempty"`
 }
 
 // Set is a named collection.

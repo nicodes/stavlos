@@ -268,7 +268,7 @@ func cmdTree(ctx context.Context, _ string, args []string) error {
 		return err
 	}
 	for _, a := range tree.Agents {
-		fmt.Printf("%s%s  %s (%s) %s turn=%d $%.4f %s\n", strings.Repeat("  ", a.Depth), a.ID, a.Label, a.Archetype, a.State, a.Turn, a.CostUSD, a.Model)
+		fmt.Printf("%s%s  %s (%s) %s turn=%d $%.4f %s\n", strings.Repeat("  ", a.Depth), a.ID, a.Name, a.Role, a.State, a.Turn, a.CostUSD, a.Model)
 	}
 	return nil
 }
