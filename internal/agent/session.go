@@ -50,8 +50,9 @@ type Session struct {
 	archived bool
 	ctx      context.Context
 	cancel   context.CancelFunc
-	permits  permits // the human's session-scoped allows (exact calls, prefixes); they answer asks, never denies
-	mode     string  // permission mode: ask (every ask prompts) | auto (asks inside the agent's dirs are allowed) | yolo (every ask is allowed)
+	permits  permits    // the human's session-scoped allows (exact calls, prefixes); they answer asks, never denies
+	mode     string     // permission mode: ask (every ask prompts) | auto (asks inside the session's dirs are allowed, calls outside denied) | yolo (every ask is allowed)
+	dirs     []dirEntry // the working set beyond the session directory, shared by every agent: what the human added (logged)
 }
 
 // Mode reports the session's permission mode (protocol.ModeAsk by default).
@@ -124,7 +125,7 @@ func (s *Session) Start(ctx context.Context) error {
 		Payload: event.MustPayload(event.SessionCreatedPayload{Dir: s.Dir, Model: s.model, RootAgent: s.rootArch})}); err != nil {
 		return err
 	}
-	_, err := s.spawn(ctx, "", s.rootArch, "main", "", "", nil) // the root is always "main (role)"
+	_, err := s.spawn(ctx, "", s.rootArch, "main", "", "") // the root is always "main (role)"
 	return err
 }
 
@@ -313,7 +314,7 @@ func (s *Session) Info() protocol.SessionInfo {
 		ID: s.ID, Dir: s.Dir, Model: s.Model(), RootAgent: s.rootArch,
 		Created: s.Created.Format(time.RFC3339), Archived: s.Archived(),
 		Live: s.Live(), CostUSD: s.Cost(), TrustPending: cfg.TrustPending, Mode: s.Mode(),
-		State: s.state(),
+		State: s.state(), Dirs: s.dirInfos(),
 	}
 }
 
@@ -387,7 +388,7 @@ func fitVariant(p config.Preset, id, want string) string {
 
 // spawn creates and starts an agent. parent=="" for the root. grants are
 // directories the parent hands down; each must be inside the parent's own.
-func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, modelArg string, grants []string) (*Agent, error) {
+func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, modelArg string) (*Agent, error) {
 	cfg := s.Config()
 	preset, ok := cfg.Presets[archetype]
 	if !ok {
@@ -418,17 +419,6 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 	if err != nil {
 		return nil, err
 	}
-	var granted []string
-	for _, g := range grants {
-		d := resolveDir(s.Dir, g)
-		if parent == nil {
-			return nil, fmt.Errorf("the root agent takes no directory grants")
-		}
-		if !parent.inDirs(d) {
-			return nil, fmt.Errorf("%s is not inside your directories (%s); you can only grant what you have", d, strings.Join(parent.dirPaths(), ", "))
-		}
-		granted = append(granted, d)
-	}
 	if parent != nil {
 		if modelID == "" {
 			return nil, errors.New(ErrNoModel)
@@ -438,9 +428,6 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		}
 	}
 	a := newAgent(s, NewID("a"), parentID, archetype, label, modelID, depth, preset)
-	for _, d := range granted {
-		a.extraDirs = append(a.extraDirs, dirEntry{d, "grant"})
-	}
 	if parent != nil && modelID == parent.ModelID() {
 		a.variant = parent.Variant() // same model: same flavour (logged below, after the spawn event)
 	}
@@ -464,7 +451,7 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 		parent.addChild(a.ID)
 	}
 	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Agent: a.ID, Type: event.AgentSpawned,
-		Payload: event.MustPayload(event.AgentSpawnedPayload{ID: a.ID, Parent: parentID, Archetype: archetype, Label: name, Model: modelID, Task: task, Depth: depth, Dirs: granted})}); err != nil {
+		Payload: event.MustPayload(event.AgentSpawnedPayload{ID: a.ID, Parent: parentID, Archetype: archetype, Label: name, Model: modelID, Task: task, Depth: depth})}); err != nil {
 		return nil, err
 	}
 	if a.variant != "" { // inherited: logged so recovery restores it
@@ -653,7 +640,7 @@ func (s *Session) killTree(a *Agent) {
 }
 
 // SpawnFromClient spawns on behalf of a human (PRD §9).
-func (s *Session) SpawnFromClient(ctx context.Context, parentID, archetype, label, task, modelArg string, dirs []string) (string, error) {
+func (s *Session) SpawnFromClient(ctx context.Context, parentID, archetype, label, task, modelArg string) (string, error) {
 	p, ok := s.Agent(parentID)
 	if !ok {
 		return "", fmt.Errorf("agent %q not found", parentID)
@@ -661,7 +648,7 @@ func (s *Session) SpawnFromClient(ctx context.Context, parentID, archetype, labe
 	if ok, why := s.canSpawn(p); !ok {
 		return "", errors.New(why)
 	}
-	a, err := s.spawn(ctx, parentID, archetype, label, task, modelArg, dirs)
+	a, err := s.spawn(ctx, parentID, archetype, label, task, modelArg)
 	if err != nil {
 		return "", err
 	}

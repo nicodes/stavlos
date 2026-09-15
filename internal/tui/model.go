@@ -24,6 +24,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tui/dialog"
 	"github.com/nicodes/stavlos/internal/tui/format"
@@ -195,7 +196,7 @@ const (
 	focusDue                     // the due tab: who is waiting on the selected agent's reply
 	focusTodo                    // the todo tab: the selected agent's todo list
 	focusMCP                     // the mcp tab: the selected agent's MCP servers
-	focusDirs                    // the dirs tab: the selected agent's working directories
+	focusDirs                    // the dirs tab: the session's working directories (every agent's)
 	focusSidebar                 // the agent tree (↑/↓ enter)
 	focusTabs                    // the tab strip: ←/→ highlight a tab, enter opens its dialog
 	focusMeta                    // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
@@ -204,11 +205,12 @@ const (
 // tabFocuses are the tabs of the strip under the chat, left to right. They
 // are one stop in the tab cycle; ←/→ move between them.
 // tabRows is the strip's two rows: on top what belongs to the whole session
-// (the prompt queue every agent adds to), below what belongs to the selected
+// (the prompt queue every agent adds to, the working directories every agent
+// shares), below what belongs to the selected
 // agent.
 var tabRows = [][]focus{
-	{focusPermission, focusQuestions},
-	{focusAsync, focusDue, focusTodo, focusMCP, focusDirs},
+	{focusPermission, focusQuestions, focusDirs},
+	{focusAsync, focusDue, focusTodo, focusMCP},
 }
 
 // tabFocuses is every tab in strip order: the top row, then the bottom.
@@ -588,12 +590,30 @@ func (m *Model) stripShown() bool {
 	return !m.isHome()
 }
 
-// selectedDirs returns the selected agent's working directories.
-func (m *Model) selectedDirs() []protocol.DirInfo {
-	if a := m.selectedAgent(); a != nil {
-		return a.Dirs
+// sessionDirs returns the session's working directories, which every agent
+// shares.
+func (m *Model) sessionDirs() []protocol.DirInfo {
+	return m.session.Dirs
+}
+
+// onDirChanged keeps the session's working directories in step with the log
+// (agent.dir_* are an older log's per-agent sets, replayed into the
+// session's like the daemon does). The attach snapshot may already hold a
+// replayed add, so adds are idempotent.
+func (m *Model) onDirChanged(ev event.Event) {
+	switch ev.Type {
+	case event.SessionDirAdded, event.AgentDirAdded:
+		var p event.DirAddedPayload
+		if ev.Decode(&p) != nil || p.Dir == m.session.Dir || slices.ContainsFunc(m.session.Dirs, func(d protocol.DirInfo) bool { return d.Path == p.Dir }) {
+			return
+		}
+		m.session.Dirs = append(m.session.Dirs, protocol.DirInfo{Path: textsafe.Clean(p.Dir), Source: p.Source})
+	default:
+		var p event.DirRefPayload
+		if ev.Decode(&p) == nil {
+			m.session.Dirs = slices.DeleteFunc(m.session.Dirs, func(d protocol.DirInfo) bool { return d.Path == p.Dir })
+		}
 	}
-	return nil
 }
 
 // selectedMCP returns the selected agent's MCP servers (its role's list).
@@ -943,7 +963,7 @@ func (m *Model) todoKey(msg tea.KeyMsg) tea.Cmd {
 // the path field is open, enter submits and esc cancels the edit. The
 // session directory cannot be changed.
 func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
-	dirs := m.selectedDirs()
+	dirs := m.sessionDirs()
 	if m.dirEdit != "" {
 		switch {
 		case key.Matches(msg, keys.OvClose):
@@ -955,13 +975,13 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 			if path == "" {
 				return nil
 			}
-			edit, agent := m.dirEdit, m.selectedID()
+			edit := m.dirEdit
 			m.dirEdit = ""
 			m.dirInput.Blur()
 			if edit == "add" {
-				return addDirCmd(m.ctx, m.c, agent, path)
+				return addDirCmd(m.ctx, m.c, m.sessionID, path)
 			}
-			return replaceDirCmd(m.ctx, m.c, agent, edit, path)
+			return replaceDirCmd(m.ctx, m.c, m.sessionID, edit, path)
 		}
 		var cmd tea.Cmd
 		m.dirInput, cmd = m.dirInput.Update(msg)
@@ -1003,7 +1023,7 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 		if d.Source == "session" {
 			return m.setStatus("the session directory cannot be removed", true)
 		}
-		return removeDirCmd(m.ctx, m.c, m.selectedID(), d.Path)
+		return removeDirCmd(m.ctx, m.c, m.sessionID, d.Path)
 	}
 	return nil
 }
@@ -2166,7 +2186,7 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 	case p.Dir != "":
 		return []permOption{
 			{"allow", "Allow once", ""},
-			{"add", "Allow and add " + format.ShortHome(p.Dir), "the agent keeps the directory for the session"},
+			{"add", "Allow and add " + format.ShortHome(p.Dir), "every agent in the session can use it"},
 			{"add_other", "Allow and add another directory…", "type the path"},
 			{"deny", "Deny", "with an optional reason"},
 		}
@@ -2506,6 +2526,8 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd) {
 	target = ev.Agent
 	switch ev.Type {
+	case event.SessionDirAdded, event.SessionDirRemoved, event.AgentDirAdded, event.AgentDirRemoved:
+		m.onDirChanged(ev) // the session's set; the chat of the agent whose prompt added one notes it
 	case event.AgentSpawned:
 		if id := m.onAgentSpawned(ev); id != "" {
 			target = id
@@ -2645,7 +2667,7 @@ func changesTree(ev event.Event) bool {
 		event.TurnStarted, event.TurnEnded, event.Usage,
 		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.SessionModelChanged,
 		event.MonitorStarted, event.MonitorFired, event.MonitorStopped,
-		event.AgentDirAdded, event.AgentDirRemoved, event.TodoChanged,
+		event.TodoChanged,
 		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.ResponseReceived,
 		event.UserMessage, event.MessageToUser: // what an agent owes changes
 		return true

@@ -1652,11 +1652,12 @@ func TestMCPServersPerAgent(t *testing.T) {
 	}
 }
 
-// TestWorkingDirectories: reads and commands inside the session directory
-// and the role's dirs run without a boundary prompt; a path outside asks
-// (naming the directory) even though read is allowed, and "allow_always"
-// adds that directory to the agent; a child can be granted only
-// directories its parent has; grants and additions survive a restart.
+// TestWorkingDirectories: the session has one working set, shared by every
+// agent. Reads inside the session directory and a directory the human added
+// run without a boundary prompt; a path outside asks (naming the directory)
+// even though read is allowed, and "allow_always" adds it to the session,
+// so a child created afterwards reads there without asking; the human edits
+// the set; it survives a restart.
 func TestWorkingDirectories(t *testing.T) {
 	setupConfig(t)
 	g := os.Getenv("STAVLOS_CONFIG_DIR")
@@ -1668,22 +1669,22 @@ func TestWorkingDirectories(t *testing.T) {
 	os.WriteFile(filepath.Join(work, "in.txt"), []byte("in"), 0o644)
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"rootAgent":"lead"}`), 0o644)
 	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
-	os.WriteFile(filepath.Join(g, "roles", "lead.md"), []byte(fmt.Sprintf("---\ndescription: Leads\ndirs: [%q]\nspawn: [general]\n---\nYou lead.\n", shared)), 0o644)
+	os.WriteFile(filepath.Join(g, "roles", "lead.md"), []byte("---\ndescription: Leads\nspawn: [general]\n---\nYou lead.\n"), 0o644)
 
 	data := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
-			if !strings.Contains(req.System, "Your working directories: "+work+", "+shared) {
-				t.Errorf("system prompt should list the directories:\n%s", req.System)
+			if !strings.Contains(req.System, "working directories, shared by every agent: "+work+", "+shared) {
+				t.Errorf("system prompt should list the session's directories:\n%s", req.System)
 			}
 			return call("c1", "read", `{"path":"in.txt"}`) // inside the session dir
 		},
-		func(model.Request) model.Response { return call("c2", "read", `{"path":"`+shared+`/lib.txt"}`) }, // inside a role dir
+		func(model.Request) model.Response { return call("c2", "read", `{"path":"`+shared+`/lib.txt"}`) }, // inside an added dir
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if last.IsError || !strings.Contains(last.Content, "lib") {
-				t.Errorf("role dir read: %+v", last)
+				t.Errorf("added dir read: %+v", last)
 			}
 			return call("c3", "read", `{"path":"`+outside+`/secret.txt"}`) // outside: asks
 		},
@@ -1692,29 +1693,23 @@ func TestWorkingDirectories(t *testing.T) {
 			if last.IsError || !strings.Contains(last.Content, "s") {
 				t.Errorf("outside read after allow_always: %+v", last)
 			}
-			return call("c4", "read", `{"path":"`+outside+`/secret.txt"}`) // now inside: no prompt
-		},
-		func(model.Request) model.Response {
-			// a grant inside the parent's set works; one outside is refused
-			return call("c5", "agent_create", `{"archetype":"general","label":"kid","task":"x","dirs":["`+shared+`"]}`)
+			return call("c4", "agent_create", `{"archetype":"general","label":"kid","task":"read the secret"}`)
 		},
 		func(req model.Request) model.Response {
-			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if last.IsError {
-				t.Errorf("grant inside the parent's set: %+v", last)
-			}
-			return call("c6", "agent_create", `{"archetype":"general","label":"kid2","task":"x","dirs":["/nowhere/else"]}`)
-		},
-		func(req model.Request) model.Response {
-			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if !last.IsError || !strings.Contains(last.Content, "not inside your directories") {
-				t.Errorf("grant outside the parent's set should fail: %+v", last)
+			if last := req.Messages[len(req.Messages)-1].Blocks[0]; last.IsError {
+				t.Errorf("agent_create: %+v", last)
 			}
 			return text("done")
 		},
 	}
 	fm.childSteps = []func(model.Request) model.Response{
-		func(req model.Request) model.Response { return text("child idle") },
+		func(model.Request) model.Response { return call("k1", "read", `{"path":"`+outside+`/secret.txt"}`) }, // the session's set: no prompt
+		func(req model.Request) model.Response {
+			if last := req.Messages[len(req.Messages)-1].Blocks[0]; last.IsError || !strings.Contains(last.Content, "s") {
+				t.Errorf("the child reads inside the shared set: %+v", last)
+			}
+			return text("child idle")
+		},
 	}
 	h := newHarness(t, data, fm)
 	ctx := context.Background()
@@ -1723,17 +1718,20 @@ func TestWorkingDirectories(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = h.c.Subscribe(ctx, s.ID, 0)
+	if len(s.Dirs) != 1 || s.Dirs[0].Path != work || s.Dirs[0].Source != "session" {
+		t.Fatalf("dirs %+v", s.Dirs)
+	}
+	if err := h.c.AddSessionDir(ctx, s.ID, shared); err != nil {
+		t.Fatal(err)
+	}
 	agents, _ := h.c.Tree(ctx, s.ID)
 	root := agents[0].ID
-	if len(agents[0].Dirs) != 2 || agents[0].Dirs[0].Path != work || agents[0].Dirs[0].Source != "session" || agents[0].Dirs[1].Path != shared || agents[0].Dirs[1].Source != "role" {
-		t.Fatalf("dirs %+v", agents[0].Dirs)
-	}
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
 	// the only prompt is the boundary one, and it names the directory
 	e := h.waitFor(event.PromptRequested, root)
 	var pr event.PromptRequestedPayload
 	_ = e.Decode(&pr)
-	if pr.Tool != "read" || !strings.Contains(pr.Question, "outside its directories") || !strings.Contains(pr.Question, outside) {
+	if pr.Tool != "read" || !strings.Contains(pr.Question, "outside the session's directories") || !strings.Contains(pr.Question, outside) {
 		t.Fatalf("boundary prompt %+v", pr)
 	}
 	pending := h.d.esc.Pending(s.ID)
@@ -1746,7 +1744,7 @@ func TestWorkingDirectories(t *testing.T) {
 	if err := h.c.ReplyPrompt(ctx, pending[0].ID, "allow_always"); err != nil {
 		t.Fatal(err)
 	}
-	e = h.waitFor(event.AgentDirAdded, root)
+	e = h.waitFor(event.SessionDirAdded, root)
 	var dp event.DirAddedPayload
 	_ = e.Decode(&dp)
 	if dp.Dir != outside || dp.Source != "human" {
@@ -1757,61 +1755,64 @@ func TestWorkingDirectories(t *testing.T) {
 		e = h.waitFor(event.TurnEnded, root)
 		_ = e.Decode(&te)
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
-	if len(agents[0].Dirs) != 3 || agents[0].Dirs[2].Path != outside || agents[0].Dirs[2].Source != "human" {
-		t.Fatalf("dirs after the answer %+v", agents[0].Dirs)
-	}
+	// the child reads the added directory without a prompt of its own
+	deadline := time.Now().Add(10 * time.Second)
 	var kid protocol.AgentInfo
-	for _, a := range agents {
-		if a.Label == "kid" {
-			kid = a
+	for kid.Turn < 1 || kid.State != protocol.AgentIdle {
+		if time.Now().After(deadline) {
+			t.Fatalf("the child should finish its read without a prompt: %+v, pending %+v", kid, h.d.esc.Pending(s.ID))
+		}
+		time.Sleep(20 * time.Millisecond)
+		agents, _ = h.c.Tree(ctx, s.ID)
+		for _, a := range agents {
+			if a.Label == "kid" {
+				kid = a
+			}
 		}
 	}
-	if kid.ID == "" || len(kid.Dirs) != 2 || kid.Dirs[1].Path != shared || kid.Dirs[1].Source != "grant" {
-		t.Fatalf("child dirs %+v", kid.Dirs)
-	}
-	// the human edits the set: add, remove (a role directory hides, the
-	// session directory refuses), and a relative path resolves
+	// the human edits the set: add, remove (the session directory refuses),
+	// and a relative path inside the session directory is already covered
 	extra := t.TempDir()
-	if err := h.c.AddAgentDir(ctx, root, extra); err != nil {
+	if err := h.c.AddSessionDir(ctx, s.ID, extra); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.AddAgentDir(ctx, root, "sub/dir"); err != nil { // inside the session dir: already covered, a no-op
+	if err := h.c.AddSessionDir(ctx, s.ID, "sub/dir"); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.RemoveAgentDir(ctx, root, shared); err != nil {
+	if err := h.c.RemoveSessionDir(ctx, s.ID, shared); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.c.RemoveAgentDir(ctx, root, work); err == nil || !strings.Contains(err.Error(), "session directory") {
+	if err := h.c.RemoveSessionDir(ctx, s.ID, work); err == nil || !strings.Contains(err.Error(), "session directory") {
 		t.Fatalf("removing the session directory: %v", err)
 	}
-	if err := h.c.RemoveAgentDir(ctx, root, "/never/there"); err == nil {
+	if err := h.c.RemoveSessionDir(ctx, s.ID, "/never/there"); err == nil {
 		t.Fatal("removing an unknown directory should fail")
 	}
-	agents, _ = h.c.Tree(ctx, s.ID)
-	paths := func(ds []protocol.DirInfo) string {
-		var out []string
-		for _, d := range ds {
-			out = append(out, d.Path+":"+d.Source)
+	dirsOf := func(list func(context.Context, string, bool) ([]protocol.SessionInfo, error)) string {
+		ss, _ := list(ctx, work, false)
+		for _, x := range ss {
+			if x.ID == s.ID {
+				var out []string
+				for _, d := range x.Dirs {
+					out = append(out, d.Path+":"+d.Source)
+				}
+				return strings.Join(out, " ")
+			}
 		}
-		return strings.Join(out, " ")
+		return ""
 	}
-	if got := paths(agents[0].Dirs); got != work+":session "+outside+":human "+extra+":human" {
+	want := work + ":session " + outside + ":human " + extra + ":human"
+	if got := dirsOf(h.c.Sessions); got != want {
 		t.Fatalf("edited dirs: %s", got)
 	}
 	h.close()
 
-	// restart: grants, additions and removals come back
+	// restart: the set comes back
 	h2 := newHarness(t, data, &fakeModel{})
 	defer h2.close()
-	agents, _ = h2.c.Tree(ctx, s.ID)
-	if got := paths(agents[0].Dirs); got != work+":session "+outside+":human "+extra+":human" {
-		t.Fatalf("recovered root dirs: %s", got)
-	}
-	for _, a := range agents {
-		if a.Label == "kid" && (len(a.Dirs) != 2 || a.Dirs[1].Path != shared) {
-			t.Fatalf("recovered child dirs %+v", a.Dirs)
-		}
+	_, _ = h2.c.Tree(ctx, s.ID)
+	if got := dirsOf(h2.c.Sessions); got != want {
+		t.Fatalf("recovered dirs: %s", got)
 	}
 }
 
@@ -1859,7 +1860,7 @@ func TestBoundaryPromptEditedDir(t *testing.T) {
 	if err := h.c.ReplyPromptDir(ctx, pending[0].ID, "allow_always", outside); err != nil {
 		t.Fatal(err)
 	}
-	e := h.waitFor(event.AgentDirAdded, root)
+	e := h.waitFor(event.SessionDirAdded, root)
 	var dp event.DirAddedPayload
 	_ = e.Decode(&dp)
 	if dp.Dir != outside {

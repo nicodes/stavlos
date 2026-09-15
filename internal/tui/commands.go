@@ -239,22 +239,22 @@ func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.
 	return resultCmd(ctx, "role set to "+role, func(ctx context.Context) error { return c.SetAgentRole(ctx, agent, role) })
 }
 
-func addDirCmd(ctx context.Context, c *client.Client, agent, dir string) tea.Cmd {
-	return resultCmd(ctx, "added "+dir, func(ctx context.Context) error { return c.AddAgentDir(ctx, agent, dir) })
+func addDirCmd(ctx context.Context, c *client.Client, session, dir string) tea.Cmd {
+	return resultCmd(ctx, "added "+dir, func(ctx context.Context) error { return c.AddSessionDir(ctx, session, dir) })
 }
 
-func removeDirCmd(ctx context.Context, c *client.Client, agent, dir string) tea.Cmd {
-	return resultCmd(ctx, "removed "+format.ShortHome(dir), func(ctx context.Context) error { return c.RemoveAgentDir(ctx, agent, dir) })
+func removeDirCmd(ctx context.Context, c *client.Client, session, dir string) tea.Cmd {
+	return resultCmd(ctx, "removed "+format.ShortHome(dir), func(ctx context.Context) error { return c.RemoveSessionDir(ctx, session, dir) })
 }
 
 // replaceDirCmd swaps one directory for another (an edit in the dirs
-// dialog): the new one is added first so the agent never loses ground.
-func replaceDirCmd(ctx context.Context, c *client.Client, agent, oldDir, newDir string) tea.Cmd {
+// dialog): the new one is added first so no agent loses ground.
+func replaceDirCmd(ctx context.Context, c *client.Client, session, oldDir, newDir string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		if err := c.AddAgentDir(ctx, agent, newDir); err != nil {
+		if err := c.AddSessionDir(ctx, session, newDir); err != nil {
 			return resultMsg{"", err}
 		}
-		return resultMsg{"replaced " + format.ShortHome(oldDir) + " with " + newDir, c.RemoveAgentDir(ctx, agent, oldDir)}
+		return resultMsg{"replaced " + format.ShortHome(oldDir) + " with " + newDir, c.RemoveSessionDir(ctx, session, oldDir)}
 	})
 }
 

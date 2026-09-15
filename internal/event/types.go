@@ -18,6 +18,8 @@ const (
 	SessionModelChanged Type = "session.model_changed" // ModelChangedPayload
 	SessionYoloChanged  Type = "session.yolo_changed"  // YoloPayload (legacy: replayed as mode yolo/ask; new logs carry SessionModeChanged)
 	SessionModeChanged  Type = "session.mode_changed"  // ModePayload: the session's permission mode (ask | auto | yolo)
+	SessionDirAdded     Type = "session.dir_added"     // DirAddedPayload: a directory joined the session\'s working set (every agent\'s); Agent is the agent whose boundary prompt added it, "" for the dirs tab
+	SessionDirRemoved   Type = "session.dir_removed"   // DirRefPayload: the human took a directory out of the session\'s working set
 	ChatPosted          Type = "chat.posted"           // ChatPayload: the human\'s message in the session chat, logged on the session, and the agents it went to
 
 	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
@@ -30,8 +32,8 @@ const (
 	AgentModelChanged   Type = "agent.model_changed"   // ModelChangedPayload
 	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
 	AgentVariantChanged Type = "agent.variant_changed" // VariantChangedPayload: model variant (reasoning effort) switched
-	AgentDirAdded       Type = "agent.dir_added"       // DirAddedPayload: a directory joined the agent\'s working set (a grant at creation, or the human\'s answer)
-	AgentDirRemoved     Type = "agent.dir_removed"     // DirRefPayload: the human took a directory out of the agent\'s working set
+	AgentDirAdded       Type = "agent.dir_added"       // DirAddedPayload (legacy: an agent's own set; replayed into the session's)
+	AgentDirRemoved     Type = "agent.dir_removed"     // DirRefPayload (legacy: replayed as a removal from the session's set)
 
 	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: wake armed for these ids (children or monitors)
 	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
@@ -113,8 +115,8 @@ type RoleChangedPayload struct {
 }
 
 // ModePayload records the session's permission mode: ask (every policy
-// ask prompts), auto (asks are allowed inside the agent's working
-// directories, the boundary still asks), yolo (everything a policy would
+// ask prompts), auto (asks are allowed inside the session's working
+// directories, calls outside them are denied), yolo (everything a policy would
 // ask about is allowed, boundary included). Deny rules hold in every mode.
 type ModePayload struct {
 	Mode string `json:"mode"`
@@ -140,12 +142,11 @@ type AgentSpawnedPayload struct {
 	Model     string   `json:"model"` // resolved provider/model-id
 	Task      string   `json:"task,omitempty"`
 	Depth     int      `json:"depth"`
-	Dirs      []string `json:"dirs,omitempty"` // directories the creator granted, absolute
+	Dirs      []string `json:"dirs,omitempty"` // legacy: directories the creator granted, replayed into the session's set
 }
 
-// DirAddedPayload: Source is "grant" (from the creating agent) or "human"
-// (the answer to a boundary prompt). Role directories are not logged: they
-// follow the role.
+// DirAddedPayload: Source is "human" (the dirs tab, or the answer to a
+// boundary prompt); logs from before the set was shared also carry "grant".
 type DirAddedPayload struct {
 	Dir    string `json:"dir"`
 	Source string `json:"source"`

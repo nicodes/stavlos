@@ -39,7 +39,7 @@ func snap(s *Session) []snapshot {
 		out = append(out, snapshot{
 			ID: in.ID, Parent: in.Parent, Archetype: in.Archetype, Label: in.Label, Model: in.Model, Variant: in.Variant, State: string(in.State),
 			Depth: in.Depth, Turn: in.Turn, Queued: in.Queued, Tokens: in.Tokens, CostUSD: in.CostUSD, LastError: in.LastError,
-			Awaiting: in.Awaiting, Todos: in.Todos, Dirs: in.Dirs, Children: a.Children(), Armed: a.armedIDs(),
+			Awaiting: in.Awaiting, Todos: in.Todos, Dirs: s.Info().Dirs, Children: a.Children(), Armed: a.armedIDs(),
 			Owed: a.replyState(a.owed), Remind: append([]string(nil), a.remind...), LastPost: a.currentPost(), Nudges: a.nudgeCount(),
 		})
 	}
@@ -81,7 +81,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 	waitUntil(t, h, func() bool {
 		return child.Info().Turn == 1 && len(child.Info().Todos) == 1 && child.Info().Todos[0].Status == "done"
 	})
-	if err := root.AddDir(ctx, other); err != nil {
+	if err := s.AddDir(ctx, other); err != nil {
 		t.Fatal(err)
 	}
 	if err := root.SetVariant(ctx, "high"); err != nil {

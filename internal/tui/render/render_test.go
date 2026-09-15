@@ -924,7 +924,7 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	} {
 		between.Apply(ev)
 	}
-	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user go\n§ Aside done\n⇄ Mode → auto · allows inside the agent's directories, denies outside them\n\n› @user again" {
+	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user go\n§ Aside done\n⇄ Mode → auto · allows inside the session's directories, denies outside them\n\n› @user again" {
 		t.Fatalf("a between-turn mode change:\n%s", got)
 	}
 	// the loader keeps one blank row above it

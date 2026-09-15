@@ -143,14 +143,13 @@ tools:
 spawn: [explorer]
 max_turns: 20
 color: cyan
-dirs: [../shared, ~/notes]
 ---
 You review.
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Name != "reviewer" || p.Mode != ModeSubagent || p.MaxTurns != 20 || p.Color != "cyan" || p.Body != "You review." || strings.Join(p.Dirs, ",") != "../shared,~/notes" {
+	if p.Name != "reviewer" || p.Mode != ModeSubagent || p.MaxTurns != 20 || p.Color != "cyan" || p.Body != "You review." {
 		t.Fatalf("%+v", p)
 	}
 	if len(p.Models) != 3 || p.Models[0].ID != "openai/gpt-5.1-codex" || len(p.Models[0].Variants) != 2 || p.Models[2].ID != "xai/grok-4-fast" || p.Models[2].Variants != nil {
@@ -372,4 +371,16 @@ func writeRole(t *testing.T, body string) string {
 		t.Fatal(err)
 	}
 	return path
+}
+
+// TestRoleDirsRemoved: working directories belong to the session, so a
+// role's dirs: key is a load error that says where they went.
+func TestRoleDirsRemoved(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "lead.md")
+	if err := os.WriteFile(path, []byte("---\ndescription: Leads\ndirs: [../shared]\n---\nYou lead.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadPreset(path); err == nil || !strings.Contains(err.Error(), "dirs: was removed") {
+		t.Fatalf("err %v", err)
+	}
 }

@@ -26,9 +26,6 @@ func cleanAgents(agents []protocol.AgentInfo) []protocol.AgentInfo {
 		for j := range a.MCP {
 			a.MCP[j].Error = textsafe.Clean(a.MCP[j].Error)
 		}
-		for j := range a.Dirs {
-			a.Dirs[j].Path = textsafe.Clean(a.Dirs[j].Path)
-		}
 	}
 	return agents
 }
@@ -50,6 +47,9 @@ func cleanPrompt(p *protocol.PromptInfo) {
 
 func cleanSession(s protocol.SessionInfo) protocol.SessionInfo {
 	s.Title, s.Dir = textsafe.Clean(s.Title), textsafe.Clean(s.Dir)
+	for i := range s.Dirs {
+		s.Dirs[i].Path = textsafe.Clean(s.Dirs[i].Path)
+	}
 	return s
 }
 

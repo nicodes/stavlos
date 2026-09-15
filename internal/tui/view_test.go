@@ -485,13 +485,13 @@ func TestTabCyclesFocus(t *testing.T) {
 			t.Fatalf("left at the edge: sel=%d", m.tabSel)
 		}
 		press(&m, right, right, right, right, right, right)
-		press(&m, right) // already rightmost (dirs): stays
+		press(&m, right) // already rightmost (mcp): stays
 		if m.focus != focusTabs || m.tabSel != 6 {
 			t.Fatalf("right x7: focus=%v sel=%d", m.focus, m.tabSel)
 		}
-		press(&m, left, left, left, left)
-		if m.tabSel != 2 {
-			t.Fatalf("left x4: sel=%d", m.tabSel)
+		press(&m, left, left, left)
+		if m.tabSel != 3 {
+			t.Fatalf("left x3: sel=%d", m.tabSel)
 		}
 		// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
 		press(&m, tea.KeyMsg{Type: tea.KeySpace})
@@ -505,10 +505,10 @@ func TestTabCyclesFocus(t *testing.T) {
 		// esc returns to where the dialog was opened from: the strip, with the
 		// closed tab still highlighted
 		press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-		if m.focus != focusTabs || m.tabSel != 2 {
+		if m.focus != focusTabs || m.tabSel != 3 {
 			t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 		}
-		press(&m, left, left)                     // past questions to permission
+		press(&m, left, left, left)               // past dirs and questions to permission
 		press(&m, tea.KeyMsg{Type: tea.KeySpace}) // permission dialog, nothing waiting
 		if dv := stripANSI(m.tabDialog(100)); m.focus != focusPermission || !strings.Contains(dv, "Permission 0") || !strings.Contains(dv, "no prompts waiting") {
 			t.Fatalf("enter on permission: focus=%v\n%s", m.focus, dv)
@@ -944,12 +944,12 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if full := stripANSI(m.View()); !strings.Contains(full, "make test") || !strings.Contains(full, "╭") {
 		t.Fatalf("the dialog should render in the view:\n%s", full)
 	}
-	// esc returns to the strip (permission still highlighted); →→ space opens async
+	// esc returns to the strip (permission still highlighted); →→→ space opens async
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.focus != focusTabs || m.tabSel != 0 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // past questions to async
+	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // past questions and dirs to async
 	if m.focus != focusAsync {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -988,7 +988,7 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: the session's tabs over the agent's, counts only
 	v := stripANSI(m.sectionsView(100))
-	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · ? 0\nasync 2 · due 0 · todo") ||
+	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · ? 0 · dirs 0\nasync 2 · due 0 · todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
@@ -1404,10 +1404,10 @@ func TestTodoTabAndDialog(t *testing.T) {
 	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo 2/4") {
 		t.Fatalf("strip with items:\n%s", sv)
 	}
-	// tab → strip, → x4 lands on todo, enter opens its dialog
+	// tab → strip, → x5 lands on todo, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusTodo {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -1426,7 +1426,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 		t.Fatalf("↓ should move the cursor: %d", m.agCursor)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 4 {
+	if m.focus != focusTabs || m.tabSel != 5 {
 		t.Fatalf("esc should return to the strip on todo: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// clicking the todo label on the strip opens the dialog
@@ -2431,7 +2431,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 
 func TestMCPTabAndDialog(t *testing.T) {
 	m := sessionModel()
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo 0 · mcp 0 · dirs 0") {
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo 0 · mcp 0") || !strings.Contains(sv, "? 0 · dirs 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	started := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
@@ -2443,10 +2443,10 @@ func TestMCPTabAndDialog(t *testing.T) {
 	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "mcp 1/3") {
 		t.Fatalf("strip with servers:\n%s", sv)
 	}
-	// tab → strip, → x5 lands on mcp, enter opens its dialog
+	// tab → strip, → x6 lands on mcp, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusMCP {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2470,7 +2470,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 5 {
+	if m.focus != focusTabs || m.tabSel != 6 {
 		t.Fatalf("esc should return to the strip on mcp: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// chat: tool names and server events
@@ -2495,13 +2495,13 @@ func TestMCPTabAndDialog(t *testing.T) {
 
 func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	m := sessionModel()
-	m.agents[0].Dirs = []protocol.DirInfo{{Path: "/repo", Source: "session"}, {Path: "/srv/shared", Source: "role"}, {Path: "/tmp/build", Source: "human"}}
+	m.session.Dirs = []protocol.DirInfo{{Path: "/repo", Source: "session"}, {Path: "/srv/shared", Source: "human"}, {Path: "/tmp/build", Source: "human"}}
 	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "dirs 3") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusDirs {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2510,7 +2510,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	if !strings.Contains(dv, "a add directory · space edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
 		t.Fatalf("dirs dialog should carry its own hints (without esc):\n%s", dv)
 	}
-	if repo := findLine(lines, "▸ /repo  session"); repo < 0 || strings.Contains(lines[repo], "◆") || !inOrder(dv, "Dirs 3", "▸ /repo  session", "/srv/shared  role", "/tmp/build  human") {
+	if repo := findLine(lines, "▸ /repo  session"); repo < 0 || strings.Contains(lines[repo], "◆") || !inOrder(dv, "Dirs 3", "▸ /repo  session", "/srv/shared  human", "/tmp/build  human") {
 		t.Fatalf("dirs dialog:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
@@ -2540,7 +2540,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 		t.Fatalf("enter should submit the add: cmd=%v edit=%q", cmd != nil, m.dirEdit)
 	}
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyCtrlD}); cmd == nil {
-		t.Fatal("ctrl+d on a role row should send the removal")
+		t.Fatal("ctrl+d on an added row should send the removal")
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
@@ -2548,14 +2548,14 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 		t.Fatalf("the session row must not be editable: %q %q", m.dirEdit, m.status)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 6 {
+	if m.focus != focusTabs || m.tabSel != 2 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// a boundary prompt says so and offers the directory
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "read", Agent: "a", Input: []byte(`{"path":"/etc/hosts"}`), Dir: "/etc"}}
 	m.setFocus(focusPermission)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
-	for _, w := range []string{"☰ /etc/hosts  coder", "outside its directories · /etc", "▸ ● Allow once", "  ○ Allow and add /etc  the agent keeps the directory for the session", "  ○ Allow and add another directory…  type the path", "  ○ Deny"} {
+	for _, w := range []string{"☰ /etc/hosts  coder", "outside the session's directories · /etc", "▸ ● Allow once", "  ○ Allow and add /etc  every agent in the session can use it", "  ○ Allow and add another directory…  type the path", "  ○ Deny"} {
 		if !strings.Contains(body, w) {
 			t.Fatalf("boundary prompt body missing %q:\n%s", w, body)
 		}
@@ -2591,7 +2591,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	m.promptBusy = ""
 	// the chat notes an added directory
 	tr := m.transcript("a")
-	tr.Apply(event.Event{Agent: "a", Type: event.AgentDirAdded, Payload: event.MustPayload(event.DirAddedPayload{Dir: "/etc", Source: "human"})})
+	tr.Apply(event.Event{Agent: "a", Type: event.SessionDirAdded, Payload: event.MustPayload(event.DirAddedPayload{Dir: "/etc", Source: "human"})})
 	m.setFocus(focusInput)
 	m.refreshViewport()
 	if v := stripANSI(m.vp.View()); !strings.Contains(v, "◆ Dirs + /etc (human)") {
@@ -2779,7 +2779,7 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 func TestQuestionsTabAndDialog(t *testing.T) {
 	m := sessionModel()
 	m.agents[0].Archetype = "general"
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "! 0 · ? 0\nasync") {
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "! 0 · ? 0 · dirs 0\nasync") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user", Questions: []protocol.Question{
@@ -2906,10 +2906,11 @@ func TestTabRowsMoveVertically(t *testing.T) {
 		down bool
 		want int
 	}{
-		{0, true, 2},  // ! → async
-		{1, true, 3},  // ? → due
-		{2, false, 0}, // async → !
-		{6, false, 1}, // dirs → ? (clamped to the shorter row)
+		{0, true, 3},  // ! → async
+		{1, true, 4},  // ? → due
+		{2, true, 5},  // dirs → todo
+		{3, false, 0}, // async → !
+		{6, false, 2}, // mcp → dirs (clamped to the shorter row)
 		{0, false, 0}, // top row stays
 		{4, true, 4},  // bottom row stays
 	} {

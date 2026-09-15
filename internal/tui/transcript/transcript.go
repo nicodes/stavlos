@@ -1251,9 +1251,8 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return []Line{{Kind: LineError, Glyph: GlyphToolMCP, Tone: ToneError, Text: titled("MCP", fmt.Sprintf("%s failed: %s", p.Server, p.Error))}}
 	}),
 
-	event.AgentDirAdded: decoded(func(p event.DirAddedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphToolFiles, Text: titled("Dirs", fmt.Sprintf("+ %s (%s)", format.ShortHome(p.Dir), p.Source))}}
-	}),
+	event.SessionDirAdded: decoded(dirAddedLines),
+	event.AgentDirAdded:   decoded(dirAddedLines), // an older log's per-agent set
 
 	event.MCPStopped: decoded(func(p event.MCPRefPayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: titled("MCP", p.Server+" stopped")}}
@@ -1870,4 +1869,10 @@ func (t *Transcript) Notice(lines ...string) {
 		ls = append(ls, ln)
 	}
 	t.appendItem(ls)
+}
+
+// dirAddedLines notes a directory joining the session's working set, in the
+// chat of the agent whose boundary prompt added it.
+func dirAddedLines(p event.DirAddedPayload) []Line {
+	return []Line{{Kind: LineDim, Glyph: GlyphToolFiles, Text: titled("Dirs", fmt.Sprintf("+ %s (%s)", format.ShortHome(p.Dir), p.Source))}}
 }

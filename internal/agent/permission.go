@@ -99,7 +99,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 	if verb == policy.Ask && mode != protocol.ModeAsk {
 		verb = policy.Allow // auto and yolo answer every policy ask with allow
 	}
-	// A call that reaches outside the agent's working directories is judged
+	// A call that reaches outside the session's working directories is judged
 	// by the mode even when policy allows the tool: ask mode asks (the prompt
 	// names the directory; "allow_always" adds it to the agent), auto denies
 	// it, yolo allows it.
@@ -122,7 +122,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 // autoOutside is what an agent is told when auto mode denies a call outside
 // its working directories.
 func autoOutside(dir string) string {
-	return "Denied in auto mode: " + dir + " is outside your working directories, and auto mode does not allow calls outside them."
+	return "Denied in auto mode: " + dir + " is outside the session's working directories, and auto mode does not allow calls outside them."
 }
 
 // escalate asks the human about a call and records what they allowed for
@@ -132,7 +132,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	a.setState(StateBlocked)
 	question := fmt.Sprintf("%s wants to run %s", rv.label, c.Name)
 	if d.boundary != "" {
-		question = fmt.Sprintf("%s wants to run %s outside its directories (%s)", rv.label, c.Name, d.boundary)
+		question = fmt.Sprintf("%s wants to run %s outside the session's directories (%s)", rv.label, c.Name, d.boundary)
 	}
 	// The prefix a client may offer to allow is the daemon's to derive
 	// from the call itself; the prompt carries it for display.
@@ -173,7 +173,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 		if strings.TrimSpace(ans.Dir) != "" {
 			dir = resolveDir(a.s.Dir, ans.Dir) // the human edited the offered directory
 		}
-		_ = a.addDir(context.Background(), dir, "human")
+		_ = a.s.addDir(context.Background(), a.ID, dir, "human")
 	}
 	return "", false, true
 }

@@ -164,7 +164,7 @@ var handlers = map[string]handler{
 		}
 		// Anything already waiting is answered as the new mode would have, so
 		// the agents move: yolo allows every permission prompt; auto allows
-		// the ones inside the agent's directories and denies the ones outside.
+		// the ones inside the session's directories and denies the ones outside.
 		switch p.Mode {
 		case protocol.ModeYolo:
 			c.d.esc.AnswerAll(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "yolo")
@@ -207,7 +207,7 @@ var handlers = map[string]handler{
 		if err != nil {
 			return nil, err
 		}
-		id, err := s.SpawnFromClient(ctx, p.Parent, p.Archetype, p.Label, p.Task, p.Model, p.Dirs)
+		id, err := s.SpawnFromClient(ctx, p.Parent, p.Archetype, p.Label, p.Task, p.Model)
 		if err != nil {
 			return nil, err
 		}
@@ -253,19 +253,19 @@ var handlers = map[string]handler{
 		}
 		return protocol.AgentCompactResult{Status: status}, nil
 	}),
-	protocol.MAgentAddDir: typed(func(ctx context.Context, c *conn, p protocol.AgentDirParams) (any, error) {
-		_, a, err := c.d.agentSession(p.Agent)
+	protocol.MSessionAddDir: typed(func(ctx context.Context, c *conn, p protocol.SessionDirParams) (any, error) {
+		s, err := c.d.session(p.ID)
 		if err != nil {
 			return nil, err
 		}
-		return okResult, a.AddDir(ctx, p.Dir)
+		return okResult, s.AddDir(ctx, p.Dir)
 	}),
-	protocol.MAgentRemoveDir: typed(func(ctx context.Context, c *conn, p protocol.AgentDirParams) (any, error) {
-		_, a, err := c.d.agentSession(p.Agent)
+	protocol.MSessionRemoveDir: typed(func(ctx context.Context, c *conn, p protocol.SessionDirParams) (any, error) {
+		s, err := c.d.session(p.ID)
 		if err != nil {
 			return nil, err
 		}
-		return okResult, a.RemoveDir(ctx, p.Dir)
+		return okResult, s.RemoveDir(ctx, p.Dir)
 	}),
 	protocol.MVariants: typed(func(_ context.Context, c *conn, p protocol.VariantsParams) (any, error) {
 		return protocol.VariantsResult{Variants: c.d.Registry.Variants(p.Model)}, nil
