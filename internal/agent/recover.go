@@ -107,7 +107,7 @@ func sortedKeys[V any](m map[string]V) []string {
 // hands an agent more than its role gave it.
 func missingRolePreset(name string) config.Preset {
 	return config.Preset{
-		Name: name, Description: "(role no longer exists)", Mode: config.ModeAll, Layer: "builtin", Loop: "default",
+		Name: name, Description: "(role no longer exists)", Type: config.TypeAll, Layer: "builtin", Loop: "default",
 		Tools: []string{toolname.Read},
 		Body:  "Your role's definition is gone from the configuration. You can only read files until the human picks a role with /role; say so if asked to do more.",
 	}

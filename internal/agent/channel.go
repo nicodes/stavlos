@@ -389,7 +389,7 @@ func (c *Channel) Presets() []protocol.PresetInfo {
 	cfg := c.Config()
 	var out []protocol.PresetInfo
 	for _, p := range cfg.Presets {
-		info := protocol.PresetInfo{Name: p.Name, Description: p.Description, Mode: p.Mode, Spawn: p.Spawn, Color: p.Color, MaxTurns: p.MaxTurns}
+		info := protocol.PresetInfo{Name: p.Name, Description: p.Description, Type: p.Type, Spawn: p.Spawn, Color: p.Color, MaxTurns: p.MaxTurns}
 		for _, m := range p.Models {
 			info.Models = append(info.Models, protocol.ModelSpec{ID: m.ID, Variants: m.Variants})
 		}

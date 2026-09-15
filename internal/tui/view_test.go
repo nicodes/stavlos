@@ -2430,9 +2430,9 @@ func TestRoleAwareDialogs(t *testing.T) {
 		{ID: "c1", Parent: "root", Name: "scout", Role: "reviewer", Model: "openai/gpt-5", Variant: "high"},
 	}
 	m.presets = []protocol.PresetInfo{
-		{Name: "general", Description: "does it all", Mode: "all", Spawn: []string{"general"}},
-		{Name: "lead", Description: "runs the show", Mode: "primary", Color: "blue"},
-		{Name: "reviewer", Description: "reviews", Mode: "subagent", Color: "cyan", Models: []protocol.ModelSpec{{ID: "openai/gpt-5", Variants: []string{"medium", "high"}}, {ID: "xai/*"}}},
+		{Name: "general", Description: "does it all", Type: "all", Spawn: []string{"general"}},
+		{Name: "lead", Description: "runs the show", Type: "primary", Color: "blue"},
+		{Name: "reviewer", Description: "reviews", Type: "subagent", Color: "cyan", Models: []protocol.ModelSpec{{ID: "openai/gpt-5", Variants: []string{"medium", "high"}}, {ID: "xai/*"}}},
 	}
 	names := func(o *overlay) []string {
 		var out []string

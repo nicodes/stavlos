@@ -736,7 +736,7 @@ func TestShellKillStopsJob(t *testing.T) {
 func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	setupConfig(t)
 	// Only "general" ships built in; a user preset comes from agents/<name>.md.
-	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "roles")
+	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
 	_ = os.MkdirAll(agentsDir, 0o755)
 	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools:\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
 	work := t.TempDir()
@@ -1197,7 +1197,7 @@ func TestChannelListTitles(t *testing.T) {
 // root preset, with its full tool set.
 func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	setupConfig(t)
-	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "roles")
+	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
 	_ = os.MkdirAll(agentsDir, 0o755)
 	presetFile := filepath.Join(agentsDir, "coder.md")
 	os.WriteFile(presetFile, []byte("---\ndescription: Old coder\ntools:\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are the old coder.\n"), 0o644)
@@ -1455,11 +1455,11 @@ func TestRoles(t *testing.T) {
 	setupConfig(t)
 	g := os.Getenv("STAVLOS_CONFIG_DIR")
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"rootAgent":"lead"}`), 0o644)
-	roles := filepath.Join(g, "roles")
+	roles := filepath.Join(g, "agents")
 	os.MkdirAll(roles, 0o755)
-	os.WriteFile(filepath.Join(roles, "lead.md"), []byte("---\ndescription: Leads\nmode: primary\nmodels:\n  - id: fake/m1\n    variants: [high]\nspawn: [limited, boss, general]\n---\nYou lead.\n"), 0o644)
-	os.WriteFile(filepath.Join(roles, "limited.md"), []byte("---\ndescription: Limited\nmode: subagent\nmodels: [fake/m2]\nmax_turns: 1\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are limited.\n"), 0o644)
-	os.WriteFile(filepath.Join(roles, "boss.md"), []byte("---\ndescription: Boss\nmode: primary\n---\nYou boss.\n"), 0o644)
+	os.WriteFile(filepath.Join(roles, "lead.md"), []byte("---\ndescription: Leads\ntype: primary\nmodels:\n  - id: fake/m1\n    variants: [high]\nspawn: [limited, boss, general]\n---\nYou lead.\n"), 0o644)
+	os.WriteFile(filepath.Join(roles, "limited.md"), []byte("---\ndescription: Limited\ntype: subagent\nmodels: [fake/m2]\nmax_turns: 1\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are limited.\n"), 0o644)
+	os.WriteFile(filepath.Join(roles, "boss.md"), []byte("---\ndescription: Boss\ntype: primary\n---\nYou boss.\n"), 0o644)
 
 	work := t.TempDir()
 	// The root's second message must reach the child after its first model
@@ -1643,8 +1643,8 @@ func TestMCPServersPerAgent(t *testing.T) {
 	}
 	cfg := fmt.Sprintf(`{"model":"fake/m1","reminders":false,"rootAgent":"mcpuser","mcp":{"echo":{"command":%q,"env":{"STAVLOS_TEST_MCP_SERVER":"1","GREETING":"${env:STAVLOS_TEST_GREETING}"}}},"policy":{"mcp__echo__*":"allow"}}`, exe)
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(cfg), 0o644)
-	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
-	os.WriteFile(filepath.Join(g, "roles", "mcpuser.md"), []byte("---\ndescription: Uses MCP\nmcp: [echo, missing]\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou use tools.\n"), 0o644)
+	os.MkdirAll(filepath.Join(g, "agents"), 0o755)
+	os.WriteFile(filepath.Join(g, "agents", "mcpuser.md"), []byte("---\ndescription: Uses MCP\nmcp: [echo, missing]\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou use tools.\n"), 0o644)
 
 	work := t.TempDir()
 	fm := &fakeModel{}
@@ -1755,8 +1755,8 @@ func TestWorkingDirectories(t *testing.T) {
 	os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("s"), 0o644)
 	os.WriteFile(filepath.Join(work, "in.txt"), []byte("in"), 0o644)
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"rootAgent":"lead"}`), 0o644)
-	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
-	os.WriteFile(filepath.Join(g, "roles", "lead.md"), []byte("---\ndescription: Leads\nspawn: [general]\n---\nYou lead.\n"), 0o644)
+	os.MkdirAll(filepath.Join(g, "agents"), 0o755)
+	os.WriteFile(filepath.Join(g, "agents", "lead.md"), []byte("---\ndescription: Leads\nspawn: [general]\n---\nYou lead.\n"), 0o644)
 
 	data := t.TempDir()
 	fm := &fakeModel{}

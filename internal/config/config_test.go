@@ -27,9 +27,9 @@ func TestLoadLayersAndTrust(t *testing.T) {
   "policy": { "shell": { "*": "allow", "git push*": "ask" }, },
 }`), 0o644)
 	dir := t.TempDir()
-	os.MkdirAll(filepath.Join(dir, ".stavlos", "roles"), 0o755)
+	os.MkdirAll(filepath.Join(dir, ".stavlos", "agents"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{"policy":{"shell":{"git push*":"allow","curl*":"deny"}}}`), 0o644)
-	os.WriteFile(filepath.Join(dir, ".stavlos", "roles", "reviewer.md"), []byte("---\ndescription: reviews\nmodels: [openai/gpt-5-mini]\ntools:\n  apply_patch: deny\n---\nYou review.\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".stavlos", "agents", "reviewer.md"), []byte("---\ndescription: reviews\nmodels: [openai/gpt-5-mini]\ntools:\n  apply_patch: deny\n---\nYou review.\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("Use light models."), 0o644)
 
 	e, err := Load(dir, noTrust{})
@@ -60,7 +60,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 		t.Fatalf("model %q root %q", e.Model, e.RootAgent)
 	}
 	p, ok := e.Presets["reviewer"]
-	if !ok || len(p.Models) != 1 || p.Models[0].ID != "openai/gpt-5-mini" || p.Body != "You review." || p.Layer != "project" || p.Mode != ModeAll {
+	if !ok || len(p.Models) != 1 || p.Models[0].ID != "openai/gpt-5-mini" || p.Body != "You review." || p.Layer != "project" || p.Type != TypeAll {
 		t.Fatalf("preset %+v", p)
 	}
 	if e.AgentsMD != "Use light models." {
@@ -130,7 +130,7 @@ func TestReadRoleFile(t *testing.T) {
 	}
 	p, err := ReadPreset(write("reviewer", `---
 description: Reviews a diff
-mode: subagent
+type: subagent
 models:
   - id: openai/gpt-5.1-codex
     variants: [medium, high]
@@ -152,7 +152,7 @@ You review.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Name != "reviewer" || p.Mode != ModeSubagent || p.MaxTurns != 20 || p.Color != "cyan" || p.Body != "You review." {
+	if p.Name != "reviewer" || p.Type != TypeSubagent || p.MaxTurns != 20 || p.Color != "cyan" || p.Body != "You review." {
 		t.Fatalf("%+v", p)
 	}
 	if len(p.Models) != 3 || p.Models[0].ID != "openai/gpt-5.1-codex" || len(p.Models[0].Variants) != 2 || p.Models[2].ID != "xai/grok-4-fast" || p.Models[2].Variants != nil {
@@ -185,13 +185,13 @@ You review.
 	}
 	// minimal: description and body; everything else inherits
 	m, err := ReadPreset(write("explainer", "---\ndescription: Explains code\n---\nYou explain."))
-	if err != nil || m.Mode != ModeAll || len(m.Models) != 0 || strings.Join(m.Tools, ",") != strings.Join(RoleTools, ",") || m.PresetPolicy().Rules() != nil {
+	if err != nil || m.Type != TypeAll || len(m.Models) != 0 || strings.Join(m.Tools, ",") != strings.Join(RoleTools, ",") || m.PresetPolicy().Rules() != nil {
 		t.Fatalf("minimal %+v %v", m, err)
 	}
 	// errors name the problem
 	for name, body := range map[string]string{
-		"nodesc":   "---\nmode: all\n---\nx",
-		"badmode":  "---\ndescription: d\nmode: sometimes\n---\nx",
+		"nodesc":   "---\ntype: all\n---\nx",
+		"badmode":  "---\ndescription: d\ntype: sometimes\n---\nx",
 		"badcolor": "---\ndescription: d\ncolor: teal\n---\nx",
 		"oldmodel": "---\ndescription: d\nmodel: openai/gpt-5\n---\nx",
 		"oldpol":   "---\ndescription: d\npolicy:\n  shell: deny\n---\nx",
@@ -214,19 +214,19 @@ You review.
 func TestRoleRulesOnlyTighten(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
-	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
+	os.MkdirAll(filepath.Join(g, "agents"), 0o755)
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1"}`), 0o644)
 	// read is allowed by default: a role may not turn it into allow-everything for shell
-	os.WriteFile(filepath.Join(g, "roles", "loose.md"), []byte("---\ndescription: d\ntools:\n  shell:\n    \"rm *\": allow\n---\nx"), 0o644)
+	os.WriteFile(filepath.Join(g, "agents", "loose.md"), []byte("---\ndescription: d\ntools:\n  shell:\n    \"rm *\": allow\n---\nx"), 0o644)
 	if _, err := Load(t.TempDir(), noTrust{}); err == nil || !strings.Contains(err.Error(), "loosens") {
 		t.Fatalf("a loosening role rule should be a config error: %v", err)
 	}
-	os.WriteFile(filepath.Join(g, "roles", "loose.md"), []byte("---\ndescription: d\ntools:\n  shell:\n    \"rm *\": deny\n  read: ask\n---\nx"), 0o644)
+	os.WriteFile(filepath.Join(g, "agents", "loose.md"), []byte("---\ndescription: d\ntools:\n  shell:\n    \"rm *\": deny\n  read: ask\n---\nx"), 0o644)
 	e, err := Load(t.TempDir(), noTrust{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Presets["loose"].Mode != ModeAll {
+	if e.Presets["loose"].Type != TypeAll {
 		t.Fatalf("%+v", e.Presets["loose"])
 	}
 }
@@ -234,11 +234,11 @@ func TestRoleRulesOnlyTighten(t *testing.T) {
 // The repository's own example role must keep parsing: it is what the
 // docs point users at.
 func TestExampleCoderRoleParses(t *testing.T) {
-	p, err := ReadPreset(filepath.Join("..", "..", ".stavlos", "roles", "coder.md"))
+	p, err := ReadPreset(filepath.Join("..", "..", ".stavlos", "agents", "coder.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p.Name != "coder" || p.Mode != ModeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
+	if p.Name != "coder" || p.Type != TypeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
 		t.Fatalf("%+v", p)
 	}
 	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,apply_patch,skill,todo,web_fetch" || verb(p.PresetPolicy(), "shell", "git push origin main") != policy.Deny || verb(p.PresetPolicy(), "web_fetch", "https://x.slack.com/y") != policy.Deny {

@@ -18,8 +18,9 @@ import (
 )
 
 // Working directories (PRD §10.7): the channel has one working set, shared
-// by every agent: the channel directory and what the human adds, in the dirs
-// tab or by answering a boundary prompt. A tool call that reaches outside
+// by every agent: the channel directory, the directories the global
+// stavlos.json lists for every channel (dirs), and what the human adds, in
+// the dirs tab or by answering a boundary prompt. A tool call that reaches outside
 // the set asks first, even when policy allows the tool. File paths are
 // resolved the way the tools open them (tools.ResolvePath); shell commands
 // are inspected as text, and the sandbox enforces the boundary for writes.
@@ -51,17 +52,44 @@ func (c *Channel) dirPaths() []string {
 }
 
 func (c *Channel) dirPathsLocked() []string {
-	out := []string{c.Dir}
-	for _, d := range c.st.dirs {
-		out = append(out, d.path)
+	infos := c.dirInfosLocked()
+	out := make([]string, len(infos))
+	for i, d := range infos {
+		out[i] = d.Path
 	}
 	return out
 }
 
+// dirInfosLocked is the working set with where each directory came from:
+// the channel directory, then config (the global stavlos.json's dirs), then
+// what the human added, each directory once.
 func (c *Channel) dirInfosLocked() []protocol.DirInfo {
 	out := []protocol.DirInfo{{Path: c.Dir, Source: "channel"}}
+	seen := map[string]bool{filepath.Clean(c.Dir): true}
+	add := func(path, source string) {
+		if !seen[path] {
+			seen[path] = true
+			out = append(out, protocol.DirInfo{Path: path, Source: source})
+		}
+	}
+	for _, d := range c.configDirsLocked() {
+		add(d, "config")
+	}
 	for _, d := range c.st.dirs {
-		out = append(out, protocol.DirInfo{Path: d.path, Source: d.source})
+		add(d.path, d.source)
+	}
+	return out
+}
+
+// configDirsLocked are the directories the global stavlos.json adds to
+// every channel, resolved from the channel directory.
+func (c *Channel) configDirsLocked() []string {
+	if c.cfg == nil {
+		return nil
+	}
+	out := make([]string, 0, len(c.cfg.Dirs))
+	for _, d := range c.cfg.Dirs {
+		out = append(out, resolveDir(c.Dir, d))
 	}
 	return out
 }
@@ -104,7 +132,7 @@ func (c *Channel) AddDir(ctx context.Context, dir string) error {
 }
 
 // RemoveDir takes a directory out of the working set. The channel
-// directory stays.
+// directory and the global stavlos.json's dirs stay.
 func (c *Channel) RemoveDir(ctx context.Context, dir string) error {
 	dir = resolveDir(c.Dir, dir)
 	if dir == filepath.Clean(c.Dir) {
@@ -112,6 +140,9 @@ func (c *Channel) RemoveDir(ctx context.Context, dir string) error {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if slices.Contains(c.configDirsLocked(), dir) {
+		return fmt.Errorf("%s comes from the global stavlos.json's dirs: change it there", dir)
+	}
 	if !slices.ContainsFunc(c.st.dirs, func(e dirEntry) bool { return e.path == dir }) {
 		return fmt.Errorf("%s is not one of the channel's directories", dir)
 	}

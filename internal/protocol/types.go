@@ -472,7 +472,7 @@ type PresetsParams struct {
 type PresetInfo struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
-	Mode        string      `json:"mode"`             // primary | subagent | all
+	Type        string      `json:"type"`             // primary | subagent | all
 	Models      []ModelSpec `json:"models,omitempty"` // whitelist, first is the default; empty = any
 	Spawn       []string    `json:"spawn,omitempty"`
 	Color       string      `json:"color,omitempty"`

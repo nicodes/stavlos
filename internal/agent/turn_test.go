@@ -513,8 +513,8 @@ func TestSubagentTurnLimit(t *testing.T) {
 		childSteps: []step{reply(text("thinking, not answering"))},
 	}
 	roles := map[string]string{
-		"lead":    "---\ndescription: Leads\nmode: primary\nspawn: [limited]\n---\nYou lead.\n",
-		"limited": "---\ndescription: Limited\nmode: subagent\nmax_turns: 1\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are limited.\n",
+		"lead":    "---\ndescription: Leads\ntype: primary\nspawn: [limited]\n---\nYou lead.\n",
+		"limited": "---\ndescription: Limited\ntype: subagent\nmax_turns: 1\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are limited.\n",
 	}
 	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","rootAgent":"lead"}`, roles: roles}, fm)
 	root := s.Root()
@@ -677,8 +677,8 @@ func TestRoleSwitchDuringTurn(t *testing.T) {
 		reply(text("done")),
 	}}
 	roles := map[string]string{
-		"lead":  "---\ndescription: Leads\nmode: primary\nspawn: [general]\n---\nYou lead.\n",
-		"other": "---\ndescription: Other\nmode: primary\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are other.\n",
+		"lead":  "---\ndescription: Leads\ntype: primary\nspawn: [general]\n---\nYou lead.\n",
+		"other": "---\ndescription: Other\ntype: primary\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are other.\n",
 	}
 	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","rootAgent":"lead"}`, roles: roles}, fm)
 	_ = os.WriteFile(filepath.Join(s.Dir, "f.txt"), []byte("x\n"), 0o644)
