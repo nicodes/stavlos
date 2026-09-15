@@ -94,7 +94,9 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 		if !o.showLine(l) || l.Kind == transcript.LineBlank || folded && !f.show[i] {
 			continue
 		}
-		if folded && f.hidden > 0 && i == f.last {
+		// the +N count shows only in the preview under the chat cursor (or the
+		// pointer); a fully folded row stays clean
+		if folded && cur && f.hidden > 0 && i == f.last {
 			l.Suffix = strings.TrimSpace(l.Suffix + fmt.Sprintf(" +%d", f.hidden))
 		}
 		if folded && len(f.show) == 1 {
