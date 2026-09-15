@@ -378,7 +378,7 @@ func TestNotesAndReminders(t *testing.T) {
 			t.Fatalf("the reminder input is not shown: %+v", l)
 		}
 	}
-	if strings.Join(notes, "|") != "Result|all good" {
+	if strings.Join(notes, "|") != "**Aside**|Result|all good" {
 		t.Fatalf("notes %q", notes)
 	}
 	if strings.Join(notices, "|") != "**Nudge** owes a reply to you, scout|**Ended without replying** to you" {

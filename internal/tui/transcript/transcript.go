@@ -113,7 +113,7 @@ const (
 	GlyphKilled     = "⊘" // an agent was killed
 	GlyphTurn       = "◦" // a turn notice (cancelled, stopped, aborted)
 	GlyphNudge      = "↻" // the harness nudged the agent to reply
-	GlyphNotes      = "§" // the agent\'s own text: its notes, which reach no one
+	GlyphAside      = "§" // the agent\'s own text, which reaches no one: "§ **Aside** …"
 	GlyphModel      = "⇄" // model changed
 	GlyphNotice     = "»" // a local notice (/help, lists)
 	GlyphPrompt     = "?" // a question for the user
@@ -921,9 +921,9 @@ func (t *Transcript) Tail() []Line {
 	for _, s := range t.stream {
 		switch s.kind {
 		case LineStream:
-			// drawn like the notes it becomes: "§ …", later lines past the glyph
+			// drawn like the aside it becomes: "§ Aside …", later lines past the glyph
 			for i, l := range strings.Split(strings.TrimRight(s.text, "\n"), "\n") {
-				ln := Line{Kind: LineStream, Text: l, Glyph: GlyphNotes}
+				ln := Line{Kind: LineStream, Text: AsideTitle + " " + l, Glyph: GlyphAside}
 				if i > 0 {
 					ln.Glyph, ln.Indent = "", 1
 				}
@@ -1082,14 +1082,23 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 				}
 				hasText = true
 				// The text a turn ends with reaches no one (replies go
-				// through message): it reads as the agent's notes, dimmed,
-				// "§ …" with later lines aligned under the text.
-				for _, l := range markdownLines(text) {
+				// through message): it reads as the agent's aside, dimmed,
+				// "§ Aside …" with later lines aligned under the text. Text
+				// that opens with a heading, a list or code puts the title on
+				// a line of its own.
+				body := markdownLines(text)
+				titled := slices.ContainsFunc(lines, func(x Line) bool { return x.Glyph == GlyphAside })
+				if !titled && body[0].Kind != LineText {
+					body = append([]Line{{Kind: LineText, Text: AsideTitle}}, body...)
+				} else if !titled {
+					body[0].Text = AsideTitle + " " + body[0].Text
+				}
+				for _, l := range body {
 					l.Note = true
-					if slices.ContainsFunc(lines, func(x Line) bool { return x.Glyph == GlyphNotes }) {
+					if titled {
 						l.Indent = 1
 					} else {
-						l.Glyph = GlyphNotes
+						l.Glyph, titled = GlyphAside, true
 					}
 					lines = append(lines, l)
 				}
@@ -1333,6 +1342,9 @@ func denialMark(output string) string {
 
 // titled is a status line's text: a bold, capitalised title, then the
 // detail ("**Mode** → yolo · …"), the way tool lines lead with their name.
+// AsideTitle leads the agent's own text: "§ Aside …".
+const AsideTitle = "**Aside**"
+
 func titled(title, detail string) string {
 	if detail == "" {
 		return "**" + title + "**"
