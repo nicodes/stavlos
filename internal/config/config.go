@@ -39,6 +39,7 @@ type File struct {
 	Plugins    []string       `json:"plugins,omitempty"`
 	Reminders  *bool          `json:"reminders,omitempty"` // remind an agent that ends a turn owing a reply (default true)
 	Sandbox    *SandboxConfig `json:"sandbox,omitempty"`   // the OS boundary shell commands and MCP servers run in
+	Dirs       []string       `json:"dirs,omitempty"`      // directories every channel works in besides its own (global only)
 }
 
 // SandboxConfig shapes the sandbox (global layer only). Paths may use ~
@@ -108,13 +109,13 @@ func expandPath(p string) string {
 	return filepath.Clean(p)
 }
 
-// Preset is a role definition from roles/<name>.md (PRD §10.3). The word
+// Preset is a role definition from agents/<name>.md (PRD §10.3). The word
 // "role" is what users see; "preset" and "archetype" are the same thing in
 // code and in the log.
 type Preset struct {
 	Name        string
 	Description string
-	Mode        string      // primary | subagent | all
+	Type        string      // primary | subagent | all
 	Models      []ModelSpec // model whitelist, first is the default; empty = any, inherit
 	Loop        string
 	Tools       []string                     // the tools it offers: RoleTools minus the ones tools: removes (todo stands for the group)
@@ -140,9 +141,9 @@ type ModelSpec struct {
 
 // Role modes.
 const (
-	ModePrimary  = "primary"  // selectable for the main agent, never spawned
-	ModeSubagent = "subagent" // only created with agent_create by a role that lists it
-	ModeAll      = "all"      // both (the default)
+	TypePrimary  = "primary"  // selectable for the main agent, never spawned
+	TypeSubagent = "subagent" // only created with agent_create by a role that lists it
+	TypeAll      = "all"      // both (the default)
 )
 
 // RoleColors are the named tints a role may pick for its rows in the TUI.
@@ -208,9 +209,9 @@ func (p Preset) DefaultVariant(id string) string {
 	return ""
 }
 
-// CanBePrimary / CanBeSubagent read the mode.
-func (p Preset) CanBePrimary() bool  { return p.Mode != ModeSubagent }
-func (p Preset) CanBeSubagent() bool { return p.Mode != ModePrimary }
+// CanBePrimary / CanBeSubagent read the type.
+func (p Preset) CanBePrimary() bool  { return p.Type != TypeSubagent }
+func (p Preset) CanBeSubagent() bool { return p.Type != TypePrimary }
 
 // Skill is a skills/<name>/SKILL.md (PRD §10.4).
 type Skill struct {
@@ -249,6 +250,11 @@ type Effective struct {
 		Enabled, Network bool
 		Writable, Hide   []string // expanded, absolute
 	}
+
+	// Dirs are the directories every channel works in besides its own (the
+	// global stavlos.json's dirs), ~ and ${env:NAME} expanded; a relative one
+	// is taken from each channel's directory.
+	Dirs []string
 
 	// TrustPending is true when a project layer exists but has not been
 	// confirmed; in that case project content has NOT been merged.
@@ -294,10 +300,9 @@ func Load(dir string, trust Trust) (*Effective, error) {
 					return nil, fmt.Errorf("%s config: %w", l.layer, err)
 				}
 			}
-			if err := e.loadPresets(filepath.Join(pdir, "roles"), "project"); err != nil {
+			if err := e.loadPresets(filepath.Join(pdir, "agents"), "project"); err != nil {
 				return nil, err
 			}
-			warnOldAgentsDir(filepath.Join(pdir, "agents"))
 			if err := e.loadSkills(filepath.Join(pdir, "skills")); err != nil {
 				return nil, err
 			}
@@ -378,10 +383,9 @@ func LoadGlobal() (*Effective, error) {
 		e.Policy = policy.Layer(e.Policy.Base().Merge(policy.New(policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Allow})), e.Policy.Overlays()...)
 	}
 	e.Plugins = gf.Plugins
-	if err := e.loadPresets(filepath.Join(gdir, "roles"), "global"); err != nil {
+	if err := e.loadPresets(filepath.Join(gdir, "agents"), "global"); err != nil {
 		return nil, err
 	}
-	warnOldAgentsDir(filepath.Join(gdir, "agents"))
 	if err := e.loadSkills(filepath.Join(gdir, "skills")); err != nil {
 		return nil, err
 	}
@@ -419,6 +423,9 @@ func (e *Effective) applyFile(f File, layer string) error {
 		for _, p := range s.Hide {
 			e.Sandbox.Hide = append(e.Sandbox.Hide, expandPath(p))
 		}
+	}
+	for _, d := range f.Dirs {
+		e.Dirs = append(e.Dirs, expandPath(d))
 	}
 	if err := e.applyLimits(f.Limits); err != nil {
 		return err
@@ -468,6 +475,8 @@ func (e *Effective) checkRepositoryFile(f File) error {
 		return errors.New("env: is global only: a repository cannot pass secrets to the processes agents run")
 	case f.Sandbox != nil:
 		return errors.New("sandbox: is global only: a repository cannot widen the boundary its commands run in")
+	case len(f.Dirs) > 0:
+		return errors.New("dirs: is global only: a repository cannot add directories its agents may work in")
 	case f.Search != nil:
 		return errors.New("search: is global only: a repository cannot choose where queries and keys go")
 	case len(f.Plugins) > 0:
@@ -653,13 +662,6 @@ func samplePattern(p string) string {
 	return strings.NewReplacer("*", "x", "?", "x").Replace(p)
 }
 
-// warnOldAgentsDir points at the rename once per load.
-func warnOldAgentsDir(dir string) {
-	if st, err := os.Stat(dir); err == nil && st.IsDir() {
-		fmt.Fprintf(os.Stderr, "stavlos: %s is ignored; roles now live in %s\n", dir, filepath.Join(filepath.Dir(dir), "roles"))
-	}
-}
-
 func (e *Effective) loadSkills(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
@@ -692,12 +694,12 @@ func (e *Effective) loadSkills(dir string) error {
 	return nil
 }
 
-// roleFile is the frontmatter of roles/<name>.md. tools and models take
+// roleFile is the frontmatter of agents/<name>.md. tools and models take
 // two shapes each (a list, or a map/list of objects), so they are decoded
 // from nodes.
 type roleFile struct {
 	Description string    `yaml:"description"`
-	Mode        string    `yaml:"mode"`
+	Type        string    `yaml:"type"`
 	Models      yaml.Node `yaml:"models"`
 	Loop        string    `yaml:"loop"`
 	Tools       yaml.Node `yaml:"tools"`
@@ -710,6 +712,7 @@ type roleFile struct {
 	Model  *string        `yaml:"model"`
 	Policy map[string]any `yaml:"policy"`
 	Hidden *bool          `yaml:"hidden"`
+	Mode   *string        `yaml:"mode"`
 	Dirs   []string       `yaml:"dirs"`
 }
 
@@ -719,7 +722,7 @@ type roleFile struct {
 // lifecycle tools with a non-empty spawn list.
 var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.GroupTodo, toolname.WebFetch, toolname.WebSearch}
 
-// ReadPreset parses one roles/<name>.md file.
+// ReadPreset parses one agents/<name>.md file.
 func ReadPreset(path string) (Preset, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -732,7 +735,7 @@ func ReadPreset(path string) (Preset, error) {
 	}
 	p := Preset{
 		Name: strings.TrimSuffix(filepath.Base(path), ".md"), Description: strings.TrimSpace(f.Description),
-		Mode: f.Mode, Loop: f.Loop, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color,
+		Type: f.Type, Loop: f.Loop, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color,
 		Body: strings.TrimSpace(body), Source: path,
 	}
 	fail := func(format string, args ...any) (Preset, error) {
@@ -744,7 +747,9 @@ func ReadPreset(path string) (Preset, error) {
 	case f.Policy != nil:
 		return fail("policy: is now written under tools: (tools.<name>.<pattern>: verb)")
 	case f.Hidden != nil:
-		return fail("hidden: is not supported; use mode: or leave the role out of spawn lists")
+		return fail("hidden: is not supported; use type: or leave the role out of spawn lists")
+	case f.Mode != nil:
+		return fail("mode: is now type: (primary, subagent or all), so it does not read like the permission mode")
 	case f.Dirs != nil:
 		return fail("dirs: was removed: working directories belong to the channel (the dirs tab, or \"Allow and add\" on a boundary prompt)")
 	case p.Description == "":
@@ -752,12 +757,12 @@ func ReadPreset(path string) (Preset, error) {
 	case p.MaxTurns < 0:
 		return fail("max_turns: must be 0 or more")
 	}
-	switch p.Mode {
+	switch p.Type {
 	case "":
-		p.Mode = ModeAll
-	case ModePrimary, ModeSubagent, ModeAll:
+		p.Type = TypeAll
+	case TypePrimary, TypeSubagent, TypeAll:
 	default:
-		return fail("mode: %q must be primary, subagent or all", p.Mode)
+		return fail("type: %q must be primary, subagent or all", p.Type)
 	}
 	if p.Color != "" && !contains(RoleColors, p.Color) {
 		return fail("color: %q must be one of %s", p.Color, strings.Join(RoleColors, ", "))
@@ -1053,11 +1058,11 @@ func toolGroup(name string) []string { return toolname.Expand([]string{name}) }
 
 // builtinPresets is the one role every install starts with. It can do
 // everything and can delegate to copies of itself; users add specialised
-// roles as <config>/roles/<name>.md or <project>/.stavlos/roles/<name>.md.
+// roles as <config>/agents/<name>.md or <project>/.stavlos/agents/<name>.md.
 func builtinPresets() []Preset {
 	return []Preset{
 		{
-			Name: "general", Layer: "builtin", Mode: ModeAll,
+			Name: "general", Layer: "builtin", Type: TypeAll,
 			Description: "General-purpose engineer: reads, edits, runs, and delegates",
 			Tools:       append([]string(nil), RoleTools...),
 			Spawn:       []string{"general"},

@@ -10,7 +10,7 @@ import (
 )
 
 // TestInitWritesALoadableConfig: the starter config passes the strict
-// loader, names a model only when one is given, comes with roles/ and
+// loader, names a model only when one is given, comes with agents/ and
 // skills/, and is never overwritten.
 func TestInitWritesALoadableConfig(t *testing.T) {
 	dir := t.TempDir()
@@ -23,7 +23,7 @@ func TestInitWritesALoadableConfig(t *testing.T) {
 	if err != nil || st.Mode().Perm() != 0o600 {
 		t.Fatalf("config file: %v %v", st, err)
 	}
-	for _, sub := range []string{"roles", "skills"} {
+	for _, sub := range []string{"agents", "skills"} {
 		if fi, err := os.Stat(filepath.Join(dir, sub)); err != nil || !fi.IsDir() {
 			t.Fatalf("%s: %v", sub, err)
 		}

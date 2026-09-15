@@ -416,7 +416,7 @@ Three layers with one layout. Global is yours and trusted. Project is the team's
 ```
 ~/.config/stavlos/            # global; identical layout to .stavlos/ plus plugins
   stavlos.json
-  roles/<name>.md
+  agents/<name>.md
   skills/<name>/SKILL.md
   plugins/<name>/             # local plugin builds (§11)
   plugins.lock.json
@@ -425,7 +425,7 @@ Three layers with one layout. Global is yours and trusted. Project is the team's
   .stavlos/
     stavlos.json              # committed
     stavlos.local.json        # gitignored
-    roles/
+    agents/
       reviewer.md             # one role per file; filename = role name
       tester.md
     skills/
@@ -450,6 +450,7 @@ JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Ever
   "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
   "compaction": { "threshold": 0.8, "maxToolOutput": "32kb" },
   "search": { "provider": "brave", "apiKey": "${env:BRAVE_API_KEY}" },   // web_search backend: brave | tavily | exa
+  "dirs": ["~/Work/shared"],   // global only: directories every channel works in besides its own
 
   // MCP servers reachable by presets that list them. Trust-gated at project level.
   "mcp": {
@@ -477,14 +478,14 @@ JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Ever
 }
 ```
 
-### 10.3 Roles — `roles/<name>.md`
+### 10.3 Roles — `agents/<name>.md`
 
-A role (preset, archetype: the same thing in code and in the log) is one markdown file: YAML frontmatter, then the system prompt. The filename is the role name and becomes the Discord role. Global roles live in `<config>/roles/`, project roles in `.stavlos/roles/`; a project role with the same name wins. Every key but `description` is optional, and anything unset is inherited.
+A role (preset, archetype: the same thing in code and in the log) is one markdown file: YAML frontmatter, then the system prompt. The filename is the role name and becomes the Discord role. Global roles live in `<config>/agents/`, project roles in `.stavlos/agents/`; a project role with the same name wins. Every key but `description` is optional, and anything unset is inherited.
 
 ```markdown
 ---
 description: Reviews a diff for correctness and risk; reports, never edits   # required
-mode: subagent                  # primary | subagent | all (default)
+type: subagent                  # primary | subagent | all (default)
 models:                         # whitelist, in order; the first is the default; omit → any, inherit
   - id: openai/gpt-5.1-codex
     variants: [medium, high]    # allowed for this model; the first is its default
@@ -499,26 +500,26 @@ tools:                          # every tool is available; a bare deny removes o
 skills: [review-checklist]      # skill descriptions this role carries
 mcp: [github]                   # servers from stavlos.json it may reach
 spawn: [explorer]               # roles it may create; omit or empty → cannot spawn
-max_turns: 20                   # subagent only: turns before it must answer; 0 = unlimited
+max_turns: 20                   # subagent only: turns before it must answer; unset or 0 = unlimited
 color: cyan                     # red blue green yellow purple orange pink cyan
 ---
 
 You are a careful reviewer…
 ```
 
-**Mode.** `primary` roles are offered in `/roles` for the main agent and are valid as the root role; `agent_create` refuses them. `subagent` roles are only created by `agent_create` from a role that lists them; `/roles` on the main agent hides them and a subagent cannot switch to a `primary` role. `all` is both, and the default; `general` is `all`.
+**Type.** (`type`, not `mode`, so it does not read like the permission mode.) `primary` roles are offered in `/roles` for the main agent and are valid as the root role; `agent_create` refuses them. `subagent` roles are only created by `agent_create` from a role that lists them; `/roles` on the main agent hides them and a subagent cannot switch to a `primary` role. `all` is both, and the default; `general` is `all`.
 
 **Models and variants.** The whitelist bounds `/models` and `agent.set_model` for any agent in the role. A child inherits its parent's model when the list allows it, otherwise it starts on the list's first plain entry; its variant is inherited only when that model's entry allows it, otherwise it takes the entry's first variant (or the provider default when the entry lists none). `/variants` and `agent.set_variant` are bounded the same way, and switching model or role re-fits the variant. All of it is enforced in the daemon, so a client cannot bypass it.
 
 **Tools and rules.** Every role has every built-in tool (`shell`, `read`, `apply_patch`, `skill`, `todo`, `web_fetch`, `web_search`) unless `tools` removes it: a bare `deny` (`web_fetch: deny`) takes the tool away, so the model is never offered it. Adding a role therefore never means re-listing the tools it should keep. Any other verb, or a map of patterns under a tool, is a rule on a tool the role keeps (patterns are the same prefix globs as `stavlos.json`); rules on `todo` cover `todo_add` and `todo_update`. The list form of earlier versions is a load error, since it meant the opposite. Roles only tighten the layered policy (allow → ask → deny): the role's rules are one more overlay (§13), so a looser entry can never take effect; the plain cases of such an entry are reported as a configuration error at load rather than silently ignored. `message`, `agent_status` and `ask_user` cannot be removed, `shell_kill` comes with `shell`, and `agent_create`/`agent_cancel` with `spawn`; a rule on one of them only re-gates it.
 
-**Working directories.** The channel has one working set, shared by every agent: the channel directory plus whatever the human adds. Roles carry no directories (a `dirs:` key is a load error) and `agent_create` grants none: one set is what a person can keep track of across many agents and repositories, the same reason the permission mode is per channel. A `read`, `apply_patch` or `shell` call that reaches outside the set asks first even when policy allows the tool: the prompt names the directory — the git checkout containing the path when there is one (one answer then covers a whole repository; a checkout rooted at the home directory does not count), else the path's own directory — "Allow once" allows, "Allow and add" allows and adds that directory to the channel, "Allow and add another directory…" takes an edited path (`dir` on `prompt.reply`) (logged as `channel.dir_added` on the asking agent, replayed on restart), `/yolo` answers it like any ask and auto mode denies it. For shell the paths are found by inspecting the command line — absolute and `~` arguments, `cd` and redirect targets, `--flag=path` values — which catches the model's ordinary behaviour and nothing adversarial; a kernel sandbox (bubblewrap, Seatbelt) is the roadmap item that would turn this list into a boundary, with the set as its writable roots. The TUI's `dirs n` tab, on the channel's row of the tab strip, lists the directories with their source (channel, human) and edits the set: `a` adds a path, enter replaces the highlighted one, ctrl+d removes it (`channel.add_dir` / `channel.remove_dir`, logged as `channel.dir_added` / `channel.dir_removed`; the channel directory cannot be changed); `ChannelInfo.dirs` carries the set.
+**Working directories.** The channel has one working set, shared by every agent: the channel directory, the directories the global `stavlos.json` lists under `dirs` (every channel's; a project's config may not add any, since it could only widen the set), plus whatever the human adds. Roles carry no directories (a `dirs:` key is a load error) and `agent_create` grants none: one set is what a person can keep track of across many agents and repositories, the same reason the permission mode is per channel. A `read`, `apply_patch` or `shell` call that reaches outside the set asks first even when policy allows the tool: the prompt names the directory — the git checkout containing the path when there is one (one answer then covers a whole repository; a checkout rooted at the home directory does not count), else the path's own directory — "Allow once" allows, "Allow and add" allows and adds that directory to the channel, "Allow and add another directory…" takes an edited path (`dir` on `prompt.reply`) (logged as `channel.dir_added` on the asking agent, replayed on restart), `/yolo` answers it like any ask and auto mode denies it. For shell the paths are found by inspecting the command line — absolute and `~` arguments, `cd` and redirect targets, `--flag=path` values — which catches the model's ordinary behaviour and nothing adversarial; a kernel sandbox (bubblewrap, Seatbelt) is the roadmap item that would turn this list into a boundary, with the set as its writable roots. The TUI's `dirs n` tab, on the channel's row of the tab strip, lists the directories with their source (channel, config, human) and edits the set: `a` adds a path, enter replaces the highlighted one, ctrl+d removes it (`channel.add_dir` / `channel.remove_dir`, logged as `channel.dir_added` / `channel.dir_removed`; the channel directory and the config directories cannot be changed there); `ChannelInfo.dirs` carries the set.
 
 **Permission answers.** Every permission dialog is the subject — the command or path, with the asking agent after it — over a hard-coded single-select list; there are no letter hotkeys. A plain permission: `Allow once` (`allow`), `Allow for this channel` (`allow_always`: this exact tool call, keyed on the policy argument), `Allow <prefix> for this channel` (`allow_prefix`; the daemon derives the prefix from the call when it raises the prompt and shows it as the prompt's `prefix`, so a client displays it rather than computing or sending one; offered for shell when the command is simple — `internal/shellcmd` tokenises it like a POSIX shell and refuses any unquoted `;`, `|`, `&`, newline, redirection, parentheses, backtick or `$(` — and the prefix is its first word, or two for git, go, npm, npx, cargo, make, docker, kubectl, pip, yarn, pnpm and bun when the second word is not a flag (a flag-first two-word tool, an environment assignment, and wrappers or interpreters such as `bash`, `env`, `sudo`, `xargs`, `python` get no prefix at all); the channel then approves every simple command of that tool whose first words are the prefix's, word for word), and `Deny` (`deny` with an optional `reason`). A boundary prompt: `Allow once`, `Allow and add <dir>` (`allow_always`, which also remembers the call), `Allow and add another directory…` (`allow_always` with `dir`), `Deny`. Trust: `Trust this project's config` or `Not now`, answered by prompt id like every other prompt (`trust.reply`, which the CLI uses, names a directory and the hash the client was shown; the daemon normalises the path and recomputes the hash from disk, and refuses a stale one). Remembered allows and prefixes live in the channel, not in config: each is logged as `permit.granted` and replayed on recovery, so a daemon restart does not ask again, and they end when the channel does. They answer a policy `ask` only: a `deny` rule holds whatever the human allowed earlier.
 
 **Turn limit.** A subagent whose role sets `max_turns` is told, in its system prompt, which turn it is on and that it must answer before the limit. A turn past the limit ends at once with an error, and every agent still waiting on it receives an answer saying so, so nobody waits forever.
 
-Only one role ships built in: `general`, a general-purpose engineer with shell, read, apply_patch, skill and todo that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised roles — explorers, testers, reviewers — are the user's to add, one file each; the repository carries `.stavlos/roles/coder.md` as a worked example. The lifecycle tools (`agent_create`, `agent_cancel`) are implied by a non-empty `spawn` list; `message` and `agent_status` every agent has. Roles are the hub — skills, MCP servers and policy are referenced *by* roles, not parallel to them. Role creation must be as frictionless as skill creation, or users will reach for skills when a role is correct. Rejected: `hidden` (a spawnable but invisible role is a footgun; `mode` and spawn lists cover every case), `temperature` (variants cover what the providers here expose), `memory` and `hooks` (roadmap).
+Only one role ships built in: `general`, a general-purpose engineer with shell, read, apply_patch, skill and todo that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised roles — explorers, testers, reviewers — are the user's to add, one file each; the repository carries `.stavlos/agents/coder.md` as a worked example. The lifecycle tools (`agent_create`, `agent_cancel`) are implied by a non-empty `spawn` list; `message` and `agent_status` every agent has. Roles are the hub — skills, MCP servers and policy are referenced *by* roles, not parallel to them. Role creation must be as frictionless as skill creation, or users will reach for skills when a role is correct. Rejected: `hidden` (a spawnable but invisible role is a footgun; `type` and spawn lists cover every case), `temperature` (variants cover what the providers here expose), `memory` and `hooks` (roadmap).
 
 ### 10.4 Skills — `skills/<name>/SKILL.md`
 

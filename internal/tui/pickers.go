@@ -439,7 +439,7 @@ func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
 	}
 	items := make([]overlayItem, 0, len(msg.roles))
 	for _, r := range msg.roles {
-		if (primary && r.Mode == "subagent") || (!primary && r.Mode == "primary") {
+		if (primary && r.Type == "subagent") || (!primary && r.Type == "primary") {
 			continue
 		}
 		items = append(items, overlayItem{id: r.Name, label: r.Name, hint: roleHint(r)})
@@ -456,8 +456,8 @@ func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
 // has a whitelist, and what it spawns.
 func roleHint(r protocol.PresetInfo) string {
 	hint := r.Description
-	if r.Mode != "" && r.Mode != "all" {
-		hint += "  · " + r.Mode
+	if r.Type != "" && r.Type != "all" {
+		hint += "  · " + r.Type
 	}
 	if len(r.Models) > 0 {
 		short, _ := transcript.SplitModel(r.Models[0].ID)

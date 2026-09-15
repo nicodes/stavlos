@@ -249,7 +249,7 @@ func TestRecoverArchivedAndKilled(t *testing.T) {
 // configuration comes back read-only under its old name, never as the
 // (usually most capable) root role.
 func TestRecoverMissingRoleIsReadOnly(t *testing.T) {
-	roles := map[string]string{"lead": "---\ndescription: Leads\nmode: primary\nspawn: [general]\n---\nYou lead.\n"}
+	roles := map[string]string{"lead": "---\ndescription: Leads\ntype: primary\nspawn: [general]\n---\nYou lead.\n"}
 	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","rootAgent":"lead"}`, roles: roles}, &fakeModel{steps: []step{reply(text("hi"))}})
 	runTurn(t, s, h, "go")
 	s.Stop()

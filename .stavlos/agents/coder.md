@@ -4,7 +4,7 @@ description: Implements features and fixes bugs in Go; runs the tests before rep
 
 # primary: selectable for the main agent, never spawned. subagent: only created
 # with agent_create by a role that lists it in spawn. all: both (the default).
-mode: all
+type: all
 
 # Model whitelist, in order; the first entry is the default. Omit the key to
 # allow any model and inherit the parent's (or the channel's) choice.

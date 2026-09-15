@@ -76,12 +76,12 @@ Switching a mode on answers whatever is waiting as that mode would have: yolo al
 
 ## Roles
 
-One role ships built in, `general`, which can read, edit, run commands and delegate to more `general` agents. Add specialised ones as `roles/<name>.md` in the global or project config; `.stavlos/roles/coder.md` in this repository shows every key:
+One role ships built in, `general`, which can read, edit, run commands and delegate to more `general` agents. Add specialised ones as `agents/<name>.md` in the global or project config; `.stavlos/agents/coder.md` in this repository shows every key:
 
-- `mode`: primary, subagent or all
+- `type`: primary, subagent or all
 - `models`: a whitelist, with the variants allowed per model
 - `tools`: every tool is available by default; `<tool>: deny` removes one, and policy rules nested under a tool tighten it
-- `spawn`, `max_turns`, `color`, `skills`, `mcp` (roles carry no directories: those are the channel's)
+- `spawn`, `max_turns` (unlimited unless set), `color`, `skills`, `mcp` (roles carry no directories: those are the channel's)
 
 The role decides what `/roles`, `/models` and `/variants` offer, and the daemon enforces it.
 
@@ -104,7 +104,7 @@ Auto mode approves fetches like any read-only call. Everything fetched is handed
 
 **Plan.** `todo_add` and `todo_update` keep a per-agent list that is logged, projected into the system prompt at every call (so it survives compaction) and shown to you in the todo tab.
 
-**Work in directories.** A channel has one set of working directories, shared by every agent: the channel directory plus whatever you add. Roles and `agent_create` grant none. A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
+**Work in directories.** A channel has one set of working directories, shared by every agent: the channel directory, the directories listed under `"dirs"` in the global `stavlos.json` (every channel gets them, and only that file changes them), plus whatever you add. Roles and `agent_create` grant none. A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
 
 **Use MCP servers.** A role's `mcp:` list starts MCP servers for that agent alone (stdio servers defined under `mcp` in `stavlos.json`). The model sees their tools as `mcp__<server>__<tool>` and calls them through the usual permission path.
 
@@ -128,7 +128,7 @@ stavlos --version              # version, commit and build of this binary
 
 ## Project configuration
 
-Put a `.stavlos/` directory in a repository to add roles (`roles/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and policy tightening in `stavlos.json`; `AGENTS.md` at the repo root is injected into every agent. The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
+Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and policy tightening in `stavlos.json`; `AGENTS.md` at the repo root is injected into every agent. The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
 
 ## Status
 

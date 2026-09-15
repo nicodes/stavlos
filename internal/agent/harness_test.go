@@ -292,7 +292,7 @@ func loadTestConfig(t *testing.T, tc testConfig) (*config.Effective, string) {
 		t.Fatal(err)
 	}
 	if len(tc.roles) > 0 {
-		roles := filepath.Join(cfgDir, "roles")
+		roles := filepath.Join(cfgDir, "agents")
 		if err := os.MkdirAll(roles, 0o755); err != nil {
 			t.Fatal(err)
 		}
