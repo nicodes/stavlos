@@ -512,19 +512,11 @@ func initConfig(args []string) error {
 }
 
 // starterConfig is the global config stavlos init writes: the defaults
-// spelled out, so the file shows where each setting lives. It is marshalled
-// from config.File, so it always loads.
+// spelled out (config.Defaults), the model, and shell rules to start from.
 func starterConfig(model string) config.File {
-	return config.File{
-		Model:      model,
-		Limits:     &config.Limits{MaxDepth: 3, MaxAgents: 6},
-		Escalation: &config.Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: "deny"},
-		// No shell command is allowed by default (searching is the grep and
-		// glob tools); allow the ones you trust here, or answer the prompt.
-		Policy: map[string]any{
-			"shell":       map[string]any{"git push*": "ask", "rm -rf*": "deny"},
-			"apply_patch": map[string]any{"**": "ask"},
-			"read":        "allow",
-		},
-	}
+	f := config.Defaults()
+	f.Model = model
+	// Allow the commands you trust here, or answer the prompt.
+	f.Policy["shell"] = map[string]any{"*": "ask", "git push*": "ask", "rm -rf*": "deny"}
+	return f
 }

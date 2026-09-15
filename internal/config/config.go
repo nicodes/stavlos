@@ -311,6 +311,40 @@ func Load(dir string, trust Trust) (*Effective, error) {
 	return e, nil
 }
 
+// Defaults is the configuration every install starts from, written as a
+// file: LoadGlobal applies the global layer over it, and stavlos init writes
+// it out so the file shows where each setting lives.
+func Defaults() File {
+	on, network := true, true
+	allow, ask := string(policy.Allow), string(policy.Ask)
+	return File{
+		RootAgent:  "general",
+		Limits:     &Limits{MaxDepth: 3, MaxAgents: 6},
+		Escalation: &Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: string(policy.Deny)},
+		Compaction: &Compaction{Threshold: 0.8, MaxToolOutput: "32kb"},
+		Reminders:  &on,
+		Sandbox:    &SandboxConfig{Enabled: &on, Network: &network},
+		Policy: map[string]any{
+			toolname.Read:        allow,
+			toolname.Grep:        allow,
+			toolname.Glob:        allow,
+			toolname.Skill:       allow,
+			toolname.AgentCreate: allow,
+			toolname.Message:     allow,
+			toolname.AgentCancel: allow,
+			toolname.AgentStatus: allow,
+			toolname.ShellKill:   allow,
+			toolname.TodoAdd:     allow,
+			toolname.TodoUpdate:  allow,
+			toolname.AskUser:     allow,
+			toolname.Shell:       ask, // no command is allowed by default: searching is grep and glob
+			toolname.ApplyPatch:  ask,
+			toolname.WebFetch:    ask, // per host: the dialog offers "allow <host> for this channel"
+			toolname.WebSearch:   ask, // allowed once a search backend is configured (see LoadGlobal)
+		},
+	}
+}
+
 // LoadGlobal is the daemon-wide configuration: the defaults and the global
 // layer, nothing from any directory. It is what the daemon itself runs on
 // (escalation timers, the fallback for a channel whose own config fails to
@@ -318,35 +352,11 @@ func Load(dir string, trust Trust) (*Effective, error) {
 func LoadGlobal() (*Effective, error) {
 	e := &Effective{Presets: map[string]Preset{}, Skills: map[string]Skill{}, MCP: map[string]MCP{}}
 
-	// defaults
-	e.Model = ""
-	e.RootAgent = "general"
-	e.Limits = Limits{MaxDepth: 3, MaxAgents: 6}
-	e.Reminders = true
-	e.Sandbox.Enabled, e.Sandbox.Network = true, true
-	e.Escalation.ClaimTimeout = 30 * time.Second
-	e.Escalation.AnswerTimeout = 3 * time.Minute
-	e.Escalation.Default = policy.Deny
-	e.Compaction.Threshold = 0.8
-	e.Compaction.MaxToolOutput = 32 * 1024
-	e.Policy = policy.Layer(policy.New(
-		policy.Rule{Tool: toolname.Read, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Grep, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Glob, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Skill, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.AgentCreate, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Message, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.AgentCancel, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.AgentStatus, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "*", Verb: policy.Ask},
-		policy.Rule{Tool: toolname.ShellKill, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.WebFetch, Pattern: "*", Verb: policy.Ask},  // per host: the dialog offers "allow <host> for this channel"
-		policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Ask}, // allow once a search backend is configured (see LoadGlobal)
-		policy.Rule{Tool: toolname.TodoAdd, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.AskUser, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.TodoUpdate, Pattern: "*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.ApplyPatch, Pattern: "*", Verb: policy.Ask},
-	))
+	// defaults, then the global layer over them
+	e.Policy = policy.Layer(policy.New())
+	if err := e.applyFile(Defaults(), "global"); err != nil {
+		return nil, fmt.Errorf("defaults: %w", err)
+	}
 	for _, p := range builtinPresets() {
 		e.Presets[p.Name] = p
 	}
