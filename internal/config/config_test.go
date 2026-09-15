@@ -29,7 +29,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".stavlos", "roles"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{"policy":{"shell":{"git push*":"allow","curl*":"deny"}}}`), 0o644)
-	os.WriteFile(filepath.Join(dir, ".stavlos", "roles", "reviewer.md"), []byte("---\ndescription: reviews\nmodels: [openai/gpt-5-mini]\ntools: [read]\n---\nYou review.\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".stavlos", "roles", "reviewer.md"), []byte("---\ndescription: reviews\nmodels: [openai/gpt-5-mini]\ntools:\n  apply_patch: deny\n---\nYou review.\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("Use light models."), 0o644)
 
 	e, err := Load(dir, noTrust{})
@@ -139,6 +139,7 @@ tools:
     "*": ask
   read: allow
   todo:
+  web_fetch: deny
 spawn: [explorer]
 max_turns: 20
 color: cyan
@@ -155,7 +156,7 @@ You review.
 	if len(p.Models) != 3 || p.Models[0].ID != "openai/gpt-5.1-codex" || len(p.Models[0].Variants) != 2 || p.Models[2].ID != "xai/grok-4-fast" || p.Models[2].Variants != nil {
 		t.Fatalf("models %+v", p.Models)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,todo" {
+	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo,web_search" { // everything but the removed web_fetch
 		t.Fatalf("tools %v", p.Tools)
 	}
 	pol := p.PresetPolicy()
@@ -182,7 +183,7 @@ You review.
 	}
 	// minimal: description and body; everything else inherits
 	m, err := ReadPreset(write("explainer", "---\ndescription: Explains code\n---\nYou explain."))
-	if err != nil || m.Mode != ModeAll || len(m.Models) != 0 || strings.Join(m.Tools, ",") != strings.Join(DefaultTools, ",") || m.PresetPolicy().Rules() != nil {
+	if err != nil || m.Mode != ModeAll || len(m.Models) != 0 || strings.Join(m.Tools, ",") != strings.Join(RoleTools, ",") || m.PresetPolicy().Rules() != nil {
 		t.Fatalf("minimal %+v %v", m, err)
 	}
 	// errors name the problem
@@ -195,6 +196,9 @@ You review.
 		"hidden":   "---\ndescription: d\nhidden: true\n---\nx",
 		"badverb":  "---\ndescription: d\ntools:\n  shell: maybe\n---\nx",
 		"badtools": "---\ndescription: d\ntools: 3\n---\nx",
+		"oldlist":  "---\ndescription: d\ntools: [read]\n---\nx",
+		"nomsg":    "---\ndescription: d\ntools:\n  message: deny\n---\nx",
+		"nokill":   "---\ndescription: d\ntools:\n  shell_kill: deny\n---\nx",
 	} {
 		if _, err := ReadPreset(write(name, body)); err == nil {
 			t.Errorf("%s should fail to parse", name)
@@ -235,7 +239,7 @@ func TestExampleCoderRoleParses(t *testing.T) {
 	if p.Name != "coder" || p.Mode != ModeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
 		t.Fatalf("%+v", p)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo,web_search,web_fetch" || p.PresetPolicy().Decide("shell", "git push origin main") != policy.Deny || p.PresetPolicy().Decide("web_fetch", "https://x.slack.com/y") != policy.Deny {
+	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo,web_fetch" || p.PresetPolicy().Decide("shell", "git push origin main") != policy.Deny || p.PresetPolicy().Decide("web_fetch", "https://x.slack.com/y") != policy.Deny {
 		t.Fatalf("tools %v rules %+v", p.Tools, p.PresetPolicy().Rules())
 	}
 }
@@ -338,4 +342,34 @@ func TestWebSearchAsksUntilConfigured(t *testing.T) {
 			t.Errorf("%s: web_search %s want %s", cfg, got, want)
 		}
 	}
+}
+
+// TestRoleToolsAreRemovedNotListed: a role offers every tool but the ones a
+// bare deny removes; a deny under patterns, or on a tool it keeps anyway,
+// stays a rule.
+func TestRoleToolsAreRemovedNotListed(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "reviewer.md")
+	os.WriteFile(path, []byte("---\ndescription: d\ntools:\n  apply_patch: deny\n  todo: deny\n  shell:\n    \"*\": deny\n  mcp__github__merge: deny\n  message:\n    user: deny\n---\nx"), 0o644)
+	p, err := ReadPreset(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(p.Tools, ","); got != "shell,read,skill,web_fetch,web_search" {
+		t.Fatalf("tools %s", got)
+	}
+	pol := p.PresetPolicy()
+	if pol.Decide("shell", "ls") != policy.Deny || pol.Decide("mcp__github__merge", "") != policy.Deny || pol.Decide("message", "user") != policy.Deny {
+		t.Fatalf("rules %+v", pol.Rules())
+	}
+	if _, err := ReadPreset(writeRole(t, "---\ndescription: d\ntools: [read]\n---\nx")); err == nil || !strings.Contains(err.Error(), "deny removes one") {
+		t.Fatalf("the list form should point at the new form: %v", err)
+	}
+}
+
+func writeRole(t *testing.T, body string) string {
+	path := filepath.Join(t.TempDir(), "r.md")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

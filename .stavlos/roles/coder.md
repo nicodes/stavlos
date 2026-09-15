@@ -14,19 +14,19 @@ models:
   - id: openai/gpt-5.1-codex-mini   # no variants key: any the provider offers, provider default
   - xai/grok-4-fast                 # a bare string is shorthand for the same
 
-# Which tools the role has and how each is gated. A tool not listed is never
-# offered. Rules only tighten the layered policy (allow → ask → deny); a
-# loosening entry is a config error. todo covers todo_add and todo_update. The agent tools exist through spawn and the
-# messaging set; list one here only to re-gate it.
+# Every tool is available unless removed here: shell, read, apply_patch,
+# skill, todo (todo_add and todo_update), web_fetch and web_search. A bare
+# deny removes a tool, so it is never offered. Any other verb, or patterns
+# under a tool, only tighten the layered policy (allow → ask → deny); a
+# loosening entry is a config error. message, agent_status and ask_user
+# cannot be removed; shell_kill comes with shell, agent_create and
+# agent_cancel with spawn.
 tools:
   shell:
     "git push*": deny
     "rm -rf*": deny
-  read: allow
   apply_patch: ask
-  skill: allow
-  todo: allow
-  web_search:                       # listed with no rule: present, gated by stavlos.json (asks until a search backend is configured)
+  web_search: deny                  # removed: never offered
   web_fetch:                        # the URL is the argument; roles only tighten, so
     "https://*.slack.com/*": deny   # host allow-lists go in stavlos.json's policy
 

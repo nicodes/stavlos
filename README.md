@@ -80,7 +80,7 @@ One role ships built in, `general`, which can read, edit, run commands and deleg
 
 - `mode`: primary, subagent or all
 - `models`: a whitelist, with the variants allowed per model
-- `tools`: the tools it gets, with policy rules nested under each tool
+- `tools`: every tool is available by default; `<tool>: deny` removes one, and policy rules nested under a tool tighten it
 - `spawn`, `max_turns`, `color`, `dirs`, `skills`, `mcp`
 
 The role decides what `/roles`, `/models` and `/variants` offer, and the daemon enforces it.

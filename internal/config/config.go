@@ -96,7 +96,7 @@ type Preset struct {
 	Mode        string      // primary | subagent | all
 	Models      []ModelSpec // model whitelist, first is the default; empty = any, inherit
 	Loop        string
-	Tools       []string                     // tool names (and the group todo)
+	Tools       []string                     // the tools it offers: RoleTools minus the ones tools: removes (todo stands for the group)
 	ToolRules   map[string]map[string]string // tool → pattern → verb, from the map form of tools:
 	Skills      []string
 	MCP         []string
@@ -658,8 +658,11 @@ type roleFile struct {
 	Hidden *bool          `yaml:"hidden"`
 }
 
-// DefaultTools is what a role gets when it lists none.
-var DefaultTools = []string{toolname.Shell, toolname.Read, toolname.ApplyPatch, toolname.Skill, toolname.WebFetch, toolname.WebSearch}
+// RoleTools are the tools every role offers unless its tools: key removes
+// one (todo stands for todo_add and todo_update). The messaging set and
+// ask_user come on top for every agent, shell_kill with shell, and the
+// lifecycle tools with a non-empty spawn list.
+var RoleTools = []string{toolname.Shell, toolname.Read, toolname.ApplyPatch, toolname.Skill, toolname.GroupTodo, toolname.WebFetch, toolname.WebSearch}
 
 // ReadPreset parses one roles/<name>.md file.
 func ReadPreset(path string) (Preset, error) {
@@ -711,9 +714,6 @@ func ReadPreset(path string) (Preset, error) {
 	if p.Tools, p.ToolRules, err = parseTools(&f.Tools); err != nil {
 		return fail("tools: %v", err)
 	}
-	if len(p.Tools) == 0 {
-		p.Tools = append([]string(nil), DefaultTools...)
-	}
 	return p, nil
 }
 
@@ -747,35 +747,34 @@ func parseModels(n *yaml.Node) ([]ModelSpec, error) {
 	return out, nil
 }
 
-// parseTools reads the tools key: a list of names (inherited policy), or a
-// map of name → verb | {pattern: verb}. Names come back in file order.
+// parseTools reads the tools key, a map of tool → verb | {pattern: verb}.
+// Every tool in RoleTools is offered unless the key removes it with a bare
+// deny; any other verb, or patterns under a tool, is a rule that tightens
+// the policy for a tool the role keeps. It returns the tools the role
+// offers, in RoleTools order, and the rules.
 func parseTools(n *yaml.Node) ([]string, map[string]map[string]string, error) {
-	if n.Kind == 0 {
-		return nil, nil, nil
-	}
+	removed := map[string]bool{}
+	rules := map[string]map[string]string{}
 	switch n.Kind {
+	case 0:
 	case yaml.SequenceNode:
-		var names []string
-		if err := n.Decode(&names); err != nil {
-			return nil, nil, err
-		}
-		return names, nil, nil
+		return nil, nil, errors.New("is no longer a list: every tool is available, and <tool>: deny removes one")
 	case yaml.MappingNode:
-		var names []string
-		rules := map[string]map[string]string{}
 		for i := 0; i+1 < len(n.Content); i += 2 {
 			name, val := n.Content[i].Value, n.Content[i+1]
-			names = append(names, name)
-			switch val.Kind {
-			case yaml.ScalarNode:
-				if val.Tag == "!!null" || val.Value == "" {
-					continue // present, inherited policy
-				}
+			switch {
+			case val.Kind == yaml.ScalarNode && (val.Tag == "!!null" || val.Value == ""):
+				// listed with no rule: available under the layered policy
+			case val.Kind == yaml.ScalarNode && policy.Verb(val.Value) == policy.Deny && contains(RoleTools, name):
+				removed[name] = true
+			case val.Kind == yaml.ScalarNode && policy.Verb(val.Value) == policy.Deny && keptTool(name) != "":
+				return nil, nil, fmt.Errorf("%s: %s", name, keptTool(name))
+			case val.Kind == yaml.ScalarNode:
 				if !policy.Verb(val.Value).Valid() {
 					return nil, nil, fmt.Errorf("%s: %q is not allow, ask or deny", name, val.Value)
 				}
 				rules[name] = map[string]string{"*": val.Value}
-			case yaml.MappingNode:
+			case val.Kind == yaml.MappingNode:
 				m := map[string]string{}
 				for k := 0; k+1 < len(val.Content); k += 2 {
 					pat, verb := val.Content[k].Value, val.Content[k+1].Value
@@ -789,9 +788,32 @@ func parseTools(n *yaml.Node) ([]string, map[string]map[string]string, error) {
 				return nil, nil, fmt.Errorf("%s: give a verb or a map of pattern → verb", name)
 			}
 		}
-		return names, rules, nil
+	default:
+		return nil, nil, errors.New("must be a map of tool → verb or pattern rules")
 	}
-	return nil, nil, errors.New("must be a list of tool names or a map of tool → rules")
+	var tools []string
+	for _, t := range RoleTools {
+		if !removed[t] {
+			tools = append(tools, t)
+		}
+	}
+	return tools, rules, nil
+}
+
+// keptTool says why a role cannot remove a tool, "" when it can (or when it
+// is not a built-in tool, where a deny is only a rule).
+func keptTool(name string) string {
+	switch name {
+	case toolname.Message, toolname.AgentStatus, toolname.AskUser:
+		return "every agent has it; it cannot be removed"
+	case toolname.AgentCreate, toolname.AgentCancel:
+		return "comes with spawn: leave spawn empty to remove it"
+	case toolname.ShellKill:
+		return "comes with shell: remove shell instead"
+	case toolname.TodoAdd, toolname.TodoUpdate:
+		return "remove todo, which covers todo_add and todo_update"
+	}
+	return ""
 }
 
 // frontmatter splits "---\nyaml\n---\nbody" and decodes the yaml into v.
@@ -983,7 +1005,7 @@ func builtinPresets() []Preset {
 		{
 			Name: "general", Layer: "builtin", Mode: ModeAll,
 			Description: "General-purpose engineer: reads, edits, runs, and delegates",
-			Tools:       []string{toolname.Shell, toolname.Read, toolname.ApplyPatch, toolname.Skill, toolname.GroupTodo, toolname.WebFetch, toolname.WebSearch},
+			Tools:       append([]string(nil), RoleTools...),
 			Spawn:       []string{"general"},
 			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
