@@ -57,6 +57,11 @@ func TestChatKeepsOnlyPostsAndReplies(t *testing.T) {
 			t.Fatalf("reply line: %+v", l)
 		}
 	}
+	for _, l := range c.All() {
+		if l.Lead && (l.Who != "scout" || len(l.Names) != 1 || l.Names[0] != "scout") {
+			t.Fatalf("the post's arrow and @name take its recipient's colour: %+v", l)
+		}
+	}
 	if ItemAgent(c.All(), 0) != "" || ItemAgent(c.All(), 1) != "b2" {
 		t.Fatalf("links: %q %q", ItemAgent(c.All(), 0), ItemAgent(c.All(), 1))
 	}

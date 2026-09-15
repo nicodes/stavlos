@@ -500,13 +500,53 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 			b.WriteString(leader)
 			b.WriteString(glyph)
 		}
-		if i == 0 && name != "" && strings.HasPrefix(p, name) {
+		switch {
+		case len(l.Names) > 0 && o.WhoStyle != nil:
+			b.WriteString(paintNames(p, l.Names, style, o.WhoStyle))
+		case i == 0 && name != "" && strings.HasPrefix(p, name):
 			b.WriteString(nameStyle.Render(name) + style(p[len(name):]))
-			continue
+		default:
+			b.WriteString(style(p))
 		}
-		b.WriteString(style(p))
 	}
 	return b.String()
+}
+
+// paintNames draws text with each @name of names in that one's colour
+// (bold), wherever it is mentioned, and the rest in style: a session chat
+// post's recipients.
+func paintNames(text string, names []string, style func(...string) string, who func(string) lipgloss.Style) string {
+	var b strings.Builder
+	start := 0
+	for i := 0; i < len(text); i++ {
+		if text[i] != '@' || i > 0 && nameByte(text[i-1]) {
+			continue
+		}
+		j := i + 1
+		for j < len(text) && nameByte(text[j]) {
+			j++
+		}
+		for _, n := range names {
+			if strings.EqualFold(text[i+1:j], n) {
+				if start < i {
+					b.WriteString(style(text[start:i]))
+				}
+				b.WriteString(who(n).Bold(true).Render(text[i:j]))
+				start = j
+				break
+			}
+		}
+		i = j - 1
+	}
+	if start < len(text) {
+		b.WriteString(style(text[start:]))
+	}
+	return b.String()
+}
+
+// nameByte reports whether c can be part of an agent's name.
+func nameByte(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_'
 }
 
 // whoColours gives a line that names someone (Line.Who) that one's colour
