@@ -36,7 +36,7 @@ func TestToolLine(t *testing.T) {
 		{"shell", `{"command":"go test ./..."}`, "Shell  go test ./..."},
 		{"shell_kill", `{"id":"m1"}`, "Shell kill  m1"},
 		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
-		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`, "Agent create  scout (explorer)"},
+		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look\naround"}`, "@scout look"},
 		{"message", `{"to":"scout","text":"go"}`, "@scout go"},
 		{"message", `{"to":"user","text":"done\nand more"}`, "@user done"},
 		{"agent_message", `{"id":"ag_1","text":"go"}`, "@ag_1 go"}, // logs from before message
@@ -426,7 +426,7 @@ func TestMessageArrows(t *testing.T) {
 		{Line{Kind: LineTool, Tool: "shell", Text: "Shell  ls"}, GlyphToolShell},
 		{Line{Kind: LineTool, Tool: "read", Text: "Read  a.go"}, GlyphToolRead},
 		{Line{Kind: LineTool, Tool: "apply_patch", Text: "Apply patch  a.go"}, GlyphToolFiles},
-		{Line{Kind: LineTool, Tool: "agent_create", Text: "Agent create  scout (general)"}, GlyphToolCreate},
+		{Line{Kind: LineTool, Tool: "agent_create", Text: "@scout look"}, GlyphToolCreate},
 		{Line{Kind: LineTool, Tool: "agent_status", Text: "Agent status"}, GlyphToolAgents},
 	} {
 		if g, _ := CallGlyph(c.line); g != c.want {
@@ -528,5 +528,26 @@ func TestDeniedCallShowsWhy(t *testing.T) {
 		if strings.Join(texts, "|") != want {
 			t.Errorf("%q: %q", out, texts)
 		}
+	}
+}
+
+// TestAgentCreateReadsLikeAPrompt: creating an agent reads "» @scout task",
+// names the agent it made (a taken label gets a suffix), keeps the rest of
+// the task under it and hides the "created" result.
+func TestAgentCreateReadsLikeAPrompt(t *testing.T) {
+	tr := NewTranscript()
+	tr.Apply(event.Event{Seq: 1, Type: event.ToolCallStarted, Time: time.Now(), Payload: event.MustPayload(event.ToolStartedPayload{CallID: "c1", Name: "agent_create", Input: json.RawMessage(`{"archetype":"general","label":"scout","task":"look around\nthen report"}`)})})
+	tr.Apply(event.Event{Seq: 2, Type: event.ToolCallFinished, Time: time.Now(), Payload: event.MustPayload(event.ToolFinishedPayload{CallID: "c1", Name: "agent_create", Output: "created scout-2 (general), id a1; address it by its name"})})
+	var texts []string
+	for _, l := range tr.All() {
+		if l.Text != "" {
+			texts = append(texts, l.Text)
+		}
+		if l.Kind == LineTool && (l.Who != "scout-2" || !IsPromptCall(l)) {
+			t.Fatalf("call line: %+v", l)
+		}
+	}
+	if strings.Join(texts, "|") != "@scout-2 look around|then report" {
+		t.Fatalf("lines %q", texts)
 	}
 }

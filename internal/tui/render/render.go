@@ -556,7 +556,7 @@ func kindStyle(l transcript.Line) (leader, glyph string, style func(...string) s
 	case transcript.LineNotice:
 		return "", "", markdownStyle(theme.StyleNotice)
 	case transcript.LineTool:
-		if transcript.IsMessage(l) {
+		if transcript.IsPromptCall(l) {
 			return "", toolLineGlyph(l), renderMessageText
 		}
 		return "", toolLineGlyph(l), renderToolText
