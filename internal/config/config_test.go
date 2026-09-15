@@ -89,20 +89,23 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	}
 }
 
-func TestReadOnlyBashAllowedByDefault(t *testing.T) {
+// TestShellAsksByDefault: no shell command is allowed by default, not even
+// a "read-only" one (find -exec and rg --pre run programs); searching is
+// grep and glob, allowed like read.
+func TestShellAsksByDefault(t *testing.T) {
 	t.Setenv("STAVLOS_CONFIG_DIR", t.TempDir())
 	e, err := Load(t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, cmd := range []string{"grep -rn foo .", "rg foo", "find . -name '*.go'", "ls -la", "git status", "git log --oneline", "cat go.mod"} {
-		if v := verb(e.Policy, "shell", cmd); v != policy.Allow {
-			t.Errorf("%q: %s, want allow", cmd, v)
+	for _, cmd := range []string{"ls", "grep -rn foo .", "find . -exec sh -c 'id' \\;", "rg --pre sh x .", "cat ~/.ssh/id_rsa", "git status"} {
+		if v := verb(e.Policy, "shell", cmd); v != policy.Ask {
+			t.Errorf("%q: %s, want ask", cmd, v)
 		}
 	}
-	for _, cmd := range []string{"rm -rf x", "git push origin main", "go test ./...", "grepx"} {
-		if v := verb(e.Policy, "shell", cmd); v == policy.Allow {
-			t.Errorf("%q should not be allowed by default", cmd)
+	for _, tool := range []string{"grep", "glob", "read"} {
+		if v := verb(e.Policy, tool, "src"); v != policy.Allow {
+			t.Errorf("%s: %s, want allow", tool, v)
 		}
 	}
 }
@@ -155,7 +158,7 @@ You review.
 	if len(p.Models) != 3 || p.Models[0].ID != "openai/gpt-5.1-codex" || len(p.Models[0].Variants) != 2 || p.Models[2].ID != "xai/grok-4-fast" || p.Models[2].Variants != nil {
 		t.Fatalf("models %+v", p.Models)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo,web_search" { // everything but the removed web_fetch
+	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,apply_patch,skill,todo,web_search" { // everything but the removed web_fetch
 		t.Fatalf("tools %v", p.Tools)
 	}
 	pol := p.PresetPolicy()
@@ -238,7 +241,7 @@ func TestExampleCoderRoleParses(t *testing.T) {
 	if p.Name != "coder" || p.Mode != ModeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
 		t.Fatalf("%+v", p)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo,web_fetch" || verb(p.PresetPolicy(), "shell", "git push origin main") != policy.Deny || verb(p.PresetPolicy(), "web_fetch", "https://x.slack.com/y") != policy.Deny {
+	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,apply_patch,skill,todo,web_fetch" || verb(p.PresetPolicy(), "shell", "git push origin main") != policy.Deny || verb(p.PresetPolicy(), "web_fetch", "https://x.slack.com/y") != policy.Deny {
 		t.Fatalf("tools %v rules %+v", p.Tools, p.PresetPolicy().Rules())
 	}
 }
@@ -388,7 +391,7 @@ func TestRoleToolsAreRemovedNotListed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(p.Tools, ","); got != "shell,read,skill,web_fetch,web_search" {
+	if got := strings.Join(p.Tools, ","); got != "shell,read,grep,glob,skill,web_fetch,web_search" {
 		t.Fatalf("tools %s", got)
 	}
 	pol := p.PresetPolicy()

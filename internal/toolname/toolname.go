@@ -13,6 +13,8 @@ const (
 	Shell      = "shell"
 	ShellKill  = "shell_kill"
 	Read       = "read"
+	Grep       = "grep"
+	Glob       = "glob"
 	ApplyPatch = "apply_patch"
 	Skill      = "skill"
 	WebFetch   = "web_fetch"

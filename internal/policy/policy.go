@@ -77,7 +77,7 @@ func New(rules ...Rule) *Set {
 }
 
 func compile(r Rule) rule {
-	c := rule{Rule: r, tool: glob(r.Tool, false), flat: glob(r.Pattern, false), path: glob(r.Pattern, true),
+	c := rule{Rule: r, tool: Glob(r.Tool, false), flat: Glob(r.Pattern, false), path: Glob(r.Pattern, true),
 		lit: literalPrefix(r.Pattern), tlt: literalPrefix(r.Tool)}
 	if r.Pattern == "*" {
 		c.path = c.flat // a bare "*" is the whole-tool rule: it matches every path, however deep
@@ -85,9 +85,9 @@ func compile(r Rule) rule {
 	return c
 }
 
-// glob compiles a pattern to an anchored regexp. With path set, "*" and "?"
+// Glob compiles a pattern to an anchored regexp. With path set, "*" and "?"
 // stop at "/" and "**" crosses it; otherwise "*" and "**" both match any run.
-func glob(p string, path bool) *regexp.Regexp {
+func Glob(p string, path bool) *regexp.Regexp {
 	var b strings.Builder
 	b.WriteString(`(?s)\A`)
 	for i := 0; i < len(p); {

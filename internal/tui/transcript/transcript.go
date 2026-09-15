@@ -1506,6 +1506,11 @@ func ToolArg(name string, raw json.RawMessage) string {
 		return str("query")
 	case toolname.Read:
 		return str("path")
+	case toolname.Grep, toolname.Glob:
+		if p := str("path"); p != "" {
+			return str("pattern") + "  in " + p
+		}
+		return str("pattern")
 	case toolname.ApplyPatch:
 		if patch, ok := in["patch"].(string); ok {
 			return patchFiles(patch)
