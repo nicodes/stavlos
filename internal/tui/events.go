@@ -46,7 +46,7 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 		}
 		var cmd tea.Cmd
 		m.sp, cmd = m.sp.Update(msg)
-		m.refreshViewport() // the "working…" indicator and the chat's loaders carry the spinner
+		m.viewDirty = true // the "working…" indicator and the chat's loaders carry the spinner
 		return cmd
 	case placeholderTickMsg:
 		m.input.Placeholder = m.placeholder()
@@ -57,7 +57,7 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		if t := m.transcripts[m.selectedID()]; t != nil && t.Compacting() {
-			m.refreshViewport()
+			m.viewDirty = true
 		}
 		return compactTickCmd()
 	case treeTickMsg:
@@ -104,7 +104,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		if msg.n.Channel == "" || msg.n.Channel == m.channelID {
 			m.transcript(msg.n.Agent).ApplyStream(msg.n)
 			if msg.n.Agent == m.viewID() {
-				m.refreshViewport()
+				m.viewDirty = true
 			}
 		}
 	case promptMsg:
@@ -178,7 +178,7 @@ func (m *Model) onDirChanged(ev event.Event) {
 // view is drawn, the tree refetched, and a compaction that was running when
 // the TUI attached gets its animation.
 func (m *Model) caughtUp() []tea.Cmd {
-	m.refreshViewport()
+	m.viewDirty = true
 	cmds := []tea.Cmd{m.markTreeDirty()}
 	if m.anyCompacting() && !m.compactTick {
 		m.compactTick = true
@@ -201,13 +201,13 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	if target != "" {
 		m.transcript(target).Apply(ev)
 		if !m.loading && target == m.viewID() {
-			m.refreshViewport()
+			m.viewDirty = true
 		}
 	}
 	if transcript.ChatEvent(ev.Type) {
 		m.transcript(chatView).Apply(ev)
 		if !m.loading && m.superChat {
-			m.refreshViewport()
+			m.viewDirty = true
 		}
 	}
 	if !m.loading && changesTree(ev) {
@@ -279,7 +279,7 @@ func (m *Model) onAgentSpawned(ev event.Event) string {
 		m.parentOf[p.ID] = p.Parent
 		m.transcript(p.Parent).ChildSpawned(p.ID)
 		if !m.loading && p.Parent == m.viewID() {
-			m.refreshViewport()
+			m.viewDirty = true
 		}
 	}
 	return p.ID
@@ -296,7 +296,7 @@ func (m *Model) onAgentKilled(id string) {
 		t.AskerGone(name)
 	}
 	if !m.loading {
-		m.refreshViewport()
+		m.viewDirty = true
 	}
 }
 
@@ -335,7 +335,7 @@ func (m *Model) onChannelUpdated(ev event.Event) {
 		m.transcript(a.ID).Apply(ev)
 	}
 	if !m.loading {
-		m.refreshViewport()
+		m.viewDirty = true
 	}
 }
 
