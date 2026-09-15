@@ -60,8 +60,10 @@ func TestLoadWithoutCache(t *testing.T) {
 	if err != nil || stale || len(c.Models("openai")) != 1 {
 		t.Fatalf("network: stale %v err %v", stale, err)
 	}
-	if data, fresh := readCache(CachePath()); !fresh || string(data) != tiny {
+	if data, fresh := readCache(CachePath()); !fresh || data == nil {
 		t.Fatalf("not cached: fresh %v %q", fresh, data)
+	} else if cached, err := Parse(data); err != nil || len(cached.Models("openai")) != 1 {
+		t.Fatalf("the cache does not hold the catalog: %v %q", err, data)
 	}
 	matches, _ := filepath.Glob(filepath.Join(filepath.Dir(CachePath()), "models-*.json"))
 	if len(matches) != 0 {

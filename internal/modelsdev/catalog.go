@@ -6,6 +6,7 @@ package modelsdev
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/nicodes/stavlos/internal/model"
@@ -27,7 +28,7 @@ type rawModel struct {
 	ID    string   `json:"id"`
 	Name  string   `json:"name"`
 	Limit rawLimit `json:"limit"`
-	Cost  *rawCost `json:"cost"`
+	Cost  *rawCost `json:"cost,omitempty"`
 }
 
 type rawLimit struct {
@@ -43,17 +44,34 @@ type rawCost struct {
 	CacheWrite float64 `json:"cache_write"`
 }
 
-// Parse decodes a models.dev api.json document.
-func Parse(data []byte) (*Catalog, error) {
-	var providers map[string]rawProvider
-	if err := json.Unmarshal(data, &providers); err != nil {
+// Parse decodes a models.dev api.json document. With keep, only those
+// providers are decoded and kept: the database lists every provider there
+// is (megabytes of it), and Stavlos serves a few.
+func Parse(data []byte, keep ...string) (*Catalog, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("modelsdev: parse: %w", err)
+	}
+	providers := make(map[string]rawProvider, len(raw))
+	for id, b := range raw {
+		if len(keep) > 0 && !slices.Contains(keep, id) {
+			continue
+		}
+		var p rawProvider
+		if err := json.Unmarshal(b, &p); err != nil {
+			return nil, fmt.Errorf("modelsdev: parse %s: %w", id, err)
+		}
+		providers[id] = p
 	}
 	if len(providers) == 0 {
 		return nil, fmt.Errorf("modelsdev: parse: empty catalog")
 	}
 	return &Catalog{providers: providers}, nil
 }
+
+// encode is the catalog as a models.dev document holding only what it kept:
+// its providers, and the fields Stavlos reads.
+func (c *Catalog) encode() ([]byte, error) { return json.Marshal(c.providers) }
 
 // Model returns metadata for a bare model id under a provider.
 func (c *Catalog) Model(provider, id string) (model.Info, bool) {
