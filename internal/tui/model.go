@@ -83,6 +83,7 @@ type Model struct {
 	promptState  // what waits on the human, in every channel; survives a switch
 
 	navChannels []protocol.ChannelInfo // the sidebar's channels section: other channels of this directory, newest first
+	dirsNext    bool                   // another channel's gear was chosen: its dirs dialog opens once the switch lands
 
 	presets []protocol.PresetInfo
 
@@ -235,7 +236,7 @@ var tabFocuses = slices.Concat(tabRows...)
 
 // tabLayout is the tab rows as they are drawn: tabRows while the sidebar is
 // hidden; with it showing, ! and ? on top (in the sidebar, above the
-// channels) and dirs out of the tabs, a row under the open channel instead,
+// channels) and dirs out of the tabs, behind each channel's gear instead,
 // since the directories are that channel's.
 func (m Model) tabLayout() [][]focus {
 	if m.sidebarVisible() {
@@ -566,10 +567,15 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 		return m.onChannelsListed(msg)
 	case switchedMsg:
 		if msg.err != nil {
+			m.dirsNext = false
 			return m.setStatus("channel: "+msg.err.Error(), true)
 		}
 		cmd := m.bindChannel(cleanChannel(msg.info))
 		m.opened = true // switched to from inside the TUI: the channel's chat, not the splash
+		if m.dirsNext { // reached through its gear: its dirs dialog
+			m.dirsNext = false
+			return tea.Batch(cmd, m.openTab(focusDirs))
+		}
 		if open, ok := m.openWaiting(m.channelID, ""); ok {
 			return tea.Batch(cmd, open)
 		}
@@ -931,7 +937,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	case focusSidebar:
 		m.sbCursor = m.channelRow()
 		if !m.superChat {
-			m.sbCursor = m.channelRow() + 2 + m.selected
+			m.sbCursor = m.channelRow() + 1 + m.selected
 		}
 	case focusAsync, focusDue, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0
@@ -3000,9 +3006,11 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, keys.Select):
 		return m.sidebarSelect(m.sbCursor)
+	case key.Matches(msg, keys.TabRight): // → on a channel row: its gear, the channel's dirs
+		return m.channelSettings(m.sbCursor)
 	case msg.String() == "n": // the next agent that needs you, selected at once
-		if i := m.nextNeedy(max(-1, m.sbCursor-m.channelRow()-2)); i >= 0 {
-			m.sbCursor = m.channelRow() + 2 + i
+		if i := m.nextNeedy(max(-1, m.sbCursor-m.channelRow()-1)); i >= 0 {
+			m.sbCursor = m.channelRow() + 1 + i
 			m.openAgent(i)
 		} else {
 			return m.setStatus("no agent is waiting on you", false)
@@ -3030,13 +3038,12 @@ func (m *Model) nextNeedy(from int) int {
 // top to bottom: 0 is + channel, then the channels alphabetically with this
 // channel's agents right under its row (channelRow).
 func (m *Model) sidebarItems() int {
-	return len(m.agents) + 3 + len(m.navChannels)
+	return len(m.agents) + 2 + len(m.navChannels)
 }
 
 // channelRow is the sidebar cursor index of this channel's row: after
 // + channel and the other channels named before it (navChannels is kept in
-// alphabetical order). Its dirs row follows, then its agent i at
-// channelRow()+2+i.
+// alphabetical order). Its agent i is channelRow()+1+i.
 func (m Model) channelRow() int {
 	n := 1
 	for _, s := range m.navChannels {
@@ -3064,16 +3071,14 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 			return tea.Batch(chat, cmd)
 		}
 		return tea.Batch(chat, m.setFocus(focusInput))
-	case i == here+1:
-		return m.openTab(focusDirs) // the open channel's dirs row
-	case i <= here+1+na:
-		m.openAgent(i - here - 2)
+	case i <= here+na:
+		m.openAgent(i - here - 1)
 		if cmd, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
 			return cmd
 		}
 		return m.setFocus(focusInput)
-	case i-na-3 < len(m.navChannels):
-		return m.openOther(i - na - 3)
+	case i-na-2 < len(m.navChannels):
+		return m.openOther(i - na - 2)
 	}
 	return nil
 }
@@ -3112,6 +3117,36 @@ func (m *Model) openWaiting(channel, agent string) (tea.Cmd, bool) {
 	return cmd, true
 }
 
+// channelAt is the channel a sidebar cursor index names: this channel (k
+// -1) or the directory's other channel k; ok is false for any other row.
+func (m Model) channelAt(i int) (k int, ok bool) {
+	here, na := m.channelRow(), len(m.agents)
+	switch {
+	case i == here:
+		return -1, true
+	case i >= 1 && i < here:
+		return i - 1, true
+	case i > here+na && i-na-2 < len(m.navChannels):
+		return i - na - 2, true
+	}
+	return 0, false
+}
+
+// channelSettings is the gear of the channel on sidebar row i (→ on the row,
+// or a click on the gear): this channel's dirs dialog, or another channel
+// opened on its dirs dialog.
+func (m *Model) channelSettings(i int) tea.Cmd {
+	k, ok := m.channelAt(i)
+	switch {
+	case !ok:
+		return nil
+	case k < 0:
+		return m.openTab(focusDirs)
+	}
+	m.dirsNext = true
+	return m.openOther(k)
+}
+
 // openOther opens the directory's other channel k (navChannels order) in
 // place of this one.
 func (m *Model) openOther(k int) tea.Cmd {
@@ -3145,6 +3180,9 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 	}
 	i := items[row]
 	m.sbCursor = i
+	if _, ok := m.channelAt(i); ok && x >= sidebarWidth-3 { // the gear at the row's right edge
+		return tea.Batch(cmd, m.channelSettings(i))
+	}
 	switch {
 	case i == m.channelRow():
 		chat := m.openChat()
@@ -3152,8 +3190,8 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 			return tea.Batch(cmd, chat, open)
 		}
 		return tea.Batch(cmd, chat)
-	case i > m.channelRow()+1 && i <= m.channelRow()+1+len(m.agents):
-		m.openAgent(i - m.channelRow() - 2)
+	case i > m.channelRow() && i <= m.channelRow()+len(m.agents):
+		m.openAgent(i - m.channelRow() - 1)
 		if open, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
 			return tea.Batch(cmd, open)
 		}
