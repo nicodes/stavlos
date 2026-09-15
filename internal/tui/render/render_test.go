@@ -14,6 +14,7 @@ import (
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/theme"
 	"github.com/nicodes/stavlos/internal/tui/transcript"
+	"github.com/nicodes/stavlos/internal/tui/transcript/evtest"
 )
 
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
@@ -62,18 +63,18 @@ func contains(got []string, s string) bool {
 
 func TestBuildTranscript(t *testing.T) {
 	showThinkingForTest(t)
-	evs := []event.Event{
-		mk(1, "a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Archetype: "coder", Label: "root", Model: "anthropic/claude-x"}),
+	evs := evtest.Seq(
+		mk(1, "a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Role: "coder", Name: "root", Model: "anthropic/claude-x"}),
 		mk(2, "a1", event.TurnStarted, event.TurnPayload{Turn: 1}),
-		mk(3, "a1", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "hello\nworld"}),
-		mk(4, "a1", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command": "sleep 100"}`)}),
-		mk(5, "a1", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "partial\n", Cancelled: true}),
+		evtest.Prompt("a1", "hello\nworld"),
+		evtest.Call("a1", "c1", "shell", `{"command": "sleep 100"}`),
+		mk(5, "a1", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "partial\n", Cancelled: true}),
 		mk(6, "a1", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "anthropic/claude-x", StopReason: "end_turn", Blocks: []model.Block{
 			{Type: model.BlockThinking},
 			{Type: model.BlockText, Text: "Done."},
 		}}),
 		mk(7, "a1", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "cancelled"}),
-	}
+	)
 	got := renderLines(transcript.Build(evs))
 	assertSubsequence(t, got, []string{
 		"› @user hello",
@@ -93,11 +94,12 @@ func TestBuildTranscript(t *testing.T) {
 
 func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Archetype: "coder", Label: "root"}))
+	tr.Apply(mk(1, "a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Role: "coder", Name: "root"}))
 	if !tr.Empty() {
 		t.Fatalf("root spawn should not produce lines: %+v", tr.All())
 	}
-	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look around"}))
+	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Role: "explorer", Name: "scout", Model: "m"}))
+	tr.Apply(mk(3, "c1", event.InputQueued, event.Input{ID: "task", Kind: event.InputRequest, Text: "look around", From: "a1", FromName: "root"}))
 	got := renderLines(tr.All())
 	if !tr.Empty() {
 		t.Fatalf("a spawn with a task waits for its first prompt: %q", got)
@@ -105,7 +107,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	// the first prompt, the task from the creator, draws the spawn and the
 	// task as one item, not "Spawned" then "Prompt from"
 	tr.Apply(mk(3, "c1", event.TurnStarted, event.TurnPayload{Turn: 1}))
-	tr.Apply(mk(4, "c1", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "look around", From: "root"}))
+	tr.Apply(mk(4, "c1", event.InputTaken, event.InputTakenPayload{Turn: 1, IDs: []string{"task"}}))
 	got = renderLines(tr.All())
 	assertSubsequence(t, got, []string{"⋙ @root as scout (explorer) · m", "  look around"})
 	for _, g := range got {
@@ -114,26 +116,26 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 		}
 	}
 	// a later prompt from the creator reads as a prompt
-	tr.Apply(mk(5, "c1", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "look around", From: "root"}))
+	evtest.Apply(tr, evtest.From("c1", event.InputRequest, "root", "look around"))
 	if got := renderLines(tr.All()); !strings.Contains(strings.Join(got, "\n"), "› @root look around") {
 		t.Fatalf("a later prompt: %q", got)
 	}
 }
 
-func TestUserMessageKinds(t *testing.T) {
-	lines := transcript.Build([]event.Event{
-		mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "steer", Text: "focus"}),
-		mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: event.MsgMonitorFired, Text: "child done"}),
-		mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}),
-	})
+func TestInputKinds(t *testing.T) {
+	lines := transcript.Build(evtest.Seq(
+		evtest.Input("a", event.Input{Kind: event.InputSteer, Text: "focus"}),
+		evtest.From("a", event.InputResponse, "scout", "child done"),
+		evtest.Input("a", event.Input{Kind: event.InputJob, Job: "m1"}), // a job's outcome nests under its call: nothing more to draw
+		evtest.Prompt("a", "hi"),
+	))
 	got := renderLines(lines)
-	assertSubsequence(t, got, []string{"› @user focus", "job result", "$ child done", "› @user hi"})
+	assertSubsequence(t, got, []string{"› @user focus", "› @scout child done", "› @user hi"})
 	for _, l := range got {
-		if strings.TrimSpace(l) == "steer" {
-			t.Fatalf("a steer should carry no title:\n%s", strings.Join(got, "\n"))
+		if strings.TrimSpace(l) == "steer" || strings.Contains(l, "job") {
+			t.Fatalf("a steer carries no title, and a job result is not drawn again:\n%s", strings.Join(got, "\n"))
 		}
 	}
-
 	// Blocks carry their kind so Render can pick the border color.
 	var blocks []transcript.BlockKind
 	for _, l := range lines {
@@ -152,9 +154,7 @@ func TestUserMessageKinds(t *testing.T) {
 
 func TestUserBlockBorderAndWrap(t *testing.T) {
 	text := "one two three four five six seven eight nine ten"
-	got := renderWith(transcript.Build([]event.Event{
-		mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi\n" + text}),
-	}), Options{Width: 30, NoFold: true})
+	got := renderWith(transcript.Build(evtest.Prompt("a", "hi\n"+text)), Options{Width: 30, NoFold: true})
 	if got[0] != "› @user hi" {
 		t.Fatalf("prompt glyph + padding: %q", got[0])
 	}
@@ -179,7 +179,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 		sb.WriteString("line\n")
 	}
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "read", Input: json.RawMessage(`{"path":"a.go"}`)}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "read", `{"path":"a.go"}`))
 	got := renderLines(tr.All())
 	if !contains(got, "☰ Read  a.go") {
 		t.Fatalf("running tool shows its glyph (yellow):\n%s", strings.Join(got, "\n"))
@@ -188,10 +188,10 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 		t.Fatal("Running() should be true while a call is open")
 	}
 
-	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "read", Output: sb.String(), IsError: true}))
-	tr.Apply(mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c2", Name: "read", Input: json.RawMessage(`{"path":"b.go"}`)}))
-	tr.Apply(mk(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c2", Name: "read", Denied: true}))
-	tr.Apply(mk(5, "a", event.Compacted, event.CompactedPayload{FromSeq: 1, ToSeq: 3}))
+	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{CallID: "c1", Name: "read", Output: sb.String(), IsError: true}))
+	evtest.Apply(tr, evtest.Call("a", "c2", "read", `{"path":"b.go"}`))
+	tr.Apply(mk(4, "a", event.ToolFinished, event.ToolFinishedPayload{CallID: "c2", Name: "read", Denied: true}))
+	tr.Apply(mk(5, "a", event.CompactionDone, event.CompactionPayload{FromSeq: 1, ToSeq: 3}))
 	if tr.Running() {
 		t.Fatal("Running() should be false after all calls finished")
 	}
@@ -270,7 +270,7 @@ func TestAssistantMarkdownAndErrors(t *testing.T) {
 func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	showThinkingForTest(t)
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "hi"}))
+	evtest.Apply(tr, evtest.Prompt("a", "hi"))
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Thinking: "hmm"})
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Text: "Hel"})
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Text: "lo"})
@@ -300,7 +300,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 
 func TestStreamingToolOutputCollapses(t *testing.T) {
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"make"}`)}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"make"}`))
 	for i := 0; i < 5; i++ {
 		tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "shell", Text: "out\n"})
 	}
@@ -309,7 +309,7 @@ func TestStreamingToolOutputCollapses(t *testing.T) {
 	if count(got, "  out") != transcript.MaxOutputCollapsed {
 		t.Fatalf("live output should be collapsed:\n%s", strings.Join(got, "\n"))
 	}
-	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "final"}))
+	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "final"}))
 	got = renderLines(tr.All())
 	assertSubsequence(t, got, []string{"$ Shell  make", "  final"})
 	if count(got, "  out") != 0 {
@@ -320,9 +320,9 @@ func TestStreamingToolOutputCollapses(t *testing.T) {
 func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	markCursorForTest(t)
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}))
-	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("x\n", 6), "\n")}))
+	evtest.Apply(tr, evtest.Prompt("a", "hi"))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"ls"}`))
+	tr.Apply(mk(3, "a", event.ToolFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("x\n", 6), "\n")}))
 	lines := tr.All()
 
 	plain := renderWith(lines, Options{Width: 80, NoFold: true})
@@ -364,11 +364,11 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
-	tr.Apply(mk(2, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "run it"}))
-	tr.Apply(mk(3, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"make test"}`)}))
-	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
-	tr.Apply(mk(5, event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
-	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "ok\nall passed"}))
+	evtest.Apply(tr, evtest.Prompt("a", "run it"))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"make test"}`))
+	tr.Apply(mk(4, event.AskRequested, event.AskRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
+	tr.Apply(mk(5, event.AskResolved, event.AskResolvedPayload{ID: "p1", Outcome: event.AskAnswered, Answer: "allow"}))
+	tr.Apply(mk(6, event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "ok\nall passed"}))
 	tr.Apply(mk(7, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "done"}}}))
 
 	lines := tr.All()
@@ -421,13 +421,13 @@ func TestFoldingToOneLine(t *testing.T) {
 	mk := func(seq int64, typ event.Type, p any) event.Event {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
-	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "line one\nline two"}))
+	evtest.Apply(tr, evtest.Prompt("a", "line one\nline two"))
 	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockThinking, Text: "first thought\nsecond thought"}}}))
-	tr.Apply(mk(3, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
-	tr.Apply(mk(5, event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
-	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a\nb\nc\nd\ne"}))
-	tr.Apply(mk(7, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: event.MsgMonitorFired, Text: "Job \"scout\" exited.\n\nfound it"}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"ls"}`))
+	tr.Apply(mk(4, event.AskRequested, event.AskRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
+	tr.Apply(mk(5, event.AskResolved, event.AskResolvedPayload{ID: "p1", Outcome: event.AskAnswered, Answer: "allow"}))
+	tr.Apply(mk(6, event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a\nb\nc\nd\ne"}))
+	evtest.Apply(tr, evtest.From("a", event.InputResponse, "scout", "scout exited.\n\nfound it"))
 	tr.Apply(mk(8, event.AssistantMessage, event.AssistantMessagePayload{Turn: 2, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "final answer\nwith two lines"}}}))
 	lines := tr.All()
 	toolItem, childItem := -1, -1
@@ -511,15 +511,15 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	mk := func(seq int64, typ event.Type, p any) event.Event {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
-	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "run the tests in the background"}))
-	tr.Apply(mk(2, event.MonitorStarted, event.MonitorStartedPayload{ID: "m1", Kind: "command", Label: "go test", Spec: "go test ./..."}))
-	tr.Apply(mk(3, event.MonitorStarted, event.MonitorStartedPayload{ID: "m2", Kind: "command", Label: "src", Spec: "./watch.sh"}))
-	tr.Apply(mk(4, event.MonitorStarted, event.MonitorStartedPayload{ID: "m3", Kind: "command", Label: "cooldown", Spec: "sleep 300"}))
+	evtest.Apply(tr, evtest.Prompt("a", "run the tests in the background"))
+	tr.Apply(mk(2, event.JobStarted, event.JobStartedPayload{ID: "m1", Command: "go test"}))
+	tr.Apply(mk(3, event.JobStarted, event.JobStartedPayload{ID: "m2", Command: "src"}))
+	tr.Apply(mk(4, event.JobStarted, event.JobStartedPayload{ID: "m3", Command: "cooldown"}))
 	tr.Apply(mk(5, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "waiting"}}}))
-	tr.Apply(mk(6, event.MonitorFired, event.MonitorFiredPayload{ID: "m1", Kind: "command", Label: "go test", Summary: "go test exited 0", Output: "ok  a\nok  b\nok  c\nok  d\nok  e"}))
-	tr.Apply(mk(7, event.MonitorStopped, event.MonitorRefPayload{ID: "m2", Reason: "unmonitor"}))
-	tr.Apply(mk(8, event.MonitorFired, event.MonitorFiredPayload{ID: "m3", Kind: "command", Label: "cooldown", Summary: "timer elapsed", IsError: true}))
-	tr.Apply(mk(9, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "monitor_fired", Text: "Job \"go test\" (m1): go test exited 0\n\nok  a\nok  b"}))
+	tr.Apply(mk(6, event.JobFinished, event.JobFinishedPayload{ID: "m1", Summary: "go test exited 0", Output: "ok  a\nok  b\nok  c\nok  d\nok  e"}))
+	tr.Apply(mk(7, event.JobStopped, event.JobStoppedPayload{ID: "m2", Reason: "unmonitor"}))
+	tr.Apply(mk(8, event.JobFinished, event.JobFinishedPayload{ID: "m3", Summary: "timer elapsed", IsError: true}))
+	evtest.Apply(tr, evtest.Input("a", event.Input{Kind: event.InputJob, Job: "m1"}))
 	tr.Apply(mk(10, event.AssistantMessage, event.AssistantMessagePayload{Turn: 2, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "all green"}}}))
 
 	lines := tr.All()
@@ -575,19 +575,11 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	if errFired.Item != timerStart.Item {
 		t.Fatalf("error fired: %+v (timer item %d)", errFired, timerStart.Item)
 	}
-	// the monitor_fired user message is a muted block labelled "job result"
-	var label transcript.Line
+	// the job's result input draws nothing: its outcome already sits under the job
 	for _, l := range lines {
-		if l.Kind == transcript.LineLabel && l.Text == "job result" {
-			label = l
+		if l.Text == "job result" {
+			t.Fatalf("a job result drawn twice: %+v", l)
 		}
-	}
-	if label.Kind != transcript.LineLabel || label.Block != transcript.BlockChild {
-		t.Fatalf("monitor block label: %+v", label)
-	}
-	_, summary := find("Job \"go test\"")
-	if summary.Kind != transcript.LineText || summary.Block != transcript.BlockChild || summary.Item != label.Item || summary.Lead {
-		t.Fatalf("monitor block summary: %+v", summary)
 	}
 
 	// folding: every monitor item collapses to its started line (only tool
@@ -603,7 +595,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	plain := nonblank(renderWith(lines, Options{Width: 80}))
 	joined := strings.Join(plain, "\n")
-	for _, want := range []string{"run the tests", "waiting", "all green", "Job go test", "Job src", "Job cooldown", "Job \"go test\" (m1): go test exited 0"} {
+	for _, want := range []string{"run the tests", "waiting", "all green", "Job go test", "Job src", "Job cooldown"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}
@@ -650,8 +642,8 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 
 	// a fired event for an unknown monitor is its own item, not lost
 	tr2 := transcript.NewTranscript()
-	tr2.Apply(mk(1, event.MonitorFired, event.MonitorFiredPayload{ID: "zz", Kind: "watch", Summary: "3 files changed", Output: "a.go"}))
-	tr2.Apply(mk(2, event.MonitorStopped, event.MonitorRefPayload{ID: "yy", Reason: "kill"}))
+	tr2.Apply(mk(1, event.JobFinished, event.JobFinishedPayload{ID: "zz", Summary: "3 files changed", Output: "a.go"}))
+	tr2.Apply(mk(2, event.JobStopped, event.JobStoppedPayload{ID: "yy", Reason: "kill"}))
 	got := renderLines(tr2.All())
 	assertSubsequence(t, got, []string{"$ Job 3 files changed", "  a.go", "$ Job stopped (kill)"})
 	if tr2.Items() != 2 {
@@ -672,7 +664,7 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 		t.Fatal("no turn yet")
 	}
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
-	tr.Apply(mk(2, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "go"}))
+	evtest.Apply(tr, evtest.Prompt("a", "go"))
 	out := render()
 	if !tr.InTurn() || !strings.HasSuffix(out, "\n\n⠋ working…") {
 		t.Fatalf("mid-turn should end with the indicator:\n%s", out)
@@ -686,8 +678,8 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 		t.Fatalf("rows %d, items %d", len(rows), tr.Items())
 	}
 	// elapsed time grows with the clock; tokens add up over the turn
-	tr.Apply(mk(21, event.Usage, event.UsagePayload{Turn: 1, Usage: model.Usage{InputTokens: 900, OutputTokens: 400, CacheReadTokens: 5000}}))
-	tr.Apply(mk(22, event.Usage, event.UsagePayload{Turn: 1, Usage: model.Usage{InputTokens: 100, OutputTokens: 100}}))
+	tr.Apply(mk(21, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Usage: model.Usage{InputTokens: 900, OutputTokens: 400, CacheReadTokens: 5000}}))
+	tr.Apply(mk(22, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Usage: model.Usage{InputTokens: 100, OutputTokens: 100}}))
 	ref := time.Now()
 	base, _ := tr.TurnStats(ref)
 	if el, tok := tr.TurnStats(ref.Add(75 * time.Second)); el-base != 75*time.Second || tok != 1500 {
@@ -751,8 +743,8 @@ func markCursorForTest(t *testing.T) {
 
 func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "delegate"}))
-	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "agent_response", From: "scout", Text: "Repository survey complete.\nNo edits were needed."}))
+	evtest.Apply(tr, evtest.Prompt("a", "delegate"))
+	evtest.Apply(tr, evtest.From("a", event.InputResponse, "scout", "Repository survey complete.\nNo edits were needed."))
 	folded := renderWith(tr.All(), Options{Width: 80})
 	if !contains(folded, "› @scout Repository survey complete.") {
 		t.Fatalf("folded response should name itself and its sender:\n%s", strings.Join(folded, "\n"))
@@ -772,8 +764,8 @@ func TestSentMessageShowsItsText(t *testing.T) {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
-	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "r1", Name: "message", Input: json.RawMessage(`{"to":"main","text":"Concise findings:\n- Go-only module"}`)}))
-	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "r1", Name: "message", Output: "response delivered to main"}))
+	evtest.Apply(tr, evtest.Call("a", "r1", "message", `{"to":"main","text":"Concise findings:\n- Go-only module"}`))
+	tr.Apply(mk(3, event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "r1", Name: "message", Output: "response delivered to main"}))
 	full := renderWith(tr.All(), Options{Width: 80, NoFold: true})
 	assertSubsequence(t, full, []string{"‹ @main Concise findings:", "  - Go-only module"})
 	for _, l := range full {
@@ -793,15 +785,15 @@ func TestSentMessageShowsItsText(t *testing.T) {
 func TestTrackedLinesSurviveLaterItems(t *testing.T) {
 	tr := transcript.NewTranscript()
 	tr.Apply(mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}))
-	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"make"}`)}))
-	tr.Apply(mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c2", Name: "read", Input: json.RawMessage(`{"path":"x"}`)}))
-	tr.Apply(mk(4, "a", event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
-	tr.Apply(mk(5, "a", event.PromptRequested, event.PromptRequestedPayload{ID: "q1", Kind: "question", Question: "which?"}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"make"}`))
+	evtest.Apply(tr, evtest.Call("a", "c2", "read", `{"path":"x"}`))
+	tr.Apply(mk(4, "a", event.AskRequested, event.AskRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
+	tr.Apply(mk(5, "a", event.AskRequested, event.AskRequestedPayload{ID: "q1", Kind: "question", Question: "which?"}))
 	snapshot := tr.All()
-	tr.Apply(mk(6, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c2", Name: "read", Output: "r1\nr2"}))
-	tr.Apply(mk(7, "a", event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
-	tr.Apply(mk(8, "a", event.PromptWithdrawn, event.PromptRefPayload{ID: "q1"}))
-	tr.Apply(mk(9, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "built"}))
+	tr.Apply(mk(6, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c2", Name: "read", Output: "r1\nr2"}))
+	tr.Apply(mk(7, "a", event.AskResolved, event.AskResolvedPayload{ID: "p1", Outcome: event.AskAnswered, Answer: "allow"}))
+	tr.Apply(mk(8, "a", event.AskResolved, event.AskResolvedPayload{ID: "q1", Outcome: event.AskWithdrawn}))
+	tr.Apply(mk(9, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "built"}))
 
 	lines := tr.All()
 	find := func(text string) transcript.Line {
@@ -854,8 +846,8 @@ func firstOf(s string, _ map[int]RowRange) string { return s }
 // chat is cut to one row, so its +N marker ends that row.
 func TestFoldedToolCallIsOneRow(t *testing.T) {
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"` + strings.Repeat("echo word ", 12) + `"}`)}))
-	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a\nb\nc\nd"}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"`+strings.Repeat("echo word ", 12)+`"}`))
+	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a\nb\nc\nd"}))
 	var rows []string
 	for _, r := range renderWith(tr.All(), Options{Width: 60}) {
 		if strings.TrimSpace(r) != "" {
@@ -873,13 +865,13 @@ func TestFoldedToolCallIsOneRow(t *testing.T) {
 func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	tr := transcript.NewTranscript()
 	tr.Apply(mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}))
-	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "list files"}))
-	tr.Apply(mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a.go"}))
+	evtest.Apply(tr, evtest.Prompt("a", "list files"))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"ls"}`))
+	tr.Apply(mk(4, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a.go"}))
 	tr.Apply(mk(5, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "one file"}}}))
 	tr.Apply(mk(6, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}))
 	tr.Apply(mk(7, "a", event.TurnStarted, event.TurnPayload{Turn: 2}))
-	tr.Apply(mk(8, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "thanks"}))
+	evtest.Apply(tr, evtest.Prompt("a", "thanks"))
 	got := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
 	want := "› @user list files\n$ Shell  ls\n  a.go\n§ Aside one file\n\n› @user thanks"
 	if got != want {
@@ -887,38 +879,38 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	}
 	// a nudge opens the turn it starts: a gap above it, none under it
 	tr.Apply(mk(9, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 2, Reason: "end_turn"}))
-	tr.Apply(mk(10, "a", event.ReminderQueued, event.RepliesPayload{Parties: []string{"user"}, Names: []string{"user"}}))
+	tr.Apply(mk(10, "a", event.InputQueued, event.Input{ID: "r1", Kind: event.InputReminder, Parties: []string{"user"}, Names: []string{"user"}}))
 	tr.Apply(mk(11, "a", event.TurnStarted, event.TurnPayload{Turn: 3}))
-	tr.Apply(mk(12, "a", event.UserMessage, event.UserMessagePayload{Turn: 3, Kind: event.MsgReminder, Text: "[reminder from the harness] ..."}))
+	tr.Apply(mk(12, "a", event.InputTaken, event.InputTakenPayload{Turn: 3, IDs: []string{"r1"}}))
 	tr.Apply(mk(13, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 3, Blocks: []model.Block{{Type: model.BlockText, Text: "replying now"}}}))
 	nudged := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
 	if !strings.HasSuffix(nudged, "› @user thanks\n\n↻ Nudge owes a reply to you\n§ Aside replying now") {
 		t.Fatalf("nudge spacing:\n%s", nudged)
 	}
 	tr = transcript.NewTranscript()
-	for _, ev := range []event.Event{
+	for _, ev := range evtest.Seq(
 		mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}),
-		mk(2, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "list files"}),
-		mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}),
-		mk(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a.go"}),
+		evtest.Prompt("a", "list files"),
+		evtest.Call("a", "c1", "shell", `{"command":"ls"}`),
+		mk(4, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a.go"}),
 		mk(5, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "one file"}}}),
 		mk(6, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}),
 		mk(7, "a", event.TurnStarted, event.TurnPayload{Turn: 2}),
-		mk(8, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "thanks"}),
-	} {
+		evtest.Prompt("a", "thanks"),
+	) {
 		tr.Apply(ev)
 	}
 	// a mode change between turns stays with the turn before the gap
 	between := transcript.NewTranscript()
-	for _, ev := range []event.Event{
+	for _, ev := range evtest.Seq(
 		mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}),
-		mk(2, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "go"}),
+		evtest.Prompt("a", "go"),
 		mk(3, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "done"}}}),
 		mk(4, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}),
-		mk(5, "", event.ChannelModeChanged, event.ModePayload{Mode: "auto"}),
+		mk(5, "", event.ChannelUpdated, event.ChannelUpdatedPayload{Mode: event.Str("auto")}),
 		mk(6, "a", event.TurnStarted, event.TurnPayload{Turn: 2}),
-		mk(7, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "again"}),
-	} {
+		evtest.Prompt("a", "again"),
+	) {
 		between.Apply(ev)
 	}
 	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user go\n§ Aside done\n⇄ Mode → auto · allows inside the channel's directories, denies outside them\n\n› @user again" {
@@ -940,9 +932,9 @@ func TestWhoColoursGlyphAndName(t *testing.T) {
 		return lipgloss.NewStyle()
 	}
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "look", From: "main"}))
-	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "message", Input: json.RawMessage(`{"to":"scout","text":"go"}`)}))
-	tr.Apply(mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}))
+	evtest.Apply(tr, evtest.From("a", event.InputRequest, "main", "look"))
+	evtest.Apply(tr, evtest.Call("a", "c1", "message", `{"to":"scout","text":"go"}`))
+	evtest.Apply(tr, evtest.Prompt("a", "hi"))
 	got := renderWith(tr.All(), Options{Width: 80, NoFold: true, WhoStyle: whoStyle})
 	assertSubsequence(t, got, []string{"› @main look", "‹ @scout go", "› @user hi"})
 	if !asked["main"] || !asked["scout"] || !asked["user"] {
@@ -954,8 +946,8 @@ func TestWhoColoursGlyphAndName(t *testing.T) {
 // led by ✗, its reason next to the tool's name.
 func TestDeniedCallReadsOnItsLine(t *testing.T) {
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"rm -rf build"}`)}))
-	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "Permission denied by the user: not now", IsError: true, Denied: true}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"rm -rf build"}`))
+	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "Permission denied by the user: not now", IsError: true, Denied: true}))
 	for _, o := range []Options{{Width: 80, NoFold: true}, {Width: 80}} {
 		var rows []string
 		for _, r := range renderWith(tr.All(), o) {
@@ -973,7 +965,7 @@ func TestDeniedCallReadsOnItsLine(t *testing.T) {
 func TestPatchDiffRenders(t *testing.T) {
 	input, _ := json.Marshal(map[string]string{"patch": "*** Begin Patch\n*** Update File: a.go\n@@ func run() {\n-old()\n*** End Patch"})
 	tr := transcript.NewTranscript()
-	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Input: input}))
-	tr.Apply(mk(2, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Output: "updated a.go (1 hunk(s))"}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "apply_patch", string(input)))
+	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Output: "updated a.go (1 hunk(s))"}))
 	assertSubsequence(t, renderLines(tr.All()), []string{"± Apply patch  a.go", "  a.go", "  @@ func run() {", "  -old()"})
 }

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -42,24 +41,28 @@ func newFakeHost(m *fakeModel) *fakeHost {
 	return &fakeHost{seq: map[string]int64{}, ch: make(chan event.Event, 10000), m: m}
 }
 
-func (h *fakeHost) Append(_ context.Context, e event.Event) (event.Event, error) {
+func (h *fakeHost) Append(_ context.Context, evs ...event.Event) ([]event.Event, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.failNext != nil {
 		err := h.failNext
 		h.failNext = nil
-		return e, err
+		return nil, err
 	}
-	h.seq[e.Channel]++
-	e.Seq = h.seq[e.Channel]
-	e.Global = int64(len(h.events) + 1)
-	e.Time = time.Now().UTC()
-	h.events = append(h.events, e)
-	select {
-	case h.ch <- e:
-	default:
+	out := make([]event.Event, 0, len(evs))
+	for _, e := range evs {
+		h.seq[e.Channel]++
+		e.Seq = h.seq[e.Channel]
+		e.Global = int64(len(h.events) + 1)
+		e.Time = time.Now().UTC()
+		h.events = append(h.events, e)
+		out = append(out, e)
+		select {
+		case h.ch <- e:
+		default:
+		}
 	}
-	return e, nil
+	return out, nil
 }
 
 func (h *fakeHost) Stream(n protocol.StreamNotification) {
@@ -260,6 +263,9 @@ func lastUserText(req model.Request) string {
 		return ""
 	}
 	b := bs[len(bs)-1]
+	if strings.HasPrefix(b.Text, "[harness state") && len(bs) > 1 {
+		b = bs[len(bs)-2] // the per-request state note rides after the last input
+	}
 	return b.Text + b.Content
 }
 
@@ -331,7 +337,7 @@ func runTurn(t *testing.T, s *Channel, h *fakeHost, prompt string) event.TurnEnd
 // finished decodes every tool.finished event of an agent.
 func finished(h *fakeHost, agent string) []event.ToolFinishedPayload {
 	var out []event.ToolFinishedPayload
-	for _, e := range h.ofType(event.ToolCallFinished, agent) {
+	for _, e := range h.ofType(event.ToolFinished, agent) {
 		var p event.ToolFinishedPayload
 		_ = e.Decode(&p)
 		out = append(out, p)
@@ -339,24 +345,85 @@ func finished(h *fakeHost, agent string) []event.ToolFinishedPayload {
 	return out
 }
 
-func userMessages(h *fakeHost, agent string) []event.UserMessagePayload {
-	var out []event.UserMessagePayload
-	for _, e := range h.ofType(event.UserMessage, agent) {
-		var p event.UserMessagePayload
-		_ = e.Decode(&p)
-		out = append(out, p)
+// takenInput is an input a model call took, with the turn that took it.
+type takenInput struct {
+	event.Input
+	Turn int
+}
+
+// userMessages lists the inputs an agent's model calls took, in order.
+func userMessages(h *fakeHost, agent string) []takenInput { return takenIn(h.all(), agent) }
+
+// takenIn is userMessages over a log (one that spans a restart, say).
+func takenIn(evs []event.Event, agent string) []takenInput {
+	queued := map[string]event.Input{}
+	var out []takenInput
+	for _, e := range evs {
+		if e.Agent != agent {
+			continue
+		}
+		switch e.Type {
+		case event.InputQueued:
+			var in event.Input
+			_ = e.Decode(&in)
+			queued[in.ID] = in
+		case event.InputTaken:
+			var p event.InputTakenPayload
+			_ = e.Decode(&p)
+			for _, id := range p.IDs {
+				out = append(out, takenInput{queued[id], p.Turn})
+			}
+		}
 	}
 	return out
 }
 
-// armedIDs lists the job ids whose exit would wake the agent (test-only view).
-func (a *Agent) armedIDs() []string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	var out []string
-	for id := range a.armed {
-		out = append(out, id)
+// Agent states, for comparisons.
+const (
+	StateIdle    = protocol.AgentIdle
+	StateRunning = protocol.AgentRunning
+)
+
+func stateOf(a *Agent) protocol.AgentState { return a.Info().State }
+
+// busy counts the channel's agents in a turn or about to start one.
+func busy(s *Channel) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.busyLocked()
+}
+
+func live(s *Channel) int { return s.Info().Live }
+
+// resolve finds an agent the way message recipients are found.
+func resolve(s *Channel, ref string) (*Agent, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st, ok := s.resolveLocked(ref)
+	if !ok {
+		return nil, false
 	}
-	sort.Strings(out)
+	return s.agents[st.id], true
+}
+
+// inputsOf lists the inputs of one kind queued for an agent.
+func inputsOf(h *fakeHost, kind event.InputKind, agent string) []event.Input {
+	var out []event.Input
+	for _, e := range h.ofType(event.InputQueued, agent) {
+		var in event.Input
+		_ = e.Decode(&in)
+		if in.Kind == kind {
+			out = append(out, in)
+		}
+	}
+	return out
+}
+
+// reminders lists the names each reminder queued for an agent names.
+func reminders(h *fakeHost, agent string) [][]string {
+	var out [][]string
+	for _, in := range inputsOf(h, event.InputReminder, agent) {
+		out = append(out, in.Names)
+	}
 	return out
 }

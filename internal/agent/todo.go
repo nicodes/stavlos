@@ -1,9 +1,9 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/toolname"
@@ -11,17 +11,14 @@ import (
 )
 
 // The todo list is state in the log: every change is a todo.changed event
-// carrying the whole list, so recovery replays the last one and every
-// client renders the same list. Tool calls on one agent run one at a time,
-// so a snapshot built under the lock is applied after it is logged.
+// carrying the whole list, applied like any other, so recovery restores it
+// and every client renders the same list.
 
-func (a *Agent) todosAPI() tools.Todos { return todosAPI{a: a} }
-
-// todoAPIIfEnabled is the list for the tool env, nil when the preset does
-// not include "todo" (the tools then report themselves unavailable).
-func (a *Agent) todoAPIIfEnabled() tools.Todos {
-	if contains(a.Preset().Tools, toolname.GroupTodo) {
-		return a.todosAPI()
+// todoAPIFor is the list for a tool env, nil when the role does not
+// include "todo" (the tools then say they are unavailable).
+func (a *Agent) todoAPIFor(rv roleView) tools.Todos {
+	if contains(rv.preset.Tools, toolname.GroupTodo) {
+		return todosAPI{a: a}
 	}
 	return nil
 }
@@ -29,68 +26,48 @@ func (a *Agent) todoAPIIfEnabled() tools.Todos {
 type todosAPI struct{ a *Agent }
 
 func (t todosAPI) Add(text string) (string, error) {
-	a := t.a
-	a.mu.Lock()
-	a.todoSeq++
-	id := "t" + strconv.Itoa(a.todoSeq)
-	items := append(a.todosCopy(), event.TodoItem{ID: id, Text: text, Status: event.TodoPending})
-	a.mu.Unlock()
-	return id, a.setTodos(items)
+	var id string
+	err := t.change(func(st *agentState, items []event.TodoItem) ([]event.TodoItem, error) {
+		id = "t" + strconv.Itoa(st.todoSeq+1)
+		return append(items, event.TodoItem{ID: id, Text: text, Status: event.TodoPending}), nil
+	})
+	return id, err
 }
 
 func (t todosAPI) Update(id, status, text string) error {
-	a := t.a
-	a.mu.Lock()
-	items := a.todosCopy()
-	i := -1
-	for k, it := range items {
-		if it.ID == id {
-			i = k
+	return t.change(func(_ *agentState, items []event.TodoItem) ([]event.TodoItem, error) {
+		for i := range items {
+			if items[i].ID != id {
+				continue
+			}
+			if status != "" {
+				items[i].Status = event.TodoStatus(status)
+			}
+			if text != "" {
+				items[i].Text = text
+			}
+			return items, nil
 		}
-	}
-	if i < 0 {
-		a.mu.Unlock()
-		return fmt.Errorf("no todo item %q", id)
-	}
-	if status != "" {
-		items[i].Status = event.TodoStatus(status)
-	}
-	if text != "" {
-		items[i].Text = text
-	}
-	a.mu.Unlock()
-	return a.setTodos(items)
+		return nil, fmt.Errorf("no todo item %q", id)
+	})
 }
 
 func (t todosAPI) List() []event.TodoItem {
-	t.a.mu.Lock()
-	defer t.a.mu.Unlock()
-	return t.a.todosCopy()
+	t.a.s.mu.Lock()
+	defer t.a.s.mu.Unlock()
+	return append([]event.TodoItem(nil), t.a.state().todos...)
 }
 
-// todosCopy returns the list; the caller holds a.mu.
-func (a *Agent) todosCopy() []event.TodoItem {
-	return append([]event.TodoItem(nil), a.todos...)
-}
-
-// setTodos logs the new list and installs it once logged.
-func (a *Agent) setTodos(items []event.TodoItem) error {
-	if _, err := a.record(a.ctx, event.TodoChanged, event.TodoPayload{Items: items}); err != nil {
+// change logs the list edit makes of a copy of the current one.
+func (t todosAPI) change(edit func(*agentState, []event.TodoItem) ([]event.TodoItem, error)) error {
+	s := t.a.s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := t.a.state()
+	items, err := edit(st, append([]event.TodoItem(nil), st.todos...))
+	if err != nil {
 		return err
 	}
-	a.mu.Lock()
-	a.todos = items
-	a.mu.Unlock()
-	return nil
-}
-
-// restoreTodos installs a replayed snapshot and moves the id counter past
-// every id in it.
-func (a *Agent) restoreTodos(items []event.TodoItem) {
-	a.todos = items
-	for _, it := range items {
-		if n, err := strconv.Atoi(strings.TrimPrefix(it.ID, "t")); err == nil && n > a.todoSeq {
-			a.todoSeq = n
-		}
-	}
+	_, err = s.commitLocked(context.Background(), s.event(t.a.ID, event.TodoChanged, event.TodoPayload{Items: items}))
+	return err
 }

@@ -21,12 +21,12 @@ func chatFeed() (*transcript.Transcript, func(seq int64, agent string, typ event
 // spaced alike, a reply as "‹ @name …" with its later lines past the glyph.
 func TestChatRendersInOrder(t *testing.T) {
 	c, ap := chatFeed()
-	ap(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Label: "main"})
-	ap(2, "b", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b", Label: "scout"})
+	ap(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Name: "main"})
+	ap(2, "b", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b", Name: "scout"})
 	ap(3, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "what's the stack?", To: []string{"main"}})
 	ap(4, "", event.ChatPosted, event.ChatPayload{ID: "p2", Text: "check the tests", To: []string{"scout"}})
-	ap(5, "a", event.MessageToUser, event.ChatPayload{From: "main", Text: "Go 1.27\nSQLite event log", Post: "p1"})
-	ap(6, "b", event.MessageToUser, event.ChatPayload{From: "scout", Text: "All pass", Post: "p2"})
+	ap(5, "a", event.ChatMessage, event.ChatPayload{From: "main", Text: "Go 1.27\nSQLite event log", Post: "p1"})
+	ap(6, "b", event.ChatMessage, event.ChatPayload{From: "scout", Text: "All pass", Post: "p2"})
 	got := strings.Join(renderWith(c.All(), Options{Width: 80}), "\n")
 	want := "› @main what's the stack?\n\n› @scout check the tests\n\n‹ @main Go 1.27\n  SQLite event log\n\n‹ @scout All pass"
 	if got != want {
@@ -38,9 +38,9 @@ func TestChatRendersInOrder(t *testing.T) {
 // count; expanded, all of it.
 func TestChatLongReplyExpands(t *testing.T) {
 	c, ap := chatFeed()
-	ap(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Label: "main"})
+	ap(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Name: "main"})
 	ap(2, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "summarise", To: []string{"main"}})
-	ap(3, "a", event.MessageToUser, event.ChatPayload{From: "main", Text: "one\ntwo\nthree\nfour\nfive", Post: "p1"})
+	ap(3, "a", event.ChatMessage, event.ChatPayload{From: "main", Text: "one\ntwo\nthree\nfour\nfive", Post: "p1"})
 	folded := strings.Join(renderWith(c.All(), Options{Width: 80}), "\n")
 	if !strings.Contains(folded, "\n  … +2 lines") || strings.Contains(folded, "five") {
 		t.Fatalf("collapsed:\n%s", folded)

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/nicodes/stavlos/internal/config"
+	"github.com/nicodes/stavlos/internal/escalation"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
@@ -30,11 +32,10 @@ type decision struct {
 }
 
 // runTool applies policy, escalates if needed, executes, and logs.
-func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs []model.ToolDef, rv roleView) {
-	bg := context.Background()
-	_, _ = a.record(bg, event.ToolCallStarted, event.ToolStartedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Input: c.Input})
+func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs []model.ToolDef, rv roleView, cfg *config.Effective) {
+	_ = a.record(event.ToolStarted, event.ToolStartedPayload{Turn: turn, CallID: c.ID, Name: c.Name})
 	finish := func(out string, isErr, cancelled, denied bool) {
-		_, _ = a.record(bg, event.ToolCallFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied})
+		_ = a.record(event.ToolFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied})
 	}
 	t, ok := a.s.tools[c.Name]
 	if !ok {
@@ -44,7 +45,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		finish(fmt.Sprintf("unknown tool %q", c.Name), true, false, false)
 		return
 	}
-	d := a.decide(c, t, rv)
+	d := a.decide(c, t, rv, cfg)
 	switch d.verb {
 	case policy.Allow:
 		// runs below
@@ -66,7 +67,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 			return
 		}
 	}
-	res := t.Run(turnCtx, c.Input, a.toolEnv(turn, c, rv))
+	res := t.Run(turnCtx, c.Input, a.toolEnv(turn, c, rv, cfg))
 	if turnCtx.Err() != nil {
 		finish(res.Output, true, true, false)
 		return
@@ -75,39 +76,40 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 }
 
 // decide is the verdict for a call before any human is asked.
-func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
+func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Effective) decision {
 	// Policy judges every value of the subject (each path a patch touches)
 	// and the most restrictive decision wins; the prompt names that value.
 	sub := t.Subject(c.Input)
-	verb, arg := a.policy(rv).Decide(c.Name, sub)
+	verb, arg := cfg.Policy.With(rv.preset.PresetPolicy()).Decide(c.Name, sub)
 	// A command allow rule speaks for one simple command: "cat *" says
-	// nothing about "cat x; rm -rf ~" or "cat x > ~/.bashrc". A compound
-	// command asks (auto and yolo then answer as they do for any ask).
+	// nothing about "cat x; rm -rf ~" or "cat x > ~/.bashrc".
 	if sub.Kind == policy.KindCommand && verb == policy.Allow && !shellcmd.Simple(arg) {
 		verb = policy.Ask
 	}
+	dirs := a.s.dirPaths()
 	// An edit to the files that steer the harness itself asks whatever
-	// policy says and whatever the mode: an agent must not rewrite its own
-	// rules, instructions or git hooks unseen.
-	control := a.controlFile(c.Name, sub)
+	// policy says and whatever the mode.
+	control := controlFile(c.Name, sub, a.s.Dir, dirs)
 	if control != "" && verb == policy.Allow {
 		verb, arg = policy.Ask, control
 	}
+	a.s.mu.Lock()
+	covered := verb == policy.Ask && a.s.st.permits.covers(c.Name, sub)
+	mode := a.s.st.mode
+	a.s.mu.Unlock()
 	// What the human allowed for the channel answers an ask, never a deny.
-	if verb == policy.Ask && a.s.permits.covers(c.Name, sub) {
+	if covered {
 		verb = policy.Allow
 	}
-	mode := a.s.Mode()
 	if verb == policy.Ask && control == "" && (mode == protocol.ModeYolo || mode == protocol.ModeAuto && !egress(c.Name, sub)) {
 		verb = policy.Allow // yolo answers every other ask; auto every one that sends nothing out
 	}
-	// A call that reaches outside the channel's working directories is judged
-	// by the mode even when policy allows the tool: ask mode asks (the prompt
-	// names the directory; "allow_always" adds it to the agent), auto denies
-	// it, yolo allows it.
+	// A call that reaches outside the working directories is judged by the
+	// mode even when policy allows it: ask mode asks, auto denies, yolo
+	// allows.
 	boundary, why := "", ""
 	if verb != policy.Deny {
-		if dir := a.outsideDir(sub); dir != "" {
+		if dir := outsideDir(sub, a.s.Dir, dirs); dir != "" {
 			boundary = dir
 			switch mode {
 			case protocol.ModeYolo:
@@ -123,8 +125,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 
 // egress reports whether a call sends data out of the machine or to a
 // process the harness does not inspect: a fetch, a search, an MCP tool.
-// Auto mode leaves these asking; only a rule or a channel permit (a host,
-// an MCP tool pattern) answers them.
+// Auto mode leaves these asking.
 func egress(tool string, sub policy.Subject) bool {
 	return sub.Kind == policy.KindURL || tool == toolname.WebSearch || strings.HasPrefix(tool, toolname.MCPPrefix)
 }
@@ -136,13 +137,12 @@ var controlFiles = []string{".stavlos", "AGENTS.md", ".git", ".envrc"}
 
 // controlFile is the first control file an apply_patch call edits, "" when
 // it edits none.
-func (a *Agent) controlFile(tool string, sub policy.Subject) string {
+func controlFile(tool string, sub policy.Subject, base string, dirs []string) string {
 	if tool != toolname.ApplyPatch {
 		return ""
 	}
-	dirs := a.s.dirPaths()
 	for _, v := range sub.Values {
-		p := tools.ResolvePath(a.s.Dir, v)
+		p := tools.ResolvePath(base, v)
 		for _, d := range dirs {
 			rel, err := filepath.Rel(tools.ResolvePath("", d), p)
 			if err != nil {
@@ -168,44 +168,34 @@ func autoOutside(dir string) string {
 // the channel. It returns the denial text when the answer was no,
 // withdrawn when the turn ended first, and allowed when the call may run.
 func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv roleView) (denial string, withdrawn, allowed bool) {
-	a.setState(StateBlocked)
-	question := fmt.Sprintf("%s wants to run %s", rv.label, c.Name)
+	question := fmt.Sprintf("%s wants to run %s", rv.name, c.Name)
 	if d.boundary != "" {
-		question = fmt.Sprintf("%s wants to run %s outside the channel's directories (%s)", rv.label, c.Name, d.boundary)
+		question = fmt.Sprintf("%s wants to run %s outside the channel's directories (%s)", rv.name, c.Name, d.boundary)
 	}
-	// The prefix a client may offer to allow is the daemon's to derive
-	// from the call itself; the prompt carries it for display.
+	// The prefix a client may offer to allow is the daemon's to derive from
+	// the call itself; the prompt carries it for display.
 	prefix := prefixFor(d.sub.Kind, d.arg)
-	ans := a.s.host.Prompt(turnCtx, protocol.PromptInfo{
-		ID: NewID("p"), Channel: a.s.ID, ChannelName: a.s.Name(), Agent: a.ID, From: a.LabelNow(), Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
+	ans := a.ask(turnCtx, protocol.PromptInfo{
+		ID: NewID("p"), Channel: a.s.ID, ChannelName: a.s.Name(), Agent: a.ID, From: rv.name, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
 		Question: question, Dir: d.boundary, Prefix: prefix,
-	})
-	a.setState(StateRunning)
+	}, c.ID)
 	if ans.Withdrawn {
 		return "", true, false
 	}
 	switch ans.Value {
 	case protocol.AnswerAllowPrefix, protocol.AnswerAllowAlways:
+		var grants []event.Event
 		if ans.Value == protocol.AnswerAllowPrefix && prefix != "" {
-			a.grantPermit(event.PermitPayload{Tool: c.Name, Prefix: prefix})
-			break
+			grants = append(grants, a.s.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: c.Name, Prefix: prefix}))
+		} else {
+			for _, v := range d.sub.Values { // the call as a whole: every path it touches
+				grants = append(grants, a.s.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: c.Name, Call: v}))
+			}
 		}
-		for _, v := range d.sub.Values { // the call as a whole: every path it touches
-			a.grantPermit(event.PermitPayload{Tool: c.Name, Call: v})
-		}
+		_ = a.recordAll(grants...)
 	case protocol.AnswerAllow:
 	default:
-		why := "Permission denied by the user."
-		if r := strings.TrimSpace(ans.Reason); r != "" {
-			why = "Permission denied by the user: " + r
-		}
-		if ans.Defaulted {
-			why = "Permission denied: nobody answered the prompt and the headless default is deny."
-		}
-		if ans.Client == protocol.ModeAuto && d.boundary != "" {
-			why = autoOutside(d.boundary) // waiting when the channel switched to auto
-		}
-		return why, false, false
+		return denialText(ans, d), false, false
 	}
 	if d.boundary != "" && ans.Value != protocol.AnswerAllow {
 		dir := d.boundary
@@ -217,20 +207,43 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	return "", false, true
 }
 
-// grantPermit remembers an allow for the channel and logs it, so recovery
-// restores it.
-func (a *Agent) grantPermit(p event.PermitPayload) {
-	a.s.permits.apply(p)
-	_, _ = a.record(context.Background(), event.PermitGranted, p)
+// denialText is what the agent is told when a prompt ends in no.
+func denialText(ans escalation.Answer, d decision) string {
+	switch {
+	case ans.Defaulted:
+		return "Permission denied: nobody answered the prompt and the headless default is deny."
+	case ans.Client == protocol.ModeAuto && d.boundary != "":
+		return autoOutside(d.boundary) // waiting when the channel switched to auto
+	case strings.TrimSpace(ans.Reason) != "":
+		return "Permission denied by the user: " + strings.TrimSpace(ans.Reason)
+	}
+	return "Permission denied by the user."
+}
+
+// ask logs a prompt, puts it to the human, and logs how it ended.
+func (a *Agent) ask(ctx context.Context, info protocol.PromptInfo, callID string) escalation.Answer {
+	_ = a.record(event.AskRequested, event.AskRequestedPayload{ID: info.ID, Kind: string(info.Kind), CallID: callID, Tool: info.Tool, Question: info.Question})
+	ans := a.s.host.Prompt(ctx, info)
+	res := event.AskResolvedPayload{ID: info.ID, Outcome: event.AskAnswered, Answer: ans.Value, By: ans.Client}
+	switch {
+	case ans.Withdrawn:
+		res.Outcome = event.AskWithdrawn
+	case ans.Defaulted:
+		res.Outcome = event.AskDefaulted
+	case len(ans.Answers) > 0:
+		res.Answer = strings.Join(ans.Answers, " · ")
+	}
+	_ = a.record(event.AskResolved, res)
+	return ans
 }
 
 // toolEnv is what a tool gets from this agent for one call.
-func (a *Agent) toolEnv(turn int, c model.Block, rv roleView) *tools.Env {
-	cfg := a.s.Config()
-	return &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg, rv), Orch: a.orch(), Mon: a.monitorsAPI(), Todo: a.todoAPIIfEnabled(), Ask: a.askAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
-		Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv, Sandbox: a.s.sandboxSpec(cfg),
-		Partial: func(s string) {
-			a.s.host.Stream(protocol.StreamNotification{Channel: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
+func (a *Agent) toolEnv(turn int, c model.Block, rv roleView, cfg *config.Effective) *tools.Env {
+	return &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{s: a.s}, Mon: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a},
+		MaxOutput: cfg.Compaction.MaxToolOutput, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
+		Sandbox: a.s.sandboxSpec(cfg),
+		Partial: func(out string) {
+			a.s.host.Stream(protocol.StreamNotification{Channel: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: out})
 		}}
 }
 
@@ -242,14 +255,3 @@ func hasDef(defs []model.ToolDef, name string) bool {
 	}
 	return false
 }
-
-// policy returns the effective policy for this agent: the channel's
-// layered policy with the role's rules as one more tightening overlay.
-func (a *Agent) policy(rv roleView) *policy.Layered {
-	return a.s.Config().Policy.With(rv.preset.PresetPolicy())
-}
-
-// orch is the runtime behind the agent_* tools. Every agent gets one
-// (messaging is universal); which tools are offered is decided in
-// buildContext.
-func (a *Agent) orch() tools.Orchestrator { return orchestrator{s: a.s} }

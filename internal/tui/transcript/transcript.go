@@ -173,20 +173,23 @@ type Transcript struct {
 	monitors    map[string]lineRef   // monitor id → its "started" line, or the shell call it grew from
 	children    map[string]lineRef   // child agent id → the agent_create line that spawned it
 	asks        map[string][]lineRef // agent name → message lines still waiting for its answer
-	monKinds    map[string]string    // monitor id → kind, for the glyph on later events
 	promptKinds map[string]string    // prompt id → kind, so its answer draws the prompt's glyph
 
 	streamTurn  int
 	stream      []streamSeg
-	turn        bool      // a turn is in progress (TurnStarted seen, not yet ended)
-	turnStart   time.Time // when the current turn began
-	turnTokens  int       // input + output tokens used so far this turn
-	turnVerb    string    // the indicator's verb for this turn ("Galloping")
-	compactItem int       // item of the running compaction's rule (replaced by the result), -1 when none
-	turnGap     bool      // a turn started (or a nudge came): the next item appended starts a new stretch (TurnStart)
-	nudged      bool      // a nudge was just drawn: the turn it starts continues right under it
-	spawnTask   string    // a spawned agent\'s task, held until its first prompt draws the spawn and the task as one item
-	spawnAs     string    // …and what it was spawned as: "scout (general) · model"
+	turn        bool        // a turn is in progress (TurnStarted seen, not yet ended)
+	turnStart   time.Time   // when the current turn began
+	turnTokens  int         // input + output tokens used so far this turn
+	turnVerb    string      // the indicator's verb for this turn ("Galloping")
+	compactItem int         // item of the running compaction's rule (replaced by the result), -1 when none
+	turnGap     bool        // a turn started (or a nudge came): the next item appended starts a new stretch (TurnStart)
+	nudged      bool        // a nudge was just drawn: the turn it starts continues right under it
+	spawnTask   string      // the input id of a spawned agent's task, drawn with the spawn when taken
+	spawnHeld   event.Event // a child's spawn waiting to see whether a task follows
+	spawnParent string      // …and its parent ("" when none is held)
+	inputs      map[string]event.Input
+	callInputs  map[string]json.RawMessage // a tool call's arguments, until its tool.started
+	spawnAs     string                     // …and what it was spawned as: "scout (general) · model"
 
 	chat  bool              // the channel chat (chat.go), not one agent's transcript
 	names map[string]string // in the chat: agent id → name
@@ -224,7 +227,7 @@ func (t *Transcript) TurnStats(now time.Time) (time.Duration, int) {
 func NewTranscript() *Transcript {
 	return &Transcript{
 		calls: map[string]lineRef{}, prompts: map[string]int{}, promptLine: map[string]lineRef{},
-		monitors: map[string]lineRef{}, monKinds: map[string]string{}, children: map[string]lineRef{},
+		monitors: map[string]lineRef{}, children: map[string]lineRef{}, inputs: map[string]event.Input{}, callInputs: map[string]json.RawMessage{},
 		asks: map[string][]lineRef{}, promptKinds: map[string]string{}, compactItem: -1,
 	}
 }
@@ -237,27 +240,35 @@ func (t *Transcript) Apply(ev event.Event) {
 		t.applyChat(ev)
 		return
 	}
-	if ev.Type == event.ReminderQueued {
+	reminder := isReminder(ev)
+	if reminder {
 		t.turnGap = true // the nudge opens the turn it starts (see the end of Apply)
 	}
 	if t.applyCompaction(ev) || t.holdSpawn(ev) {
 		return
 	}
 	switch ev.Type {
-	case event.ToolCallStarted, event.ToolCallFinished:
+	case event.AssistantMessage:
+		t.rememberCalls(ev)
+	case event.InputQueued:
+		t.queueInput(ev)
+	case event.InputTaken:
+		t.applyTaken(ev)
+		return
+	case event.ToolStarted, event.ToolFinished:
 		if t.applyToolCall(ev) {
 			return
 		}
-	case event.PromptRequested, event.PromptClaimed, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted:
+	case event.AskRequested, event.AskResolved:
 		if t.applyPrompt(ev) {
 			return
 		}
-	case event.MonitorStarted, event.MonitorFired, event.MonitorStopped:
+	case event.JobStarted, event.JobFinished, event.JobStopped:
 		if t.applyMonitor(ev) {
 			return
 		}
 	}
-	lines := CleanLines(t.eventLines(ev))
+	lines := CleanLines(EventLines(ev))
 	t.answerGlyph(ev, lines)
 	t.appendItem(lines)
 	t.afterAppend(ev)
@@ -265,61 +276,139 @@ func (t *Transcript) Apply(ev event.Event) {
 	// turn: what happens between turns (a mode or model change, a job's
 	// result) stays with the turn before, above the gap. A nudge is the
 	// exception: it opens the turn it starts, so the gap goes above it.
-	switch ev.Type {
-	case event.ReminderQueued:
+	switch {
+	case reminder:
 		t.nudged = true
-	case event.TurnStarted:
+	case ev.Type == event.TurnStarted:
 		t.turnGap = t.turnGap || !t.nudged
 		t.nudged = false
 	}
 }
 
-// holdSpawn keeps a spawn that carries a task off the chat: the agent's
-// first prompt, which is that task, draws both as one item of its first
-// turn (see eventLines). A spawn without a task draws as usual.
-func (t *Transcript) holdSpawn(ev event.Event) bool {
-	if ev.Type != event.AgentSpawned {
-		return false
-	}
-	var p event.AgentSpawnedPayload
-	if ev.Decode(&p) != nil || p.Parent == "" || p.Task == "" {
-		return false
-	}
-	t.spawnTask, t.spawnAs = p.Task, fmt.Sprintf("%s (%s)", p.Label, p.Archetype)
-	if p.Model != "" {
-		t.spawnAs += " · " + p.Model
-	}
-	return true
+// isReminder reports whether ev queues the harness's reminder of replies owed.
+func isReminder(ev event.Event) bool {
+	var in event.Input
+	return ev.Type == event.InputQueued && ev.Decode(&in) == nil && in.Kind == event.InputReminder
 }
 
-// eventLines is EventLines, except for a spawned agent's first prompt from
-// its creator: "» @main as scout (general) · model" over the task.
-func (t *Transcript) eventLines(ev event.Event) []Line {
-	if ev.Type == event.UserMessage && t.spawnTask != "" {
-		var p event.UserMessagePayload
-		if ev.Decode(&p) == nil && p.From != "" && p.Text == t.spawnTask {
-			t.spawnTask = ""
-			lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: titled("@"+p.From, "as "+t.spawnAs), Block: BlockChild, Glyph: GlyphSpawn, Who: p.From}}
-			for _, l := range strings.Split(strings.TrimRight(p.Text, "\n"), "\n") {
-				lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild, Indent: 1})
-			}
-			return append(lines, Line{Kind: LineBlank})
+// queueInput remembers an input until the agent takes it: that is when it
+// joins the conversation, and when the chat shows it.
+func (t *Transcript) queueInput(ev event.Event) {
+	var in event.Input
+	if ev.Decode(&in) == nil && in.ID != "" && in.Kind != event.InputReminder {
+		t.inputs[in.ID] = in
+	}
+}
+
+// applyTaken draws each input a model call took as an item of its own; an
+// answer settles the messages waiting on its sender.
+func (t *Transcript) applyTaken(ev event.Event) {
+	var p event.InputTakenPayload
+	if ev.Decode(&p) != nil {
+		return
+	}
+	for _, id := range p.IDs {
+		in, ok := t.inputs[id]
+		if !ok {
+			continue
+		}
+		delete(t.inputs, id)
+		lines := InputLines(in)
+		if id == t.spawnTask {
+			t.spawnTask, lines = "", t.spawnLines(in)
+		}
+		t.appendItem(CleanLines(lines))
+		if in.Kind == event.InputResponse {
+			t.answered(in.FromName)
 		}
 	}
-	return EventLines(ev)
+}
+
+// InputLines draws an input as the chat shows it: the human's own words
+// blue after "@user", another agent's under its name. A job's result nests
+// under its call and a reminder showed when it was queued, so neither draws
+// again.
+func InputLines(in event.Input) []Line {
+	switch in.Kind {
+	case event.InputPrompt, event.InputSteer:
+		lines := block(BlockUser, "", "**@user** "+in.Text)
+		for i := range lines {
+			if lines[i].Lead {
+				lines[i].Who = "user"
+				break
+			}
+		}
+		return lines
+	case event.InputRequest, event.InputResponse:
+		return received(in.FromName, in.Text, GlyphAsk)
+	case event.InputInfo:
+		return received(in.FromName, in.Text, GlyphInfo) // needs no reply
+	default:
+	}
+	return nil
+}
+
+// rememberCalls keeps each tool call's input from the assistant message
+// until its tool.started draws the call.
+func (t *Transcript) rememberCalls(ev event.Event) {
+	var p event.AssistantMessagePayload
+	if ev.Decode(&p) != nil {
+		return
+	}
+	for _, b := range p.Blocks {
+		if b.Type == model.BlockToolUse {
+			t.callInputs[b.ID] = b.Input
+		}
+	}
+}
+
+// holdSpawn keeps a child's spawn off the chat until the next event shows
+// whether it came with a task: a task from its parent is drawn with the
+// spawn as one item when the child takes it; anything else draws the
+// spawn on its own first.
+func (t *Transcript) holdSpawn(ev event.Event) bool {
+	if ev.Type == event.AgentSpawned {
+		var p event.AgentSpawnedPayload
+		if ev.Decode(&p) != nil || p.Parent == "" {
+			return false
+		}
+		t.spawnHeld, t.spawnParent = ev, p.Parent
+		t.spawnAs = fmt.Sprintf("%s (%s)", p.Name, p.Role)
+		if p.Model != "" {
+			t.spawnAs += " · " + p.Model
+		}
+		return true
+	}
+	if t.spawnParent == "" {
+		return false
+	}
+	parent := t.spawnParent
+	t.spawnParent = ""
+	var in event.Input
+	if ev.Type == event.InputQueued && ev.Decode(&in) == nil && in.Kind == event.InputRequest && in.From == parent {
+		t.spawnTask, t.inputs[in.ID] = in.ID, in
+		return true
+	}
+	t.appendItem(CleanLines(EventLines(t.spawnHeld)))
+	return false
+}
+
+// spawnLines draws a child's first task with its spawn: "» @main as scout
+// (general) · model" over the task.
+func (t *Transcript) spawnLines(in event.Input) []Line {
+	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: titled("@"+in.FromName, "as "+t.spawnAs), Block: BlockChild, Glyph: GlyphSpawn, Who: in.FromName}}
+	for _, l := range strings.Split(strings.TrimRight(in.Text, "\n"), "\n") {
+		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild, Indent: 1})
+	}
+	return append(lines, Line{Kind: LineBlank})
 }
 
 // answerGlyph marks an answer, a default or a withdrawal with its prompt's
 // glyph: ? for a question, ! for a permission or trust prompt (and for one
 // whose kind was never seen).
 func (t *Transcript) answerGlyph(ev event.Event, lines []Line) {
-	switch ev.Type {
-	case event.PromptAnswered, event.PromptDefaulted, event.PromptWithdrawn:
-	default:
-		return
-	}
-	var p event.PromptRefPayload
-	if ev.Decode(&p) != nil || t.promptKinds[p.ID] == string(protocol.PromptQuestion) {
+	var p event.AskResolvedPayload
+	if ev.Type != event.AskResolved || ev.Decode(&p) != nil || t.promptKinds[p.ID] == string(protocol.PromptQuestion) {
 		return
 	}
 	for i := range lines {
@@ -340,7 +429,7 @@ func (t *Transcript) applyCompaction(ev event.Event) bool {
 			t.compactItem = refs[0].item
 		}
 		return true
-	case event.Compacted, event.CompactionFailed:
+	case event.CompactionDone, event.CompactionFailed:
 		if t.compactItem >= 0 {
 			t.replaceItem(t.compactItem, CleanLines(EventLines(ev)))
 			t.compactItem = -1
@@ -358,12 +447,14 @@ func (t *Transcript) applyCompaction(ev event.Event) bool {
 // applyToolCall tracks a call's line and nests its output under it. It
 // reports whether ev was fully handled.
 func (t *Transcript) applyToolCall(ev event.Event) bool {
-	if ev.Type == event.ToolCallStarted {
+	if ev.Type == event.ToolStarted {
 		var p event.ToolStartedPayload
 		if ev.Decode(&p) != nil || p.CallID == "" {
 			return false
 		}
-		if r, ok := t.find(t.appendItem(CleanLines(EventLines(ev))), isToolLine); ok {
+		input := t.callInputs[p.CallID]
+		delete(t.callInputs, p.CallID)
+		if r, ok := t.find(t.appendItem(CleanLines(toolStartedLines(p.Name, p.CallID, input))), isToolLine); ok {
 			t.calls[p.CallID] = r
 		}
 		return true
@@ -389,17 +480,15 @@ func (t *Transcript) applyToolCall(ev event.Event) bool {
 // call it gates, and settles the prompt's "?" line. It reports whether ev
 // was fully handled.
 func (t *Transcript) applyPrompt(ev event.Event) bool {
-	if ev.Type == event.PromptRequested {
-		// A permission prompt belongs to the call it gates: the open call
-		// with the same tool name (the latest one if several).
-		var p event.PromptRequestedPayload
+	if ev.Type == event.AskRequested {
+		var p event.AskRequestedPayload
 		if ev.Decode(&p) != nil {
 			return false
 		}
 		t.promptKinds[p.ID] = p.Kind
 		lines := CleanLines(EventLines(ev))
 		var refs []lineRef
-		if item, gated := t.openCallItem(p.Tool); p.Kind == "permission" && gated {
+		if item, gated := t.callItem(p.CallID, p.Tool); p.Kind == string(protocol.PromptPermission) && gated {
 			t.prompts[p.ID] = item
 			refs = t.insertIntoItem(item, nested(lines))
 		} else {
@@ -410,24 +499,29 @@ func (t *Transcript) applyPrompt(ev event.Event) bool {
 		}
 		return true
 	}
-	var p event.PromptRefPayload
+	var p event.AskResolvedPayload
 	if ev.Decode(&p) != nil {
 		return false
 	}
-	if ev.Type != event.PromptClaimed {
-		t.settlePrompt(p.ID, ev.Type != event.PromptAnswered)
-	}
+	t.settlePrompt(p.ID, p.Outcome != event.AskAnswered)
 	item, ok := t.prompts[p.ID]
 	if !ok {
 		return false
 	}
-	if ev.Type != event.PromptClaimed {
-		delete(t.prompts, p.ID)
-	}
+	delete(t.prompts, p.ID)
 	lines := CleanLines(EventLines(ev))
 	t.answerGlyph(ev, lines)
 	t.insertIntoItem(item, nested(lines))
 	return true
+}
+
+// callItem is the item of the call a prompt gates: by its id, else the most
+// recently started open call of the tool.
+func (t *Transcript) callItem(id, tool string) (int, bool) {
+	if r, ok := t.calls[id]; ok && t.valid(r) {
+		return r.item, true
+	}
+	return t.openCallItem(tool)
 }
 
 // applyMonitor ties a background job to the shell call it grew from, or to
@@ -435,12 +529,11 @@ func (t *Transcript) applyPrompt(ev event.Event) bool {
 // was fully handled.
 func (t *Transcript) applyMonitor(ev event.Event) bool {
 	switch ev.Type {
-	case event.MonitorStarted:
-		var p event.MonitorStartedPayload
+	case event.JobStarted:
+		var p event.JobStartedPayload
 		if ev.Decode(&p) != nil || p.ID == "" {
 			return false
 		}
-		t.monKinds[p.ID] = p.Kind
 		// A job that grew out of a shell call is represented by that call's
 		// own line: it stays yellow while the job runs and the outcome nests
 		// under it. Only a job with no such call gets its own notice.
@@ -454,15 +547,10 @@ func (t *Transcript) applyMonitor(ev event.Event) bool {
 			t.monitors[p.ID] = r
 		}
 		return true
-	case event.MonitorFired:
-		// The outcome joins the "started" notice's item, like tool output
-		// joins its call.
-		var p event.MonitorFiredPayload
+	case event.JobFinished:
+		var p event.JobFinishedPayload
 		if ev.Decode(&p) != nil {
 			return false
-		}
-		if p.Kind == "" {
-			p.Kind = t.monKinds[p.ID]
 		}
 		tone := ToneNone
 		if p.IsError {
@@ -470,12 +558,12 @@ func (t *Transcript) applyMonitor(ev event.Event) bool {
 		}
 		t.settleMonitor(p.ID, tone, CleanLines(monitorFiredLines(p)))
 		return true
-	case event.MonitorStopped:
-		var p event.MonitorRefPayload
+	case event.JobStopped:
+		var p event.JobStoppedPayload
 		if ev.Decode(&p) != nil {
 			return false
 		}
-		t.settleMonitor(p.ID, ToneError, CleanLines(monitorStoppedLines(t.monKinds[p.ID], p.Reason)))
+		t.settleMonitor(p.ID, ToneError, CleanLines(monitorStoppedLines("command", p.Reason)))
 		return true
 	}
 	return false
@@ -489,18 +577,12 @@ func (t *Transcript) afterAppend(ev event.Event) {
 		var p event.TurnPayload
 		_ = ev.Decode(&p)
 		t.turnVerb = TurnVerbs[((p.Turn-1)%len(TurnVerbs)+len(TurnVerbs))%len(TurnVerbs)]
-	case event.Usage:
-		var p event.UsagePayload
+	case event.AssistantMessage:
+		t.stream = nil
+		var p event.AssistantMessagePayload
 		if ev.Decode(&p) == nil {
 			t.turnTokens += p.Usage.InputTokens + p.Usage.OutputTokens
 		}
-	case event.UserMessage:
-		var p event.UserMessagePayload
-		if ev.Decode(&p) == nil && p.Kind == event.MsgAgentResponse {
-			t.answered(p.From)
-		}
-	case event.AssistantMessage:
-		t.stream = nil
 	case event.TurnEnded, event.TurnAborted, event.AgentKilled:
 		t.stream = nil
 		t.turn = false
@@ -1033,39 +1115,14 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		if p.Parent == "" {
 			return nil // the root's own spawn is not a message; keeps the home state empty
 		}
-		lines := []Line{{Kind: LineDim, Glyph: GlyphSpawn, Text: titled("Spawned", fmt.Sprintf("%s (%s) · %s", p.Label, p.Archetype, p.Model))}}
-		if p.Task != "" {
-			lines = append(lines, blockWith(BlockChild, "task", p.Task, GlyphTask)...)
-		}
-		return lines
+		return []Line{{Kind: LineDim, Glyph: GlyphSpawn, Text: titled("Spawned", fmt.Sprintf("%s (%s) · %s", p.Name, p.Role, p.Model))}}
 	}),
 
-	event.UserMessage: decoded(func(p event.UserMessagePayload) []Line {
-		switch p.Kind {
-		case event.MsgPrompt, "", event.MsgSteer, event.MsgNote: // a steer or a note reads like a prompt
-			if p.From != "" && p.Kind == event.MsgNote {
-				return received(p.From, p.Text, GlyphInfo) // info: needs no reply
-			}
-			if p.From != "" {
-				return received(p.From, p.Text, GlyphAsk)
-			}
-			lines := block(BlockUser, "", "**@user** "+p.Text) // the human's own input: blue "› @user …"
-			for i := range lines {
-				if lines[i].Lead {
-					lines[i].Who = "user"
-					break
-				}
-			}
-			return lines
-		case event.MsgAgentResponse:
-			return received(p.From, p.Text, GlyphAsk)
-		case event.MsgMonitorFired:
-			return blockWith(BlockChild, "job result", p.Text, GlyphToolMonitors)
-		case event.MsgReminder:
-			return nil // the reminder.queued notice already said it
-		default:
-			return block(BlockUser, string(p.Kind), p.Text)
+	event.InputQueued: decoded(func(in event.Input) []Line {
+		if in.Kind != event.InputReminder {
+			return nil // an input draws when the agent takes it (Transcript.applyTaken)
 		}
+		return []Line{{Kind: LineDim, Glyph: GlyphNudge, Text: titled("Nudge", "owes a reply to "+partyList(in.Names))}}
 	}),
 
 	event.AssistantMessage: decoded(func(p event.AssistantMessagePayload) []Line {
@@ -1115,36 +1172,11 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return lines
 	}),
 
-	event.ReminderQueued: decoded(func(p event.RepliesPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphNudge, Text: titled("Nudge", "owes a reply to "+partyList(p.Names))}}
+	event.ToolStarted: decoded(func(p event.ToolStartedPayload) []Line {
+		return toolStartedLines(p.Name, p.CallID, nil) // the transcript draws calls with their input from the assistant message
 	}),
 
-	event.ToolCallStarted: decoded(func(p event.ToolStartedPayload) []Line {
-		if p.Name == toolname.Message || p.Name == toolname.AgentCreate {
-			// "‹ @scout first line" (a message) or "» @scout first line" (the
-			// task that creates it), then the rest of the text under it
-			who, text := promptOf(p.Name, p.Input)
-			lines := []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, Tool: p.Name, Who: who}}
-			var in struct{ Kind string }
-			if _ = json.Unmarshal(p.Input, &in); p.Name == toolname.Message && in.Kind == "info" {
-				lines[0].Glyph = GlyphInfoSent // needs no reply: « (a denial still swaps in ✗)
-			}
-			if _, rest, ok := strings.Cut(text, "\n"); ok {
-				lines = append(lines, OutputLines(rest)...)
-			}
-			return lines
-		}
-		call := Line{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID, Tool: p.Name}
-		if p.Name == toolname.ApplyPatch {
-			// the change itself is what matters: the call, then its diff
-			var in struct{ Patch string }
-			_ = json.Unmarshal(p.Input, &in)
-			return append([]Line{call}, DiffLines(in.Patch)...)
-		}
-		return []Line{call}
-	}),
-
-	event.ToolCallFinished: decoded(func(p event.ToolFinishedPayload) []Line {
+	event.ToolFinished: decoded(func(p event.ToolFinishedPayload) []Line {
 		if p.Denied {
 			return nil // the denial reads on the call's own line (see finishCall)
 		}
@@ -1180,28 +1212,33 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return errorBlockWith("killed", GlyphKilled)
 	},
 
-	event.AgentRoleChanged: decoded(func(p event.RoleChangedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Role", "→ "+p.Role)}}
-	}),
-
-	event.AgentModelChanged: decoded(func(p event.ModelChangedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Model", "→ "+p.Model)}}
-	}),
-
-	event.ChannelModeChanged: decoded(func(p event.ModePayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Mode", "→ "+p.Mode+" · "+protocol.ModeSummary(p.Mode))}}
-	}),
-
-	event.AgentVariantChanged: decoded(func(p event.VariantChangedPayload) []Line {
-		v := p.Variant
-		if v == "" {
-			v = "default"
+	event.AgentUpdated: decoded(func(p event.AgentUpdatedPayload) []Line {
+		var lines []Line
+		if p.Role != nil {
+			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Role", "→ "+*p.Role)})
 		}
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Variant", "→ "+v)}}
+		if p.Model != nil {
+			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Model", "→ "+*p.Model)})
+		}
+		if p.Variant != nil {
+			v := *p.Variant
+			if v == "" {
+				v = "default"
+			}
+			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Variant", "→ "+v)})
+		}
+		return lines
 	}),
 
-	event.MonitorStarted: decoded(func(p event.MonitorStartedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphToolMonitors, Tone: ToneWorking, Text: titled("Job", p.Label)}}
+	event.ChannelUpdated: decoded(func(p event.ChannelUpdatedPayload) []Line {
+		if p.Mode == nil {
+			return nil
+		}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Mode", "→ "+*p.Mode+" · "+protocol.ModeSummary(*p.Mode))}}
+	}),
+
+	event.JobStarted: decoded(func(p event.JobStartedPayload) []Line {
+		return []Line{{Kind: LineDim, Glyph: GlyphToolMonitors, Tone: ToneWorking, Text: titled("Job", p.Command)}}
 	}),
 
 	event.MCPStarted: decoded(func(p event.MCPStartedPayload) []Line {
@@ -1218,14 +1255,12 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: titled("MCP", p.Server+" stopped")}}
 	}),
 
-	event.MonitorFired: decoded(func(p event.MonitorFiredPayload) []Line {
-		return monitorFiredLines(p)
-	}),
+	event.JobFinished: decoded(monitorFiredLines),
 
 	// Without the transcript's id → kind memory the kind is unknown here;
 	// Transcript.Apply looks it up.
-	event.MonitorStopped: decoded(func(p event.MonitorRefPayload) []Line {
-		return monitorStoppedLines("", p.Reason)
+	event.JobStopped: decoded(func(p event.JobStoppedPayload) []Line {
+		return monitorStoppedLines("command", p.Reason)
 	}),
 
 	event.CompactionStarted: func(event.Event) []Line {
@@ -1236,7 +1271,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return []Line{{Kind: LineBlank}, {Kind: LineDim, Text: titled("Compaction failed", p.Error)}, {Kind: LineBlank}}
 	}),
 
-	event.Compacted: decoded(func(p event.CompactedPayload) []Line {
+	event.CompactionDone: decoded(func(p event.CompactionPayload) []Line {
 		rule := GlyphCompacted
 		if p.Before > 0 && p.After > 0 {
 			rule = fmt.Sprintf("┄┄ compacted %s → %s tokens ┄┄", format.Tokens(p.Before), format.Tokens(p.After))
@@ -1248,35 +1283,62 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return append(lines, Line{Kind: LineBlank})
 	}),
 
-	event.PromptRequested: decoded(func(p event.PromptRequestedPayload) []Line {
-		switch p.Kind {
-		case "question":
+	event.AskRequested: decoded(func(p event.AskRequestedPayload) []Line {
+		switch protocol.PromptKind(p.Kind) {
+		case protocol.PromptQuestion:
 			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: titled("Question", format.FirstLine(p.Question))}}
-		case "trust":
+		case protocol.PromptTrust:
 			return []Line{{Kind: LineNotice, Glyph: GlyphPermission, Tone: ToneWorking, Text: titled("Trust requested", "")}}
-		default:
-			return []Line{{Kind: LineNotice, Glyph: GlyphPermission, Tone: ToneWorking, Text: titled("Permission", p.Tool)}}
+		case protocol.PromptPermission:
 		}
+		return []Line{{Kind: LineNotice, Glyph: GlyphPermission, Tone: ToneWorking, Text: titled("Permission", p.Tool)}}
 	}),
 
-	event.PromptAnswered: decoded(func(p event.PromptAnsweredPayload) []Line {
+	event.AskResolved: decoded(func(p event.AskResolvedPayload) []Line {
+		switch p.Outcome {
+		case event.AskDefaulted:
+			return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: titled("Defaulted", format.FirstLine(p.Answer))}}
+		case event.AskWithdrawn:
+			return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: titled("Prompt withdrawn", "")}}
+		case event.AskAnswered:
+		}
 		ln := Line{Kind: LineNotice, Glyph: GlyphAnswer, Text: titled("Answered", format.FirstLine(p.Answer))}
 		if strings.HasPrefix(strings.ToLower(p.Answer), "deny") {
 			ln.Tone = ToneError
 		}
 		return []Line{ln}
 	}),
-
-	event.PromptDefaulted: decoded(func(p event.PromptAnsweredPayload) []Line {
-		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: titled("Defaulted", format.FirstLine(p.Answer))}}
-	}),
-
-	event.PromptWithdrawn: func(event.Event) []Line {
-		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: titled("Prompt withdrawn", "")}}
-	},
 }
 
 // --- helpers ---
+
+// toolStartedLines draws a call: its line, and for a message or a task the
+// text under it, for a patch its diff. input is the call's arguments from
+// the assistant message (nil when unknown).
+func toolStartedLines(name, callID string, input json.RawMessage) []Line {
+	if name == toolname.Message || name == toolname.AgentCreate {
+		// "‹ @scout first line" (a message) or "» @scout first line" (the
+		// task that creates it), then the rest of the text under it
+		who, text := promptOf(name, input)
+		lines := []Line{{Kind: LineTool, Text: toolLine(name, input), Running: true, Tool: name, Who: who}}
+		var in struct{ Kind string }
+		if _ = json.Unmarshal(input, &in); name == toolname.Message && in.Kind == "info" {
+			lines[0].Glyph = GlyphInfoSent // needs no reply: « (a denial still swaps in ✗)
+		}
+		if _, rest, ok := strings.Cut(text, "\n"); ok {
+			lines = append(lines, OutputLines(rest)...)
+		}
+		return lines
+	}
+	call := Line{Kind: LineTool, Text: toolLine(name, input), Running: true, callID: callID, Tool: name}
+	if name == toolname.ApplyPatch {
+		// the change itself is what matters: the call, then its diff
+		var in struct{ Patch string }
+		_ = json.Unmarshal(input, &in)
+		return append([]Line{call}, DiffLines(in.Patch)...)
+	}
+	return []Line{call}
+}
 
 // denialMark is why a call was denied, for next to its name: "(<the
 // human's reason>)", "(by policy)", "(no answer)" when nobody could answer
@@ -1317,7 +1379,7 @@ func decodeErr(ev event.Event, err error) []Line {
 
 // monitorFiredLines renders "<glyph> <summary>" (red on error) followed by
 // the output collapsed like tool output.
-func monitorFiredLines(p event.MonitorFiredPayload) []Line {
+func monitorFiredLines(p event.JobFinishedPayload) []Line {
 	head := Line{Kind: LineDim, Glyph: GlyphToolMonitors}
 	if p.IsError {
 		head.Tone = ToneError
@@ -1833,6 +1895,6 @@ func (t *Transcript) Notice(lines ...string) {
 
 // dirAddedLines notes a directory joining the channel's working set, in the
 // chat of the agent whose boundary prompt added it.
-func dirAddedLines(p event.DirAddedPayload) []Line {
+func dirAddedLines(p event.DirPayload) []Line {
 	return []Line{{Kind: LineDim, Glyph: GlyphToolFiles, Text: titled("Dirs", fmt.Sprintf("+ %s (%s)", format.ShortHome(p.Dir), p.Source))}}
 }

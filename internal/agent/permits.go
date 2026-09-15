@@ -3,7 +3,6 @@ package agent
 import (
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/policy"
@@ -14,9 +13,9 @@ import (
 // calls ("Allow for this channel") and prefixes ("Allow go test for this
 // channel": a command prefix, a host). They answer a policy Ask; they
 // never override a Deny, and they last for the channel, across daemon
-// restarts (each is logged as permit.granted and replayed) (PRD §10.3).
+// restarts (each is a permit.granted event). They are channel state,
+// guarded by the channel's lock.
 type permits struct {
-	mu       sync.Mutex
 	calls    map[string]bool     // tool + "\x00" + one subject value
 	prefixes map[string][]string // tool → remembered prefixes
 }
@@ -28,8 +27,6 @@ func (p *permits) covers(tool string, sub policy.Subject) bool {
 	if len(sub.Values) == 0 {
 		return false
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	for _, v := range sub.Values {
 		if !p.coversOne(tool, sub.Kind, v) {
 			return false
@@ -38,7 +35,6 @@ func (p *permits) covers(tool string, sub policy.Subject) bool {
 	return true
 }
 
-// coversOne is covers for one value; the caller holds p.mu.
 func (p *permits) coversOne(tool string, kind policy.Kind, v string) bool {
 	if p.calls[tool+"\x00"+v] {
 		return true
@@ -51,43 +47,22 @@ func (p *permits) coversOne(tool string, kind policy.Kind, v string) bool {
 	return false
 }
 
-// apply installs a granted permit (live or replayed).
+// apply installs a granted permit.
 func (p *permits) apply(g event.PermitPayload) {
-	if g.Prefix != "" {
-		p.rememberPrefix(g.Tool, g.Prefix)
-	} else if g.Call != "" {
-		p.rememberCall(g.Tool, g.Call)
-	}
-}
-
-// rememberCall allows this exact call for the channel.
-func (p *permits) rememberCall(tool, arg string) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.calls == nil {
-		p.calls = map[string]bool{}
-	}
-	p.calls[tool+"\x00"+arg] = true
-}
-
-// rememberPrefix allows every call of tool the prefix covers for the
-// channel. The prefix is the daemon's own (prefixFor of the call being
-// answered), never a client's.
-func (p *permits) rememberPrefix(tool, prefix string) {
-	if prefix == "" {
-		return
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.prefixes == nil {
-		p.prefixes = map[string][]string{}
-	}
-	for _, have := range p.prefixes[tool] {
-		if have == prefix {
-			return
+	switch {
+	case g.Prefix != "":
+		if p.prefixes == nil {
+			p.prefixes = map[string][]string{}
 		}
+		if !contains(p.prefixes[g.Tool], g.Prefix) {
+			p.prefixes[g.Tool] = append(p.prefixes[g.Tool], g.Prefix)
+		}
+	case g.Call != "":
+		if p.calls == nil {
+			p.calls = map[string]bool{}
+		}
+		p.calls[g.Tool+"\x00"+g.Call] = true
 	}
-	p.prefixes[tool] = append(p.prefixes[tool], prefix)
 }
 
 // prefixFor is what "allow … for this channel" may remember for a call:

@@ -22,19 +22,6 @@ func postTurn(t *testing.T, s *Channel, h *fakeHost, text string) {
 	h.waitFor(t, event.TurnEnded, s.Root().ID)
 }
 
-func repliesOf(t *testing.T, h *fakeHost, typ event.Type, agent string) [][]string {
-	t.Helper()
-	var out [][]string
-	for _, e := range h.ofType(typ, agent) {
-		var p event.RepliesPayload
-		if err := e.Decode(&p); err != nil {
-			t.Fatal(err)
-		}
-		out = append(out, p.Names)
-	}
-	return out
-}
-
 // TestNudgesUntilReplyOrCap: every turn that ends owing the human a reply (for
 // a channel chat post) is
 // followed by a reminder turn, up to maxNudges in a row; the reply stays
@@ -52,12 +39,12 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	postTurn(t, s, h, "check it")
-	waitUntil(t, h, func() bool { return root.Info().Turn == 1+maxNudges && root.StateOf() == StateIdle })
+	waitUntil(t, h, func() bool { return root.Info().Turn == 1+maxNudges && stateOf(root) == StateIdle })
 	time.Sleep(50 * time.Millisecond) // nothing follows the cap
 	if in := root.Info(); in.Turn != 1+maxNudges || !reflect.DeepEqual(in.Due, []string{"user"}) {
 		t.Fatalf("turn %d due %v", in.Turn, in.Due)
 	}
-	if q := repliesOf(t, h, event.ReminderQueued, root.ID); len(q) != maxNudges || !reflect.DeepEqual(q[0], []string{"user"}) {
+	if q := reminders(h, root.ID); len(q) != maxNudges || !reflect.DeepEqual(q[0], []string{"user"}) {
 		t.Fatalf("reminders %v", q)
 	}
 	if !strings.Contains(reminder, "without replying to user") || !strings.Contains(reminder, "message (to: user, kind: response)") {
@@ -70,9 +57,9 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 	if _, err := s.Post(context.Background(), "again", "human:test"); err != nil {
 		t.Fatal(err)
 	}
-	waitUntil(t, h, func() bool { return root.Info().Turn == 2+2*maxNudges && root.StateOf() == StateIdle })
+	waitUntil(t, h, func() bool { return root.Info().Turn == 2+2*maxNudges && stateOf(root) == StateIdle })
 	time.Sleep(50 * time.Millisecond)
-	if q := repliesOf(t, h, event.ReminderQueued, root.ID); len(q) != 2*maxNudges || root.Info().Turn != 2+2*maxNudges {
+	if q := reminders(h, root.ID); len(q) != 2*maxNudges || root.Info().Turn != 2+2*maxNudges {
 		t.Fatalf("a new message resets the count: reminders %d turn %d", len(q), root.Info().Turn)
 	}
 }
@@ -87,9 +74,9 @@ func TestNudgeGetsAReply(t *testing.T) {
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	postTurn(t, s, h, "check it")
-	waitUntil(t, h, func() bool { return len(h.ofType(event.MessageToUser, root.ID)) == 1 && root.StateOf() == StateIdle })
+	waitUntil(t, h, func() bool { return len(h.ofType(event.ChatMessage, root.ID)) == 1 && stateOf(root) == StateIdle })
 	time.Sleep(50 * time.Millisecond)
-	if in := root.Info(); in.Turn != 2 || len(in.Due) != 0 || len(h.ofType(event.ReminderQueued, root.ID)) != 1 {
+	if in := root.Info(); in.Turn != 2 || len(in.Due) != 0 || len(reminders(h, root.ID)) != 1 {
 		t.Fatalf("turn %d due %v log:\n%s", in.Turn, in.Due, h.dump())
 	}
 }
@@ -103,8 +90,8 @@ func TestReplyNeedsNoReminder(t *testing.T) {
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	postTurn(t, s, h, "check it")
-	waitUntil(t, h, func() bool { return root.StateOf() == StateIdle })
-	if due := root.Info().Due; len(due) != 0 || len(h.ofType(event.ReminderQueued, root.ID)) != 0 || root.Info().Turn != 1 {
+	waitUntil(t, h, func() bool { return stateOf(root) == StateIdle })
+	if due := root.Info().Due; len(due) != 0 || len(reminders(h, root.ID)) != 0 || root.Info().Turn != 1 {
 		t.Fatalf("due %v, log:\n%s", due, h.dump())
 	}
 }
@@ -130,12 +117,12 @@ func TestNoNudgeWhileWaiting(t *testing.T) {
 	root := s.Root()
 	postTurn(t, s, h, "delegate")
 	time.Sleep(50 * time.Millisecond)
-	if n := len(h.ofType(event.ReminderQueued, root.ID)); n != 0 || root.Info().Turn != 1 {
+	if n := len(reminders(h, root.ID)); n != 0 || root.Info().Turn != 1 {
 		t.Fatalf("no nudge while waiting on the child: reminders %d turn %d", n, root.Info().Turn)
 	}
 	close(release)
-	waitUntil(t, h, func() bool { return len(h.ofType(event.MessageToUser, root.ID)) == 1 && root.StateOf() == StateIdle })
-	if q := repliesOf(t, h, event.ReminderQueued, root.ID); !reflect.DeepEqual(q, [][]string{{"user"}}) || root.Info().Turn != 3 {
+	waitUntil(t, h, func() bool { return len(h.ofType(event.ChatMessage, root.ID)) == 1 && stateOf(root) == StateIdle })
+	if q := reminders(h, root.ID); !reflect.DeepEqual(q, [][]string{{"user"}}) || root.Info().Turn != 3 {
 		t.Fatalf("reminders %v turn %d", q, root.Info().Turn)
 	}
 }
@@ -166,13 +153,13 @@ func TestChildRemindedOfItsParent(t *testing.T) {
 	child := s.Agents()[1]
 	waitUntil(t, h, func() bool {
 		for _, m := range userMessages(h, root.ID) {
-			if m.Kind == event.MsgAgentResponse && m.From == "scout" {
-				return child.StateOf() == StateIdle
+			if m.Kind == event.InputResponse && m.FromName == "scout" {
+				return stateOf(child) == StateIdle
 			}
 		}
 		return false
 	})
-	if q := repliesOf(t, h, event.ReminderQueued, child.ID); !reflect.DeepEqual(q, [][]string{{"main"}}) {
+	if q := reminders(h, child.ID); !reflect.DeepEqual(q, [][]string{{"main"}}) {
 		t.Fatalf("child reminders %v\n%s", q, h.dump())
 	}
 	if due := child.Info().Due; len(due) != 0 {
@@ -187,12 +174,13 @@ func TestReminderSurvivesRestart(t *testing.T) {
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	postTurn(t, s, h, "check it")
-	waitUntil(t, h, func() bool { return len(h.ofType(event.ReminderQueued, root.ID)) >= 1 })
+	waitUntil(t, h, func() bool { return len(reminders(h, root.ID)) >= 1 })
 	s.Stop()
 	var cut []event.Event
 	for _, e := range h.all() {
 		cut = append(cut, e)
-		if e.Type == event.ReminderQueued {
+		var in event.Input
+		if e.Type == event.InputQueued && e.Decode(&in) == nil && in.Kind == event.InputReminder {
 			break
 		}
 	}
@@ -203,8 +191,8 @@ func TestReminderSurvivesRestart(t *testing.T) {
 	}
 	t.Cleanup(s2.Stop)
 	r2, _ := s2.Agent(root.ID)
-	waitUntil(t, h2, func() bool { return len(h2.ofType(event.MessageToUser, root.ID)) == 1 && r2.StateOf() == StateIdle })
-	if um := userMessages(h2, root.ID); len(um) != 1 || um[0].Kind != event.MsgReminder {
+	waitUntil(t, h2, func() bool { return len(h2.ofType(event.ChatMessage, root.ID)) == 1 && stateOf(r2) == StateIdle })
+	if um := takenIn(append(cut, h2.all()...), root.ID); len(um) != 2 || um[1].Kind != event.InputReminder || um[1].Turn != 2 {
 		t.Fatalf("recovered reminder turn inputs: %+v", um)
 	}
 }
@@ -218,7 +206,7 @@ func TestDirectMessageOwesNothing(t *testing.T) {
 	root := s.Root()
 	runTurn(t, s, h, "check it")
 	time.Sleep(50 * time.Millisecond)
-	if in := root.Info(); len(in.Due) != 0 || len(h.ofType(event.ReminderQueued, root.ID)) != 0 || in.Turn != 1 {
+	if in := root.Info(); len(in.Due) != 0 || len(reminders(h, root.ID)) != 0 || in.Turn != 1 {
 		t.Fatalf("due %v, turn %d, log:\n%s", in.Due, in.Turn, h.dump())
 	}
 }

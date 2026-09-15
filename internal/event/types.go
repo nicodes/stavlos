@@ -1,5 +1,6 @@
 // Package event defines the append-only event vocabulary (PRD §3.3, §4.2).
-// Every state change in a channel is exactly one of these.
+// Every state change in a channel is exactly one of these, and the channel's
+// in-memory state is a fold of them (agent.apply), live and on recovery.
 package event
 
 import (
@@ -13,67 +14,51 @@ import (
 type Type string
 
 const (
-	ChannelCreated      Type = "channel.created"       // ChannelCreatedPayload
-	ChannelArchived     Type = "channel.archived"      // (none)
-	ChannelModelChanged Type = "channel.model_changed" // ModelChangedPayload
-	ChannelRenamed      Type = "channel.renamed"       // NamePayload: the channel\'s new name
-	ChannelModeChanged  Type = "channel.mode_changed"  // ModePayload: the channel's permission mode (ask | auto | yolo)
-	ChannelDirAdded     Type = "channel.dir_added"     // DirAddedPayload: a directory joined the channel\'s working set (every agent\'s); Agent is the agent whose boundary prompt added it, "" for the dirs tab
-	ChannelDirRemoved   Type = "channel.dir_removed"   // DirRefPayload: the human took a directory out of the channel\'s working set
-	ChatPosted          Type = "chat.posted"           // ChatPayload: the human\'s message in the channel chat, logged on the channel, and the agents it went to
+	ChannelCreated    Type = "channel.created"     // ChannelCreatedPayload
+	ChannelUpdated    Type = "channel.updated"     // ChannelUpdatedPayload: its name, model or permission mode changed
+	ChannelArchived   Type = "channel.archived"    // (none)
+	ChannelDirAdded   Type = "channel.dir_added"   // DirPayload: a directory joined the working set; Agent is the agent whose boundary prompt added it
+	ChannelDirRemoved Type = "channel.dir_removed" // DirPayload
+	ChatPosted        Type = "chat.posted"         // ChatPayload: the human's post in the channel chat, logged on the channel
+	ChatMessage       Type = "chat.message"        // ChatPayload: an agent's message to the human, logged on the agent
 
-	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
-	ResponseReceived    Type = "agent.response"        // ResponsePayload: an answer from another agent, logged on the recipient
-	MessageToUser       Type = "agent.message_to_user" // ChatPayload: a message tool call addressed to the human, logged on the sender
-	ReminderQueued      Type = "agent.reminder_queued" // RepliesPayload: a turn ended owing replies; one reminder starts the next turn
-	AgentKilled         Type = "agent.killed"          // AgentRefPayload
-	AgentModelChanged   Type = "agent.model_changed"   // ModelChangedPayload
-	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
-	AgentVariantChanged Type = "agent.variant_changed" // VariantChangedPayload: model variant (reasoning effort) switched
+	AgentSpawned Type = "agent.spawned" // AgentSpawnedPayload
+	AgentUpdated Type = "agent.updated" // AgentUpdatedPayload: its role, name, model or variant changed
+	AgentKilled  Type = "agent.killed"  // (none)
 
-	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: wake armed for these ids (children or monitors)
-	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
-	MonitorStarted  Type = "monitor.started"  // MonitorStartedPayload: a general monitor (command, watch, timer) began
-	MonitorFired    Type = "monitor.fired"    // MonitorFiredPayload: it completed / detected a change / elapsed
-	MonitorStopped  Type = "monitor.stopped"  // MonitorRefPayload: stopped before firing (unmonitor stop, kill, restart)
-
-	TodoChanged Type = "todo.changed" // TodoPayload: the agent\'s todo list after a change (a full snapshot)
-
-	MCPStarted Type = "mcp.started" // MCPStartedPayload: an agent\'s MCP server is connected and its tools listed
-	MCPFailed  Type = "mcp.failed"  // MCPFailedPayload: it could not be started or was lost
-	MCPStopped Type = "mcp.stopped" // MCPRefPayload: stopped (role change, kill)
-
-	PromptQueued  Type = "prompt.queued"  // TextPayload
-	SteerReceived Type = "steer.received" // TextPayload
-	NoteQueued    Type = "note.queued"    // TextPayload: a message that needs no reply, for the recipient\'s next step; it never wakes the agent
+	InputQueued Type = "input.queued" // Input: something for the agent's model, waiting in its inbox
+	InputTaken  Type = "input.taken"  // InputTakenPayload: the inputs a model call consumed, in order
 
 	TurnStarted      Type = "turn.started"      // TurnPayload
-	UserMessage      Type = "user.message"      // UserMessagePayload
 	AssistantMessage Type = "assistant.message" // AssistantMessagePayload
-	ToolCallStarted  Type = "tool.started"      // ToolStartedPayload
-	ToolCallFinished Type = "tool.finished"     // ToolFinishedPayload
+	ToolStarted      Type = "tool.started"      // ToolStartedPayload
+	ToolFinished     Type = "tool.finished"     // ToolFinishedPayload
 	TurnEnded        Type = "turn.ended"        // TurnEndedPayload
-	TurnAborted      Type = "turn.aborted"      // TurnPayload (daemon restart, PRD §4.3)
+	TurnAborted      Type = "turn.aborted"      // TurnPayload: the turn was open when the daemon stopped
 
-	PromptRequested Type = "prompt.requested" // PromptRequestedPayload (permission/question)
-	PromptEscalated Type = "prompt.escalated" // PromptRefPayload: unclaimed past the claim timeout, shown to the fallback tier too
-	PromptClaimed   Type = "prompt.claimed"   // PromptRefPayload
-	PromptAnswered  Type = "prompt.answered"  // PromptAnsweredPayload
-	PromptWithdrawn Type = "prompt.withdrawn" // PromptRefPayload
-	PermitGranted   Type = "permit.granted"   // PermitPayload: the human allowed a call or a prefix for the channel
-	PromptDefaulted Type = "prompt.defaulted" // PromptAnsweredPayload
+	AskRequested  Type = "ask.requested"  // AskRequestedPayload: a permission, question or trust prompt
+	AskResolved   Type = "ask.resolved"   // AskResolvedPayload
+	PermitGranted Type = "permit.granted" // PermitPayload: the human allowed a call or a prefix for the channel
 
-	Usage     Type = "usage"     // UsagePayload (PRD §4.4)
-	Compacted Type = "compacted" // CompactedPayload
+	JobStarted  Type = "job.started"  // JobStartedPayload: a shell command continues in the background
+	JobFinished Type = "job.finished" // JobFinishedPayload
+	JobStopped  Type = "job.stopped"  // JobStoppedPayload: killed before it finished
 
-	CompactionStarted Type = "compaction.started" // CompactionPayload: the summariser is running
-	CompactionFailed  Type = "compaction.failed"  // CompactionPayload with Error
+	TodoChanged Type = "todo.changed" // TodoPayload: the whole list after a change
+
+	MCPStarted Type = "mcp.started" // MCPStartedPayload
+	MCPFailed  Type = "mcp.failed"  // MCPFailedPayload
+	MCPStopped Type = "mcp.stopped" // MCPRefPayload
+
+	CompactionStarted Type = "compaction.started" // CompactionPayload{Before}
+	CompactionDone    Type = "compaction.done"    // CompactionPayload: the summary replaces the history up to ToSeq
+	CompactionFailed  Type = "compaction.failed"  // CompactionPayload{Before, Error}
 )
 
 // Event is one log record.
 type Event struct {
 	Global  int64           `json:"global"`  // total order across channels
-	Seq     int64           `json:"seq"`     // per-channel, contiguous from 1
+	Seq     int64           `json:"seq"`     // per channel, contiguous from 1
 	Channel string          `json:"channel"` // channel id
 	Agent   string          `json:"agent,omitempty"`
 	Type    Type            `json:"type"`
@@ -89,207 +74,110 @@ func (e Event) Decode(v any) error {
 	return json.Unmarshal(e.Payload, v)
 }
 
-// --- payloads ---
+// MustPayload marshals v or panics; payloads are our own types.
+func MustPayload(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// Str is a pointer to s, for the optional fields of an update.
+func Str(s string) *string { return &s }
+
+// --- channel ---
 
 type ChannelCreatedPayload struct {
-	Name      string `json:"name"` // unique across the daemon, shown as #name
-	Dir       string `json:"dir"`
-	Model     string `json:"model"`
-	RootAgent string `json:"root_agent"` // archetype
+	Name  string `json:"name"` // unique across the daemon, shown as #name
+	Dir   string `json:"dir"`
+	Model string `json:"model,omitempty"`
+	Role  string `json:"role"` // the main agent's role
 }
 
-// NamePayload is a channel's new name.
-type NamePayload struct {
-	Name string `json:"name"`
+// ChannelUpdatedPayload carries only what changed.
+type ChannelUpdatedPayload struct {
+	Name  *string `json:"name,omitempty"`
+	Model *string `json:"model,omitempty"`
+	Mode  *string `json:"mode,omitempty"` // ask | auto | yolo
 }
 
-type ModelChangedPayload struct {
-	Model string `json:"model"`
-}
-
-// RoleChangedPayload records a preset switch; Label is the agent's label
-// afterwards (it follows the role when it was the old role's name).
-type RoleChangedPayload struct {
-	Role  string `json:"role"`
-	Label string `json:"label"`
-}
-
-// ModePayload records the channel's permission mode: ask (every policy
-// ask prompts), auto (asks are allowed inside the channel's working
-// directories, calls outside them are denied), yolo (everything a policy would
-// ask about is allowed, boundary included). Deny rules hold in every mode.
-type ModePayload struct {
-	Mode string `json:"mode"`
-}
-
-// VariantChangedPayload records a model-variant switch; "" is the
-// provider default.
-type VariantChangedPayload struct {
-	Variant string `json:"variant"`
-}
-
-type AgentSpawnedPayload struct {
-	ID        string `json:"id"`
-	Parent    string `json:"parent,omitempty"` // empty for the root
-	Archetype string `json:"archetype"`
-	Label     string `json:"label"`
-	Model     string `json:"model"` // resolved provider/model-id
-	Task      string `json:"task,omitempty"`
-	Depth     int    `json:"depth"`
-}
-
-// DirAddedPayload: Source is "human" (the dirs tab, or the answer to a
-// boundary prompt).
-type DirAddedPayload struct {
+// DirPayload names a working directory; Source is "human" on an add.
+type DirPayload struct {
 	Dir    string `json:"dir"`
-	Source string `json:"source"`
-}
-
-type DirRefPayload struct {
-	Dir string `json:"dir"`
-}
-
-// ResponsePayload is an answer delivered to this agent (a message from an
-// agent it was waiting on): who sent it and what it said. It is consumed by the recipient's next turn as a
-// user message of kind "agent_response".
-type ResponsePayload struct {
-	From      string `json:"from"`
-	FromLabel string `json:"from_label,omitempty"`
-	Text      string `json:"text"`
-}
-
-type Artifact struct {
-	Path        string `json:"path"`
-	Description string `json:"description,omitempty"`
-}
-
-type AgentRefPayload struct {
-	ID string `json:"id"`
-}
-
-// Source says who wrote an envelope: "human:<client>" or "agent:<id>".
-type TextPayload struct {
-	Text   string `json:"text"`
 	Source string `json:"source,omitempty"`
-	Post   string `json:"post,omitempty"` // the channel chat post a steer delivers
 }
 
-// MonitorPayload lists child ids whose finish wakes (or no longer wakes) the agent.
-type MonitorPayload struct {
-	IDs []string `json:"ids"`
-}
-
-// TodoStatus is where a todo item stands.
-type TodoStatus string
-
-const (
-	TodoPending    TodoStatus = "pending"
-	TodoInProgress TodoStatus = "in_progress"
-	TodoDone       TodoStatus = "done"
-	TodoCancelled  TodoStatus = "cancelled"
-)
-
-// TodoItem is one entry of an agent's todo list.
-type TodoItem struct {
-	ID     string     `json:"id"`
-	Text   string     `json:"text"`
-	Status TodoStatus `json:"status"`
-}
-
-// TodoPayload is the whole todo list after a change; replaying the last
-// one restores the list.
-type TodoPayload struct {
-	Items []TodoItem `json:"items"`
-}
-
-// MCPStartedPayload lists the tools an agent's MCP server offers, by their
-// model-facing names (mcp__<server>__<tool>).
-type MCPStartedPayload struct {
-	Server string   `json:"server"`
-	Tools  []string `json:"tools"`
-}
-
-type MCPFailedPayload struct {
-	Server string `json:"server"`
-	Error  string `json:"error"`
-}
-
-type MCPRefPayload struct {
-	Server string `json:"server"`
-}
-
-// MonitorStartedPayload describes a general monitor. Kind: "command" |
-// "watch" | "timer". Spec is kind-specific: the command line, the watched
-// path (plus glob), or the duration in seconds.
-type MonitorStartedPayload struct {
-	ID      string  `json:"id"`
-	Kind    string  `json:"kind"`
-	Label   string  `json:"label"`
-	Spec    string  `json:"spec"`
-	Glob    string  `json:"glob,omitempty"`
-	Seconds float64 `json:"seconds,omitempty"`
-}
-
-type MonitorFiredPayload struct {
-	ID       string `json:"id"`
-	Kind     string `json:"kind"`
-	Label    string `json:"label"`
-	Summary  string `json:"summary"`          // one line
-	Output   string `json:"output,omitempty"` // command output / changed paths
-	ExitCode int    `json:"exit_code,omitempty"`
-	IsError  bool   `json:"is_error,omitempty"`
-}
-
-type MonitorRefPayload struct {
-	ID     string `json:"id"`
-	Reason string `json:"reason,omitempty"`
-}
-
-type TurnPayload struct {
-	Turn int `json:"turn"`
-}
-
-// MessageKind says where a user message came from.
-type MessageKind string
-
-const (
-	MsgPrompt        MessageKind = "prompt"         // one or more coalesced prompts (a steer to an idle agent reads as one)
-	MsgSteer         MessageKind = "steer"          // delivered mid-turn at a model-call boundary
-	MsgAgentResponse MessageKind = "agent_response" // another agent's answer, from the mailbox
-	MsgMonitorFired  MessageKind = "monitor_fired"  // a background job's exit, from the mailbox
-	MsgReminder      MessageKind = "reminder"       // the harness's one reminder of replies still owed
-	MsgNote          MessageKind = "note"           // a message from another agent that needs no reply (message kind info)
-)
-
-// UserMessagePayload is the model-visible input to a model call.
-type UserMessagePayload struct {
-	Turn int         `json:"turn"`
-	Kind MessageKind `json:"kind"`
-	Text string      `json:"text"`
-	// From names the sending agent ("scout") when a prompt, steer or answer
-	// came from another agent in the channel; empty for humans. FromID is
-	// its id.
-	From   string `json:"from,omitempty"`
-	FromID string `json:"from_id,omitempty"`
-	Post   string `json:"post,omitempty"` // the channel chat post this input delivers
-}
-
-// ChatPayload is a message in the channel chat: the human's post (To: the
-// names of the agents it was delivered to) or an agent's message to the
-// human (From: the agent's name).
+// ChatPayload is a message in the channel chat: the human's post (ID, the
+// names it went To) or an agent's message to the human (From, and the Post
+// it answers, "" for none).
 type ChatPayload struct {
-	ID   string   `json:"id,omitempty"` // a post's id
+	ID   string   `json:"id,omitempty"`
 	From string   `json:"from,omitempty"`
 	Text string   `json:"text"`
 	To   []string `json:"to,omitempty"`
-	Post string   `json:"post,omitempty"` // a message to the human: the post it answers
+	Post string   `json:"post,omitempty"`
 }
 
-// RepliesPayload names the parties a turn ended owing a reply: "user" or
-// agent ids, with the names shown for them.
-type RepliesPayload struct {
-	Parties []string `json:"parties"`
-	Names   []string `json:"names"`
+// --- agent ---
+
+type AgentSpawnedPayload struct {
+	ID      string `json:"id"`
+	Parent  string `json:"parent,omitempty"` // "" for the main agent
+	Role    string `json:"role"`
+	Name    string `json:"name"` // unique in the channel, never reused
+	Model   string `json:"model,omitempty"`
+	Variant string `json:"variant,omitempty"`
+	Depth   int    `json:"depth"`
+}
+
+// AgentUpdatedPayload carries only what changed.
+type AgentUpdatedPayload struct {
+	Role    *string `json:"role,omitempty"`
+	Name    *string `json:"name,omitempty"`
+	Model   *string `json:"model,omitempty"`
+	Variant *string `json:"variant,omitempty"` // "" is the provider default
+}
+
+// --- inbox ---
+
+// InputKind says what an input is, which decides when it reaches the model
+// and whether it is owed a reply.
+type InputKind string
+
+const (
+	InputPrompt   InputKind = "prompt"   // the human's, queued for after the current turn
+	InputSteer    InputKind = "steer"    // the human's, at the next model call; a channel post carries Post and is owed a reply
+	InputRequest  InputKind = "request"  // another agent's (a message, a child's task), at the next model call; owed a reply
+	InputInfo     InputKind = "info"     // another agent's, needing no reply; it never wakes the agent
+	InputResponse InputKind = "response" // another agent's answer, between turns; it settles the wait on that agent
+	InputJob      InputKind = "job"      // a background job's result (Job), between turns
+	InputReminder InputKind = "reminder" // the harness's reminder of replies still owed (Parties)
+)
+
+// Input is one entry of an agent's inbox.
+type Input struct {
+	ID       string    `json:"id"`
+	Kind     InputKind `json:"kind"`
+	Text     string    `json:"text,omitempty"`
+	From     string    `json:"from,omitempty"`      // the sending agent's id
+	FromName string    `json:"from_name,omitempty"` // its name when it sent
+	Post     string    `json:"post,omitempty"`      // the channel chat post a steer delivers
+	Job      string    `json:"job,omitempty"`       // kind job: the job whose result this is
+	Parties  []string  `json:"parties,omitempty"`   // kind reminder: who is owed ("user" or agent ids)
+	Names    []string  `json:"names,omitempty"`     // …and their names
+}
+
+// InputTakenPayload lists the inputs a model call consumed.
+type InputTakenPayload struct {
+	Turn int      `json:"turn"`
+	IDs  []string `json:"ids"`
+}
+
+// --- turns ---
+
+type TurnPayload struct {
+	Turn int `json:"turn"`
 }
 
 type AssistantMessagePayload struct {
@@ -297,13 +185,15 @@ type AssistantMessagePayload struct {
 	Blocks     []model.Block `json:"blocks"`
 	StopReason string        `json:"stop_reason"`
 	Model      string        `json:"model"`
+	Usage      model.Usage   `json:"usage"`
+	CostUSD    float64       `json:"cost_usd,omitempty"`
 }
 
+// ToolStartedPayload names a call; its input is in the assistant message.
 type ToolStartedPayload struct {
-	Turn   int             `json:"turn"`
-	CallID string          `json:"call_id"`
-	Name   string          `json:"name"`
-	Input  json.RawMessage `json:"input"`
+	Turn   int    `json:"turn"`
+	CallID string `json:"call_id"`
+	Name   string `json:"name"`
 }
 
 type ToolFinishedPayload struct {
@@ -332,64 +222,112 @@ type TurnEndedPayload struct {
 	Error  string     `json:"error,omitempty"`
 }
 
-// PromptRequestedPayload.Kind: "permission" | "question" | "trust"
-type PromptRequestedPayload struct {
-	ID        string          `json:"id"`
-	Kind      string          `json:"kind"`
-	Tool      string          `json:"tool,omitempty"`
-	Input     json.RawMessage `json:"input,omitempty"`
-	Question  string          `json:"question,omitempty"`
-	Options   []string        `json:"options,omitempty"`
-	Questions json.RawMessage `json:"questions,omitempty"` // kind question: the protocol.Question batch, as JSON
+// --- asks ---
+
+// AskRequestedPayload records a prompt to the human. Kind is permission,
+// question or trust; CallID ties a permission or question to its tool call.
+type AskRequestedPayload struct {
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	CallID   string `json:"call_id,omitempty"`
+	Tool     string `json:"tool,omitempty"`
+	Question string `json:"question,omitempty"`
 }
 
-// PermitPayload is an allow the human granted for the channel: either an
-// exact call (Call, the policy subject it matched) or a prefix (a command
-// prefix, a host) covering every call of the tool it fits. Replayed on
-// recovery, so a restart does not ask again.
+// AskOutcome is how a prompt ended.
+type AskOutcome string
+
+const (
+	AskAnswered  AskOutcome = "answered"
+	AskDefaulted AskOutcome = "defaulted" // nobody answered: the headless default applied
+	AskWithdrawn AskOutcome = "withdrawn" // the asking turn ended first
+)
+
+type AskResolvedPayload struct {
+	ID      string     `json:"id"`
+	Outcome AskOutcome `json:"outcome"`
+	Answer  string     `json:"answer,omitempty"`
+	By      string     `json:"by,omitempty"` // the answering client
+}
+
+// PermitPayload is an allow the human granted for the channel: an exact
+// call (Call, one subject value) or a prefix (a command prefix, a host).
 type PermitPayload struct {
 	Tool   string `json:"tool"`
 	Call   string `json:"call,omitempty"`
 	Prefix string `json:"prefix,omitempty"`
 }
 
-type PromptRefPayload struct {
+// --- jobs ---
+
+type JobStartedPayload struct {
+	ID      string `json:"id"`
+	Command string `json:"command"`
+}
+
+type JobFinishedPayload struct {
+	ID       string `json:"id"`
+	Summary  string `json:"summary"`
+	Output   string `json:"output,omitempty"`
+	ExitCode int    `json:"exit_code"`
+	IsError  bool   `json:"is_error,omitempty"`
+}
+
+type JobStoppedPayload struct {
 	ID     string `json:"id"`
-	Client string `json:"client,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
-type PromptAnsweredPayload struct {
-	ID     string `json:"id"`
-	Answer string `json:"answer"` // "allow" | "deny" | free text for questions
-	Client string `json:"client,omitempty"`
+// --- todo ---
+
+// TodoStatus is where a todo item stands.
+type TodoStatus string
+
+const (
+	TodoPending    TodoStatus = "pending"
+	TodoInProgress TodoStatus = "in_progress"
+	TodoDone       TodoStatus = "done"
+	TodoCancelled  TodoStatus = "cancelled"
+)
+
+// TodoItem is one entry of an agent's todo list.
+type TodoItem struct {
+	ID     string     `json:"id"`
+	Text   string     `json:"text"`
+	Status TodoStatus `json:"status"`
 }
 
-type UsagePayload struct {
-	Turn    int         `json:"turn"`
-	Model   string      `json:"model"`
-	Usage   model.Usage `json:"usage"`
-	CostUSD float64     `json:"cost_usd"`
+type TodoPayload struct {
+	Items []TodoItem `json:"items"`
 }
 
-type CompactedPayload struct {
-	FromSeq int64  `json:"from_seq"`
-	ToSeq   int64  `json:"to_seq"`
-	Summary string `json:"summary"`
-	Before  int    `json:"before,omitempty"` // estimated history tokens before and after (clients show "84k → 12k")
-	After   int    `json:"after,omitempty"`
+// --- MCP ---
+
+// MCPStartedPayload lists a server's tools by their model-facing names
+// (mcp__<server>__<tool>).
+type MCPStartedPayload struct {
+	Server string   `json:"server"`
+	Tools  []string `json:"tools"`
 }
 
-// CompactionPayload marks the start or failure of a compaction.
+type MCPFailedPayload struct {
+	Server string `json:"server"`
+	Error  string `json:"error"`
+}
+
+type MCPRefPayload struct {
+	Server string `json:"server"`
+}
+
+// --- compaction ---
+
+// CompactionPayload: Before and After are estimated history tokens; a
+// finished compaction's summary covers the agent's events up to ToSeq.
 type CompactionPayload struct {
-	Before int    `json:"before,omitempty"` // estimated history tokens going in
-	Error  string `json:"error,omitempty"`
-}
-
-// MustPayload marshals v or panics; payloads are our own types.
-func MustPayload(v any) json.RawMessage {
-	b, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return b
+	FromSeq int64  `json:"from_seq,omitempty"`
+	ToSeq   int64  `json:"to_seq,omitempty"`
+	Summary string `json:"summary,omitempty"`
+	Before  int    `json:"before,omitempty"`
+	After   int    `json:"after,omitempty"`
+	Error   string `json:"error,omitempty"`
 }

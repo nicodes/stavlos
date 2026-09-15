@@ -87,9 +87,10 @@ type Model struct {
 
 	presets []protocol.PresetInfo
 
-	vp    viewport.Model
-	input textarea.Model // grows with the text, up to inputMaxLines
-	sp    spinner.Model
+	vp       viewport.Model
+	input    textarea.Model // grows with the text, up to inputMaxLines
+	sp       spinner.Model
+	spinning bool // a spinner tick is scheduled: it runs only while something animates
 
 	width, height int
 	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
@@ -373,6 +374,7 @@ func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 		promptInput:  pi,
 		dirInput:     di,
 		sp:           sp,
+		spinning:     true, // Init schedules the first tick
 		follow:       true,
 	}
 	m.loading = true // until the reconcile lands
@@ -391,9 +393,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if quit {
 		return m, tea.Quit
 	}
-	cmds = append(cmds, m.ensureFocus())
+	cmds = append(cmds, m.ensureFocus(), m.ensureSpin())
 	m.layout()
 	return m, tea.Batch(cmds...)
+}
+
+// animating reports whether anything on screen carries the spinner: the
+// viewed chat's turn, running call or waiting post, or a dialog.
+func (m *Model) animating() bool {
+	if m.ov != nil {
+		return true
+	}
+	t := m.transcripts[m.viewID()]
+	return t != nil && (t.InTurn() || t.Running() || len(t.Waiting()) > 0)
+}
+
+// ensureSpin schedules the spinner's tick when something animates and no
+// tick is pending. An idle screen gets no ticks, so it is not redrawn
+// twelve times a second for nothing.
+func (m *Model) ensureSpin() tea.Cmd {
+	if m.spinning || !m.animating() {
+		return nil
+	}
+	m.spinning = true
+	return m.sp.Tick
 }
 
 // update applies one message; quit reports a fatal condition (m.fatal says
@@ -436,13 +459,13 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case spinner.TickMsg:
+		if !m.animating() {
+			m.spinning = false // the tick lapses; ensureSpin starts it again
+			return nil
+		}
 		var cmd tea.Cmd
 		m.sp, cmd = m.sp.Update(msg)
-		// The "working…" indicator and the chat's loaders carry the
-		// spinner, so redraw while either shows.
-		if t := m.transcripts[m.viewID()]; t != nil && (t.InTurn() || t.Running() || len(t.Waiting()) > 0) {
-			m.refreshViewport()
-		}
+		m.refreshViewport() // the "working…" indicator and the chat's loaders carry the spinner
 		return cmd
 	case placeholderTickMsg:
 		m.input.Placeholder = m.placeholder()
@@ -651,13 +674,13 @@ func (m *Model) channelDirs() []protocol.DirInfo {
 func (m *Model) onDirChanged(ev event.Event) {
 	switch ev.Type {
 	case event.ChannelDirAdded:
-		var p event.DirAddedPayload
+		var p event.DirPayload
 		if ev.Decode(&p) != nil || p.Dir == m.channel.Dir || slices.ContainsFunc(m.channel.Dirs, func(d protocol.DirInfo) bool { return d.Path == p.Dir }) {
 			return
 		}
 		m.channel.Dirs = append(m.channel.Dirs, protocol.DirInfo{Path: textsafe.Clean(p.Dir), Source: p.Source})
 	default:
-		var p event.DirRefPayload
+		var p event.DirPayload
 		if ev.Decode(&p) == nil {
 			m.channel.Dirs = slices.DeleteFunc(m.channel.Dirs, func(d protocol.DirInfo) bool { return d.Path == p.Dir })
 		}
@@ -2603,25 +2626,15 @@ func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd)
 		}
 	case event.AgentKilled:
 		m.onAgentKilled(ev.Agent)
-	case event.PromptQueued:
+	case event.InputQueued:
 		m.rememberPrompt(ev)
 	case event.CompactionStarted: // the chat item's bar animates until the result lands
 		if !m.loading && !m.compactTick {
 			m.compactTick = true
 			cmds = append(cmds, compactTickCmd())
 		}
-	case event.ChannelRenamed:
-		var p event.NamePayload
-		if ev.Decode(&p) == nil {
-			m.channel.Name = textsafe.Clean(p.Name)
-		}
-	case event.ChannelModelChanged:
-		var p event.ModelChangedPayload
-		if ev.Decode(&p) == nil {
-			m.channel.Model = p.Model
-		}
-	case event.ChannelModeChanged:
-		m.onModeChanged(ev)
+	case event.ChannelUpdated:
+		m.onChannelUpdated(ev)
 	case event.TurnEnded:
 		var p event.TurnEndedPayload
 		if !m.loading && ev.Decode(&p) == nil && p.Reason == "error" &&
@@ -2647,8 +2660,8 @@ func (m *Model) onAgentSpawned(ev event.Event) string {
 	if !m.loading && m.findAgent(p.ID) < 0 {
 		// Placeholder until the debounced tree refresh lands.
 		m.agents = append(m.agents, protocol.AgentInfo{
-			ID: p.ID, Channel: ev.Channel, Parent: p.Parent, Archetype: p.Archetype,
-			Label: p.Label, Model: p.Model, Depth: p.Depth, State: protocol.AgentIdle,
+			ID: p.ID, Channel: ev.Channel, Parent: p.Parent, Archetype: p.Role,
+			Label: p.Name, Model: p.Model, Variant: p.Variant, Depth: p.Depth, State: protocol.AgentIdle,
 		})
 	}
 	if p.Parent != "" {
@@ -2680,26 +2693,37 @@ func (m *Model) onAgentKilled(id string) {
 	}
 }
 
-// rememberPrompt replays a human prompt into the input history.
+// rememberPrompt replays the human's message typed into an agent's chat
+// into the input history.
 func (m *Model) rememberPrompt(ev event.Event) {
-	var p event.TextPayload
-	if !m.loading || ev.Decode(&p) != nil || !strings.HasPrefix(p.Source, "human:") || p.Text == "" {
+	var in event.Input
+	if !m.loading || ev.Decode(&in) != nil || in.From != "" || in.Post != "" || in.Text == "" || in.Kind != event.InputPrompt && in.Kind != event.InputSteer {
 		return
 	}
-	if n := len(m.history); n == 0 || m.history[n-1] != p.Text {
-		m.history = append(m.history, p.Text)
+	if n := len(m.history); n == 0 || m.history[n-1] != in.Text {
+		m.history = append(m.history, in.Text)
 	}
 	m.histIdx = len(m.history)
 }
 
-// onModeChanged records the channel's permission mode and notes the switch
-// in every agent's chat, like model and role changes: the event has no
-// agent of its own.
-func (m *Model) onModeChanged(ev event.Event) {
-	var p event.ModePayload
-	if ev.Decode(&p) == nil {
-		m.channel.Mode = p.Mode
+// onChannelUpdated records the channel's new name, model or permission
+// mode; a mode switch is noted in every agent's chat, like model and role
+// changes, since the event has no agent of its own.
+func (m *Model) onChannelUpdated(ev event.Event) {
+	var p event.ChannelUpdatedPayload
+	if ev.Decode(&p) != nil {
+		return
 	}
+	if p.Name != nil {
+		m.channel.Name = textsafe.Clean(*p.Name)
+	}
+	if p.Model != nil {
+		m.channel.Model = *p.Model
+	}
+	if p.Mode == nil {
+		return
+	}
+	m.channel.Mode = *p.Mode
 	for _, a := range m.agents {
 		m.transcript(a.ID).Apply(ev)
 	}
@@ -2727,21 +2751,13 @@ func (m *Model) followChild(ev event.Event) {
 // tree, so the tree needs refreshing.
 func changesTree(ev event.Event) bool {
 	switch ev.Type {
-	case event.AgentSpawned, event.AgentKilled,
-		event.TurnStarted, event.TurnEnded, event.Usage,
-		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.ChannelModelChanged,
-		event.MonitorStarted, event.MonitorFired, event.MonitorStopped,
-		event.TodoChanged,
-		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.ResponseReceived,
-		event.UserMessage, event.MessageToUser: // what an agent owes changes
+	case event.AgentSpawned, event.AgentKilled, event.AgentUpdated, event.ChannelUpdated,
+		event.TurnStarted, event.TurnEnded, event.TurnAborted, event.AssistantMessage,
+		event.JobStarted, event.JobFinished, event.JobStopped, event.TodoChanged,
+		event.MCPStarted, event.MCPFailed, event.MCPStopped,
+		event.InputQueued, event.InputTaken, event.ChatMessage, // what an agent waits on or owes changes
+		event.AskRequested, event.AskResolved: // blocked or running
 		return true
-	case event.ToolCallFinished: // a message or task just put another agent on the awaiting list
-		var p event.ToolFinishedPayload
-		if ev.Decode(&p) != nil {
-			return false
-		}
-		name := p.Name
-		return name == toolname.Message || name == toolname.AgentCreate
 	}
 	return false
 }

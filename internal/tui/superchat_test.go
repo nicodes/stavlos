@@ -21,10 +21,10 @@ func TestSuperChatView(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
 	m.superChat = true
-	m.applyEvent(chatEvent(1, "b", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b", Parent: "a", Label: "world-politics"}))
+	m.applyEvent(chatEvent(1, "b", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b", Parent: "a", Name: "world-politics"}))
 	m.applyEvent(chatEvent(2, "", event.ChatPosted, event.ChatPayload{Text: "summarise", To: []string{"world-politics"}}))
-	m.applyEvent(chatEvent(3, "b", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell"}))
-	m.applyEvent(chatEvent(4, "b", event.MessageToUser, event.ChatPayload{From: "world-politics", Text: "three headlines"}))
+	m.applyEvent(chatEvent(3, "b", event.ToolStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell"}))
+	m.applyEvent(chatEvent(4, "b", event.ChatMessage, event.ChatPayload{From: "world-politics", Text: "three headlines"}))
 	view := stripANSI(m.vp.View())
 	if !strings.Contains(view, "@world-politics summarise") || !strings.Contains(view, "three headlines") || strings.Contains(view, "Shell") {
 		t.Fatalf("chat view:\n%s", view)
@@ -97,9 +97,9 @@ func TestSuperChatSpaceExpandsALongReply(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
 	m.superChat = true
-	m.applyEvent(chatEvent(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Label: "main"}))
+	m.applyEvent(chatEvent(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Name: "main"}))
 	m.applyEvent(chatEvent(2, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "summarise", To: []string{"main"}}))
-	m.applyEvent(chatEvent(3, "a", event.MessageToUser, event.ChatPayload{From: "main", Text: "alpha\nbravo\ncharlie\ndelta\nfoxtrot", Post: "p1"}))
+	m.applyEvent(chatEvent(3, "a", event.ChatMessage, event.ChatPayload{From: "main", Text: "alpha\nbravo\ncharlie\ndelta\nfoxtrot", Post: "p1"}))
 	if view := stripANSI(m.vp.View()); !strings.Contains(view, "@main alpha") || strings.Contains(view, "foxtrot") {
 		t.Fatalf("collapsed view:\n%s", view)
 	}
@@ -116,12 +116,12 @@ func TestSuperChatLoaderUntilReply(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
 	m.superChat = true
-	m.applyEvent(chatEvent(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Label: "main"}))
+	m.applyEvent(chatEvent(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Name: "main"}))
 	m.applyEvent(chatEvent(2, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "hello", To: []string{"main"}}))
 	if view := stripANSI(m.vp.View()); !strings.Contains(view, "… · @main") {
 		t.Fatalf("a loader should show under the unanswered post:\n%s", view)
 	}
-	m.applyEvent(chatEvent(3, "a", event.MessageToUser, event.ChatPayload{From: "main", Text: "hi", Post: "p1"}))
+	m.applyEvent(chatEvent(3, "a", event.ChatMessage, event.ChatPayload{From: "main", Text: "hi", Post: "p1"}))
 	if view := stripANSI(m.vp.View()); strings.Contains(view, "… · @main") || !strings.Contains(view, "@main hi") {
 		t.Fatalf("the reply replaces the loader:\n%s", view)
 	}

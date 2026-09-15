@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -779,10 +778,10 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	m := channelModel()
 	tr := m.transcript("a")
 	for i := 0; i < 8; i++ {
-		tr.Apply(mk(int64(i+1), "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "msg " + string(rune('A'+i))}))
+		feed(tr.Apply, userMsg(int64(i+1), "a", "msg "+string(rune('A'+i))))
 	}
-	tr.Apply(mk(9, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(10, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
+	feed(tr.Apply, toolCall(9, "a", "c1", "shell", `{"command":"ls"}`))
+	tr.Apply(mk(10, "a", event.ToolFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
 	m.height = 20 // a viewport smaller than the transcript so the cursor has to scroll
 	m.layout()
 	m.refreshViewport()
@@ -1146,7 +1145,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 		t.Fatalf("the bar should move: %q %q", a, b)
 	}
 	before := len(tr.All())
-	m.applyEvent(event.Event{Seq: 51, Agent: "a", Type: event.Compacted, Time: now, Payload: event.MustPayload(event.CompactedPayload{FromSeq: 1, ToSeq: 40, Summary: "S", Before: 84_000, After: 12_000})})
+	m.applyEvent(event.Event{Seq: 51, Agent: "a", Type: event.CompactionDone, Time: now, Payload: event.MustPayload(event.CompactionPayload{FromSeq: 1, ToSeq: 40, Summary: "S", Before: 84_000, After: 12_000})})
 	m.refreshViewport()
 	v = stripANSI(m.vp.View())
 	if tr.Compacting() || m.status != "" || strings.Contains(v, "compacting") || !strings.Contains(v, "┄┄ compacted 84k → 12k tokens ┄┄") {
@@ -1240,9 +1239,9 @@ func TestParentAgentCreateLineFollowsChildEvents(t *testing.T) {
 		return event.Event{Seq: seq, Channel: "s", Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
 	m.applyEvent(ev(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}))
-	m.applyEvent(ev(2, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Input: json.RawMessage(`{"archetype":"explorer","label":"scout","task":"look"}`)}))
-	m.applyEvent(ev(3, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a", Archetype: "explorer", Label: "scout", Model: "fake/m1", Depth: 1}))
-	m.applyEvent(ev(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Output: "spawned scout (explorer) as c1"}))
+	feed(func(e event.Event) { e.Channel = "s"; m.applyEvent(e) }, toolCall(2, "a", "c1", "agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`))
+	m.applyEvent(ev(3, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a", Role: "explorer", Name: "scout", Model: "fake/m1", Depth: 1}))
+	m.applyEvent(ev(4, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Output: "spawned scout (explorer) as c1"}))
 	tone := func() transcript.Tone {
 		for _, l := range m.transcript("a").All() {
 			if l.Kind == transcript.LineTool && l.Tool == "agent_create" {
@@ -1263,7 +1262,7 @@ func TestParentAgentCreateLineFollowsChildEvents(t *testing.T) {
 	if tone() != transcript.ToneNone {
 		t.Fatalf("child idle after answering: tone %v", tone())
 	}
-	m.applyEvent(ev(7, "c1", event.AgentKilled, event.AgentRefPayload{ID: "c1"}))
+	m.applyEvent(ev(7, "c1", event.AgentKilled, nil))
 	if tone() != transcript.ToneError {
 		t.Fatalf("child killed: tone %v", tone())
 	}
@@ -1277,11 +1276,11 @@ func TestLastSnippet(t *testing.T) {
 	if lastSnippet(nil) != "" || lastSnippet(tr) != "" {
 		t.Fatal("empty")
 	}
-	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "look around"}))
+	feed(tr.Apply, userMsg(1, "a", "look around"))
 	if got := lastSnippet(tr); got != "@user look around" {
 		t.Fatalf("prompt: %q", got)
 	}
-	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls -la"}`)}))
+	feed(tr.Apply, toolCall(2, "a", "c1", "shell", `{"command":"ls -la"}`))
 	if got := lastSnippet(tr); got != "Shell  ls -la" {
 		t.Fatalf("tool: %q", got)
 	}
@@ -1295,8 +1294,8 @@ func TestLastSnippet(t *testing.T) {
 		t.Fatalf("multi-line message should start at its beginning: %q", got)
 	}
 	// a tool call with output: the call line comes first
-	tr.Apply(mk(5, event.ToolCallStarted, event.ToolStartedPayload{CallID: "c2", Name: "shell", Input: json.RawMessage(`{"command":"go test"}`)}))
-	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c2", Name: "shell", Output: "ok\nPASS"}))
+	feed(tr.Apply, toolCall(5, "a", "c2", "shell", `{"command":"go test"}`))
+	tr.Apply(mk(6, event.ToolFinished, event.ToolFinishedPayload{CallID: "c2", Name: "shell", Output: "ok\nPASS"}))
 	if got := lastSnippet(tr); !strings.HasPrefix(got, "Shell  go test") {
 		t.Fatalf("tool item should start with the call: %q", got)
 	}
@@ -1573,7 +1572,7 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 	m.showTree = false
 	tr := m.transcript("a")
 	for i := 0; i < 6; i++ {
-		tr.Apply(mk(int64(i+2), "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: fmt.Sprintf("prompt %d", i)}))
+		feed(tr.Apply, userMsg(int64(i+2), "a", fmt.Sprintf("prompt %d", i)))
 	}
 	m.width, m.height = 100, 40
 	m.layout()
@@ -1628,9 +1627,8 @@ func TestMouseClickTogglesItem(t *testing.T) {
 	m := channelModel()
 	m.showTree = false
 	tr := m.transcript("a")
-	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "list the files"}))
-	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
-	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
+	feed(tr.Apply, userMsg(1, "a", "list the files"), toolCall(2, "a", "c1", "shell", `{"command":"ls"}`))
+	tr.Apply(mk(3, "a", event.ToolFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
 	m.width, m.height = 100, 40
 	m.layout()
 	m.refreshViewport()
@@ -1801,7 +1799,7 @@ func TestDialogRowsTakeTheMouse(t *testing.T) {
 func TestModeChangeShowsInEveryChat(t *testing.T) {
 	m := channelModel()
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main"}, {ID: "b", Parent: "a", Label: "scout"}}
-	m.applyEvent(event.Event{Seq: 9, Channel: "s", Type: event.ChannelModeChanged, Time: time.Now(), Payload: event.MustPayload(event.ModePayload{Mode: "auto"})})
+	m.applyEvent(event.Event{Seq: 9, Channel: "s", Type: event.ChannelUpdated, Time: time.Now(), Payload: event.MustPayload(event.ChannelUpdatedPayload{Mode: event.Str("auto")})})
 	for _, id := range []string{"a", "b"} {
 		found := false
 		for _, l := range m.transcript(id).All() {
@@ -1827,8 +1825,7 @@ func TestDragSelectsAndCopies(t *testing.T) {
 	m := channelModel()
 	m.showTree = false
 	tr := m.transcript("a")
-	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "first line here"}))
-	tr.Apply(mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "second line"}))
+	feed(tr.Apply, userMsg(2, "a", "first line here"), userMsg(3, "a", "second line"))
 	m.width, m.height = 60, 30
 	m.layout()
 	m.refreshViewport()
@@ -2656,7 +2653,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	m.promptBusy = ""
 	// the chat notes an added directory
 	tr := m.transcript("a")
-	tr.Apply(event.Event{Agent: "a", Type: event.ChannelDirAdded, Payload: event.MustPayload(event.DirAddedPayload{Dir: "/etc", Source: "human"})})
+	tr.Apply(event.Event{Agent: "a", Type: event.ChannelDirAdded, Payload: event.MustPayload(event.DirPayload{Dir: "/etc", Source: "human"})})
 	m.setFocus(focusInput)
 	m.refreshViewport()
 	if v := stripANSI(m.vp.View()); !strings.Contains(v, "◆ Dirs + /etc (human)") {
@@ -2946,7 +2943,7 @@ func TestControlsNeverReachTheTerminal(t *testing.T) {
 		t.Fatalf("hidden bytes should show as carets:\n%s", body)
 	}
 	tr := m.transcript("a")
-	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi \x1b]0;evil\x07there"}))
+	feed(tr.Apply, userMsg(1, "a", "hi \x1b]0;evil\x07there"))
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Text: "str\x1b[31meam"})
 	for _, l := range tr.All() {
 		if strings.ContainsRune(l.Text, 0x1b) || strings.ContainsRune(l.Text, 0x07) {
