@@ -114,7 +114,7 @@ func tick(d time.Duration, msg tea.Msg) tea.Cmd {
 
 func reconcileCmd(ctx context.Context, c *client.Client, channel string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		res, err := client.Do(ctx, c, protocol.Reconcile, protocol.ChannelRef{ID: channel})
+		res, err := client.Do(ctx, c, protocol.Reconcile, protocol.ChannelRef{Channel: channel})
 		return reconcileMsg{res, err}
 	})
 }
@@ -145,7 +145,7 @@ func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.
 // delivers it by @mention and refuses a mention that names no agent.
 func postCmd(ctx context.Context, c *client.Client, channel, text string) tea.Cmd {
 	return resultCmd(ctx, "", func(ctx context.Context) error {
-		return call(ctx, c, protocol.ChannelPost, protocol.ChannelPostParams{ID: channel, Text: text})
+		return call(ctx, c, protocol.ChannelPost, protocol.ChannelPostParams{Channel: channel, Text: text})
 	})
 }
 
@@ -254,13 +254,13 @@ func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.
 
 func addDirCmd(ctx context.Context, c *client.Client, channel, dir string) tea.Cmd {
 	return resultCmd(ctx, "added "+dir, func(ctx context.Context) error {
-		return call(ctx, c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: channel, Dir: dir})
+		return call(ctx, c, protocol.ChannelAddDir, protocol.ChannelDirParams{Channel: channel, Dir: dir})
 	})
 }
 
 func removeDirCmd(ctx context.Context, c *client.Client, channel, dir string) tea.Cmd {
 	return resultCmd(ctx, "removed "+format.ShortHome(dir), func(ctx context.Context) error {
-		return call(ctx, c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: channel, Dir: dir})
+		return call(ctx, c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{Channel: channel, Dir: dir})
 	})
 }
 
@@ -268,10 +268,10 @@ func removeDirCmd(ctx context.Context, c *client.Client, channel, dir string) te
 // dialog): the new one is added first so no agent loses ground.
 func replaceDirCmd(ctx context.Context, c *client.Client, channel, oldDir, newDir string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		if err := call(ctx, c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: channel, Dir: newDir}); err != nil {
+		if err := call(ctx, c, protocol.ChannelAddDir, protocol.ChannelDirParams{Channel: channel, Dir: newDir}); err != nil {
 			return resultMsg{"", err}
 		}
-		return resultMsg{"replaced " + format.ShortHome(oldDir) + " with " + newDir, call(ctx, c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: channel, Dir: oldDir})}
+		return resultMsg{"replaced " + format.ShortHome(oldDir) + " with " + newDir, call(ctx, c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{Channel: channel, Dir: oldDir})}
 	})
 }
 
@@ -279,13 +279,13 @@ func replaceDirCmd(ctx context.Context, c *client.Client, channel, oldDir, newDi
 // another channel has.
 func renameChannelCmd(ctx context.Context, c *client.Client, channel, name string) tea.Cmd {
 	return resultCmd(ctx, "channel renamed", func(ctx context.Context) error {
-		return call(ctx, c, protocol.ChannelRename, protocol.ChannelRenameParams{ID: channel, Name: name})
+		return call(ctx, c, protocol.ChannelRename, protocol.ChannelRenameParams{Channel: channel, Name: name})
 	})
 }
 
 func setModeCmd(ctx context.Context, c *client.Client, channel, mode string) tea.Cmd {
 	return resultCmd(ctx, "mode "+mode+": "+protocol.ModeSummary(mode), func(ctx context.Context) error {
-		return call(ctx, c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: channel, Mode: mode})
+		return call(ctx, c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: channel, Mode: mode})
 	})
 }
 
@@ -399,7 +399,7 @@ func newChannelCmd(ctx context.Context, c *client.Client, from, dir, name string
 func switchChannelCmd(ctx context.Context, c *client.Client, from, to string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		_ = call(ctx, c, protocol.Unsubscribe, protocol.SubscribeParams{Channel: from})
-		info, err := client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{ID: to})
+		info, err := client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{Channel: to})
 		return switchedMsg{info, err}
 	})
 }
@@ -439,7 +439,7 @@ func pickAgentModelCmd(ctx context.Context, c *client.Client, agent, modelID str
 
 func pickChannelModelCmd(ctx context.Context, c *client.Client, channel, modelID string) tea.Cmd {
 	return resultCmd(ctx, "channel model set to "+modelID, func(ctx context.Context) error {
-		return call(ctx, c, protocol.ChannelSetModel, protocol.ChannelSetModelParams{ID: channel, Model: modelID})
+		return call(ctx, c, protocol.ChannelSetModel, protocol.ChannelSetModelParams{Channel: channel, Model: modelID})
 	})
 }
 

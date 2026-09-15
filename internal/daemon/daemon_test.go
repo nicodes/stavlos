@@ -376,7 +376,7 @@ func TestEndToEnd(t *testing.T) {
 		t.Fatalf("usage events %d", nUsage)
 	}
 	// reconcile
-	rc, err := rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{ID: s.ID})
+	rc, err := rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{Channel: s.ID})
 	if err != nil || rc.Seq != evs[len(evs)-1].Seq || len(rc.Agents) != 2 {
 		t.Fatalf("reconcile %+v %v", rc, err)
 	}
@@ -397,7 +397,7 @@ func TestCancelMidToolAndRecover(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
-	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"})) // chained commands ask under policy; auto answers inside the directory
+	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: "auto"})) // chained commands ask under policy; auto answers inside the directory
 	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
@@ -577,7 +577,7 @@ func TestShellBackgroundWakes(t *testing.T) {
 	ctx := context.Background()
 	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
 	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
-	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"}))
+	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: "auto"}))
 	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "run it"}))
@@ -643,7 +643,7 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	ctx := context.Background()
 	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
 	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
-	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"}))
+	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: "auto"}))
 	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "run it"}))
@@ -679,7 +679,7 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	defer h2.close()
 	s2, _ := rpc.Do(ctx, h2.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
 	_ = errOf(rpc.Do(ctx, h2.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s2.ID, From: 0}))
-	_ = errOf(rpc.Do(ctx, h2.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s2.ID, Mode: "auto"}))
+	_ = errOf(rpc.Do(ctx, h2.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s2.ID, Mode: "auto"}))
 	agents, _ = tree(ctx, h2.c, s2.ID)
 	_ = errOf(rpc.Do(ctx, h2.c, protocol.AgentSend, protocol.AgentSendParams{Agent: agents[0].ID, Kind: protocol.KindPrompt, Text: "run it"}))
 	h2.waitFor(event.TurnEnded, agents[0].ID)
@@ -717,7 +717,7 @@ func TestShellKillStopsJob(t *testing.T) {
 	ctx := context.Background()
 	s, _ := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: work, Model: "", RootAgent: ""})
 	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID, From: 0}))
-	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"}))
+	_ = errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: "auto"}))
 	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 	start := time.Now()
@@ -1038,7 +1038,7 @@ func TestYolo(t *testing.T) {
 		t.Fatalf("one prompt should be waiting: %+v", ps)
 	}
 	// yolo on: the waiting prompt is approved and logged
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "yolo"})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: "yolo"})); err != nil {
 		t.Fatal(err)
 	}
 	e := h.waitFor(event.ChannelUpdated, "")
@@ -1058,7 +1058,7 @@ func TestYolo(t *testing.T) {
 	if ps, _ := prompts(ctx, h.c, s.ID); len(ps) != 0 {
 		t.Fatalf("prompt queue should be drained: %+v", ps)
 	}
-	rc, _ := rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{ID: s.ID})
+	rc, _ := rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{Channel: s.ID})
 	if rc.Channel.Mode != "yolo" {
 		t.Fatalf("channel info should show yolo: %+v", rc.Channel)
 	}
@@ -1083,14 +1083,14 @@ func TestYolo(t *testing.T) {
 		t.Fatalf("only turn 1's prompt should have been raised, not one in yolo: %d", asks)
 	}
 	// back to ask
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "ask"})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: "ask"})); err != nil {
 		t.Fatal(err)
 	}
-	rc, _ = rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{ID: s.ID})
+	rc, _ = rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{Channel: s.ID})
 	if rc.Channel.Mode != "ask" {
 		t.Fatalf("mode should be ask: %+v", rc.Channel)
 	}
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "turbo"})); err == nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: "turbo"})); err == nil {
 		t.Fatal("an unknown mode should be rejected")
 	}
 }
@@ -1141,7 +1141,7 @@ func TestAutoMode(t *testing.T) {
 	root := agents[0].ID
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, root) // the inside command waits in ask mode
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: "auto"})); err != nil {
 		t.Fatal(err)
 	}
 	// auto approves the waiting inside command, then denies the outside read
@@ -1157,7 +1157,7 @@ func TestAutoMode(t *testing.T) {
 	if n := len(h.d.esc.Pending(s.ID)); n != 0 {
 		t.Fatalf("auto should leave no boundary prompt waiting: %d", n)
 	}
-	rc, _ := rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{ID: s.ID})
+	rc, _ := rpc.Do(ctx, h.c, protocol.Reconcile, protocol.ChannelRef{Channel: s.ID})
 	if rc.Channel.Mode != "auto" {
 		t.Fatalf("%+v", rc.Channel)
 	}
@@ -1230,7 +1230,7 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	}}
 	h2 := newHarness(t, data, fm2)
 	defer h2.close()
-	if _, err := rpc.Do(ctx, h2.c, protocol.ChannelResume, protocol.ChannelRef{ID: s.ID}); err != nil {
+	if _, err := rpc.Do(ctx, h2.c, protocol.ChannelResume, protocol.ChannelRef{Channel: s.ID}); err != nil {
 		t.Fatal(err)
 	}
 	agents, _ = tree(ctx, h2.c, s.ID)
@@ -1808,7 +1808,7 @@ func TestWorkingDirectories(t *testing.T) {
 	if len(s.Dirs) != 1 || s.Dirs[0].Path != work || s.Dirs[0].Source != "channel" {
 		t.Fatalf("dirs %+v", s.Dirs)
 	}
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: s.ID, Dir: shared})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelAddDir, protocol.ChannelDirParams{Channel: s.ID, Dir: shared})); err != nil {
 		t.Fatal(err)
 	}
 	agents, _ := tree(ctx, h.c, s.ID)
@@ -1863,19 +1863,19 @@ func TestWorkingDirectories(t *testing.T) {
 	// the human edits the set: add, remove (the channel directory refuses),
 	// and a relative path inside the channel directory is already covered
 	extra := t.TempDir()
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: s.ID, Dir: extra})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelAddDir, protocol.ChannelDirParams{Channel: s.ID, Dir: extra})); err != nil {
 		t.Fatal(err)
 	}
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: s.ID, Dir: "sub/dir"})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelAddDir, protocol.ChannelDirParams{Channel: s.ID, Dir: "sub/dir"})); err != nil {
 		t.Fatal(err)
 	}
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: s.ID, Dir: shared})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{Channel: s.ID, Dir: shared})); err != nil {
 		t.Fatal(err)
 	}
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: s.ID, Dir: work})); err == nil || !strings.Contains(err.Error(), "channel directory") {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{Channel: s.ID, Dir: work})); err == nil || !strings.Contains(err.Error(), "channel directory") {
 		t.Fatalf("removing the channel directory: %v", err)
 	}
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: s.ID, Dir: "/never/there"})); err == nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{Channel: s.ID, Dir: "/never/there"})); err == nil {
 		t.Fatal("removing an unknown directory should fail")
 	}
 	dirsOf := func(c *rpc.Client) string {
@@ -2544,8 +2544,8 @@ func TestWireErrors(t *testing.T) {
 	}{
 		{`{"jsonrpc":"2.0","id":1,"method":"daemon.status"}`, protocol.ErrVersion},
 		{`{"jsonrpc":"2.0","id":2,"v":1,"method":"no.such"}`, protocol.ErrMethodNotFound},
-		{`{"jsonrpc":"2.0","id":3,"v":1,"method":"channel.resume","params":{"id":7}}`, protocol.ErrInvalidParams},
-		{`{"jsonrpc":"2.0","id":4,"v":1,"method":"channel.resume","params":{"id":"s-missing"}}`, protocol.ErrNotFound},
+		{`{"jsonrpc":"2.0","id":3,"v":1,"method":"channel.resume","params":{"channel":7}}`, protocol.ErrInvalidParams},
+		{`{"jsonrpc":"2.0","id":4,"v":1,"method":"channel.resume","params":{"channel":"s-missing"}}`, protocol.ErrNotFound},
 		{`{"jsonrpc":"2.0","id":5,"v":1,"method":"agent.send","params":{"agent":"a-missing","kind":"prompt"}}`, protocol.ErrNotFound},
 		{`{"jsonrpc":"2.0","id":6,"v":1,"method":"prompt.reply","params":{"id":"p-missing","answer":"allow"}}`, protocol.ErrConflict},
 		{`{"jsonrpc":"2.0","id":7,"v":1,"method":"channel.create","params":{"dir":"/definitely/not/here"}}`, protocol.ErrInvalidParams},
@@ -2559,7 +2559,7 @@ func TestWireErrors(t *testing.T) {
 	if r := ask(`{"jsonrpc":"2.0","id":8,"v":1,"method":"daemon.status"}`); r.Error != nil || len(r.Result) == 0 {
 		t.Fatalf("status with the version: %+v", r)
 	}
-	if r := ask(`{"jsonrpc":"2.0","id":9,"v":1,"method":"channel.resume","params":{"id":"s-missing"}}`); r.Error == nil || r.Error.Message != `channel "s-missing" not found` {
+	if r := ask(`{"jsonrpc":"2.0","id":9,"v":1,"method":"channel.resume","params":{"channel":"s-missing"}}`); r.Error == nil || r.Error.Message != `channel "s-missing" not found` {
 		t.Fatalf("message: %+v", r.Error)
 	}
 }
@@ -2578,7 +2578,7 @@ func TestChannelPost(t *testing.T) {
 	agents, _ := tree(ctx, h.c, s.ID)
 	root := agents[0].ID
 	to, err := func() ([]string, error) {
-		r, err := rpc.Do(ctx, h.c, protocol.ChannelPost, protocol.ChannelPostParams{ID: s.ID, Text: "hello there"})
+		r, err := rpc.Do(ctx, h.c, protocol.ChannelPost, protocol.ChannelPostParams{Channel: s.ID, Text: "hello there"})
 		return r.To, err
 	}()
 	if err != nil || len(to) != 1 || to[0] != "main" {
@@ -2591,7 +2591,7 @@ func TestChannelPost(t *testing.T) {
 	}
 	h.waitFor(event.TurnEnded, root)
 	if _, err := func() ([]string, error) {
-		r, err := rpc.Do(ctx, h.c, protocol.ChannelPost, protocol.ChannelPostParams{ID: s.ID, Text: "@nobody hi"})
+		r, err := rpc.Do(ctx, h.c, protocol.ChannelPost, protocol.ChannelPostParams{Channel: s.ID, Text: "@nobody hi"})
 		return r.To, err
 	}(); err == nil || !strings.Contains(err.Error(), "@nobody") {
 		t.Fatalf("an unknown mention should be refused: %v", err)
@@ -2622,7 +2622,7 @@ func TestAutoDeniesAWaitingBoundaryPrompt(t *testing.T) {
 	agents, _ := tree(ctx, h.c, s.ID)
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: agents[0].ID, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, agents[0].ID) // the outside read waits in ask mode
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: s.ID, Mode: "auto"})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: "auto"})); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -2659,13 +2659,13 @@ func TestChannelNames(t *testing.T) {
 	if a.Name != "proj" || b.Name != "proj-2" {
 		t.Fatalf("names %q %q", a.Name, b.Name)
 	}
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRename, protocol.ChannelRenameParams{ID: b.ID, Name: "#Docs Site"})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRename, protocol.ChannelRenameParams{Channel: b.ID, Name: "#Docs Site"})); err != nil {
 		t.Fatal(err)
 	}
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRename, protocol.ChannelRenameParams{ID: a.ID, Name: "docs-site"})); err == nil || !strings.Contains(err.Error(), "taken") {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRename, protocol.ChannelRenameParams{Channel: a.ID, Name: "docs-site"})); err == nil || !strings.Contains(err.Error(), "taken") {
 		t.Fatalf("a taken name: %v", err)
 	}
-	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRename, protocol.ChannelRenameParams{ID: a.ID, Name: "!!"})); err == nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.ChannelRename, protocol.ChannelRenameParams{Channel: a.ID, Name: "!!"})); err == nil {
 		t.Fatal("a name with nothing left should be refused")
 	}
 	// a channel created under a chosen name keeps it, normalised; a taken

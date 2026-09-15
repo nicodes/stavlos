@@ -120,7 +120,7 @@ var handlers = routes(
 		return s.Info(), nil
 	}),
 	route(protocol.ChannelResume, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.ChannelInfo, error) {
-		s, err := c.d.channel(p.ID)
+		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return protocol.ChannelInfo{}, err
 		}
@@ -128,13 +128,13 @@ var handlers = routes(
 		return s.Info(), nil
 	}),
 	route(protocol.ChannelArchive, func(ctx context.Context, c *conn, p protocol.ChannelRef) (protocol.None, error) {
-		return none, c.d.ArchiveChannel(ctx, p.ID)
+		return none, c.d.ArchiveChannel(ctx, p.Channel)
 	}),
 	route(protocol.ChannelRename, func(ctx context.Context, c *conn, p protocol.ChannelRenameParams) (protocol.None, error) {
-		return none, c.d.RenameChannel(ctx, p.ID, p.Name)
+		return none, c.d.RenameChannel(ctx, p.Channel, p.Name)
 	}),
 	route(protocol.ChannelSetModel, func(ctx context.Context, c *conn, p protocol.ChannelSetModelParams) (protocol.None, error) {
-		s, err := c.d.channel(p.ID)
+		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return none, err
 		}
@@ -145,7 +145,7 @@ var handlers = routes(
 		return none, nil
 	}),
 	route(protocol.ChannelPost, func(ctx context.Context, c *conn, p protocol.ChannelPostParams) (protocol.ChannelPostResult, error) {
-		s, err := c.d.channel(p.ID)
+		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return protocol.ChannelPostResult{}, err
 		}
@@ -153,7 +153,7 @@ var handlers = routes(
 		return protocol.ChannelPostResult{To: to}, err
 	}),
 	route(protocol.ChannelSetMode, func(ctx context.Context, c *conn, p protocol.ChannelSetModeParams) (protocol.None, error) {
-		s, err := c.d.channel(p.ID)
+		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return none, err
 		}
@@ -173,14 +173,14 @@ var handlers = routes(
 		return none, nil
 	}),
 	route(protocol.ChannelAddDir, func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (protocol.None, error) {
-		s, err := c.d.channel(p.ID)
+		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return none, err
 		}
 		return none, s.AddDir(ctx, p.Dir)
 	}),
 	route(protocol.ChannelRemoveDir, func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (protocol.None, error) {
-		s, err := c.d.channel(p.ID)
+		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return none, err
 		}
@@ -329,11 +329,11 @@ var handlers = routes(
 		return none, nil
 	}),
 	route(protocol.Reconcile, func(ctx context.Context, c *conn, p protocol.ChannelRef) (protocol.ReconcileResult, error) {
-		s, err := c.d.channel(p.ID)
+		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return protocol.ReconcileResult{}, err
 		}
-		seq, _ := c.d.Log.LastSeq(ctx, p.ID)
+		seq, _ := c.d.Log.LastSeq(ctx, p.Channel)
 		info := s.Info()
 		info.Seq = seq
 		// Every channel's prompts: the permission and questions tabs span channels.

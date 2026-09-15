@@ -49,8 +49,6 @@ type Manager struct {
 	sink Sink
 	mu   sync.Mutex
 	pend map[string]*pending
-	// Record is called on every state change so the daemon can log events.
-	Record func(action protocol.PromptAction, info protocol.PromptInfo, answer string, client string)
 }
 
 // New creates a manager.
@@ -79,7 +77,6 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo) Answer 
 	m.mu.Lock()
 	m.pend[info.ID] = p
 	m.mu.Unlock()
-	m.record(protocol.ActionRequested, info, "", "")
 	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionRequested, Prompt: info}, []protocol.Tier{protocol.TierInteractive})
 
 	claimT := time.NewTimer(m.cfg.ClaimTimeout)
@@ -108,7 +105,6 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo) Answer 
 			info := p.info
 			m.mu.Unlock()
 			if esc {
-				m.record(protocol.ActionEscalated, info, "", "")
 				m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionEscalated, Prompt: info}, []protocol.Tier{protocol.TierInteractive, protocol.TierFallback})
 			}
 		case <-expiry.C:
@@ -125,14 +121,12 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo) Answer 
 		case <-answerT.C:
 			a := Answer{Value: m.cfg.Default, Defaulted: true}
 			if m.finish(info.ID, a) {
-				m.record(protocol.ActionDefaulted, info, a.Value, "")
 				m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionDefaulted, Prompt: m.snapshot(info.ID, p)}, m.tiersFor(p.info))
 			}
 			return a
 		case <-ctx.Done():
 			a := Answer{Withdrawn: true}
 			if m.finish(info.ID, a) {
-				m.record(protocol.ActionWithdrawn, info, "", "")
 				m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionWithdrawn, Prompt: m.snapshot(info.ID, p)}, m.tiersFor(p.info))
 			}
 			return a
@@ -170,12 +164,6 @@ func (m *Manager) finish(id string, a Answer) bool {
 	return true
 }
 
-func (m *Manager) record(action protocol.PromptAction, info protocol.PromptInfo, answer, client string) {
-	if m.Record != nil {
-		m.Record(action, info, answer, client)
-	}
-}
-
 // Claim marks a prompt as being answered by client (a human engaged).
 func (m *Manager) Claim(id, client string) error {
 	m.mu.Lock()
@@ -192,7 +180,6 @@ func (m *Manager) Claim(id, client string) error {
 	p.claimedAt = time.Now()
 	info := p.info
 	m.mu.Unlock()
-	m.record(protocol.ActionClaimed, info, "", client)
 	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionClaimed, Prompt: info}, m.tiersFor(info))
 	return nil
 }
@@ -237,7 +224,6 @@ func (m *Manager) answer(id string, info protocol.PromptInfo, client string, a A
 	if !m.finish(id, a) {
 		return ErrLate
 	}
-	m.record(protocol.ActionAnswered, info, a.Value, client)
 	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionAnswered, Prompt: info}, m.tiersFor(info))
 	return nil
 }
@@ -274,7 +260,6 @@ func (m *Manager) AnswerWhere(channel string, kind protocol.PromptKind, answer, 
 		if !m.finish(id, Answer{Value: answer, Client: client}) {
 			continue
 		}
-		m.record(protocol.ActionAnswered, info, answer, client)
 		m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionAnswered, Prompt: info}, m.tiersFor(info))
 		n++
 	}
