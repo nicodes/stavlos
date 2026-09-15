@@ -4,26 +4,21 @@ import (
 	"encoding/json"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"regexp"
-	"strings"
-	"testing"
-	"time"
-
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/theme"
 	"github.com/nicodes/stavlos/internal/tui/transcript"
 	"github.com/nicodes/stavlos/internal/tui/transcript/evtest"
+	"github.com/nicodes/stavlos/internal/tui/tuitest"
+	"strings"
+	"testing"
+	"time"
 )
 
-var ansiRE = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
+var stripANSI = tuitest.StripANSI
 
-func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
-
-func mk(seq int64, agent string, typ event.Type, payload any) event.Event {
-	return event.Event{Seq: seq, Channel: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
-}
+var mk = tuitest.Event
 
 // renderLines renders (collapsed) and returns trimmed, ANSI-free lines.
 func renderLines(lines []transcript.Line) []string {

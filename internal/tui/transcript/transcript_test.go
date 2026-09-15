@@ -2,19 +2,17 @@ package transcript
 
 import (
 	"encoding/json"
-	"strings"
-	"testing"
-	"time"
-
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/transcript/evtest"
+	"github.com/nicodes/stavlos/internal/tui/tuitest"
+	"strings"
+	"testing"
+	"time"
 )
 
-func mk(seq int64, agent string, typ event.Type, payload any) event.Event {
-	return event.Event{Seq: seq, Channel: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
-}
+var mk = tuitest.Event
 
 // showThinkingForTest turns the (off by default) thinking display on for
 // one test.
