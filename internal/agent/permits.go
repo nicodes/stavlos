@@ -17,21 +17,34 @@ import (
 // restarts (each is logged as permit.granted and replayed) (PRD §10.3).
 type permits struct {
 	mu       sync.Mutex
-	calls    map[string]bool     // tool + "\x00" + primary subject
+	calls    map[string]bool     // tool + "\x00" + one subject value
 	prefixes map[string][]string // tool → remembered prefixes
 }
 
-// covers reports whether a remembered allow answers a call of tool with
-// this subject.
+// covers reports whether remembered allows answer a call of tool with this
+// subject: every value of it (each path a patch touches) must be covered,
+// or a patch allowed for one file would carry any other along.
 func (p *permits) covers(tool string, sub policy.Subject) bool {
-	arg := sub.Primary()
+	if len(sub.Values) == 0 {
+		return false
+	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.calls[tool+"\x00"+arg] {
+	for _, v := range sub.Values {
+		if !p.coversOne(tool, sub.Kind, v) {
+			return false
+		}
+	}
+	return true
+}
+
+// coversOne is covers for one value; the caller holds p.mu.
+func (p *permits) coversOne(tool string, kind policy.Kind, v string) bool {
+	if p.calls[tool+"\x00"+v] {
 		return true
 	}
 	for _, pre := range p.prefixes[tool] {
-		if prefixCovers(sub.Kind, pre, arg) {
+		if prefixCovers(kind, pre, v) {
 			return true
 		}
 	}

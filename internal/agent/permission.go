@@ -139,14 +139,14 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 		return "", true, false
 	}
 	switch ans.Value {
-	case protocol.AnswerAllowPrefix:
-		if prefix != "" {
+	case protocol.AnswerAllowPrefix, protocol.AnswerAllowAlways:
+		if ans.Value == protocol.AnswerAllowPrefix && prefix != "" {
 			a.grantPermit(event.PermitPayload{Tool: c.Name, Prefix: prefix})
-		} else {
-			a.grantPermit(event.PermitPayload{Tool: c.Name, Call: d.arg})
+			break
 		}
-	case protocol.AnswerAllowAlways:
-		a.grantPermit(event.PermitPayload{Tool: c.Name, Call: d.arg})
+		for _, v := range d.sub.Values { // the call as a whole: every path it touches
+			a.grantPermit(event.PermitPayload{Tool: c.Name, Call: v})
+		}
 	case protocol.AnswerAllow:
 	default:
 		why := "Permission denied by the user."

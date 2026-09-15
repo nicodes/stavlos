@@ -10,25 +10,36 @@ package shellcmd
 
 import (
 	"path"
+	"slices"
 	"strings"
 )
 
-// twoWordTools are commands whose first word says little on its own: "go"
-// covers build, test and run alike, so their prefix takes the subcommand too.
-var twoWordTools = map[string]bool{
-	"git": true, "go": true, "npm": true, "npx": true, "cargo": true, "make": true,
-	"docker": true, "kubectl": true, "pip": true, "pip3": true, "yarn": true, "pnpm": true, "bun": true,
+// Prefixes a human may allow for a channel come from an allowlist: a
+// program not listed here gets no prefix (the dialog offers the exact
+// command instead), so an unknown launcher can never be allowed wholesale.
+
+// twoWordTools are programs whose first word says little on its own: "go"
+// covers build, test and run alike, so their prefix takes the subcommand
+// too. The listed subcommands run whatever command follows them and get
+// no prefix ("npm exec", "docker run", "uv run").
+var twoWordTools = map[string][]string{
+	"git": nil, "go": nil, "cargo": nil, "make": nil, "just": nil, "gh": nil,
+	"npm": {"exec", "x"}, "pnpm": {"exec", "dlx", "x"}, "yarn": {"exec", "dlx"}, "bun": {"x", "exec"},
+	"pip": nil, "pip3": nil, "uv": {"run", "tool"}, "poetry": {"run"},
+	"docker": {"run", "exec", "compose"}, "kubectl": {"exec", "run", "debug"},
+	"dotnet": nil, "mvn": nil, "gradle": nil, "terraform": nil, "helm": nil,
 }
 
-// wrappers run whatever follows them: allowing "bash" or "env" for a
-// channel would allow everything.
-var wrappers = map[string]bool{
-	"bash": true, "sh": true, "zsh": true, "dash": true, "fish": true, "ksh": true,
-	"env": true, "xargs": true, "sudo": true, "doas": true, "su": true,
-	"eval": true, "exec": true, "command": true, "builtin": true, "source": true, ".": true,
-	"time": true, "nohup": true, "nice": true, "ionice": true, "timeout": true, "watch": true, "setsid": true, "chroot": true, "strace": true, "ltrace": true,
-	"python": true, "python2": true, "python3": true, "node": true, "deno": true, "perl": true, "ruby": true, "php": true, "lua": true, "awk": true, "gawk": true,
-	"ssh": true, "script": true, "screen": true, "tmux": true,
+// oneWordTools are programs whose name alone makes a meaningful prefix and
+// that do not run other programs given as arguments (find -exec, sed's e
+// command, tar --to-command, rsync -e and awk are left out on purpose).
+var oneWordTools = map[string]bool{
+	"ls": true, "cat": true, "head": true, "tail": true, "wc": true, "echo": true, "printf": true, "grep": true, "rg": true,
+	"sort": true, "uniq": true, "cut": true, "diff": true, "cmp": true, "tree": true, "file": true, "stat": true, "du": true, "df": true, "pwd": true, "which": true,
+	"mkdir": true, "touch": true, "cp": true, "mv": true, "rm": true, "ln": true, "chmod": true,
+	"jq": true, "yq": true, "curl": true, "wget": true,
+	"tsc": true, "eslint": true, "prettier": true, "pytest": true, "jest": true, "vitest": true, "mypy": true, "ruff": true, "black": true,
+	"gofmt": true, "goimports": true, "golangci-lint": true, "staticcheck": true, "rustfmt": true, "clang-format": true, "cmake": true, "ninja": true,
 }
 
 // Words splits cmd into its words when it is one simple command: single
@@ -180,30 +191,28 @@ func Simple(cmd string) bool {
 }
 
 // Prefix is the part of a command a human may allow for the rest of a
-// channel: its first word, or two words for tools like git and go ("go
-// test") when the second is a subcommand rather than a flag. It is "" when
-// no prefix would mean what it says: a compound command, an environment
-// assignment, a wrapper or interpreter (bash, env, sudo, python…), or a
-// two-word tool whose second word is a flag ("go -C x test" is not "go").
+// channel: the program for a listed one-word tool or a script of the
+// project ("./run.sh"), the program and subcommand for a listed two-word
+// tool ("go test"). It is "" for anything else: a compound command, an
+// environment assignment, an unlisted program, a two-word tool whose
+// second word is a flag ("go -C x test" is not "go") or a subcommand that
+// runs another command.
 func Prefix(cmd string) string {
 	w, ok := Words(cmd)
 	if !ok || len(w) == 0 {
 		return ""
 	}
 	first := w[0]
-	if first == "" || strings.Contains(first, "=") || first == "!" {
-		return ""
-	}
-	if wrappers[path.Base(first)] {
-		return ""
-	}
-	if twoWordTools[first] {
-		if len(w) < 2 || strings.HasPrefix(w[1], "-") || w[1] == "" {
+	if sub, two := twoWordTools[first]; two {
+		if len(w) < 2 || w[1] == "" || strings.HasPrefix(w[1], "-") || slices.Contains(sub, w[1]) {
 			return ""
 		}
 		return first + " " + w[1]
 	}
-	return first
+	if oneWordTools[first] || strings.HasPrefix(first, "./") && !strings.Contains(first[2:], "/..") && len(first) > 2 {
+		return first
+	}
+	return ""
 }
 
 // Covers reports whether an allowed prefix covers cmd: cmd is one simple
