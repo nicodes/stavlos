@@ -183,7 +183,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	tr := transcript.NewTranscript()
 	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "read", Input: json.RawMessage(`{"path":"a.go"}`)}))
 	got := renderLines(tr.All())
-	if !contains(got, "◆ Read  a.go") {
+	if !contains(got, "⌕ Read  a.go") {
 		t.Fatalf("running tool shows its glyph (yellow):\n%s", strings.Join(got, "\n"))
 	}
 	if !tr.Running() {
@@ -199,7 +199,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"◆ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "◆ Read  b.go (denied)"})
+	assertSubsequence(t, got, []string{"⌕ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "⌕ Read  b.go (denied)"})
 	if n := count(got, "  line"); n != transcript.MaxOutputCollapsed {
 		t.Fatalf("collapsed: want %d output lines, got %d", transcript.MaxOutputCollapsed, n)
 	}

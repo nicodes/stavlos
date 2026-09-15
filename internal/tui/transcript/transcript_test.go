@@ -424,6 +424,8 @@ func TestMessageArrows(t *testing.T) {
 		{Line{Kind: LineTool, Tool: "message", Text: "@scout look"}, GlyphReply},
 		{Line{Kind: LineTool, Tool: "message", Text: "@user done"}, GlyphReply},
 		{Line{Kind: LineTool, Tool: "shell", Text: "Shell  ls"}, GlyphToolShell},
+		{Line{Kind: LineTool, Tool: "read", Text: "Read  a.go"}, GlyphToolRead},
+		{Line{Kind: LineTool, Tool: "apply_patch", Text: "Apply patch  a.go"}, GlyphToolFiles},
 		{Line{Kind: LineTool, Tool: "agent_create", Text: "Agent create  scout (general)"}, GlyphToolCreate},
 		{Line{Kind: LineTool, Tool: "agent_status", Text: "Agent status"}, GlyphToolAgents},
 	} {
