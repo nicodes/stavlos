@@ -1672,7 +1672,7 @@ const (
 	GlyphToolMonitors = "$" // async jobs are shell commands
 	GlyphToolAgents   = "⑂"
 	GlyphToolCreate   = "»" // agent_create: the double of a prompt's ›, since it makes the agent it prompts
-	GlyphToolTodo     = "✓" // todo_add, todo_update
+	GlyphToolTodo     = "□" // todo_add, todo_update
 	GlyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
 	GlyphToolWeb      = "↗" // web_fetch, web_search
 )
