@@ -962,7 +962,7 @@ func TestPatchDiffRenders(t *testing.T) {
 	tr := transcript.NewTranscript()
 	evtest.Apply(tr, evtest.Call("a", "c1", "apply_patch", string(input)))
 	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Output: "updated a.go (1 hunk(s))"}))
-	assertSubsequence(t, renderLines(tr.All()), []string{"± Apply patch  a.go", "  a.go", "  @@ func run() {", "  -old()"})
+	assertSubsequence(t, renderLines(tr.All()), []string{"± Patch  a.go", "  a.go", "  @@ func run() {", "  -old()"})
 }
 
 // linesText is Lines as the chat shows it, one string.
