@@ -103,6 +103,8 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, keys.Select):
 		return m.sidebarSelect(m.sbCursor)
+	case key.Matches(msg, keys.TabLeft): // ← folds another channel's tree, and unfolds it again
+		return m.toggleChannelTree(m.sbCursor)
 	case key.Matches(msg, keys.TabRight): // → on the title: its +; on a channel row: its gear, the channel's dirs
 		if m.sbCursor == 0 {
 			return m.newChannel()
@@ -114,7 +116,7 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 			from = r.k
 		}
 		if i := m.nextNeedy(from); i >= 0 {
-			m.sbCursor = m.sidebarIndex(sidebarRow{sbAgent, i})
+			m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbAgent, k: i})
 			m.openAgent(i)
 		} else {
 			return m.setStatus("no agent is waiting on you", false)
@@ -153,13 +155,15 @@ const (
 	sbOther                         // another channel of this directory
 	sbHere                          // this channel: its chat
 	sbAgent                         // one of this channel's agents
+	sbOtherAgent                    // an agent of another channel, under its row
 )
 
 // sidebarRow is one row the sidebar cursor lands on; k indexes navChannels
 // (sbOther) or agents (sbAgent).
 type sidebarRow struct {
 	kind sidebarKind
-	k    int
+	k    int // navChannels index (sbOther, sbOtherAgent) or agents index (sbAgent)
+	j    int // sbOtherAgent: the agent's place in that channel's kept tree
 }
 
 // sidebarRows is the sidebar's cursor rows top to bottom: the title, the
@@ -177,14 +181,16 @@ func (m Model) sidebarRows() []sidebarRow {
 	rows := make([]sidebarRow, 0, 2+len(m.agents)+len(m.navChannels))
 	rows = append(rows, sidebarRow{kind: sbNewChannel})
 	for k := range before {
-		rows = append(rows, sidebarRow{sbOther, k})
+		rows = append(rows, sidebarRow{kind: sbOther, k: k})
+		rows = append(rows, m.otherTreeRows(k)...)
 	}
 	rows = append(rows, sidebarRow{kind: sbHere})
 	for i := range m.agents {
-		rows = append(rows, sidebarRow{sbAgent, i})
+		rows = append(rows, sidebarRow{kind: sbAgent, k: i})
 	}
 	for k := before; k < len(m.navChannels); k++ {
-		rows = append(rows, sidebarRow{sbOther, k})
+		rows = append(rows, sidebarRow{kind: sbOther, k: k})
+		rows = append(rows, m.otherTreeRows(k)...)
 	}
 	return rows
 }
@@ -235,7 +241,43 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 			return cmd
 		}
 		return m.setFocus(focusInput)
+	case sbOtherAgent:
+		// another channel's agent: open that channel on it
+		if tree := m.trees[m.navChannels[r.k].ID]; r.j < len(tree) {
+			m.selectNext = tree[r.j].ID
+		}
+		return m.openOther(r.k)
 	}
+	return nil
+}
+
+// otherTreeRows are the cursor rows of another channel's agents, drawn
+// under its row while its tree is open.
+func (m Model) otherTreeRows(k int) []sidebarRow {
+	id := m.navChannels[k].ID
+	if !m.treeOpen[id] {
+		return nil
+	}
+	rows := make([]sidebarRow, 0, len(m.trees[id]))
+	for j := range m.trees[id] {
+		rows = append(rows, sidebarRow{kind: sbOtherAgent, k: k, j: j})
+	}
+	return rows
+}
+
+// toggleChannelTree folds the tree of the channel on row i, or unfolds it
+// again. The bound channel's tree is always drawn: its agents are live.
+func (m *Model) toggleChannelTree(i int) tea.Cmd {
+	r, ok := m.sidebarAt(i)
+	if !ok || (r.kind != sbOther && r.kind != sbOtherAgent) {
+		return nil
+	}
+	s := m.navChannels[r.k]
+	if len(m.trees[s.ID]) == 0 {
+		return m.setStatus("no tree for "+channelLabel(s)+" yet: open it once", false)
+	}
+	m.treeOpen[s.ID] = !m.treeOpen[s.ID]
+	m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbOther, k: r.k})
 	return nil
 }
 
@@ -247,7 +289,7 @@ func (m Model) channelAt(i int) (k int, ok bool) {
 		return -1, true
 	case sbOther:
 		return r.k, true
-	case sbNewChannel, sbAgent:
+	case sbNewChannel, sbAgent, sbOtherAgent:
 	}
 	return 0, false
 }
@@ -321,7 +363,7 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 			return tea.Batch(cmd, open)
 		}
 		return cmd
-	case sbNewChannel, sbOther:
+	case sbNewChannel, sbOther, sbOtherAgent:
 	}
 	return tea.Batch(cmd, m.sidebarSelect(i))
 }

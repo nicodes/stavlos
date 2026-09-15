@@ -3168,3 +3168,52 @@ func (m Model) tabBodyLines(width int) []string {
 	lines, _ := m.tabBodyRows(width)
 	return lines
 }
+
+// TestOtherChannelTreesStayOpen: the channel you leave keeps its tree in
+// the sidebar, so opening another folds nothing; ← folds one by hand.
+func TestOtherChannelTreesStayOpen(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	old := m.channelID
+	m.stash() // leaving a channel keeps its agents
+	if len(m.trees[old]) != 4 || !m.treeOpen[old] {
+		t.Fatalf("leaving a channel should keep its tree: %d rows open=%v", len(m.trees[old]), m.treeOpen[old])
+	}
+	// bound to another channel of the directory now, the old one beside it
+	dir := m.channel.Dir
+	m.channelState = newChannelState("s2", protocol.ChannelInfo{ID: "s2", Name: "other", Dir: dir})
+	m.reconciled = true
+	m.agents = []protocol.AgentInfo{{ID: "z", Name: "solo", Role: "general", State: "idle"}}
+	m.navChannels = []protocol.ChannelInfo{{ID: old, Name: "proj", Dir: dir}}
+	m.layout()
+	kept := func() int {
+		n := 0
+		for _, r := range m.sidebarRows() {
+			if r.kind == sbOtherAgent {
+				n++
+			}
+		}
+		return n
+	}
+	if kept() != 4 {
+		t.Fatalf("the channel left behind should keep its tree open: %d rows", kept())
+	}
+	body, items := m.sidebarBody(sidebarWidth - 1)
+	if len(body) != len(items) {
+		t.Fatalf("every drawn row needs its cursor index: %d rows, %d indices", len(body), len(items))
+	}
+	if drawn := stripANSI(strings.Join(body, "\n")); !strings.Contains(drawn, "@world-politics") || !strings.Contains(drawn, "@solo") {
+		t.Fatalf("both trees should be drawn:\n%s", drawn)
+	}
+	// ← folds that channel's tree, and unfolds it again
+	m.setFocus(focusSidebar)
+	m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbOther, k: 0})
+	press(&m, tea.KeyMsg{Type: tea.KeyLeft})
+	if kept() != 0 || m.treeOpen[old] {
+		t.Fatalf("← should fold the tree: %d rows open=%v", kept(), m.treeOpen[old])
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyLeft})
+	if kept() != 4 {
+		t.Fatalf("← again should unfold it: %d rows", kept())
+	}
+}

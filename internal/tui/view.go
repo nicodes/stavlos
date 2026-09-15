@@ -697,6 +697,13 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		channel(dot, channelLabel(s), theme.StyleDim, idx)
 	}
 	tree := m.treeRows(width)
+	// another channel's kept tree, rendered once and indexed by its row
+	others := map[string][]string{}
+	for _, s := range m.navChannels {
+		if m.treeOpen[s.ID] && len(m.trees[s.ID]) > 0 {
+			others[s.ID] = m.agentRows(m.trees[s.ID], "", width)
+		}
+	}
 	for i, r := range m.sidebarRows() {
 		switch r.kind {
 		case sbNewChannel:
@@ -724,6 +731,10 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 			}
 		case sbAgent:
 			line(tree[r.k], i)
+		case sbOtherAgent:
+			if rs := others[m.navChannels[r.k].ID]; r.j < len(rs) {
+				line(rs[r.j], i)
+			}
 		}
 	}
 	return rows, items
@@ -763,8 +774,18 @@ func (m Model) needsHuman(agent string) string {
 // reads bold; the sidebar cursor is a background across the row, as in
 // the chat.
 func (m Model) treeRows(width int) []string {
-	rows := make([]string, 0, len(m.agents))
-	for i, a := range m.agents {
+	sel := ""
+	if !m.superChat {
+		sel = m.selectedID()
+	}
+	return m.agentRows(m.agents, sel, width)
+}
+
+// agentRows renders one channel's agent tree. selected names the agent
+// drawn bold, "" for none: another channel's tree has no selection.
+func (m Model) agentRows(agents []protocol.AgentInfo, selected string, width int) []string {
+	rows := make([]string, 0, len(agents))
+	for _, a := range agents {
 		indent := "  " + strings.Repeat("  ", a.Depth) // one level under this channel's "#name" row
 		dot := agentDot(a)
 		if b := m.needsHuman(a.ID); b != "" {
@@ -798,7 +819,7 @@ func (m Model) treeRows(width int) []string {
 			tint = r.Color
 		}
 		switch {
-		case i == m.selected && !m.superChat:
+		case selected != "" && a.ID == selected:
 			text = roleStyle(tint).Inherit(theme.StyleSelected).Render(text)
 		case tint != "":
 			text = roleStyle(tint).Render(text)
