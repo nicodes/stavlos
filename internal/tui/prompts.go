@@ -325,7 +325,7 @@ func (m *Model) applyPromptNotification(n protocol.PromptNotification) tea.Cmd {
 	// The turn indicator switches between "working…" and "permission
 	// requested" on prompt changes, which arrive outside the event stream.
 	if n.Prompt.Agent == m.selectedID() {
-		m.refreshViewport()
+		m.viewDirty = true
 	}
 	if before == 0 && len(m.prompts) > 0 && (n.Prompt.Channel == "" || n.Prompt.Channel == m.channelID) && m.focus == focusInput && m.ov == nil && strings.TrimSpace(m.input.Value()) == "" {
 		if n.Prompt.Kind == "question" {

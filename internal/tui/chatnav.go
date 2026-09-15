@@ -208,6 +208,7 @@ func (m *Model) chatItemFolds() bool {
 // refreshViewport re-renders the selected transcript into the viewport,
 // marking the cursor item while the chat has focus.
 func (m *Model) refreshViewport() {
+	m.viewDirty = false
 	t := m.transcripts[m.viewID()]
 	n := 0
 	if t != nil {

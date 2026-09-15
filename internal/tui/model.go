@@ -88,6 +88,7 @@ type Model struct {
 	metaSel       metaPart  // the highlighted part of the meta row while it has focus
 	tabSel        int       // the highlighted tab (index into tabFocuses) while the strip has focus
 	follow        bool      // auto-scroll to bottom
+	viewDirty     bool      // the chat changed (an event, a stream delta, a tick): Update redraws it once, at the end
 
 	status      string
 	statusErr   bool
@@ -283,6 +284,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	cmds = append(cmds, m.ensureFocus(), m.ensureSpin())
+	if m.viewDirty {
+		m.refreshViewport()
+	}
 	m.layout()
 	return m, tea.Batch(cmds...)
 }

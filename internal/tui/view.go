@@ -335,6 +335,9 @@ func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "starting…"
 	}
+	if m.viewDirty { // only when View runs without Update, which redraws once at its end
+		m.refreshViewport()
+	}
 	f := m.computeFrame()
 	keybar, kb := f.keybar, f.keybarRows
 	mainH := m.height - kb
