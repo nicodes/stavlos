@@ -58,7 +58,7 @@ func Run(ctx context.Context, c *client.Client, channelID string) error {
 	case <-c.Closed():
 	default:
 		uctx, ucancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_ = c.Unsubscribe(uctx, channelID)
+		_ = call(uctx, c, protocol.Unsubscribe, protocol.SubscribeParams{Channel: channelID})
 		ucancel()
 	}
 
@@ -1229,7 +1229,7 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 func (m *Model) answerQuestions(p *protocol.PromptInfo, answers []string) tea.Cmd {
 	answers = append([]string(nil), answers...)
 	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error {
-		return c.AnswerQuestions(ctx, id, answers)
+		return call(ctx, c, protocol.PromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerAnswered, Answers: answers})
 	})
 }
 
@@ -2900,7 +2900,9 @@ func (m *Model) removePrompt(id string) {
 func (m *Model) answerPrompt(p *protocol.PromptInfo, answer string) tea.Cmd {
 	// A trust prompt is answered like any other, by id: the daemon knows
 	// which directory and hash it asked about.
-	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error { return c.ReplyPrompt(ctx, id, answer) })
+	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error {
+		return call(ctx, c, protocol.PromptReply, protocol.PromptReplyParams{ID: id, Answer: answer})
+	})
 }
 
 // claimThen sends one answer to p through reply, unless an answer to it is
@@ -2924,7 +2926,9 @@ func (m *Model) denyPrompt(p *protocol.PromptInfo, reason string) tea.Cmd {
 	if p.Kind == "trust" {
 		return m.answerPrompt(p, "deny") // trust has its own reply; no reason field
 	}
-	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error { return c.DenyPrompt(ctx, id, reason) })
+	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error {
+		return call(ctx, c, protocol.PromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerDeny, Reason: reason})
+	})
 }
 
 // answerPromptPrefix allows the call and every command of the tool that
@@ -2933,14 +2937,16 @@ func (m *Model) answerPromptPrefix(p *protocol.PromptInfo) tea.Cmd {
 	if p.Prefix == "" {
 		return m.answerPrompt(p, "allow_always")
 	}
-	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error { return c.AllowPromptPrefix(ctx, id) })
+	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error {
+		return call(ctx, c, protocol.PromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerAllowPrefix})
+	})
 }
 
 // answerPromptDir is allow_always on a boundary prompt with an edited
 // directory: the call runs and that directory joins the agent's set.
 func (m *Model) answerPromptDir(p *protocol.PromptInfo, dir string) tea.Cmd {
 	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error {
-		return c.ReplyPromptDir(ctx, id, "allow_always", dir)
+		return call(ctx, c, protocol.PromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerAllowAlways, Dir: dir})
 	})
 }
 

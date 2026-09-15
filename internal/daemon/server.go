@@ -214,7 +214,7 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 	if !ok {
 		return nil, &protocol.Error{Code: protocol.ErrMethodNotFound, Message: "unknown method " + req.Method}
 	}
-	res, err := h(ctx, c, req)
+	res, err := h(ctx, c, req.Params)
 	if err != nil {
 		return nil, toProtocolError(err)
 	}

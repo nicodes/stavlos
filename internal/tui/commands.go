@@ -95,6 +95,12 @@ func rpcCmd(ctx context.Context, do func(ctx context.Context) tea.Msg) tea.Cmd {
 	}
 }
 
+// call is client.Do for a caller that wants only the error.
+func call[P, R any](ctx context.Context, c *client.Client, m protocol.Method[P, R], p P) error {
+	_, err := client.Do(ctx, c, m, p)
+	return err
+}
+
 // resultCmd is a fire-and-forget call reported as a resultMsg; ok is shown
 // on success.
 func resultCmd(ctx context.Context, ok string, do func(ctx context.Context) error) tea.Cmd {
@@ -108,19 +114,21 @@ func tick(d time.Duration, msg tea.Msg) tea.Cmd {
 
 func reconcileCmd(ctx context.Context, c *client.Client, channel string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		res, err := c.Reconcile(ctx, channel)
+		res, err := client.Do(ctx, c, protocol.Reconcile, protocol.ChannelRef{ID: channel})
 		return reconcileMsg{res, err}
 	})
 }
 
 func subscribeCmd(ctx context.Context, c *client.Client, channel string, from int64) tea.Cmd {
-	return rpcCmd(ctx, func(ctx context.Context) tea.Msg { return subscribedMsg{c.Subscribe(ctx, channel, from)} })
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
+		return subscribedMsg{call(ctx, c, protocol.Subscribe, protocol.SubscribeParams{Channel: channel, From: from})}
+	})
 }
 
 func treeCmd(ctx context.Context, c *client.Client, channel string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		agents, err := c.Tree(ctx, channel)
-		return treeMsg{agents, err}
+		res, err := client.Do(ctx, c, protocol.AgentTree, protocol.AgentTreeParams{Channel: channel})
+		return treeMsg{res.Agents, err}
 	})
 }
 
@@ -128,15 +136,16 @@ func treeCmd(ctx context.Context, c *client.Client, channel string) tea.Cmd {
 func treeDebounceCmd() tea.Cmd { return tick(250*time.Millisecond, treeTickMsg{}) }
 
 func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.Kind, text, ok string) tea.Cmd {
-	return resultCmd(ctx, ok, func(ctx context.Context) error { return c.Send(ctx, agent, kind, text) })
+	return resultCmd(ctx, ok, func(ctx context.Context) error {
+		return call(ctx, c, protocol.AgentSend, protocol.AgentSendParams{Agent: agent, Kind: kind, Text: text})
+	})
 }
 
 // postCmd sends the human's message to the channel chat; the daemon
 // delivers it by @mention and refuses a mention that names no agent.
 func postCmd(ctx context.Context, c *client.Client, channel, text string) tea.Cmd {
 	return resultCmd(ctx, "", func(ctx context.Context) error {
-		_, err := c.Post(ctx, channel, text)
-		return err
+		return call(ctx, c, protocol.ChannelPost, protocol.ChannelPostParams{ID: channel, Text: text})
 	})
 }
 
@@ -144,7 +153,7 @@ func postCmd(ctx context.Context, c *client.Client, channel, text string) tea.Cm
 // here, once the human acted (PRD §7.4).
 func replyCmd(ctx context.Context, c *client.Client, id string, reply func(ctx context.Context, c *client.Client) error) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		if err := c.ClaimPrompt(ctx, id); err != nil {
+		if err := call(ctx, c, protocol.PromptClaim, protocol.PromptClaimParams{ID: id}); err != nil {
 			return promptReplyMsg{id, err}
 		}
 		return promptReplyMsg{id, reply(ctx, c)}
@@ -155,7 +164,7 @@ func replyCmd(ctx context.Context, c *client.Client, id string, reply func(ctx c
 // is for (a sign-in to jump to, a quiet refresh, a status to show).
 func providersCmd(ctx context.Context, c *client.Client, msg providersMsg) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		msg.res, msg.err = c.Providers(ctx)
+		msg.res, msg.err = client.Do(ctx, c, protocol.ProviderList, protocol.None{})
 		return msg
 	})
 }
@@ -163,7 +172,7 @@ func providersCmd(ctx context.Context, c *client.Client, msg providersMsg) tea.C
 // loginStartCmd begins the device-code login for provider.
 func loginStartCmd(ctx context.Context, c *client.Client, provider, method string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		res, err := c.LoginStart(ctx, provider, method)
+		res, err := client.Do(ctx, c, protocol.ProviderLoginStart, protocol.LoginStartParams{Provider: provider, Method: method})
 		return loginStartMsg{provider: provider, res: res, err: err}
 	})
 }
@@ -173,7 +182,7 @@ func loginStartCmd(ctx context.Context, c *client.Client, provider, method strin
 // cancelling it abandons the wait.
 func loginWaitCmd(ctx context.Context, c *client.Client, id string) tea.Cmd {
 	return func() tea.Msg {
-		info, err := c.LoginWait(ctx, id)
+		info, err := client.Do(ctx, c, protocol.ProviderLoginWait, protocol.LoginWaitParams{ID: id})
 		return loginDoneMsg{id: id, info: info, err: err}
 	}
 }
@@ -205,10 +214,10 @@ func openBrowserCmd(url string) tea.Cmd {
 // the open dialog refreshes.
 func disconnectProviderCmd(ctx context.Context, c *client.Client, id string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		if err := c.DisconnectProvider(ctx, id); err != nil {
+		if err := call(ctx, c, protocol.ProviderDisconnect, protocol.ProviderRef{Provider: id}); err != nil {
 			return resultMsg{"", err}
 		}
-		res, err := c.Providers(ctx)
+		res, err := client.Do(ctx, c, protocol.ProviderList, protocol.None{})
 		return providersMsg{res: res, err: err, status: "signed out of " + id}
 	})
 }
@@ -216,8 +225,8 @@ func disconnectProviderCmd(ctx context.Context, c *client.Client, id string) tea
 // modelsCmd lists models of connected providers only.
 func modelsCmd(ctx context.Context, c *client.Client) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		ms, err := c.Models(ctx, "", false)
-		return modelsMsg{ms, err}
+		res, err := client.Do(ctx, c, protocol.ModelList, protocol.ModelListParams{})
+		return modelsMsg{res.Models, err}
 	})
 }
 
@@ -232,42 +241,52 @@ type rolesMsg struct {
 
 func rolesCmd(ctx context.Context, c *client.Client, channel string, quiet bool) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		rs, err := c.Presets(ctx, channel)
-		return rolesMsg{roles: rs, err: err, quiet: quiet}
+		res, err := client.Do(ctx, c, protocol.Presets, protocol.PresetsParams{Channel: channel})
+		return rolesMsg{roles: res.Presets, err: err, quiet: quiet}
 	})
 }
 
 func pickRoleCmd(ctx context.Context, c *client.Client, agent, role string) tea.Cmd {
-	return resultCmd(ctx, "role set to "+role, func(ctx context.Context) error { return c.SetAgentRole(ctx, agent, role) })
+	return resultCmd(ctx, "role set to "+role, func(ctx context.Context) error {
+		return call(ctx, c, protocol.AgentSetRole, protocol.AgentSetRoleParams{Agent: agent, Role: role})
+	})
 }
 
 func addDirCmd(ctx context.Context, c *client.Client, channel, dir string) tea.Cmd {
-	return resultCmd(ctx, "added "+dir, func(ctx context.Context) error { return c.AddChannelDir(ctx, channel, dir) })
+	return resultCmd(ctx, "added "+dir, func(ctx context.Context) error {
+		return call(ctx, c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: channel, Dir: dir})
+	})
 }
 
 func removeDirCmd(ctx context.Context, c *client.Client, channel, dir string) tea.Cmd {
-	return resultCmd(ctx, "removed "+format.ShortHome(dir), func(ctx context.Context) error { return c.RemoveChannelDir(ctx, channel, dir) })
+	return resultCmd(ctx, "removed "+format.ShortHome(dir), func(ctx context.Context) error {
+		return call(ctx, c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: channel, Dir: dir})
+	})
 }
 
 // replaceDirCmd swaps one directory for another (an edit in the dirs
 // dialog): the new one is added first so no agent loses ground.
 func replaceDirCmd(ctx context.Context, c *client.Client, channel, oldDir, newDir string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		if err := c.AddChannelDir(ctx, channel, newDir); err != nil {
+		if err := call(ctx, c, protocol.ChannelAddDir, protocol.ChannelDirParams{ID: channel, Dir: newDir}); err != nil {
 			return resultMsg{"", err}
 		}
-		return resultMsg{"replaced " + format.ShortHome(oldDir) + " with " + newDir, c.RemoveChannelDir(ctx, channel, oldDir)}
+		return resultMsg{"replaced " + format.ShortHome(oldDir) + " with " + newDir, call(ctx, c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{ID: channel, Dir: oldDir})}
 	})
 }
 
 // renameChannelCmd is /rename: the daemon normalises the name and refuses one
 // another channel has.
 func renameChannelCmd(ctx context.Context, c *client.Client, channel, name string) tea.Cmd {
-	return resultCmd(ctx, "channel renamed", func(ctx context.Context) error { return c.RenameChannel(ctx, channel, name) })
+	return resultCmd(ctx, "channel renamed", func(ctx context.Context) error {
+		return call(ctx, c, protocol.ChannelRename, protocol.ChannelRenameParams{ID: channel, Name: name})
+	})
 }
 
 func setModeCmd(ctx context.Context, c *client.Client, channel, mode string) tea.Cmd {
-	return resultCmd(ctx, "mode "+mode+": "+protocol.ModeSummary(mode), func(ctx context.Context) error { return c.SetChannelMode(ctx, channel, mode) })
+	return resultCmd(ctx, "mode "+mode+": "+protocol.ModeSummary(mode), func(ctx context.Context) error {
+		return call(ctx, c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{ID: channel, Mode: mode})
+	})
 }
 
 // compactCmd is /compact. Summarising takes a model call, so it gets a
@@ -276,8 +295,8 @@ func compactCmd(ctx context.Context, c *client.Client, agent string) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 		defer cancel()
-		status, err := c.CompactAgent(ctx, agent)
-		if status == "queued" {
+		res, err := client.Do(ctx, c, protocol.AgentCompact, protocol.AgentCompactParams{Agent: agent})
+		if res.Status == "queued" {
 			return resultMsg{"compaction queued: the agent is mid-turn and compacts before its next model call", err}
 		}
 		return resultMsg{"", err} // the Compacted event reports the result
@@ -328,8 +347,8 @@ type channelsMsg struct {
 
 func channelsCmd(ctx context.Context, c *client.Client, dir string, purpose channelsPurpose) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		ss, err := c.Channels(ctx, dir, false)
-		return channelsMsg{ss, err, purpose}
+		res, err := client.Do(ctx, c, protocol.ChannelList, protocol.ChannelListParams{Dir: dir})
+		return channelsMsg{res.Channels, err, purpose}
 	})
 }
 
@@ -369,9 +388,9 @@ type switchedMsg struct {
 // a refused name keeps the TUI where it was.
 func newChannelCmd(ctx context.Context, c *client.Client, from, dir, name string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		info, err := c.CreateNamedChannel(ctx, dir, name)
+		info, err := client.Do(ctx, c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: dir, Name: name})
 		if err == nil {
-			_ = c.Unsubscribe(ctx, from)
+			_ = call(ctx, c, protocol.Unsubscribe, protocol.SubscribeParams{Channel: from})
 		}
 		return switchedMsg{info, err}
 	})
@@ -379,8 +398,8 @@ func newChannelCmd(ctx context.Context, c *client.Client, from, dir, name string
 
 func switchChannelCmd(ctx context.Context, c *client.Client, from, to string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		_ = c.Unsubscribe(ctx, from)
-		info, err := c.ResumeChannel(ctx, to)
+		_ = call(ctx, c, protocol.Unsubscribe, protocol.SubscribeParams{Channel: from})
+		info, err := client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{ID: to})
 		return switchedMsg{info, err}
 	})
 }
@@ -396,8 +415,8 @@ type variantsMsg struct {
 
 func variantsCmd(ctx context.Context, c *client.Client, modelID, current string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		vs, err := c.Variants(ctx, modelID)
-		return variantsMsg{modelID, current, vs, err}
+		res, err := client.Do(ctx, c, protocol.Variants, protocol.VariantsParams{Model: modelID})
+		return variantsMsg{modelID, current, res.Variants, err}
 	})
 }
 
@@ -406,16 +425,22 @@ func pickVariantCmd(ctx context.Context, c *client.Client, agent, variant string
 	if variant == "" {
 		what = "variant reset to the provider default"
 	}
-	return resultCmd(ctx, what, func(ctx context.Context) error { return c.SetAgentVariant(ctx, agent, variant) })
+	return resultCmd(ctx, what, func(ctx context.Context) error {
+		return call(ctx, c, protocol.AgentSetVariant, protocol.AgentSetVariantParams{Agent: agent, Variant: variant})
+	})
 }
 
 // pickAgentModelCmd / pickChannelModelCmd are the /models overlay actions.
 func pickAgentModelCmd(ctx context.Context, c *client.Client, agent, modelID string) tea.Cmd {
-	return resultCmd(ctx, "model set to "+modelID, func(ctx context.Context) error { return c.SetAgentModel(ctx, agent, modelID) })
+	return resultCmd(ctx, "model set to "+modelID, func(ctx context.Context) error {
+		return call(ctx, c, protocol.AgentSetModel, protocol.AgentSetModelParams{Agent: agent, Model: modelID})
+	})
 }
 
 func pickChannelModelCmd(ctx context.Context, c *client.Client, channel, modelID string) tea.Cmd {
-	return resultCmd(ctx, "channel model set to "+modelID, func(ctx context.Context) error { return c.SetChannelModel(ctx, channel, modelID) })
+	return resultCmd(ctx, "channel model set to "+modelID, func(ctx context.Context) error {
+		return call(ctx, c, protocol.ChannelSetModel, protocol.ChannelSetModelParams{ID: channel, Model: modelID})
+	})
 }
 
 // compactTickMsg animates the compaction bar while a summariser runs.

@@ -11,31 +11,38 @@ import (
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
-// The protocol's methods, one handler each. A handler returns a result or
-// a domain error; toProtocolError is the one place that decides the wire
-// code. Params are decoded by typed, once, into the method's own struct.
+// The protocol's methods, one route each, keyed by the descriptors the
+// client calls (protocol.Method): a handler's params and result are the
+// method's, checked at compile time. A handler returns a result or a
+// domain error; toProtocolError is the one place that decides the wire
+// code.
 
-type handler func(ctx context.Context, c *conn, req protocol.Request) (any, error)
+type handler func(ctx context.Context, c *conn, params json.RawMessage) (any, error)
 
-// typed decodes a request's params into P and calls fn.
-func typed[P any](fn func(ctx context.Context, c *conn, p P) (any, error)) handler {
-	return func(ctx context.Context, c *conn, req protocol.Request) (any, error) {
+// routeEntry is one method's handler.
+type routeEntry struct {
+	name string
+	h    handler
+}
+
+// route binds a handler to its method.
+func route[P, R any](m protocol.Method[P, R], fn func(ctx context.Context, c *conn, p P) (R, error)) routeEntry {
+	return routeEntry{m.Name, func(ctx context.Context, c *conn, params json.RawMessage) (any, error) {
 		var p P
-		if len(req.Params) > 0 {
-			if err := json.Unmarshal(req.Params, &p); err != nil {
+		if len(params) > 0 {
+			if err := json.Unmarshal(params, &p); err != nil {
 				return nil, codedError{protocol.ErrInvalidParams, err}
 			}
 		}
 		return fn(ctx, c, p)
-	}
+	}}
 }
 
 // errNotFound marks a missing channel, agent or prompt; wrap it with %w so
 // the message reads "channel "x" not found".
 var errNotFound = errors.New("not found")
 
-// codedError carries an explicit wire code for errors that are neither the
-// caller's mistake nor a missing thing (an internal failure).
+// codedError carries an explicit wire code.
 type codedError struct {
 	code int
 	err  error
@@ -75,22 +82,20 @@ func promptErr(err error) error {
 	return codedError{protocol.ErrNotFound, err}
 }
 
-var okResult = map[string]bool{"ok": true}
+var none = protocol.None{}
 
-type noParams struct{}
-
-var handlers = map[string]handler{
-	protocol.MDaemonStatus: typed(func(_ context.Context, c *conn, _ noParams) (any, error) {
+var handlers = routes(
+	route(protocol.DaemonStatus, func(_ context.Context, c *conn, _ protocol.None) (protocol.DaemonStatusResult, error) {
 		return c.d.Status(), nil
 	}),
-	protocol.MDaemonShutdown: typed(func(_ context.Context, c *conn, _ noParams) (any, error) {
+	route(protocol.DaemonShutdown, func(_ context.Context, c *conn, _ protocol.None) (protocol.None, error) {
 		log.Printf("shutdown requested by client %s (%s)", c.cl.name, c.cl.id)
 		if c.d.Shutdown != nil {
 			go c.d.Shutdown()
 		}
-		return okResult, nil
+		return none, nil
 	}),
-	protocol.MAttach: typed(func(_ context.Context, c *conn, p protocol.AttachParams) (any, error) {
+	route(protocol.Attach, func(_ context.Context, c *conn, p protocol.AttachParams) (protocol.AttachResult, error) {
 		if p.Tier == protocol.TierFallback {
 			c.cl.tier = protocol.TierFallback
 		}
@@ -100,63 +105,60 @@ var handlers = map[string]handler{
 		return protocol.AttachResult{ClientID: c.cl.id, Version: protocol.Version}, nil
 	}),
 
-	protocol.MChannelList: typed(func(ctx context.Context, c *conn, p protocol.ChannelListParams) (any, error) {
+	route(protocol.ChannelList, func(ctx context.Context, c *conn, p protocol.ChannelListParams) (protocol.ChannelListResult, error) {
 		list, err := c.d.ChannelList(ctx, p.Dir, p.IncludeArchived)
 		if err != nil {
-			return nil, internal(err)
+			return protocol.ChannelListResult{}, internal(err)
 		}
 		return protocol.ChannelListResult{Channels: list}, nil
 	}),
-	protocol.MChannelCreate: typed(func(ctx context.Context, c *conn, p protocol.ChannelCreateParams) (any, error) {
+	route(protocol.ChannelCreate, func(ctx context.Context, c *conn, p protocol.ChannelCreateParams) (protocol.ChannelInfo, error) {
 		s, err := c.d.CreateChannel(ctx, p.Dir, p.Model, p.RootAgent, p.Name)
 		if err != nil {
-			return nil, err
+			return protocol.ChannelInfo{}, err
 		}
 		return s.Info(), nil
 	}),
-	protocol.MChannelResume: typed(func(_ context.Context, c *conn, p protocol.ChannelRef) (any, error) {
+	route(protocol.ChannelResume, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.ChannelInfo, error) {
 		s, err := c.d.channel(p.ID)
 		if err != nil {
-			return nil, err
+			return protocol.ChannelInfo{}, err
 		}
 		c.d.maybeTrustPrompt(s)
 		return s.Info(), nil
 	}),
-	protocol.MChannelArchive: typed(func(ctx context.Context, c *conn, p protocol.ChannelRef) (any, error) {
-		return okResult, c.d.ArchiveChannel(ctx, p.ID)
+	route(protocol.ChannelArchive, func(ctx context.Context, c *conn, p protocol.ChannelRef) (protocol.None, error) {
+		return none, c.d.ArchiveChannel(ctx, p.ID)
 	}),
-	protocol.MChannelRename: typed(func(ctx context.Context, c *conn, p protocol.ChannelRenameParams) (any, error) {
-		return okResult, c.d.RenameChannel(ctx, p.ID, p.Name)
+	route(protocol.ChannelRename, func(ctx context.Context, c *conn, p protocol.ChannelRenameParams) (protocol.None, error) {
+		return none, c.d.RenameChannel(ctx, p.ID, p.Name)
 	}),
-	protocol.MChannelSetModel: typed(func(ctx context.Context, c *conn, p protocol.ChannelSetModelParams) (any, error) {
+	route(protocol.ChannelSetModel, func(ctx context.Context, c *conn, p protocol.ChannelSetModelParams) (protocol.None, error) {
 		s, err := c.d.channel(p.ID)
 		if err != nil {
-			return nil, err
+			return none, err
 		}
 		if err := s.SetModel(ctx, p.Model); err != nil {
-			return nil, err
+			return none, err
 		}
 		c.d.rememberModel(s, p.Model)
-		return okResult, nil
+		return none, nil
 	}),
-	protocol.MChannelPost: typed(func(ctx context.Context, c *conn, p protocol.ChannelPostParams) (any, error) {
+	route(protocol.ChannelPost, func(ctx context.Context, c *conn, p protocol.ChannelPostParams) (protocol.ChannelPostResult, error) {
 		s, err := c.d.channel(p.ID)
 		if err != nil {
-			return nil, err
+			return protocol.ChannelPostResult{}, err
 		}
 		to, err := s.Post(ctx, p.Text, "human:"+c.cl.name)
-		if err != nil {
-			return nil, err
-		}
-		return protocol.ChannelPostResult{To: to}, nil
+		return protocol.ChannelPostResult{To: to}, err
 	}),
-	protocol.MChannelSetMode: typed(func(ctx context.Context, c *conn, p protocol.ChannelSetModeParams) (any, error) {
+	route(protocol.ChannelSetMode, func(ctx context.Context, c *conn, p protocol.ChannelSetModeParams) (protocol.None, error) {
 		s, err := c.d.channel(p.ID)
 		if err != nil {
-			return nil, err
+			return none, err
 		}
 		if err := s.SetMode(ctx, p.Mode); err != nil {
-			return nil, err
+			return none, err
 		}
 		// Anything already waiting is answered as the new mode would have, so
 		// the agents move: yolo allows every permission prompt; auto allows
@@ -168,149 +170,141 @@ var handlers = map[string]handler{
 			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir == "" })
 			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerDeny, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir != "" })
 		}
-		return okResult, nil
+		return none, nil
+	}),
+	route(protocol.ChannelAddDir, func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (protocol.None, error) {
+		s, err := c.d.channel(p.ID)
+		if err != nil {
+			return none, err
+		}
+		return none, s.AddDir(ctx, p.Dir)
+	}),
+	route(protocol.ChannelRemoveDir, func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (protocol.None, error) {
+		s, err := c.d.channel(p.ID)
+		if err != nil {
+			return none, err
+		}
+		return none, s.RemoveDir(ctx, p.Dir)
 	}),
 
-	protocol.MAgentTree: typed(func(_ context.Context, c *conn, p protocol.AgentTreeParams) (any, error) {
+	route(protocol.AgentTree, func(_ context.Context, c *conn, p protocol.AgentTreeParams) (protocol.AgentTreeResult, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
-			return nil, err
+			return protocol.AgentTreeResult{}, err
 		}
 		return protocol.AgentTreeResult{Agents: s.Tree()}, nil
 	}),
-	protocol.MAgentSend: typed(func(ctx context.Context, c *conn, p protocol.AgentSendParams) (any, error) {
+	route(protocol.AgentSend, func(ctx context.Context, c *conn, p protocol.AgentSendParams) (protocol.None, error) {
 		s, _, err := c.d.agentChannel(p.Agent)
 		if err != nil {
-			return nil, err
+			return none, err
 		}
 		src := "human:" + c.cl.name
 		switch p.Kind {
 		case protocol.KindPrompt:
-			err = s.Send(ctx, p.Agent, p.Text, src)
+			return none, s.Send(ctx, p.Agent, p.Text, src)
 		case protocol.KindSteer:
-			err = s.Steer(ctx, p.Agent, p.Text, src)
+			return none, s.Steer(ctx, p.Agent, p.Text, src)
 		case protocol.KindCancel:
-			err = s.Cancel(p.Agent)
+			return none, s.Cancel(p.Agent)
 		case protocol.KindKill:
-			err = s.Kill(p.Agent)
-		default:
-			err = fmt.Errorf("unknown envelope kind %q", p.Kind)
+			return none, s.Kill(p.Agent)
 		}
-		return okResult, err
+		return none, fmt.Errorf("unknown envelope kind %q", p.Kind)
 	}),
-	protocol.MAgentSpawn: typed(func(ctx context.Context, c *conn, p protocol.AgentSpawnParams) (any, error) {
+	route(protocol.AgentSpawn, func(ctx context.Context, c *conn, p protocol.AgentSpawnParams) (protocol.AgentSpawnResult, error) {
 		s, _, err := c.d.agentChannel(p.Parent)
 		if err != nil {
-			return nil, err
+			return protocol.AgentSpawnResult{}, err
 		}
 		id, err := s.SpawnFromClient(ctx, p.Parent, p.Archetype, p.Label, p.Task, p.Model)
-		if err != nil {
-			return nil, err
-		}
-		return protocol.AgentSpawnResult{ID: id}, nil
+		return protocol.AgentSpawnResult{ID: id}, err
 	}),
-	protocol.MAgentSetModel: typed(func(ctx context.Context, c *conn, p protocol.AgentSetModelParams) (any, error) {
+	route(protocol.AgentSetModel, func(ctx context.Context, c *conn, p protocol.AgentSetModelParams) (protocol.None, error) {
 		s, a, err := c.d.agentChannel(p.Agent)
 		if err != nil {
-			return nil, err
+			return none, err
 		}
 		if err := a.SetModel(ctx, p.Model); err != nil {
-			return nil, err
+			return none, err
 		}
 		if a.Parent == "" && s.Model() == "" {
-			// Root picked a model in a channel that had none: adopt it.
+			// The main agent picked a model in a channel that had none: adopt it.
 			_ = s.SetModel(ctx, p.Model)
 			c.d.rememberModel(s, p.Model)
 		}
-		return okResult, nil
+		return none, nil
 	}),
-	protocol.MAgentSetRole: typed(func(ctx context.Context, c *conn, p protocol.AgentSetRoleParams) (any, error) {
+	route(protocol.AgentSetRole, func(ctx context.Context, c *conn, p protocol.AgentSetRoleParams) (protocol.None, error) {
 		_, a, err := c.d.agentChannel(p.Agent)
 		if err != nil {
-			return nil, err
+			return none, err
 		}
-		return okResult, a.SetRole(ctx, p.Role)
+		return none, a.SetRole(ctx, p.Role)
 	}),
-	protocol.MAgentSetVariant: typed(func(ctx context.Context, c *conn, p protocol.AgentSetVariantParams) (any, error) {
+	route(protocol.AgentSetVariant, func(ctx context.Context, c *conn, p protocol.AgentSetVariantParams) (protocol.None, error) {
 		_, a, err := c.d.agentChannel(p.Agent)
 		if err != nil {
-			return nil, err
+			return none, err
 		}
-		return okResult, a.SetVariant(ctx, p.Variant)
+		return none, a.SetVariant(ctx, p.Variant)
 	}),
-	protocol.MAgentCompact: typed(func(ctx context.Context, c *conn, p protocol.AgentCompactParams) (any, error) {
+	route(protocol.AgentCompact, func(ctx context.Context, c *conn, p protocol.AgentCompactParams) (protocol.AgentCompactResult, error) {
 		_, a, err := c.d.agentChannel(p.Agent)
 		if err != nil {
-			return nil, err
+			return protocol.AgentCompactResult{}, err
 		}
 		status, err := a.Compact(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return protocol.AgentCompactResult{Status: status}, nil
+		return protocol.AgentCompactResult{Status: status}, err
 	}),
-	protocol.MChannelAddDir: typed(func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (any, error) {
-		s, err := c.d.channel(p.ID)
-		if err != nil {
-			return nil, err
-		}
-		return okResult, s.AddDir(ctx, p.Dir)
-	}),
-	protocol.MChannelRemoveDir: typed(func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (any, error) {
-		s, err := c.d.channel(p.ID)
-		if err != nil {
-			return nil, err
-		}
-		return okResult, s.RemoveDir(ctx, p.Dir)
-	}),
-	protocol.MVariants: typed(func(_ context.Context, c *conn, p protocol.VariantsParams) (any, error) {
+	route(protocol.Variants, func(_ context.Context, c *conn, p protocol.VariantsParams) (protocol.VariantsResult, error) {
 		return protocol.VariantsResult{Variants: c.d.Registry.Variants(p.Model)}, nil
 	}),
 
-	protocol.MPromptList: typed(func(_ context.Context, c *conn, p protocol.PromptListParams) (any, error) {
+	route(protocol.PromptList, func(_ context.Context, c *conn, p protocol.PromptListParams) (protocol.PromptListResult, error) {
 		return protocol.PromptListResult{Prompts: c.d.esc.Pending(p.Channel)}, nil
 	}),
-	protocol.MPromptClaim: typed(func(_ context.Context, c *conn, p protocol.PromptClaimParams) (any, error) {
+	route(protocol.PromptClaim, func(_ context.Context, c *conn, p protocol.PromptClaimParams) (protocol.None, error) {
 		if err := c.d.esc.Claim(p.ID, c.cl.id); err != nil {
-			return nil, promptErr(err)
+			return none, promptErr(err)
 		}
-		return okResult, nil
+		return none, nil
 	}),
-	protocol.MPromptReply: typed(func(_ context.Context, c *conn, p protocol.PromptReplyParams) (any, error) {
+	route(protocol.PromptReply, func(_ context.Context, c *conn, p protocol.PromptReplyParams) (protocol.None, error) {
 		if err := c.d.esc.Reply(p.ID, c.cl.id, escalation.Answer{Value: p.Answer, Dir: p.Dir, Reason: p.Reason, Answers: p.Answers}); err != nil {
-			return nil, promptErr(err)
+			return none, promptErr(err)
 		}
-		return okResult, nil
+		return none, nil
 	}),
 
-	protocol.MTrustStatus: typed(func(_ context.Context, c *conn, p protocol.TrustStatusParams) (any, error) {
+	route(protocol.TrustStatus, func(_ context.Context, c *conn, p protocol.TrustStatusParams) (protocol.TrustStatusResult, error) {
 		r, err := c.d.TrustStatus(p.Dir)
 		if err != nil {
-			return nil, internal(err)
+			return r, internal(err)
 		}
 		return r, nil
 	}),
-	protocol.MTrustReply: typed(func(ctx context.Context, c *conn, p protocol.TrustReplyParams) (any, error) {
-		return okResult, c.d.Trust(ctx, p.Dir, p.Hash, p.Trust)
+	route(protocol.TrustReply, func(ctx context.Context, c *conn, p protocol.TrustReplyParams) (protocol.None, error) {
+		return none, c.d.Trust(ctx, p.Dir, p.Hash, p.Trust)
 	}),
 
-	protocol.MProviderList: typed(func(_ context.Context, c *conn, _ noParams) (any, error) {
+	route(protocol.ProviderList, func(_ context.Context, c *conn, _ protocol.None) (protocol.ProviderListResult, error) {
 		return c.d.ProviderList(), nil
 	}),
-	protocol.MProviderLoginStart: typed(func(ctx context.Context, c *conn, p protocol.LoginStartParams) (any, error) {
+	route(protocol.ProviderLoginStart, func(ctx context.Context, c *conn, p protocol.LoginStartParams) (protocol.LoginStartResult, error) {
 		return c.d.LoginStart(ctx, p.Provider, p.Method)
 	}),
-	protocol.MProviderLoginWait: typed(func(ctx context.Context, c *conn, p protocol.LoginWaitParams) (any, error) {
+	route(protocol.ProviderLoginWait, func(ctx context.Context, c *conn, p protocol.LoginWaitParams) (protocol.ProviderInfo, error) {
 		st, err := c.d.LoginWait(ctx, p.ID)
 		if err != nil {
-			return nil, err
+			return protocol.ProviderInfo{}, err
 		}
 		return providerInfo(st), nil
 	}),
-	protocol.MProviderDisconnect: typed(func(_ context.Context, c *conn, p protocol.ProviderRef) (any, error) {
-		return okResult, c.d.Registry.Disconnect(p.Provider)
+	route(protocol.ProviderDisconnect, func(_ context.Context, c *conn, p protocol.ProviderRef) (protocol.None, error) {
+		return none, c.d.Registry.Disconnect(p.Provider)
 	}),
-	protocol.MModelList: typed(func(_ context.Context, c *conn, p protocol.ModelListParams) (any, error) {
+	route(protocol.ModelList, func(_ context.Context, c *conn, p protocol.ModelListParams) (protocol.ModelListResult, error) {
 		var out []protocol.ModelInfo
 		for _, m := range c.d.Registry.Models(p.Provider, p.All) {
 			out = append(out, protocol.ModelInfo{ID: m.ID, Provider: m.Provider, Name: m.Name, Context: m.Info.ContextWindow, InputPrice: m.Info.InputPrice, OutputPrice: m.Info.OutputPrice})
@@ -318,37 +312,51 @@ var handlers = map[string]handler{
 		return protocol.ModelListResult{Models: out}, nil
 	}),
 
-	protocol.MSubscribe: typed(func(ctx context.Context, c *conn, p protocol.SubscribeParams) (any, error) {
+	route(protocol.Subscribe, func(ctx context.Context, c *conn, p protocol.SubscribeParams) (protocol.SubscribeResult, error) {
 		if _, err := c.d.channel(p.Channel); err != nil {
-			return nil, err
+			return protocol.SubscribeResult{}, err
 		}
 		last, err := c.d.subscribe(ctx, c.cl, p.Channel, p.From)
 		if err != nil {
-			return nil, internal(err)
+			return protocol.SubscribeResult{}, internal(err)
 		}
-		return map[string]any{"ok": true, "seq": last}, nil
+		return protocol.SubscribeResult{Seq: last}, nil
 	}),
-	protocol.MUnsubscribe: typed(func(_ context.Context, c *conn, p protocol.SubscribeParams) (any, error) {
+	route(protocol.Unsubscribe, func(_ context.Context, c *conn, p protocol.SubscribeParams) (protocol.None, error) {
 		c.cl.mu.Lock()
 		delete(c.cl.subs, p.Channel)
 		c.cl.mu.Unlock()
-		return okResult, nil
+		return none, nil
 	}),
-	protocol.MReconcile: typed(func(ctx context.Context, c *conn, p protocol.ChannelRef) (any, error) {
+	route(protocol.Reconcile, func(ctx context.Context, c *conn, p protocol.ChannelRef) (protocol.ReconcileResult, error) {
 		s, err := c.d.channel(p.ID)
 		if err != nil {
-			return nil, err
+			return protocol.ReconcileResult{}, err
 		}
 		seq, _ := c.d.Log.LastSeq(ctx, p.ID)
 		info := s.Info()
 		info.Seq = seq
-		return protocol.ReconcileResult{Channel: info, Agents: s.Tree(), Prompts: c.d.esc.Pending("") /* every channel's: the permission and questions tabs span channels */, Seq: seq}, nil
+		// Every channel's prompts: the permission and questions tabs span channels.
+		return protocol.ReconcileResult{Channel: info, Agents: s.Tree(), Prompts: c.d.esc.Pending(""), Seq: seq}, nil
 	}),
-	protocol.MPresets: typed(func(_ context.Context, c *conn, p protocol.PresetsParams) (any, error) {
+	route(protocol.Presets, func(_ context.Context, c *conn, p protocol.PresetsParams) (protocol.PresetsResult, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
-			return nil, err
+			return protocol.PresetsResult{}, err
 		}
 		return protocol.PresetsResult{Presets: s.Presets()}, nil
 	}),
+)
+
+// routes builds the method table; a method routed twice is a programming
+// error.
+func routes(entries ...routeEntry) map[string]handler {
+	out := map[string]handler{}
+	for _, e := range entries {
+		if _, dup := out[e.name]; dup {
+			panic("method routed twice: " + e.name)
+		}
+		out[e.name] = e.h
+	}
+	return out
 }
