@@ -28,6 +28,7 @@ type snapshot struct {
 	Children                                            []string
 	Owed, Reminded, Remind                              []string
 	LastPost                                            string
+	Flagged                                             []string
 	Armed                                               []string
 }
 
@@ -39,7 +40,7 @@ func snap(s *Session) []snapshot {
 			ID: in.ID, Parent: in.Parent, Archetype: in.Archetype, Label: in.Label, Model: in.Model, Variant: in.Variant, State: string(in.State),
 			Depth: in.Depth, Turn: in.Turn, Queued: in.Queued, Tokens: in.Tokens, CostUSD: in.CostUSD, LastError: in.LastError,
 			Awaiting: in.Awaiting, Todos: in.Todos, Dirs: in.Dirs, Children: a.Children(), Armed: a.armedIDs(),
-			Owed: a.replyState(a.owed), Reminded: a.replyState(a.reminded), Remind: append([]string(nil), a.remind...), LastPost: a.currentPost(),
+			Owed: a.replyState(a.owed), Reminded: a.replyState(a.reminded), Remind: append([]string(nil), a.remind...), LastPost: a.currentPost(), Flagged: a.replyState(a.flagged),
 		})
 	}
 	return out

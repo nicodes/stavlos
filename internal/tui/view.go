@@ -828,6 +828,7 @@ func (m Model) tabTexts() []string {
 		permKind + " " + permCount,
 		"questions " + qCount,
 		fmt.Sprintf("async %d", len(m.awaitedAgents())+len(m.runningJobs())),
+		fmt.Sprintf("due %d", m.dueCount()),
 		"todo " + todoCount(m.selectedTodos()),
 		"mcp " + mcpCount(m.selectedMCP()),
 		fmt.Sprintf("dirs %d", len(m.selectedDirs())),
@@ -869,6 +870,18 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		}
 		rows := agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2)
 		rows = append(rows, monitorRows(jobs, owner, role, time.Now(), width-2)...)
+		return rowsAt(m.cursorRows(rows), 0, len(rows))
+	case focusDue:
+		// who is waiting on the selected agent's reply: you, then agents
+		human, agents := m.dueOf()
+		if !human && len(agents) == 0 {
+			return note("  no replies due")
+		}
+		var rows []string
+		if human {
+			rows = append(rows, "  "+theme.StyleBold.Render("you")+"  "+theme.StyleDim.Render("the session chat"))
+		}
+		rows = append(rows, agentRows(agents, m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2)...)
 		return rowsAt(m.cursorRows(rows), 0, len(rows))
 	case focusTodo:
 		items := m.selectedTodos()

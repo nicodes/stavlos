@@ -29,7 +29,7 @@ func ChatEvent(typ event.Type) bool {
 	switch typ {
 	case event.AgentSpawned, event.AgentRoleChanged, event.ChatPosted, event.MessageToUser,
 		event.PromptRequested, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted,
-		event.AgentKilled, event.ReplyMissing:
+		event.AgentKilled:
 		return true
 	}
 	return false
@@ -60,11 +60,6 @@ func (t *Transcript) applyChat(ev event.Event) {
 		}
 	case event.AgentKilled:
 		delete(t.open, t.names[ev.Agent]) // no reply is coming
-	case event.ReplyMissing:
-		var p event.RepliesPayload
-		if ev.Decode(&p) == nil && slices.Contains(p.Parties, "user") {
-			delete(t.open, t.names[ev.Agent]) // it ended without replying
-		}
 	case event.ChatPosted:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {

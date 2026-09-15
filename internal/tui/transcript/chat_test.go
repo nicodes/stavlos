@@ -178,8 +178,8 @@ func TestChatFoldsLongReplies(t *testing.T) {
 	}
 }
 
-// TestChatWaitingThreads: a thread waits on its agents until each replies,
-// is killed, or ends without replying; a reply starts after a spacer.
+// TestChatWaitingThreads: a thread waits on its agents until each replies
+// or is killed; a missing reply stays due; a reply starts after a spacer.
 func TestChatWaitingThreads(t *testing.T) {
 	c := NewChat()
 	seq := int64(0)
@@ -200,8 +200,8 @@ func TestChatWaitingThreads(t *testing.T) {
 		t.Fatalf("after a reply and a kill: %v", w)
 	}
 	apply("c3", event.ReplyMissing, event.RepliesPayload{Parties: []string{"user"}, Names: []string{"user"}})
-	if w := c.Waiting(); len(w) != 0 {
-		t.Fatalf("after a missing reply: %v", w)
+	if w := c.Waiting(); strings.Join(w[0], ",") != "lookout" {
+		t.Fatalf("a missing reply is still due: %v", w)
 	}
 	var spacerBeforeReply bool
 	lines := c.All()

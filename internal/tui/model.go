@@ -191,6 +191,7 @@ const (
 	focusPermission              // the permission tab: pending permission/trust prompts (y/n/a)
 	focusQuestions               // the questions tab: an ask_user batch, answered one question at a time
 	focusAsync                   // the async tab: running shell jobs
+	focusDue                     // the due tab: who is waiting on the selected agent's reply
 	focusTodo                    // the todo tab: the selected agent's todo list
 	focusMCP                     // the mcp tab: the selected agent's MCP servers
 	focusDirs                    // the dirs tab: the selected agent's working directories
@@ -201,7 +202,7 @@ const (
 
 // tabFocuses are the tabs of the strip under the chat, left to right. They
 // are one stop in the tab cycle; ←/→ move between them.
-var tabFocuses = []focus{focusPermission, focusQuestions, focusAsync, focusTodo, focusMCP, focusDirs}
+var tabFocuses = []focus{focusPermission, focusQuestions, focusAsync, focusDue, focusTodo, focusMCP, focusDirs}
 
 // isTab reports whether f is one of the strip's tabs.
 func isTab(f focus) bool {
@@ -643,6 +644,38 @@ func awaitedOf(agents []protocol.AgentInfo, id string) []protocol.AgentInfo {
 	return out
 }
 
+// dueOf is who the selected agent owes a reply: the human (you), then the
+// live agents in tree order.
+func (m *Model) dueOf() (human bool, agents []protocol.AgentInfo) {
+	a := m.selectedAgent()
+	if a == nil {
+		return false, nil
+	}
+	want := map[string]bool{}
+	for _, d := range a.Due {
+		if d == "user" {
+			human = true
+		} else {
+			want[d] = true
+		}
+	}
+	for _, o := range m.agents {
+		if want[o.ID] && o.State != protocol.AgentKilled {
+			agents = append(agents, o)
+		}
+	}
+	return human, agents
+}
+
+// dueCount is how many replies the selected agent owes.
+func (m *Model) dueCount() int {
+	human, agents := m.dueOf()
+	if human {
+		return len(agents) + 1
+	}
+	return len(agents)
+}
+
 // runningJobs returns the selected agent's running async jobs.
 func (m *Model) runningJobs() []protocol.MonitorInfo {
 	if a := m.selectedAgent(); a != nil {
@@ -828,7 +861,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		if !m.superChat {
 			m.sbCursor = m.selected + 1
 		}
-	case focusAsync, focusTodo, focusMCP, focusDirs:
+	case focusAsync, focusDue, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0
 	case focusMeta:
 		m.metaSel = m.metaParts()[0] // always the leftmost part: YOLO while on, else the role
@@ -854,6 +887,34 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 			return nil // a job row: nothing to select
 		}
 		m.openAgent(m.findAgent(agents[m.agCursor%n].ID))
+		return m.closeDialog()
+	}
+	return nil
+}
+
+// dueKey handles keys while the due dialog is open: ↑/↓ (or j/k) move over
+// who is waiting on the selected agent's reply; space on "you" opens the
+// session chat and on an agent opens that agent's chat, closing the dialog.
+func (m *Model) dueKey(msg tea.KeyMsg) tea.Cmd {
+	human, agents := m.dueOf()
+	off := 0
+	if human {
+		off = 1
+	}
+	n := off + len(agents)
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.closeDialog()
+	case stepCursor(msg, &m.agCursor, n, true):
+	case key.Matches(msg, keys.Select):
+		if n == 0 {
+			return nil
+		}
+		if i := m.agCursor % n; i < off {
+			m.openChat()
+		} else {
+			m.openAgent(m.findAgent(agents[i-off].ID))
+		}
 		return m.closeDialog()
 	}
 	return nil
@@ -1264,6 +1325,9 @@ func (m *Model) pickTabRow(row int, choose bool) tea.Cmd {
 		m.agCursor = row
 		if choose && m.focus == focusAsync {
 			return m.asyncKey(space)
+		}
+		if choose && m.focus == focusDue {
+			return m.dueKey(space)
 		}
 	}
 	return nil
@@ -1896,6 +1960,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	switch m.focus {
 	case focusAsync:
 		return m.asyncKey(msg)
+	case focusDue:
+		return m.dueKey(msg)
 	case focusTodo:
 		return m.todoKey(msg)
 	case focusMCP:
@@ -2564,7 +2630,8 @@ func changesTree(ev event.Event) bool {
 		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.SessionModelChanged,
 		event.MonitorStarted, event.MonitorFired, event.MonitorStopped,
 		event.AgentDirAdded, event.AgentDirRemoved, event.TodoChanged,
-		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.ResponseReceived:
+		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.ResponseReceived,
+		event.UserMessage, event.MessageToUser: // what an agent owes changes
 		return true
 	case event.ToolCallFinished: // a message or task just put another agent on the awaiting list
 		var p event.ToolFinishedPayload

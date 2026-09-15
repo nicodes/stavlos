@@ -26,7 +26,7 @@ A session opens on its chat, where you talk to every agent. `@name` delivers you
 
 Selecting an agent in the sidebar opens its own chat, with its tool calls and notes, where typing talks to that agent alone. The "# chat" row at the top of the sidebar, or `/chat`, goes back. If an agent is busy, your message reaches it at its next step. The input grows as your message wraps; ctrl+j breaks a line and enter sends. If the agent is busy, your message reaches it at its next step. `/queue <text>` waits for the current turn to end instead, and esc pressed twice on an empty input cancels the current turn (the first press warns).
 
-Agents reply with the `message` tool, to you or to another agent. The text an agent ends a turn with is its notes: it reaches no one and shows dimmed in its chat. Every message an agent receives, from you or from another agent, is owed a reply. A turn that ends without one gets a single reminder, and if the next turn still does not reply, the chat marks that the agent ended without replying. `"reminders": false` in `stavlos.json` turns the reminder off.
+Agents reply with the `message` tool, to you or to another agent. The text an agent ends a turn with is its notes: it reaches no one and shows dimmed in its chat. Every message an agent receives, from you or from another agent, is owed a reply. A turn that ends without one gets a single reminder turn, and if that turn still does not reply, the agent's chat marks that it ended without replying. Either way the reply stays due: the agent sees who it still owes in its instructions on every later turn, and the due tab lists them, until it replies. `"reminders": false` in `stavlos.json` turns the reminder off.
 
 The meta row under the input shows the selected agent's role, model and variant, then how full its context is (`31% of 200k`, orange from 70%), its tokens and its cost. Context is compacted on its own when an agent's history passes 80% of its model's window: older turns become a summary. `/compact` does it for the selected agent right away, or before its next model call if it is busy. A compaction is an item in the chat: a rule with a sweeping bar while it runs, replaced in place by `┄┄ compacted 84k → 12k tokens ┄┄` and the summary when it is done.
 
@@ -41,11 +41,12 @@ The meta row under the input shows the selected agent's role, model and variant,
 
 ### The tab strip
 
-A strip under the input holds six tabs, each always there with its count: "permission", "questions", "async", "todo", "mcp" and "dirs". Tab lands on the leftmost, ←/→ move the highlight, enter or a click opens that tab's dialog, and esc returns to where you came from.
+A strip under the input holds seven tabs, each always there with its count: "permission", "questions", "async", "due", "todo", "mcp" and "dirs". Tab lands on the leftmost, ←/→ move the highlight, enter or a click opens that tab's dialog, and esc returns to where you came from.
 
 - **permission** holds the permission prompts. The permission and questions dialogs show the selected agent's prompt first and the oldest one otherwise, while the strip counts every prompt in the session.
 - **questions** holds `ask_user` batches (see below).
 - **async** shows what the selected agent is waiting on: the agents whose answer it expects (a child it tasked, a sibling or parent it messaged) and its running shell jobs.
+- **due** is the other direction: who is waiting on the selected agent's reply, you first, then any agent that messaged it. Space opens that chat.
 - **todo** lists the selected agent's plan.
 - **mcp** lists its MCP servers with their state, tool count and uptime.
 - **dirs** edits its working directories: `a` adds, enter replaces, ctrl+d removes; the session directory stays.
