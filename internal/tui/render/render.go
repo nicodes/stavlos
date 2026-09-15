@@ -346,11 +346,13 @@ type fold struct {
 // it; enter expands it fully.
 const PreviewLines = 3
 
-// folds decides which items collapse to a single line. User inputs and
-// assistant responses always show in full; everything else (tool calls with
-// their output and permission notices, thinking, child results, spawns,
-// errors, finish blocks, notices) folds unless the chat cursor is on it, it
-// was expanded with enter, or /details is on.
+// folds decides which items collapse to a single line. The human's input
+// always shows in full, and so does text still streaming and the session
+// chat's messages (which fold by their own lines); everything else (the
+// agent's notes, tool calls with their output and permission notices,
+// thinking, prompts and responses from other agents, spawns, errors,
+// notices) folds unless the chat cursor is on it, it was expanded with
+// space, or /details is on.
 func (o Options) folds(lines []transcript.Line) map[int]fold {
 	out := map[int]fold{}
 	if o.Details || o.NoFold {
@@ -375,8 +377,10 @@ func (o Options) folds(lines []transcript.Line) map[int]fold {
 		switch {
 		case l.Block == transcript.BlockUser || l.Block == transcript.BlockSteer:
 			in.full = true
-		case l.Kind == transcript.LineText || l.Kind == transcript.LineHeading || l.Kind == transcript.LineCode || l.Kind == transcript.LineStream || l.Kind == transcript.LineModel:
-			if l.Block == transcript.BlockNone {
+		case l.Kind == transcript.LineStream:
+			in.full = true
+		case l.Kind == transcript.LineText || l.Kind == transcript.LineHeading || l.Kind == transcript.LineCode:
+			if l.Block == transcript.BlockNone && l.Agent != "" {
 				in.full = true
 			}
 		}

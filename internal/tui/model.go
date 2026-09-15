@@ -2333,12 +2333,12 @@ func (m *Model) scrollToCursor() {
 	}
 }
 
-// toggleItem flips the cursor item's tool output or long reply between
-// expanded and collapsed (a per-item override of /details). Other items are
-// inert.
+// toggleItem flips the cursor item between expanded and collapsed (a
+// per-item override of /details): in an agent's own chat any item but the
+// human's input, in the session chat a long reply.
 func (m *Model) toggleItem() {
 	t := m.transcripts[m.viewID()]
-	if t == nil || !transcript.ItemIsTool(t.All(), m.chatCursor) && !transcript.ItemFolds(t.All(), m.chatCursor) {
+	if t == nil || m.superChat && !transcript.ItemFolds(t.All(), m.chatCursor) || !m.superChat && transcript.ItemIsInput(t.All(), m.chatCursor) {
 		return
 	}
 	e := m.agentExpanded(m.viewID())
