@@ -88,8 +88,11 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 			m.upsertPrompt(p)
 		}
 		m.replayTo = msg.res.Seq
-		m.loading = msg.res.Seq > 0
-		return []tea.Cmd{subscribeCmd(m.ctx, m.c, m.channelID, 0), channelsCmd(m.ctx, m.c, m.channel.Dir, channelsHistory), rolesCmd(m.ctx, m.c, m.channelID, true)}, false
+		cmds := []tea.Cmd{subscribeCmd(m.ctx, m.c, m.channelID, m.seq+1), channelsCmd(m.ctx, m.c, m.channel.Dir, channelsHistory), rolesCmd(m.ctx, m.c, m.channelID, true)}
+		if m.loading = msg.res.Seq > m.seq; !m.loading {
+			cmds = append(cmds, m.caughtUp()...) // a return with nothing missed replays nothing
+		}
+		return cmds, false
 	case subscribedMsg:
 		if msg.err != nil {
 			m.fatal = fmt.Errorf("subscribe: %w", msg.err)
@@ -171,6 +174,19 @@ func (m *Model) onDirChanged(ev event.Event) {
 	}
 }
 
+// caughtUp runs once the channel's replay has reached the snapshot: the
+// view is drawn, the tree refetched, and a compaction that was running when
+// the TUI attached gets its animation.
+func (m *Model) caughtUp() []tea.Cmd {
+	m.refreshViewport()
+	cmds := []tea.Cmd{m.markTreeDirty()}
+	if m.anyCompacting() && !m.compactTick {
+		m.compactTick = true
+		cmds = append(cmds, compactTickCmd())
+	}
+	return cmds
+}
+
 // applyEvent routes one log event into the right transcript and schedules a
 // tree refresh for events that change agent state or cost.
 func (m *Model) applyEvent(ev event.Event) tea.Cmd {
@@ -199,12 +215,7 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	}
 	if m.loading && ev.Seq >= m.replayTo {
 		m.loading = false
-		m.refreshViewport()
-		cmds = append(cmds, m.markTreeDirty())
-		if m.anyCompacting() && !m.compactTick { // a compaction was running when we attached
-			m.compactTick = true
-			cmds = append(cmds, compactTickCmd())
-		}
+		cmds = append(cmds, m.caughtUp()...)
 	}
 	return tea.Batch(cmds...)
 }
