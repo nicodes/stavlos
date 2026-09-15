@@ -68,8 +68,12 @@ func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task,
 func (o orchestrator) Message(caller, to, text string) (string, error) {
 	from, hasFrom := o.s.Agent(caller)
 	if to == tools.User {
+		post := "" // the chat post this answers, so the chat threads it under that post
+		if hasFrom {
+			post = from.currentPost()
+		}
 		if _, err := o.s.host.Append(context.Background(), event.Event{Session: o.s.ID, Agent: caller, Type: event.MessageToUser,
-			Payload: event.MustPayload(event.ChatPayload{From: o.s.senderLabel("agent:" + caller), Text: text})}); err != nil {
+			Payload: event.MustPayload(event.ChatPayload{From: o.s.senderLabel("agent:" + caller), Text: text, Post: post})}); err != nil {
 			return "", err
 		}
 		if hasFrom {

@@ -30,6 +30,7 @@ const (
 
 type queued struct {
 	text, source string
+	post         string // the session chat post a steer delivers, if any
 }
 
 // response is an answer waiting in the mailbox: who answered (id
@@ -65,6 +66,7 @@ type Agent struct {
 	owed        map[string]bool       // parties owed a reply ("user" or an agent id) by the messages taken in (replies.go)
 	reminded    map[string]bool       // owed parties already reminded once
 	remind      []string              // parties a queued reminder names; it starts a turn
+	lastPost    string                // the session chat post the human's latest input delivered; a message to the user answers it
 	todos       []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
 	todoSeq     int                   // last todo id issued
 	mcps        map[string]*mcpServer // MCP servers this agent has started (name → server)
@@ -164,7 +166,7 @@ func (a *Agent) takeInputs() []event.UserMessagePayload {
 	}
 	a.prompts = nil
 	for _, q := range a.steers { // idle: a steer is just a prompt, and reads as one
-		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source)})
+		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source), Post: q.post})
 	}
 	a.steers = nil
 	for _, r := range a.responses {
@@ -194,7 +196,7 @@ func (a *Agent) Prompt(ctx context.Context, text, source string) error {
 		return err
 	}
 	a.mu.Lock()
-	a.prompts = append(a.prompts, queued{text, source})
+	a.prompts = append(a.prompts, queued{text: text, source: source})
 	a.mu.Unlock()
 	a.signal()
 	return nil
@@ -202,15 +204,20 @@ func (a *Agent) Prompt(ctx context.Context, text, source string) error {
 
 // Steer preempts at the next model-call boundary; if idle it starts a turn.
 func (a *Agent) Steer(ctx context.Context, text, source string) error {
+	return a.steer(ctx, text, source, "")
+}
+
+// steer is Steer carrying the session chat post it delivers ("" for none).
+func (a *Agent) steer(ctx context.Context, text, source, post string) error {
 	if !a.Alive() {
 		return fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
 	}
 	if _, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.SteerReceived,
-		Payload: event.MustPayload(event.TextPayload{Text: text, Source: source})}); err != nil {
+		Payload: event.MustPayload(event.TextPayload{Text: text, Source: source, Post: post})}); err != nil {
 		return err
 	}
 	a.mu.Lock()
-	a.steers = append(a.steers, queued{text, source})
+	a.steers = append(a.steers, queued{text, source, post})
 	a.mu.Unlock()
 	a.signal()
 	return nil

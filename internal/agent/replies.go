@@ -43,7 +43,9 @@ func owedBy(in event.UserMessagePayload) string {
 }
 
 // took records the reply a logged input is owed. A new message from a
-// party already reminded starts its reminder over.
+// party already reminded starts its reminder over. The human's input also
+// sets the post a message to the user answers: its chat post, or none for
+// a message typed in the agent's own chat.
 func (a *Agent) took(in event.UserMessagePayload) {
 	party := owedBy(in)
 	if party == "" {
@@ -52,7 +54,18 @@ func (a *Agent) took(in event.UserMessagePayload) {
 	a.mu.Lock()
 	a.owed[party] = true
 	delete(a.reminded, party)
+	if party == tools.User {
+		a.lastPost = in.Post
+	}
 	a.mu.Unlock()
+}
+
+// currentPost is the session chat post a message to the user answers, ""
+// for none.
+func (a *Agent) currentPost() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.lastPost
 }
 
 // settle clears the reply owed to party: the agent messaged them, or they
