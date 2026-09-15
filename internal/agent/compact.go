@@ -78,7 +78,13 @@ func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all
 		return err
 	}
 	summary := sb.String()
-	return a.record(event.CompactionDone, event.CompactionPayload{FromSeq: cut.FromSeq, ToSeq: cut.ToSeq, Summary: summary, Before: cut.Before, After: cut.After(summary)})
+	if err := a.record(event.CompactionDone, event.CompactionPayload{FromSeq: cut.FromSeq, ToSeq: cut.ToSeq, Summary: summary, Before: cut.Before, After: cut.After(summary)}); err != nil {
+		return err
+	}
+	a.c.mu.Lock()
+	a.instructed = nil // the summary replaced the results that carried them: they are attached again
+	a.c.mu.Unlock()
+	return nil
 }
 
 // summaryMaxTokens bounds the summary; summaryWords is the same bound in
