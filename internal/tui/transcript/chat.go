@@ -78,6 +78,12 @@ func (t *Transcript) applyChat(ev event.Event) {
 			} else {
 				lines = append([]Line{{Kind: LineText, Text: "@" + from}}, lines...)
 			}
+			// "‹ @main …", the mirror of the post's "› …": later lines align
+			// under the text, past the glyph.
+			lines[0].Glyph = GlyphReply
+			for i := 1; i < len(lines); i++ {
+				lines[i].Indent++
+			}
 			lines = collapsed(lines)
 			lines = linked(CleanLines(append(lines, Line{Kind: LineBlank})), ev.Agent)
 			// A reply joins the thread of the post it answers, indented under
@@ -85,7 +91,7 @@ func (t *Transcript) applyChat(ev event.Event) {
 			// on its own at the end.
 			if item, ok := t.posts[p.Post]; ok {
 				for i := range lines {
-					lines[i].Indent = 1
+					lines[i].Indent++ // under its post
 				}
 				t.insertIntoItem(item, append([]Line{{Kind: LineBlank, Spacer: true, Agent: ev.Agent}}, lines...))
 				if t.open[from] == item {
@@ -156,7 +162,7 @@ func collapsed(lines []Line) []Line {
 	for i := MaxOutputCollapsed; i < len(lines); i++ {
 		lines[i].Vis = VisExpanded
 	}
-	return append(lines, Line{Kind: LineDim, Text: fmt.Sprintf("… +%d lines", len(lines)-MaxOutputCollapsed), Vis: VisCollapsed})
+	return append(lines, Line{Kind: LineDim, Text: fmt.Sprintf("… +%d lines", len(lines)-MaxOutputCollapsed), Vis: VisCollapsed, Indent: 1})
 }
 
 // ItemIsInput reports whether committed item i of lines is the human's own

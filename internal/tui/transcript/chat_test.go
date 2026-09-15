@@ -149,7 +149,7 @@ func TestChatFoldsLongReplies(t *testing.T) {
 
 	var always, expanded, collapsedOnly []string
 	for _, l := range c.All() {
-		if l.Item != 0 || l.Indent != 1 || l.Text == "" {
+		if l.Item != 0 || l.Indent < 1 || l.Text == "" {
 			continue
 		}
 		switch l.Vis {
