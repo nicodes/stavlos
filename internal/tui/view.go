@@ -47,6 +47,19 @@ func agentDot(a protocol.AgentInfo) string {
 	return stateDot(agentOutcome(a))
 }
 
+// promptMark is what takes a channel's state dot while the human is waited
+// on: an orange "!" for a permission or trust prompt (first, since it holds
+// up a tool call), an orange "?" for a question, "" for neither.
+func promptMark(permissions, questions int) string {
+	switch {
+	case permissions > 0:
+		return theme.StyleWarn.Render("!")
+	case questions > 0:
+		return theme.StyleWarn.Render("?")
+	}
+	return ""
+}
+
 // stateDot is the marker for a working / waiting / idle state, shared by
 // agent rows and the channels section: a full orange circle while
 // working, a half one while waiting, an empty dim one when idle.
@@ -560,7 +573,11 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		line("  "+dot+" "+style.Render(name)+strings.Repeat(" ", max(0, width-4-ansi.StringWidth(name))), idx)
 	}
 	other := func(s protocol.ChannelInfo, idx int) {
-		channel(stateDot(string(s.State)), channelLabel(s), theme.StyleDim, idx)
+		dot := stateDot(string(s.State))
+		if mark := promptMark(s.Permissions, s.Questions); mark != "" {
+			dot = mark
+		}
+		channel(dot, channelLabel(s), theme.StyleDim, idx)
 	}
 	line("  "+theme.StyleDim.Render("+ channel")+strings.Repeat(" ", max(0, width-11)), 0)
 	here, na := m.channelRow(), len(m.agents)
@@ -575,7 +592,11 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	if m.superChat {
 		style = theme.StyleSelected
 	}
-	channel(stateDot(string(protocol.RollUp(states))), channelLabel(m.channel), style, here)
+	dot := stateDot(string(protocol.RollUp(states)))
+	if mark := promptMark(m.promptCounts()); mark != "" {
+		dot = mark
+	}
+	channel(dot, channelLabel(m.channel), style, here)
 	tree := m.treeRows(width)
 	rows = append(rows, tree...)
 	for i := range tree {
@@ -644,8 +665,9 @@ func (m Model) needsHuman(agent string) string {
 }
 
 // treeRows renders the agent tree, one row per agent: indent, the state
-// dot, "label (role)", then, at the right edge, the needs-you badge and
-// the agent's cost. Every row is exactly width wide. The selected agent
+// dot (an orange ! or ? in its place while a permission or question of the
+// agent's own waits), "@label (role)", then the agent's cost at the right
+// edge. Every row is exactly width wide. The selected agent
 // reads bold; the sidebar cursor is a background across the row, as in
 // the chat.
 func (m Model) treeRows(width int) []string {
@@ -654,20 +676,14 @@ func (m Model) treeRows(width int) []string {
 	for i, a := range m.agents {
 		indent := "    " + strings.Repeat("  ", a.Depth) // one level under this channel's "#name" row
 		dot := agentDot(a)
-		// The right column: the badge (warning) and the cost (dim), with a
-		// space before it whenever it is not empty.
-		right, rightW := "", 0
 		if b := m.needsHuman(a.ID); b != "" {
-			right, rightW = theme.StyleWarn.Render(b), 1
+			dot = theme.StyleWarn.Render(b) // waiting on the human: the mark takes the dot's place
 		}
+		// The right column: the cost (dim), with a space before it.
+		right, rightW := "", 0
 		if a.CostUSD > 0 {
 			c := "$" + format.Cost(a.CostUSD)
-			if right != "" {
-				right += " "
-				rightW++
-			}
-			right += theme.StyleDim.Render(c)
-			rightW += len([]rune(c))
+			right, rightW = theme.StyleDim.Render(c), len([]rune(c))
 		}
 		// indent + dot + " " is two columns plus the indent; the text gets
 		// what is left before the right column and one space.

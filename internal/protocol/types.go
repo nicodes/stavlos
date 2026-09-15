@@ -246,10 +246,12 @@ type ChannelInfo struct {
 	Live         int          `json:"live_agents"`
 	CostUSD      float64      `json:"cost_usd"`
 	TrustPending bool         `json:"trust_pending"`
-	Mode         string       `json:"mode"`            // permission mode: ask | auto | yolo
-	State        ChannelState `json:"state,omitempty"` // working (an agent runs) | waiting (one expects an answer) | idle; "" for a channel not in memory
-	Title        string       `json:"title,omitempty"` // the first human prompt, for pickers
-	Dirs         []DirInfo    `json:"dirs,omitempty"`  // the working directories every agent shares, the channel directory first
+	Mode         string       `json:"mode"`                  // permission mode: ask | auto | yolo
+	State        ChannelState `json:"state,omitempty"`       // working (an agent runs) | waiting (one expects an answer) | idle; "" for a channel not in memory
+	Title        string       `json:"title,omitempty"`       // the first human prompt, for pickers
+	Dirs         []DirInfo    `json:"dirs,omitempty"`        // the working directories every agent shares, the channel directory first
+	Permissions  int          `json:"permissions,omitempty"` // permission and trust prompts waiting on the human (channel.list)
+	Questions    int          `json:"questions,omitempty"`   // questions waiting on the human (channel.list)
 }
 
 type ChannelListParams struct {

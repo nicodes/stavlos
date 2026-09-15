@@ -2197,14 +2197,18 @@ func TestSidebarNav(t *testing.T) {
 		if !strings.HasPrefix(plain[0], "    ◐ @main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
 			t.Fatalf("root row: %q", plain[0])
 		}
-		if !strings.HasPrefix(plain[1], "      ● @world-politic") || !strings.HasSuffix(plain[1], "… ! $0.05") {
-			t.Fatalf("blocked child row should carry the badge and cost: %q", plain[1])
+		if !strings.HasPrefix(plain[1], "      ! @world-politic") || !strings.HasSuffix(plain[1], " $0.05") || strings.Count(plain[1], "!") != 1 {
+			t.Fatalf("an agent waiting on a permission shows ! in place of its dot, and its cost: %q", plain[1])
 		}
 		if !strings.HasSuffix(strings.TrimRight(plain[2], " "), " @business (general)") {
 			t.Fatalf("a row with nothing on the right ends with the label: %q", plain[2])
 		}
-		if !strings.HasSuffix(plain[3], " ?") {
-			t.Fatalf("a question shows ?: %q", plain[3])
+		if !strings.HasPrefix(plain[3], "      ? @asker") || !strings.HasSuffix(strings.TrimRight(plain[3], " "), "@asker (general)") {
+			t.Fatalf("an agent waiting on a question shows ? in place of its dot: %q", plain[3])
+		}
+		// the channel's own row: a permission waits in it, so ! takes its dot
+		if body, _ := m.sidebarBody(sidebarWidth - 1); strings.Fields(stripANSI(body[1]))[0] != "!" {
+			t.Fatalf("channel row: %q", stripANSI(body[1]))
 		}
 	})
 	t.Run("n selects the next agent that needs you", func(t *testing.T) {
@@ -2253,8 +2257,8 @@ func TestSidebarNav(t *testing.T) {
 		// agents under it; space on another opens it, and so does a click
 		m.channel.Name = "proj"
 		m.navChannels = resumable([]protocol.ChannelInfo{
-			{ID: "s-old", Name: "proj-2", Title: "fix the login bug", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
-			{ID: "s-older", Name: "docs", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
+			{ID: "s-old", Name: "proj-2", Title: "fix the login bug", State: "working", Permissions: 2, Questions: 1, Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
+			{ID: "s-older", Name: "docs", Title: "docs sweep", Questions: 1, Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
 		}, m.channelID)
 		m.setFocus(focusSidebar)
 		body, items := m.sidebarBody(sidebarWidth - 1)
@@ -2263,8 +2267,8 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if f := strings.Fields(plain[2]); len(body) != na+4 || !strings.HasPrefix(plain[0], "  + channel") || strings.TrimRight(plain[1], " ") != "  ○ #docs" ||
-			len(f) != 2 || f[1] != "#proj" || strings.TrimRight(plain[na+3], " ") != "  ● #proj-2" || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
+		if f := strings.Fields(plain[2]); len(body) != na+4 || !strings.HasPrefix(plain[0], "  + channel") || strings.TrimRight(plain[1], " ") != "  ? #docs" ||
+			len(f) != 2 || f[1] != "#proj" || strings.TrimRight(plain[na+3], " ") != "  ! #proj-2" || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
 			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || m.channelRow() != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}

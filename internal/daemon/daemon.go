@@ -360,6 +360,13 @@ func (d *Daemon) ChannelList(ctx context.Context, dir string, archived bool) ([]
 			info = protocol.ChannelInfo{ID: r.ID, Name: r.Name, Dir: r.Dir, Created: r.Created.Format(time.RFC3339), Archived: r.Archived}
 		}
 		info.Seq, info.Title = r.LastSeq, r.Title
+		for _, p := range d.esc.Pending(r.ID) { // what the channel waits on the human for
+			if p.Kind == "question" {
+				info.Questions++
+			} else {
+				info.Permissions++
+			}
+		}
 		out = append(out, info)
 	}
 	return out, nil
