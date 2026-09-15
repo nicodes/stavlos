@@ -387,7 +387,7 @@ func TestNotesAndReminders(t *testing.T) {
 }
 
 // TestOnlyHumanInputIsBlue: a prompt or steer from another agent reads like
-// a received message ("» @main look at the parser"), never as the blue user
+// a received message ("› @main look at the parser"), never as the blue user
 // block the human's own input gets.
 func TestOnlyHumanInputIsBlue(t *testing.T) {
 	mk := func(p event.UserMessagePayload) []Line {
@@ -404,7 +404,7 @@ func TestOnlyHumanInputIsBlue(t *testing.T) {
 				texts = append(texts, l.Text)
 			}
 		}
-		if strings.Join(texts, "|") != "**@main** look at the parser" || lines[1].Glyph != GlyphFromAgent {
+		if strings.Join(texts, "|") != "**@main** look at the parser" || lines[1].Glyph != GlyphAsk {
 			t.Fatalf("%s from an agent: %+v", kind, lines)
 		}
 	}
@@ -414,14 +414,14 @@ func TestOnlyHumanInputIsBlue(t *testing.T) {
 	}
 }
 
-// TestMessageArrows: between agents a message reads « sent and » received;
-// to the human it reads ‹; other tools keep their glyph.
+// TestMessageArrows: what an agent sends reads ‹ and what it receives ›;
+// other tools keep their glyph.
 func TestMessageArrows(t *testing.T) {
 	for _, c := range []struct {
 		line Line
 		want string
 	}{
-		{Line{Kind: LineTool, Tool: "message", Text: "@scout look"}, GlyphToAgent},
+		{Line{Kind: LineTool, Tool: "message", Text: "@scout look"}, GlyphReply},
 		{Line{Kind: LineTool, Tool: "message", Text: "@user done"}, GlyphReply},
 		{Line{Kind: LineTool, Tool: "shell", Text: "Shell  ls"}, GlyphToolShell},
 		{Line{Kind: LineTool, Tool: "read", Text: "Read  a.go"}, GlyphToolRead},
@@ -434,8 +434,8 @@ func TestMessageArrows(t *testing.T) {
 		}
 	}
 	resp := EventLines(event.Event{Type: event.UserMessage, Time: time.Now(), Payload: event.MustPayload(event.UserMessagePayload{Kind: event.MsgAgentResponse, Text: "done", From: "scout"})})
-	if resp[1].Glyph != GlyphFromAgent || resp[1].Text != "**@scout** done" {
-		t.Fatalf("a response from an agent reads » @scout: %+v", resp)
+	if resp[1].Glyph != GlyphAsk || resp[1].Text != "**@scout** done" {
+		t.Fatalf("a response from an agent reads › @scout: %+v", resp)
 	}
 }
 
