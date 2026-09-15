@@ -584,7 +584,7 @@ func (e *Effective) loadPresets(dir, layer string) error {
 // It samples one argument per pattern, so it catches the plain cases.
 func (e *Effective) checkTightening(p Preset) error {
 	for _, r := range p.PresetPolicy().Rules() {
-		base := e.Policy.Decide(r.Tool, samplePattern(r.Pattern))
+		base, _ := e.Policy.Decide(r.Tool, policy.Text(samplePattern(r.Pattern)))
 		if r.Verb.Rank() < base.Rank() {
 			return fmt.Errorf("%s: tools.%s %q: %s loosens the policy (%s); roles may only tighten", p.Source, r.Tool, r.Pattern, r.Verb, base)
 		}

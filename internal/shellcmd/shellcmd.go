@@ -224,3 +224,179 @@ func Covers(prefix, cmd string) bool {
 	}
 	return true
 }
+
+// Commands lists the commands a command line runs, best effort, in the
+// form a rule should judge them: each one's words joined by single spaces,
+// with leading VAR=value assignments and launcher words (sudo, env, nice,
+// timeout 5, …) dropped, the program also by its base name (/bin/rm → rm),
+// and the script of sh -c / bash -c expanded. A deny rule on "rm -rf *"
+// thereby also speaks for "cd x && FOO=1 sudo /bin/rm  -rf /". It is a
+// classifier's view, not a shell's: it may find commands that are not
+// there, never fewer than a plain reading shows.
+func Commands(cmd string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(s string) {
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	var visit func(cmd string, depth int)
+	visit = func(cmd string, depth int) {
+		segs := []string{cmd}
+		if _, ok := Words(cmd); !ok {
+			segs = segments(cmd)
+		}
+		for _, seg := range segs {
+			words, ok := Words(seg)
+			if !ok {
+				words = strings.Fields(seg)
+			}
+			words = launched(words)
+			if len(words) == 0 {
+				continue
+			}
+			add(strings.Join(words, " "))
+			if base := path.Base(words[0]); base != words[0] {
+				add(strings.Join(append([]string{base}, words[1:]...), " "))
+			}
+			if script := shellScript(words); script != "" && depth < 4 {
+				visit(script, depth+1)
+			}
+		}
+	}
+	visit(cmd, 0)
+	return out
+}
+
+// segments splits a line that is not one simple command at every unquoted
+// control operator, parenthesis, brace word, backtick and $( — the places a
+// new command may start.
+func segments(cmd string) []string {
+	var out []string
+	var cur strings.Builder
+	cut := func() {
+		if s := strings.TrimSpace(cur.String()); s != "" {
+			out = append(out, s)
+		}
+		cur.Reset()
+	}
+	rs := []rune(cmd)
+	state := quoteNone
+	for i := 0; i < len(rs); i++ {
+		r := rs[i]
+		switch state {
+		case quoteSingle:
+			cur.WriteRune(r)
+			if r == '\'' {
+				state = quoteNone
+			}
+			continue
+		case quoteDouble:
+			switch {
+			case r == '"':
+				state = quoteNone
+				cur.WriteRune(r)
+			case r == '\\' && i+1 < len(rs):
+				cur.WriteRune(r)
+				i++
+				cur.WriteRune(rs[i])
+			case r == '`', r == '$' && i+1 < len(rs) && rs[i+1] == '(':
+				// A substitution inside double quotes runs a command too.
+				cut()
+				state = quoteNone
+				if r == '$' {
+					i++
+				}
+			default:
+				cur.WriteRune(r)
+			}
+			continue
+		case quoteNone:
+		}
+		switch {
+		case r == '\'':
+			state = quoteSingle
+			cur.WriteRune(r)
+		case r == '"':
+			state = quoteDouble
+			cur.WriteRune(r)
+		case r == '\\' && i+1 < len(rs):
+			cur.WriteRune(r)
+			i++
+			cur.WriteRune(rs[i])
+		case strings.ContainsRune(";&|\n\r()`", r), r == '$' && i+1 < len(rs) && rs[i+1] == '(':
+			cut()
+			if r == '$' {
+				i++
+			}
+		case (r == '{' || r == '}') && (i == 0 || rs[i-1] == ' ' || rs[i-1] == '\t') && (i+1 == len(rs) || rs[i+1] == ' ' || rs[i+1] == '\t' || rs[i+1] == ';'):
+			cut()
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	cut()
+	return out
+}
+
+// launchers run the command that follows them; the value is how many
+// non-flag arguments of their own they take first ("timeout 5 rm").
+var launchers = map[string]int{
+	"sudo": 0, "doas": 0, "env": 0, "nice": 0, "nohup": 0, "time": 0, "command": 0, "exec": 0, "builtin": 0,
+	"setsid": 0, "stdbuf": 0, "ionice": 0, "xargs": 0, "chronic": 0, "unbuffer": 0, "timeout": 1, "chroot": 1,
+}
+
+// launched drops leading assignments and launcher words (with their flags
+// and own arguments) from a command's words.
+func launched(words []string) []string {
+	for len(words) > 0 {
+		w := words[0]
+		if isAssignment(w) {
+			words = words[1:]
+			continue
+		}
+		n, ok := launchers[path.Base(w)]
+		if !ok {
+			return words
+		}
+		words = words[1:]
+		for len(words) > 0 && (strings.HasPrefix(words[0], "-") || isAssignment(words[0])) {
+			words = words[1:]
+		}
+		for ; n > 0 && len(words) > 0; n-- {
+			words = words[1:]
+		}
+	}
+	return words
+}
+
+func isAssignment(w string) bool {
+	eq := strings.IndexByte(w, '=')
+	if eq <= 0 {
+		return false
+	}
+	for i, r := range w[:eq] {
+		if !(r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || i > 0 && r >= '0' && r <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+// shellScript is the script a shell is asked to run with -c ("" when the
+// command is not a shell given -c).
+func shellScript(words []string) string {
+	switch path.Base(words[0]) {
+	case "sh", "bash", "zsh", "dash", "ksh", "fish":
+	default:
+		return ""
+	}
+	for i := 1; i < len(words); i++ {
+		if w := words[i]; strings.HasPrefix(w, "-") && !strings.HasPrefix(w, "--") && strings.Contains(w, "c") && i+1 < len(words) {
+			return words[i+1]
+		}
+	}
+	return ""
+}
