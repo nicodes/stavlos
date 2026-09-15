@@ -41,8 +41,7 @@ type Daemon struct {
 	loginMu sync.Mutex
 	logins  map[string]*pendingLogin
 
-	appendMu sync.Mutex // orders Append + broadcast across agents
-	nameMu   sync.Mutex // serialises choosing and checking channel names
+	nameMu sync.Mutex // serialises choosing and checking channel names
 
 	mu           sync.RWMutex
 	channels     map[string]*agent.Channel
@@ -59,12 +58,13 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 	if err != nil {
 		return nil, err
 	}
-	lg, err := eventlog.Open(filepath.Join(dataDir, "events.db"))
+	d := &Daemon{Registry: reg, DataDir: dataDir, lock: lock, channels: map[string]*agent.Channel{}, clients: map[string]*client{}, trustPrompts: map[string]string{}, logins: map[string]*pendingLogin{}}
+	lg, err := eventlog.Open(filepath.Join(dataDir, "events.db"), d.committed)
 	if err != nil {
 		lock.Close()
 		return nil, err
 	}
-	d := &Daemon{Log: lg, Registry: reg, DataDir: dataDir, lock: lock, channels: map[string]*agent.Channel{}, clients: map[string]*client{}, trustPrompts: map[string]string{}, logins: map[string]*pendingLogin{}}
+	d.Log = lg
 	d.trust = &trustStore{log: lg}
 	if err := d.trust.load(ctx); err != nil {
 		return nil, err
@@ -132,25 +132,34 @@ func (d *Daemon) recover(ctx context.Context) error {
 
 // --- agent.Host ---
 
-// Append logs an event and fans it out to subscribed clients. Append and
-// broadcast happen under one lock so clients see events in sequence order
-// (two agents finishing at once must not deliver out of order), and so a
-// subscription's handover from replay to live can take the same lock and
-// miss nothing. Delivery only queues: a slow client never holds the lock.
+// Append logs an event. Delivery to clients happens in committed, as the
+// log commits it.
 func (d *Daemon) Append(ctx context.Context, e event.Event) (event.Event, error) {
-	d.appendMu.Lock()
-	defer d.appendMu.Unlock()
-	e, err := d.Log.Append(ctx, e)
+	out, err := d.Log.Append(ctx, e)
 	if err != nil {
 		return e, err
 	}
-	d.broadcastEvent(e)
-	return e, nil
+	return out[0], nil
+}
+
+// committed fans committed events out to subscribed clients. The log calls
+// it on its writer, in commit order, so clients see every channel's events
+// in sequence; each event is encoded once for all of them, and delivery
+// only queues, so a slow client never holds up a commit.
+func (d *Daemon) committed(evs []event.Event) {
+	clients := d.clientList()
+	for _, e := range evs {
+		line := eventLine(e)
+		for _, c := range clients {
+			c.deliver(e, line)
+		}
+	}
 }
 
 func (d *Daemon) Stream(n protocol.StreamNotification) {
 	b, _ := json.Marshal(n)
-	d.eachSubscribed(n.Channel, func(c *client) { c.notify(protocol.NStream, b) })
+	line := notification(protocol.NStream, b)
+	d.eachSubscribed(n.Channel, func(c *client) { c.send(line, true) })
 }
 
 func (d *Daemon) Resolve(id string) (model.Model, model.Info, error) { return d.Registry.Resolve(id) }
@@ -169,10 +178,11 @@ func (f sinkFunc) Notify(n protocol.PromptNotification, tiers []protocol.Tier) {
 
 func (d *Daemon) notifyPrompt(n protocol.PromptNotification, tiers []protocol.Tier) {
 	b, _ := json.Marshal(n)
+	line := notification(protocol.NPrompt, b)
 	for _, c := range d.clientList() {
 		for _, t := range tiers {
 			if c.tier == t {
-				c.notify(protocol.NPrompt, b)
+				c.send(line, false)
 				break
 			}
 		}
@@ -259,10 +269,7 @@ func (d *Daemon) CreateChannel(ctx context.Context, dir, modelID, root, want str
 			return nil, err
 		}
 	}
-	if err := s.Start(ctx, name); err != nil {
-		return nil, err
-	}
-	if err := d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Name: name, Dir: dir, Created: s.Created}); err != nil {
+	if err := s.Start(ctx, name); err != nil { // channel.created indexes it
 		return nil, err
 	}
 	d.mu.Lock()
@@ -278,10 +285,7 @@ func (d *Daemon) ArchiveChannel(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	if err := s.Archive(ctx); err != nil {
-		return err
-	}
-	return d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Name: s.Name(), Dir: s.Dir, Created: s.Created, Archived: true})
+	return s.Archive(ctx)
 }
 
 // RenameChannel gives a channel another name: normalised like an agent's
@@ -302,10 +306,7 @@ func (d *Daemon) RenameChannel(ctx context.Context, id, want string) error {
 	if err != nil {
 		return err
 	}
-	if err := s.Rename(ctx, name); err != nil {
-		return err
-	}
-	return d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Name: name, Dir: s.Dir, Created: s.Created, Archived: s.Archived()})
+	return s.Rename(ctx, name)
 }
 
 // checkName normalises a name the human chose ("#Docs Site" becomes
@@ -381,8 +382,8 @@ type trustStore struct {
 }
 
 func (t *trustStore) load(ctx context.Context) error {
-	t.m = map[string]string{}
-	_, err := t.log.Get(ctx, "trust", &t.m)
+	m, err := t.log.Trust(ctx)
+	t.m = m
 	return err
 }
 
@@ -393,14 +394,13 @@ func (t *trustStore) Trusted(dir, hash string) bool {
 }
 
 func (t *trustStore) set(ctx context.Context, dir, hash string) error {
+	if err := t.log.SetTrust(ctx, dir, hash); err != nil {
+		return err
+	}
 	t.mu.Lock()
 	t.m[dir] = hash
-	m := map[string]string{}
-	for k, v := range t.m {
-		m[k] = v
-	}
 	t.mu.Unlock()
-	return t.log.Put(ctx, "trust", m)
+	return nil
 }
 
 // maybeTrustPrompt raises a trust prompt for a channel whose project layer
@@ -571,16 +571,26 @@ type client struct {
 	id   string
 	name string
 	tier protocol.Tier
-	send func(method string, params json.RawMessage)
+	send func(line []byte, droppable bool) // queues one encoded line; droppable for stream deltas
 
 	mu   sync.Mutex
 	subs map[string]int64 // channel id → last seq delivered
 }
 
-func (c *client) notify(method string, params json.RawMessage) { c.send(method, params) }
+// notification encodes a notification line once, for any number of clients.
+func notification(method string, params json.RawMessage) []byte {
+	b, _ := json.Marshal(protocol.Response{JSONRPC: "2.0", Method: method, Params: params})
+	return append(b, '\n')
+}
 
-// deliver sends a live event once per subscription, in order.
-func (c *client) deliver(e event.Event) {
+func eventLine(e event.Event) []byte {
+	b, _ := json.Marshal(protocol.EventNotification{Event: e})
+	return notification(protocol.NEvent, b)
+}
+
+// deliver sends a committed event, already encoded, once per subscription
+// and in order.
+func (c *client) deliver(e event.Event, line []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	last, ok := c.subs[e.Channel]
@@ -588,19 +598,14 @@ func (c *client) deliver(e event.Event) {
 		return
 	}
 	c.subs[e.Channel] = e.Seq
-	c.sendEvent(e)
-}
-
-func (c *client) sendEvent(e event.Event) {
-	b, _ := json.Marshal(protocol.EventNotification{Event: e})
-	c.send(protocol.NEvent, b)
+	c.send(line, false)
 }
 
 // subscribe replays a channel's events from seq from, then hands the
 // client over to live delivery with nothing missed and nothing twice. The
-// bulk of the replay runs without the append lock; the tail written
-// meanwhile is read and sent under it, and the subscription is registered
-// before the lock is released, so the next live event is the next seq.
+// bulk of the replay runs alongside appends; the tail committed meanwhile
+// is read and sent inside a log barrier, where nothing commits, and the
+// subscription is registered there, so the next live event is the next seq.
 func (d *Daemon) subscribe(ctx context.Context, cl *client, channel string, from int64) (int64, error) {
 	if from <= 0 {
 		from = 1
@@ -614,23 +619,27 @@ func (d *Daemon) subscribe(ctx context.Context, cl *client, channel string, from
 		return 0, err
 	}
 	for _, e := range evs {
-		cl.sendEvent(e)
+		cl.send(eventLine(e), false)
 		last = e.Seq
 	}
-	d.appendMu.Lock()
-	defer d.appendMu.Unlock()
-	tail, err := d.Log.Read(ctx, channel, last+1, 0)
-	if err != nil {
+	var tailErr error
+	if err := d.Log.Barrier(func() {
+		tail, err := d.Log.Read(ctx, channel, last+1, 0)
+		if err != nil {
+			tailErr = err
+			return
+		}
+		for _, e := range tail {
+			cl.send(eventLine(e), false)
+			last = e.Seq
+		}
+		cl.mu.Lock()
+		cl.subs[channel] = last
+		cl.mu.Unlock()
+	}); err != nil {
 		return 0, err
 	}
-	for _, e := range tail {
-		cl.sendEvent(e)
-		last = e.Seq
-	}
-	cl.mu.Lock()
-	cl.subs[channel] = last
-	cl.mu.Unlock()
-	return last, nil
+	return last, tailErr
 }
 
 // clientList snapshots the attached clients, so nothing is sent while the
@@ -654,10 +663,6 @@ func (d *Daemon) eachSubscribed(channel string, fn func(*client)) {
 			fn(c)
 		}
 	}
-}
-
-func (d *Daemon) broadcastEvent(e event.Event) {
-	d.eachSubscribed(e.Channel, func(c *client) { c.deliver(e) })
 }
 
 func (d *Daemon) addClient(c *client) {
