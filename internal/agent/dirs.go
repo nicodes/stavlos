@@ -18,8 +18,8 @@ import (
 )
 
 // Working directories (PRD §10.7): the channel has one working set, shared
-// by every agent: the channel directory, the directories the global
-// stavlos.json lists for every channel (dirs), and what the human adds, in
+// by every agent: the channel directory, the directories stavlos.json
+// lists (dirs, yours and a trusted project's), and what the human adds, in
 // the dirs tab or by answering a boundary prompt. A tool call that reaches outside
 // the set asks first, even when policy allows the tool. File paths are
 // resolved the way the tools open them (tools.ResolvePath); shell commands
@@ -61,7 +61,7 @@ func (c *Channel) dirPathsLocked() []string {
 }
 
 // dirInfosLocked is the working set with where each directory came from:
-// the channel directory, then config (the global stavlos.json's dirs), then
+// the channel directory, then config (stavlos.json's dirs), then
 // what the human added, each directory once.
 func (c *Channel) dirInfosLocked() []protocol.DirInfo {
 	out := []protocol.DirInfo{{Path: c.Dir, Source: "channel"}}
@@ -81,8 +81,8 @@ func (c *Channel) dirInfosLocked() []protocol.DirInfo {
 	return out
 }
 
-// configDirsLocked are the directories the global stavlos.json adds to
-// every channel, resolved from the channel directory.
+// configDirsLocked are the directories stavlos.json adds (yours, and a
+// trusted project's), resolved from the channel directory.
 func (c *Channel) configDirsLocked() []string {
 	if c.cfg == nil {
 		return nil
@@ -132,7 +132,7 @@ func (c *Channel) AddDir(ctx context.Context, dir string) error {
 }
 
 // RemoveDir takes a directory out of the working set. The channel
-// directory and the global stavlos.json's dirs stay.
+// directory and stavlos.json's dirs stay.
 func (c *Channel) RemoveDir(ctx context.Context, dir string) error {
 	dir = resolveDir(c.Dir, dir)
 	if dir == filepath.Clean(c.Dir) {
@@ -141,7 +141,7 @@ func (c *Channel) RemoveDir(ctx context.Context, dir string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if slices.Contains(c.configDirsLocked(), dir) {
-		return fmt.Errorf("%s comes from the global stavlos.json's dirs: change it there", dir)
+		return fmt.Errorf("%s comes from stavlos.json's dirs: change it there", dir)
 	}
 	if !slices.ContainsFunc(c.st.dirs, func(e dirEntry) bool { return e.path == dir }) {
 		return fmt.Errorf("%s is not one of the channel's directories", dir)

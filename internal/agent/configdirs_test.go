@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestConfigDirsJoinEveryChannel: the global stavlos.json's dirs are in
+// TestConfigDirsJoinEveryChannel: stavlos.json's dirs are in
 // every channel's working set, marked config, and cannot be removed from
 // one channel.
 func TestConfigDirsJoinEveryChannel(t *testing.T) {
