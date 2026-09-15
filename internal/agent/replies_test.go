@@ -12,6 +12,16 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 )
 
+// postTurn posts text in the channel chat (to the main agent) and waits for
+// the turn it starts to end: the human's post is owed a reply.
+func postTurn(t *testing.T, s *Channel, h *fakeHost, text string) {
+	t.Helper()
+	if _, err := s.Post(context.Background(), text, "human:test"); err != nil {
+		t.Fatal(err)
+	}
+	h.waitFor(t, event.TurnEnded, s.Root().ID)
+}
+
 func repliesOf(t *testing.T, h *fakeHost, typ event.Type, agent string) [][]string {
 	t.Helper()
 	var out [][]string
@@ -25,7 +35,8 @@ func repliesOf(t *testing.T, h *fakeHost, typ event.Type, agent string) [][]stri
 	return out
 }
 
-// TestNudgesUntilReplyOrCap: every turn that ends owing the human a reply is
+// TestNudgesUntilReplyOrCap: every turn that ends owing the human a reply (for
+// a channel chat post) is
 // followed by a reminder turn, up to maxNudges in a row; the reply stays
 // due, nothing is injected into the system prompt, and a new message resets
 // the count.
@@ -40,7 +51,7 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 	}}
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
-	runTurn(t, s, h, "check it")
+	postTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return root.Info().Turn == 1+maxNudges && root.StateOf() == StateIdle })
 	time.Sleep(50 * time.Millisecond) // nothing follows the cap
 	if in := root.Info(); in.Turn != 1+maxNudges || !reflect.DeepEqual(in.Due, []string{"user"}) {
@@ -56,7 +67,7 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 	if strings.Contains(reqs[len(reqs)-1].System, "Replies due") || strings.Contains(reqs[len(reqs)-1].System, "owe a reply to") {
 		t.Fatal("what is owed is not injected into the system prompt")
 	}
-	if err := root.Prompt(context.Background(), "again", "human:test"); err != nil {
+	if _, err := s.Post(context.Background(), "again", "human:test"); err != nil {
 		t.Fatal(err)
 	}
 	waitUntil(t, h, func() bool { return root.Info().Turn == 2+2*maxNudges && root.StateOf() == StateIdle })
@@ -75,7 +86,7 @@ func TestNudgeGetsAReply(t *testing.T) {
 	}}
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
-	runTurn(t, s, h, "check it")
+	postTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return len(h.ofType(event.MessageToUser, root.ID)) == 1 && root.StateOf() == StateIdle })
 	time.Sleep(50 * time.Millisecond)
 	if in := root.Info(); in.Turn != 2 || len(in.Due) != 0 || len(h.ofType(event.ReminderQueued, root.ID)) != 1 {
@@ -91,7 +102,7 @@ func TestReplyNeedsNoReminder(t *testing.T) {
 	}}
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
-	runTurn(t, s, h, "check it")
+	postTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return root.StateOf() == StateIdle })
 	if due := root.Info().Due; len(due) != 0 || len(h.ofType(event.ReminderQueued, root.ID)) != 0 || root.Info().Turn != 1 {
 		t.Fatalf("due %v, log:\n%s", due, h.dump())
@@ -117,7 +128,7 @@ func TestNoNudgeWhileWaiting(t *testing.T) {
 	}
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
-	runTurn(t, s, h, "delegate")
+	postTurn(t, s, h, "delegate")
 	time.Sleep(50 * time.Millisecond)
 	if n := len(h.ofType(event.ReminderQueued, root.ID)); n != 0 || root.Info().Turn != 1 {
 		t.Fatalf("no nudge while waiting on the child: reminders %d turn %d", n, root.Info().Turn)
@@ -175,7 +186,7 @@ func TestReminderSurvivesRestart(t *testing.T) {
 	fm := &fakeModel{steps: []step{reply(text("notes only")), reply(text("notes again"))}}
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
-	runTurn(t, s, h, "check it")
+	postTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return len(h.ofType(event.ReminderQueued, root.ID)) >= 1 })
 	s.Stop()
 	var cut []event.Event
@@ -195,5 +206,19 @@ func TestReminderSurvivesRestart(t *testing.T) {
 	waitUntil(t, h2, func() bool { return len(h2.ofType(event.MessageToUser, root.ID)) == 1 && r2.StateOf() == StateIdle })
 	if um := userMessages(h2, root.ID); len(um) != 1 || um[0].Kind != event.MsgReminder {
 		t.Fatalf("recovered reminder turn inputs: %+v", um)
+	}
+}
+
+// TestDirectMessageOwesNothing: a message the human types in the agent's own
+// chat is answered in that chat, by the text the turn ends with, so no reply
+// is owed and no reminder follows.
+func TestDirectMessageOwesNothing(t *testing.T) {
+	fm := &fakeModel{steps: []step{reply(text("answered right here")), reply(text("a reminder turn would land here"))}}
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
+	root := s.Root()
+	runTurn(t, s, h, "check it")
+	time.Sleep(50 * time.Millisecond)
+	if in := root.Info(); len(in.Due) != 0 || len(h.ofType(event.ReminderQueued, root.ID)) != 0 || in.Turn != 1 {
+		t.Fatalf("due %v, turn %d, log:\n%s", in.Due, in.Turn, h.dump())
 	}
 }
