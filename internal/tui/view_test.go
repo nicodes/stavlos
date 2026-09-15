@@ -2191,7 +2191,7 @@ func TestSidebarNav(t *testing.T) {
 		// dirs is the open channel's: out of the tabs the strip walks, behind
 		// the gear at the right edge of the channel's row; → on the row, or a
 		// click on the gear, opens the dirs dialog
-		if body, _ := m.sidebarBody(sidebarWidth - 1); !strings.HasSuffix(stripANSI(body[1]), " "+channelGear) || !strings.Contains(stripANSI(body[2]), "@main") || ansi.StringWidth(stripANSI(body[1])) != sidebarWidth-1 {
+		if body, _ := m.sidebarBody(sidebarWidth - 1); !strings.HasSuffix(stripANSI(body[1]), " "+channelGear+" ") || !strings.Contains(stripANSI(body[2]), "@main") || ansi.StringWidth(stripANSI(body[1])) != sidebarWidth-1 {
 			t.Fatalf("channel row:\n%s", stripANSI(strings.Join(body, "\n")))
 		}
 		if slices.Contains(m.tabOrder(), focusDirs) {
@@ -2205,8 +2205,8 @@ func TestSidebarNav(t *testing.T) {
 		}
 		m.closeDialog()
 		gear := func(y int) {
-			nm, _ := m.Update(tea.MouseMsg{X: sidebarWidth - 2, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-			nm, _ = nm.(Model).Update(tea.MouseMsg{X: sidebarWidth - 2, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+			nm, _ := m.Update(tea.MouseMsg{X: sidebarWidth - 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+			nm, _ = nm.(Model).Update(tea.MouseMsg{X: sidebarWidth - 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 			m = nm.(Model)
 		}
 		gear(header + m.channelRow())
