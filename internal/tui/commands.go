@@ -4,12 +4,14 @@ package tui
 // directly (PRD §7.2 implementation note); it only returns these.
 
 import (
+	"cmp"
 	"context"
 	"encoding/base64"
 	"errors"
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -332,7 +334,7 @@ func channelsCmd(ctx context.Context, c *client.Client, dir string, purpose chan
 }
 
 // resumable is the sidebar's channels section: the directory's other
-// channels, in the order given.
+// channels, in alphabetical order.
 func resumable(ss []protocol.ChannelInfo, current string) []protocol.ChannelInfo {
 	var out []protocol.ChannelInfo
 	for _, s := range ss {
@@ -340,7 +342,19 @@ func resumable(ss []protocol.ChannelInfo, current string) []protocol.ChannelInfo
 			out = append(out, s)
 		}
 	}
+	sortChannels(out)
 	return out
+}
+
+// sortChannels puts channels in alphabetical order by name (then id), the
+// order every channel list keeps: nothing moves when a channel is created,
+// used or switched to.
+func sortChannels(ss []protocol.ChannelInfo) {
+	slices.SortStableFunc(ss, compareChannels)
+}
+
+func compareChannels(a, b protocol.ChannelInfo) int {
+	return cmp.Or(strings.Compare(a.Name, b.Name), strings.Compare(a.ID, b.ID))
 }
 
 // switchedMsg reports a channel resume for the /channels picker: the TUI
