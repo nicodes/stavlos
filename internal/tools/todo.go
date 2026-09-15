@@ -16,10 +16,17 @@ import (
 // logged on every change and shown to the human beside the chat.
 type Todos interface {
 	// Edit applies updates to existing items, then appends add as new
-	// pending items, as one change; an unknown id changes nothing. It
-	// returns the list after the change.
-	Edit(add []string, updates []TodoUpdate) ([]event.TodoItem, error)
+	// items, as one change; an unknown id changes nothing. It returns the
+	// list after the change.
+	Edit(add []TodoAdd, updates []TodoUpdate) ([]event.TodoItem, error)
 	List() []event.TodoItem
+}
+
+// TodoAdd is one new step. A step may start at any status, so planning
+// work and starting its first step is one call rather than two.
+type TodoAdd struct {
+	Text   string `json:"text" desc:"The step, imperative and short (\"Run the tests\")" req:"true"`
+	Status string `json:"status" desc:"The status to start it in: pending (the default), in_progress, done, cancelled"`
 }
 
 // TodoUpdate changes one item: its status, its text, or both.
@@ -52,19 +59,22 @@ func validTodoStatus(s string) bool {
 type todoTool struct{}
 
 func (todoTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Todo, Description: "Your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep the list honest with update, by id. Keep exactly one item in_progress while you work; mark an item done the moment it is finished and verified, never before; cancel steps you drop; add a new item for a blocker instead of marking the blocked step done. One call can update items and add new ones. Returns the whole list with ids. Skip the list for single-step or trivial requests.",
+	return model.ToolDef{Name: toolname.Todo, Description: "Your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep the list honest by id. Keep exactly one item in_progress while you work; mark an item done the moment it is finished and verified, never before; cancel steps you drop; add a new item for a blocker instead of marking the blocked step done. One call carries every change you have: post the plan and start its first step together, and finish one step and start the next in the same call, never two. Updates apply before the additions, and the whole list comes back with its ids. Skip the list for single-step or trivial requests.",
 		Schema: schemaOf(todoInput{})}
 }
 
 type todoInput struct {
-	Add    []string     `json:"add" desc:"New steps to append, in order, each imperative and short (\"Run the tests\")"`
+	Add    []TodoAdd    `json:"add" desc:"New steps to append, in order; each may start at a status, so a plan and its first in_progress step are one call"`
 	Update []TodoUpdate `json:"update" desc:"Changes to existing items, by id: a status (pending | in_progress | done | cancelled), a new text, or both"`
 }
 
 func (todoTool) Subject(in json.RawMessage) policy.Subject {
 	var a todoInput
 	_ = decode(in, &a)
-	values := append([]string(nil), a.Add...)
+	values := make([]string, 0, len(a.Add)+len(a.Update))
+	for _, it := range a.Add {
+		values = append(values, it.Text)
+	}
 	for _, u := range a.Update {
 		values = append(values, u.ID)
 	}
@@ -82,12 +92,16 @@ func (todoTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if len(a.Add) == 0 && len(a.Update) == 0 {
 		return errf("nothing to do: give add, update, or both")
 	}
-	add := make([]string, 0, len(a.Add))
-	for _, text := range a.Add {
-		if text = strings.TrimSpace(text); text == "" {
+	add := make([]TodoAdd, 0, len(a.Add))
+	for _, it := range a.Add {
+		text := strings.TrimSpace(it.Text)
+		switch {
+		case text == "":
 			return errf("add: a step needs text")
+		case it.Status != "" && !validTodoStatus(it.Status):
+			return errf("add %q: status must be one of %s", text, todoStatusNames())
 		}
-		add = append(add, text)
+		add = append(add, TodoAdd{Text: text, Status: it.Status})
 	}
 	for i, u := range a.Update {
 		switch {

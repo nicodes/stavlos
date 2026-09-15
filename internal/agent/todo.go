@@ -27,7 +27,7 @@ func (a *Agent) todoAPIFor(rv roleView) tools.Todos {
 
 type todosAPI struct{ a *Agent }
 
-func (t todosAPI) Edit(add []string, updates []tools.TodoUpdate) ([]event.TodoItem, error) {
+func (t todosAPI) Edit(add []tools.TodoAdd, updates []tools.TodoUpdate) ([]event.TodoItem, error) {
 	var out []event.TodoItem
 	err := t.change(func(st *agentState, items []event.TodoItem) ([]event.TodoItem, error) {
 		for _, u := range updates {
@@ -48,9 +48,13 @@ func (t todosAPI) Edit(add []string, updates []tools.TodoUpdate) ([]event.TodoIt
 				next = max(next, n)
 			}
 		}
-		for _, text := range add {
+		for _, it := range add {
 			next++
-			items = append(items, event.TodoItem{ID: "t" + strconv.Itoa(next), Text: text, Status: event.TodoPending})
+			status := event.TodoStatus(it.Status)
+			if status == "" {
+				status = event.TodoPending // a step starts pending unless it says otherwise
+			}
+			items = append(items, event.TodoItem{ID: "t" + strconv.Itoa(next), Text: it.Text, Status: status})
 		}
 		out = items
 		return items, nil
