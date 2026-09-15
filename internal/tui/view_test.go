@@ -1621,6 +1621,7 @@ func TestMouseClickTogglesItem(t *testing.T) {
 	m := sessionModel()
 	m.showTree = false
 	tr := m.transcript("a")
+	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "list the files"}))
 	tr.Apply(mk(2, "a", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
 	tr.Apply(mk(3, "a", event.ToolCallFinished, event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: strings.TrimRight(strings.Repeat("out\n", 8), "\n")}))
 	m.width, m.height = 100, 40
@@ -1642,10 +1643,10 @@ func TestMouseClickTogglesItem(t *testing.T) {
 	if m.expanded["a"][item] || strings.Count(view(), "out") != render.PreviewLines-1 {
 		t.Fatalf("second click should collapse to the preview:\n%s", view())
 	}
-	// a click on a user item is inert beyond selecting it
-	click(m.itemRows[0].First - m.vp.YOffset)
-	if m.chatCursor != 0 || len(m.expanded["a"]) != 0 {
-		t.Fatalf("click on a non-tool item: cursor=%d expanded=%v", m.chatCursor, m.expanded["a"])
+	// a click on the human's own input is inert beyond selecting it
+	click(m.itemRows[1].First - m.vp.YOffset)
+	if m.chatCursor != 1 || len(m.expanded["a"]) != 0 {
+		t.Fatalf("click on the human's input: cursor=%d expanded=%v", m.chatCursor, m.expanded["a"])
 	}
 }
 

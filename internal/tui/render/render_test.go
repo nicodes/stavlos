@@ -433,11 +433,14 @@ func TestFoldingToOneLine(t *testing.T) {
 	}
 	plain := nonblank(renderWith(lines, Options{Width: 80}))
 	joined := strings.Join(plain, "\n")
-	// user input and final response in full
-	for _, want := range []string{"line one", "line two", "final answer", "with two lines"} {
+	// the human's input in full; the agent's own text folds like the rest
+	for _, want := range []string{"line one", "line two", "final answer +1"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}
+	}
+	if strings.Contains(joined, "with two lines") {
+		t.Fatalf("the agent's text should fold to its first line:\n%s", joined)
 	}
 	// thinking, tool (with its notices and output) and child result fold to one line each
 	if strings.Contains(joined, "second thought") || strings.Contains(joined, "permission") || strings.Contains(joined, "found it") {

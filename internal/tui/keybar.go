@@ -47,7 +47,7 @@ func (m Model) keyHints() []dialog.Hint {
 	case focusTabs:
 		return []dialog.Hint{hint("←/→", "choose"), hint("space", "open"), hint("enter", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusChat:
-		return []dialog.Hint{hint("↑/↓", "item"), hint("space", "expand/collapse tool"), hint("pgup/pgdn", "page"), hint("tab", "next section"), hint("enter", "input"), hint("esc", "input"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("↑/↓", "item"), hint("space", "expand/collapse"), hint("pgup/pgdn", "page"), hint("tab", "next section"), hint("enter", "input"), hint("esc", "input"), hint("ctrl+c", "quit")}
 	case focusQuestions:
 		if m.q.typing {
 			return []dialog.Hint{hint("enter", "answer"), hint("esc", "back to the options"), hint("ctrl+c", "quit")}

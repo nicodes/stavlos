@@ -159,6 +159,17 @@ func collapsed(lines []Line) []Line {
 	return append(lines, Line{Kind: LineDim, Text: fmt.Sprintf("… +%d lines", len(lines)-MaxOutputCollapsed), Vis: VisCollapsed})
 }
 
+// ItemIsInput reports whether committed item i of lines is the human's own
+// input, the one kind of item that never folds.
+func ItemIsInput(lines []Line, item int) bool {
+	for _, l := range lines {
+		if l.Item == item && (l.Block == BlockUser || l.Block == BlockSteer) {
+			return true
+		}
+	}
+	return false
+}
+
 // ItemFolds reports whether committed item i of lines has lines that show
 // only while collapsed or only while expanded (tool output, a long reply).
 func ItemFolds(lines []Line, item int) bool {
