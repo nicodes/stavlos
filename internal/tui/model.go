@@ -211,7 +211,6 @@ const (
 	focusPermission              // the permission tab: pending permission/trust prompts (y/n/a)
 	focusQuestions               // the questions tab: an ask_user batch, answered one question at a time
 	focusAsync                   // the async tab: running shell jobs
-	focusDue                     // the due tab: who is waiting on the selected agent's reply
 	focusTodo                    // the todo tab: the selected agent's todo list
 	focusMCP                     // the mcp tab: the selected agent's MCP servers
 	focusDirs                    // the dirs tab: the channel's working directories (every agent's)
@@ -228,7 +227,7 @@ const (
 // agent.
 var tabRows = [][]focus{
 	{focusPermission, focusQuestions, focusDirs},
-	{focusAsync, focusDue, focusTodo, focusMCP},
+	{focusAsync, focusTodo, focusMCP},
 }
 
 // tabFocuses is every tab in strip order: the top row, then the bottom.
@@ -746,13 +745,15 @@ func (m *Model) dueOf() (human bool, agents []protocol.AgentInfo) {
 	return human, agents
 }
 
-// dueCount is how many replies the selected agent owes.
-func (m *Model) dueCount() int {
-	human, agents := m.dueOf()
+// asyncCount is the async tab's count: the agents and jobs the selected
+// agent waits on, and the replies it owes (you, and agents).
+func (m *Model) asyncCount() int {
+	human, owed := m.dueOf()
+	n := len(m.awaitedAgents()) + len(m.runningJobs()) + len(owed)
 	if human {
-		return len(agents) + 1
+		n++
 	}
-	return len(agents)
+	return n
 }
 
 // runningJobs returns the selected agent's running async jobs.
@@ -946,7 +947,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		if !m.superChat {
 			m.sbCursor = m.channelRow() + 1 + m.selected
 		}
-	case focusAsync, focusDue, focusTodo, focusMCP, focusDirs:
+	case focusAsync, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0
 	case focusMeta:
 		if parts := m.metaParts(); len(parts) > 0 {
@@ -959,36 +960,17 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 }
 
 // asyncKey handles keys while the async dialog is open: ↑/↓ (or j/k) move
-// over what the selected agent is waiting on — the awaited agents first,
-// then its running jobs; space on an agent row selects that agent and
-// closes the dialog (a job row is informational), esc closes.
+// over what the selected agent waits on (agents, then its jobs) and who waits
+// on its reply (you, then agents); space on an agent opens that agent's chat
+// and on "you" the channel chat, closing the dialog. A job row opens nothing.
 func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
-	agents := m.awaitedAgents()
-	n := len(agents) + len(m.runningJobs())
-	switch {
-	case key.Matches(msg, keys.OvClose):
-		return m.closeDialog()
-	case stepCursor(msg, &m.agCursor, n, true):
-	case key.Matches(msg, keys.Select):
-		if n == 0 || m.agCursor%n >= len(agents) {
-			return nil // a job row: nothing to select
-		}
-		m.openAgent(m.findAgent(agents[m.agCursor%n].ID))
-		return m.closeDialog()
-	}
-	return nil
-}
-
-// dueKey handles keys while the due dialog is open: ↑/↓ (or j/k) move over
-// who is waiting on the selected agent's reply; space on "you" opens the
-// channel chat and on an agent opens that agent's chat, closing the dialog.
-func (m *Model) dueKey(msg tea.KeyMsg) tea.Cmd {
-	human, agents := m.dueOf()
-	off := 0
+	waiting, jobs := m.awaitedAgents(), m.runningJobs()
+	human, owed := m.dueOf()
+	you := 0
 	if human {
-		off = 1
+		you = 1
 	}
-	n := off + len(agents)
+	n := len(waiting) + len(jobs) + you + len(owed)
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeDialog()
@@ -997,10 +979,15 @@ func (m *Model) dueKey(msg tea.KeyMsg) tea.Cmd {
 		if n == 0 {
 			return nil
 		}
-		if i := m.agCursor % n; i < off {
+		switch i := m.agCursor % n; {
+		case i < len(waiting):
+			m.openAgent(m.findAgent(waiting[i].ID))
+		case i < len(waiting)+len(jobs):
+			return nil // a job row: nothing to open
+		case i < len(waiting)+len(jobs)+you:
 			m.openChat()
-		} else {
-			m.openAgent(m.findAgent(agents[i-off].ID))
+		default:
+			m.openAgent(m.findAgent(owed[i-len(waiting)-len(jobs)-you].ID))
 		}
 		return m.closeDialog()
 	}
@@ -1412,9 +1399,6 @@ func (m *Model) pickTabRow(row int, choose bool) tea.Cmd {
 		m.agCursor = row
 		if choose && m.focus == focusAsync {
 			return m.asyncKey(space)
-		}
-		if choose && m.focus == focusDue {
-			return m.dueKey(space)
 		}
 	}
 	return nil
@@ -2078,8 +2062,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 	switch m.focus {
 	case focusAsync:
 		return m.asyncKey(msg)
-	case focusDue:
-		return m.dueKey(msg)
 	case focusTodo:
 		return m.todoKey(msg)
 	case focusMCP:

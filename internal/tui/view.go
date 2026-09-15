@@ -888,8 +888,7 @@ func (m Model) tabTexts() []string {
 		focusPermission: permKind + " " + permCount,
 		focusQuestions:  "questions " + qCount,
 		focusDirs:       fmt.Sprintf("dirs %d", len(m.channelDirs())),
-		focusAsync:      fmt.Sprintf("async %d", len(m.awaitedAgents())+len(m.runningJobs())),
-		focusDue:        fmt.Sprintf("due %d", m.dueCount()),
+		focusAsync:      fmt.Sprintf("async %d", m.asyncCount()),
 		focusTodo:       "todo " + todoCount(m.selectedTodos()),
 		focusMCP:        "mcp " + mcpCount(m.selectedMCP()),
 	}
@@ -923,31 +922,46 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 	note := func(text string) ([]string, []int) { return rowsAt([]string{theme.StyleDim.Render(text)}, -1, 0) }
 	switch m.focus {
 	case focusAsync:
-		// what the selected agent is waiting on: the agents whose answer it
-		// expects, then its running jobs
+		// what the selected agent waits on (the agents whose answer it
+		// expects, then its running jobs), then who waits on its reply (you,
+		// then agents), each under a dim label the cursor skips
 		waiting, jobs := m.awaitedAgents(), m.runningJobs()
-		if len(waiting)+len(jobs) == 0 {
-			return note("  not waiting on anything")
-		}
+		human, owed := m.dueOf()
 		owner, role := "", ""
 		if a := m.selectedAgent(); a != nil {
 			owner, role = a.Label, a.Archetype
 		}
-		rows := agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2)
-		rows = append(rows, monitorRows(jobs, owner, role, time.Now(), width-2)...)
-		return rowsAt(m.cursorRows(rows), 0, len(rows))
-	case focusDue:
-		// who is waiting on the selected agent's reply: you, then agents
-		human, agents := m.dueOf()
-		if !human && len(agents) == 0 {
-			return note("  no replies due")
-		}
-		var rows []string
+		now := time.Now()
+		sel := agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), now, width-2)
+		sel = append(sel, monitorRows(jobs, owner, role, now, width-2)...)
+		nWait := len(sel)
 		if human {
-			rows = append(rows, "  "+theme.StyleBold.Render("you")+"  "+theme.StyleDim.Render("the channel chat"))
+			sel = append(sel, "  "+theme.StyleBold.Render("you")+"  "+theme.StyleDim.Render("the channel chat"))
 		}
-		rows = append(rows, agentRows(agents, m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2)...)
-		return rowsAt(m.cursorRows(rows), 0, len(rows))
+		sel = append(sel, agentRows(owed, m.spawned, m.lastLines(), m.roleTints(), now, width-2)...)
+		if len(sel) == 0 {
+			return note("  not waiting on anything, and no replies due")
+		}
+		marked := m.cursorRows(sel)
+		var lines []string
+		var rows []int
+		add := func(line string, row int) { lines, rows = append(lines, line), append(rows, row) }
+		if nWait > 0 {
+			add(theme.StyleDim.Render("waiting on"), -1)
+			for i := range nWait {
+				add(marked[i], i)
+			}
+		}
+		if len(sel) > nWait {
+			if nWait > 0 {
+				add("", -1)
+			}
+			add(theme.StyleDim.Render("owes a reply to"), -1)
+			for i := nWait; i < len(sel); i++ {
+				add(marked[i], i)
+			}
+		}
+		return lines, rows
 	case focusTodo:
 		items := m.selectedTodos()
 		if len(items) == 0 {

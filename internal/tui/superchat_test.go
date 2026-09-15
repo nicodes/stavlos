@@ -127,26 +127,33 @@ func TestSuperChatLoaderUntilReply(t *testing.T) {
 	}
 }
 
-// TestDueTab: the due tab lists who is waiting on the selected agent's
-// reply, you first; space opens that chat.
-func TestDueTab(t *testing.T) {
+// TestAsyncTabHoldsWhatIsDue: the async tab counts and lists both
+// directions: the agents the selected agent waits on (and its jobs), then who
+// waits on its reply, you first; space opens that chat.
+func TestAsyncTabHoldsWhatIsDue(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
 	m.agents[0].Due = []string{"b", "user"}
-	if labels := strings.Join(m.tabTexts(), " · "); !strings.Contains(labels, "async 2 · due 2 · todo") {
+	if labels := strings.Join(m.tabTexts(), " · "); !strings.Contains(labels, "async 4 · todo") || strings.Contains(labels, "due") {
 		t.Fatalf("strip: %s", labels)
 	}
-	m.setFocus(focusDue)
+	m.setFocus(focusAsync)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
-	if !strings.Contains(strings.Split(body, "\n")[0], "you  the channel chat") || !strings.Contains(body, "world-politics (general)") {
-		t.Fatalf("due body:\n%s", body)
+	if !inOrder(body, "waiting on", "world-politics (general)", "business (general)", "owes a reply to", "you  the channel chat", "world-politics (general)") {
+		t.Fatalf("async body:\n%s", body)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
+	if !m.superChat || isTab(m.focus) {
+		t.Fatalf("space on you opens the channel chat: super %v focus %v", m.superChat, m.focus)
+	}
+	m.openAgent(0)
+	m.setFocus(focusAsync)
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
 	if m.selectedID() != "b" || m.superChat || isTab(m.focus) {
-		t.Fatalf("space on an agent opens its chat: selected %s super %v focus %v", m.selectedID(), m.superChat, m.focus)
+		t.Fatalf("space on an agent it owes opens that chat: selected %s super %v focus %v", m.selectedID(), m.superChat, m.focus)
 	}
-	m.setFocus(focusDue)
-	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "no replies due") {
-		t.Fatalf("b owes nothing:\n%s", body)
+	m.setFocus(focusAsync)
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "not waiting on anything, and no replies due") {
+		t.Fatalf("b waits on nothing and owes nothing:\n%s", body)
 	}
 }
