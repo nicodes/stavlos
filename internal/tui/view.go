@@ -827,15 +827,20 @@ func (m Model) tabTexts() []string {
 	} else if questions > 0 {
 		qCount = fmt.Sprintf("1/%d", questions)
 	}
-	return []string{
-		permKind + " " + permCount,
-		"questions " + qCount,
-		fmt.Sprintf("async %d", len(m.awaitedAgents())+len(m.runningJobs())),
-		fmt.Sprintf("due %d", m.dueCount()),
-		"todo " + todoCount(m.selectedTodos()),
-		"mcp " + mcpCount(m.selectedMCP()),
-		fmt.Sprintf("dirs %d", len(m.selectedDirs())),
+	byTab := map[focus]string{
+		focusPermission: permKind + " " + permCount,
+		focusQuestions:  "questions " + qCount,
+		focusDirs:       fmt.Sprintf("dirs %d", len(m.sessionDirs())),
+		focusAsync:      fmt.Sprintf("async %d", len(m.awaitedAgents())+len(m.runningJobs())),
+		focusDue:        fmt.Sprintf("due %d", m.dueCount()),
+		focusTodo:       "todo " + todoCount(m.selectedTodos()),
+		focusMCP:        "mcp " + mcpCount(m.selectedMCP()),
 	}
+	texts := make([]string, len(tabFocuses))
+	for i, f := range tabFocuses {
+		texts[i] = byTab[f]
+	}
+	return texts
 }
 
 // tabBodyLines is the focused tab's body, laid out for width columns.
@@ -901,7 +906,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		rows, _ := mcpRows(items, m.mcpOpen, time.Now(), width-2)
 		return rowsAt(m.cursorRows(rows), 0, len(rows))
 	case focusDirs:
-		items := m.selectedDirs()
+		items := m.sessionDirs()
 		var rows []string
 		n := 0
 		if len(items) == 0 {
@@ -1026,9 +1031,8 @@ func (m Model) sectionTabs(p *protocol.PromptInfo, width int) string {
 	return strings.Join(rows, "\n")
 }
 
-// tabLabels is the strip, a line per row of tabRows: "! 1/2 · ? 0" (the
-// session's) over "async n · due n · todo … · mcp … · dirs n" (the selected
-// agent's). The highlighted tab (while the strip has focus) or the open one
+// tabLabels is the strip, a line per row of tabRows: "! 1/2 · ? 0 · dirs n" (the
+// session's) over "async n · due n · todo … · mcp …" (the selected agent's). The highlighted tab (while the strip has focus) or the open one
 // (while its dialog is up) is in accent, the rest dim; with where each label
 // was drawn, per row.
 func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
@@ -1099,7 +1103,7 @@ func (m Model) cursorRows(rows []string) []string {
 // whole argument (the command, path or files) wrapped onto indented
 // continuation lines, since it is what the user is approving and is never
 // cut; a boundary prompt adds the line saying it reaches outside the
-// agent's directories; trust shows the project directory and its files —
+// session's directories; trust shows the project directory and its files —
 // then the single-select list of answers, and the reason or path row
 // while one is open. Key hints live in the key bar. The options start at
 // line optStart.
@@ -1168,7 +1172,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 			}
 		}
 		if p.Dir != "" {
-			lines = append(lines, theme.StyleWarn.Render("outside its directories")+theme.StyleDim.Render(" · "+format.ShortHome(p.Dir)))
+			lines = append(lines, theme.StyleWarn.Render("outside the session's directories")+theme.StyleDim.Render(" · "+format.ShortHome(p.Dir)))
 		}
 	}
 	lines = append(lines, "")
@@ -1474,9 +1478,8 @@ func todoRows(items []event.TodoItem, width int) []string {
 	return rows
 }
 
-// dirRows renders an agent's working directories: the path (home
-// abbreviated) in bold, then where it came from (session, role, grant,
-// human) in dim.
+// dirRows renders the session's working directories: the path (home
+// abbreviated) in bold, then where it came from (session, human) in dim.
 func dirRows(items []protocol.DirInfo, width int) []string {
 	rows := make([]string, 0, len(items))
 	for _, d := range items {

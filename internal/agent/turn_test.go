@@ -200,7 +200,7 @@ func TestBoundaryPrompt(t *testing.T) {
 	if n := h.promptCount(); n != 1 {
 		t.Fatalf("prompts: %d", n)
 	}
-	if p := h.prompts[0]; p.Kind != "permission" || p.Dir != other || !strings.Contains(p.Question, "outside its directories") {
+	if p := h.prompts[0]; p.Kind != "permission" || p.Dir != other || !strings.Contains(p.Question, "outside the session's directories") {
 		t.Fatalf("boundary prompt: %+v", p)
 	}
 	fin := finished(h, s.Root().ID)
@@ -208,7 +208,7 @@ func TestBoundaryPrompt(t *testing.T) {
 		t.Fatalf("%+v", fin)
 	}
 	var dirs []string
-	for _, d := range s.Root().Info().Dirs {
+	for _, d := range s.Info().Dirs {
 		dirs = append(dirs, d.Path+":"+d.Source)
 	}
 	if strings.Join(dirs, " ") != s.Dir+":session "+other+":human" {

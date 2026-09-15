@@ -33,8 +33,8 @@ func (a *Agent) writePreamble(sb *strings.Builder, rv roleView, cfg *config.Effe
 	sb.WriteString(rv.preset.Body)
 	sb.WriteString("\n\n")
 	fmt.Fprintf(sb, "Working directory: %s\n", a.s.Dir)
-	if dirs := a.dirPaths(); len(dirs) > 1 {
-		fmt.Fprintf(sb, "Your working directories: %s. Reading, editing or running commands outside them asks the human first; agent_create can grant a child any of them.\n", strings.Join(dirs, ", "))
+	if dirs := a.s.dirPaths(); len(dirs) > 1 {
+		fmt.Fprintf(sb, "The session's working directories, shared by every agent: %s. Reading, editing or running commands outside them needs the human's approval.\n", strings.Join(dirs, ", "))
 	} else {
 		sb.WriteString("Reading, editing or running commands outside the working directory asks the human first.\n")
 	}

@@ -322,11 +322,15 @@ func (c *Client) CompactAgent(ctx context.Context, agent string) (string, error)
 	return r.Status, err
 }
 
-func (c *Client) AddAgentDir(ctx context.Context, agent, dir string) error {
-	return c.Call(ctx, protocol.MAgentAddDir, protocol.AgentDirParams{Agent: agent, Dir: dir}, nil)
+// AddSessionDir puts a directory in the session's working set, which every
+// agent shares.
+func (c *Client) AddSessionDir(ctx context.Context, id, dir string) error {
+	return c.Call(ctx, protocol.MSessionAddDir, protocol.SessionDirParams{ID: id, Dir: dir}, nil)
 }
-func (c *Client) RemoveAgentDir(ctx context.Context, agent, dir string) error {
-	return c.Call(ctx, protocol.MAgentRemoveDir, protocol.AgentDirParams{Agent: agent, Dir: dir}, nil)
+
+// RemoveSessionDir takes a directory out of it (never the session directory).
+func (c *Client) RemoveSessionDir(ctx context.Context, id, dir string) error {
+	return c.Call(ctx, protocol.MSessionRemoveDir, protocol.SessionDirParams{ID: id, Dir: dir}, nil)
 }
 
 // Variants lists the variant names a model offers.

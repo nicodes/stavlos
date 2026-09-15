@@ -52,8 +52,8 @@ func (o orchestrator) child(parent, id string) (*Agent, error) {
 	return c, nil
 }
 
-func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (id, name string, err error) {
-	a, err := o.s.spawn(ctx, parent, archetype, label, task, modelID, dirs)
+func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task, modelID string) (id, name string, err error) {
+	a, err := o.s.spawn(ctx, parent, archetype, label, task, modelID)
 	if err != nil {
 		return "", "", err
 	}
@@ -160,11 +160,7 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 	var out []tools.ChildStatus
 	for _, c := range agents {
 		in := c.Info()
-		var dirs []string
-		for _, d := range in.Dirs {
-			dirs = append(dirs, d.Path)
-		}
-		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: in.Label, Archetype: in.Archetype, State: string(in.State), Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller, Dirs: dirs})
+		out = append(out, tools.ChildStatus{ID: c.ID, Parent: c.Parent, Label: in.Label, Archetype: in.Archetype, State: string(in.State), Turn: in.Turn, CostUSD: in.CostUSD, Summary: in.Summary, You: c.ID == caller})
 	}
 	return out, nil
 }

@@ -5,23 +5,26 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/policy"
+	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// Working directories (PRD §10.7): every agent has the session directory;
-// its role adds dirs:; its creator may grant directories from its own set at
-// agent_create; the human may add one by answering a boundary prompt. A
-// tool call that reaches outside the set asks first, even when policy
-// allows the tool. File paths are resolved the way the tools open them
-// (tools.ResolvePath: symlinks followed, nothing expanded); shell commands
-// are inspected as text — absolute, ~, $HOME-style and parent-relative
-// arguments, cd and redirect targets. That is string inspection, not a
-// sandbox: it catches the model's ordinary behaviour, not an adversary's.
+// Working directories (PRD §10.7): the session has one working set, shared
+// by every agent: the session directory and what the human adds, in the dirs
+// tab or by answering a boundary prompt. Roles carry none and agent_create
+// grants none: one set is what a person can keep track of. A tool call that
+// reaches outside the set asks first, even when policy allows the tool.
+// File paths are resolved the way the tools open them (tools.ResolvePath:
+// symlinks followed, nothing expanded); shell commands are inspected as
+// text — absolute, ~, $HOME-style and parent-relative arguments, cd and
+// redirect targets. That is string inspection, not a sandbox: it catches
+// the model's ordinary behaviour, not an adversary's.
 
 type dirEntry struct{ path, source string }
 
@@ -40,42 +43,28 @@ func resolveDir(base, d string) string {
 	return filepath.Clean(d)
 }
 
-// dirListLocked is the agent's working set: the session directory, the
-// role's directories, then grants and human additions. The caller holds
-// a.mu.
-func (a *Agent) dirListLocked() []dirEntry {
-	out := []dirEntry{{a.s.Dir, "session"}}
-	seen := map[string]bool{a.s.Dir: true}
-	add := func(e dirEntry) {
-		if !seen[e.path] {
-			seen[e.path] = true
-			out = append(out, e)
-		}
-	}
-	for _, d := range a.preset.Dirs {
-		if e := (dirEntry{resolveDir(a.s.Dir, d), "role"}); !a.removedDirs[e.path] {
-			add(e)
-		}
-	}
-	for _, e := range a.extraDirs {
-		if !a.removedDirs[e.path] {
-			add(e)
-		}
+// dirList is the session's working set: the session directory, then the
+// added directories in the order they came.
+func (s *Session) dirList() []dirEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return append([]dirEntry{{s.Dir, "session"}}, s.dirs...)
+}
+
+// dirPaths is the working set as paths.
+func (s *Session) dirPaths() []string {
+	var out []string
+	for _, d := range s.dirList() {
+		out = append(out, d.path)
 	}
 	return out
 }
 
-func (a *Agent) dirList() []dirEntry {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.dirListLocked()
-}
-
-// dirPaths is the working set as paths.
-func (a *Agent) dirPaths() []string {
-	var out []string
-	for _, d := range a.dirList() {
-		out = append(out, d.path)
+// dirInfos is the working set for clients.
+func (s *Session) dirInfos() []protocol.DirInfo {
+	var out []protocol.DirInfo
+	for _, d := range s.dirList() {
+		out = append(out, protocol.DirInfo{Path: d.path, Source: d.source})
 	}
 	return out
 }
@@ -83,9 +72,9 @@ func (a *Agent) dirPaths() []string {
 // inDirs reports whether an absolute path lies in the working set. Both
 // sides are compared with symlinks resolved, so a working directory that
 // is itself a link (or reached through one) still contains its files.
-func (a *Agent) inDirs(p string) bool {
+func (s *Session) inDirs(p string) bool {
 	p = tools.ResolvePath("", p)
-	for _, d := range a.dirList() {
+	for _, d := range s.dirList() {
 		dir := tools.ResolvePath("", d.path)
 		if p == dir || strings.HasPrefix(p, dir+string(filepath.Separator)) {
 			return true
@@ -94,75 +83,65 @@ func (a *Agent) inDirs(p string) bool {
 	return false
 }
 
-// addDir puts a directory in the working set and logs it. A directory the
-// human had removed comes back.
-func (a *Agent) addDir(ctx context.Context, dir, source string) error {
+// addDir puts a directory in the working set and logs it on agent, the one
+// whose boundary prompt added it ("" for the dirs tab). A directory already
+// inside the set is a no-op.
+func (s *Session) addDir(ctx context.Context, agent, dir, source string) error {
 	dir = filepath.Clean(dir)
-	if a.inDirs(dir) {
+	if s.inDirs(dir) {
 		return nil
 	}
-	if _, err := a.record(ctx, event.AgentDirAdded, event.DirAddedPayload{Dir: dir, Source: source}); err != nil {
+	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Agent: agent, Type: event.SessionDirAdded,
+		Payload: event.MustPayload(event.DirAddedPayload{Dir: dir, Source: source})}); err != nil {
 		return err
 	}
-	a.mu.Lock()
-	a.applyDirAdded(dir, source)
-	a.mu.Unlock()
+	s.mu.Lock()
+	s.applyDirAdded(dir, source)
+	s.mu.Unlock()
 	return nil
 }
 
-// applyDirAdded installs an added directory; the caller holds a.mu.
-func (a *Agent) applyDirAdded(dir, source string) {
-	delete(a.removedDirs, dir)
-	a.extraDirs = append(a.extraDirs, dirEntry{dir, source})
+// applyDirAdded installs an added directory; the caller holds s.mu or is
+// replaying the log (where an older log's per-agent entries may repeat).
+func (s *Session) applyDirAdded(dir, source string) {
+	if dir == filepath.Clean(s.Dir) || slices.ContainsFunc(s.dirs, func(e dirEntry) bool { return e.path == dir }) {
+		return
+	}
+	s.dirs = append(s.dirs, dirEntry{dir, source})
 }
 
 // AddDir is the human's add (an absolute path, ~, or a path relative to the
 // session directory).
-func (a *Agent) AddDir(ctx context.Context, dir string) error {
+func (s *Session) AddDir(ctx context.Context, dir string) error {
 	if strings.TrimSpace(dir) == "" {
 		return fmt.Errorf("a directory is required")
 	}
-	return a.addDir(ctx, resolveDir(a.s.Dir, dir), "human")
+	return s.addDir(ctx, "", resolveDir(s.Dir, dir), "human")
 }
 
 // RemoveDir takes a directory out of the working set. The session
-// directory stays; a role directory is hidden until added back.
-func (a *Agent) RemoveDir(ctx context.Context, dir string) error {
-	dir = resolveDir(a.s.Dir, dir)
-	if dir == filepath.Clean(a.s.Dir) {
+// directory stays.
+func (s *Session) RemoveDir(ctx context.Context, dir string) error {
+	dir = resolveDir(s.Dir, dir)
+	if dir == filepath.Clean(s.Dir) {
 		return fmt.Errorf("the session directory cannot be removed")
 	}
-	found := false
-	for _, d := range a.dirList() {
-		if d.path == dir {
-			found = true
-		}
+	if !slices.ContainsFunc(s.dirList(), func(e dirEntry) bool { return e.path == dir }) {
+		return fmt.Errorf("%s is not one of the session's directories", dir)
 	}
-	if !found {
-		return fmt.Errorf("%s is not one of the agent's directories", dir)
-	}
-	if _, err := a.record(ctx, event.AgentDirRemoved, event.DirRefPayload{Dir: dir}); err != nil {
+	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.SessionDirRemoved, Payload: event.MustPayload(event.DirRefPayload{Dir: dir})}); err != nil {
 		return err
 	}
-	a.mu.Lock()
-	a.applyDirRemoved(dir)
-	a.mu.Unlock()
+	s.mu.Lock()
+	s.applyDirRemoved(dir)
+	s.mu.Unlock()
 	return nil
 }
 
-// applyDirRemoved forgets a directory; the caller holds a.mu.
-func (a *Agent) applyDirRemoved(dir string) {
-	if a.removedDirs == nil {
-		a.removedDirs = map[string]bool{}
-	}
-	a.removedDirs[dir] = true
-	kept := a.extraDirs[:0]
-	for _, e := range a.extraDirs {
-		if e.path != dir {
-			kept = append(kept, e)
-		}
-	}
-	a.extraDirs = kept
+// applyDirRemoved forgets a directory; the caller holds s.mu or is
+// replaying the log.
+func (s *Session) applyDirRemoved(dir string) {
+	s.dirs = slices.DeleteFunc(s.dirs, func(e dirEntry) bool { return e.path == dir })
 }
 
 // outsideDir returns the first directory a tool call reaches outside the
@@ -180,7 +159,7 @@ func (a *Agent) outsideDir(sub policy.Subject) string {
 	case policy.KindText, policy.KindURL, policy.KindID:
 	}
 	for _, p := range paths {
-		if p == "" || a.inDirs(p) {
+		if p == "" || a.s.inDirs(p) {
 			continue
 		}
 		return grantDir(p)

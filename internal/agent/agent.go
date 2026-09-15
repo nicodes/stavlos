@@ -72,8 +72,6 @@ type Agent struct {
 	todoSeq     int                   // last todo id issued
 	mcps        map[string]*mcpServer // MCP servers this agent has started (name → server)
 	mcpIdle     *time.Timer           // stops idle MCP servers (MCPIdleAfter)
-	extraDirs   []dirEntry            // working directories beyond the session\'s and the role\'s: grants and the human\'s answers (logged)
-	removedDirs map[string]bool       // directories the human took out (role ones stay hidden while listed)
 	events      []event.Event         // this agent's events since the last compaction (what the projection reads)
 	evVer       int                   // bumps on every recorded event: the history cache is valid for one version
 	hist        []model.Message       // the projected history for histVer
@@ -588,9 +586,6 @@ func (a *Agent) Info() protocol.AgentInfo {
 	info.Due = a.dueLocked()
 	info.Todos = append([]event.TodoItem(nil), a.todos...)
 	info.MCP = a.mcpInfoLocked()
-	for _, d := range a.dirListLocked() {
-		info.Dirs = append(info.Dirs, protocol.DirInfo{Path: d.path, Source: d.source})
-	}
 	mons := make([]*Monitor, 0, len(a.monitors))
 	for _, m := range a.monitors {
 		mons = append(mons, m)

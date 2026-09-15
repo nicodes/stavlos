@@ -83,9 +83,8 @@ type Tool interface {
 // Orchestrator is implemented by the agent runtime (PRD §6.4).
 type Orchestrator interface {
 	// Spawn creates a child and returns its id and the name it got (label,
-	// normalised and made unique in the session); dirs are directories to
-	// grant it, each of which must be inside the parent's own.
-	Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (id, name string, err error)
+	// normalised and made unique in the session).
+	Spawn(ctx context.Context, parent, archetype, label, task, modelID string) (id, name string, err error)
 	// Message sends text from the caller to an agent (name or id) or to
 	// User, as kind KindRequest (the recipient owes a reply, the caller
 	// waits; delivered at its next step), KindResponse (settles a request,
@@ -101,16 +100,15 @@ type Orchestrator interface {
 }
 
 type ChildStatus struct {
-	ID        string   `json:"id"`
-	Parent    string   `json:"parent,omitempty"`
-	You       bool     `json:"you,omitempty"` // this row is the caller
-	Label     string   `json:"label"`
-	Archetype string   `json:"archetype"`
-	State     string   `json:"state"`
-	Turn      int      `json:"turn"`
-	CostUSD   float64  `json:"cost_usd"`
-	Summary   string   `json:"summary,omitempty"`
-	Dirs      []string `json:"dirs,omitempty"` // working directories (what a parent may grant on)
+	ID        string  `json:"id"`
+	Parent    string  `json:"parent,omitempty"`
+	You       bool    `json:"you,omitempty"` // this row is the caller
+	Label     string  `json:"label"`
+	Archetype string  `json:"archetype"`
+	State     string  `json:"state"`
+	Turn      int     `json:"turn"`
+	CostUSD   float64 `json:"cost_usd"`
+	Summary   string  `json:"summary,omitempty"`
 }
 
 // Set is a named collection.

@@ -64,11 +64,12 @@ type recovery struct {
 // apply folds one logged event into the session being rebuilt.
 func (r *recovery) apply(e event.Event) {
 	switch e.Type {
-	case event.SessionCreated, event.SessionArchived, event.SessionModelChanged, event.SessionYoloChanged, event.SessionModeChanged:
+	case event.SessionCreated, event.SessionArchived, event.SessionModelChanged, event.SessionYoloChanged, event.SessionModeChanged,
+		event.SessionDirAdded, event.SessionDirRemoved, event.AgentDirAdded, event.AgentDirRemoved:
 		r.session(e)
 	case event.AgentSpawned:
 		r.spawned(e)
-	case event.AgentRoleChanged, event.AgentModelChanged, event.AgentVariantChanged, event.AgentDirAdded, event.AgentDirRemoved, event.TodoChanged:
+	case event.AgentRoleChanged, event.AgentModelChanged, event.AgentVariantChanged, event.TodoChanged:
 		r.agentSetting(e)
 	case event.PromptQueued, event.SteerReceived, event.NoteQueued, event.UserMessage, event.ResponseReceived:
 		r.inbox(e)
@@ -122,6 +123,14 @@ func (r *recovery) session(e event.Event) {
 		var p event.ModePayload
 		_ = e.Decode(&p)
 		s.mode = p.Mode
+	case event.SessionDirAdded, event.AgentDirAdded: // agent.dir_added: an older log's per-agent set, now the session's
+		var p event.DirAddedPayload
+		_ = e.Decode(&p)
+		s.applyDirAdded(p.Dir, p.Source)
+	case event.SessionDirRemoved, event.AgentDirRemoved:
+		var p event.DirRefPayload
+		_ = e.Decode(&p)
+		s.applyDirRemoved(p.Dir)
 	}
 }
 
@@ -149,8 +158,8 @@ func (r *recovery) spawned(e event.Event) {
 	if !ok {
 		r.missingRole[a.ID] = missingRoleError(p.Archetype)
 	}
-	for _, d := range p.Dirs {
-		a.extraDirs = append(a.extraDirs, dirEntry{d, "grant"})
+	for _, d := range p.Dirs { // an older log's grants join the session's set
+		s.applyDirAdded(d, "grant")
 	}
 	if par, ok := s.agents[p.Parent]; ok {
 		a.ctx, a.kill = context.WithCancel(par.ctx)
@@ -197,14 +206,6 @@ func (r *recovery) agentSetting(e event.Event) {
 		var p event.VariantChangedPayload
 		_ = e.Decode(&p)
 		a.variant = p.Variant
-	case event.AgentDirAdded:
-		var p event.DirAddedPayload
-		_ = e.Decode(&p)
-		a.applyDirAdded(p.Dir, p.Source)
-	case event.AgentDirRemoved:
-		var p event.DirRefPayload
-		_ = e.Decode(&p)
-		a.applyDirRemoved(p.Dir)
 	case event.TodoChanged:
 		var p event.TodoPayload
 		_ = e.Decode(&p)

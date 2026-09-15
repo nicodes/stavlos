@@ -20,14 +20,16 @@ const (
 	MDaemonShutdown = "daemon.shutdown" // graceful stop; used to replace a stale build
 	MAttach         = "attach"          // declare client name + escalation tier
 
-	MSessionList     = "session.list"
-	MSessionCreate   = "session.create"
-	MSessionResume   = "session.resume"
-	MSessionFork     = "session.fork"
-	MSessionArchive  = "session.archive"
-	MSessionSetModel = "session.set_model"
-	MSessionSetMode  = "session.set_mode" // permission mode: ask | auto | yolo
-	MSessionPost     = "session.post"     // the human\'s message in the session chat, delivered by @mention
+	MSessionList      = "session.list"
+	MSessionCreate    = "session.create"
+	MSessionResume    = "session.resume"
+	MSessionFork      = "session.fork"
+	MSessionArchive   = "session.archive"
+	MSessionSetModel  = "session.set_model"
+	MSessionSetMode   = "session.set_mode"   // permission mode: ask | auto | yolo
+	MSessionPost      = "session.post"       // the human\'s message in the session chat, delivered by @mention
+	MSessionAddDir    = "session.add_dir"    // put a directory in the session\'s working set (every agent\'s)
+	MSessionRemoveDir = "session.remove_dir" // take one out (never the session directory)
 
 	MAgentTree       = "agent.tree"
 	MAgentSend       = "agent.send" // Prompt / Steer / Cancel / Kill
@@ -35,9 +37,7 @@ const (
 	MAgentSetModel   = "agent.set_model"
 	MAgentSetRole    = "agent.set_role"    // switch an agent's preset in place
 	MAgentSetVariant = "agent.set_variant" // switch an agent's model variant (reasoning effort)
-	MAgentAddDir     = "agent.add_dir"     // put a directory in an agent's working set
 	MAgentCompact    = "agent.compact"     // summarise the agent\'s completed turns now (or at its next turn if busy)
-	MAgentRemoveDir  = "agent.remove_dir"  // take one out (never the session directory)
 	MVariants        = "variants"          // variant names a model offers
 
 	MPromptList  = "prompt.list"
@@ -248,6 +248,7 @@ type SessionInfo struct {
 	Mode         string       `json:"mode"`            // permission mode: ask | auto | yolo
 	State        SessionState `json:"state,omitempty"` // working (an agent runs) | waiting (one expects an answer) | idle; "" for a session not in memory
 	Title        string       `json:"title,omitempty"` // the first human prompt, for pickers
+	Dirs         []DirInfo    `json:"dirs,omitempty"`  // the working directories every agent shares, the session directory first
 }
 
 type SessionListParams struct {
@@ -291,6 +292,13 @@ type SessionPostResult struct {
 	To []string `json:"to"`
 }
 
+// SessionDirParams names a directory to add to or remove from the
+// session's working set.
+type SessionDirParams struct {
+	ID  string `json:"id"`
+	Dir string `json:"dir"` // absolute, ~ or relative to the session directory
+}
+
 // Permission modes.
 const (
 	ModeAsk  = "ask"
@@ -303,7 +311,7 @@ const (
 func ModeSummary(mode string) string {
 	switch mode {
 	case ModeAuto:
-		return "allows inside the agent's directories, denies outside them"
+		return "allows inside the session's directories, denies outside them"
 	case ModeYolo:
 		return "every permission is approved, directories included"
 	}
@@ -332,7 +340,6 @@ type AgentInfo struct {
 	Monitors      []MonitorInfo    `json:"monitors,omitempty"`       // this agent's general monitors (not children)
 	Todos         []event.TodoItem `json:"todos,omitempty"`          // this agent\'s todo list, in creation order
 	MCP           []MCPInfo        `json:"mcp,omitempty"`            // this agent\'s MCP servers (the ones its role lists), with state
-	Dirs          []DirInfo        `json:"dirs,omitempty"`           // the agent\'s working directories, session first
 	Awaiting      []string         `json:"awaiting,omitempty"`       // ids of the agents whose answer this one is waiting for (a child's task, a message)
 	Due           []string         `json:"due,omitempty"`            // who this agent owes a reply: "user" or agent ids, until it messages them
 }
@@ -350,12 +357,11 @@ type AgentSendParams struct {
 }
 
 type AgentSpawnParams struct {
-	Parent    string   `json:"parent"`
-	Archetype string   `json:"archetype"`
-	Label     string   `json:"label"`
-	Task      string   `json:"task"`
-	Model     string   `json:"model,omitempty"`
-	Dirs      []string `json:"dirs,omitempty"` // directories to grant, each inside the parent's
+	Parent    string `json:"parent"`
+	Archetype string `json:"archetype"`
+	Label     string `json:"label"`
+	Task      string `json:"task"`
+	Model     string `json:"model,omitempty"`
 }
 type AgentSpawnResult struct {
 	ID string `json:"id"`
@@ -373,10 +379,6 @@ type AgentCompactParams struct {
 }
 type AgentCompactResult struct {
 	Status string `json:"status"` // compacted | queued (the agent is mid-turn; it compacts before its next model call)
-}
-type AgentDirParams struct {
-	Agent string `json:"agent"`
-	Dir   string `json:"dir"` // absolute, ~ or relative to the session directory
 }
 type AgentSetVariantParams struct {
 	Agent   string `json:"agent"`
@@ -402,7 +404,7 @@ type PromptInfo struct {
 	ClaimedBy string          `json:"claimed_by,omitempty"`
 	Escalated bool            `json:"escalated"` // visible to fallback tier
 	Created   string          `json:"created"`
-	Dir       string          `json:"dir,omitempty"`       // a boundary prompt: the call reaches outside the agent's directories; "allow_always" adds this one
+	Dir       string          `json:"dir,omitempty"`       // a boundary prompt: the call reaches outside the session's directories; "allow_always" adds this one
 	Prefix    string          `json:"prefix,omitempty"`    // what "allow_prefix" would remember for this call (a command prefix, a host); "" when the call has none
 	Questions []Question      `json:"questions,omitempty"` // kind question: the batch an ask_user call raised, answered together
 }
@@ -581,8 +583,8 @@ type PromptNotification struct {
 
 // MonitorInfo is a general monitor owned by an agent: a background command,
 // a file watch, or a timer. Children are not monitors; they are agents.
-// DirInfo is one working directory of an agent and where it came from:
-// session | role | grant | human.
+// DirInfo is one of the session's working directories and where it came
+// from: session (the session directory) | human | grant (older logs).
 type DirInfo struct {
 	Path   string `json:"path"`
 	Source string `json:"source"`

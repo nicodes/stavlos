@@ -24,13 +24,6 @@
           "description": "Preset name of the child (see the list in your instructions)",
           "type": "string"
         },
-        "dirs": {
-          "description": "Optional directories to grant the child on top of the session directory and its role's own; each must be inside one of yours (agent_status lists them)",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "label": {
           "description": "Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the session gets a suffix (auth-explorer-2); the result says the name it got",
           "type": "string"

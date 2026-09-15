@@ -514,7 +514,7 @@ func TestDeniedCallShowsWhy(t *testing.T) {
 		"Permission denied by the user.":                                                  "Shell  rm x",
 		"Denied by policy: shell rm x":                                                    "Shell (by policy)  rm x",
 		"Permission denied: nobody answered the prompt and the headless default is deny.": "Shell (no answer)  rm x",
-		"Denied in auto mode: /etc is outside your working directories, and auto mode does not allow calls outside them.": "Shell (outside dirs, auto mode)  rm x",
+		"Denied in auto mode: /etc is outside the session's working directories, and auto mode does not allow calls outside them.": "Shell (outside dirs, auto mode)  rm x",
 	} {
 		tr := NewTranscript()
 		tr.Apply(event.Event{Seq: 1, Type: event.ToolCallStarted, Time: time.Now(), Payload: event.MustPayload(event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"rm x"}`)})})

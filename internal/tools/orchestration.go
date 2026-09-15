@@ -40,11 +40,10 @@ func (spawnTool) Def() model.ToolDef {
 }
 
 type spawnInput struct {
-	Archetype string   `json:"archetype" desc:"Preset name of the child (see the list in your instructions)" req:"true"`
-	Label     string   `json:"label" desc:"Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the session gets a suffix (auth-explorer-2); the result says the name it got" req:"true"`
-	Task      string   `json:"task" desc:"The complete task description; the child has no other context" req:"true"`
-	Model     string   `json:"model" desc:"Optional provider/model-id override for this child"`
-	Dirs      []string `json:"dirs" desc:"Optional directories to grant the child on top of the session directory and its role's own; each must be inside one of yours (agent_status lists them)"`
+	Archetype string `json:"archetype" desc:"Preset name of the child (see the list in your instructions)" req:"true"`
+	Label     string `json:"label" desc:"Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the session gets a suffix (auth-explorer-2); the result says the name it got" req:"true"`
+	Task      string `json:"task" desc:"The complete task description; the child has no other context" req:"true"`
+	Model     string `json:"model" desc:"Optional provider/model-id override for this child"`
 }
 
 func (spawnTool) Subject(in json.RawMessage) policy.Subject {
@@ -66,7 +65,7 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if ok, why := env.Orch.CanSpawn(env.Agent); !ok {
 		return errf("cannot spawn: %s", why)
 	}
-	id, name, err := env.Orch.Spawn(ctx, env.Agent, a.Archetype, a.Label, a.Task, a.Model, a.Dirs)
+	id, name, err := env.Orch.Spawn(ctx, env.Agent, a.Archetype, a.Label, a.Task, a.Model)
 	if err != nil {
 		return errf("%v", err)
 	}
