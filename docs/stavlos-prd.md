@@ -446,6 +446,7 @@ JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Ever
 
   "model": "openai/gpt-5.4",   // default for root channels here
   "rootAgent": "general",                 // preset a new channel's root uses
+  "mode": "ask",                          // permission mode a new channel starts in: ask | auto | yolo (auto and yolo only in the global file)
 
   "limits":     { "maxDepth": 3, "maxAgents": 6 },
   "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },

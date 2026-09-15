@@ -153,7 +153,7 @@ func (c *Channel) Start(ctx context.Context, name string) error {
 		c.mu.Unlock()
 		return fmt.Errorf("root preset %q not found", role)
 	}
-	_, err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.Dir, Model: modelID, Role: role}))
+	_, err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.Dir, Model: modelID, Role: role, Mode: c.cfg.Mode}))
 	c.mu.Unlock()
 	if err != nil {
 		return err

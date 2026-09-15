@@ -104,6 +104,9 @@ func (cs *channelState) applyChannel(e event.Event) {
 		var p event.ChannelCreatedPayload
 		if e.Decode(&p) == nil {
 			cs.name, cs.model, cs.role = p.Name, p.Model, p.Role
+			if p.Mode != "" {
+				cs.mode = p.Mode // the mode the config started it in
+			}
 		}
 	case event.ChannelUpdated:
 		var p event.ChannelUpdatedPayload

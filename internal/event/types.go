@@ -92,7 +92,8 @@ type ChannelCreatedPayload struct {
 	Name  string `json:"name"` // unique across the daemon, shown as #name
 	Dir   string `json:"dir"`
 	Model string `json:"model,omitempty"`
-	Role  string `json:"role"` // the main agent's role
+	Role  string `json:"role"`           // the main agent's role
+	Mode  string `json:"mode,omitempty"` // the permission mode it starts in (ask when empty)
 }
 
 // ChannelUpdatedPayload carries only what changed.

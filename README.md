@@ -66,7 +66,7 @@ Permission prompts show the command (or path) with the asking agent after it, th
 
 Esc closes a dialog with the prompt still waiting.
 
-`/mode` picks the channel's permission mode:
+`/mode` picks the channel's permission mode. A new channel starts in `ask` unless the global `stavlos.json` sets `"mode": "auto"` or `"yolo"` (a project's may only say `ask`):
 
 - **ask**, the default, prompts for every policy ask and every call outside the channel's directories.
 - **auto** (`/auto`) approves permissions inside the channel's directories; a call outside them is denied, and the agent is told that auto mode does not allow it (switch to ask to grant a directory with "Allow and add").
