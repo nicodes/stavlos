@@ -35,6 +35,13 @@ type fakeModel struct {
 	calls      []model.Request
 }
 
+// callCount is how many calls the model has had.
+func (f *fakeModel) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
 func (f *fakeModel) Complete(ctx context.Context, req model.Request, onDelta func(model.Delta)) (model.Response, error) {
 	// The per-request state note (turn budget, todo list, fan-out) is moved
 	// from the last message to the end of the system prompt, so steps read
@@ -1433,7 +1440,7 @@ func TestFullAgentIDs(t *testing.T) {
 	_ = h.c.Send(ctx, root, protocol.KindPrompt, "go")
 	h.waitInput(event.InputResponse, root)
 	h.waitFor(event.TurnEnded, root) // the "thanks" turn
-	if len(fm.calls) < 3 {
+	if fm.callCount() < 3 {
 		h.waitFor(event.TurnEnded, root)
 	}
 }
