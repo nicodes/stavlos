@@ -591,12 +591,12 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		rows, items = append(rows, text), append(items, idx)
 	}
-	// "● #name          ⚙", flush with the "channels" title: the channel's
-	// state dot, its name, and its gear at the right edge (→ on the row or a
-	// click on it: the channel's dirs)
+	// "● #name         ⚙ ", flush with the "channels" title: the channel's
+	// state dot, its name, and its gear a space in from the right edge (→ on
+	// the row or a click on it: the channel's dirs)
 	channel := func(dot, name string, style lipgloss.Style, idx int) {
-		name = format.Trunc(name, width-5)
-		line(dot+" "+style.Render(name)+strings.Repeat(" ", max(1, width-3-ansi.StringWidth(name)))+theme.StyleDim.Render(channelGear), idx)
+		name = format.Trunc(name, width-6)
+		line(dot+" "+style.Render(name)+strings.Repeat(" ", max(1, width-4-ansi.StringWidth(name)))+theme.StyleDim.Render(channelGear)+" ", idx)
 	}
 	other := func(s protocol.ChannelInfo, idx int) {
 		dot := stateDot(string(s.State))
