@@ -25,7 +25,7 @@ type jobRun struct {
 	cancel      context.CancelFunc
 }
 
-// jobsAPI is the tools.Monitors of one agent.
+// jobsAPI is the tools.Jobs of one agent.
 type jobsAPI struct{ a *Agent }
 
 func (j jobsAPI) AdoptCommand(command string, job tools.Job, timeout time.Duration) (string, error) {
@@ -125,16 +125,16 @@ func (a *Agent) stopJob(id, reason string) error {
 }
 
 // jobInfosLocked describes the running jobs, oldest first.
-func (a *Agent) jobInfosLocked() []protocol.MonitorInfo {
+func (a *Agent) jobInfosLocked() []protocol.JobInfo {
 	runs := make([]*jobRun, 0, len(a.jobs))
 	for _, r := range a.jobs {
 		runs = append(runs, r)
 	}
 	sort.Slice(runs, func(i, j int) bool { return runs[i].handle.Started().Before(runs[j].handle.Started()) })
-	var out []protocol.MonitorInfo
+	var out []protocol.JobInfo
 	for _, r := range runs {
-		out = append(out, protocol.MonitorInfo{ID: r.id, Agent: a.ID, Kind: "command", Label: jobLabel(r.command), Spec: r.command,
-			State: protocol.MonitorRunning, Started: r.handle.Started().UTC().Format(time.RFC3339), Progress: fmt.Sprintf("%d lines", r.handle.Lines())})
+		out = append(out, protocol.JobInfo{ID: r.id, Agent: a.ID, Label: jobLabel(r.command), Spec: r.command,
+			Started: r.handle.Started().UTC().Format(time.RFC3339), Progress: fmt.Sprintf("%d lines", r.handle.Lines())})
 	}
 	return out
 }

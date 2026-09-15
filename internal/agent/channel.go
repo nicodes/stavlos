@@ -411,7 +411,7 @@ func (c *Channel) busyLocked() int {
 	return n
 }
 
-// resolveModel implements PRD §8.3 under the role's whitelist: an explicit
+// resolveModelLocked implements PRD §8.3 under the role's whitelist: an explicit
 // spawn argument must be allowed; otherwise the parent's (or the channel's)
 // model is inherited when the role allows it, else the role's default.
 func (c *Channel) resolveModelLocked(spawnArg string, preset config.Preset, parent *agentState) (string, error) {

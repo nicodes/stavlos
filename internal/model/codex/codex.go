@@ -26,12 +26,6 @@ type provider struct {
 	http     *http.Client
 }
 
-// New returns the "openai" provider backed by the Codex endpoint. src is
-// called on every Complete so a refreshed token is picked up immediately.
-func New(src model.TokenSource) model.Provider {
-	return NewWithEndpoint(src, DefaultEndpoint)
-}
-
 // NewWithEndpoint is New with a custom URL (tests, proxies).
 func NewWithEndpoint(src model.TokenSource, endpoint string) model.Provider {
 	return &provider{src: src, endpoint: endpoint, http: stream.NewHTTPClient()}

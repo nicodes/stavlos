@@ -66,8 +66,6 @@ type Compaction struct {
 	MaxToolOutput string  `json:"maxToolOutput,omitempty"`
 }
 
-// Search configures web_search: a provider and its key (the key may be
-// "${env:NAME}").
 // EnvConfig shapes the environment of the processes agents run. Variables
 // whose names look like credentials (…_API_KEY, …TOKEN, …SECRET,
 // …PASSWORD…) and STAVLOS_* are dropped; Pass lists names kept anyway.
@@ -75,6 +73,8 @@ type EnvConfig struct {
 	Pass []string `json:"pass,omitempty"`
 }
 
+// Search configures web_search: a provider and its key (the key may be
+// "${env:NAME}").
 type Search struct {
 	Provider string `json:"provider,omitempty"` // brave | tavily | exa
 	APIKey   string `json:"apiKey,omitempty"`

@@ -47,15 +47,6 @@ func NewBuilder() *Builder {
 	return &Builder{inputs: map[string]event.Input{}, jobs: map[string]event.JobFinishedPayload{}}
 }
 
-// Project folds events into a fresh builder and returns the history.
-func Project(events []event.Event) []model.Message {
-	b := NewBuilder()
-	for _, e := range events {
-		b.Apply(e)
-	}
-	return b.History()
-}
-
 // Apply folds one of the agent's events into the history.
 func (b *Builder) Apply(e event.Event) {
 	switch e.Type {

@@ -218,3 +218,12 @@ func TestEstimateAndTranscript(t *testing.T) {
 		t.Fatalf("transcript %q", got)
 	}
 }
+
+// Project folds events into a fresh builder and returns the history.
+func Project(events []event.Event) []model.Message {
+	b := NewBuilder()
+	for _, e := range events {
+		b.Apply(e)
+	}
+	return b.History()
+}

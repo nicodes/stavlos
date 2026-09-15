@@ -58,8 +58,5 @@ func Socket() string {
 // AuthFile is the credential store (mode 0600).
 func AuthFile() string { return filepath.Join(DataDir(), "auth.json") }
 
-// LogDB is the SQLite event log path.
-func LogDB() string { return filepath.Join(DataDir(), "events.db") }
-
 // ProjectDir is the project config layer inside a working directory.
 func ProjectDir(workdir string) string { return filepath.Join(workdir, ".stavlos") }

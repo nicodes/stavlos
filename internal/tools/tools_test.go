@@ -64,28 +64,28 @@ func TestFileToolsAndShell(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(dir, ".git"), 0o755)
 }
 
-// fakeMonitors records jobs handed over by the shell tool.
-type fakeMonitors struct {
+// fakeJobs records jobs handed over by the shell tool.
+type fakeJobs struct {
 	adopted []Job
 	specs   []string
 }
 
-func (f *fakeMonitors) AdoptCommand(command string, job Job, timeout time.Duration) (string, error) {
+func (f *fakeJobs) AdoptCommand(command string, job Job, timeout time.Duration) (string, error) {
 	f.adopted = append(f.adopted, job)
 	f.specs = append(f.specs, command)
 	return fmt.Sprintf("m%d", len(f.adopted)), nil
 }
-func (f *fakeMonitors) Stop(id string) error { return nil }
-func (f *fakeMonitors) Has(id string) bool   { return false }
+func (f *fakeJobs) Stop(id string) error { return nil }
+func (f *fakeJobs) Has(id string) bool   { return false }
 
 // TestShellWaitWindow: a command that exits inside the window returns
-// inline; one that outlives it is handed to the monitors with the output so
+// inline; one that outlives it is handed to the agent's jobs with the output so
 // far, keeps running, and reports its exit through the Job; background:
 // true skips the wait; without a job runtime the tool waits it out.
 func TestShellWaitWindow(t *testing.T) {
 	ctx := context.Background()
-	mon := &fakeMonitors{}
-	env := &Env{Dir: t.TempDir(), Mon: mon}
+	mon := &fakeJobs{}
+	env := &Env{Dir: t.TempDir(), Jobs: mon}
 	sh := Builtin()["shell"]
 	if !strings.Contains(string(sh.Def().Schema), "default 15, max 300") || defaultShellWaitSeconds != 15 {
 		t.Fatalf("shell schema does not advertise the wait window: %s", sh.Def().Schema)

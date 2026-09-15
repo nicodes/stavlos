@@ -202,7 +202,7 @@ func (a *Agent) infoLocked() protocol.AgentInfo {
 		Queued: len(st.inbox), CostUSD: st.cost, Tokens: st.tokens,
 		Context: a.ctxTokens, ContextWindow: a.ctxWindow, LastError: st.lastError,
 		Awaiting: st.awaitingIDs(), Due: st.due(), Todos: append([]event.TodoItem(nil), st.todos...),
-		MCP: a.mcpInfo(rv.preset.MCP), Monitors: a.jobInfosLocked(),
+		MCP: a.mcpInfo(rv.preset.MCP), Jobs: a.jobInfosLocked(),
 	}
 	if rv.missing && info.LastError == "" {
 		info.LastError = missingRoleError(st.role)

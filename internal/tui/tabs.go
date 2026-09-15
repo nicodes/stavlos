@@ -12,8 +12,6 @@ import (
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
-// tabFocuses are the tabs of the strip under the chat, left to right. They
-// are one stop in the tab cycle; ←/→ move between them.
 // tabRows is the strip's two rows: on top what belongs to the whole channel
 // (the prompt queue every agent adds to, the working directories every agent
 // shares), below what belongs to the selected
@@ -24,6 +22,8 @@ var tabRows = [][]focus{
 }
 
 // tabFocuses is every tab in strip order: the top row, then the bottom.
+// tabFocuses are the tabs of the strip under the chat, left to right. They
+// are one stop in the tab cycle; ←/→ move between them.
 var tabFocuses = slices.Concat(tabRows...)
 
 // tabLayout is the tab rows as they are drawn: tabRows while the sidebar is
@@ -162,9 +162,9 @@ func (m *Model) asyncCount() int {
 }
 
 // runningJobs returns the selected agent's running async jobs.
-func (m *Model) runningJobs() []protocol.MonitorInfo {
+func (m *Model) runningJobs() []protocol.JobInfo {
 	if a := m.selectedAgent(); a != nil {
-		return a.Monitors
+		return a.Jobs
 	}
 	return nil
 }

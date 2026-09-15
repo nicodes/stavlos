@@ -501,7 +501,7 @@ func TestFoldingToOneLine(t *testing.T) {
 	}
 }
 
-func TestMonitorEventsGroupAndFold(t *testing.T) {
+func TestJobEventsGroupAndFold(t *testing.T) {
 	tr := transcript.NewTranscript()
 	mk := func(seq int64, typ event.Type, p any) event.Event {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
@@ -577,8 +577,8 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		}
 	}
 
-	// folding: every monitor item collapses to its started line (only tool
-	// lines carry a +N tag); the monitor_fired block folds to the summary line.
+	// folding: every job item collapses to its started line (only tool
+	// lines carry a +N tag); the job.finished block folds to the summary line.
 	nonblank := func(out []string) []string {
 		var r []string
 		for _, l := range out {
@@ -597,7 +597,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	for _, leak := range []string{"$ Job go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
 		if strings.Contains(joined, leak) {
-			t.Fatalf("folded monitor item leaked %q:\n%s", leak, joined)
+			t.Fatalf("folded job item leaked %q:\n%s", leak, joined)
 		}
 	}
 	// the block label never becomes the folded line
@@ -606,13 +606,13 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 			t.Fatalf("folded to the label line:\n%s", joined)
 		}
 	}
-	// cursor on the command monitor previews the start, the fired line and
+	// cursor on the command job previews the start, the fired line and
 	// the first output line with a +N marker; expanded shows the collapsed
 	// output rule (3 lines + "… +N lines")
 	prev := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
 	for _, want := range []string{"$ Job go test", "$ Job go test exited 0", "ok  a", "+"} {
 		if !strings.Contains(prev, want) {
-			t.Fatalf("cursor on monitor lacks %q:\n%s", want, prev)
+			t.Fatalf("cursor on job lacks %q:\n%s", want, prev)
 		}
 	}
 	if strings.Contains(prev, "ok  c") {
@@ -621,11 +621,11 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	full := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: cmdStart.Item, Expanded: map[int]bool{cmdStart.Item: true}})), "\n")
 	for _, want := range []string{"$ Job go test exited 0", "ok  a", "ok  c", "ok  d", "ok  e"} {
 		if !strings.Contains(full, want) {
-			t.Fatalf("expanded monitor lacks %q:\n%s", want, full)
+			t.Fatalf("expanded job lacks %q:\n%s", want, full)
 		}
 	}
 	if strings.Contains(full, "Job stopped") {
-		t.Fatalf("expanded monitor shows other items:\n%s", full)
+		t.Fatalf("expanded job shows other items:\n%s", full)
 	}
 	// /details shows the whole output and the user block's output lines
 	all := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Details: true})), "\n")
@@ -635,7 +635,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		}
 	}
 
-	// a fired event for an unknown monitor is its own item, not lost
+	// a fired event for an unknown job is its own item, not lost
 	tr2 := transcript.NewTranscript()
 	tr2.Apply(mk(1, event.JobFinished, event.JobFinishedPayload{ID: "zz", Summary: "3 files changed", Output: "a.go"}))
 	tr2.Apply(mk(2, event.JobStopped, event.JobStoppedPayload{ID: "yy", Reason: "kill"}))

@@ -264,15 +264,14 @@ func TestAgentRows(t *testing.T) {
 	}
 }
 
-func TestMonitorRows(t *testing.T) {
+func TestJobRows(t *testing.T) {
 	now := time.Now().Truncate(time.Second) // Started is RFC3339: whole seconds
-	monitors := []protocol.MonitorInfo{
-		{ID: "m1", Agent: "root", Kind: "command", Label: "go test", Spec: "go test ./...", State: "running", Started: now.Add(-75 * time.Second).Format(time.RFC3339), Progress: "42 lines"},
-		{ID: "m2", Agent: "root", Kind: "command", Label: "src changes", Spec: "./watch.sh", State: "running", Started: now.Add(-3 * time.Second).Format(time.RFC3339)},
-		{ID: "m3", Agent: "root", Kind: "command", Label: "cooldown", Spec: "sleep 300", State: "running", Started: now.Add(-2 * time.Hour).Format(time.RFC3339), Progress: "3m left"},
-		{ID: "m4", Agent: "root", Kind: "command", Label: "old", State: "fired", Started: now.Format(time.RFC3339)},
+	jobs := []protocol.JobInfo{
+		{ID: "m1", Agent: "root", Label: "go test", Spec: "go test ./...", Started: now.Add(-75 * time.Second).Format(time.RFC3339), Progress: "42 lines"},
+		{ID: "m2", Agent: "root", Label: "src changes", Spec: "./watch.sh", Started: now.Add(-3 * time.Second).Format(time.RFC3339)},
+		{ID: "m3", Agent: "root", Label: "cooldown", Spec: "sleep 300", Started: now.Add(-2 * time.Hour).Format(time.RFC3339), Progress: "3m left"},
 	}
-	rows := monitorRows(monitors, "coder", "coder", now, 100)
+	rows := jobRows(jobs, "coder", "coder", now, 100)
 	if len(rows) != 3 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
@@ -298,18 +297,18 @@ func TestMonitorRows(t *testing.T) {
 		t.Fatalf("third job row: %q", plain[2])
 	}
 	// a bad Started stamp just drops the elapsed field
-	rows = monitorRows([]protocol.MonitorInfo{{ID: "x", Kind: "command", Label: "w", State: "running", Started: "nope"}}, "", "", now, 100)
+	rows = jobRows([]protocol.JobInfo{{ID: "x", Label: "w", Started: "nope"}}, "", "", now, 100)
 	if len(rows) != 1 || strings.Contains(rows[0], "command") || !strings.HasSuffix(strings.TrimRight(stripANSI(rows[0]), " "), "w") {
 		t.Fatalf("bad stamp: %q", rows)
 	}
-	if monitorRows(nil, "coder", "coder", now, 100) != nil {
-		t.Fatal("no monitors should give no rows")
+	if jobRows(nil, "coder", "coder", now, 100) != nil {
+		t.Fatal("no jobs should give no rows")
 	}
 
-	// The section reads the selected agent's Monitors; unfocused it is one
+	// The section reads the selected agent's Jobs; unfocused it is one
 	// summary line, focused it lists one row per job.
 	m := channelModel()
-	m.agents = []protocol.AgentInfo{{ID: "root", Name: "coder", Role: "coder", State: "idle", Monitors: monitors[:3]}}
+	m.agents = []protocol.AgentInfo{{ID: "root", Name: "coder", Role: "coder", State: "idle", Jobs: jobs[:3]}}
 	m.selected = 0
 	view := stripANSI(tabsView(m, 100))
 	if !strings.Contains(view, "async 3") || strings.Count(view, "\n") != 1 {
@@ -339,7 +338,7 @@ func TestMonitorRows(t *testing.T) {
 	}
 	// the strip stays (with "(0)") once the jobs are gone
 	m.focus = focusInput
-	m.agents[0].Monitors = nil
+	m.agents[0].Jobs = nil
 	m.layout()
 	if m.vp.Height != collapsed || !strings.Contains(stripANSI(tabsView(m, 100)), "async 0") {
 		t.Fatalf("layout: viewport %d without jobs, want %d:\n%s", m.vp.Height, collapsed, stripANSI(tabsView(m, 100)))
@@ -576,13 +575,13 @@ func TestTabCyclesFocus(t *testing.T) {
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 		m.agents = m.agents[:len(m.agents)-1]
-		m.agents[0].Monitors = []protocol.MonitorInfo{{ID: "j", Kind: "command", Label: "sleep", State: "running"}}
+		m.agents[0].Jobs = []protocol.JobInfo{{ID: "j", Label: "sleep"}}
 		press(&m, tab)
 		if m.focus != focusTabs || m.tabSel != 0 {
 			t.Fatalf("the strip should land on permission even with a job: %v sel %d", m.focus, m.tabSel)
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-		m.agents[0].Monitors = nil
+		m.agents[0].Jobs = nil
 		m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
 		press(&m, tab, tea.KeyMsg{Type: tea.KeySpace}) // input → strip → the permission dialog
 		if m.focus != focusPermission {
@@ -987,7 +986,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 func TestSectionTabStrip(t *testing.T) {
 	m := channelModel()
 	m.agents = []protocol.AgentInfo{
-		{ID: "root", Name: "coder", Role: "coder", State: "working", Awaiting: []string{"c1"}, Monitors: []protocol.MonitorInfo{{ID: "j1", Kind: "command", Label: "go test", State: "running"}}},
+		{ID: "root", Name: "coder", Role: "coder", State: "working", Awaiting: []string{"c1"}, Jobs: []protocol.JobInfo{{ID: "j1", Label: "go test"}}},
 		{ID: "c1", Parent: "root", Name: "scout", Role: "explorer", State: "working"},
 	}
 	m.selected = 0
@@ -3148,4 +3147,16 @@ func TestStatusSitsOnTheDivider(t *testing.T) {
 func tabsView(m Model, _ int) string {
 	labels, _ := m.tabLabels(m.currentPrompt())
 	return labels
+}
+
+// metaLine is the meta row's text without its click spans.
+func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) string {
+	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel, nameStyle)
+	return line
+}
+
+// tabBodyLines is the focused tab's body, laid out for width columns.
+func (m Model) tabBodyLines(width int) []string {
+	lines, _ := m.tabBodyRows(width)
+	return lines
 }
