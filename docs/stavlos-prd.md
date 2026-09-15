@@ -452,6 +452,7 @@ JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Ever
   "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
   "compaction": { "threshold": 0.8, "maxToolOutput": "32kb" },
   "search": { "provider": "brave", "apiKey": "${env:BRAVE_API_KEY}" },   // web_search backend: brave | tavily | exa
+  "hosts": ["github.com", "*.golang.org"],   // hosts web_fetch reaches without asking; "*" is every host (a trusted project's add to yours)
   "dirs": ["~/Work/shared", "/tmp"],   // directories every channel works in besides its own (a trusted project's add to yours)
 
   // MCP servers reachable by presets that list them. Trust-gated at project level.
@@ -537,7 +538,7 @@ Plain markdown, model-facing prose rather than config — where "use light model
 
 Project configuration is data, but a cloned repository's data can still cause code to run: `mcp` server definitions start processes, policy `allow` rules loosen what the model may execute, and presets, skills, and `AGENTS.md` are instructions the model will follow. On first load of a directory, the daemon prompts once for **all of it** — the whole `.stavlos/` directory plus the instructions files agents will follow (§10.5: from the git root down to the channel directory, and those in its subdirectories) — showing what it contains, and records the decision keyed by directory plus a hash of those files' contents. A change to any of them re-prompts: an edited instructions file is noticed when an agent next starts a turn, and a file added later at the next load. Until confirmed, nothing from the project layer is loaded: no MCP servers start, no `allow` rules apply, no presets or skills are discovered, and only your own `AGENTS.md` reaches agents. The channel runs on global configuration alone, and the TUI and Discord both show that the project layer is pending trust.
 
-A repository's files (`stavlos.json` and `stavlos.local.json` alike) can only **tighten** the global layer, never loosen it, even once trusted: both are in the trust hash, their policy is an overlay, and `env`, `search`, `plugins`, a raised limit and an `allow` escalation default are errors there (global only). The exceptions are `mode` and `dirs`: a trusted project may set the permission mode its new channels start in, `auto` and `yolo` included, and add working directories anywhere (`/tmp`, a sibling checkout); the trust prompt lists its `stavlos.json`.
+A repository's files (`stavlos.json` and `stavlos.local.json` alike) can only **tighten** the global layer, never loosen it, even once trusted: both are in the trust hash, their policy is an overlay, and `env`, `search`, `plugins`, a raised limit and an `allow` escalation default are errors there (global only). The exceptions are `mode`, `dirs` and `hosts`: a trusted project may set the permission mode its new channels start in, `auto` and `yolo` included, add working directories anywhere (`/tmp`, a sibling checkout), and list the hosts `web_fetch` reaches without asking (`*` for every host); the trust prompt lists its `stavlos.json`.
 
 ### 10.7 Deliberately not in `.stavlos/`
 
