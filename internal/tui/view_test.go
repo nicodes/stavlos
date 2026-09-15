@@ -2071,35 +2071,6 @@ func TestStartScreenHistoryComesFromEarlierChannels(t *testing.T) {
 	}
 }
 
-func TestStatusShowsAboveTheDivider(t *testing.T) {
-	m := channelModel()
-	m.showTree = false
-	m.width, m.height = 80, 30
-	m.setStatus("copied 12 characters", false)
-	m.layout()
-	lines := strings.Split(stripANSI(m.View()), "\n")
-	rule := -1
-	for i, l := range lines {
-		if strings.HasPrefix(l, "─") {
-			rule = i
-			break
-		}
-	}
-	if rule < 1 || !strings.HasPrefix(lines[rule-1], "copied 12 characters") {
-		t.Fatalf("the status should sit left-aligned right above the rule:\n%s", strings.Join(lines, "\n"))
-	}
-	if strings.Contains(lines[rule+1], "copied") {
-		t.Fatal("the meta row no longer carries the status")
-	}
-	// and the line is blank without a status
-	m.status = ""
-	m.layout()
-	lines = strings.Split(stripANSI(m.View()), "\n")
-	if strings.TrimSpace(lines[rule-1]) != "" {
-		t.Fatalf("no status → blank line: %q", lines[rule-1])
-	}
-}
-
 func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 	m := channelModel()
 	m.showTree = true
@@ -3121,5 +3092,40 @@ func TestModeTagLeadsTheInput(t *testing.T) {
 	nm, cmd := nm.(Model).Update(tea.MouseMsg{X: 1, Y: lay.input, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	if cmd == nil || nm.(Model).focus != focusInput {
 		t.Fatalf("a click on the YOLO tag should set the mode back to ask: cmd=%v focus=%v", cmd != nil, nm.(Model).focus)
+	}
+}
+
+// TestStatusSitsOnTheDivider: the transient status is on the divider's left
+// end, the usage on its right; there is no line for it between the chat and
+// the divider, and on a narrow window the status is cut before the usage.
+func TestStatusSitsOnTheDivider(t *testing.T) {
+	m := channelModel()
+	m.reconciled = false // connected: the usage shows
+	m.width, m.height = 100, 30
+	m.agents[0].Tokens, m.agents[0].CostUSD = 1500, 0.02
+	m.transcript(m.agents[0].ID).Notice("hello")
+	m.openChat()
+	m.layout()
+	m.setStatus("copied 3 lines", false)
+	lines := strings.Split(stripANSI(m.View()), "\n")
+	rule := -1
+	for i, l := range lines {
+		if strings.HasPrefix(l, "─") {
+			rule = i
+			break
+		}
+	}
+	if rule < 0 || !strings.HasPrefix(lines[rule], "─ copied 3 lines ─") || !strings.HasSuffix(lines[rule], "─ 2k tokens · $0.02 ─") || ansi.StringWidth(lines[rule]) != m.width {
+		t.Fatalf("divider: %q", lines[rule])
+	}
+	if strings.Contains(strings.Join(lines[:rule], "\n"), "copied") || len(lines) != m.height {
+		t.Fatalf("the status has no line of its own above the divider:\n%s", strings.Join(lines, "\n"))
+	}
+	if r := m.rows(); r.input != rule+1 {
+		t.Fatalf("rows: input at %d, divider at %d", r.input, rule)
+	}
+	m.setStatus(strings.Repeat("a long status ", 10), true)
+	if d := stripANSI(m.ruleLine(60)); ansi.StringWidth(d) != 60 || !strings.HasSuffix(d, "─ 2k tokens · $0.02 ─") || !strings.Contains(d, "…") {
+		t.Fatalf("narrow divider: %q", d)
 	}
 }

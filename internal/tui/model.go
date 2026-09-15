@@ -1889,7 +1889,7 @@ type rowLayout struct {
 
 // rows derives the row layout the same way channelView stacks its parts.
 func (m *Model) rows() rowLayout {
-	y := m.vp.Height + 2 // the status line, then the rule
+	y := m.vp.Height + 1 // the rule (the status and usage sit on it)
 	if pv := m.paletteViewFor(m.width); pv != "" {
 		y += strings.Count(pv, "\n") + 1
 	}
@@ -3403,7 +3403,7 @@ func (m *Model) layout() {
 	m.dirInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.dirInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
-	bodyH := m.height - kb - 2 - m.inputRows() // key bar, status line + rule, the input rows
+	bodyH := m.height - kb - 1 - m.inputRows() // key bar, the rule (with the status and usage on it), the input rows
 	sv := m.sectionsView(m.width)
 	if sv != "" {
 		bodyH -= strings.Count(sv, "\n") + 1 // the strip, which the channel chat may not have at all
