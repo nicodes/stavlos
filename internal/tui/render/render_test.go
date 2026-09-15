@@ -76,7 +76,7 @@ func TestBuildTranscript(t *testing.T) {
 	}
 	got := renderLines(transcript.Build(evs))
 	assertSubsequence(t, got, []string{
-		"› hello",
+		"› @user hello",
 		"  world",
 		"$ Shell  sleep 100 (cancelled)",
 		"  partial",
@@ -109,7 +109,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	tr.Apply(mk(3, "c1", event.TurnStarted, event.TurnPayload{Turn: 1}))
 	tr.Apply(mk(4, "c1", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "look around", From: "root"}))
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"» Spawned by root as scout (explorer) · m", "look around"})
+	assertSubsequence(t, got, []string{"» @root as scout (explorer) · m", "  look around"})
 	for _, g := range got {
 		if strings.Contains(g, "Prompt from") || strings.Contains(g, "▹") {
 			t.Fatalf("the spawn and its task are one item: %q", got)
@@ -129,7 +129,7 @@ func TestUserMessageKinds(t *testing.T) {
 		mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}),
 	})
 	got := renderLines(lines)
-	assertSubsequence(t, got, []string{"› focus", "agent response", "⑂ child done", "› hi"})
+	assertSubsequence(t, got, []string{"› @user focus", "agent response", "⑂ child done", "› @user hi"})
 	for _, l := range got {
 		if strings.TrimSpace(l) == "steer" {
 			t.Fatalf("a steer should carry no title:\n%s", strings.Join(got, "\n"))
@@ -157,7 +157,7 @@ func TestUserBlockBorderAndWrap(t *testing.T) {
 	got := renderWith(transcript.Build([]event.Event{
 		mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi\n" + text}),
 	}), Options{Width: 30, NoFold: true})
-	if got[0] != "› hi" {
+	if got[0] != "› @user hi" {
 		t.Fatalf("prompt glyph + padding: %q", got[0])
 	}
 	// Long lines wrap inside the border; every continuation keeps it.
@@ -279,7 +279,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "shell"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"› hi", "◌ thinking…", "§ Hello", "$ Shell"})
+	assertSubsequence(t, got, []string{"› @user hi", "◌ thinking…", "§ Hello", "$ Shell"})
 	if len(tr.Tail()) == 0 || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -337,7 +337,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	if !contains(got, GutterMark+"$ Shell  ls") || !contains(got, GutterMark+"  x") || contains(got, GutterMark+"│  hi") {
 		t.Fatalf("cursor marks only item 1:\n%s", strings.Join(got, "\n"))
 	}
-	if !contains(got, "› hi") {
+	if !contains(got, "› @user hi") {
 		t.Fatalf("non-cursor lines keep the gutter space:\n%s", strings.Join(got, "\n"))
 	}
 	// Per-item override expands item 1 while /details is off, and vice versa.
@@ -882,13 +882,13 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	tr.Apply(mk(7, "a", event.TurnStarted, event.TurnPayload{Turn: 2}))
 	tr.Apply(mk(8, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "thanks"}))
 	got := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
-	want := "› list files\n$ Shell  ls\n  a.go\n§ one file\n\n› thanks"
+	want := "› @user list files\n$ Shell  ls\n  a.go\n§ one file\n\n› @user thanks"
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
 	// the loader keeps one blank row above it
 	working := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true, Working: true, Spinner: "◐", Verb: "Trotting"}), "\n")
-	if !strings.HasSuffix(working, "› thanks\n\n◐ Trotting…") {
+	if !strings.HasSuffix(working, "› @user thanks\n\n◐ Trotting…") {
 		t.Fatalf("loader spacing:\n%s", working)
 	}
 }

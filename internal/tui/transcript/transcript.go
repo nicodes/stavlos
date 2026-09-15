@@ -276,15 +276,15 @@ func (t *Transcript) holdSpawn(ev event.Event) bool {
 }
 
 // eventLines is EventLines, except for a spawned agent's first prompt from
-// its creator: "» Spawned by main as scout (general) · model" over the task.
+// its creator: "» @main as scout (general) · model" over the task.
 func (t *Transcript) eventLines(ev event.Event) []Line {
 	if ev.Type == event.UserMessage && t.spawnTask != "" {
 		var p event.UserMessagePayload
 		if ev.Decode(&p) == nil && p.From != "" && p.Text == t.spawnTask {
 			t.spawnTask = ""
-			lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: titled("Spawned by "+p.From, "as "+t.spawnAs), Block: BlockChild, Glyph: GlyphSpawn}}
+			lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: titled("@"+p.From, "as "+t.spawnAs), Block: BlockChild, Glyph: GlyphSpawn}}
 			for _, l := range strings.Split(strings.TrimRight(p.Text, "\n"), "\n") {
-				lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild})
+				lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild, Indent: 1})
 			}
 			return append(lines, Line{Kind: LineBlank})
 		}
@@ -1008,7 +1008,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			if p.From != "" {
 				return received(p.From, p.Text)
 			}
-			return block(BlockUser, "", p.Text) // the human's own input: blue ›
+			return block(BlockUser, "", "**@user** "+p.Text) // the human's own input: blue "› @user …"
 		case event.MsgAgentResponse:
 			return received(p.From, p.Text)
 		case "child_finished": // legacy: finished children from old logs
