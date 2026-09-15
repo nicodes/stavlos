@@ -109,7 +109,7 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), done: make(chan struct{}), ran: ran}
-	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.notify}
+	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.enqueue}
 	d.addClient(c.cl)
 	go c.writer()
 	defer func() {
@@ -137,19 +137,22 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
 	}
 }
 
-func (c *conn) write(v any) { c.enqueue(v, false) }
-
-// enqueue queues one message without blocking.
-func (c *conn) enqueue(v any, droppable bool) {
+func (c *conn) write(v any) {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return
 	}
+	c.enqueue(append(b, '\n'), false)
+}
+
+// enqueue queues one encoded, newline-terminated message without blocking.
+// The bytes may be shared with other connections and are never modified.
+func (c *conn) enqueue(line []byte, droppable bool) {
 	if droppable && len(c.out) > outQueue/2 {
 		return
 	}
 	select {
-	case c.out <- outMsg{b: append(b, '\n'), droppable: droppable}:
+	case c.out <- outMsg{b: line, droppable: droppable}:
 	case <-c.done:
 	default:
 		log.Printf("client %s (%s) is not reading; dropping it", c.cl.id, c.cl.name)
@@ -198,10 +201,6 @@ func (c *conn) reply(id *json.RawMessage, result any, perr *protocol.Error) {
 		}
 	}
 	c.write(r)
-}
-
-func (c *conn) notify(method string, params json.RawMessage) {
-	c.enqueue(protocol.Response{JSONRPC: "2.0", Method: method, Params: params}, method == protocol.NStream)
 }
 
 func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protocol.Error) {

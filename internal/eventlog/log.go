@@ -1,18 +1,22 @@
 // Package eventlog stores the append-only event log in SQLite (PRD §4.2).
 // The event vocabulary lives in internal/event, which a client can import
 // without pulling in a database driver; this package is the daemon's.
+//
+// One goroutine writes. Appends queue for it and it commits whatever has
+// queued in one transaction (group commit), assigning each channel's
+// sequence numbers, maintaining the channel index from the events in the
+// same transaction, and then handing the committed events to the owner's
+// callback in commit order. Readers use a pool of their own, so replaying a
+// long channel never holds up an append (WAL lets them run together).
 package eventlog
 
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -20,192 +24,311 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 )
 
-// schemaVersion is PRAGMA user_version once migrate has run.
-const schemaVersion = 4
+// schemaVersion is PRAGMA user_version for the current schema. A file
+// written by any other version is deleted, not converted: stavlos is
+// unreleased, so there is nothing to keep, and dropping tables would leave
+// a file of free pages behind.
+const schemaVersion = 5
 
-// Log is the event log. Appends go through one writer connection and are
-// serialised so per-channel sequences stay contiguous; reads use a small
-// pool of their own, so replaying a long channel to a client never holds
-// up an agent's append (WAL lets readers and the writer run together).
+// maxGroup bounds how many queued appends one transaction takes.
+const maxGroup = 256
+
+// ErrClosed is returned by an append after Close.
+var ErrClosed = errors.New("event log is closed")
+
+// Log is the event log.
 type Log struct {
-	w *sql.DB
-	r *sql.DB
-
-	mu   sync.Mutex       // serialises appends; guards last
-	last map[string]int64 // channel → last seq written, filled lazily
+	w, r     *sql.DB
+	reqs     chan *request
+	quit     chan struct{}
+	done     chan struct{}
+	onCommit func([]event.Event)
+	last     map[string]int64 // channel → last seq committed; the writer's alone
 }
 
-// Open opens or creates the log at path and brings its schema up to date.
-func Open(path string) (*Log, error) {
+// request is one append, or a barrier (fn) run between commits.
+type request struct {
+	evs  []event.Event
+	fn   func()
+	out  []event.Event
+	err  error
+	done chan struct{}
+}
+
+// Open opens or creates the log at path. onCommit (nil for none) receives
+// each committed group's events, in commit order, on the writer goroutine:
+// it must not block and must not append.
+func Open(path string, onCommit func([]event.Event)) (*Log, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, err
 	}
-	const pragmas = "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)"
-	w, err := sql.Open("sqlite", path+pragmas)
+	w, err := openCurrent(path)
 	if err != nil {
 		return nil, err
 	}
-	w.SetMaxOpenConns(1)
-	l := &Log{w: w, last: map[string]int64{}}
-	if err := l.migrate(context.Background()); err != nil {
-		w.Close()
-		return nil, err
-	}
-	r, err := sql.Open("sqlite", path+pragmas+"&_pragma=query_only(1)")
+	r, err := sql.Open("sqlite", dsn(path)+"&_pragma=query_only(1)")
 	if err != nil {
 		w.Close()
 		return nil, err
 	}
 	r.SetMaxOpenConns(4)
-	l.r = r
+	l := &Log{w: w, r: r, reqs: make(chan *request), quit: make(chan struct{}), done: make(chan struct{}), onCommit: onCommit, last: map[string]int64{}}
+	go l.run()
 	return l, nil
 }
 
-// migrate creates the schema. A log written by any other schema version is
-// wiped, not converted: stavlos is unreleased, so there is nothing to keep.
-func (l *Log) migrate(ctx context.Context) error {
-	var version int
-	if err := l.w.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
-		return err
-	}
-	if version != schemaVersion {
-		if _, err := l.w.ExecContext(ctx, `
-DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS sessions;
-DROP TABLE IF EXISTS channels;
-DROP TABLE IF EXISTS kv;`); err != nil {
-			return err
+func dsn(path string) string {
+	return path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)"
+}
+
+// openCurrent opens the writer connection on a database at the current
+// schema, deleting a file written by another version first.
+func openCurrent(path string) (*sql.DB, error) {
+	for attempt := 0; ; attempt++ {
+		w, err := sql.Open("sqlite", dsn(path))
+		if err != nil {
+			return nil, err
+		}
+		w.SetMaxOpenConns(1)
+		version, tables, err := inspect(w)
+		if err != nil {
+			w.Close()
+			return nil, err
+		}
+		if version == schemaVersion || tables == 0 {
+			if err := create(w); err != nil {
+				w.Close()
+				return nil, err
+			}
+			return w, nil
+		}
+		w.Close()
+		if attempt > 0 {
+			return nil, fmt.Errorf("%s: schema %d could not be replaced", path, version)
+		}
+		for _, suffix := range []string{"", "-wal", "-shm"} {
+			if err := os.Remove(path + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return nil, err
+			}
 		}
 	}
-	if _, err := l.w.ExecContext(ctx, `
+}
+
+func inspect(w *sql.DB) (version, tables int, err error) {
+	if err = w.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		return 0, 0, err
+	}
+	err = w.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'`).Scan(&tables)
+	return version, tables, err
+}
+
+func create(w *sql.DB) error {
+	_, err := w.Exec(fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS events (
-  global  INTEGER PRIMARY KEY AUTOINCREMENT,
-  channel TEXT NOT NULL,
+  global  INTEGER PRIMARY KEY,
+  channel TEXT    NOT NULL,
   seq     INTEGER NOT NULL,
-  agent   TEXT NOT NULL DEFAULT '',
-  type    TEXT NOT NULL,
-  time    TEXT NOT NULL,
+  agent   TEXT    NOT NULL DEFAULT '',
+  type    TEXT    NOT NULL,
+  time    INTEGER NOT NULL,
   payload BLOB,
   UNIQUE(channel, seq)
 );
 CREATE TABLE IF NOT EXISTS channels (
-  id       TEXT PRIMARY KEY,
-  name     TEXT NOT NULL DEFAULT '',
-  dir      TEXT NOT NULL,
-  created  TEXT NOT NULL,
+  id       TEXT    PRIMARY KEY,
+  name     TEXT    NOT NULL UNIQUE,
+  dir      TEXT    NOT NULL,
+  created  INTEGER NOT NULL,
   archived INTEGER NOT NULL DEFAULT 0,
-  title    TEXT NOT NULL DEFAULT ''
+  title    TEXT    NOT NULL DEFAULT '',
+  last_seq INTEGER NOT NULL DEFAULT 0
 );
-CREATE TABLE IF NOT EXISTS kv (
-  k TEXT PRIMARY KEY,
-  v BLOB
-);`); err != nil {
-		return err
-	}
-	_, err := l.w.ExecContext(ctx, fmt.Sprintf(`PRAGMA user_version = %d`, schemaVersion))
+CREATE TABLE IF NOT EXISTS trust (
+  dir  TEXT PRIMARY KEY,
+  hash TEXT NOT NULL
+);
+PRAGMA user_version = %d;`, schemaVersion))
 	return err
 }
 
-// Close closes the database.
+// Close commits what is queued, stops the writer and closes the database.
 func (l *Log) Close() error {
-	var err error
-	if l.r != nil {
-		err = l.r.Close()
+	select {
+	case <-l.quit:
+	default:
+		close(l.quit)
 	}
+	<-l.done
+	err := l.r.Close()
 	if werr := l.w.Close(); werr != nil {
 		err = werr
 	}
 	return err
 }
 
-// Append writes one event, assigning Seq and Global. The returned event
-// carries the assigned numbers; delivering it to clients is the daemon's.
-func (l *Log) Append(ctx context.Context, e event.Event) (event.Event, error) {
-	out, err := l.AppendBatch(ctx, []event.Event{e})
-	if err != nil {
-		return e, err
+// Append writes events in one transaction, all or none, assigning Seq and
+// Global, and returns them numbered. Once queued an append is never
+// abandoned: ctx is only checked before, so a caller never sees an error for
+// an event that was written.
+func (l *Log) Append(ctx context.Context, evs ...event.Event) ([]event.Event, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-	return out[0], nil
+	r := &request{evs: evs, done: make(chan struct{})}
+	if err := l.submit(r); err != nil {
+		return nil, err
+	}
+	return r.out, r.err
 }
 
-// AppendBatch writes events in one transaction: all of them or none.
-func (l *Log) AppendBatch(ctx context.Context, evs []event.Event) ([]event.Event, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
+// Barrier runs fn on the writer between two commits: every append queued
+// before it is committed (and delivered to onCommit) first, and none after
+// it starts until fn returns. A subscription hands over from replay to live
+// delivery inside one, so it misses nothing and sees nothing twice.
+func (l *Log) Barrier(fn func()) error {
+	return l.submit(&request{fn: fn, done: make(chan struct{})})
+}
+
+func (l *Log) submit(r *request) error {
+	select {
+	case l.reqs <- r:
+	case <-l.quit:
+		return ErrClosed
+	}
+	<-r.done
+	return nil
+}
+
+// run is the writer: it groups queued requests, commits them in order and
+// runs barriers between commits.
+func (l *Log) run() {
+	defer close(l.done)
+	for {
+		var group []*request
+		select {
+		case r := <-l.reqs:
+			group = append(group, r)
+		case <-l.quit:
+			return
+		}
+	fill:
+		for len(group) < maxGroup {
+			select {
+			case r := <-l.reqs:
+				group = append(group, r)
+			default:
+				break fill
+			}
+		}
+		start := 0
+		for i, r := range group {
+			if r.fn == nil {
+				continue
+			}
+			l.commit(group[start:i])
+			r.fn()
+			close(r.done)
+			start = i + 1
+		}
+		l.commit(group[start:])
+	}
+}
+
+// commit writes a group of appends in one transaction. When the group
+// fails, each append is retried alone, so one bad append fails only itself.
+func (l *Log) commit(group []*request) {
+	if len(group) == 0 {
+		return
+	}
+	if len(group) > 1 {
+		if err := l.write(group); err == nil {
+			return
+		}
+	}
+	for _, r := range group {
+		if err := l.write([]*request{r}); err != nil {
+			r.err = err
+			close(r.done)
+		}
+	}
+}
+
+// write commits requests in one transaction and, on success, delivers the
+// events and releases the callers. On failure nothing is released and the
+// sequence cache is left as it was.
+func (l *Log) write(group []*request) error {
+	ctx := context.Background()
 	tx, err := l.w.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer tx.Rollback()
-	next := map[string]int64{} // this batch's view of the last seq per channel
-	out := make([]event.Event, 0, len(evs))
-	for _, e := range evs {
-		if e.Time.IsZero() {
-			e.Time = time.Now().UTC()
-		}
-		last, ok := next[e.Channel]
-		if !ok {
-			if last, err = l.lastSeqTx(ctx, tx, e.Channel); err != nil {
-				return nil, err
+	next := map[string]int64{}
+	for _, r := range group {
+		r.out = make([]event.Event, 0, len(r.evs))
+		for _, e := range r.evs {
+			if e.Time.IsZero() {
+				e.Time = time.Now().UTC()
 			}
-		}
-		e.Seq = last + 1
-		res, err := tx.ExecContext(ctx, `INSERT INTO events(channel, seq, agent, type, time, payload) VALUES(?,?,?,?,?,?)`,
-			e.Channel, e.Seq, e.Agent, string(e.Type), e.Time.Format(time.RFC3339Nano), []byte(e.Payload))
-		if err != nil {
-			return nil, err
-		}
-		e.Global, _ = res.LastInsertId()
-		next[e.Channel] = e.Seq
-		if title := titleOf(e); title != "" {
-			if _, err := tx.ExecContext(ctx, `UPDATE channels SET title = ? WHERE id = ? AND title = ''`, title, e.Channel); err != nil {
-				return nil, err
+			seq, ok := next[e.Channel]
+			if !ok {
+				if seq, err = l.lastSeq(ctx, tx, e.Channel); err != nil {
+					return err
+				}
 			}
+			e.Seq = seq + 1
+			res, err := tx.ExecContext(ctx, `INSERT INTO events(channel, seq, agent, type, time, payload) VALUES(?,?,?,?,?,?)`,
+				e.Channel, e.Seq, e.Agent, string(e.Type), e.Time.UnixNano(), []byte(e.Payload))
+			if err != nil {
+				return fmt.Errorf("%s: %w", e.Type, err)
+			}
+			if e.Global, err = res.LastInsertId(); err != nil {
+				return err
+			}
+			if err := index(ctx, tx, e); err != nil {
+				return fmt.Errorf("%s: index: %w", e.Type, err)
+			}
+			next[e.Channel] = e.Seq
+			r.out = append(r.out, e)
 		}
-		out = append(out, e)
+	}
+	for ch, seq := range next {
+		if _, err := tx.ExecContext(ctx, `UPDATE channels SET last_seq = ? WHERE id = ?`, seq, ch); err != nil {
+			return err
+		}
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return err
 	}
-	for s, seq := range next {
-		l.last[s] = seq
+	for ch, seq := range next {
+		l.last[ch] = seq
 	}
-	return out, nil
+	var all []event.Event
+	for _, r := range group {
+		all = append(all, r.out...)
+	}
+	if l.onCommit != nil && len(all) > 0 {
+		l.onCommit(all)
+	}
+	for _, r := range group {
+		close(r.done)
+	}
+	return nil
 }
 
-// lastSeqTx is the channel's last seq: the cache, else the table. The
-// caller holds l.mu.
-func (l *Log) lastSeqTx(ctx context.Context, tx *sql.Tx, channel string) (int64, error) {
+func (l *Log) lastSeq(ctx context.Context, tx *sql.Tx, channel string) (int64, error) {
 	if seq, ok := l.last[channel]; ok {
 		return seq, nil
 	}
 	var last sql.NullInt64
-	if err := tx.QueryRowContext(ctx, `SELECT MAX(seq) FROM events WHERE channel = ?`, channel).Scan(&last); err != nil {
-		return 0, err
-	}
-	return last.Int64, nil
-}
-
-// titleOf is a channel's title if e can give it one: the first line of a
-// human's prompt or steer.
-func titleOf(e event.Event) string {
-	if e.Type != event.PromptQueued && e.Type != event.SteerReceived {
-		return ""
-	}
-	var p event.TextPayload
-	if e.Decode(&p) != nil || !strings.HasPrefix(p.Source, "human:") {
-		return ""
-	}
-	t := strings.TrimSpace(p.Text)
-	if i := strings.IndexByte(t, '\n'); i >= 0 {
-		t = strings.TrimSpace(t[:i])
-	}
-	return t
+	err := tx.QueryRowContext(ctx, `SELECT MAX(seq) FROM events WHERE channel = ?`, channel).Scan(&last)
+	return last.Int64, err
 }
 
 const eventColumns = `global, channel, seq, agent, type, time, payload`
 
-// Read returns events for a channel with seq >= from, in order. limit<=0 = all.
+// Read returns a channel's events with seq >= from, in order; limit <= 0
+// reads them all.
 func (l *Log) Read(ctx context.Context, channel string, from int64, limit int) ([]event.Event, error) {
 	q := `SELECT ` + eventColumns + ` FROM events WHERE channel = ? AND seq >= ? ORDER BY seq`
 	args := []any{channel, from}
@@ -213,15 +336,6 @@ func (l *Log) Read(ctx context.Context, channel string, from int64, limit int) (
 		q += ` LIMIT ?`
 		args = append(args, limit)
 	}
-	return l.query(ctx, q, args...)
-}
-
-// ReadRange returns events with from <= seq <= to.
-func (l *Log) ReadRange(ctx context.Context, channel string, from, to int64) ([]event.Event, error) {
-	return l.query(ctx, `SELECT `+eventColumns+` FROM events WHERE channel = ? AND seq >= ? AND seq <= ? ORDER BY seq`, channel, from, to)
-}
-
-func (l *Log) query(ctx context.Context, q string, args ...any) ([]event.Event, error) {
 	rows, err := l.r.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -230,122 +344,82 @@ func (l *Log) query(ctx context.Context, q string, args ...any) ([]event.Event, 
 	var out []event.Event
 	for rows.Next() {
 		var e event.Event
-		var typ, ts string
+		var typ string
+		var ns int64
 		var payload []byte
-		if err := rows.Scan(&e.Global, &e.Channel, &e.Seq, &e.Agent, &typ, &ts, &payload); err != nil {
+		if err := rows.Scan(&e.Global, &e.Channel, &e.Seq, &e.Agent, &typ, &ns, &payload); err != nil {
 			return nil, err
 		}
-		e.Type = event.Type(typ)
-		e.Time, _ = time.Parse(time.RFC3339Nano, ts)
+		e.Type, e.Time = event.Type(typ), time.Unix(0, ns).UTC()
 		if len(payload) > 0 {
-			e.Payload = json.RawMessage(payload)
+			e.Payload = payload
 		}
 		out = append(out, e)
 	}
 	return out, rows.Err()
 }
 
-// LastSeq returns the latest per-channel sequence (0 if none).
-func (l *Log) LastSeq(ctx context.Context, channel string) (int64, error) {
-	l.mu.Lock()
-	seq, ok := l.last[channel]
-	l.mu.Unlock()
-	if ok {
-		return seq, nil
-	}
-	var last sql.NullInt64
-	err := l.r.QueryRowContext(ctx, `SELECT MAX(seq) FROM events WHERE channel = ?`, channel).Scan(&last)
-	return last.Int64, err
-}
-
-// --- channel index (not channel state; PRD §4.2) ---
-
-// ChannelRow is the daemon-level index entry for a channel. Title and
-// LastSeq are read-only here: the log keeps them from the events.
+// ChannelRow is a channel's index entry, kept from its events.
 type ChannelRow struct {
 	ID       string
-	Name     string // unique across the daemon; the daemon keeps it in step with the channel
+	Name     string // unique across the daemon
 	Dir      string
 	Created  time.Time
 	Archived bool
-	Title    string // the first human prompt's first line
+	Title    string // the first line of the human's first message
 	LastSeq  int64
 }
 
-type execer interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-}
-
-func putChannel(ctx context.Context, x execer, s ChannelRow) error {
-	_, err := x.ExecContext(ctx, `INSERT INTO channels(id, name, dir, created, archived, title) VALUES(?,?,?,?,?,?)
-ON CONFLICT(id) DO UPDATE SET name = excluded.name, dir = excluded.dir, archived = excluded.archived`,
-		s.ID, s.Name, s.Dir, s.Created.UTC().Format(time.RFC3339Nano), boolInt(s.Archived), s.Title)
-	return err
-}
-
-// PutChannel inserts a channel index row, or updates its name, directory
-// and archived flag (the title is never overwritten).
-func (l *Log) PutChannel(ctx context.Context, s ChannelRow) error {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return putChannel(ctx, l.w, s)
-}
-
-// Channels lists index rows, newest first, with their titles and last seq
-// in the same query.
+// Channels lists the index, newest first.
 func (l *Log) Channels(ctx context.Context) ([]ChannelRow, error) {
-	rows, err := l.r.QueryContext(ctx, `SELECT s.id, s.name, s.dir, s.created, s.archived, s.title,
-  COALESCE((SELECT MAX(e.seq) FROM events e WHERE e.channel = s.id), 0)
-FROM channels s ORDER BY s.created DESC`)
+	rows, err := l.r.QueryContext(ctx, `SELECT id, name, dir, created, archived, title, last_seq FROM channels ORDER BY created DESC`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []ChannelRow
 	for rows.Next() {
-		var s ChannelRow
-		var ts string
-		var arch int
-		if err := rows.Scan(&s.ID, &s.Name, &s.Dir, &ts, &arch, &s.Title, &s.LastSeq); err != nil {
+		var c ChannelRow
+		var ns int64
+		if err := rows.Scan(&c.ID, &c.Name, &c.Dir, &ns, &c.Archived, &c.Title, &c.LastSeq); err != nil {
 			return nil, err
 		}
-		s.Created, _ = time.Parse(time.RFC3339Nano, ts)
-		s.Archived = arch != 0
-		out = append(out, s)
+		c.Created = time.Unix(0, ns).UTC()
+		out = append(out, c)
 	}
 	return out, rows.Err()
 }
 
-// --- kv (trust records etc.) ---
-
-// Get reads a kv value; ok=false if absent.
-func (l *Log) Get(ctx context.Context, key string, v any) (bool, error) {
-	var b []byte
-	err := l.r.QueryRowContext(ctx, `SELECT v FROM kv WHERE k = ?`, key).Scan(&b)
+// LastSeq is a channel's latest committed sequence number (0 for none).
+func (l *Log) LastSeq(ctx context.Context, channel string) (int64, error) {
+	var seq int64
+	err := l.r.QueryRowContext(ctx, `SELECT last_seq FROM channels WHERE id = ?`, channel).Scan(&seq)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
+		return 0, nil
 	}
-	if err != nil {
-		return false, err
-	}
-	return true, json.Unmarshal(b, v)
+	return seq, err
 }
 
-// Put writes a kv value.
-func (l *Log) Put(ctx context.Context, key string, v any) error {
-	b, err := json.Marshal(v)
+// Trust lists the confirmed project layers: directory → content hash.
+func (l *Log) Trust(ctx context.Context) (map[string]string, error) {
+	rows, err := l.r.QueryContext(ctx, `SELECT dir, hash FROM trust`)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	_, err = l.w.ExecContext(ctx, `INSERT INTO kv(k, v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v = excluded.v`, key, b)
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var dir, hash string
+		if err := rows.Scan(&dir, &hash); err != nil {
+			return nil, err
+		}
+		out[dir] = hash
+	}
+	return out, rows.Err()
+}
+
+// SetTrust records that dir's project layer with this hash is trusted.
+func (l *Log) SetTrust(ctx context.Context, dir, hash string) error {
+	_, err := l.w.ExecContext(ctx, `INSERT INTO trust(dir, hash) VALUES(?, ?) ON CONFLICT(dir) DO UPDATE SET hash = excluded.hash`, dir, hash)
 	return err
-}
-
-func boolInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
