@@ -258,15 +258,16 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		e.TrustHash = hash
 		e.TrustFiles = files
 		if trust != nil && trust.Trusted(dir, hash) {
-			pf, err := readFile(filepath.Join(pdir, "stavlos.json"))
-			if err != nil {
-				return nil, fmt.Errorf("project config: %w", err)
-			}
-			if len(pf.Plugins) > 0 {
-				fmt.Fprintf(os.Stderr, "stavlos: ignoring plugins in %s (global only)\n", pdir)
-			}
-			if err := e.applyFile(pf, "project"); err != nil {
-				return nil, fmt.Errorf("project config: %w", err)
+			// stavlos.json and stavlos.local.json are both the repository's:
+			// trust-gated, hashed, and able only to tighten.
+			for _, l := range []struct{ file, layer string }{{"stavlos.json", "project"}, {"stavlos.local.json", "local"}} {
+				f, err := readFile(filepath.Join(pdir, l.file))
+				if err != nil {
+					return nil, fmt.Errorf("%s config: %w", l.layer, err)
+				}
+				if err := e.applyFile(f, l.layer); err != nil {
+					return nil, fmt.Errorf("%s config: %w", l.layer, err)
+				}
 			}
 			if err := e.loadPresets(filepath.Join(pdir, "roles"), "project"); err != nil {
 				return nil, err
@@ -281,15 +282,6 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		} else {
 			e.TrustPending = true
 		}
-	}
-
-	// local layer (trusted, never prompts)
-	lf, err := readFile(filepath.Join(pdir, "stavlos.local.json"))
-	if err != nil {
-		return nil, fmt.Errorf("local config: %w", err)
-	}
-	if err := e.applyFile(lf, "local"); err != nil {
-		return nil, fmt.Errorf("local config: %w", err)
 	}
 	return e, nil
 }
@@ -379,6 +371,11 @@ func LoadGlobal() (*Effective, error) {
 // that cannot be applied is an error, never a silent fallback to the
 // default (an unreadable deny rule is the worst kind of failure).
 func (e *Effective) applyFile(f File, layer string) error {
+	if layer != "global" {
+		if err := e.checkRepositoryFile(f); err != nil {
+			return err
+		}
+	}
 	if f.Model != "" {
 		e.Model = f.Model
 	}
@@ -414,12 +411,34 @@ func (e *Effective) applyFile(f File, layer string) error {
 	if err != nil {
 		return err
 	}
-	if layer == "project" {
-		// The project's rules are an overlay: they can only tighten what
-		// the global and local layers decide (PRD §10.6).
+	if layer != "global" {
+		// A repository's rules are an overlay: they can only tighten what
+		// the global layer decides (PRD §10.6).
 		e.Policy = e.Policy.With(rules)
 	} else {
 		e.Policy = policy.Layer(e.Policy.Base().Merge(rules), e.Policy.Overlays()...)
+	}
+	return nil
+}
+
+// checkRepositoryFile refuses what a repository's files may not set,
+// however trusted: anything that loosens the global layer (secrets passed
+// to child processes, an allow default for unanswered prompts, higher
+// limits) or chooses where data goes (a search backend and its key,
+// plugins). Everything else they set tightens or is the project's own
+// business (model, roles, MCP servers, which run sandboxed).
+func (e *Effective) checkRepositoryFile(f File) error {
+	switch {
+	case f.Env != nil:
+		return errors.New("env: is global only: a repository cannot pass secrets to the processes agents run")
+	case f.Search != nil:
+		return errors.New("search: is global only: a repository cannot choose where queries and keys go")
+	case len(f.Plugins) > 0:
+		return errors.New("plugins: is global only")
+	case f.Escalation != nil && policy.Verb(f.Escalation.Default) == policy.Allow:
+		return errors.New("escalation.default: a repository cannot make unanswered prompts allow")
+	case f.Limits != nil && (f.Limits.MaxDepth > e.Limits.MaxDepth || f.Limits.MaxAgents > e.Limits.MaxAgents):
+		return errors.New("limits: a repository may only lower them")
 	}
 	return nil
 }
@@ -934,8 +953,8 @@ func parseSize(s string) (int, error) {
 	return n * mult, nil
 }
 
-// ProjectHash lists the trust-gated files under dir (.stavlos/** except
-// stavlos.local.json, plus AGENTS.md) and hashes their contents (PRD §10.6).
+// ProjectHash lists the trust-gated files under dir (.stavlos/**, plus
+// AGENTS.md) and hashes their contents (PRD §10.6).
 func ProjectHash(dir string) ([]string, string, error) {
 	var files []string
 	pdir := paths.ProjectDir(dir)
@@ -947,9 +966,6 @@ func ProjectHash(dir string) ([]string, string, error) {
 			return err
 		}
 		if d.IsDir() {
-			return nil
-		}
-		if filepath.Base(p) == "stavlos.local.json" {
 			return nil
 		}
 		rel, _ := filepath.Rel(dir, p)
