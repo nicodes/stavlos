@@ -82,7 +82,7 @@ func (t *Transcript) applyChat(ev event.Event) {
 	}
 }
 
-// reply adds an agent's message to the human: "‹ @main …", the mirror of
+// reply adds an agent's message to the human, in grey: "‹ @main …", the mirror of
 // a post's "› …", read like the agent's reply in its own chat, with later
 // lines aligned under the text and a long one folded.
 func (t *Transcript) reply(agent string, p event.ChatPayload) {
@@ -97,8 +97,11 @@ func (t *Transcript) reply(agent string, p event.ChatPayload) {
 		lines = append([]Line{{Kind: LineText, Text: "@" + from}}, lines...)
 	}
 	lines[0].Glyph, lines[0].Who = GlyphReply, from
-	for i := 1; i < len(lines); i++ {
-		lines[i].Indent = 1
+	for i := range lines {
+		lines[i].Note = true // grey like an aside: only the human's posts keep the text colour
+		if i > 0 {
+			lines[i].Indent = 1
+		}
 	}
 	lines = append([]Line{{Kind: LineBlank}}, collapsed(lines)...)
 	t.appendItem(linked(CleanLines(append(lines, Line{Kind: LineBlank})), agent))

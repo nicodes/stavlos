@@ -52,9 +52,13 @@ func TestChatKeepsOnlyPostsAndReplies(t *testing.T) {
 	}
 	for _, l := range c.All() {
 		// the reply reads like an agent's reply: markdown prose, not a
-		// quoted block, and not dimmed like notes
-		if l.Text == "@scout Found it" && (l.Kind != LineHeading || l.Block != BlockNone || l.Note || l.Agent != "b2" || l.Glyph != GlyphReply) {
+		// quoted block, and grey like an aside (only the human's posts keep
+		// the text colour)
+		if l.Text == "@scout Found it" && (l.Kind != LineHeading || l.Block != BlockNone || !l.Note || l.Agent != "b2" || l.Glyph != GlyphReply) {
 			t.Fatalf("reply line: %+v", l)
+		}
+		if l.Lead && l.Note {
+			t.Fatalf("the human's post keeps the text colour: %+v", l)
 		}
 	}
 	for _, l := range c.All() {

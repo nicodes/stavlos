@@ -80,7 +80,7 @@ type Line struct {
 	Tone      Tone   // in progress / error; zero means "as is"
 	callID    string
 	Tool      string   // raw tool name on a LineTool line
-	Note      bool     // the agent's own text, which reaches no one: drawn dimmed
+	Note      bool     // drawn grey: the agent\'s aside, or an agent\'s reply in the channel chat (only the human\'s posts keep the text colour)
 	Agent     string   // in the channel chat: the agent this line links to
 	Who       string   // the @name this line leads with, whose colour its glyph and name take: an agent\'s name, or "user"
 	Names     []string // @names coloured wherever this line mentions them (a channel chat post\'s recipients)
