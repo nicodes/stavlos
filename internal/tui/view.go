@@ -278,9 +278,11 @@ type footerInfo struct {
 	window    int    // the model's context window; 0 hides the bar
 	tokens    int
 	cost      float64
+	channel   bool // the channel chat: the main agent\'s context percentage, then the channel\'s tokens
 }
 
-// footerRight builds the right side of the meta row: a sign-in nudge,
+// footerRight builds the usage on the divider over the input (a sign-in
+// nudge on the meta row instead while nothing is connected),
 // nothing on the home view (the left side already names the role and
 // model), or how full the context is and the cost ("2% · 22k/1.1m · $0.00",
 // or the channel's tokens when the window is unknown). The
@@ -294,6 +296,13 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
+	if f.channel { // "2% · 69k tokens · $0.00"
+		usage := format.Tokens(f.tokens) + " tokens · $" + format.Cost(f.cost)
+		if pct := contextPct(f.context, f.window); pct != "" {
+			usage = pct + " · " + usage
+		}
+		return usage
+	}
 	if bar := contextBar(f.context, f.window); bar != "" {
 		return bar + " · $" + format.Cost(f.cost) // the channel's total tokens are in the sidebar
 	}
@@ -304,18 +313,35 @@ func footerRight(f footerInfo) string {
 // is what auto-compaction watches (it summarises at 80%). Dim until 70%,
 // warning-coloured from there. "" when the window is unknown.
 func contextBar(context, window int) string {
-	if window <= 0 || context < 0 {
+	pct, st, ok := contextFill(context, window)
+	if !ok {
 		return ""
 	}
-	pct := context * 100 / window
-	if pct > 100 {
-		pct = 100
-	}
-	st := theme.StyleDim
-	if pct >= 70 {
-		st = theme.StyleWarn
-	}
 	return st.Render(fmt.Sprintf("%d%% · %s/%s", pct, format.Tokens(context), format.Tokens(window)))
+}
+
+// contextPct is contextBar's percentage alone, "31%", as the channel chat
+// shows it before the channel's tokens.
+func contextPct(context, window int) string {
+	pct, st, ok := contextFill(context, window)
+	if !ok {
+		return ""
+	}
+	return st.Render(fmt.Sprintf("%d%%", pct))
+}
+
+// contextFill is how full the context is, in percent (at most 100), and its
+// colour: dim until 70%, warning from there. ok is false while the window is
+// unknown.
+func contextFill(context, window int) (int, lipgloss.Style, bool) {
+	if window <= 0 || context < 0 {
+		return 0, lipgloss.Style{}, false
+	}
+	pct := min(context*100/window, 100)
+	if pct >= 70 {
+		return pct, theme.StyleWarn, true
+	}
+	return pct, theme.StyleDim, true
 }
 
 // --- view ---
@@ -419,7 +445,10 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 // each side. The left side is truncated first when they collide.
 func (m Model) metaRow(width int) string {
 	left, _ := m.metaLeft()
-	right := m.footerRightView()
+	right := "" // the usage sits on the divider over the input (ruleLine); only the sign-in nudge stays here
+	if !m.connected() {
+		right = m.footerRightView()
+	}
 	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {
 		avail := width - lipgloss.Width(right) - 4
@@ -519,7 +548,7 @@ func (m Model) channelView(width, height int) string {
 	// Under the rule: the palette (while open) and the input, a blank line,
 	// then the tab strip and the meta row (mode tag, role, model, variant,
 	// usage).
-	parts := []string{top, theme.StyleRule.Render(strings.Repeat("─", width))}
+	parts := []string{top, m.ruleLine(width)}
 	if pv := m.paletteViewFor(width); pv != "" {
 		parts = append(parts, pv)
 	}
@@ -1305,8 +1334,11 @@ func (m Model) statusLine(width int) string {
 
 func (m Model) footerRightView() string {
 	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.channel.Model}
-	if m.superChat { // the channel chat: the channel's tokens and cost, not one agent's context
-		f.tokens, f.cost = m.totalTokens(), m.totalCost()
+	if m.superChat { // the channel chat: the channel's tokens and cost, after the main agent's context (what a post with no mention reaches)
+		f.tokens, f.cost, f.channel = m.totalTokens(), m.totalCost(), true
+		if len(m.agents) > 0 {
+			f.context, f.window = m.agents[0].Context, m.agents[0].ContextWindow
+		}
 		return footerRight(f)
 	}
 	if a := m.selectedAgent(); a != nil {
@@ -1317,6 +1349,23 @@ func (m Model) footerRightView() string {
 		}
 	}
 	return footerRight(f)
+}
+
+// ruleLine is the divider over the input with the usage at its right end,
+// "──── 69k tokens · $0.00 ─": the channel's in the channel chat, the
+// selected agent's context and cost in its own. A plain rule while nothing
+// is connected (the meta row carries the sign-in nudge then) or when the
+// usage does not fit.
+func (m Model) ruleLine(width int) string {
+	usage := ""
+	if m.connected() {
+		usage = m.footerRightView()
+	}
+	w := lipgloss.Width(usage)
+	if usage == "" || w+4 > width {
+		return theme.StyleRule.Render(strings.Repeat("─", width))
+	}
+	return theme.StyleRule.Render(strings.Repeat("─", width-w-3)) + " " + usage + " " + theme.StyleRule.Render("─")
 }
 
 // connected reports whether a provider and a model are usable.
