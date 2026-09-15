@@ -1,0 +1,194 @@
+// Package auth is the credential store (PRD §8.4): the OAuth tokens of the
+// subscription logins (ChatGPT, Grok) made through /providers or
+// `stavlos auth login`, kept in <data dir>/auth.json with mode 0600, never
+// in project config. There are no API keys and no environment variables.
+package auth
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io/fs"
+	"maps"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Credential is one stored subscription login. Type is "oauth".
+type Credential struct {
+	Type  string `json:"type"`
+	Added string `json:"added,omitempty"`
+
+	// oauth
+	Access    string `json:"access,omitempty"`
+	Refresh   string `json:"refresh,omitempty"`
+	Expires   int64  `json:"expires,omitempty"` // unix milliseconds
+	AccountID string `json:"account_id,omitempty"`
+	Email     string `json:"email,omitempty"`
+}
+
+// Store reads and writes auth.json. Reads are served from memory while the
+// file's modification time and size are unchanged, so the per-request token
+// lookups of a running daemon cost a stat, not a read and a JSON decode;
+// a login made by another process is still seen at once.
+type Store struct {
+	path string
+	mu   sync.Mutex
+
+	cached  map[string]Credential // nil until the first load
+	modTime time.Time
+	size    int64
+}
+
+// Open returns a store at path; the file need not exist yet.
+func Open(path string) *Store { return &Store{path: path} }
+
+// Path returns the file path.
+func (s *Store) Path() string { return s.path }
+
+// load returns the stored credentials; callers hold mu and must not modify
+// the map (it is the cache).
+func (s *Store) load() (map[string]Credential, error) {
+	st, err := os.Stat(s.path)
+	if errors.Is(err, fs.ErrNotExist) {
+		s.remember(map[string]Credential{}, nil)
+		return s.cached, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if s.cached != nil && st.ModTime().Equal(s.modTime) && st.Size() == s.size {
+		return s.cached, nil
+	}
+	b, err := os.ReadFile(s.path)
+	if err != nil {
+		return nil, err
+	}
+	m := map[string]Credential{}
+	if len(strings.TrimSpace(string(b))) > 0 {
+		if err := json.Unmarshal(b, &m); err != nil {
+			return nil, fmt.Errorf("%s: %w", s.path, err)
+		}
+	}
+	s.remember(m, st)
+	return m, nil
+}
+
+func (s *Store) remember(m map[string]Credential, st fs.FileInfo) {
+	s.cached, s.modTime, s.size = m, time.Time{}, -1
+	if st != nil {
+		s.modTime, s.size = st.ModTime(), st.Size()
+	}
+}
+
+// save writes m through a temporary file of its own (mode 0600 from the
+// start) and renames it into place, then caches it.
+func (s *Store) save(m map[string]Credential) error {
+	dir := filepath.Dir(s.path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(dir, ".auth-*.json")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	_, err = f.Write(append(b, '\n'))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = os.Rename(tmp, s.path)
+	}
+	if err != nil {
+		os.Remove(tmp)
+		s.cached = nil
+		return err
+	}
+	st, err := os.Stat(s.path)
+	if err != nil {
+		s.cached = nil
+		return nil
+	}
+	s.remember(m, st)
+	return nil
+}
+
+// All returns a copy of every stored credential keyed by provider id.
+func (s *Store) All() (map[string]Credential, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	return maps.Clone(m), nil
+}
+
+// Get returns the credential for a provider.
+func (s *Store) Get(provider string) (Credential, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, err := s.load()
+	if err != nil {
+		return Credential{}, false
+	}
+	c, ok := m[norm(provider)]
+	return c, ok
+}
+
+// Set stores a credential, replacing any existing one.
+func (s *Store) Set(provider string, c Credential) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, err := s.load()
+	if err != nil {
+		return err
+	}
+	if c.Type == "" {
+		c.Type = "oauth"
+	}
+	if c.Added == "" {
+		c.Added = time.Now().UTC().Format(time.RFC3339)
+	}
+	m = maps.Clone(m)
+	m[norm(provider)] = c
+	return s.save(m)
+}
+
+// Remove deletes a provider's credential. Removing a missing one is not an error.
+func (s *Store) Remove(provider string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	m, err := s.load()
+	if err != nil {
+		return err
+	}
+	m = maps.Clone(m)
+	delete(m, norm(provider))
+	return s.save(m)
+}
+
+// Providers lists provider ids with stored credentials, sorted.
+func (s *Store) Providers() []string {
+	m, err := s.All()
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func norm(p string) string { return strings.TrimRight(strings.TrimSpace(p), "/") }
