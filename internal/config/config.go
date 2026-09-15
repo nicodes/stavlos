@@ -502,8 +502,6 @@ func (e *Effective) checkRepositoryFile(f File) error {
 		return errors.New("sandbox: is global only: a repository cannot widen the boundary its commands run in")
 	case len(f.Dirs) > 0:
 		return errors.New("dirs: is global only: a repository cannot add directories its agents may work in")
-	case f.Mode != "" && f.Mode != protocol.ModeAsk:
-		return errors.New("mode: a repository may only start channels in ask; auto and yolo are set in the global stavlos.json")
 	case f.Search != nil:
 		return errors.New("search: is global only: a repository cannot choose where queries and keys go")
 	case len(f.Plugins) > 0:
