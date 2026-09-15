@@ -291,14 +291,27 @@
     }
   },
   {
-    "description": "Your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep the list honest with update, by id. Keep exactly one item in_progress while you work; mark an item done the moment it is finished and verified, never before; cancel steps you drop; add a new item for a blocker instead of marking the blocked step done. One call can update items and add new ones. Returns the whole list with ids. Skip the list for single-step or trivial requests.",
+    "description": "Your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep the list honest by id. Keep exactly one item in_progress while you work; mark an item done the moment it is finished and verified, never before; cancel steps you drop; add a new item for a blocker instead of marking the blocked step done. One call carries every change you have: post the plan and start its first step together, and finish one step and start the next in the same call, never two. Updates apply before the additions, and the whole list comes back with its ids. Skip the list for single-step or trivial requests.",
     "name": "todo",
     "schema": {
       "properties": {
         "add": {
-          "description": "New steps to append, in order, each imperative and short (\"Run the tests\")",
+          "description": "New steps to append, in order; each may start at a status, so a plan and its first in_progress step are one call",
           "items": {
-            "type": "string"
+            "properties": {
+              "status": {
+                "description": "The status to start it in: pending (the default), in_progress, done, cancelled",
+                "type": "string"
+              },
+              "text": {
+                "description": "The step, imperative and short (\"Run the tests\")",
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
           },
           "type": "array"
         },

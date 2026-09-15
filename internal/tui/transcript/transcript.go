@@ -1662,26 +1662,8 @@ func ToolArg(name string, raw json.RawMessage) string {
 			return strings.Join(qs, " · ")
 		}
 		return ""
-	case toolname.Todo: // "t2 → done · Run the tests": the updates, then the steps added
-		var a struct {
-			Add    []string
-			Update []struct{ ID, Status, Text string }
-		}
-		if json.Unmarshal(raw, &a) != nil {
-			return ""
-		}
-		parts := make([]string, 0, len(a.Update)+len(a.Add))
-		for _, u := range a.Update {
-			part := u.ID
-			if u.Status != "" {
-				part += " → " + u.Status
-			}
-			if u.Text != "" {
-				part += "  " + u.Text
-			}
-			parts = append(parts, part)
-		}
-		return strings.Join(append(parts, a.Add...), " · ")
+	case toolname.Todo:
+		return todoArg(raw)
 	case toolname.Message:
 		to := str("to")
 		to = strings.TrimPrefix(to, "@")
@@ -1691,6 +1673,38 @@ func ToolArg(name string, raw json.RawMessage) string {
 		return "@" + to
 	}
 	return compactArgs(raw)
+}
+
+// todoArg is a todo call's summary, "t2 → done · Run the tests": the
+// updates by id, then the steps added, each with its status when it does
+// not start pending.
+func todoArg(raw json.RawMessage) string {
+	var a struct {
+		Add    []struct{ Text, Status string }
+		Update []struct{ ID, Status, Text string }
+	}
+	if json.Unmarshal(raw, &a) != nil {
+		return ""
+	}
+	parts := make([]string, 0, len(a.Update)+len(a.Add))
+	for _, u := range a.Update {
+		part := u.ID
+		if u.Status != "" {
+			part += " → " + u.Status
+		}
+		if u.Text != "" {
+			part += "  " + u.Text
+		}
+		parts = append(parts, part)
+	}
+	for _, it := range a.Add {
+		part := it.Text
+		if it.Status != "" && it.Status != "pending" {
+			part += " → " + it.Status
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, " · ")
 }
 
 // ToolTitle is the display name of a tool on its chat line: titleCase of
