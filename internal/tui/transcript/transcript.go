@@ -1755,7 +1755,7 @@ const (
 	GlyphToolCreate   = "»" // agent_create: the double of a prompt's ›, since it makes the agent it prompts
 	GlyphToolTodo     = "□" // todo_add, todo_update
 	GlyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
-	GlyphToolWeb      = "↗" // web_fetch
+	GlyphToolWeb      = "↓" // web_fetch: pulling a page in
 )
 
 // CallGlyph is a tool line's glyph and the gap after it: ToolGlyph of its
