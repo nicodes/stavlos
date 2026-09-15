@@ -2458,3 +2458,31 @@ func TestWireErrors(t *testing.T) {
 		t.Fatalf("message: %+v", r.Error)
 	}
 }
+
+// TestSessionPost: a chat message with no mention reaches the root, is
+// logged once on the session with who it went to, and a mention of no agent
+// is refused.
+func TestSessionPost(t *testing.T) {
+	setupConfig(t)
+	work := t.TempDir()
+	h := newHarness(t, t.TempDir(), &fakeModel{})
+	defer h.close()
+	ctx := context.Background()
+	s, _ := h.c.CreateSession(ctx, work, "", "")
+	_ = h.c.Subscribe(ctx, s.ID, 0)
+	agents, _ := h.c.Tree(ctx, s.ID)
+	root := agents[0].ID
+	to, err := h.c.Post(ctx, s.ID, "hello there")
+	if err != nil || len(to) != 1 || to[0] != "main" {
+		t.Fatalf("to %v err %v", to, err)
+	}
+	e := h.waitFor(event.ChatPosted, "")
+	var p event.ChatPayload
+	if _ = e.Decode(&p); p.Text != "hello there" || e.Agent != "" || len(p.To) != 1 {
+		t.Fatalf("chat.posted %+v on %q", p, e.Agent)
+	}
+	h.waitFor(event.TurnEnded, root)
+	if _, err := h.c.Post(ctx, s.ID, "@nobody hi"); err == nil || !strings.Contains(err.Error(), "@nobody") {
+		t.Fatalf("an unknown mention should be refused: %v", err)
+	}
+}

@@ -209,6 +209,15 @@ func (c *Client) SetSessionMode(ctx context.Context, id, mode string) error {
 	return c.Call(ctx, protocol.MSessionSetMode, protocol.SessionSetModeParams{ID: id, Mode: mode}, nil)
 }
 
+// Post sends the human's message to the session chat: every @mentioned
+// agent gets it as a steer, the root agent when none is mentioned. It
+// returns the names of the agents it went to.
+func (c *Client) Post(ctx context.Context, session, text string) ([]string, error) {
+	var r protocol.SessionPostResult
+	err := c.Call(ctx, protocol.MSessionPost, protocol.SessionPostParams{ID: session, Text: text}, &r)
+	return r.To, err
+}
+
 func (c *Client) Tree(ctx context.Context, session string) ([]protocol.AgentInfo, error) {
 	var r protocol.AgentTreeResult
 	err := c.Call(ctx, protocol.MAgentTree, protocol.AgentTreeParams{Session: session}, &r)

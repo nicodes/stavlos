@@ -22,7 +22,9 @@ Tokens live in `~/.local/share/stavlos/auth.json` (mode 0600) and refresh automa
 
 ### Talking to agents
 
-Type to talk to the selected agent. The input grows as your message wraps; ctrl+j breaks a line and enter sends. If the agent is busy, your message reaches it at its next step. `/queue <text>` waits for the current turn to end instead, and esc pressed twice on an empty input cancels the current turn (the first press warns).
+A session opens on its chat, where you talk to every agent. `@name` delivers your message to that agent (several mentions deliver it to each, and `@` autocompletes names); a message with no mention goes to `main`, the root agent. A mention that names no agent refuses the message. Agents answer you there with `message`, and permission prompts and questions show there with the agent that raised them: space on one opens that agent's own chat. Tool calls stay out of it.
+
+Selecting an agent in the sidebar opens its own chat, with its tool calls and notes, where typing talks to that agent alone. The "# chat" row at the top of the sidebar, or `/chat`, goes back. If an agent is busy, your message reaches it at its next step. The input grows as your message wraps; ctrl+j breaks a line and enter sends. If the agent is busy, your message reaches it at its next step. `/queue <text>` waits for the current turn to end instead, and esc pressed twice on an empty input cancels the current turn (the first press warns).
 
 Agents reply with the `message` tool, to you or to another agent. The text an agent ends a turn with is its notes: it reaches no one and shows dimmed in its chat. Every message an agent receives, from you or from another agent, is owed a reply. A turn that ends without one gets a single reminder, and if the next turn still does not reply, the chat marks that the agent ended without replying. `"reminders": false` in `stavlos.json` turns the reminder off.
 
@@ -50,7 +52,7 @@ A strip under the input holds six tabs, each always there with its count: "permi
 
 ### The sidebar
 
-The sidebar (ctrl+b) is the swarm nav: the session directory, its tokens and cost, the swarm state (`3 working · 1 waiting`), then the agent tree with a `!` or `?` badge on any agent whose permission or question is pending and its cost at the right edge. ↑/↓ move, space selects, `n` jumps to the next agent waiting on you, and a click on a row selects it.
+The sidebar (ctrl+b) is the swarm nav: the session directory, its tokens and cost, the swarm state (`3 working · 1 waiting`), then the "# chat" row and the agent tree with a `!` or `?` badge on any agent whose permission or question is pending and its cost at the right edge. ↑/↓ move, space selects, `n` jumps to the next agent waiting on you, and a click on a row selects it.
 
 Under the tree, a folded "sessions" section lists this directory's other sessions, each with a state dot (full orange while an agent works, half while one waits, empty when idle). Space unfolds it, and space on a session resumes it in place.
 

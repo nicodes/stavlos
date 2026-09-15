@@ -572,6 +572,53 @@ func (s *Session) Steer(ctx context.Context, agentID, text, source string) error
 	return a.Steer(ctx, text, source)
 }
 
+// Post is the human's message in the session chat (docs/super-chat.md):
+// it is delivered as a steer to every agent it @mentions, or to the root
+// when it mentions none, and logged once on the session as chat.posted. A
+// mention that names no live agent refuses the whole message before
+// anything is delivered. It returns the names it went to.
+func (s *Session) Post(ctx context.Context, text, source string) ([]string, error) {
+	if strings.TrimSpace(text) == "" {
+		return nil, errors.New("empty message")
+	}
+	var targets []*Agent
+	seen := map[string]bool{}
+	for _, ref := range protocol.Mentions(text) {
+		a, ok := s.resolve(ref)
+		if !ok {
+			return nil, fmt.Errorf("no agent named @%s in this session", ref)
+		}
+		if !a.Alive() {
+			return nil, fmt.Errorf("@%s is %s", ref, a.StateOf())
+		}
+		if !seen[a.ID] {
+			seen[a.ID] = true
+			targets = append(targets, a)
+		}
+	}
+	if len(targets) == 0 {
+		root := s.Root()
+		if root == nil {
+			return nil, errors.New("the session has no agents")
+		}
+		targets = []*Agent{root}
+	}
+	names := make([]string, len(targets))
+	for i, a := range targets {
+		names[i] = a.LabelNow()
+	}
+	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.ChatPosted,
+		Payload: event.MustPayload(event.ChatPayload{Text: text, To: names})}); err != nil {
+		return nil, err
+	}
+	for _, a := range targets {
+		if err := a.Steer(ctx, text, source); err != nil {
+			return names, err
+		}
+	}
+	return names, nil
+}
+
 // Cancel ends the current turn.
 func (s *Session) Cancel(agentID string) error {
 	a, ok := s.Agent(agentID)

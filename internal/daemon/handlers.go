@@ -143,6 +143,17 @@ var handlers = map[string]handler{
 		c.d.rememberModel(s, p.Model)
 		return okResult, nil
 	}),
+	protocol.MSessionPost: typed(func(ctx context.Context, c *conn, p protocol.SessionPostParams) (any, error) {
+		s, err := c.d.session(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		to, err := s.Post(ctx, p.Text, "human:"+c.cl.name)
+		if err != nil {
+			return nil, err
+		}
+		return protocol.SessionPostResult{To: to}, nil
+	}),
 	protocol.MSessionSetMode: typed(func(ctx context.Context, c *conn, p protocol.SessionSetModeParams) (any, error) {
 		s, err := c.d.session(p.ID)
 		if err != nil {

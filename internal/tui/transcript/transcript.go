@@ -81,6 +81,7 @@ type Line struct {
 	callID  string
 	Tool    string // raw tool name on a LineTool line
 	Note    bool   // the agent's own text, which reaches no one: drawn dimmed
+	Agent   string // in the session chat: the agent this line links to
 }
 
 // Tone colours a line's glyph by lifecycle: yellow while in progress, red
@@ -169,6 +170,9 @@ type Transcript struct {
 	turnTokens  int       // input + output tokens used so far this turn
 	turnVerb    string    // the indicator's verb for this turn ("Galloping")
 	compactItem int       // item of the running compaction's rule (replaced by the result), -1 when none
+
+	chat  bool              // the session chat (chat.go), not one agent's transcript
+	names map[string]string // in the chat: agent id → name
 }
 
 // turnVerbs are the horse-flavoured labels the turn indicator cycles
@@ -211,6 +215,10 @@ func NewTranscript() *Transcript {
 // a turn) replaces the in-progress streaming buffer; tool.call.finished
 // updates the matching tool line and nests the output under it.
 func (t *Transcript) Apply(ev event.Event) {
+	if t.chat {
+		t.applyChat(ev)
+		return
+	}
 	if t.applyCompaction(ev) {
 		return
 	}

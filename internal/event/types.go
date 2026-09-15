@@ -18,11 +18,12 @@ const (
 	SessionModelChanged Type = "session.model_changed" // ModelChangedPayload
 	SessionYoloChanged  Type = "session.yolo_changed"  // YoloPayload (legacy: replayed as mode yolo/ask; new logs carry SessionModeChanged)
 	SessionModeChanged  Type = "session.mode_changed"  // ModePayload: the session's permission mode (ask | auto | yolo)
+	ChatPosted          Type = "chat.posted"           // ChatPayload: the human\'s message in the session chat, logged on the session, and the agents it went to
 
 	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
 	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload (legacy: agents no longer finish; kept for old logs)
 	ResponseReceived    Type = "agent.response"        // ResponsePayload: an answer from another agent, logged on the recipient
-	MessageToUser       Type = "agent.message_to_user" // TextPayload: a message tool call addressed to the human, logged on the sender
+	MessageToUser       Type = "agent.message_to_user" // ChatPayload: a message tool call addressed to the human, logged on the sender
 	ReminderQueued      Type = "agent.reminder_queued" // RepliesPayload: a turn ended owing replies; one reminder starts the next turn
 	ReplyMissing        Type = "agent.reply_missing"   // RepliesPayload: a turn ended still owing replies it was reminded of
 	AgentKilled         Type = "agent.killed"          // AgentRefPayload
@@ -279,6 +280,15 @@ type UserMessagePayload struct {
 	// its id (logs from before it carry the name only).
 	From   string `json:"from,omitempty"`
 	FromID string `json:"from_id,omitempty"`
+}
+
+// ChatPayload is a message in the session chat: the human's post (To: the
+// names of the agents it was delivered to) or an agent's message to the
+// human (From: the agent's name).
+type ChatPayload struct {
+	From string   `json:"from,omitempty"`
+	Text string   `json:"text"`
+	To   []string `json:"to,omitempty"`
 }
 
 // RepliesPayload names the parties a turn ended owing a reply: "user" or

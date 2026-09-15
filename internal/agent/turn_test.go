@@ -729,8 +729,8 @@ func TestMessageToUser(t *testing.T) {
 	s, h := newTestSession(t, testConfig{}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "go")
-	var p event.TextPayload
-	if sent := h.ofType(event.MessageToUser, root.ID); len(sent) != 1 || sent[0].Decode(&p) != nil || p.Text != "done: see a.go" {
+	var p event.ChatPayload
+	if sent := h.ofType(event.MessageToUser, root.ID); len(sent) != 1 || sent[0].Decode(&p) != nil || p.Text != "done: see a.go" || p.From != "main" {
 		t.Fatalf("%+v\n%s", p, h.dump())
 	}
 	fin := h.ofType(event.ToolCallFinished, root.ID)

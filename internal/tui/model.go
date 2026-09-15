@@ -44,6 +44,8 @@ func Run(ctx context.Context, c *client.Client, sessionID string) error {
 	defer cancel()
 
 	m := newModel(ctx, c, sessionID)
+	m.superChat = true // the session chat is the default view
+	m.input.Placeholder = m.placeholder()
 	p := tea.NewProgram(m, tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseAllMotion())
 	go forwardNotifications(ctx, c, p)
 
@@ -126,6 +128,7 @@ type sessionState struct {
 	parentOf    map[string]string    // child agent id → parent id, for the parent's agent_create line
 	transcripts map[string]*transcript.Transcript
 	renders     map[string]*render.Cache // per agent: rendered rows of its transcript's items
+	superChat   bool                     // the session chat is shown instead of the selected agent's own (docs/super-chat.md)
 	seq         int64
 	loading     bool  // replaying events up to replayTo
 	replayTo    int64 // seq from reconcile
@@ -391,7 +394,7 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 		}
 		return cmd
 	case placeholderTickMsg:
-		m.input.Placeholder = placeholders[placeholderIndex(time.Now())]
+		m.input.Placeholder = m.placeholder()
 		return placeholderTickCmd()
 	case compactTickMsg:
 		if !m.anyCompacting() {
@@ -442,7 +445,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case streamMsg:
 		if msg.n.Session == "" || msg.n.Session == m.sessionID {
 			m.transcript(msg.n.Agent).ApplyStream(msg.n)
-			if msg.n.Agent == m.selectedID() {
+			if msg.n.Agent == m.viewID() {
 				m.refreshViewport()
 			}
 		}
@@ -820,7 +823,10 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	case focusQuestions:
 		m.q.bind(m.currentQuestion())
 	case focusSidebar:
-		m.sbCursor = m.selected
+		m.sbCursor = 0 // the chat row
+		if !m.superChat {
+			m.sbCursor = m.selected + 1
+		}
 	case focusAsync, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0
 	case focusMeta:
@@ -846,11 +852,7 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 		if n == 0 || m.agCursor%n >= len(agents) {
 			return nil // a job row: nothing to select
 		}
-		if i := m.findAgent(agents[m.agCursor%n].ID); i >= 0 && i != m.selected {
-			m.selected = i
-			m.follow = true
-			m.refreshViewport()
-		}
+		m.openAgent(m.findAgent(agents[m.agCursor%n].ID))
 		return m.closeDialog()
 	}
 	return nil
@@ -1834,7 +1836,7 @@ func (m *Model) selectionChanged() {
 
 // chatItems is the item count of the selected transcript.
 func (m *Model) chatItems() int {
-	if t := m.transcripts[m.selectedID()]; t != nil {
+	if t := m.transcripts[m.viewID()]; t != nil {
 		return t.Items()
 	}
 	return 0
@@ -1874,7 +1876,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 
 	// While the "/" palette is open in the input, tab completes the command
 	// (handled below) instead of cycling focus.
-	paletteOpen := m.focus == focusInput && len(paletteMatches(m.input.Value())) > 0
+	paletteOpen := m.focus == focusInput && (len(paletteMatches(m.input.Value())) > 0 || len(m.mentionMatches()) > 0)
 
 	// Section-independent keys.
 	switch {
@@ -1921,6 +1923,9 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 // busy turn), tab to complete a command, enter to run or send; anything
 // else edits the text.
 func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
+	if m.mentionKey(msg) {
+		return nil
+	}
 	switch {
 	case key.Matches(msg, keys.PageUp):
 		m.vp.PageUp()
@@ -2002,6 +2007,27 @@ func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
 		m.palIdx = 0
 	}
 	return cmd
+}
+
+// mentionKey handles the @name dropdown while it is open in the session
+// chat: ↑/↓ pick a name, tab or enter completes it. It reports whether it
+// used the key.
+func (m *Model) mentionKey(msg tea.KeyMsg) bool {
+	mm := m.mentionMatches()
+	if len(mm) == 0 {
+		return false
+	}
+	switch {
+	case key.Matches(msg, keys.SelUp):
+		m.palIdx = (m.palIdx - 1 + len(mm)) % len(mm)
+	case key.Matches(msg, keys.SelDown):
+		m.palIdx = (m.palIdx + 1) % len(mm)
+	case msg.Type == tea.KeyTab, key.Matches(msg, keys.Submit):
+		m.completeMention(mm[m.clampPal(len(mm))])
+	default:
+		return false
+	}
+	return true
 }
 
 func (m *Model) clampPal(n int) int {
@@ -2190,7 +2216,9 @@ func (m *Model) chatKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.ChatBottom):
 		m.moveCursor(m.chatItems())
 	case key.Matches(msg, keys.Select):
-		m.toggleItem()
+		if !m.followChatLink() {
+			m.toggleItem()
+		}
 	}
 	return nil
 }
@@ -2240,11 +2268,11 @@ func (m *Model) scrollToCursor() {
 // toggleItem flips the cursor item's tool output between expanded and
 // collapsed (a per-item override of /details). Other items are inert.
 func (m *Model) toggleItem() {
-	t := m.transcripts[m.selectedID()]
+	t := m.transcripts[m.viewID()]
 	if t == nil || !transcript.ItemIsTool(t.All(), m.chatCursor) {
 		return
 	}
-	e := m.agentExpanded(m.selectedID())
+	e := m.agentExpanded(m.viewID())
 	cur, ok := e[m.chatCursor]
 	if !ok {
 		cur = m.details
@@ -2264,6 +2292,9 @@ func (m *Model) submit() tea.Cmd {
 	m.pushHistory(text)
 	if strings.HasPrefix(text, "/") {
 		return m.command(text)
+	}
+	if m.superChat {
+		return postCmd(m.ctx, m.c, m.sessionID, text) // the daemon delivers it by @mention
 	}
 	agent := m.selectedID()
 	if agent == "" {
@@ -2298,6 +2329,8 @@ func (m *Model) command(text string) tea.Cmd {
 		return m.setStatus("key bar shown (/help hides it)", false)
 	case "/tree":
 		return m.toggleTree()
+	case "/chat":
+		return m.openChat()
 	case "/roles", "/role", "/presets":
 		// The one role dialog: enter switches the selected agent's preset.
 		// A name argument sets it directly.
@@ -2358,7 +2391,13 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	m.followChild(ev)
 	if target != "" {
 		m.transcript(target).Apply(ev)
-		if !m.loading && target == m.selectedID() {
+		if !m.loading && target == m.viewID() {
+			m.refreshViewport()
+		}
+	}
+	if transcript.ChatEvent(ev.Type) {
+		m.transcript(chatView).Apply(ev)
+		if !m.loading && m.superChat {
 			m.refreshViewport()
 		}
 	}
@@ -2438,7 +2477,7 @@ func (m *Model) onAgentSpawned(ev event.Event) string {
 		}
 		m.parentOf[p.ID] = p.Parent
 		m.transcript(p.Parent).ChildSpawned(p.ID)
-		if !m.loading && p.Parent == m.selectedID() {
+		if !m.loading && p.Parent == m.viewID() {
 			m.refreshViewport()
 		}
 	}
@@ -2767,8 +2806,7 @@ func (m *Model) moveSelection(delta int) tea.Cmd {
 	if n == 0 {
 		return nil
 	}
-	m.selected = wrapIndex(m.selected+delta, n)
-	m.selectionChanged()
+	m.openAgent(wrapIndex(m.selected+delta, n))
 	if !m.sidebarVisible() {
 		return m.setStatusFor("→ "+m.agents[m.selected].Label, false, selectDuration)
 	}
@@ -2811,13 +2849,9 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.Select):
 		return m.sidebarSelect(m.sbCursor)
 	case msg.String() == "n": // the next agent that needs you, selected at once
-		if i := m.nextNeedy(m.sbCursor); i >= 0 {
-			m.sbCursor = i
-			if i != m.selected {
-				m.selected = i
-				m.follow = true
-				m.refreshViewport()
-			}
+		if i := m.nextNeedy(m.sbCursor - 1); i >= 0 {
+			m.sbCursor = i + 1
+			m.openAgent(i)
 		} else {
 			return m.setStatus("no agent is waiting on you", false)
 		}
@@ -2839,43 +2873,43 @@ func (m *Model) nextNeedy(from int) int {
 	return -1
 }
 
-// sidebarItems is how many rows the sidebar cursor can rest on: the
-// agents, the sessions heading, and the sessions while the section is
-// open.
+// sidebarItems is how many rows the sidebar cursor can rest on: the chat,
+// the agents, the sessions heading, and the sessions while the section is
+// open. The cursor counts them in that order: 0 is the chat, agent i is
+// i+1, the heading len(agents)+1.
 func (m *Model) sidebarItems() int {
-	n := len(m.agents) + 1
+	n := len(m.agents) + 2
 	if m.navSessionsOpen {
 		n += len(m.navSessions)
 	}
 	return n
 }
 
-// sidebarSelect acts on the item under the cursor: an agent is selected
-// (and the input focused), the sessions heading folds or unfolds, a
-// session is resumed in place of the current one.
+// sidebarSelect acts on the item under the cursor: the chat row shows the
+// session chat and an agent row that agent's own chat (both focus the
+// input), the sessions heading folds or unfolds, a session is resumed in
+// place of the current one.
 func (m *Model) sidebarSelect(i int) tea.Cmd {
 	na := len(m.agents)
 	switch {
-	case i < na:
-		if i != m.selected {
-			m.selected = i
-			m.follow = true
-			m.refreshViewport()
-		}
+	case i == 0:
+		return tea.Batch(m.openChat(), m.setFocus(focusInput))
+	case i <= na:
+		m.openAgent(i - 1)
 		return m.setFocus(focusInput)
-	case i == na:
+	case i == na+1:
 		m.navSessionsOpen = !m.navSessionsOpen
 		return nil
-	case i-na-1 < len(m.navSessions):
-		s := m.navSessions[i-na-1]
+	case i-na-2 < len(m.navSessions):
+		s := m.navSessions[i-na-2]
 		return tea.Batch(m.setStatus("resuming "+sessionTitle(s), false), switchSessionCmd(m.ctx, m.c, m.sessionID, s.ID))
 	}
 	return nil
 }
 
 // sidebarClick focuses the sidebar and acts on the row under the pointer
-// like space: an agent row selects that agent (the sidebar keeps focus),
-// the sessions heading toggles, a session row resumes it.
+// like space: the chat row or an agent row opens that chat (the sidebar
+// keeps focus), the sessions heading toggles, a session row resumes it.
 func (m *Model) sidebarClick(y int) tea.Cmd {
 	cmd := m.setFocus(focusSidebar)
 	_, items := m.sidebarBody(sidebarWidth - 1)
@@ -2885,12 +2919,11 @@ func (m *Model) sidebarClick(y int) tea.Cmd {
 	}
 	i := items[row]
 	m.sbCursor = i
-	if i < len(m.agents) {
-		if i != m.selected {
-			m.selected = i
-			m.follow = true
-			m.refreshViewport()
-		}
+	switch {
+	case i == 0:
+		return tea.Batch(cmd, m.openChat())
+	case i <= len(m.agents):
+		m.openAgent(i - 1)
 		return cmd
 	}
 	return tea.Batch(cmd, m.sidebarSelect(i))
@@ -2940,9 +2973,70 @@ func (m *Model) transcript(id string) *transcript.Transcript {
 	t := m.transcripts[id]
 	if t == nil {
 		t = transcript.NewTranscript()
+		if id == chatView {
+			t = transcript.NewChat()
+		}
 		m.transcripts[id] = t
 	}
 	return t
+}
+
+// chatView keys the session chat in transcripts, renders and expanded; it
+// is never an agent id.
+const chatView = "#chat"
+
+// viewID is what the chat area shows: the session chat, or the selected
+// agent's own transcript.
+func (m *Model) viewID() string {
+	if m.superChat {
+		return chatView
+	}
+	return m.selectedID()
+}
+
+// openChat shows the session chat, where typing posts to the session.
+func (m *Model) openChat() tea.Cmd {
+	if !m.superChat {
+		m.superChat = true
+		m.selectionChanged()
+	}
+	m.input.Placeholder = m.placeholder()
+	return nil
+}
+
+// openAgent selects agent i and shows its own chat, where typing messages
+// that agent alone.
+func (m *Model) openAgent(i int) {
+	if i < 0 || i >= len(m.agents) || i == m.selected && !m.superChat {
+		return
+	}
+	m.selected, m.superChat = i, false
+	m.input.Placeholder = m.placeholder()
+	m.selectionChanged()
+}
+
+// followChatLink opens the agent the session chat's cursor item links to
+// (its message, its prompt). It reports whether there was one.
+func (m *Model) followChatLink() bool {
+	t := m.transcripts[chatView]
+	if !m.superChat || t == nil {
+		return false
+	}
+	i := m.findAgent(transcript.ItemAgent(t.All(), m.chatCursor))
+	if i < 0 {
+		return false
+	}
+	m.openAgent(i)
+	return true
+}
+
+// placeholder is the input's hint: how the session chat addresses agents,
+// or a cycling suggestion in an agent's own chat.
+func (m *Model) placeholder() string {
+	if m.superChat {
+		return "Message the session · @name addresses an agent, no mention goes to the root"
+	}
+	return placeholders[placeholderIndex(time.Now())]
 }
 
 // totalTokens sums every agent's tokens for the session rollup.
@@ -3010,7 +3104,7 @@ func (m *Model) layout() {
 // refreshViewport re-renders the selected transcript into the viewport,
 // marking the cursor item while the chat has focus.
 func (m *Model) refreshViewport() {
-	t := m.transcripts[m.selectedID()]
+	t := m.transcripts[m.viewID()]
 	n := 0
 	if t != nil {
 		n = t.Items()
@@ -3028,7 +3122,7 @@ func (m *Model) refreshViewport() {
 		active = m.activeTodo()
 	}
 	for _, p := range m.prompts {
-		if p.Agent == m.selectedID() {
+		if m.superChat || p.Agent == m.selectedID() {
 			waiting = true
 			break
 		}
@@ -3042,7 +3136,7 @@ func (m *Model) refreshViewport() {
 		Verb:     verb,
 		Active:   active,
 		Stats:    stats,
-		Expanded: m.expanded[m.selectedID()],
+		Expanded: m.expanded[m.viewID()],
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,
 
@@ -3051,7 +3145,7 @@ func (m *Model) refreshViewport() {
 	var content string
 	var rows map[int]render.RowRange
 	if t != nil {
-		content, rows = render.Transcript(t, m.chatCache(m.selectedID()), opts) // unchanged items come from the cache
+		content, rows = render.Transcript(t, m.chatCache(m.viewID()), opts) // unchanged items come from the cache
 	} else {
 		content, rows = render.Lines(nil, opts)
 	}
@@ -3526,6 +3620,8 @@ func sessionItem(s protocol.SessionInfo, current bool) overlayItem {
 // piece of state starts over and a fresh reconcile replays its history.
 func (m *Model) bindSession(info protocol.SessionInfo) tea.Cmd {
 	m.sessionState = newSessionState(info.ID, info)
+	m.superChat = true
+	m.input.Placeholder = m.placeholder()
 	m.follow = true
 	m.input.Reset()
 	m.refreshViewport()

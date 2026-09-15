@@ -69,7 +69,7 @@ func (o orchestrator) Message(caller, to, text string) (string, error) {
 	from, hasFrom := o.s.Agent(caller)
 	if to == tools.User {
 		if _, err := o.s.host.Append(context.Background(), event.Event{Session: o.s.ID, Agent: caller, Type: event.MessageToUser,
-			Payload: event.MustPayload(event.TextPayload{Text: text})}); err != nil {
+			Payload: event.MustPayload(event.ChatPayload{From: o.s.senderLabel("agent:" + caller), Text: text})}); err != nil {
 			return "", err
 		}
 		if hasFrom {

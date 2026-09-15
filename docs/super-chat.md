@@ -1,6 +1,6 @@
 # Super chat
 
-A session-wide chat where the human talks to any agent by name and agents talk back on purpose. Decided 2026-09-14.
+A session-wide chat where the human talks to any agent by name and agents talk back on purpose. Decided 2026-09-14; all four steps are built.
 
 ## Decisions
 
