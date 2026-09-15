@@ -534,8 +534,7 @@ func (m Model) sidebarView(height int) string {
 
 // sidebarHeader is what precedes the tree: the app name, a blank, the
 // channel directory, the channel's tokens and cost (the rollup of what
-// the meta row shows per agent), the swarm state ("3 working · 1
-// waiting", or "idle"), a blank, the ! and ? tabs (sidebarTabsRow; every
+// the meta row shows per agent), a blank, the ! and ? tabs (sidebarTabsRow; every
 // channel's prompts, so above the channels; the footer strip keeps only the
 // agent's row while the sidebar shows, and dirs sits behind each channel's
 // gear), and a blank; the "channels" title is the body's first row. The tree's
@@ -552,19 +551,22 @@ func (m Model) sidebarHeader(width int) []string {
 		"",
 		theme.StyleDim.Render(format.Trunc(dir, width)),
 		theme.StyleDim.Render(format.Trunc(usage, width)),
-		theme.StyleDim.Render(format.Trunc(m.swarmLine(), width)),
 		"",
 		ansi.Truncate(strings.Split(labels, "\n")[0], width, "…"),
 		"",
 	}
 }
 
+// newChannelMark sits at the right of the channels title, in the gears'
+// column: a click on it, or space or → on the title, names a new channel.
+const newChannelMark = "✚"
+
 // channelGear ends every channel row: → on the row or a click on it opens the
 // channel's dirs.
 const channelGear = "⚙"
 
 // sidebarTabsRow is the sidebar header row that holds the ! and ? tabs.
-const sidebarTabsRow = 6
+const sidebarTabsRow = 5
 
 // stripRows is how many tab rows the footer strip draws: both, or only the
 // agent's while the sidebar shows the ! ? dirs row.
@@ -607,7 +609,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	}
 	// the "channels" title, with its + (a new channel) a space in from the
 	// right edge, in the gears' column
-	line(theme.StyleBold.Render("channels")+strings.Repeat(" ", max(1, width-10))+theme.StyleDim.Render("+")+" ", 0)
+	line(theme.StyleBold.Render("channels")+strings.Repeat(" ", max(1, width-10))+theme.StyleDim.Render(newChannelMark)+" ", 0)
 	here, na := m.channelRow(), len(m.agents)
 	for k := 0; k < here-1; k++ {
 		other(m.navChannels[k], 1+k)
@@ -646,31 +648,6 @@ func channelLabel(s protocol.ChannelInfo) string {
 		return "#channel"
 	}
 	return "#" + s.Name
-}
-
-// swarmLine counts the agents working and waiting on an answer; "idle"
-// when neither.
-func (m Model) swarmLine() string {
-	var working, waiting int
-	for _, a := range m.agents {
-		switch agentOutcome(a) {
-		case "working":
-			working++
-		case "waiting":
-			waiting++
-		}
-	}
-	var parts []string
-	if working > 0 {
-		parts = append(parts, fmt.Sprintf("%d working", working))
-	}
-	if waiting > 0 {
-		parts = append(parts, fmt.Sprintf("%d waiting", waiting))
-	}
-	if len(parts) == 0 {
-		return "idle"
-	}
-	return strings.Join(parts, " · ")
 }
 
 // needsHuman is the badge for an agent with a prompt of its own waiting:
