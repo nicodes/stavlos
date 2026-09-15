@@ -20,6 +20,8 @@ func TestClean(t *testing.T) {
 		"unicode ünïcödé — ok":                           "unicode ünïcödé — ok",
 		"\x1b":                                           "",
 		"\x1b[":                                          "",
+		"access = \u202euser\u2066 \u2069admin":          "access = user admin",
+		"zero\u200bwidth stays":                          "zero\u200bwidth stays",
 	}
 	for in, want := range cases {
 		if got := Clean(in); got != want {
@@ -33,10 +35,29 @@ func TestVisible(t *testing.T) {
 		"rm -rf ~ \x1b[2K\x1b[1Gls -la": "rm -rf ~ ^[^[ls -la",
 		"a\x01b\x7fc\x9b2Kd":            "a^Ab^?c<9b>d",
 		"clean":                         "clean",
+		"is\u202eadmin":                 "is<U+202E>admin",
+		"a\u200bb":                      "a<U+200B>b",
 	}
 	for in, want := range cases {
 		if got := Visible(in); got != want {
 			t.Errorf("Visible(%q) = %q want %q", in, got, want)
+		}
+	}
+}
+
+func TestFrame(t *testing.T) {
+	cases := map[string]string{
+		"\x1b[1;38;2;255;0:1mbold\x1b[0m": "\x1b[1;38;2;255;0:1mbold\x1b[0m",
+		"\x1b[2Jcleared\x1b[H":            "cleared",
+		"\x1b]0;title\x07text":            "text",
+		"\x1b[?25lx\rcr":                  "xcr",
+		"rtl\u202etxt":                    "rtltxt",
+		"line\nnext\ttab":                 "line\nnext\ttab",
+		"\x1b[31":                         "",
+	}
+	for in, want := range cases {
+		if got := Frame(in); got != want {
+			t.Errorf("Frame(%q) = %q want %q", in, got, want)
 		}
 	}
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/tui/dialog"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/theme"
@@ -130,7 +131,7 @@ func (o *overlay) setLogin(url, code, instructions string) {
 }
 
 // setLoginError replaces the waiting line with err.
-func (o *overlay) setLoginError(err string) { o.login.err = err }
+func (o *overlay) setLoginError(err string) { o.login.err = textsafe.Clean(err) }
 
 // filterItems keeps items whose id or label contains query (case-insensitive),
 // preserving the given order. An empty query keeps everything.

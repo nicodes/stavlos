@@ -35,6 +35,7 @@ import (
 	"github.com/nicodes/stavlos/internal/daemon"
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/tui"
 	"github.com/nicodes/stavlos/pkg/client"
 )
@@ -237,9 +238,9 @@ func cmdTrust(ctx context.Context, _ string, args []string) error {
 		fmt.Println("nothing pending for", d)
 		return nil
 	}
-	fmt.Printf("Project configuration in %s is not yet trusted. It can start MCP servers, tighten policy, add roles and skills, and instruct agents.\nFiles:\n", d)
+	fmt.Printf("Project configuration in %s is not yet trusted. It can start MCP servers, tighten policy, add roles and skills, and instruct agents.\nFiles:\n", textsafe.Visible(d))
 	for _, f := range st.Files {
-		fmt.Println("  ", f)
+		fmt.Println("  ", textsafe.Visible(f)) // a repository's file names: controls shown, never obeyed
 	}
 	fmt.Print("Trust it? [y/N] ")
 	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')

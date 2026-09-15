@@ -3370,7 +3370,7 @@ func (m *Model) setStatus(text string, isErr bool) tea.Cmd {
 }
 
 func (m *Model) setStatusFor(text string, isErr bool, d time.Duration) tea.Cmd {
-	m.status, m.statusErr = text, isErr
+	m.status, m.statusErr = textsafe.Clean(text), isErr // errors carry the daemon's and providers' text
 	m.statusToken++
 	return clearStatusCmd(m.statusToken, d)
 }
