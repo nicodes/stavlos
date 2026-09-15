@@ -1,7 +1,6 @@
 package chatcompletions
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
@@ -53,15 +52,7 @@ func assistantMessage(blocks []model.Block) chatMessage {
 				texts = append(texts, b.Text)
 			}
 		case model.BlockToolUse:
-			args := string(b.Input)
-			if args == "" {
-				args = "{}"
-			}
-			calls = append(calls, toolCall{
-				ID:       b.ID,
-				Type:     "function",
-				Function: toolFunction{Name: b.Name, Arguments: args},
-			})
+			calls = append(calls, toolCall{ID: b.ID, Type: "function", Function: toolFunction{Name: b.Name, Arguments: model.ToolArguments(b)}})
 		}
 	}
 	msg := chatMessage{Role: "assistant", ToolCalls: calls}
@@ -79,11 +70,7 @@ func userMessages(blocks []model.Block) []chatMessage {
 	for _, b := range blocks {
 		switch b.Type {
 		case model.BlockToolResult:
-			content := b.Content
-			if b.IsError && !strings.HasPrefix(content, "Error") {
-				content = "Error: " + content
-			}
-			out = append(out, chatMessage{Role: "tool", ToolCallID: b.ToolUseID, Content: strp(content)})
+			out = append(out, chatMessage{Role: "tool", ToolCallID: b.ToolUseID, Content: strp(model.ToolResultText(b))})
 		case model.BlockText:
 			if b.Text != "" {
 				texts = append(texts, b.Text)
@@ -102,14 +89,7 @@ func toTools(defs []model.ToolDef) []chatTool {
 	}
 	out := make([]chatTool, 0, len(defs))
 	for _, d := range defs {
-		params := d.Schema
-		if len(params) == 0 {
-			params = json.RawMessage(`{"type":"object","properties":{}}`)
-		}
-		out = append(out, chatTool{
-			Type:     "function",
-			Function: toolDefinion{Name: d.Name, Description: d.Description, Parameters: params},
-		})
+		out = append(out, chatTool{Type: "function", Function: toolDefinition{Name: d.Name, Description: d.Description, Parameters: model.ToolSchema(d)}})
 	}
 	return out
 }

@@ -39,11 +39,11 @@ type toolFunction struct {
 }
 
 type chatTool struct {
-	Type     string       `json:"type"`
-	Function toolDefinion `json:"function"`
+	Type     string         `json:"type"`
+	Function toolDefinition `json:"function"`
 }
 
-type toolDefinion struct {
+type toolDefinition struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
 	Parameters  json.RawMessage `json:"parameters"`
