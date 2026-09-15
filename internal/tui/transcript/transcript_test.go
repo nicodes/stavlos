@@ -84,7 +84,7 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 		}
 		return out
 	}
-	if k := kinds(0); k[LineText] != 2 || k[LineDim] != 0 || k[LineLabel] != 0 || !strings.HasPrefix(lines[1].Text, "**Spawned by main** as scout (explorer) · m") {
+	if k := kinds(0); k[LineText] != 2 || k[LineDim] != 0 || k[LineLabel] != 0 || !strings.HasPrefix(lines[1].Text, "**@main** as scout (explorer) · m") {
 		t.Fatalf("spawn item (the spawn over its task): %v %+v", k, lines[1])
 	}
 	if k := kinds(1); k[LineText] != 2 || k[LineBlank] != 2 {
@@ -461,7 +461,7 @@ func TestTurnStartMarksItems(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(marked, "|") != "one|two" {
+	if strings.Join(marked, "|") != "**@user** one|**@user** two" {
 		t.Fatalf("turn starts: %q", marked)
 	}
 }

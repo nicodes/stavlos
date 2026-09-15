@@ -1357,7 +1357,8 @@ func lastSnippet(t *transcript.Transcript) string {
 		case transcript.LineBlank, transcript.LineLabel, transcript.LineRule:
 			continue
 		}
-		s := strings.TrimSpace(strings.ReplaceAll(l.Text, "\n", " "))
+		// plain text: newlines flattened, **bold** markers dropped
+		s := strings.TrimSpace(strings.NewReplacer("\n", " ", "**", "").Replace(l.Text))
 		if s == "" {
 			continue
 		}

@@ -801,7 +801,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if m.chatCursor != items-2 {
 		t.Fatalf("up: cursor %d", m.chatCursor)
 	}
-	if got := marked(); got != "› msg H" {
+	if got := marked(); got != "› @user msg H" {
 		t.Fatalf("cursor item not marked: %q\n%s", got, stripANSI(m.vp.View()))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}, tea.KeyMsg{Type: tea.KeyPgUp})
@@ -1268,7 +1268,7 @@ func TestLastSnippet(t *testing.T) {
 		t.Fatal("empty")
 	}
 	tr.Apply(mk(1, event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "look around"}))
-	if got := lastSnippet(tr); got != "look around" {
+	if got := lastSnippet(tr); got != "@user look around" {
 		t.Fatalf("prompt: %q", got)
 	}
 	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls -la"}`)}))
@@ -1276,7 +1276,7 @@ func TestLastSnippet(t *testing.T) {
 		t.Fatalf("tool: %q", got)
 	}
 	tr.Apply(mk(3, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "Found **three** files.\n"}}}))
-	if got := lastSnippet(tr); got != "Found **three** files." {
+	if got := lastSnippet(tr); got != "Found three files." { // plain: bold markers dropped
 		t.Fatalf("text (trailing blank skipped): %q", got)
 	}
 	// a multi-line message reads from its first line, not its last
@@ -1588,7 +1588,7 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 	// the row is highlighted like an arrow-key visit
 	markCursorForTest(t)
 	m.refreshViewport()
-	if !strings.Contains(stripANSI(m.vp.View()), render.GutterMark+"› prompt 0") {
+	if !strings.Contains(stripANSI(m.vp.View()), render.GutterMark+"› @user prompt 0") {
 		t.Fatalf("hovered item should carry the cursor:\n%s", stripANSI(m.vp.View()))
 	}
 	// hovering another item moves the cursor
