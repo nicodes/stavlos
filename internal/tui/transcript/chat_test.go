@@ -9,16 +9,31 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 )
 
+func newChatFeed() (*Transcript, func(agent string, typ event.Type, p any)) {
+	c := NewChat()
+	seq := int64(0)
+	return c, func(agent string, typ event.Type, p any) {
+		seq++
+		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
+	}
+}
+
+// chatItem is item i's non-empty texts, each prefixed by ">" per indent.
+func chatItem(c *Transcript, i int) string {
+	var out []string
+	for _, l := range c.All() {
+		if l.Item == i && l.Text != "" {
+			out = append(out, strings.Repeat(">", l.Indent)+l.Text)
+		}
+	}
+	return strings.Join(out, "|")
+}
+
 // TestChatKeepsOnlyPostsAndReplies: the session chat shows the human's posts
 // and agents' messages to the human, linked to the agent; tool calls,
 // prompts and notices stay in the agents' own chats.
 func TestChatKeepsOnlyPostsAndReplies(t *testing.T) {
-	c := NewChat()
-	seq := int64(0)
-	apply := func(agent string, typ event.Type, p any) {
-		seq++
-		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
-	}
+	c, apply := newChatFeed()
 	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
 	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Parent: "a1", Label: "scout", Archetype: "general"})
 	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@scout look around", To: []string{"scout"}})
@@ -29,119 +44,71 @@ func TestChatKeepsOnlyPostsAndReplies(t *testing.T) {
 	apply("b2", event.AssistantMessage, event.AssistantMessagePayload{})
 	apply("b2", event.MessageToUser, event.ChatPayload{From: "scout", Text: "## Found it\nthe bug is in `parse`", Post: "p1"})
 
-	if n := c.Items(); n != 1 {
-		t.Fatalf("items %d, want the one thread:\n%+v", n, c.All())
+	if n := c.Items(); n != 2 {
+		t.Fatalf("items %d, want the post and the reply:\n%+v", n, c.All())
 	}
-	var texts []string
+	if got := chatItem(c, 0) + " || " + chatItem(c, 1); got != "@scout look around || @scout Found it|>the bug is in `parse`" {
+		t.Fatalf("chat %q", got)
+	}
 	for _, l := range c.All() {
-		if l.Text != "" {
-			texts = append(texts, l.Text)
-		}
 		// the reply reads like an agent's reply: markdown prose, not a
 		// quoted block, and not dimmed like notes
-		if l.Text == "@scout Found it" && (l.Kind != LineHeading || l.Block != BlockNone || l.Note || l.Agent != "b2") {
+		if l.Text == "@scout Found it" && (l.Kind != LineHeading || l.Block != BlockNone || l.Note || l.Agent != "b2" || l.Glyph != GlyphReply) {
 			t.Fatalf("reply line: %+v", l)
 		}
 	}
-	if got := strings.Join(texts, "|"); got != "@scout look around|@scout Found it|the bug is in `parse`" {
-		t.Fatalf("chat lines %q", got)
-	}
-	if ItemAgent(c.All(), 0) != "b2" {
-		t.Fatalf("the thread links to its replying agent: %q", ItemAgent(c.All(), 0))
+	if ItemAgent(c.All(), 0) != "" || ItemAgent(c.All(), 1) != "b2" {
+		t.Fatalf("links: %q %q", ItemAgent(c.All(), 0), ItemAgent(c.All(), 1))
 	}
 }
 
-// TestChatThreadsRepliesUnderPosts: a reply joins its post's item, indented,
-// even after newer posts; a message with no known post stands alone.
-func TestChatThreadsRepliesUnderPosts(t *testing.T) {
-	c := NewChat()
-	seq := int64(0)
-	apply := func(agent string, typ event.Type, p any) {
-		seq++
-		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
-	}
-	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main", Archetype: "general"})
-	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Parent: "a1", Label: "scout", Archetype: "general"})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@scout check the tests", To: []string{"scout"}})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p2", Text: "what's the stack?", To: []string{"main"}})
-	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "Go 1.27", Post: "p2"})
-	apply("b2", event.MessageToUser, event.ChatPayload{From: "scout", Text: "All 42 pass.", Post: "p1"})
-	apply("b2", event.MessageToUser, event.ChatPayload{From: "scout", Text: "also: one flaky test"})
-
-	if n := c.Items(); n != 3 {
-		t.Fatalf("items %d, want two threads and a standalone message", n)
-	}
-	item := func(i int) string {
-		var out []string
-		for _, l := range c.All() {
-			if l.Item == i && l.Text != "" {
-				out = append(out, strings.Repeat(">", l.Indent)+l.Text)
-			}
-		}
-		return strings.Join(out, "|")
-	}
-	if got := item(0); got != "@scout check the tests|>@scout All 42 pass." {
-		t.Fatalf("first thread %q", got)
-	}
-	if got := item(1); got != "@main what's the stack?|>@main Go 1.27" {
-		t.Fatalf("second thread %q", got)
-	}
-	if got := item(2); got != "@scout also: one flaky test" {
-		t.Fatalf("standalone %q", got)
-	}
-}
-
-// TestChatGroupsPostsToAWaitingAgent: a post to an agent that has not
-// replied yet joins its open thread; a reply closes it; a post to several
-// agents groups only when they all wait in the same thread.
-func TestChatGroupsPostsToAWaitingAgent(t *testing.T) {
-	c := NewChat()
-	seq := int64(0)
-	apply := func(agent string, typ event.Type, p any) {
-		seq++
-		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
-	}
+// TestChatInArrivalOrder: posts and replies show in the order they happen,
+// whichever post a reply answers.
+func TestChatInArrivalOrder(t *testing.T) {
+	c, apply := newChatFeed()
 	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
 	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Label: "scout"})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "what's the stack?", To: []string{"main"}})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p2", Text: "and the tests?", To: []string{"main"}})
-	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "Go; go test", Post: "p2"})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p3", Text: "one more", To: []string{"main"}})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p4", Text: "@main @scout sync up", To: []string{"main", "scout"}})
-	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "late answer to p1", Post: "p1"})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@scout check the tests", To: []string{"scout"}})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p2", Text: "what's the stack?", To: []string{"main"}})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p3", Text: "and the setup?", To: []string{"main"}})
+	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "Go 1.27", Post: "p3"})
+	apply("b2", event.MessageToUser, event.ChatPayload{From: "scout", Text: "All 42 pass.", Post: "p1"})
+	var got []string
+	for i := range c.Items() {
+		got = append(got, chatItem(c, i))
+	}
+	want := "@scout check the tests / @main what's the stack? / @main and the setup? / @main Go 1.27 / @scout All 42 pass."
+	if strings.Join(got, " / ") != want {
+		t.Fatalf("chat:\n%s\nwant:\n%s", strings.Join(got, " / "), want)
+	}
+}
 
-	item := func(i int) string {
-		var out []string
-		for _, l := range c.All() {
-			if l.Item == i && l.Text != "" {
-				out = append(out, strings.Repeat(">", l.Indent)+l.Text)
-			}
-		}
-		return strings.Join(out, "|")
+// TestChatWaiting: a post waits on its agents until each sends the human a
+// message or is killed.
+func TestChatWaiting(t *testing.T) {
+	c, apply := newChatFeed()
+	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
+	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Label: "scout"})
+	apply("c3", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c3", Label: "lookout"})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@main @scout @lookout status?", To: []string{"main", "scout", "lookout"}})
+	if w := strings.Join(c.Waiting(), ","); w != "lookout,main,scout" {
+		t.Fatalf("waiting %s", w)
 	}
-	if n := c.Items(); n != 3 {
-		t.Fatalf("items %d", n)
+	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "fine", Post: "p1"})
+	apply("b2", event.AgentKilled, event.AgentRefPayload{ID: "b2"})
+	if w := strings.Join(c.Waiting(), ","); w != "lookout" {
+		t.Fatalf("after a reply and a kill: %s", w)
 	}
-	if got := item(0); got != "@main what's the stack?|@main and the tests?|>@main Go; go test|>@main late answer to p1" {
-		t.Fatalf("grouped thread %q", got)
-	}
-	if got := item(1); got != "@main one more" {
-		t.Fatalf("after a reply a new thread starts: %q", got)
-	}
-	if got := item(2); got != "@main @scout sync up" {
-		t.Fatalf("scout was not waiting, so no grouping: %q", got)
+	apply("c3", event.MessageToUser, event.ChatPayload{From: "lookout", Text: "on it"})
+	if w := c.Waiting(); len(w) != 0 {
+		t.Fatalf("any message to the human ends the wait: %v", w)
 	}
 }
 
 // TestChatFoldsLongReplies: a reply longer than MaxOutputCollapsed lines
 // shows its head and "… +N lines" until expanded; a short one never folds.
 func TestChatFoldsLongReplies(t *testing.T) {
-	c := NewChat()
-	seq := int64(0)
-	apply := func(agent string, typ event.Type, p any) {
-		seq++
-		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
-	}
+	c, apply := newChatFeed()
 	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
 	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "summarise", To: []string{"main"}})
 	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "one\ntwo\nthree\nfour\nfive\nsix", Post: "p1"})
@@ -149,7 +116,7 @@ func TestChatFoldsLongReplies(t *testing.T) {
 
 	var always, expanded, collapsedOnly []string
 	for _, l := range c.All() {
-		if l.Item != 0 || l.Indent < 1 || l.Text == "" {
+		if l.Item != 1 || l.Text == "" {
 			continue
 		}
 		switch l.Vis {
@@ -164,44 +131,7 @@ func TestChatFoldsLongReplies(t *testing.T) {
 	if strings.Join(always, "|") != "@main one|two|three" || strings.Join(expanded, "|") != "four|five|six" || strings.Join(collapsedOnly, "|") != "… +3 lines" {
 		t.Fatalf("always %q expanded %q collapsed %q", always, expanded, collapsedOnly)
 	}
-	if !ItemFolds(c.All(), 0) || ItemFolds(c.All(), 1) {
-		t.Fatal("the long reply's thread folds, the short message does not")
-	}
-}
-
-// TestChatWaitingThreads: a thread waits on its agents until each replies
-// or is killed; a missing reply stays due; a reply starts after a spacer.
-func TestChatWaitingThreads(t *testing.T) {
-	c := NewChat()
-	seq := int64(0)
-	apply := func(agent string, typ event.Type, p any) {
-		seq++
-		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
-	}
-	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
-	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Label: "scout"})
-	apply("c3", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c3", Label: "lookout"})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@main @scout @lookout status?", To: []string{"main", "scout", "lookout"}})
-	if w := c.Waiting(); strings.Join(w[0], ",") != "lookout,main,scout" {
-		t.Fatalf("waiting %v", w)
-	}
-	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "fine", Post: "p1"})
-	apply("b2", event.AgentKilled, event.AgentRefPayload{ID: "b2"})
-	if w := c.Waiting(); strings.Join(w[0], ",") != "lookout" {
-		t.Fatalf("after a reply and a kill: %v", w)
-	}
-	apply("c3", event.ReplyMissing, event.RepliesPayload{Parties: []string{"user"}, Names: []string{"user"}})
-	if w := c.Waiting(); strings.Join(w[0], ",") != "lookout" {
-		t.Fatalf("a missing reply is still due: %v", w)
-	}
-	var spacerBeforeReply bool
-	lines := c.All()
-	for i := 1; i < len(lines); i++ {
-		if lines[i].Text == "@main fine" {
-			spacerBeforeReply = lines[i-1].Spacer
-		}
-	}
-	if !spacerBeforeReply {
-		t.Fatalf("a reply starts after a spacer: %+v", lines)
+	if !ItemFolds(c.All(), 1) || ItemFolds(c.All(), 2) || ItemFolds(c.All(), 0) {
+		t.Fatal("the long reply folds; the short one and the post do not")
 	}
 }

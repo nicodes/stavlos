@@ -818,23 +818,19 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 	rootID = agents[0].ID
 	_ = h.c.Send(ctx, rootID, protocol.KindPrompt, "delegate")
 
-	// the parent's logged answer carries the sender's name
+	// The parent's logged answer (it carries the sender's name), the end of
+	// its turn 2 and the child's second message (after its status check)
+	// race each other, so one loop watches for all three: a separate wait
+	// for the answer would throw away a steer that landed first.
 	var um event.UserMessagePayload
-	for um.From == "" {
-		e := h.waitFor(event.UserMessage, rootID)
-		_ = e.Decode(&um)
-	}
-	if um.From != "scout" || um.Text != "which branch?" || um.Kind != "agent_response" {
-		t.Fatalf("parent's message: %+v", um)
-	}
-	// The parent's turn 2 ending and the child's second message (after its
-	// status check) race each other; either may come first.
 	var turn2, responded bool
 	deadline := time.After(10 * time.Second)
-	for !turn2 || !responded {
+	for um.From == "" || !turn2 || !responded {
 		select {
 		case e := <-h.evs:
 			switch {
+			case e.Type == event.UserMessage && e.Agent == rootID && um.From == "":
+				_ = e.Decode(&um)
 			case e.Type == event.TurnEnded && e.Agent == rootID:
 				var te event.TurnEndedPayload
 				if _ = e.Decode(&te); te.Turn == 2 {
@@ -847,8 +843,11 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 				responded = true
 			}
 		case <-deadline:
-			t.Fatalf("turn 2 ended %v, second message received %v\nevents so far:\n%s", turn2, responded, strings.Join(h.recentEvents(), "\n"))
+			t.Fatalf("answer %+v, turn 2 ended %v, second message received %v\nevents so far:\n%s", um, turn2, responded, strings.Join(h.recentEvents(), "\n"))
 		}
+	}
+	if um.From != "scout" || um.Text != "which branch?" || um.Kind != "agent_response" {
+		t.Fatalf("parent's message: %+v", um)
 	}
 }
 

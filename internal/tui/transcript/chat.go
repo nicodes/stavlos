@@ -2,7 +2,6 @@ package transcript
 
 import (
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 
@@ -13,14 +12,15 @@ import (
 
 // The session chat (docs/super-chat.md) is a Transcript of its own, fed the
 // events of every agent: it keeps the human's posts and the agents'
-// messages to the human, linked to the agent. Tool calls, prompts and every
-// notice stay in the agents' own chats.
+// messages to the human in the order they happen, each message an item of
+// its own linked to its agent. Tool calls, prompts and notices stay in the
+// agents' own chats.
 
 // NewChat returns an empty session chat.
 func NewChat() *Transcript {
 	t := NewTranscript()
 	t.chat = true
-	t.names, t.posts, t.open = map[string]string{}, map[string]int{}, map[string]int{}
+	t.names, t.open = map[string]string{}, map[string]bool{}
 	return t
 }
 
@@ -61,96 +61,52 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.ChatPosted:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
-			t.post(p)
+			t.appendItem(CleanLines(block(BlockUser, "", addressed(p.To, p.Text))))
+			for _, n := range p.To {
+				t.open[n] = true
+			}
 		}
 	case event.MessageToUser:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
-			// Reads like an agent's reply in its own chat, with the
-			// sender's @name before it.
-			from := p.From
-			if from == "" {
-				from = t.agentName(ev.Agent)
-			}
-			lines := markdownLines(strings.TrimRight(p.Text, "\n"))
-			if len(lines) > 0 && (lines[0].Kind == LineText || lines[0].Kind == LineHeading) {
-				lines[0].Text = "@" + from + " " + lines[0].Text
-			} else {
-				lines = append([]Line{{Kind: LineText, Text: "@" + from}}, lines...)
-			}
-			// "‹ @main …", the mirror of the post's "› …": later lines align
-			// under the text, past the glyph.
-			lines[0].Glyph = GlyphReply
-			for i := 1; i < len(lines); i++ {
-				lines[i].Indent++
-			}
-			lines = collapsed(lines)
-			lines = linked(CleanLines(append(lines, Line{Kind: LineBlank})), ev.Agent)
-			// A reply joins the thread of the post it answers, indented under
-			// it, wherever that post is; a message with no known post stands
-			// on its own at the end.
-			if item, ok := t.posts[p.Post]; ok {
-				for i := range lines {
-					lines[i].Indent++ // under its post
-				}
-				t.insertIntoItem(item, append([]Line{{Kind: LineBlank, Spacer: true, Agent: ev.Agent}}, lines...))
-				if t.open[from] == item {
-					delete(t.open, from) // answered: the next post to it starts a new thread
-				}
-				return
-			}
-			t.appendItem(append([]Line{{Kind: LineBlank, Agent: ev.Agent}}, lines...))
+			t.reply(ev.Agent, p)
 		}
 	}
 }
 
-// post adds the human's post to the chat. A post to agents that are all
-// still waiting to reply in the same thread joins that thread, since one
-// reply will cover both; otherwise it starts a thread of its own. Either
-// way its agents now wait to reply in its thread.
-func (t *Transcript) post(p event.ChatPayload) {
-	lines := CleanLines(block(BlockUser, "", addressed(p.To, p.Text)))
-	item, grouped := -1, len(p.To) > 0
-	for _, n := range p.To {
-		open, ok := t.open[n]
-		if !ok || item >= 0 && open != item {
-			grouped = false
-			break
-		}
-		item = open
+// reply adds an agent's message to the human: "‹ @main …", the mirror of
+// a post's "› …", read like the agent's reply in its own chat, with later
+// lines aligned under the text and a long one folded.
+func (t *Transcript) reply(agent string, p event.ChatPayload) {
+	from := p.From
+	if from == "" {
+		from = t.agentName(agent)
 	}
-	if grouped {
-		lines = lines[1:] // no gap between grouped posts…
-		if slices.ContainsFunc(t.items[item], func(l Line) bool { return l.Indent > 0 }) {
-			lines = append([]Line{{Kind: LineBlank, Spacer: true}}, lines...) // …but one after a reply
-		}
-		t.insertIntoItem(item, lines)
+	lines := markdownLines(strings.TrimRight(p.Text, "\n"))
+	if len(lines) > 0 && (lines[0].Kind == LineText || lines[0].Kind == LineHeading) {
+		lines[0].Text = "@" + from + " " + lines[0].Text
 	} else {
-		refs := t.appendItem(lines)
-		if len(refs) == 0 {
-			return
-		}
-		item = refs[0].item
+		lines = append([]Line{{Kind: LineText, Text: "@" + from}}, lines...)
 	}
-	if p.ID != "" {
-		t.posts[p.ID] = item
+	lines[0].Glyph = GlyphReply
+	for i := 1; i < len(lines); i++ {
+		lines[i].Indent = 1
 	}
-	for _, n := range p.To {
-		t.open[n] = item
-	}
+	lines = append([]Line{{Kind: LineBlank}}, collapsed(lines)...)
+	t.appendItem(linked(CleanLines(append(lines, Line{Kind: LineBlank})), agent))
+	delete(t.open, from)
 }
 
-// Waiting maps each thread of the session chat to the agents still due to
-// reply in it, sorted; it is empty outside the chat.
-func (t *Transcript) Waiting() map[int][]string {
-	out := map[int][]string{}
-	for name, item := range t.open {
-		out[item] = append(out[item], name)
+// Waiting lists the agents a post of the human's is still waiting on,
+// sorted: until each sends the human a message or is killed. It is empty
+// outside the chat.
+func (t *Transcript) Waiting() []string {
+	names := make([]string, 0, len(t.open))
+	for n := range t.open {
+		names = append(names, n)
 	}
-	for _, names := range out {
-		sort.Strings(names)
-	}
-	return out
+	sort.Strings(names)
+	return names
 }
 
 // collapsed folds a long reply the way tool output folds: its first

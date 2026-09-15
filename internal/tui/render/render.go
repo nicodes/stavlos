@@ -39,9 +39,6 @@ type Options struct {
 	Cursor   int
 	Focused  bool
 	NoFold   bool // render every item in full (exports, line-level tests)
-	// Pending maps a session chat thread to the agents still due to reply
-	// in it: a loader row follows the thread.
-	Pending map[int][]string
 	// CompactFrame animates a running compaction's rule (the sweeping bar).
 	CompactFrame int
 }
@@ -86,19 +83,14 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 	f, folded := o.folds(lines)[r.item]
 	cur := o.Focused && r.item == o.Cursor
 	for i, l := range lines {
-		if l.Spacer && o.showLine(l) && !(folded && !f.show[i]) {
-			row := ""
-			if cur {
-				row = highlight(row, o.Width)
-			}
-			r.rows = append(r.rows, row)
-			continue
-		}
 		if !o.showLine(l) || l.Kind == transcript.LineBlank || folded && !f.show[i] {
 			continue
 		}
 		if folded && f.hidden > 0 && i == f.last {
 			l.Suffix = strings.TrimSpace(l.Suffix + fmt.Sprintf(" +%d", f.hidden))
+		}
+		if folded && len(f.show) == 1 {
+			l = oneRow(l, o)
 		}
 		for _, part := range strings.Split(renderLine(l, o, cur), "\n") {
 			if cur {
@@ -133,8 +125,8 @@ func assemble(parts []itemRows, o Options) (string, map[int]RowRange) {
 		}
 		b.WriteString(text)
 		// The cursor's highlight spans the item's own rows only, never the
-		// blank spacing rows above and below it or a thread's loader.
-		if !blank && item >= 0 {
+		// blank spacing rows above and below it.
+		if !blank {
 			if rr, ok := rows[item]; ok {
 				rr.Last = n
 				rows[item] = rr
@@ -154,10 +146,6 @@ func assemble(parts []itemRows, o Options) (string, map[int]RowRange) {
 		}
 		for _, row := range p.rows {
 			emit(p.item, row, false)
-		}
-		if names := o.Pending[p.item]; len(names) > 0 {
-			emit(p.item, "", true)
-			emit(-1, loaderRow(p.item, names, o), false)
 		}
 		if p.spaced && i != lastPart {
 			emit(p.item, "", true)
@@ -189,16 +177,22 @@ func assemble(parts []itemRows, o Options) (string, map[int]RowRange) {
 	return b.String(), rows
 }
 
-// loaderRow is the session chat's sign that a reply is coming, under a
-// thread whose agents have not replied yet: the spinner and a flavour verb
-// like the turn indicator, then who it waits on.
-func loaderRow(item int, names []string, o Options) string {
-	at := make([]string, len(names))
-	for i, n := range names {
-		at[i] = "@" + n
+// oneRow cuts a folded item's one shown line to a single row, so its +N
+// marker ends that row instead of landing inside a wrapped second one.
+func oneRow(l transcript.Line, o Options) transcript.Line {
+	leader, glyph, _ := kindStyle(l)
+	if l.Glyph != "" {
+		glyph = l.Glyph + " "
 	}
-	verb := transcript.TurnVerbs[item%len(transcript.TurnVerbs)]
-	return "  " + o.Spinner + " " + theme.StyleDim.Render(verb+"… · "+strings.Join(at, " "))
+	avail := o.Width - 1 - ansi.StringWidth(leader) - ansi.StringWidth(glyph) - 2*l.Indent
+	if l.Suffix != "" {
+		avail -= ansi.StringWidth(l.Suffix) + 1
+	}
+	if avail < 10 || ansi.StringWidth(l.Text) <= avail {
+		return l
+	}
+	l.Text = ansi.Truncate(l.Text, avail, "…")
+	return l
 }
 
 // renderCache keeps each committed item's rows between renders of one
