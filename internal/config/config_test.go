@@ -42,7 +42,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if _, ok := e.Presets["reviewer"]; ok {
 		t.Fatal("untrusted preset loaded")
 	}
-	if e.AgentsMD != "" {
+	if len(e.Instructions) != 0 || e.ProjectTrusted {
 		t.Fatal("untrusted AGENTS.md loaded")
 	}
 	if verb(e.Policy, "shell", "curl x") != policy.Allow {
@@ -63,8 +63,8 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if !ok || len(p.Models) != 1 || p.Models[0].ID != "openai/gpt-5-mini" || p.Body != "You review." || p.Layer != "project" || p.Type != TypeAll {
 		t.Fatalf("preset %+v", p)
 	}
-	if e.AgentsMD != "Use light models." {
-		t.Fatal("AGENTS.md")
+	if len(e.Instructions) != 1 || e.Instructions[0].Text != "Use light models." || !e.ProjectTrusted || len(e.InstructionFiles) != 1 {
+		t.Fatalf("AGENTS.md: %+v %v", e.Instructions, e.InstructionFiles)
 	}
 	if verb(e.Policy, "shell", "git push x") != policy.Ask {
 		t.Fatal("project loosened git push")

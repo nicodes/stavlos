@@ -416,6 +416,7 @@ Three layers with one layout. Global is yours and trusted. Project is the team's
 ```
 ~/.config/stavlos/            # global; identical layout to .stavlos/ plus plugins
   stavlos.json
+  AGENTS.md                   # your instructions for every project (§10.5)
   agents/<name>.md
   skills/<name>/SKILL.md
   plugins/<name>/             # local plugin builds (§11)
@@ -433,7 +434,7 @@ Three layers with one layout. Global is yours and trusted. Project is the team's
         SKILL.md              # required; anything else in the dir is bundled, not discovered
         reference.md
         scripts/lint.sh
-  AGENTS.md                   # project instructions; stays at the repo root
+  AGENTS.md                   # instructions every agent follows (§10.5)
 ```
 
 ### 10.2 `stavlos.json`
@@ -529,11 +530,11 @@ Descriptions stay in context; bodies load only when an agent calls the `skill` t
 
 ### 10.5 `AGENTS.md`
 
-Plain markdown at the repo root, injected into every agent's context in that project. This is model-facing prose, not config: it is where "use light models for easy tasks" instructions live.
+Plain markdown, model-facing prose rather than config — where "use light models for easy tasks" instructions live — read the way coding-agent harnesses have converged on (agents.md). Every agent in the channel follows it, subagents included, and no role can opt out. Each agent's system prompt carries, general first: your own `<config>/AGENTS.md`, then the repository's files from its git root down to the channel directory, one per directory — `AGENTS.md`, or `CLAUDE.md` where a directory has no `AGENTS.md` (a directory in no repository reads only its own, and the home directory never counts as a root). A later file is closer to the work and wins where they conflict, and the human's own messages win over all of them. The whole is bounded at 32 KiB: the file that crosses the budget is cut with a note, and later ones are left out. The channel's other working directories are not read: their instructions would need a trust decision of their own.
 
 ### 10.6 Trust
 
-Project configuration is data, but a cloned repository's data can still cause code to run: `mcp` server definitions start processes, policy `allow` rules loosen what the model may execute, and presets, skills, and `AGENTS.md` are instructions the model will follow. On first load of a directory, the daemon prompts once for **all of it** — the whole `.stavlos/` directory plus `AGENTS.md` — showing what it contains, and records the decision keyed by directory plus a hash of those files' contents. A change to any of them re-prompts. Until confirmed, nothing from the project layer is loaded: no MCP servers start, no `allow` rules apply, no presets or skills are discovered, and `AGENTS.md` is not injected. The channel runs on global configuration alone, and the TUI and Discord both show that the project layer is pending trust.
+Project configuration is data, but a cloned repository's data can still cause code to run: `mcp` server definitions start processes, policy `allow` rules loosen what the model may execute, and presets, skills, and `AGENTS.md` are instructions the model will follow. On first load of a directory, the daemon prompts once for **all of it** — the whole `.stavlos/` directory plus the instructions files agents will follow (§10.5: from the git root down to the channel directory, and those in its subdirectories) — showing what it contains, and records the decision keyed by directory plus a hash of those files' contents. A change to any of them re-prompts. Until confirmed, nothing from the project layer is loaded: no MCP servers start, no `allow` rules apply, no presets or skills are discovered, and only your own `AGENTS.md` reaches agents. The channel runs on global configuration alone, and the TUI and Discord both show that the project layer is pending trust.
 
 A repository's files (`stavlos.json` and `stavlos.local.json` alike) can only **tighten** the global layer, never loosen it, even once trusted: both are in the trust hash, their policy is an overlay, and `env`, `search`, `plugins`, a raised limit and an `allow` escalation default are errors there (global only).
 
