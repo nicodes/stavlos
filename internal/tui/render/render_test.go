@@ -81,8 +81,8 @@ func TestBuildTranscript(t *testing.T) {
 		"  partial",
 		"◌ thinking…",
 		"Done.",
-		"◦ turn cancelled",
-		"✓ finished · success",
+		"◦ Turn cancelled",
+		"✓ Finished success",
 		"all good",
 	})
 	for _, g := range got {
@@ -100,7 +100,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look around"}))
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"⑂ spawned scout (explorer) · m", "task", "▹ look around"})
+	assertSubsequence(t, got, []string{"⑂ Spawned scout (explorer) · m", "task", "▹ look around"})
 }
 
 func TestUserMessageKinds(t *testing.T) {
@@ -377,14 +377,14 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 	for i := first; i <= last; i++ {
 		joined += lines[i].Text + "\n"
 	}
-	reqAt, ansAt, outAt := strings.Index(joined, "permission"), strings.Index(joined, "allow"), strings.Index(joined, "all passed")
+	reqAt, ansAt, outAt := strings.Index(joined, "Permission"), strings.Index(joined, "allow"), strings.Index(joined, "all passed")
 	if reqAt < 0 || ansAt < 0 || outAt < 0 || !(reqAt < ansAt && ansAt < outAt) {
 		t.Fatalf("order within tool item wrong (req %d, ans %d, out %d):\n%s", reqAt, ansAt, outAt, joined)
 	}
 	// the notices are nested under the call at the output's indent
 	rendered := renderWith(lines, Options{Width: 80, Focused: true, Cursor: toolItem})
 	for _, r := range rendered {
-		if strings.Contains(r, "permission") || strings.Contains(r, "answered") {
+		if strings.Contains(r, "Permission") || strings.Contains(r, "answered") {
 			if !strings.HasPrefix(strings.TrimLeft(r, "▍"), "  ") {
 				t.Fatalf("notice not indented under the call: %q", r)
 			}
@@ -392,7 +392,7 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 	}
 	// nothing of the tool item, and no permission notice, lives outside it
 	for i := last + 1; i < len(lines); i++ {
-		if lines[i].Item == toolItem || strings.Contains(lines[i].Text, "permission") {
+		if lines[i].Item == toolItem || strings.Contains(lines[i].Text, "Permission") {
 			t.Fatalf("tool item content after its range at %d: %q", i, lines[i].Text)
 		}
 	}
@@ -443,7 +443,7 @@ func TestFoldingToOneLine(t *testing.T) {
 		t.Fatalf("the agent's text should fold to its first line:\n%s", joined)
 	}
 	// thinking, tool (with its notices and output) and child result fold to one line each
-	if strings.Contains(joined, "second thought") || strings.Contains(joined, "permission") || strings.Contains(joined, "found it") {
+	if strings.Contains(joined, "second thought") || strings.Contains(joined, "Permission") || strings.Contains(joined, "found it") {
 		t.Fatalf("folded items leaked lines:\n%s", joined)
 	}
 	toolRows := 0
@@ -462,12 +462,12 @@ func TestFoldingToOneLine(t *testing.T) {
 	// answer) with a +N marker; enter (Expanded) shows everything
 	prev := nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: toolItem}))
 	joinedPrev := strings.Join(prev, "\n")
-	if !strings.Contains(joinedPrev, "permission") || !strings.Contains(joinedPrev, "allow") || strings.Contains(joinedPrev, "found it") {
+	if !strings.Contains(joinedPrev, "Permission") || !strings.Contains(joinedPrev, "allow") || strings.Contains(joinedPrev, "found it") {
 		t.Fatalf("cursor on tool:\n%s", joinedPrev)
 	}
 	toolPrev := 0
 	for _, l := range prev {
-		if strings.Contains(l, "Shell") || strings.Contains(l, "permission") || strings.Contains(l, "allow") || strings.HasPrefix(strings.TrimLeft(l, "▍ "), "a") {
+		if strings.Contains(l, "Shell") || strings.Contains(l, "Permission") || strings.Contains(l, "allow") || strings.HasPrefix(strings.TrimLeft(l, "▍ "), "a") {
 			toolPrev++
 		}
 	}
@@ -475,16 +475,16 @@ func TestFoldingToOneLine(t *testing.T) {
 		t.Fatalf("preview should be at most %d lines with a +N marker:\n%s", PreviewLines, joinedPrev)
 	}
 	full := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: toolItem, Expanded: map[int]bool{toolItem: true}})), "\n")
-	if !strings.Contains(full, "permission") || !strings.Contains(full, "allow") || !strings.Contains(full, "\n") || strings.Count(full, "\n") < 5 {
+	if !strings.Contains(full, "Permission") || !strings.Contains(full, "allow") || !strings.Contains(full, "\n") || strings.Count(full, "\n") < 5 {
 		t.Fatalf("expanded tool:\n%s", full)
 	}
 	child := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: childItem})), "\n")
-	if !strings.Contains(child, "found it") || strings.Contains(child, "permission") {
+	if !strings.Contains(child, "found it") || strings.Contains(child, "Permission") {
 		t.Fatalf("cursor on child:\n%s", child)
 	}
 	// /details shows everything
 	all := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Details: true})), "\n")
-	if !strings.Contains(all, "found it") || !strings.Contains(all, "permission") || !strings.Contains(all, "e\n") && !strings.HasSuffix(all, "e") {
+	if !strings.Contains(all, "found it") || !strings.Contains(all, "Permission") || !strings.Contains(all, "e\n") && !strings.HasSuffix(all, "e") {
 		t.Fatalf("details:\n%s", all)
 	}
 }
@@ -516,9 +516,9 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		return -1, transcript.Line{}
 	}
 	// started notices
-	_, cmdStart := find("job: go test")
-	_, watchStart := find("job: src")
-	_, timerStart := find("job: cooldown")
+	_, cmdStart := find("**Job** go test")
+	_, watchStart := find("**Job** src")
+	_, timerStart := find("**Job** cooldown")
 	for _, l := range []transcript.Line{cmdStart, watchStart, timerStart} {
 		if l.Kind != transcript.LineDim || l.Running {
 			t.Fatalf("started notice should be a static dim line: %+v", l)
@@ -549,7 +549,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		t.Fatalf("assistant item %d vs started item %d", waiting.Item, cmdStart.Item)
 	}
 	// stopped: glyph from the remembered kind, grouped with its start
-	_, stopped := find("job stopped (unmonitor)")
+	_, stopped := find("**Job stopped** (unmonitor)")
 	if stopped.Item != watchStart.Item || stopped.Kind != transcript.LineDim {
 		t.Fatalf("stopped: %+v (watch item %d)", stopped, watchStart.Item)
 	}
@@ -586,12 +586,12 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	}
 	plain := nonblank(renderWith(lines, Options{Width: 80}))
 	joined := strings.Join(plain, "\n")
-	for _, want := range []string{"run the tests", "waiting", "all green", "job: go test", "job: src", "job: cooldown", "Job \"go test\" (m1): go test exited 0"} {
+	for _, want := range []string{"run the tests", "waiting", "all green", "Job go test", "Job src", "Job cooldown", "Job \"go test\" (m1): go test exited 0"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}
 	}
-	for _, leak := range []string{"$ go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
+	for _, leak := range []string{"$ Job go test exited 0", "ok  a", "monitor stopped", "timer elapsed", "ok  b"} {
 		if strings.Contains(joined, leak) {
 			t.Fatalf("folded monitor item leaked %q:\n%s", leak, joined)
 		}
@@ -606,7 +606,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	// the first output line with a +N marker; expanded shows the collapsed
 	// output rule (3 lines + "… +N lines")
 	prev := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: cmdStart.Item})), "\n")
-	for _, want := range []string{"$ job: go test", "$ go test exited 0", "ok  a", "+"} {
+	for _, want := range []string{"$ Job go test", "$ Job go test exited 0", "ok  a", "+"} {
 		if !strings.Contains(prev, want) {
 			t.Fatalf("cursor on monitor lacks %q:\n%s", want, prev)
 		}
@@ -615,17 +615,17 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 		t.Fatalf("preview shows too much:\n%s", prev)
 	}
 	full := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: cmdStart.Item, Expanded: map[int]bool{cmdStart.Item: true}})), "\n")
-	for _, want := range []string{"$ go test exited 0", "ok  a", "ok  c", "ok  d", "ok  e"} {
+	for _, want := range []string{"$ Job go test exited 0", "ok  a", "ok  c", "ok  d", "ok  e"} {
 		if !strings.Contains(full, want) {
 			t.Fatalf("expanded monitor lacks %q:\n%s", want, full)
 		}
 	}
-	if strings.Contains(full, "job stopped") {
+	if strings.Contains(full, "Job stopped") {
 		t.Fatalf("expanded monitor shows other items:\n%s", full)
 	}
 	// /details shows the whole output and the user block's output lines
 	all := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Details: true})), "\n")
-	for _, want := range []string{"ok  e", "job stopped (unmonitor)", "timer elapsed", "ok  b"} {
+	for _, want := range []string{"ok  e", "Job stopped (unmonitor)", "timer elapsed", "ok  b"} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("details lacks %q:\n%s", want, all)
 		}
@@ -636,7 +636,7 @@ func TestMonitorEventsGroupAndFold(t *testing.T) {
 	tr2.Apply(mk(1, event.MonitorFired, event.MonitorFiredPayload{ID: "zz", Kind: "watch", Summary: "3 files changed", Output: "a.go"}))
 	tr2.Apply(mk(2, event.MonitorStopped, event.MonitorRefPayload{ID: "yy", Reason: "kill"}))
 	got := renderLines(tr2.All())
-	assertSubsequence(t, got, []string{"$ 3 files changed", "  a.go", "$ job stopped (kill)"})
+	assertSubsequence(t, got, []string{"$ Job 3 files changed", "  a.go", "$ Job stopped (kill)"})
 	if tr2.Items() != 2 {
 		t.Fatalf("items %d", tr2.Items())
 	}
@@ -797,7 +797,7 @@ func TestTrackedLinesSurviveLaterItems(t *testing.T) {
 		t.Fatalf("no line %q in:\n%s", text, strings.Join(renderLines(lines), "\n"))
 		return transcript.Line{}
 	}
-	perm, question := find("permission: shell"), find("question: which?")
+	perm, question := find("**Permission** shell"), find("**Question** which?")
 	if perm.Glyph != transcript.GlyphPrompt || perm.Tone != transcript.ToneNone {
 		t.Fatalf("answered permission prompt: %+v", perm)
 	}

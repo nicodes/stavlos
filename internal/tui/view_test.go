@@ -1153,7 +1153,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	m.applyEvent(event.Event{Seq: 55, Agent: "a", Type: event.TurnEnded, Time: now, Payload: event.MustPayload(event.TurnEndedPayload{Turn: 1, Reason: "error"})})
 	m.refreshViewport()
 	v = stripANSI(m.vp.View())
-	if tr.Compacting() || !strings.Contains(v, "compaction failed: boom") || !strings.Contains(v, "compaction interrupted") || strings.Contains(v, "compacting ") {
+	if tr.Compacting() || !strings.Contains(v, "Compaction failed boom") || !strings.Contains(v, "Compaction interrupted") || strings.Contains(v, "compacting ") {
 		t.Fatalf("failed and interrupted compactions:\n%s", v)
 	}
 	// the tick stops once nothing is compacting
@@ -1795,7 +1795,7 @@ func TestModeChangeShowsInEveryChat(t *testing.T) {
 	for _, id := range []string{"a", "b"} {
 		found := false
 		for _, l := range m.transcript(id).All() {
-			if strings.Contains(l.Text, "mode → auto") {
+			if strings.Contains(l.Text, "**Mode** → auto") {
 				found = true
 			}
 		}
@@ -2486,7 +2486,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 	tr.Apply(event.Event{Agent: "a", Type: event.MCPStopped, Payload: event.MustPayload(event.MCPRefPayload{Server: "github"})})
 	m.refreshViewport()
 	v := stripANSI(m.vp.View())
-	for _, want := range []string{"≡ mcp: github connected · 2 tools", "≡ mcp: docs failed: boom", "≡ mcp: github stopped"} {
+	for _, want := range []string{"≡ MCP github connected · 2 tools", "≡ MCP docs failed: boom", "≡ MCP github stopped"} {
 		if !strings.Contains(v, want) {
 			t.Fatalf("chat lacks %q:\n%s", want, v)
 		}
@@ -2594,7 +2594,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	tr.Apply(event.Event{Agent: "a", Type: event.AgentDirAdded, Payload: event.MustPayload(event.DirAddedPayload{Dir: "/etc", Source: "human"})})
 	m.setFocus(focusInput)
 	m.refreshViewport()
-	if v := stripANSI(m.vp.View()); !strings.Contains(v, "◆ dirs: + /etc (human)") {
+	if v := stripANSI(m.vp.View()); !strings.Contains(v, "◆ Dirs + /etc (human)") {
 		t.Fatalf("chat:\n%s", v)
 	}
 }
