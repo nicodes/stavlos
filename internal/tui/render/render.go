@@ -60,7 +60,7 @@ type RowRange struct{ First, Last int }
 // Lines renders lines and, for every item, the rendered rows it occupies
 // (so the model can scroll the cursor item into view). Items are
 // contiguous runs of lines.
-func Lines(lines []transcript.Line, o Options) (string, map[int]RowRange) {
+func Lines(lines []transcript.Line, o Options) ([]string, map[int]RowRange) {
 	var parts []itemRows
 	for start := 0; start < len(lines); {
 		end := start + 1
@@ -115,25 +115,23 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 // assemble joins rendered items: a blank row above and below spaced items
 // (user inputs, thinking, assistant responses), never doubled, none at the
 // very top; then the ephemeral turn indicator.
-func assemble(parts []itemRows, o Options) (string, map[int]RowRange) {
-	lastPart := -1
+func assemble(parts []itemRows, o Options) ([]string, map[int]RowRange) {
+	lastPart, total := -1, 2
 	for i, p := range parts {
 		if len(p.rows) > 0 {
 			lastPart = i
 		}
+		total += len(p.rows) + 2
 	}
-	var b strings.Builder
+	out := make([]string, 0, total)
 	rows := map[int]RowRange{}
-	n := 0
 	lastBlank := true // suppress a leading blank
 	emit := func(item int, text string, blank bool) {
 		if blank && lastBlank {
 			return
 		}
-		if n > 0 {
-			b.WriteByte('\n')
-		}
-		b.WriteString(text)
+		n := len(out)
+		out = append(out, text)
 		// The cursor's highlight spans the item's own rows only, never the
 		// blank spacing rows above and below it.
 		if !blank {
@@ -144,7 +142,6 @@ func assemble(parts []itemRows, o Options) (string, map[int]RowRange) {
 				rows[item] = RowRange{n, n}
 			}
 		}
-		n++
 		lastBlank = blank
 	}
 	for i, p := range parts {
@@ -164,27 +161,34 @@ func assemble(parts []itemRows, o Options) (string, map[int]RowRange) {
 	// The ephemeral turn indicator: not an item (no cursor, no fold), gone
 	// as soon as the turn ends.
 	if o.Working {
-		if n > 0 {
-			b.WriteString("\n\n") // one blank row above the indicator, in every chat
+		if len(out) > 0 {
+			out = append(out, "") // one blank row above the indicator, in every chat
 		}
-		// Gutter + leader, like every chat line.
-		if o.Waiting {
-			b.WriteString(theme.StyleWarn.Render("!") + " " + theme.StyleWarn.Render("permission requested"))
-		} else {
-			verb := o.Verb
-			if verb == "" {
-				verb = "working"
-			}
-			b.WriteString(o.Spinner + " " + theme.StyleDim.Render(verb+"…"))
-			if o.Active != "" {
-				b.WriteString(theme.StyleDim.Render(" · " + o.Active))
-			}
+		out = append(out, indicator(o))
+	}
+	return out, rows
+}
+
+// indicator is the turn indicator's row: gutter and leader, like every chat
+// line.
+func indicator(o Options) string {
+	var b strings.Builder
+	if o.Waiting {
+		b.WriteString(theme.StyleWarn.Render("!") + " " + theme.StyleWarn.Render("permission requested"))
+	} else {
+		verb := o.Verb
+		if verb == "" {
+			verb = "working"
 		}
-		if o.Stats != "" {
-			b.WriteString(" " + theme.StyleDim.Render(o.Stats))
+		b.WriteString(o.Spinner + " " + theme.StyleDim.Render(verb+"…"))
+		if o.Active != "" {
+			b.WriteString(theme.StyleDim.Render(" · " + o.Active))
 		}
 	}
-	return b.String(), rows
+	if o.Stats != "" {
+		b.WriteString(" " + theme.StyleDim.Render(o.Stats))
+	}
+	return b.String()
 }
 
 // oneRow cuts a folded item's one shown line to a single row, so its +N
@@ -237,7 +241,7 @@ type renderKey struct {
 
 // Transcript renders t like Lines(t.All(), o), reusing from c the
 // rows of committed items that have not changed.
-func Transcript(t *transcript.Transcript, c *Cache, o Options) (string, map[int]RowRange) {
+func Transcript(t *transcript.Transcript, c *Cache, o Options) ([]string, map[int]RowRange) {
 	if len(c.entries) > t.Committed() {
 		c.entries = c.entries[:t.Committed()]
 	}

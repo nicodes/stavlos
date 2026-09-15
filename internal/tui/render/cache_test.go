@@ -36,8 +36,8 @@ func TestRenderMatchesRenderAll(t *testing.T) {
 					o.Focused, o.Cursor = true, cur
 					o.Expanded = map[int]bool{cur: cur%2 == 0}
 				}
-				want, wantRows := Lines(tr.All(), o)
-				got, gotRows := Transcript(tr, cache, o)
+				want, wantRows := linesText(tr.All(), o)
+				got, gotRows := transcriptText(tr, cache, o)
 				if got != want || !reflect.DeepEqual(gotRows, wantRows) {
 					t.Fatalf("%s, opts %+v:\ngot:\n%s\nwant:\n%s\nrows %v vs %v", stage, o, got, want, gotRows, wantRows)
 				}
@@ -78,7 +78,7 @@ func TestRenderReusesUnchangedItems(t *testing.T) {
 	misses := func(step string, want int, o Options) {
 		t.Helper()
 		before := cache.misses
-		Transcript(tr, cache, o)
+		transcriptText(tr, cache, o)
 		if got := cache.misses - before; got != want {
 			t.Fatalf("%s: rendered %d items, want %d", step, got, want)
 		}

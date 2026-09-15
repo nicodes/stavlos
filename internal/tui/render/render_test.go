@@ -26,7 +26,7 @@ func renderLines(lines []transcript.Line) []string {
 }
 
 func renderWith(lines []transcript.Line, o Options) []string {
-	out := strings.Split(stripANSI(firstOf(Lines(lines, o))), "\n")
+	out := strings.Split(stripANSI(firstOf(linesText(lines, o))), "\n")
 	for i := range out {
 		out[i] = strings.TrimRight(out[i], " ")
 	}
@@ -342,7 +342,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	if count(col, "  x") != transcript.MaxOutputCollapsed {
 		t.Fatalf("collapsed override:\n%s", strings.Join(col, "\n"))
 	}
-	_, rows := Lines(lines, Options{Width: 80, NoFold: true})
+	_, rows := linesText(lines, Options{Width: 80, NoFold: true})
 	// user block on row 0 (no leading blank at the top), one blank row of
 	// spacing, then the tool item: line, 3 output lines, trailer
 	if r := rows[0]; r.First != 0 || r.Last != 0 {
@@ -652,7 +652,7 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
 	render := func() string {
-		s, _ := Lines(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: tr.InTurn()})
+		s, _ := linesText(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: tr.InTurn()})
 		return stripANSI(s)
 	}
 	if tr.InTurn() || strings.Contains(render(), "working…") {
@@ -665,11 +665,11 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 		t.Fatalf("mid-turn should end with the indicator:\n%s", out)
 	}
 	// blocked on a permission: an exclamation mark and a different label
-	if s, _ := Lines(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Waiting: true}); !strings.HasSuffix(stripANSI(s), "\n\n! permission requested") || strings.Contains(s, "working") {
+	if s, _ := linesText(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Waiting: true}); !strings.HasSuffix(stripANSI(s), "\n\n! permission requested") || strings.Contains(s, "working") {
 		t.Fatalf("waiting indicator:\n%s", stripANSI(s))
 	}
 	// the indicator is not an item: the cursor/expand bookkeeping ignores it
-	if _, rows := Lines(tr.All(), Options{Width: 80, NoFold: true, Working: true}); len(rows) != tr.Items() {
+	if _, rows := linesText(tr.All(), Options{Width: 80, NoFold: true, Working: true}); len(rows) != tr.Items() {
 		t.Fatalf("rows %d, items %d", len(rows), tr.Items())
 	}
 	// elapsed time grows with the clock; tokens add up over the turn
@@ -683,7 +683,7 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	if got := TurnStats(75*time.Second, 1500); got != "(1m15s · 2k tokens)" {
 		t.Fatalf("stats: %q", got)
 	}
-	if s, _ := Lines(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Stats: "(3s · 0 tokens)"}); !strings.HasSuffix(stripANSI(s), "⠋ working… (3s · 0 tokens)") {
+	if s, _ := linesText(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Stats: "(3s · 0 tokens)"}); !strings.HasSuffix(stripANSI(s), "⠋ working… (3s · 0 tokens)") {
 		t.Fatalf("stats suffix:\n%s", stripANSI(s))
 	}
 	tr.Apply(mk(3, event.TurnEnded, event.TurnEndedPayload{Turn: 1}))
@@ -699,7 +699,7 @@ func TestWorkingIndicatorOnlyDuringTurn(t *testing.T) {
 	if v := tr.TurnVerb(); v != transcript.TurnVerbs[1] {
 		t.Fatalf("turn 2 verb %q, want %q", v, transcript.TurnVerbs[1])
 	}
-	if s, _ := Lines(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Verb: tr.TurnVerb()}); !strings.HasSuffix(stripANSI(s), "⠋ "+transcript.TurnVerbs[1]+"…") {
+	if s, _ := linesText(tr.All(), Options{Width: 80, NoFold: true, Spinner: "⠋", Working: true, Verb: tr.TurnVerb()}); !strings.HasSuffix(stripANSI(s), "⠋ "+transcript.TurnVerbs[1]+"…") {
 		t.Fatalf("verb on the indicator:\n%s", stripANSI(s))
 	}
 	tr.Apply(mk(5, event.TurnAborted, event.TurnPayload{Turn: 2}))
@@ -716,7 +716,7 @@ func TestCursorMarkSkipsSpacingRows(t *testing.T) {
 		{Kind: transcript.LineTool, Text: "Shell  ls", Item: 2, Tool: "shell"},
 	}
 	for cursor := 0; cursor < 3; cursor++ {
-		out, _ := Lines(lines, Options{Width: 60, NoFold: true, Focused: true, Cursor: cursor})
+		out, _ := linesText(lines, Options{Width: 60, NoFold: true, Focused: true, Cursor: cursor})
 		for _, row := range strings.Split(stripANSI(out), "\n") {
 			if strings.TrimSpace(row) == GutterMark {
 				t.Fatalf("cursor %d: the mark sits on a blank spacing row:\n%s", cursor, stripANSI(out))
@@ -963,4 +963,16 @@ func TestPatchDiffRenders(t *testing.T) {
 	evtest.Apply(tr, evtest.Call("a", "c1", "apply_patch", string(input)))
 	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Output: "updated a.go (1 hunk(s))"}))
 	assertSubsequence(t, renderLines(tr.All()), []string{"± Apply patch  a.go", "  a.go", "  @@ func run() {", "  -old()"})
+}
+
+// linesText is Lines as the chat shows it, one string.
+func linesText(lines []transcript.Line, o Options) (string, map[int]RowRange) {
+	rows, items := Lines(lines, o)
+	return strings.Join(rows, "\n"), items
+}
+
+// transcriptText is Transcript as the chat shows it, one string.
+func transcriptText(t *transcript.Transcript, c *Cache, o Options) (string, map[int]RowRange) {
+	rows, items := Transcript(t, c, o)
+	return strings.Join(rows, "\n"), items
 }
