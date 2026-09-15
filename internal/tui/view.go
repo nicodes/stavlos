@@ -1360,8 +1360,12 @@ func lastSnippet(t *transcript.Transcript) string {
 		case transcript.LineBlank, transcript.LineLabel, transcript.LineRule:
 			continue
 		}
-		// plain text: newlines flattened, **bold** markers dropped
-		s := strings.TrimSpace(strings.NewReplacer("\n", " ", "**", "").Replace(l.Text))
+		// plain text: newlines flattened, **bold** markers and an aside's title dropped
+		text := l.Text
+		if l.Glyph == transcript.GlyphAside {
+			text = strings.TrimPrefix(text, transcript.AsideTitle)
+		}
+		s := strings.TrimSpace(strings.NewReplacer("\n", " ", "**", "").Replace(text))
 		if s == "" {
 			continue
 		}

@@ -82,7 +82,7 @@ func TestBuildTranscript(t *testing.T) {
 		"$ Shell  sleep 100 (cancelled)",
 		"  partial",
 		"◌ thinking…",
-		"§ Done.",
+		"§ Aside Done.",
 		"◦ Turn cancelled",
 		"✓ Finished success",
 		"all good",
@@ -255,7 +255,7 @@ func TestAssistantMarkdownAndErrors(t *testing.T) {
 		mk(2, "a", event.TurnEnded, event.TurnEndedPayload{Reason: "error", Error: "boom"}),
 		mk(3, "a", event.AgentKilled, nil),
 	}))
-	assertSubsequence(t, got, []string{"§ Plan", "  Some bold text", "   fmt.Println()", "  - item", "! boom", "⊘ killed"})
+	assertSubsequence(t, got, []string{"§ Aside", "  Plan", "  Some bold text", "   fmt.Println()", "  - item", "! boom", "⊘ killed"})
 	for _, g := range got {
 		if strings.Contains(g, "```") || strings.Contains(g, "· gpt-x") {
 			t.Fatalf("unexpected line %q (fences dropped; no model trailer on tool_use)", g)
@@ -280,7 +280,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "shell"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"› @user hi", "◌ thinking…", "§ Hello", "$ Shell"})
+	assertSubsequence(t, got, []string{"› @user hi", "◌ thinking…", "§ Aside Hello", "$ Shell"})
 	if len(tr.Tail()) == 0 || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -293,7 +293,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 		t.Fatal("buffer should be cleared by assistant.message")
 	}
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"◌ one", "§ Hello"})
+	assertSubsequence(t, got, []string{"◌ one", "§ Aside Hello"})
 	for _, g := range got {
 		if g == "$ Shell" || g == "◌ thinking…" || g == "two" {
 			t.Fatalf("stale stream line %q", g)
@@ -884,7 +884,7 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	tr.Apply(mk(7, "a", event.TurnStarted, event.TurnPayload{Turn: 2}))
 	tr.Apply(mk(8, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "thanks"}))
 	got := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
-	want := "› @user list files\n$ Shell  ls\n  a.go\n§ one file\n\n› @user thanks"
+	want := "› @user list files\n$ Shell  ls\n  a.go\n§ Aside one file\n\n› @user thanks"
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -895,7 +895,7 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	tr.Apply(mk(12, "a", event.UserMessage, event.UserMessagePayload{Turn: 3, Kind: event.MsgReminder, Text: "[reminder from the harness] ..."}))
 	tr.Apply(mk(13, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 3, Blocks: []model.Block{{Type: model.BlockText, Text: "replying now"}}}))
 	nudged := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
-	if !strings.HasSuffix(nudged, "› @user thanks\n\n↻ Nudge owes a reply to you\n§ replying now") {
+	if !strings.HasSuffix(nudged, "› @user thanks\n\n↻ Nudge owes a reply to you\n§ Aside replying now") {
 		t.Fatalf("nudge spacing:\n%s", nudged)
 	}
 	tr = transcript.NewTranscript()
@@ -924,7 +924,7 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	} {
 		between.Apply(ev)
 	}
-	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user go\n§ done\n⇄ Mode → auto · allows inside the agent's directories, denies outside them\n\n› @user again" {
+	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user go\n§ Aside done\n⇄ Mode → auto · allows inside the agent's directories, denies outside them\n\n› @user again" {
 		t.Fatalf("a between-turn mode change:\n%s", got)
 	}
 	// the loader keeps one blank row above it
