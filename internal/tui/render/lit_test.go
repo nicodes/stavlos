@@ -35,10 +35,10 @@ func TestLitItemReadsLighter(t *testing.T) {
 		}
 	}
 	aside := []transcript.Line{{Kind: transcript.LineText, Text: "an aside", Note: true}}
-	if got := firstOf(Lines(aside, Options{Width: 80, NoFold: true, Expanded: map[int]bool{0: true}})); strings.Contains(got, grey) {
+	if got := firstOf(linesText(aside, Options{Width: 80, NoFold: true, Expanded: map[int]bool{0: true}})); strings.Contains(got, grey) {
 		t.Errorf("an expanded item reads in the text colour too: %q", got)
 	}
-	if got := firstOf(Lines(aside, Options{Width: 80, NoFold: true})); !strings.Contains(got, grey) {
+	if got := firstOf(linesText(aside, Options{Width: 80, NoFold: true})); !strings.Contains(got, grey) {
 		t.Errorf("an item neither under the cursor nor expanded keeps its grey: %q", got)
 	}
 }

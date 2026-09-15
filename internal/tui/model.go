@@ -7,11 +7,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
@@ -76,7 +74,7 @@ type Model struct {
 
 	presets []protocol.PresetInfo
 
-	vp       viewport.Model
+	vp       chatViewport
 	input    textarea.Model // grows with the text, up to inputMaxLines
 	sp       spinner.Model
 	spinning bool // a spinner tick is scheduled: it runs only while something animates
@@ -236,13 +234,7 @@ func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 	ti.Placeholder = placeholders[placeholderIndex(time.Now())]
 	ti.Focus()
 
-	vp := viewport.New(80, 20)
-	vp.MouseWheelEnabled = true
-	// Arrow keys are ours (selection); the viewport keeps pgup/pgdn.
-	vp.KeyMap.Up = key.NewBinding()
-	vp.KeyMap.Down = key.NewBinding()
-	vp.KeyMap.Left = key.NewBinding()
-	vp.KeyMap.Right = key.NewBinding()
+	vp := chatViewport{Width: 80, Height: 20}
 
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot), spinner.WithStyle(theme.StyleRunning))
 
@@ -300,12 +292,11 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case tea.KeyMsg:
 		cmds = append(cmds, m.handleKey(msg))
 	case tea.MouseMsg:
-		var cmd tea.Cmd
-		m.vp, cmd = m.vp.Update(msg)
+		m.vp.Wheel(msg)
 		if m.focus != focusChat {
 			m.follow = m.vp.AtBottom()
 		}
-		cmds = append(cmds, cmd, m.mouse(msg))
+		cmds = append(cmds, m.mouse(msg))
 	case spinner.TickMsg, placeholderTickMsg, compactTickMsg, treeTickMsg, clearStatusMsg:
 		cmds = append(cmds, m.onTick(msg))
 	case reconcileMsg, subscribedMsg, eventMsg, streamMsg, promptMsg, disconnectedMsg, treeMsg, resultMsg, promptReplyMsg:

@@ -258,15 +258,15 @@ func (m *Model) refreshViewport() {
 
 		CompactFrame: render.CompactFrame(time.Now()),
 	}
-	var content string
+	var lines []string
 	var rows map[int]render.RowRange
 	if t != nil {
-		content, rows = render.Transcript(t, m.chatCache(m.viewID()), opts) // unchanged items come from the cache
+		lines, rows = render.Transcript(t, m.chatCache(m.viewID()), opts) // unchanged items come from the cache
 	} else {
-		content, rows = render.Lines(nil, opts)
+		lines, rows = render.Lines(nil, opts)
 	}
 	m.itemRows = rows
-	m.vp.SetContent(content)
+	m.vp.SetRows(lines)
 	if m.follow {
 		m.vp.GotoBottom()
 	}
