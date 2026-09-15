@@ -1,0 +1,273 @@
+package tui
+
+import (
+	"fmt"
+
+	"github.com/charmbracelet/bubbles/key"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/format"
+)
+
+func (m *Model) findAgent(id string) int {
+	for i, a := range m.agents {
+		if a.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m *Model) selectedID() string {
+	if m.selected < 0 || m.selected >= len(m.agents) {
+		return ""
+	}
+	return m.agents[m.selected].ID
+}
+
+func (m *Model) selectedAgent() *protocol.AgentInfo {
+	if m.selected < 0 || m.selected >= len(m.agents) {
+		return nil
+	}
+	return &m.agents[m.selected]
+}
+
+func (m *Model) agentLabel(id string) string {
+	if i := m.findAgent(id); i >= 0 {
+		return m.agents[i].Name
+	}
+	return id
+}
+
+// setAgents replaces the tree, keeping the selection on the same agent.
+func (m *Model) setAgents(agents []protocol.AgentInfo) {
+	agents = cleanAgents(agents)
+	prev := m.selectedID()
+	m.agents = agents
+	if i := m.findAgent(prev); i >= 0 {
+		m.selected = i
+	} else {
+		m.selected = 0
+	}
+	if prev != m.selectedID() {
+		m.selectionChanged()
+	}
+}
+
+// moveSelection cycles the selected agent. With the sidebar hidden the new
+// label is flashed in the footer so the change is visible.
+func (m *Model) moveSelection(delta int) tea.Cmd {
+	n := len(m.agents)
+	if n == 0 {
+		return nil
+	}
+	m.openAgent(wrapIndex(m.selected+delta, n))
+	if !m.sidebarVisible() {
+		return m.setStatusFor("→ "+m.agents[m.selected].Name, false, selectDuration)
+	}
+	return nil
+}
+
+// toggleTree flips the sidebar; it stays hidden below sidebarMinW columns.
+func (m *Model) toggleTree() tea.Cmd {
+	m.showTree = !m.showTree
+	if m.showTree && m.width < sidebarMinW {
+		m.showTree = false
+		return m.setStatus(fmt.Sprintf("sidebar needs %d columns", sidebarMinW), true)
+	}
+	m.layout()
+	if m.showTree {
+		return tea.Batch(m.setFocus(focusSidebar), channelsCmd(m.ctx, m.c, m.channel.Dir, channelsNav))
+	}
+	return m.setFocus(focusInput)
+}
+
+// sidebarKey handles keys while the sidebar has focus: ↑/↓ (or j/k) move
+// the cursor, enter selects that agent and returns to the input, esc
+// returns without changing the selection (ctrl+b, handled before, closes
+// the sidebar).
+func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
+	n := m.sidebarItems()
+	switch {
+	case key.Matches(msg, keys.OvClose):
+		return m.setFocus(focusInput)
+	case stepCursor(msg, &m.sbCursor, n, true):
+		return nil
+	case key.Matches(msg, keys.PageUp):
+		m.vp.PageUp()
+		m.follow = m.vp.AtBottom()
+		return nil
+	case key.Matches(msg, keys.PageDown):
+		m.vp.PageDown()
+		m.follow = m.vp.AtBottom()
+		return nil
+	case key.Matches(msg, keys.Select):
+		return m.sidebarSelect(m.sbCursor)
+	case key.Matches(msg, keys.TabRight): // → on the title: its +; on a channel row: its gear, the channel's dirs
+		if m.sbCursor == 0 {
+			return m.newChannel()
+		}
+		return m.channelSettings(m.sbCursor)
+	case msg.String() == "n": // the next agent that needs you, selected at once
+		if i := m.nextNeedy(max(-1, m.sbCursor-m.channelRow()-1)); i >= 0 {
+			m.sbCursor = m.channelRow() + 1 + i
+			m.openAgent(i)
+		} else {
+			return m.setStatus("no agent is waiting on you", false)
+		}
+		return nil
+	}
+	return nil
+}
+
+// nextNeedy is the index of the next agent after from (wrapping) with a
+// permission or question of its own pending, or -1.
+func (m *Model) nextNeedy(from int) int {
+	n := len(m.agents)
+	for k := 1; k <= n; k++ {
+		i := (from + k) % n
+		if m.needsHuman(m.agents[i].ID) != "" {
+			return i
+		}
+	}
+	return -1
+}
+
+// sidebarItems is how many rows the sidebar cursor can rest on: + channel,
+// the directory's channels and this channel's agents. The cursor counts them
+// top to bottom: 0 is + channel, then the channels alphabetically with this
+// channel's agents right under its row (channelRow).
+func (m *Model) sidebarItems() int {
+	return len(m.agents) + 2 + len(m.navChannels)
+}
+
+// channelRow is the sidebar cursor index of this channel's row: after
+// + channel and the other channels named before it (navChannels is kept in
+// alphabetical order). Its agent i is channelRow()+1+i.
+func (m Model) channelRow() int {
+	n := 1
+	for _, s := range m.navChannels {
+		if compareChannels(s, m.channel) < 0 {
+			n++
+		}
+	}
+	return n
+}
+
+// sidebarSelect acts on the item under the cursor: + channel creates a
+// channel in this directory and opens it; this channel's row shows its chat
+// and an agent row that agent's own chat (both focus the input); another
+// channel's row opens that channel in place of this one.
+func (m *Model) sidebarSelect(i int) tea.Cmd {
+	na, here := len(m.agents), m.channelRow()
+	switch {
+	case i == 0:
+		return m.newChannel()
+	case i < here:
+		return m.openOther(i - 1)
+	case i == here:
+		chat := m.openChat()
+		if cmd, ok := m.openWaiting(m.channelID, ""); ok {
+			return tea.Batch(chat, cmd)
+		}
+		return tea.Batch(chat, m.setFocus(focusInput))
+	case i <= here+na:
+		m.openAgent(i - here - 1)
+		if cmd, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
+			return cmd
+		}
+		return m.setFocus(focusInput)
+	case i-na-2 < len(m.navChannels):
+		return m.openOther(i - na - 2)
+	}
+	return nil
+}
+
+// channelAt is the channel a sidebar cursor index names: this channel (k
+// -1) or the directory's other channel k; ok is false for any other row.
+func (m Model) channelAt(i int) (k int, ok bool) {
+	here, na := m.channelRow(), len(m.agents)
+	switch {
+	case i == here:
+		return -1, true
+	case i >= 1 && i < here:
+		return i - 1, true
+	case i > here+na && i-na-2 < len(m.navChannels):
+		return i - na - 2, true
+	}
+	return 0, false
+}
+
+// channelSettings is the gear of the channel on sidebar row i (→ on the row,
+// or a click on the gear): this channel's dirs dialog, or another channel
+// opened on its dirs dialog.
+func (m *Model) channelSettings(i int) tea.Cmd {
+	k, ok := m.channelAt(i)
+	switch {
+	case !ok:
+		return nil
+	case k < 0:
+		return m.openTab(focusDirs)
+	}
+	m.dirsNext = true
+	return m.openOther(k)
+}
+
+// openOther opens the directory's other channel k (navChannels order) in
+// place of this one.
+func (m *Model) openOther(k int) tea.Cmd {
+	s := m.navChannels[k]
+	return tea.Batch(m.setStatus("opening #"+s.Name, false), switchChannelCmd(m.ctx, m.c, m.channelID, s.ID))
+}
+
+// newChannel is + channel: a popup names a new channel of this directory,
+// which then opens in place of this one.
+func (m *Model) newChannel() tea.Cmd {
+	o := newOverlay(ovNewChannel, overlayInput, "New channel in "+format.ShortHome(m.channel.Dir))
+	o.input.Placeholder = "name, shown as #name"
+	return m.openOverlay(o)
+}
+
+// sidebarClick focuses the sidebar and acts on the row under the pointer
+// like space: the chat row or an agent row opens that chat (the sidebar
+// keeps focus), + channel or another channel's row acts like space.
+func (m *Model) sidebarClick(x, y int) tea.Cmd {
+	cmd := m.setFocus(focusSidebar)
+	if y == sidebarTabsRow { // the ! ? dirs tabs: a click opens that tab
+		if f, ok := m.tabAt(x, 0); ok && m.sidebarVisible() {
+			return tea.Batch(cmd, m.openTab(f))
+		}
+		return cmd
+	}
+	_, items := m.sidebarBody(sidebarWidth - 1)
+	row := y - len(m.sidebarHeader(sidebarWidth-1))
+	if row < 0 || row >= len(items) || items[row] < 0 {
+		return cmd
+	}
+	i := items[row]
+	m.sbCursor = i
+	if i == 0 { // the channels title: only its + acts
+		if x >= sidebarWidth-3 {
+			return tea.Batch(cmd, m.newChannel())
+		}
+		return cmd
+	}
+	if _, ok := m.channelAt(i); ok && x >= sidebarWidth-3 { // the gear at the row's right edge
+		return tea.Batch(cmd, m.channelSettings(i))
+	}
+	switch {
+	case i == m.channelRow():
+		chat := m.openChat()
+		if open, ok := m.openWaiting(m.channelID, ""); ok {
+			return tea.Batch(cmd, chat, open)
+		}
+		return tea.Batch(cmd, chat)
+	case i > m.channelRow() && i <= m.channelRow()+len(m.agents):
+		m.openAgent(i - m.channelRow() - 1)
+		if open, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
+			return tea.Batch(cmd, open)
+		}
+		return cmd
+	}
+	return tea.Batch(cmd, m.sidebarSelect(i))
+}
