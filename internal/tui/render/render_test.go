@@ -110,7 +110,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	tr.Apply(mk(3, "c1", event.TurnStarted, event.TurnPayload{Turn: 1}))
 	tr.Apply(mk(4, "c1", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "look around", From: "root"}))
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"» @root as scout (explorer) · m", "  look around"})
+	assertSubsequence(t, got, []string{"⋙ @root as scout (explorer) · m", "  look around"})
 	for _, g := range got {
 		if strings.Contains(g, "Prompt from") || strings.Contains(g, "▹") {
 			t.Fatalf("the spawn and its task are one item: %q", got)
