@@ -2,6 +2,8 @@ package transcript
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
@@ -26,7 +28,8 @@ func NewChat() *Transcript {
 func ChatEvent(typ event.Type) bool {
 	switch typ {
 	case event.AgentSpawned, event.AgentRoleChanged, event.ChatPosted, event.MessageToUser,
-		event.PromptRequested, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted:
+		event.PromptRequested, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted,
+		event.AgentKilled, event.ReplyMissing:
 		return true
 	}
 	return false
@@ -54,6 +57,13 @@ func (t *Transcript) applyChat(ev event.Event) {
 		var p event.RoleChangedPayload
 		if ev.Decode(&p) == nil && p.Label != "" {
 			t.names[ev.Agent] = p.Label
+		}
+	case event.AgentKilled:
+		delete(t.open, t.names[ev.Agent]) // no reply is coming
+	case event.ReplyMissing:
+		var p event.RepliesPayload
+		if ev.Decode(&p) == nil && slices.Contains(p.Parties, "user") {
+			delete(t.open, t.names[ev.Agent]) // it ended without replying
 		}
 	case event.ChatPosted:
 		var p event.ChatPayload
@@ -84,7 +94,7 @@ func (t *Transcript) applyChat(ev event.Event) {
 				for i := range lines {
 					lines[i].Indent = 1
 				}
-				t.insertIntoItem(item, lines)
+				t.insertIntoItem(item, append([]Line{{Kind: LineBlank, Spacer: true, Agent: ev.Agent}}, lines...))
 				if t.open[from] == item {
 					delete(t.open, from) // answered: the next post to it starts a new thread
 				}
@@ -130,7 +140,11 @@ func (t *Transcript) post(p event.ChatPayload) {
 		item = open
 	}
 	if grouped {
-		t.insertIntoItem(item, lines[1:]) // no blank line between grouped posts
+		lines = lines[1:] // no gap between grouped posts…
+		if slices.ContainsFunc(t.items[item], func(l Line) bool { return l.Indent > 0 }) {
+			lines = append([]Line{{Kind: LineBlank, Spacer: true}}, lines...) // …but one after a reply
+		}
+		t.insertIntoItem(item, lines)
 	} else {
 		refs := t.appendItem(lines)
 		if len(refs) == 0 {
@@ -144,6 +158,19 @@ func (t *Transcript) post(p event.ChatPayload) {
 	for _, n := range p.To {
 		t.open[n] = item
 	}
+}
+
+// Waiting maps each thread of the session chat to the agents still due to
+// reply in it, sorted; it is empty outside the chat.
+func (t *Transcript) Waiting() map[int][]string {
+	out := map[int][]string{}
+	for name, item := range t.open {
+		out[item] = append(out[item], name)
+	}
+	for _, names := range out {
+		sort.Strings(names)
+	}
+	return out
 }
 
 // collapsed folds a long reply the way tool output folds: its first
