@@ -5,16 +5,22 @@ import (
 	"testing"
 )
 
-func TestMentions(t *testing.T) {
-	for text, want := range map[string][]string{
-		"@scout look": {"scout"},
-		"hey @Scout and @lookout-2, @scout again": {"scout", "lookout-2"},
-		"mail me@example.com":                     nil,
-		"(@main) @kid-. @ alone @":                {"main", "kid"},
-		"no mentions here":                        nil,
+func TestAddressees(t *testing.T) {
+	for text, want := range map[string]struct {
+		names   []string
+		message string
+	}{
+		"@scout look":                           {[]string{"scout"}, "look"},
+		"@Scout @lookout-2 check the tests":     {[]string{"scout", "lookout-2"}, "check the tests"},
+		"@main, what about @decorators here?":   {[]string{"main"}, "what about @decorators here?"},
+		"mail me@example.com":                   {nil, "mail me@example.com"},
+		"hi @scout":                             {nil, "hi @scout"},
+		"@scout":                                {[]string{"scout"}, ""},
+		"@scout @lookout\nsecond line @x stays": {[]string{"scout", "lookout"}, "second line @x stays"},
 	} {
-		if got := Mentions(text); !reflect.DeepEqual(got, want) {
-			t.Errorf("Mentions(%q) = %q, want %q", text, got, want)
+		names, message := Addressees(text)
+		if !reflect.DeepEqual(names, want.names) || message != want.message {
+			t.Errorf("Addressees(%q) = %q, %q; want %q, %q", text, names, message, want.names, want.message)
 		}
 	}
 }

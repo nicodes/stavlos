@@ -12,9 +12,10 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 )
 
-// TestPostDeliversByMention: a chat message reaches each agent it
-// mentions once, the root when it mentions none, and is refused whole when
-// a mention names nobody.
+// TestPostDeliversByMention: the @names at the front of a chat message say
+// who gets it, and what follows is delivered to each exactly as written; a
+// message with none goes to the root; a leading name that is nobody refuses
+// it whole.
 func TestPostDeliversByMention(t *testing.T) {
 	fm := &fakeModel{steps: []step{
 		reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
@@ -36,30 +37,33 @@ func TestPostDeliversByMention(t *testing.T) {
 		}
 		return out
 	}
-	to, err := s.Post(ctx, "@Scout and @lookout, then @scout again", "human:test")
+	to, err := s.Post(ctx, "@Scout @lookout @scout check the tests, then ping @main", "human:test")
 	if err != nil || !reflect.DeepEqual(to, []string{"scout", "lookout"}) {
 		t.Fatalf("to %v err %v", to, err)
 	}
-	if got := steers(scout.ID); len(got) != 1 || got[0] != "human:test @Scout and @lookout, then @scout again" {
+	if got := steers(scout.ID); len(got) != 1 || got[0] != "human:test check the tests, then ping @main" {
 		t.Fatalf("scout steers %q", got)
 	}
 	if len(steers(lookout.ID)) != 1 || len(steers(root.ID)) != 0 {
 		t.Fatalf("lookout %q root %q", steers(lookout.ID), steers(root.ID))
 	}
-	if to, err := s.Post(ctx, "mail me@example.com", "human:test"); err != nil || !reflect.DeepEqual(to, []string{"main"}) || len(steers(root.ID)) != 1 {
-		t.Fatalf("no mention goes to the root: %v %v", to, err)
+	if to, err := s.Post(ctx, "hi @scout, mail me@example.com", "human:test"); err != nil || !reflect.DeepEqual(to, []string{"main"}) || steers(root.ID)[0] != "human:test hi @scout, mail me@example.com" {
+		t.Fatalf("no leading name goes to the root, untouched: %v %v %q", to, err, steers(root.ID))
 	}
-	if _, err := s.Post(ctx, "@scout and @ghost", "human:test"); err == nil || !strings.Contains(err.Error(), "@ghost") || len(steers(scout.ID)) != 1 {
-		t.Fatalf("an unknown mention refuses the message: %v", err)
+	if _, err := s.Post(ctx, "@scout @ghost hi", "human:test"); err == nil || !strings.Contains(err.Error(), "@ghost") || len(steers(scout.ID)) != 1 {
+		t.Fatalf("an unknown leading name refuses the message: %v", err)
 	}
-	var posts [][]string
+	if _, err := s.Post(ctx, "@scout", "human:test"); err == nil {
+		t.Fatal("names with no message are refused")
+	}
+	var posts []string
 	for _, e := range h.ofType(event.ChatPosted, "") {
 		var p event.ChatPayload
 		_ = e.Decode(&p)
-		posts = append(posts, p.To)
+		posts = append(posts, strings.Join(p.To, ",")+": "+p.Text)
 	}
-	if !reflect.DeepEqual(posts, [][]string{{"scout", "lookout"}, {"main"}}) {
-		t.Fatalf("chat.posted log: %v", posts)
+	if strings.Join(posts, " | ") != "scout,lookout: check the tests, then ping @main | main: hi @scout, mail me@example.com" {
+		t.Fatalf("chat.posted log: %q", posts)
 	}
 }
 

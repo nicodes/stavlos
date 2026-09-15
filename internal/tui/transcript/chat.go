@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
-	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/format"
 )
 
@@ -152,24 +151,13 @@ func ItemFolds(lines []Line, item int) bool {
 	return false
 }
 
-// addressed puts the @names a post went to before its text, leaving out
-// those the text already mentions: "what's the stack?" sent to main reads
-// "@main what's the stack?".
+// addressed puts the @names a post went to in front of its message, the way
+// it was typed: the message itself never carries them.
 func addressed(to []string, text string) string {
-	mentioned := map[string]bool{}
-	for _, n := range protocol.Mentions(text) {
-		mentioned[n] = true
-	}
-	var pre []string
-	for _, n := range to {
-		if !mentioned[strings.ToLower(n)] {
-			pre = append(pre, "@"+n)
-		}
-	}
-	if len(pre) == 0 {
+	if len(to) == 0 {
 		return text
 	}
-	return strings.Join(pre, " ") + " " + text
+	return "@" + strings.Join(to, " @") + " " + text
 }
 
 // agentName is how the chat names agent id: its name once spawned, a short

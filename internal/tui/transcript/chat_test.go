@@ -36,7 +36,7 @@ func TestChatKeepsOnlyPostsAndReplies(t *testing.T) {
 	c, apply := newChatFeed()
 	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
 	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Parent: "a1", Label: "scout", Archetype: "general"})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@scout look around", To: []string{"scout"}})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "look around", To: []string{"scout"}})
 	apply("b2", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)})
 	apply("b2", event.PromptRequested, event.PromptRequestedPayload{ID: "perm1", Kind: "permission", Tool: "shell"})
 	apply("", event.PromptAnswered, event.PromptAnsweredPayload{ID: "perm1", Answer: "allow"})
@@ -73,7 +73,7 @@ func TestChatInArrivalOrder(t *testing.T) {
 	c, apply := newChatFeed()
 	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
 	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Label: "scout"})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@scout check the tests", To: []string{"scout"}})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "check the tests", To: []string{"scout"}})
 	apply("", event.ChatPosted, event.ChatPayload{ID: "p2", Text: "what's the stack?", To: []string{"main"}})
 	apply("", event.ChatPosted, event.ChatPayload{ID: "p3", Text: "and the setup?", To: []string{"main"}})
 	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "Go 1.27", Post: "p3"})
@@ -95,7 +95,7 @@ func TestChatWaiting(t *testing.T) {
 	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
 	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Label: "scout"})
 	apply("c3", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c3", Label: "lookout"})
-	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@main @scout @lookout status?", To: []string{"main", "scout", "lookout"}})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "status?", To: []string{"main", "scout", "lookout"}})
 	if w := strings.Join(c.Waiting(), ","); w != "lookout,main,scout" {
 		t.Fatalf("waiting %s", w)
 	}
