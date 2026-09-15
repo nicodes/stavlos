@@ -388,8 +388,9 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.sp, cmd = m.sp.Update(msg)
-		// The "working…" indicator carries the spinner, so redraw mid-turn.
-		if t := m.transcripts[m.selectedID()]; t != nil && (t.InTurn() || t.Running()) {
+		// The "working…" indicator and the chat's loaders carry the
+		// spinner, so redraw while either shows.
+		if t := m.transcripts[m.viewID()]; t != nil && (t.InTurn() || t.Running() || len(t.Waiting()) > 0) {
 			m.refreshViewport()
 		}
 		return cmd
@@ -3136,6 +3137,10 @@ func (m *Model) refreshViewport() {
 			break
 		}
 	}
+	var pending map[int][]string // the session chat's threads still waiting on a reply
+	if t != nil && m.superChat {
+		pending = t.Waiting()
+	}
 	opts := render.Options{
 		Width:    m.vp.Width,
 		Details:  m.details,
@@ -3146,6 +3151,7 @@ func (m *Model) refreshViewport() {
 		Active:   active,
 		Stats:    stats,
 		Expanded: m.expanded[m.viewID()],
+		Pending:  pending,
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,
 

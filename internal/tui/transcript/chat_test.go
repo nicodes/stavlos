@@ -177,3 +177,40 @@ func TestChatFoldsLongReplies(t *testing.T) {
 		t.Fatal("the long reply's thread folds, the short message does not")
 	}
 }
+
+// TestChatWaitingThreads: a thread waits on its agents until each replies,
+// is killed, or ends without replying; a reply starts after a spacer.
+func TestChatWaitingThreads(t *testing.T) {
+	c := NewChat()
+	seq := int64(0)
+	apply := func(agent string, typ event.Type, p any) {
+		seq++
+		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
+	}
+	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
+	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Label: "scout"})
+	apply("c3", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c3", Label: "lookout"})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@main @scout @lookout status?", To: []string{"main", "scout", "lookout"}})
+	if w := c.Waiting(); strings.Join(w[0], ",") != "lookout,main,scout" {
+		t.Fatalf("waiting %v", w)
+	}
+	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "fine", Post: "p1"})
+	apply("b2", event.AgentKilled, event.AgentRefPayload{ID: "b2"})
+	if w := c.Waiting(); strings.Join(w[0], ",") != "lookout" {
+		t.Fatalf("after a reply and a kill: %v", w)
+	}
+	apply("c3", event.ReplyMissing, event.RepliesPayload{Parties: []string{"user"}, Names: []string{"user"}})
+	if w := c.Waiting(); len(w) != 0 {
+		t.Fatalf("after a missing reply: %v", w)
+	}
+	var spacerBeforeReply bool
+	lines := c.All()
+	for i := 1; i < len(lines); i++ {
+		if lines[i].Text == "@main fine" {
+			spacerBeforeReply = lines[i-1].Spacer
+		}
+	}
+	if !spacerBeforeReply {
+		t.Fatalf("a reply starts after a spacer: %+v", lines)
+	}
+}

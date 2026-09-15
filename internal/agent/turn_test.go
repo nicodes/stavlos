@@ -591,8 +591,12 @@ func TestCompact(t *testing.T) {
 		},
 	}
 	_ = s.SetMode(ctx, protocol.ModeYolo)
+	before := len(fm.requests())
 	_ = root.Prompt(ctx, "again", "human:test")
-	waitUntil(t, h, func() bool { return root.StateOf() == StateRunning })
+	// Wait for the first model call to be in flight, not just for the turn
+	// to start: a /compact before that call's history is built would be
+	// taken by that call instead of the next one.
+	waitUntil(t, h, func() bool { return len(fm.requests()) == before+1 })
 	if st, err := root.Compact(ctx); err != nil || st != "queued" {
 		t.Fatalf("busy compact: %s %v", st, err)
 	}

@@ -83,6 +83,7 @@ type Line struct {
 	Note    bool   // the agent's own text, which reaches no one: drawn dimmed
 	Agent   string // in the session chat: the agent this line links to
 	Indent  int    // nesting depth, two columns each (a reply under its post in the session chat)
+	Spacer  bool   // a blank row kept inside an item (the session chat's gap before a reply)
 }
 
 // Tone colours a line's glyph by lifecycle: yellow while in progress, red

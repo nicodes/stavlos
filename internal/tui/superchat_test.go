@@ -109,3 +109,20 @@ func TestSuperChatSpaceExpandsALongReply(t *testing.T) {
 		t.Fatalf("space should expand the reply in the chat: super=%v\n%s", m.superChat, stripANSI(m.vp.View()))
 	}
 }
+
+// TestSuperChatLoaderUntilReply: a post shows a loader in the chat until its
+// agent replies.
+func TestSuperChatLoaderUntilReply(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.superChat = true
+	m.applyEvent(chatEvent(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Label: "main"}))
+	m.applyEvent(chatEvent(2, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "hello", To: []string{"main"}}))
+	if view := stripANSI(m.vp.View()); !strings.Contains(view, "… · @main") {
+		t.Fatalf("a loader should show under the unanswered post:\n%s", view)
+	}
+	m.applyEvent(chatEvent(3, "a", event.MessageToUser, event.ChatPayload{From: "main", Text: "hi", Post: "p1"}))
+	if view := stripANSI(m.vp.View()); strings.Contains(view, "… · @main") || !strings.Contains(view, "@main hi") {
+		t.Fatalf("the reply replaces the loader:\n%s", view)
+	}
+}
