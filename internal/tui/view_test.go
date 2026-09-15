@@ -657,7 +657,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	}
 	m.focus = focusPermission
 	hs := m.keyHints()
-	if hs[0].Key != "↑/↓" || hs[1].Key != "space" || hs[1].Desc != "choose" {
+	if hs[0].Key != "↑/↓" || hs[1].Key != "space/enter" || hs[1].Desc != "choose" {
 		t.Fatalf("permission hints: %+v", hs)
 	}
 
@@ -2571,7 +2571,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	}
 	dv := stripANSI(m.tabDialog(120))
 	lines := strings.Split(dv, "\n")
-	if !strings.Contains(dv, "a add directory · space edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
+	if !strings.Contains(dv, "a add directory · space/enter edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
 		t.Fatalf("dirs dialog should carry its own hints (without esc):\n%s", dv)
 	}
 	if repo := findLine(lines, "▸ /repo  channel"); repo < 0 || strings.Contains(lines[repo], "◆") || !inOrder(dv, "Dirs 3", "▸ /repo  channel", "/srv/shared  human", "/tmp/build  human") {
@@ -2688,62 +2688,69 @@ func TestDialogHintsWrap(t *testing.T) {
 	}
 }
 
-func TestEnterReturnsToInputAndSpaceSelects(t *testing.T) {
+func TestEnterSelectsAndCtrlSpaceReturnsToInput(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Todos = []event.TodoItem{{ID: "t1", Text: "x", Status: "pending"}}
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	enter := tea.KeyMsg{Type: tea.KeyEnter}
 	space := tea.KeyMsg{Type: tea.KeySpace}
-	// strip: enter goes to the input, space opens the highlighted tab
+	ctrlSpace := tea.KeyMsg{Type: tea.KeyCtrlAt} // ctrl+space reaches a program as ctrl+@
+	// strip: enter opens the highlighted tab, exactly as space does
 	press(&m, tab)
 	if m.focus != focusTabs {
 		t.Fatalf("focus %v", m.focus)
 	}
 	press(&m, enter)
+	if m.focus != focusPermission {
+		t.Fatalf("enter on the strip should open the tab: %v", m.focus)
+	}
+	// a tab dialog: ctrl+space returns to the input (not the strip)
+	press(&m, ctrlSpace)
 	if m.focus != focusInput || !m.input.Focused() {
-		t.Fatalf("enter on the strip should return to the input: %v", m.focus)
+		t.Fatalf("ctrl+space in a dialog should return to the input: %v", m.focus)
 	}
 	press(&m, tab, space)
 	if m.focus != focusPermission {
 		t.Fatalf("space on the strip should open the tab: %v", m.focus)
 	}
-	// a tab dialog: enter closes it and lands on the input (not the strip)
-	press(&m, enter)
-	if m.focus != focusInput {
-		t.Fatalf("enter in a dialog should return to the input: %v", m.focus)
-	}
-	// chat and meta row: enter → input; space acts
+	press(&m, ctrlSpace)
+	// chat: enter acts on the item and stays, ctrl+space goes back to typing
 	press(&m, tea.KeyMsg{Type: tea.KeyShiftTab})
 	if m.focus != focusChat {
 		t.Fatalf("focus %v", m.focus)
 	}
 	press(&m, enter)
-	if m.focus != focusInput {
-		t.Fatalf("enter in the chat should return to the input: %v", m.focus)
+	if m.focus != focusChat {
+		t.Fatalf("enter in the chat should stay in the chat: %v", m.focus)
 	}
+	press(&m, ctrlSpace)
+	if m.focus != focusInput {
+		t.Fatalf("ctrl+space in the chat should return to the input: %v", m.focus)
+	}
+	// meta row: enter opens the part's dialog, as space does
 	press(&m, tab, tab) // strip → meta row
 	if m.focus != focusMeta {
 		t.Fatalf("focus %v", m.focus)
 	}
-	if cmd := press(&m, space); cmd == nil {
-		t.Fatal("space on the meta row should open the part's dialog")
+	if cmd := press(&m, enter); cmd == nil {
+		t.Fatal("enter on the meta row should open the part's dialog")
 	}
-	press(&m, enter)
+	press(&m, ctrlSpace)
 	if m.focus != focusInput {
-		t.Fatalf("enter on the meta row should return to the input: %v", m.focus)
+		t.Fatalf("ctrl+space on the meta row should return to the input: %v", m.focus)
 	}
-	// an overlay: space picks, enter closes it onto the input
+	// an overlay: enter picks the row, ctrl+space closes it with nothing picked
 	m.setFocus(focusMeta)
 	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles"))
 	m.ov.setItems([]overlayItem{{id: "general", label: "general"}})
-	press(&m, enter)
-	if m.ov != nil || m.focus != focusInput || !m.input.Focused() {
-		t.Fatalf("enter in an overlay should close it onto the input: ov=%v focus=%v", m.ov != nil, m.focus)
+	if cmd := press(&m, enter); cmd == nil || m.ov != nil {
+		t.Fatalf("enter in an overlay should pick the row: cmd=%v ov=%v", cmd != nil, m.ov != nil)
 	}
 	m.openOverlay(newOverlay(ovRoles, overlayList, "Roles"))
 	m.ov.setItems([]overlayItem{{id: "general", label: "general"}})
-	if cmd := press(&m, space); cmd == nil || m.ov != nil {
-		t.Fatalf("space in an overlay should pick the row: cmd=%v ov=%v", cmd != nil, m.ov != nil)
+	press(&m, ctrlSpace)
+	if m.ov != nil || m.focus != focusInput || !m.input.Focused() {
+		t.Fatalf("ctrl+space in an overlay should close it onto the input: ov=%v focus=%v", m.ov != nil, m.focus)
 	}
 	// text fields keep enter: a question's typed answer
 	m.prompts = []protocol.PromptInfo{{ID: "q", Kind: "question", Agent: "a", Questions: []protocol.Question{{Question: "which?", Options: []protocol.QuestionOption{{Label: "x"}}}}}}
@@ -2755,6 +2762,13 @@ func TestEnterReturnsToInputAndSpaceSelects(t *testing.T) {
 	}
 	if cmd := press(&m, enter); cmd == nil || m.focus != focusQuestions {
 		t.Fatalf("enter should submit the answer: cmd=%v focus=%v", cmd != nil, m.focus)
+	}
+	// and ctrl+space gets out of that text field
+	m.setFocus(focusQuestions)
+	m.q.typing = true
+	press(&m, ctrlSpace)
+	if m.focus != focusInput {
+		t.Fatalf("ctrl+space should leave a dialog's text field: %v", m.focus)
 	}
 }
 

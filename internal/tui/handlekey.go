@@ -47,16 +47,20 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.ctrlC()
 	}
 	m.quitArmed = time.Time{} // any other key disarms the two-step quit
+	// ctrl+space goes back to typing from anywhere, an overlay or a dialog's
+	// text field included; space and enter both select, open and toggle
+	// outside one.
+	if key.Matches(msg, keys.FocusInput) {
+		if m.ov != nil {
+			return m.closeOverlayToInput() // the overlay closes with nothing picked
+		}
+		return m.setFocus(focusInput)
+	}
 	if m.ov != nil {
 		return m.overlayKey(msg)
 	}
 	if !key.Matches(msg, keys.Clear) {
 		m.cancelArmed = time.Time{} // any other key disarms the two-step cancel
-	}
-	// Enter anywhere but the input (and outside a text field) closes what is
-	// open and goes back to typing; space is what selects, opens and toggles.
-	if key.Matches(msg, keys.Submit) && m.focus != focusInput && !m.textEntry() {
-		return m.setFocus(focusInput)
 	}
 
 	// While the "/" palette is open in the input, tab completes the command

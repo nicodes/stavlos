@@ -147,8 +147,6 @@ func (m *Model) overlayKey(msg tea.KeyMsg) tea.Cmd {
 		return m.closeOverlay()
 	case key.Matches(msg, keys.Select):
 		return m.overlaySubmit(false)
-	case key.Matches(msg, keys.OvSelect):
-		return m.closeOverlayToInput() // enter: back to typing, nothing picked
 	case key.Matches(msg, keys.OvAlt):
 		return m.overlaySubmit(true)
 	case key.Matches(msg, keys.OvRemove):
