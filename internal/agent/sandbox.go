@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/config"
+	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/sandbox"
 	"github.com/nicodes/stavlos/internal/tools"
@@ -19,12 +20,13 @@ import (
 // tools fill; they cannot see the harness's data, config, cache or socket,
 // the user's runtime directory (the D-Bus and agent sockets live there) or
 // credential stores; and the files that steer the harness or run code
-// later (git hooks and config, .stavlos, AGENTS.md, .envrc) are read-only.
+// later (git hooks and config, .stavlos, .envrc, and every AGENTS.md or
+// CLAUDE.md the trust hash knows) are read-only.
 
 // sandboxReadOnly are the control paths, relative to each working
 // directory, a command may read but not change. git's objects and refs
 // stay writable: only what runs code or steers an agent is frozen.
-var sandboxReadOnly = []string{".git/hooks", ".git/config", ".stavlos", "AGENTS.md", ".envrc"}
+var sandboxReadOnly = append([]string{".git/hooks", ".git/config", ".stavlos", ".envrc"}, instructions.Names...)
 
 // sandboxHiddenHome are credential stores, relative to the home directory.
 var sandboxHiddenHome = []string{
@@ -46,6 +48,7 @@ func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 			spec.ReadOnly = append(spec.ReadOnly, filepath.Join(d, ro))
 		}
 	}
+	spec.ReadOnly = append(spec.ReadOnly, cfg.InstructionFiles...) // the nested ones too
 	dirs := append([]string(nil), spec.Writable...)
 	spec.Writable = append(spec.Writable, buildCaches()...)
 	spec.Writable = append(spec.Writable, cfg.Sandbox.Writable...)

@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/escalation"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -136,9 +138,10 @@ func egress(tool string, sub policy.Subject) bool {
 }
 
 // controlFiles are the paths, relative to a working directory, whose edits
-// always ask: the harness's config and roles, the agents' instructions,
-// git's internals (hooks run code) and direnv's script.
-var controlFiles = []string{".stavlos", "AGENTS.md", ".git", ".envrc"}
+// always ask: the harness's config and roles, git's internals (hooks run
+// code) and direnv's script. Every instructions file (AGENTS.md, CLAUDE.md)
+// at any depth asks too: it is what every agent follows.
+var controlFiles = []string{".stavlos", ".git", ".envrc"}
 
 // controlFile is the first control file an apply_patch call edits, "" when
 // it edits none.
@@ -157,6 +160,9 @@ func controlFile(tool string, sub policy.Subject, base string, dirs []string) st
 				if rel == cf || strings.HasPrefix(rel, cf+string(filepath.Separator)) {
 					return v
 				}
+			}
+			if !strings.HasPrefix(rel, "..") && slices.Contains(instructions.Names, filepath.Base(rel)) {
+				return v
 			}
 		}
 	}

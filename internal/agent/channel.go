@@ -40,6 +40,10 @@ type Host interface {
 	// Prompt asks the human and waits; opened runs once the prompt can be
 	// listed and answered, before any answer is taken.
 	Prompt(ctx context.Context, info protocol.PromptInfo, opened func()) escalation.Answer
+	// ProjectChanged tells the host an instructions file of the project in
+	// dir changed since its config was loaded: the host loads it again, and
+	// asks for trust again when the hash no longer matches.
+	ProjectChanged(dir string)
 }
 
 // ErrNoModel is the turn error when an agent has no model to call.
@@ -61,6 +65,7 @@ type Channel struct {
 
 	mu      sync.Mutex
 	cfg     *config.Effective
+	stamp   string // the instructions files' sizes and times when cfg was set: a change asks the host to look again
 	st      *channelState
 	agents  map[string]*Agent // the runtime handle of every agent in st
 	stopped bool
@@ -82,7 +87,7 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, role string)
 	}
 	return &Channel{
 		ID: id, Dir: dir, Created: time.Now().UTC(),
-		host: host, tools: tools.Builtin(), cfg: cfg,
+		host: host, tools: tools.Builtin(), cfg: cfg, stamp: instructionsStamp(cfg.InstructionFiles),
 		st: newChannelState(modelID, role), agents: map[string]*Agent{},
 		ctx: ctx, cancel: cancel,
 	}
@@ -198,8 +203,9 @@ func (c *Channel) Config() *config.Effective {
 
 // SetConfig swaps the effective config (after a trust decision or edit).
 func (c *Channel) SetConfig(cfg *config.Effective) {
+	stamp := instructionsStamp(cfg.InstructionFiles)
 	c.mu.Lock()
-	c.cfg = cfg
+	c.cfg, c.stamp = cfg, stamp
 	c.mu.Unlock()
 }
 
