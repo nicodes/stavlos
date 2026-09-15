@@ -15,7 +15,7 @@ models:
   - xai/grok-4-fast                 # a bare string is shorthand for the same
 
 # Every tool is available unless removed here: shell, read, apply_patch,
-# skill, todo (todo_add and todo_update), web_fetch and web_search. A bare
+# skill, todo, web_fetch and web_search. A bare
 # deny removes a tool, so it is never offered. Any other verb, or patterns
 # under a tool, only tighten the layered policy (allow → ask → deny); a
 # loosening entry is a config error. message, agent_status and ask_user

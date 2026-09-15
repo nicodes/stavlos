@@ -1328,11 +1328,11 @@ func TestTodoListLogsProjectsAndRecovers(t *testing.T) {
 			if !strings.Contains(req.System, "# Todo list") || !strings.Contains(req.System, "(empty)") {
 				t.Errorf("system prompt should carry an empty todo section:\n%s", req.System)
 			}
-			return call("c1", "todo_add", `{"text":"Read the code"}`)
+			return call("c1", "todo", `{"add":["Read the code"]}`)
 		},
-		func(model.Request) model.Response { return call("c2", "todo_add", `{"text":"Fix the bug"}`) },
+		func(model.Request) model.Response { return call("c2", "todo", `{"add":["Fix the bug"]}`) },
 		func(model.Request) model.Response {
-			return call("c3", "todo_update", `{"id":"t1","status":"in_progress"}`)
+			return call("c3", "todo", `{"update":[{"id":"t1","status":"in_progress"}]}`)
 		},
 		func(req model.Request) model.Response {
 			// the list comes with every request
@@ -1372,10 +1372,10 @@ func TestTodoListLogsProjectsAndRecovers(t *testing.T) {
 	// restart: the list is replayed and ids continue past it
 	fm2 := &fakeModel{}
 	fm2.steps = []func(model.Request) model.Response{
-		func(model.Request) model.Response { return call("c4", "todo_add", `{"text":"Run the tests"}`) },
+		func(model.Request) model.Response { return call("c4", "todo", `{"add":["Run the tests"]}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if !strings.Contains(last.Content, "added t3") {
+			if !strings.Contains(last.Content, "- t3 [pending] Run the tests") {
 				t.Errorf("ids should continue after recovery: %+v", last)
 			}
 			return text("ok")

@@ -3,7 +3,9 @@ package agent
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/toolname"
@@ -15,9 +17,9 @@ import (
 // and every client renders the same list.
 
 // todoAPIFor is the list for a tool env, nil when the role does not
-// include "todo" (the tools then say they are unavailable).
+// include "todo" (the tool then says it is unavailable).
 func (a *Agent) todoAPIFor(rv roleView) tools.Todos {
-	if contains(rv.preset.Tools, toolname.GroupTodo) {
+	if contains(rv.preset.Tools, toolname.Todo) {
 		return todosAPI{a: a}
 	}
 	return nil
@@ -25,31 +27,35 @@ func (a *Agent) todoAPIFor(rv roleView) tools.Todos {
 
 type todosAPI struct{ a *Agent }
 
-func (t todosAPI) Add(text string) (string, error) {
-	var id string
+func (t todosAPI) Edit(add []string, updates []tools.TodoUpdate) ([]event.TodoItem, error) {
+	var out []event.TodoItem
 	err := t.change(func(st *agentState, items []event.TodoItem) ([]event.TodoItem, error) {
-		id = "t" + strconv.Itoa(st.todoSeq+1)
-		return append(items, event.TodoItem{ID: id, Text: text, Status: event.TodoPending}), nil
-	})
-	return id, err
-}
-
-func (t todosAPI) Update(id, status, text string) error {
-	return t.change(func(_ *agentState, items []event.TodoItem) ([]event.TodoItem, error) {
-		for i := range items {
-			if items[i].ID != id {
-				continue
+		for _, u := range updates {
+			i := slices.IndexFunc(items, func(it event.TodoItem) bool { return it.ID == u.ID })
+			if i < 0 {
+				return nil, fmt.Errorf("no todo item %q", u.ID)
 			}
-			if status != "" {
-				items[i].Status = event.TodoStatus(status)
+			if u.Status != "" {
+				items[i].Status = event.TodoStatus(u.Status)
 			}
-			if text != "" {
-				items[i].Text = text
+			if u.Text != "" {
+				items[i].Text = u.Text
 			}
-			return items, nil
 		}
-		return nil, fmt.Errorf("no todo item %q", id)
+		next := st.todoSeq // ids keep counting past every item there has been
+		for _, it := range items {
+			if n, err := strconv.Atoi(strings.TrimPrefix(it.ID, "t")); err == nil {
+				next = max(next, n)
+			}
+		}
+		for _, text := range add {
+			next++
+			items = append(items, event.TodoItem{ID: "t" + strconv.Itoa(next), Text: text, Status: event.TodoPending})
+		}
+		out = items
+		return items, nil
 	})
+	return out, err
 }
 
 func (t todosAPI) List() []event.TodoItem {

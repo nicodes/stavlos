@@ -19,8 +19,7 @@ const (
 	Skill      = "skill"
 	WebFetch   = "web_fetch"
 	WebSearch  = "web_search"
-	TodoAdd    = "todo_add"
-	TodoUpdate = "todo_update"
+	Todo       = "todo"
 	AskUser    = "ask_user"
 
 	Message = "message"
@@ -29,10 +28,6 @@ const (
 	AgentCancel = "agent_cancel"
 	AgentStatus = "agent_status"
 
-	// GroupTodo is the entry in a role's tools: list that stands for both
-	// todo tools.
-	GroupTodo = "todo"
-
 	// MCPPrefix starts the model-facing name of an MCP server's tool:
 	// mcp__<server>__<tool>.
 	MCPPrefix = "mcp__"
@@ -40,8 +35,6 @@ const (
 
 // Groups of tools offered together.
 var (
-	// Todo are the tools GroupTodo stands for.
-	Todo = []string{TodoAdd, TodoUpdate}
 	// Messaging is offered to every agent: any agent may message any other
 	// in its channel, or the human, and see the tree.
 	Messaging = []string{Message, AgentStatus}
@@ -53,8 +46,7 @@ var (
 	Ask = []string{AskUser}
 )
 
-// Expand replaces group entries in a role's tools: list with the tools
-// they stand for, keeping order and dropping duplicates.
+// Expand is a role's tools: list with duplicates dropped, in order.
 func Expand(names []string) []string {
 	var out []string
 	seen := map[string]bool{}
@@ -65,12 +57,6 @@ func Expand(names []string) []string {
 		}
 	}
 	for _, n := range names {
-		if n == GroupTodo {
-			for _, t := range Todo {
-				add(t)
-			}
-			continue
-		}
 		add(n)
 	}
 	return out
