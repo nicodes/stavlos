@@ -29,7 +29,7 @@ type Env struct {
 	Orch      Orchestrator     // nil if the agent cannot orchestrate
 	Partial   func(string)     // receives streamed partial output (shell); may be nil
 	MaxOutput int              // truncate tool output beyond this many bytes (0 = 32k)
-	Mon       Monitors         // general monitors (background commands, watches, timers); nil if unavailable
+	Jobs      Jobs             // the agent's background jobs; nil if unavailable
 	Todo      Todos            // the agent's todo list; nil if the preset does not include "todo"
 	Ask       Asker            // raises a question batch to the human and waits; nil in tests without a runtime
 	Search    SearchConfig     // web_search backend; zero → the tool explains how to configure it
@@ -49,9 +49,9 @@ type Asker interface {
 	Ask(ctx context.Context, questions []protocol.Question) ([]string, error)
 }
 
-// Monitors is implemented by the agent runtime: background jobs, whose
+// Jobs is implemented by the agent runtime: background jobs, whose
 // exit lands a result in the agent's mailbox and wakes it.
-type Monitors interface {
+type Jobs interface {
 	// AdoptCommand takes over a command the shell tool started (one that
 	// outlived its wait window, or was started in the background) and
 	// kills, reaps and reports it like any other job.

@@ -562,12 +562,12 @@ func TestShellBackgroundWakes(t *testing.T) {
 			}
 			return text("started, carrying on")
 		},
-		// woken by the monitor
+		// woken by the job
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks
 			txt := last[len(last)-1].Text
 			if !strings.Contains(txt, "exited 3") || !strings.Contains(txt, "one\ntwo") {
-				t.Errorf("monitor wake text: %q", txt)
+				t.Errorf("job wake text: %q", txt)
 			}
 			return text("noted")
 		},
@@ -588,8 +588,8 @@ func TestShellBackgroundWakes(t *testing.T) {
 		t.Fatalf("%+v", ms)
 	}
 	agents, _ = tree(ctx, h.c, s.ID)
-	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Kind != "command" {
-		t.Fatalf("monitors in tree: %+v", agents[0].Monitors)
+	if len(agents[0].Jobs) != 1 {
+		t.Fatalf("jobs in tree: %+v", agents[0].Jobs)
 	}
 	e = h.waitFor(event.JobFinished, root)
 	var mf event.JobFinishedPayload
@@ -606,8 +606,8 @@ func TestShellBackgroundWakes(t *testing.T) {
 		t.Fatalf("%+v", te)
 	}
 	agents, _ = tree(ctx, h.c, s.ID)
-	if len(agents[0].Monitors) != 0 {
-		t.Fatalf("monitor should be gone: %+v", agents[0].Monitors)
+	if len(agents[0].Jobs) != 0 {
+		t.Fatalf("job should be gone: %+v", agents[0].Jobs)
 	}
 }
 
@@ -649,8 +649,8 @@ func TestShellOutlivesWaitBecomesJob(t *testing.T) {
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "run it"}))
 	h.waitFor(event.JobStarted, root)
 	agents, _ = tree(ctx, h.c, s.ID)
-	if len(agents[0].Monitors) != 1 || agents[0].Monitors[0].Label != "echo early; sleep 2; echo late; exit 2" {
-		t.Fatalf("monitors in tree: %+v", agents[0].Monitors)
+	if len(agents[0].Jobs) != 1 || agents[0].Jobs[0].Label != "echo early; sleep 2; echo late; exit 2" {
+		t.Fatalf("jobs in tree: %+v", agents[0].Jobs)
 	}
 	e := h.waitFor(event.JobFinished, root)
 	var mf event.JobFinishedPayload
@@ -728,8 +728,8 @@ func TestShellKillStopsJob(t *testing.T) {
 		t.Fatal("stop did not kill the command promptly")
 	}
 	agents, _ = tree(ctx, h.c, s.ID)
-	if len(agents[0].Monitors) != 0 {
-		t.Fatalf("%+v", agents[0].Monitors)
+	if len(agents[0].Jobs) != 0 {
+		t.Fatalf("%+v", agents[0].Jobs)
 	}
 }
 

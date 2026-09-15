@@ -277,8 +277,6 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 	return nil
 }
 
-// startLogin switches the overlay to "Sign in to <Name>" and asks the
-// daemon for a device code. Any earlier sign-in is abandoned.
 // openMethodMenu shows the provider's sign-in methods (opencode's "Login
 // method" step), default first.
 func (m *Model) openMethodMenu(p protocol.ProviderInfo) tea.Cmd {
@@ -297,6 +295,8 @@ func (m *Model) openMethodMenu(p protocol.ProviderInfo) tea.Cmd {
 	return m.openOverlay(ov)
 }
 
+// startLogin switches the overlay to "Sign in to <Name>" and asks the
+// daemon for a device code. Any earlier sign-in is abandoned.
 func (m *Model) startLogin(p protocol.ProviderInfo, method string) tea.Cmd {
 	name := p.Name
 	if name == "" {

@@ -15,10 +15,10 @@ import (
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
-// shell is the one command tool. It runs the command and waits up to a
+// shellTool is the one command tool. It runs the command and waits up to a
 // short window for it; a command still running when the window closes
 // continues as a background job (the agent runtime adopts the process as a
-// monitor), so the model never has to choose between a sync and an async
+// job), so the model never has to choose between a sync and an async
 // tool, and nothing is killed for being slow.
 type shellTool struct{}
 
@@ -68,7 +68,7 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		a.Timeout = maxJobTimeoutSeconds
 	}
 	timeout := time.Duration(a.Timeout) * time.Second
-	if a.Background && env.Mon == nil {
+	if a.Background && env.Jobs == nil {
 		return errf("background jobs are not available to this agent")
 	}
 	job, err := proc.Start(a.Command, env.Dir, proc.Env(env.PassEnv), env.Partial, env.Sandbox)
@@ -77,7 +77,7 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	}
 	if a.Background { // no wait: the runtime takes it at once
 		job.Detach()
-		id, err := env.Mon.AdoptCommand(a.Command, job, timeout)
+		id, err := env.Jobs.AdoptCommand(a.Command, job, timeout)
 		if err != nil {
 			job.Kill()
 			<-job.Done()
@@ -97,7 +97,7 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		return Result{Output: clip.Middle(job.Output(), env.MaxOutput), IsError: true}
 	case <-wait.C:
 	}
-	if env.Mon == nil { // no job runtime (tests, restricted agents): keep waiting, kill at the timeout
+	if env.Jobs == nil { // no job runtime (tests, restricted agents): keep waiting, kill at the timeout
 		deadline := time.NewTimer(time.Until(job.Started().Add(timeout)))
 		defer deadline.Stop()
 		select {
@@ -114,7 +114,7 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		}
 	}
 	job.Detach() // the call that wanted the stream is over
-	id, err := env.Mon.AdoptCommand(a.Command, job, timeout)
+	id, err := env.Jobs.AdoptCommand(a.Command, job, timeout)
 	if err != nil {
 		job.Kill()
 		<-job.Done()
@@ -158,14 +158,14 @@ type shellKillInput struct {
 func (shellKillTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 
 func (shellKillTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	if env.Mon == nil {
+	if env.Jobs == nil {
 		return errf("background jobs are not available to this agent")
 	}
 	id := idArg(in)
-	if !env.Mon.Has(id) {
+	if !env.Jobs.Has(id) {
 		return errf("no running job %q", id)
 	}
-	if err := env.Mon.Stop(id); err != nil {
+	if err := env.Jobs.Stop(id); err != nil {
 		return errf("%v", err)
 	}
 	return Result{Output: "stopped job " + id}

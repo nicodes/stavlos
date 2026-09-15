@@ -112,7 +112,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 	_ = s.SetMode(ctx, protocol.ModeYolo)
 	runTurn(t, s, h, "ask the child")
 	waitUntil(t, h, func() bool {
-		return root.Info().Turn >= 5 && stateOf(root) == StateIdle && stateOf(child) == StateIdle && busy(s) == 0 && len(root.Info().Awaiting) == 0 && len(root.Info().Monitors) == 0
+		return root.Info().Turn >= 5 && stateOf(root) == StateIdle && stateOf(child) == StateIdle && busy(s) == 0 && len(root.Info().Awaiting) == 0 && len(root.Info().Jobs) == 0
 	})
 	s.Stop()
 	before := snap(s)
@@ -190,7 +190,7 @@ func TestRecoverAbortsOpenTurns(t *testing.T) {
 	if !strings.HasPrefix(strings.Join(types, " "), "turn.aborted job.finished input.queued turn.started") {
 		t.Fatalf("recovery logged %v", types)
 	}
-	if in := r.Info(); in.State != "idle" || len(in.Monitors) != 0 || in.LastError != "" {
+	if in := r.Info(); in.State != "idle" || len(in.Jobs) != 0 || in.LastError != "" {
 		t.Fatalf("%+v", in)
 	}
 }

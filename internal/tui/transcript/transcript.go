@@ -141,9 +141,6 @@ type streamSeg struct {
 	Tool string // raw tool name for LineTool
 }
 
-// Transcript accumulates rendered lines for one agent. Lines are grouped
-// into items, one per rendered event group (a user block, an assistant
-// message, a tool call with its output, …); the chat cursor walks items.
 // ShowThinking controls whether the model's thinking (summaries and
 // streaming deltas) appears in the chat as "◌ thinking…" items. It is
 // off: the events are still logged and the rendering path is kept, so it
@@ -160,6 +157,9 @@ func (r lineRef) after(o lineRef) bool {
 	return r.item > o.item || r.item == o.item && r.off > o.off
 }
 
+// Transcript accumulates rendered lines for one agent. Lines are grouped
+// into items, one per rendered event group (a user block, an assistant
+// message, a tool call with its output, …); the chat cursor walks items.
 type Transcript struct {
 	items   [][]Line // committed lines by item; items[i][j].Item == i
 	revs    []uint64 // revs[i] changes whenever items[i] does (render cache key)
@@ -170,7 +170,7 @@ type Transcript struct {
 	calls       map[string]lineRef   // tool call id → its LineTool line
 	prompts     map[string]int       // prompt id → item of the tool call it gates
 	promptLine  map[string]lineRef   // prompt id → its "?" line (tone flips when settled)
-	monitors    map[string]lineRef   // monitor id → its "started" line, or the shell call it grew from
+	jobs        map[string]lineRef   // job id → its "started" line, or the shell call it grew from
 	toolLines   map[string][]lineRef // tool name → its call lines in transcript order: what lastUntiedCall walks instead of every line
 	children    map[string]lineRef   // child agent id → the agent_create line that spawned it
 	asks        map[string][]lineRef // agent name → message lines still waiting for its answer
@@ -197,7 +197,7 @@ type Transcript struct {
 	open  map[string]bool   // in the chat: agents a post is still waiting on
 }
 
-// turnVerbs are the horse-flavoured labels the turn indicator cycles
+// TurnVerbs are the horse-flavoured labels the turn indicator cycles
 // through, one per turn (stable within a turn so the line does not
 // flicker).
 var TurnVerbs = []string{
@@ -228,7 +228,7 @@ func (t *Transcript) TurnStats(now time.Time) (time.Duration, int) {
 func NewTranscript() *Transcript {
 	return &Transcript{
 		calls: map[string]lineRef{}, prompts: map[string]int{}, promptLine: map[string]lineRef{},
-		monitors: map[string]lineRef{}, toolLines: map[string][]lineRef{}, children: map[string]lineRef{}, inputs: map[string]event.Input{}, callInputs: map[string]json.RawMessage{},
+		jobs: map[string]lineRef{}, toolLines: map[string][]lineRef{}, children: map[string]lineRef{}, inputs: map[string]event.Input{}, callInputs: map[string]json.RawMessage{},
 		asks: map[string][]lineRef{}, promptKinds: map[string]string{}, compactItem: -1,
 	}
 }
@@ -265,7 +265,7 @@ func (t *Transcript) Apply(ev event.Event) {
 			return
 		}
 	case event.JobStarted, event.JobFinished, event.JobStopped:
-		if t.applyMonitor(ev) {
+		if t.applyJob(ev) {
 			return
 		}
 	}
@@ -525,10 +525,10 @@ func (t *Transcript) callItem(id, tool string) (int, bool) {
 	return t.openCallItem(tool)
 }
 
-// applyMonitor ties a background job to the shell call it grew from, or to
+// applyJob ties a background job to the shell call it grew from, or to
 // a notice of its own, and nests its outcome there. It reports whether ev
 // was fully handled.
-func (t *Transcript) applyMonitor(ev event.Event) bool {
+func (t *Transcript) applyJob(ev event.Event) bool {
 	switch ev.Type {
 	case event.JobStarted:
 		var p event.JobStartedPayload
@@ -538,14 +538,14 @@ func (t *Transcript) applyMonitor(ev event.Event) bool {
 		// A job that grew out of a shell call is represented by that call's
 		// own line: it stays yellow while the job runs and the outcome nests
 		// under it. Only a job with no such call gets its own notice.
-		if r, ok := t.lastUntiedCall(toolname.Shell, t.monitors); ok {
-			t.monitors[p.ID] = r
+		if r, ok := t.lastUntiedCall(toolname.Shell, t.jobs); ok {
+			t.jobs[p.ID] = r
 			t.line(r).Tone = ToneWorking
 			t.stream = nil
 			return true
 		}
 		if r, ok := t.find(t.appendItem(CleanLines(EventLines(ev))), isNotBlank); ok {
-			t.monitors[p.ID] = r
+			t.jobs[p.ID] = r
 		}
 		return true
 	case event.JobFinished:
@@ -557,14 +557,14 @@ func (t *Transcript) applyMonitor(ev event.Event) bool {
 		if p.IsError {
 			tone = ToneError
 		}
-		t.settleMonitor(p.ID, tone, CleanLines(monitorFiredLines(p)))
+		t.settleJob(p.ID, tone, CleanLines(jobFinishedLines(p)))
 		return true
 	case event.JobStopped:
 		var p event.JobStoppedPayload
 		if ev.Decode(&p) != nil {
 			return false
 		}
-		t.settleMonitor(p.ID, ToneError, CleanLines(monitorStoppedLines("command", p.Reason)))
+		t.settleJob(p.ID, ToneError, CleanLines(jobStoppedLines("command", p.Reason)))
 		return true
 	}
 	return false
@@ -750,12 +750,12 @@ func (t *Transcript) settlePrompt(id string, terminated bool) {
 	}
 }
 
-// settleMonitor gives a job's line its final tone and nests the outcome
+// settleJob gives a job's line its final tone and nests the outcome
 // under it (indented when the line is the shell call the job grew from); a
 // job the transcript never saw start gets the outcome as its own item.
-func (t *Transcript) settleMonitor(id string, tone Tone, lines []Line) {
-	r, ok := t.monitors[id]
-	delete(t.monitors, id)
+func (t *Transcript) settleJob(id string, tone Tone, lines []Line) {
+	r, ok := t.jobs[id]
+	delete(t.jobs, id)
 	l := t.line(r)
 	if !ok || l == nil {
 		t.appendItem(lines)
@@ -1064,16 +1064,6 @@ func (t *Transcript) Items() int {
 	return len(t.items)
 }
 
-func ItemCount(lines []Line) int {
-	n := 0
-	for _, l := range lines {
-		if l.Item+1 > n {
-			n = l.Item + 1
-		}
-	}
-	return n
-}
-
 func ItemRange(lines []Line, item int) (first, last int) {
 	first, last = -1, -1
 	for i, l := range lines {
@@ -1086,16 +1076,6 @@ func ItemRange(lines []Line, item int) (first, last int) {
 		last = i
 	}
 	return first, last
-}
-
-// itemIsTool reports whether item is a tool call (has output to expand).
-func ItemIsTool(lines []Line, item int) bool {
-	for _, l := range lines {
-		if l.Item == item && l.Kind == LineTool {
-			return true
-		}
-	}
-	return false
 }
 
 // Empty reports whether nothing at all would be shown (the home state).
@@ -1264,7 +1244,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.JobStarted: decoded(func(p event.JobStartedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphToolMonitors, Tone: ToneWorking, Text: titled("Job", p.Command)}}
+		return []Line{{Kind: LineDim, Glyph: GlyphJob, Tone: ToneWorking, Text: titled("Job", p.Command)}}
 	}),
 
 	event.MCPStarted: decoded(func(p event.MCPStartedPayload) []Line {
@@ -1281,12 +1261,12 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: titled("MCP", p.Server+" stopped")}}
 	}),
 
-	event.JobFinished: decoded(monitorFiredLines),
+	event.JobFinished: decoded(jobFinishedLines),
 
 	// Without the transcript's id → kind memory the kind is unknown here;
 	// Transcript.Apply looks it up.
 	event.JobStopped: decoded(func(p event.JobStoppedPayload) []Line {
-		return monitorStoppedLines("command", p.Reason)
+		return jobStoppedLines("command", p.Reason)
 	}),
 
 	event.CompactionStarted: func(event.Event) []Line {
@@ -1387,11 +1367,11 @@ func denialMark(output string) string {
 	return ""
 }
 
-// titled is a status line's text: a bold, capitalised title, then the
-// detail ("**Mode** → yolo · …"), the way tool lines lead with their name.
 // AsideTitle leads the agent's own text: "§ Aside …".
 const AsideTitle = "**Aside**"
 
+// titled is a status line's text: a bold, capitalised title, then the
+// detail ("**Mode** → yolo · …"), the way tool lines lead with their name.
 func titled(title, detail string) string {
 	if detail == "" {
 		return "**" + title + "**"
@@ -1403,10 +1383,10 @@ func decodeErr(ev event.Event, err error) []Line {
 	return []Line{{Kind: LineError, Text: fmt.Sprintf("(bad %s payload: %v)", ev.Type, err)}}
 }
 
-// monitorFiredLines renders "<glyph> <summary>" (red on error) followed by
+// jobFinishedLines renders "<glyph> <summary>" (red on error) followed by
 // the output collapsed like tool output.
-func monitorFiredLines(p event.JobFinishedPayload) []Line {
-	head := Line{Kind: LineDim, Glyph: GlyphToolMonitors}
+func jobFinishedLines(p event.JobFinishedPayload) []Line {
+	head := Line{Kind: LineDim, Glyph: GlyphJob}
 	if p.IsError {
 		head.Tone = ToneError
 	}
@@ -1420,13 +1400,13 @@ func monitorFiredLines(p event.JobFinishedPayload) []Line {
 	return append(lines, OutputLines(strings.TrimRight(p.Output, "\n"))...)
 }
 
-// monitorStoppedLines renders "<glyph> monitor stopped (<reason>)".
-func monitorStoppedLines(kind, reason string) []Line {
+// jobStoppedLines renders "<glyph> Job stopped (<reason>)".
+func jobStoppedLines(kind, reason string) []Line {
 	text := titled("Job stopped", "")
 	if reason = strings.TrimSpace(reason); reason != "" {
 		text = titled("Job stopped", "("+reason+")")
 	}
-	return []Line{{Kind: LineDim, Glyph: GlyphToolMonitors, Tone: ToneError, Text: text}}
+	return []Line{{Kind: LineDim, Glyph: GlyphJob, Tone: ToneError, Text: text}}
 }
 
 // block renders text as a left-bordered block (blank line before and after)
@@ -1570,7 +1550,7 @@ func toolLine(name string, input json.RawMessage) string {
 	return title + "  " + format.Trunc(arg, maxArgChars)
 }
 
-// toolArg picks the argument worth showing for a tool call.
+// ToolArg picks the argument worth showing for a tool call.
 func ToolArg(name string, raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""
@@ -1681,7 +1661,7 @@ func titleCase(s string) string {
 	return strings.ToUpper(string(r[0])) + string(r[1:])
 }
 
-// splitModel splits "provider/model-id" into the short id and the provider.
+// SplitModel splits "provider/model-id" into the short id and the provider.
 func SplitModel(id string) (short, provider string) {
 	if i := strings.IndexByte(id, '/'); i >= 0 {
 		return id[i+1:], id[:i]
@@ -1703,7 +1683,7 @@ func compactArgs(raw json.RawMessage) string {
 	return format.Trunc(s, maxArgChars)
 }
 
-// outputLines renders tool output collapsed by default: the first
+// OutputLines renders tool output collapsed by default: the first
 // MaxOutputCollapsed lines always, up to MaxOutputExpanded with /details,
 // and a "… +N lines" trailer for whichever mode is hiding something.
 func OutputLines(out string) []Line {
@@ -1811,20 +1791,20 @@ func CleanLines(lines []Line) []Line {
 	return lines
 }
 
-// Tool-call glyphs by group: the gear for files, shell and finish; the
-// clock for monitors; the fork for agent tools.
+// Tool-call glyphs, one per group of tools; a background job draws the
+// shell's, since every job is a shell command.
 const (
-	GlyphToolFiles    = "◆" // file tools (skill)
-	GlyphToolRead     = "☰" // read: the lines of a file
-	GlyphToolSearch   = "⌕" // web_search: a magnifying glass
-	GlyphToolPatch    = "±" // apply_patch: a diff
-	GlyphToolShell    = "$" // shell, shell_kill (and the old bash names): the shell prompt
-	GlyphToolMonitors = "$" // async jobs are shell commands
-	GlyphToolAgents   = "⑂"
-	GlyphToolCreate   = "⋙" // agent_create: the triple of a prompt\'s ›, since it makes the agent it prompts
-	GlyphToolTodo     = "□" // todo_add, todo_update
-	GlyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
-	GlyphToolWeb      = "↓" // web_fetch: pulling a page in
+	GlyphToolFiles  = "◆" // file tools (skill)
+	GlyphToolRead   = "☰" // read: the lines of a file
+	GlyphToolSearch = "⌕" // web_search: a magnifying glass
+	GlyphToolPatch  = "±" // apply_patch: a diff
+	GlyphToolShell  = "$" // shell, shell_kill (and the old bash names): the shell prompt
+	GlyphJob        = "$" // async jobs are shell commands
+	GlyphToolAgents = "⑂"
+	GlyphToolCreate = "⋙" // agent_create: the triple of a prompt\'s ›, since it makes the agent it prompts
+	GlyphToolTodo   = "□" // todo_add, todo_update
+	GlyphToolMCP    = "≡" // mcp__<server>__<tool> and MCP server notices
+	GlyphToolWeb    = "↓" // web_fetch: pulling a page in
 )
 
 // CallGlyph is a tool line's glyph and the gap after it: ToolGlyph of its
@@ -1863,7 +1843,7 @@ func promptOf(name string, input json.RawMessage) (who, text string) {
 	return strings.TrimPrefix(ToolArg(name, input), "@"), strings.TrimSpace(in.Text)
 }
 
-// toolGlyph returns the glyph for a tool name and the gap after it.
+// ToolGlyph returns the glyph for a tool name and the gap after it.
 func ToolGlyph(tool string) (string, string) {
 	switch {
 	case tool == toolname.Read:

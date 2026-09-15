@@ -22,7 +22,7 @@ import (
 // CompactTick is how often a running compaction's bar advances.
 const CompactTick = 120 * time.Millisecond
 
-// RenderOpts controls Render. Spinner is the glyph drawn in front of
+// Options controls rendering. Spinner is the glyph drawn in front of
 // running tool calls (falls back to ◆ when empty). Expanded overrides the
 // global Details toggle per item (the chat cursor's enter). With Focused
 // set, the lines of item Cursor carry the accent gutter marker.
@@ -50,15 +50,14 @@ type Options struct {
 	CompactFrame int
 }
 
-// gutterMark is the chat cursor marker drawn in the one-column gutter.
-// gutterMark is the cursor marker tests swap in for highlightRow (the real
-// cursor is a background colour, invisible without a colour profile).
+// GutterMark is the chat cursor marker tests swap in for the highlight (the
+// real cursor is a background colour, invisible without a colour profile).
 const GutterMark = "▍"
 
-// rowRange is the first and last rendered row of an item (inclusive).
+// RowRange is the first and last rendered row of an item (inclusive).
 type RowRange struct{ First, Last int }
 
-// renderAll is Render plus, for every item, the rendered rows it occupies
+// Lines renders lines and, for every item, the rendered rows it occupies
 // (so the model can scroll the cursor item into view). Items are
 // contiguous runs of lines.
 func Lines(lines []transcript.Line, o Options) (string, map[int]RowRange) {
@@ -206,7 +205,7 @@ func oneRow(l transcript.Line, o Options) transcript.Line {
 	return l
 }
 
-// renderCache keeps each committed item's rows between renders of one
+// Cache keeps each committed item's rows between renders of one
 // transcript. An entry is reused while the item's revision and the options
 // that shape it are unchanged, so a streamed token or a spinner frame
 // renders only the live tail, not the whole chat.
@@ -222,8 +221,8 @@ type cachedItem struct {
 	rows     itemRows
 }
 
-// renderEpoch invalidates every render cache when a package-level
-// rendering hook is swapped (tests replace highlightRow).
+// epoch invalidates every render cache when a package-level rendering
+// hook is swapped (tests replace highlight).
 var epoch uint64
 
 type renderKey struct {
@@ -236,7 +235,7 @@ type renderKey struct {
 	frame                   int
 }
 
-// renderTranscript renders t like renderAll(t.All(), o), reusing from c the
+// Transcript renders t like Lines(t.All(), o), reusing from c the
 // rows of committed items that have not changed.
 func Transcript(t *transcript.Transcript, c *Cache, o Options) (string, map[int]RowRange) {
 	if len(c.entries) > t.Committed() {
@@ -300,7 +299,7 @@ func Transcript(t *transcript.Transcript, c *Cache, o Options) (string, map[int]
 	return assemble(parts, o)
 }
 
-// highlightRow paints one row of the item under the chat cursor: a
+// highlight paints one row of the item under the chat cursor: a
 // background across the full width, keeping the row's own colours (the
 // background is re-asserted after every reset inside the row). It is a
 // variable so tests can swap in a visible marker.
@@ -340,7 +339,7 @@ func isSpaced(lines []transcript.Line) bool {
 }
 
 // fold describes a collapsed item: which line indices to show (one when
-// folded, up to previewLines under the chat cursor) and how many other
+// folded, up to PreviewLines under the chat cursor) and how many other
 // non-blank lines are hidden; the "+N" marker goes on the last shown line.
 type fold struct {
 	show   map[int]bool
@@ -348,7 +347,7 @@ type fold struct {
 	hidden int
 }
 
-// previewLines is how many lines an item shows while the chat cursor is on
+// PreviewLines is how many lines an item shows while the chat cursor is on
 // it; enter expands it fully.
 const PreviewLines = 3
 
@@ -768,7 +767,7 @@ func centerText(s string, width int) string {
 	return strings.Repeat(" ", (width-w)/2) + s
 }
 
-// compactSweep is the bar inside a running compaction's rule: a segment
+// CompactSweep is the bar inside a running compaction's rule: a segment
 // sweeping across a ten-cell track (the summariser gives no progress, so
 // the bar shows activity, not completion). frame advances one cell a tick.
 func CompactSweep(frame int) string {
@@ -785,7 +784,7 @@ func CompactSweep(frame int) string {
 	return b.String()
 }
 
-// compactFrame is the sweep position for now: one cell per tick period.
+// CompactFrame is the sweep position for now: one cell per tick period.
 func CompactFrame(now time.Time) int {
 	return int(now.UnixNano() / int64(CompactTick))
 }

@@ -211,7 +211,7 @@ func (o *overlay) handleNav(msg tea.KeyMsg) bool {
 
 // --- rendering ---
 
-// view renders the box at min(overlayWidth, bodyWidth-4). spinner is the
+// view renders the box dialog.Width(bodyWidth) wide. spinner is the
 // current spinner glyph (login mode).
 func (o *overlay) view(bodyWidth int, spinner string) string {
 	w := dialog.Width(bodyWidth)

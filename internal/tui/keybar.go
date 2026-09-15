@@ -9,10 +9,10 @@ import (
 	"github.com/nicodes/stavlos/internal/tui/theme"
 )
 
-// keyHints returns the legend for the current state, most useful first.
 // hint is one key bar entry: what to press, what it does.
 func hint(key, desc string) dialog.Hint { return dialog.Hint{Key: key, Desc: desc} }
 
+// keyHints returns the legend for the current state, most useful first.
 func (m Model) keyHints() []dialog.Hint {
 	switch {
 	case m.ov != nil && m.ov.mode == overlayLogin:

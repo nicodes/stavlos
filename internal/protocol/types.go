@@ -72,7 +72,7 @@ const (
 	TierFallback    Tier = "fallback"
 )
 
-// Envelope kinds for agent.send.
+// Kind is what agent.send delivers: a prompt, a steer, a cancel or a kill.
 type Kind string
 
 const (
@@ -150,16 +150,6 @@ const (
 	AnswerAllowAlways = "allow_always" // this exact call, for the channel
 	AnswerAllowPrefix = "allow_prefix" // every call the prompt's prefix covers, for the channel
 	AnswerAnswered    = "answered"     // a question batch: the answers are in Answers
-)
-
-// MonitorState is a background job's state (MonitorInfo.State).
-type MonitorState string
-
-const (
-	MonitorRunning MonitorState = "running"
-	MonitorFired   MonitorState = "fired"
-	MonitorStopped MonitorState = "stopped"
-	MonitorLost    MonitorState = "lost" // the daemon restarted while it ran
 )
 
 // MCPState is an agent's MCP server's state (MCPInfo.State).
@@ -343,7 +333,7 @@ type AgentInfo struct {
 	Context       int              `json:"context,omitempty"`        // estimated tokens the next model call carries (what compaction measures)
 	ContextWindow int              `json:"context_window,omitempty"` // the model\'s window; 0 when unknown
 	LastError     string           `json:"last_error,omitempty"`     // error that ended the most recent turn, if any
-	Monitors      []MonitorInfo    `json:"monitors,omitempty"`       // this agent's general monitors (not children)
+	Jobs          []JobInfo        `json:"jobs,omitempty"`           // its background jobs still running (not children)
 	Todos         []event.TodoItem `json:"todos,omitempty"`          // this agent\'s todo list, in creation order
 	MCP           []MCPInfo        `json:"mcp,omitempty"`            // this agent\'s MCP servers (the ones its role lists), with state
 	Awaiting      []string         `json:"awaiting,omitempty"`       // ids of the agents whose answer this one is waiting for (a child's task, a message)
@@ -590,8 +580,6 @@ type PromptNotification struct {
 	Prompt PromptInfo   `json:"prompt"`
 }
 
-// MonitorInfo is a general monitor owned by an agent: a background command,
-// a file watch, or a timer. Children are not monitors; they are agents.
 // DirInfo is one of the channel's working directories and where it came
 // from: channel (the channel directory) | human.
 type DirInfo struct {
@@ -610,13 +598,14 @@ type MCPInfo struct {
 	Started string   `json:"started,omitempty"`
 }
 
-type MonitorInfo struct {
-	ID       string       `json:"id"`
-	Agent    string       `json:"agent"`
-	Kind     string       `json:"kind"`  // command | watch | timer
-	Label    string       `json:"label"` // human-facing
-	Spec     string       `json:"spec"`  // command line / path / duration
-	State    MonitorState `json:"state"` // running | fired | stopped | lost
-	Started  string       `json:"started"`
-	Progress string       `json:"progress,omitempty"` // e.g. "42 lines", "3m left"
+// JobInfo is one of an agent's background jobs: a shell command still
+// running (one that outlived the shell tool's wait, or was started in the
+// background). Children are not jobs; they are agents.
+type JobInfo struct {
+	ID       string `json:"id"`
+	Agent    string `json:"agent"`
+	Label    string `json:"label"` // human-facing
+	Spec     string `json:"spec"`  // the command line
+	Started  string `json:"started"`
+	Progress string `json:"progress,omitempty"` // e.g. "42 lines"
 }

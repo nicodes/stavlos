@@ -177,23 +177,6 @@ func promptBoxWidth(width int) int {
 	return w
 }
 
-// inputBox is the input line over its meta line. Focus shows on the prompt
-// chevron (set in layout), so there is no border.
-
-// metaLine is "main (coder) · claude-opus-5 · high" (or the
-// no-model nudge): the agent as "label (role)" like the tab rows, the
-// model and its variant ("default" when none is set), led by a
-// warning-coloured YOLO tag while the channel auto-approves.
-// sel is the part highlighted while the row has keyboard focus (metaNone
-// otherwise).
-// nameStyle tints the "label (role)" part (the role's colour, or plain).
-// modeTag is "ASK", "AUTO" or "YOLO" (the channel's permission mode), "" for none.
-func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) string {
-	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel, nameStyle)
-	return line
-}
-
-// metaLineSpans is metaLine plus where each clickable part was drawn.
 // modeTagStyle colours the mode tag: dim ASK (every permission asks), accent
 // AUTO (allowed inside the directories, denied outside), warning YOLO
 // (nothing asks).
@@ -207,6 +190,13 @@ func modeTagStyle(tag string) lipgloss.Style {
 	return theme.StyleDim
 }
 
+// metaLineSpans is the meta row, "main (coder) · claude-opus-5 · high" (or
+// the no-model nudge), with where each clickable part was drawn: the agent
+// as "label (role)" like the tab rows, the model and its variant ("default"
+// when none is set), led by the mode tag ("ASK", "AUTO" or "YOLO"; "" for
+// none). sel is the part highlighted while the row has keyboard focus
+// (metaNone otherwise); nameStyle tints "label (role)" (the role's colour,
+// or plain).
 func metaLineSpans(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) (string, []span[metaPart]) {
 	var b strings.Builder
 	var spans []span[metaPart]
@@ -941,12 +931,6 @@ func (m Model) tabs() []tab {
 	return tabs
 }
 
-// tabBodyLines is the focused tab's body, laid out for width columns.
-func (m Model) tabBodyLines(width int) []string {
-	lines, _ := m.tabBodyRows(width)
-	return lines
-}
-
 // tabBodyRows is tabBodyLines plus, for every line, the selectable row it
 // draws (-1 for none): what a click or hover on that line picks.
 func (m Model) tabBodyRows(width int) ([]string, []int) {
@@ -975,7 +959,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		}
 		now := time.Now()
 		sel := agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), now, width-2)
-		sel = append(sel, monitorRows(jobs, owner, role, now, width-2)...)
+		sel = append(sel, jobRows(jobs, owner, role, now, width-2)...)
 		nWait := len(sel)
 		if human {
 			sel = append(sel, "  "+theme.StyleBold.Render("you")+"  "+theme.StyleDim.Render("the channel chat"))
@@ -1344,7 +1328,7 @@ func (m Model) promptWho(p *protocol.PromptInfo) string {
 	return strings.Join(parts, " · ")
 }
 
-// fullToolArg is toolArg without the one-line flattening for the tools
+// fullToolArg is transcript.ToolArg without the one-line flattening for the tools
 // whose argument is text the user must read in full before approving.
 func fullToolArg(tool string, raw json.RawMessage) string {
 	switch tool {
@@ -1557,17 +1541,12 @@ func lastSnippet(t *transcript.Transcript) string {
 	return strings.Join(parts, " ")
 }
 
-// monitorRows is the pure part of monitorsView: one row per running
-// monitor: the owning agent in bold with its role, the job's label, and
+// jobRows is the async dialog's running jobs, one row per job: the
+// owning agent in bold with its role, the job's label, and
 // dim meta (progress, elapsed): "coder (coder)  go test  42 lines · 1m15s".
-func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now time.Time, width int) []string {
+func jobRows(jobs []protocol.JobInfo, owner, ownerRole string, now time.Time, width int) []string {
 	var rows []string
-	for _, mo := range monitors {
-		switch mo.State {
-		case protocol.MonitorFired, protocol.MonitorStopped, protocol.MonitorLost:
-			continue
-		case protocol.MonitorRunning:
-		}
+	for _, mo := range jobs {
 		who := owner
 		if ownerRole != "" {
 			who = fmt.Sprintf("%s (%s)", owner, ownerRole)
@@ -1576,7 +1555,7 @@ func monitorRows(monitors []protocol.MonitorInfo, owner, ownerRole string, now t
 		if who != "" {
 			label = theme.StyleBold.Render(who) + "  " + mo.Label
 		}
-		var meta []string // the kind is always "command" now, so it is not shown
+		var meta []string
 		if mo.Progress != "" {
 			meta = append(meta, mo.Progress)
 		}

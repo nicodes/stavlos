@@ -16,8 +16,8 @@ func cleanAgents(agents []protocol.AgentInfo) []protocol.AgentInfo {
 	for i := range agents {
 		a := &agents[i]
 		a.Name, a.Role, a.LastError = textsafe.Clean(a.Name), textsafe.Clean(a.Role), textsafe.Clean(a.LastError)
-		for j := range a.Monitors {
-			m := &a.Monitors[j]
+		for j := range a.Jobs {
+			m := &a.Jobs[j]
 			m.Label, m.Spec, m.Progress = textsafe.Clean(m.Label), textsafe.Clean(m.Spec), textsafe.Clean(m.Progress)
 		}
 		for j := range a.Todos {

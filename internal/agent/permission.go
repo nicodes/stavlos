@@ -242,7 +242,7 @@ func (a *Agent) ask(ctx context.Context, info protocol.PromptInfo, callID string
 
 // toolEnv is what a tool gets from this agent for one call.
 func (a *Agent) toolEnv(turn int, c model.Block, rv roleView, cfg *config.Effective) *tools.Env {
-	return &tools.Env{Dir: a.c.Dir, Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Mon: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a},
+	return &tools.Env{Dir: a.c.Dir, Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a},
 		MaxOutput: cfg.Compaction.MaxToolOutput, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Sandbox: a.c.sandboxSpec(cfg),
 		Partial: func(out string) {
