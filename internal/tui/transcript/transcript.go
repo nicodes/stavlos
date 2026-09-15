@@ -748,12 +748,21 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 		mark := denialMark(p.Output)
 		switch title, arg, ok := strings.Cut(l.Text, "  "); {
 		case mark == "":
-		case IsMessage(*l):
+		case IsPromptCall(*l):
 			l.Suffix = mark
 		case ok:
 			l.Text = title + " " + mark + "  " + arg
 		default:
 			l.Text += " " + mark
+		}
+	}
+	// A created agent's name may differ from the label asked for (a taken
+	// name gets a suffix): the line names the agent it made.
+	if toolname.Canonical(p.Name) == toolname.AgentCreate && !p.IsError {
+		if rest, ok := strings.CutPrefix(p.Output, "created "); ok {
+			if name, _, ok := strings.Cut(rest, " ("); ok && name != l.Who && strings.HasPrefix(l.Text, "@"+l.Who) {
+				l.Text, l.Who = "@"+name+strings.TrimPrefix(l.Text, "@"+l.Who), name
+			}
 		}
 	}
 	// A new message to an agent waits for its answer: yellow until the
@@ -1090,13 +1099,12 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 	event.ToolCallStarted: decoded(func(p event.ToolStartedPayload) []Line {
 		p.Name = toolname.Canonical(p.Name) // logs from before a rename read as the current tool
-		if p.Name == toolname.Message {
-			// "‹ @scout first line", then the rest of the message under it
-			var in struct{ Text string }
-			_ = json.Unmarshal(p.Input, &in)
-			who := strings.TrimPrefix(ToolArg(p.Name, p.Input), "@")
+		if p.Name == toolname.Message || p.Name == toolname.AgentCreate {
+			// "‹ @scout first line" (a message) or "» @scout first line" (the
+			// task that creates it), then the rest of the text under it
+			who, text := promptOf(p.Name, p.Input)
 			lines := []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, Tool: p.Name, Who: who}}
-			if _, rest, ok := strings.Cut(strings.TrimSpace(in.Text), "\n"); ok {
+			if _, rest, ok := strings.Cut(text, "\n"); ok {
 				lines = append(lines, OutputLines(rest)...)
 			}
 			return lines
@@ -1108,8 +1116,8 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		if p.Denied {
 			return nil // the denial reads on the call's own line (see finishCall)
 		}
-		if toolname.Canonical(p.Name) == toolname.Message && !p.IsError {
-			return nil // the text already sits under the call; "delivered" adds nothing
+		if name := toolname.Canonical(p.Name); (name == toolname.Message || name == toolname.AgentCreate) && !p.IsError {
+			return nil // the text already sits under the call; "delivered" or "created" adds nothing
 		}
 		return OutputLines(strings.TrimRight(p.Output, "\n"))
 	}),
@@ -1459,12 +1467,12 @@ func truncLines(text string, n int, kind LineKind) []Line {
 // most relevant argument.
 func toolLine(name string, input json.RawMessage) string {
 	name = toolname.Canonical(name) // a direct caller (a prompt, a test) may hold an old name
-	if name == toolname.Message {
-		// what this agent sends: "@scout look at the parser" (its first line)
-		var in struct{ Text string }
-		_ = json.Unmarshal(input, &in)
-		first, _, _ := strings.Cut(strings.TrimSpace(in.Text), "\n")
-		return strings.TrimSpace(ToolArg(name, input) + " " + first)
+	if name == toolname.Message || name == toolname.AgentCreate {
+		// what this agent sends: "@scout look at the parser" (its first
+		// line), for a message and for the task that creates an agent
+		to, text := promptOf(name, input)
+		first, _, _ := strings.Cut(text, "\n")
+		return strings.TrimSpace("@" + to + " " + first)
 	}
 	title := ToolTitle(name)
 	arg := ToolArg(name, input)
@@ -1685,6 +1693,24 @@ func CallGlyph(l Line) (string, string) {
 // IsMessage reports whether l is a message call's line.
 func IsMessage(l Line) bool {
 	return l.Kind == LineTool && toolname.Canonical(l.Tool) == toolname.Message
+}
+
+// IsPromptCall reports whether l is a call that prompts an agent by name,
+// "@scout …": a message, or the agent_create that makes it.
+func IsPromptCall(l Line) bool {
+	return IsMessage(l) || l.Kind == LineTool && toolname.Canonical(l.Tool) == toolname.AgentCreate
+}
+
+// promptOf is who a prompting call names and what it says: a message's
+// recipient ("user" for the human) and text, or a new agent's label and
+// task.
+func promptOf(name string, input json.RawMessage) (who, text string) {
+	var in struct{ To, ID, Text, Label, Task string }
+	_ = json.Unmarshal(input, &in)
+	if toolname.Canonical(name) == toolname.AgentCreate {
+		return in.Label, strings.TrimSpace(in.Task)
+	}
+	return strings.TrimPrefix(ToolArg(name, input), "@"), strings.TrimSpace(in.Text)
 }
 
 // toolGlyph returns the glyph for a tool name and the gap after it.
