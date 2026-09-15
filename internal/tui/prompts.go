@@ -142,6 +142,8 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	case stepCursor(msg, &m.q.sel, rows, false): // no j/k: letters start the typed answer
 		return nil
+	case key.Matches(msg, keys.Submit): // enter confirms the answers; space toggles an option
+		return confirm()
 	case key.Matches(msg, keys.Select):
 		if m.q.sel == nopt { // "something else": type it
 			m.q.typing = true
@@ -151,8 +153,6 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		m.q.marks[m.q.sel] = !m.q.marks[m.q.sel]
 		return nil
-	case key.Matches(msg, keys.Submit):
-		return confirm()
 	case msg.Type == tea.KeyRunes || msg.Type == tea.KeyBackspace:
 		// typing starts the "something else" answer
 		m.q.typing = true

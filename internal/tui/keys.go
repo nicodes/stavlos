@@ -24,6 +24,7 @@ type keyMap struct {
 	Select      key.Binding
 	Clear       key.Binding
 	ToggleTree  key.Binding
+	FocusInput  key.Binding // ctrl+space: back to typing from anywhere, a dialog's text field included
 
 	// Overlay (modal list / field) keys.
 	OvUp     key.Binding
@@ -52,9 +53,10 @@ var keys = keyMap{
 	ChatTop:     key.NewBinding(key.WithKeys("home", "ctrl+home")),
 	ChatBottom:  key.NewBinding(key.WithKeys("end", "ctrl+end")),
 	Submit:      key.NewBinding(key.WithKeys("enter")),
-	Select:      key.NewBinding(key.WithKeys(" ")), // space: select, open, toggle — outside text fields
+	Select:      key.NewBinding(key.WithKeys(" ", "enter")), // space and enter: select, open, toggle — outside text fields
 	Clear:       key.NewBinding(key.WithKeys("esc")),
 	ToggleTree:  key.NewBinding(key.WithKeys("ctrl+b")),
+	FocusInput:  key.NewBinding(key.WithKeys("ctrl+@", "ctrl+space")), // ctrl+space reaches a program as ctrl+@
 
 	OvUp:     key.NewBinding(key.WithKeys("up", "ctrl+p")),
 	OvDown:   key.NewBinding(key.WithKeys("down", "ctrl+n")),

@@ -22,32 +22,32 @@ func (m Model) keyHints() []dialog.Hint {
 		}
 		return h
 	case m.ov != nil && m.ov.kind == ovModels:
-		return []dialog.Hint{hint("space", "set for this agent"), hint("ctrl+s", "set channel default"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("enter", "input"), hint("esc", "close")}
+		return []dialog.Hint{hint("space/enter", "set for this agent"), hint("ctrl+s", "set channel default"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("ctrl+space", "input"), hint("esc", "close")}
 	case m.ov != nil && m.ov.mode == overlayInput:
 		return []dialog.Hint{hint("enter", "create"), hint("esc", "cancel")}
 	case m.ov != nil:
-		return []dialog.Hint{hint("space", "select"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("enter", "input"), hint("esc", "close")}
+		return []dialog.Hint{hint("space/enter", "select"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("ctrl+space", "input"), hint("esc", "close")}
 	}
 	switch m.focus {
 	case focusAsync:
-		return []dialog.Hint{hint("↑/↓", "move"), hint("space", "open chat"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("space/enter", "open chat"), hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusTodo:
-		return []dialog.Hint{hint("↑/↓", "move"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusDirs:
 		if m.dirEdit != "" {
 			return []dialog.Hint{hint("enter", "save"), hint("esc", "cancel"), hint("ctrl+c", "quit")}
 		}
-		return []dialog.Hint{hint("↑/↓", "move"), hint("a", "add directory"), hint("space", "edit"), hint("ctrl+d", "remove"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("a", "add directory"), hint("space/enter", "edit"), hint("ctrl+d", "remove"), hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusMCP:
-		return []dialog.Hint{hint("↑/↓", "move"), hint("space", "show/hide tools"), hint("enter", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("space/enter", "show/hide tools"), hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusSidebar:
-		return []dialog.Hint{hint("↑/↓", "move"), hint("space", "open"), hint("n", "next agent needing you"), hint("→", "channel dirs"), hint("enter", "input"), hint("tab", "next section"), hint("esc", "back to input"), hint("ctrl+b", "close sidebar"), hint("pgup/pgdn", "scroll"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("↑/↓", "move"), hint("space/enter", "open"), hint("n", "next agent needing you"), hint("→", "channel dirs"), hint("ctrl+space", "input"), hint("tab", "next section"), hint("esc", "back to input"), hint("ctrl+b", "close sidebar"), hint("pgup/pgdn", "scroll"), hint("ctrl+c", "quit")}
 	case focusMeta:
-		return []dialog.Hint{hint("←/→", "choose"), hint("space", "open"), hint("enter", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("←/→", "choose"), hint("space/enter", "open"), hint("ctrl+space", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusTabs:
-		return []dialog.Hint{hint("←/→", "choose"), hint("space", "open"), hint("enter", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("←/→", "choose"), hint("space/enter", "open"), hint("ctrl+space", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusChat:
-		return []dialog.Hint{hint("↑/↓", "item"), hint("space", "expand/collapse"), hint("pgup/pgdn", "page"), hint("tab", "next section"), hint("enter", "input"), hint("esc", "input"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("↑/↓", "item"), hint("space/enter", "expand/collapse"), hint("pgup/pgdn", "page"), hint("tab", "next section"), hint("ctrl+space", "input"), hint("esc", "input"), hint("ctrl+c", "quit")}
 	case focusQuestions:
 		if m.q.typing {
 			return []dialog.Hint{hint("enter", "answer"), hint("esc", "back to the options"), hint("ctrl+c", "quit")}
@@ -61,7 +61,7 @@ func (m Model) keyHints() []dialog.Hint {
 			case "dir":
 				return []dialog.Hint{hint("enter", "allow + add this directory"), hint("esc", "cancel"), hint("ctrl+c", "quit")}
 			}
-			return []dialog.Hint{hint("↑/↓", "option"), hint("space", "choose"), hint("enter", "input"), hint("tab", "next section"), hint("esc", "close"), hint("ctrl+c", "quit")}
+			return []dialog.Hint{hint("↑/↓", "option"), hint("space/enter", "choose"), hint("ctrl+space", "input"), hint("tab", "next section"), hint("esc", "close"), hint("ctrl+c", "quit")}
 		}
 		return []dialog.Hint{hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	}

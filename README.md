@@ -33,10 +33,10 @@ The divider over the input shows the selected agent's role, model and variant at
 ### Focus and keys
 
 - Tab and shift+tab cycle focus from top to bottom: the chat, the input, the tab strip, the agent's role, model and variant on the divider, and the sidebar (ctrl+b).
-- Space is the select key everywhere outside a text field. It opens the highlighted tab or divider part, picks a dialog row, selects an agent, and expands a tool call's output in the chat.
-- Enter anywhere but the input closes what is open and returns to typing.
+- Space and enter both select, everywhere outside a text field. They open the highlighted tab or divider part, pick a dialog row, select an agent, and expand a tool call's output in the chat.
+- ctrl+space returns to typing from anywhere, closing whatever is open; esc also goes back from the chat, the sidebar, the tab strip and the meta row.
 - In the chat, ↑/↓ move item by item. In the input, ↑/↓ walk your prompt history; on the start screen they recall the first prompts of this directory's earlier channels, and `/channels` picks one to resume.
-- On the divider, ←/→ pick the role, model or variant, and enter opens its dialog; a click on the mode tag before the input's › switches the mode. `/roles`, `/models` and `/variants` open the same dialogs.
+- On the divider, ←/→ pick the role, model or variant, and space or enter opens its dialog; a click on the mode tag before the input's › switches the mode. `/roles`, `/models` and `/variants` open the same dialogs.
 - The "/" palette lists every command. `/help` shows a key bar at the bottom (off by default; `/help` again hides it).
 
 ### The tab strip
@@ -58,7 +58,7 @@ Under the tree, a folded "channels" section lists this directory's other channel
 
 ### Permissions and modes
 
-Permission prompts show the command (or path) with the asking agent after it, then a fixed list of answers; ↑/↓ move and space chooses:
+Permission prompts show the command (or path) with the asking agent after it, then a fixed list of answers; ↑/↓ move and space or enter chooses:
 
 - A plain permission offers "Allow once", "Allow for this channel" (this exact call), "Allow `<prefix>` for this channel" for a simple shell command, and "Deny", which opens a row for an optional reason the agent reads. The prefix is the first word, or two for git, go, npm, cargo, make, docker and the like: `go test` then covers every `go test …` that is not chained, piped or redirected. It is never offered for wrappers such as `bash`, `env`, `sudo` or `python`.
 - A boundary prompt, for a call outside the channel's directories, offers "Allow once", "Allow and add <dir>", "Allow and add another directory…" and "Deny". "Allow and add" adds the directory to the channel's set, for every agent: the whole git checkout when the path is inside one, else the path's directory.
