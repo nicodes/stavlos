@@ -41,7 +41,7 @@ func TestChatKeepsPostsMessagesAndPrompts(t *testing.T) {
 		}
 	}
 	got := strings.Join(texts, "|")
-	if got != "to scout|@scout look around|scout · permission: shell|scout (general)|Found it|the bug is in `parse`" {
+	if got != "@scout look around|scout · permission: shell|@scout Found it|the bug is in `parse`" {
 		t.Fatalf("chat lines %q", got)
 	}
 	lines := c.All()
@@ -54,7 +54,7 @@ func TestChatKeepsPostsMessagesAndPrompts(t *testing.T) {
 		}
 		// the message reads like an agent's reply: markdown prose, not a
 		// quoted block, and not dimmed like notes
-		if l.Item == 2 && l.Text == "Found it" && (l.Kind != LineHeading || l.Block != BlockNone || l.Note) {
+		if l.Item == 2 && l.Text == "@scout Found it" && (l.Kind != LineHeading || l.Block != BlockNone || l.Note) {
 			t.Fatalf("message line: %+v", l)
 		}
 	}
@@ -89,13 +89,13 @@ func TestChatThreadsRepliesUnderPosts(t *testing.T) {
 		}
 		return strings.Join(out, "|")
 	}
-	if got := item(0); got != "to scout|@scout check the tests|>scout (general)|>All 42 pass." {
+	if got := item(0); got != "@scout check the tests|>@scout All 42 pass." {
 		t.Fatalf("first thread %q", got)
 	}
-	if got := item(1); got != "to main|what's the stack?|>main (general)|>Go 1.27" {
+	if got := item(1); got != "@main what's the stack?|>@main Go 1.27" {
 		t.Fatalf("second thread %q", got)
 	}
-	if got := item(2); got != "scout (general)|also: one flaky test" {
+	if got := item(2); got != "@scout also: one flaky test" {
 		t.Fatalf("standalone %q", got)
 	}
 }

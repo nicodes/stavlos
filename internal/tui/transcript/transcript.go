@@ -174,7 +174,6 @@ type Transcript struct {
 
 	chat  bool              // the session chat (chat.go), not one agent's transcript
 	names map[string]string // in the chat: agent id → name
-	roles map[string]string // in the chat: agent id → role
 	posts map[string]int    // in the chat: post id → its item, which its replies join
 }
 
