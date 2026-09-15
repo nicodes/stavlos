@@ -521,6 +521,9 @@ func kindStyle(l transcript.Line) (leader, glyph string, style func(...string) s
 	case transcript.LineNotice:
 		return "", "", markdownStyle(theme.StyleNotice)
 	case transcript.LineTool:
+		if transcript.IsMessage(l) {
+			return "", toolLineGlyph(l), renderMessageText
+		}
 		return "", toolLineGlyph(l), renderToolText
 	case transcript.LineToolOut:
 		return "  ", "", theme.StyleToolOut.Render // under the tool name (after "◆ ")
@@ -571,6 +574,20 @@ func renderToolText(strs ...string) string {
 		return out + theme.StyleTool.Render(rest[:i]) + theme.StyleDim.Render(rest[i:])
 	}
 	return out + theme.StyleTool.Render(rest)
+}
+
+// renderMessageText styles a message call "@scout look at …": the bold
+// recipient, then the text as written (a wrapped row carries no name).
+func renderMessageText(strs ...string) string {
+	s := strings.Join(strs, "")
+	if !strings.HasPrefix(s, "@") {
+		return theme.StyleTool.Render(s)
+	}
+	name, rest, _ := strings.Cut(s, " ")
+	if rest == "" {
+		return theme.StyleToolName.Render(name)
+	}
+	return theme.StyleToolName.Render(name) + " " + theme.StyleTool.Render(rest)
 }
 
 // inlineMarkdown renders **bold** spans; unbalanced markers are left as-is.
