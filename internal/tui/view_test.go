@@ -1105,8 +1105,11 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	}
 	// role and model on the left, tokens and cost on the right, no dots; no
 	// context figure while the window is unknown
-	if row := lines[meta]; !strings.HasSuffix(row, "2k tokens · $0.02") || strings.Contains(row, "%") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 {
-		t.Fatalf("meta row: %q", row)
+	// the usage sits on the divider over the input, not the meta row (no
+	// context figure while the window is unknown)
+	if row := lines[meta]; strings.Contains(row, "tokens") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 ||
+		!strings.HasSuffix(lines[strip-3], "─ 2k tokens · $0.02 ─") || strings.Contains(lines[strip-3], "%") {
+		t.Fatalf("meta row %q, divider %q", row, lines[strip-3])
 	}
 	// with a window: "used% · used/window" and the cost; the channel's tokens are in the sidebar
 	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
@@ -3083,7 +3086,7 @@ func TestChannelChatFooterIsTheChannels(t *testing.T) {
 		if !m.superChat || stripANSI(left) != "ASK" || len(spans) != 1 || len(m.metaParts()) != 1 {
 			t.Fatalf("channel chat meta: %q %v %v", stripANSI(left), spans, m.metaParts())
 		}
-		if right := stripANSI(m.footerRightView()); strings.Contains(right, "%") || right != "2k tokens · $0.02" {
+		if right := stripANSI(m.footerRightView()); right != "31% · 2k tokens · $0.02" { // the main agent's context, then the channel's tokens and cost
 			t.Fatalf("channel chat right side: %q", right)
 		}
 		if sv := stripANSI(m.sectionsView(100)); strings.Contains(sv, "async") || slices.Contains(m.tabOrder(), focusAsync) || (tree == (sv != "")) {
