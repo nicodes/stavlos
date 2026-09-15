@@ -114,6 +114,7 @@ stavlos init [--model p/m]     # write a starter global config
 stavlos status                 # daemon status
 stavlos auth login|list|logout # subscription sign-in
 stavlos daemon                 # run the daemon in the foreground (there is no separate binary)
+stavlos --version              # version, commit and build of this binary
 ```
 
 ## Project configuration
