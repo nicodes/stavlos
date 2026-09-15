@@ -25,7 +25,7 @@ func (s *recSink) Notify(n protocol.PromptNotification, tiers []protocol.Tier) {
 func TestEscalateThenDefault(t *testing.T) {
 	s := &recSink{}
 	m := New(Config{ClaimTimeout: 30 * time.Millisecond, AnswerTimeout: 80 * time.Millisecond, Default: "deny"}, s)
-	a := m.Request(context.Background(), protocol.PromptInfo{ID: "p1", Kind: "permission"})
+	a := m.Request(context.Background(), protocol.PromptInfo{ID: "p1", Kind: "permission"}, nil)
 	if !a.Defaulted || a.Value != "deny" {
 		t.Fatalf("%+v", a)
 	}
@@ -47,7 +47,7 @@ func TestClaimConflictAndWithdraw(t *testing.T) {
 	m := New(Config{ClaimTimeout: time.Second, AnswerTimeout: time.Second, Default: "deny"}, s)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan Answer, 1)
-	go func() { done <- m.Request(ctx, protocol.PromptInfo{ID: "p2"}) }()
+	go func() { done <- m.Request(ctx, protocol.PromptInfo{ID: "p2"}, nil) }()
 	time.Sleep(10 * time.Millisecond)
 	if err := m.Claim("p2", "a"); err != nil {
 		t.Fatal(err)
@@ -72,7 +72,7 @@ func TestReply(t *testing.T) {
 	s := &recSink{}
 	m := New(Config{ClaimTimeout: time.Second, AnswerTimeout: time.Second}, s)
 	done := make(chan Answer, 1)
-	go func() { done <- m.Request(context.Background(), protocol.PromptInfo{ID: "p3"}) }()
+	go func() { done <- m.Request(context.Background(), protocol.PromptInfo{ID: "p3"}, nil) }()
 	time.Sleep(10 * time.Millisecond)
 	if err := m.Reply("p3", "a", Answer{Value: "allow", Dir: "/x", Reason: "r", Answers: []string{"one"}}); err != nil {
 		t.Fatal(err)
@@ -88,7 +88,7 @@ func TestResolveIgnoresClaims(t *testing.T) {
 	m := New(Config{ClaimTimeout: time.Second, AnswerTimeout: time.Second}, &recSink{})
 	done := make(chan Answer, 1)
 	go func() {
-		done <- m.Request(context.Background(), protocol.PromptInfo{ID: "p4", Kind: protocol.PromptTrust})
+		done <- m.Request(context.Background(), protocol.PromptInfo{ID: "p4", Kind: protocol.PromptTrust}, nil)
 	}()
 	time.Sleep(10 * time.Millisecond)
 	if err := m.Claim("p4", "tui"); err != nil {
@@ -110,7 +110,7 @@ func TestTrustAndQuestionsNeverDefault(t *testing.T) {
 	for _, kind := range []protocol.PromptKind{protocol.PromptTrust, protocol.PromptQuestion} {
 		m := New(Config{ClaimTimeout: 10 * time.Millisecond, AnswerTimeout: 30 * time.Millisecond, Default: "deny"}, &recSink{})
 		done := make(chan Answer, 1)
-		go func() { done <- m.Request(context.Background(), protocol.PromptInfo{ID: "p5", Kind: kind}) }()
+		go func() { done <- m.Request(context.Background(), protocol.PromptInfo{ID: "p5", Kind: kind}, nil) }()
 		select {
 		case a := <-done:
 			t.Fatalf("%s defaulted: %+v", kind, a)

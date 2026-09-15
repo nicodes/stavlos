@@ -70,14 +70,22 @@ var (
 )
 
 // Request opens a prompt and blocks until answered, defaulted, or ctx is
-// cancelled (in which case the prompt is withdrawn everywhere).
-func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo) Answer {
+// cancelled (in which case the prompt is withdrawn everywhere). opened, if
+// set, runs once the prompt can be listed and answered, before any answer
+// is taken.
+func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo, opened func()) Answer {
 	info.Created = time.Now().UTC().Format(time.RFC3339)
 	p := &pending{info: info, answer: make(chan Answer, 1)}
 	m.mu.Lock()
 	m.pend[info.ID] = p
 	m.mu.Unlock()
 	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionRequested, Prompt: info}, []protocol.Tier{protocol.TierInteractive})
+	// The prompt can be listed and answered from here on: opened runs now
+	// (the caller logs the request), and no answer is taken before it
+	// returns, so what it logs always precedes the answer.
+	if opened != nil {
+		opened()
+	}
 
 	claimT := time.NewTimer(m.cfg.ClaimTimeout)
 	answerT := time.NewTimer(m.cfg.AnswerTimeout)

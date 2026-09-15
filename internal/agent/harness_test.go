@@ -84,11 +84,14 @@ func (h *fakeHost) Resolve(modelID string) (model.Model, model.Info, error) {
 func (h *fakeHost) CheckModel(string) error  { return h.badModel }
 func (h *fakeHost) Variants(string) []string { return []string{"low", "high"} }
 
-func (h *fakeHost) Prompt(ctx context.Context, p protocol.PromptInfo) escalation.Answer {
+func (h *fakeHost) Prompt(ctx context.Context, p protocol.PromptInfo, opened func()) escalation.Answer {
 	h.mu.Lock()
 	h.prompts = append(h.prompts, p)
 	f := h.answer
 	h.mu.Unlock()
+	if opened != nil {
+		opened() // open before any answer, as the daemon's escalation does
+	}
 	if f == nil {
 		return escalation.Answer{Value: "deny"}
 	}

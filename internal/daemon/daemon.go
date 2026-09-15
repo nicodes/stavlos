@@ -171,8 +171,8 @@ func (d *Daemon) Resolve(id string) (model.Model, model.Info, error) { return d.
 func (d *Daemon) CheckModel(id string) error                         { return d.Registry.Check(id) }
 func (d *Daemon) Variants(id string) []string                        { return d.Registry.Variants(id) }
 
-func (d *Daemon) Prompt(ctx context.Context, info protocol.PromptInfo) escalation.Answer {
-	return d.esc.Request(ctx, info)
+func (d *Daemon) Prompt(ctx context.Context, info protocol.PromptInfo, opened func()) escalation.Answer {
+	return d.esc.Request(ctx, info, opened)
 }
 
 // --- prompts ---
@@ -413,7 +413,7 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 			ID: id, Channel: s.ID, ChannelName: s.Name(), Kind: protocol.PromptTrust, Input: input,
 			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, presets, skills and AGENTS.md.", s.Dir),
 			Options:  []string{"trust", "skip"},
-		})
+		}, nil) // the daemon's own prompt: no agent logs it
 		d.mu.Lock()
 		delete(d.trustPrompts, s.Dir)
 		d.mu.Unlock()
