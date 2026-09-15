@@ -801,7 +801,7 @@ func partyList(names []string) string {
 
 // messageDelivered starts the result of a message that the sender now
 // waits on (an answer or a message to the user reads differently).
-const messageDelivered = "message delivered to "
+const messageDelivered = "request delivered to "
 
 // messagedAgent is the name of the agent a finished message call is waiting
 // on: set only for a new message delivered to an agent, not for an answer,

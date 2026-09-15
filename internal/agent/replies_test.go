@@ -49,7 +49,7 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 	if q := repliesOf(t, h, event.ReminderQueued, root.ID); len(q) != maxNudges || !reflect.DeepEqual(q[0], []string{"user"}) {
 		t.Fatalf("reminders %v", q)
 	}
-	if !strings.Contains(reminder, "without replying to user") || !strings.Contains(reminder, "message (to: user)") {
+	if !strings.Contains(reminder, "without replying to user") || !strings.Contains(reminder, "message (to: user, kind: response)") {
 		t.Fatalf("reminder: %q", reminder)
 	}
 	reqs := fm.requests()
@@ -112,7 +112,7 @@ func TestNoNudgeWhileWaiting(t *testing.T) {
 		},
 		childSteps: []step{func(context.Context, model.Request) (model.Response, error) {
 			<-release
-			return call("k1", "message", `{"to":"main","text":"found it"}`), nil
+			return call("k1", "message", `{"to":"main","text":"found it","kind":"response"}`), nil
 		}},
 	}
 	s, h := newTestSession(t, testConfig{reminders: true}, fm)
@@ -144,7 +144,7 @@ func TestChildRemindedOfItsParent(t *testing.T) {
 				if !strings.Contains(lastUserText(req), "without replying to main") {
 					return text(""), errors.New("reminder: " + lastUserText(req))
 				}
-				return call("k1", "message", `{"to":"main","text":"found it"}`), nil
+				return call("k1", "message", `{"to":"main","text":"found it","kind":"response"}`), nil
 			},
 		},
 	}

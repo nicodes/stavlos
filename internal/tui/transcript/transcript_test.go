@@ -304,7 +304,7 @@ func TestMessageLineWaitsForTheAnswer(t *testing.T) {
 		tr.Apply(mk(seq+1, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: callID, Name: "message", Output: output, IsError: isErr}))
 	}
 	delivered := func(name string) string {
-		return "message delivered to " + name + "; its answer wakes you between turns"
+		return "request delivered to " + name + "; its response wakes you between turns"
 	}
 	tone := func(to string) Tone {
 		for _, l := range tr.All() {
@@ -345,7 +345,7 @@ func TestMessageLineWaitsForTheAnswer(t *testing.T) {
 	}
 	// nothing to wait for: a refused message, an answer, a message to the user
 	send(14, "p3", "ghost", `unknown agent "ghost"`, true)
-	send(16, "p6", "helper", "answer delivered to helper", false)
+	send(16, "p6", "helper", "response delivered to helper", false)
 	send(18, "p7", "user", "message delivered to the user", false)
 	for _, to := range []string{"ghost", "helper", "user"} {
 		if tone(to) == ToneWorking {

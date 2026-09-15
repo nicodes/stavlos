@@ -270,7 +270,7 @@ const (
 	MsgAgentResponse MessageKind = "agent_response" // another agent's answer, from the mailbox
 	MsgMonitorFired  MessageKind = "monitor_fired"  // a background job's exit, from the mailbox
 	MsgReminder      MessageKind = "reminder"       // the harness's one reminder of replies still owed
-	MsgNote          MessageKind = "note"           // a message from another agent that needs no reply (message no_reply)
+	MsgNote          MessageKind = "note"           // a message from another agent that needs no reply (message kind info)
 )
 
 // UserMessagePayload is the model-visible input to a model call.

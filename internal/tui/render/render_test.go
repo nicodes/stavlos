@@ -776,11 +776,11 @@ func TestSentMessageShowsItsText(t *testing.T) {
 	}
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
 	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "r1", Name: "message", Input: json.RawMessage(`{"to":"main","text":"Concise findings:\n- Go-only module"}`)}))
-	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "r1", Name: "message", Output: "answer delivered to main"}))
+	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "r1", Name: "message", Output: "response delivered to main"}))
 	full := renderWith(tr.All(), Options{Width: 80, NoFold: true})
 	assertSubsequence(t, full, []string{"‹ @main Concise findings:", "  - Go-only module"})
 	for _, l := range full {
-		if strings.Contains(l, "answer delivered to") {
+		if strings.Contains(l, "response delivered to") {
 			t.Fatalf("the bare tool result should not show:\n%s", strings.Join(full, "\n"))
 		}
 	}

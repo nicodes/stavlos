@@ -108,7 +108,7 @@ func TestMessageAnswersTheLatestPost(t *testing.T) {
 	}
 }
 
-// TestNoReplyNote: a message sent with no_reply leaves no debt and no wait,
+// TestNoReplyNote: a message of kind info leaves no debt and no wait,
 // does not wake an idle recipient, survives a restart, and reaches the
 // recipient with its next turn, marked as needing no reply.
 func TestNoReplyNote(t *testing.T) {
@@ -116,11 +116,11 @@ func TestNoReplyNote(t *testing.T) {
 		steps: []step{
 			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("delegated")),
-			reply(call("c2", "message", `{"to":"scout","text":"thanks","no_reply":true}`)), // woken by scout's answer
+			reply(call("c2", "message", `{"to":"scout","text":"thanks","kind":"info"}`)), // woken by scout's answer
 			reply(text("noted")),
 		},
 		childSteps: []step{
-			reply(call("k1", "message", `{"to":"main","text":"found it"}`)),
+			reply(call("k1", "message", `{"to":"main","text":"found it","kind":"response"}`)),
 			reply(text("done")),
 		},
 	}
@@ -137,7 +137,7 @@ func TestNoReplyNote(t *testing.T) {
 		t.Fatalf("child %+v root awaiting %v", in, root.Info().Awaiting)
 	}
 	fin := finished(h, root.ID)
-	if out := fin[len(fin)-1].Output; !strings.HasPrefix(out, "note delivered to scout") {
+	if out := fin[len(fin)-1].Output; !strings.HasPrefix(out, "info delivered to scout") {
 		t.Fatalf("tool result %q", out)
 	}
 	s.Stop()

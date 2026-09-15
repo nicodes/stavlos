@@ -233,7 +233,7 @@ func TestEndToEnd(t *testing.T) {
 			if !strings.Contains(req.Messages[0].Blocks[0].Text, "look around") {
 				t.Errorf("child task missing: %+v", req.Messages[0])
 			}
-			return call("k1", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"found it"}`)
+			return call("k1", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"found it","kind":"response"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -462,7 +462,7 @@ func TestChildResponseWakesParent(t *testing.T) {
 	fm.childSteps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
 			<-release
-			return call("k", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"late"}`)
+			return call("k", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"late","kind":"response"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -785,11 +785,11 @@ func TestAgentsMessageAcrossTheSession(t *testing.T) {
 			if pid != rootID {
 				t.Errorf("parent id %q, want %q", pid, rootID)
 			}
-			return call("k1", "message", `{"to":"`+pid+`","text":"which branch?"}`)
+			return call("k1", "message", `{"to":"`+pid+`","text":"which branch?","kind":"response"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if last.IsError || last.Content != "answer delivered to main" {
+			if last.IsError || last.Content != "response delivered to main" {
 				t.Errorf("message to the waiting parent should be an answer: %+v", last)
 			}
 			// one messaging tool for everyone: the older tools are gone
@@ -877,7 +877,7 @@ func TestVariants(t *testing.T) {
 			mu.Lock()
 			seen = append(seen, "child:"+req.Variant)
 			mu.Unlock()
-			return call("k1", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"ok"}`)
+			return call("k1", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"ok","kind":"response"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -1238,7 +1238,7 @@ func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
 	fm.childSteps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
 			<-release
-			return call("k", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"one answer for both"}`)
+			return call("k", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"one answer for both","kind":"response"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -1374,11 +1374,11 @@ func TestFullAgentIDs(t *testing.T) {
 				t.Errorf("task should name the parent: %q", last)
 			}
 			// a unique id prefix still resolves, for models that use ids
-			return call("k1", "message", `{"to":"`+parent[:8]+`","text":"found it"}`)
+			return call("k1", "message", `{"to":"`+parent[:8]+`","text":"found it","kind":"response"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if last.IsError || last.Content != "answer delivered to main" {
+			if last.IsError || last.Content != "response delivered to main" {
 				t.Errorf("prefix id should resolve: %+v", last)
 			}
 			return text("done")

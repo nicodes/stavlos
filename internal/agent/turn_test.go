@@ -439,7 +439,7 @@ func TestDelegation(t *testing.T) {
 			<-release
 			parent := req.System[strings.Index(req.System, "created by a parent agent (id ")+len("created by a parent agent (id "):]
 			parent = parent[:strings.IndexByte(parent, ')')]
-			return call("k1", "message", `{"to":"`+parent+`","text":"found it"}`), nil
+			return call("k1", "message", `{"to":"`+parent+`","text":"found it","kind":"response"}`), nil
 		}},
 	}
 	s, h := newTestSession(t, testConfig{}, fm)
