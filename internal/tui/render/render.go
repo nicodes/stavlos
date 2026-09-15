@@ -158,11 +158,8 @@ func assemble(parts []itemRows, o Options) (string, map[int]RowRange) {
 	// The ephemeral turn indicator: not an item (no cursor, no fold), gone
 	// as soon as the turn ends.
 	if o.Working {
-		switch {
-		case n > 0 && o.TurnGaps:
-			b.WriteString("\n") // the running turn: no gap before its indicator
-		case n > 0:
-			b.WriteString("\n\n")
+		if n > 0 {
+			b.WriteString("\n\n") // one blank row above the indicator, in every chat
 		}
 		// Gutter + leader, like every chat line.
 		if o.Waiting {

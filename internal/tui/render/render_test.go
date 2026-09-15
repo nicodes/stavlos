@@ -868,4 +868,9 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
+	// the loader keeps one blank row above it
+	working := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true, Working: true, Spinner: "◐", Verb: "Trotting"}), "\n")
+	if !strings.HasSuffix(working, "› thanks\n\n◐ Trotting…") {
+		t.Fatalf("loader spacing:\n%s", working)
+	}
 }
