@@ -519,12 +519,12 @@ func (m Model) homeView(width, height int) string {
 // channelView is the transcript over the input box, plus the sidebar.
 func (m Model) channelView(width, height int) string {
 	cw := m.contentWidth()
-	// The chat (and the status line above the rule) share the top with the
-	// sidebar; everything from the rule down spans the whole window, so the
+	// The chat shares the top with the sidebar; everything from the rule down
+	// (the status and usage sit on the rule) spans the whole window, so the
 	// footer cuts the sidebar off, not the other way round.
-	top := padLines(m.vp.View()+"\n"+m.statusLine(cw), cw)
+	top := padLines(m.vp.View(), cw)
 	if m.sidebarVisible() {
-		h := m.vp.Height + 1
+		h := m.vp.Height
 		sep := theme.StyleSep.Render(strings.TrimSuffix(strings.Repeat("│ \n", h), "\n")) // a space keeps the chat off the line
 		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top)           // the sidebar sits on the left
 	}
@@ -1304,21 +1304,25 @@ func fullToolArg(tool string, raw json.RawMessage) string {
 	return transcript.ToolArg(tool, raw)
 }
 
-// statusLine is the line between the chat and the divider: the transient
-// message (copied, resumed, an error…) left-aligned, or blank.
+// statusLine is the transient message (copied, resumed, an error…) cut to
+// width, or blank: over the input on the home screen; a channel's view puts
+// it on the divider instead (ruleLine).
 func (m Model) statusLine(width int) string {
-	var s string
+	return ansi.Truncate(m.statusText(), width, "…")
+}
+
+// statusText is the transient message, coloured: an error red, anything
+// else green, "replaying events…" dim while history loads; "" for none.
+func (m Model) statusText() string {
 	switch {
 	case m.status != "" && m.statusErr:
-		s = theme.StyleStatusErr.Render(m.status)
+		return theme.StyleStatusErr.Render(m.status)
 	case m.status != "":
-		s = theme.StyleStatusOK.Render(m.status)
+		return theme.StyleStatusOK.Render(m.status)
 	case m.loading:
-		s = theme.StyleDim.Render("replaying events…")
-	default:
-		return ""
+		return theme.StyleDim.Render("replaying events…")
 	}
-	return ansi.Truncate(s, width, "…")
+	return ""
 }
 
 func (m Model) footerRightView() string {
@@ -1337,21 +1341,27 @@ func (m Model) footerRightView() string {
 	return footerRight(f)
 }
 
-// ruleLine is the divider over the input with the usage at its right end,
-// "──── 69k tokens · $0.00 ─": the channel's in the channel chat, the
+// ruleLine is the divider over the input, with the transient status at its
+// left end and the usage at its right, "─ copied ──── 69k tokens · $0.00 ─": the channel's in the channel chat, the
 // selected agent's context and cost in its own. A plain rule while nothing
 // is connected (the meta row carries the sign-in nudge then) or when the
 // usage does not fit.
 func (m Model) ruleLine(width int) string {
-	usage := ""
+	dash := theme.StyleRule.Render
+	right, rightW := "", 0
 	if m.connected() {
-		usage = m.footerRightView()
+		if usage := m.footerRightView(); usage != "" && lipgloss.Width(usage)+4 <= width {
+			right, rightW = " "+usage+" "+dash("─"), lipgloss.Width(usage)+3
+		}
 	}
-	w := lipgloss.Width(usage)
-	if usage == "" || w+4 > width {
-		return theme.StyleRule.Render(strings.Repeat("─", width))
+	left, leftW := "", 0
+	if status := m.statusText(); status != "" { // the transient message, cut before the usage is
+		if avail := width - rightW - 4; avail >= 4 {
+			status = ansi.Truncate(status, avail, "…")
+			left, leftW = dash("─")+" "+status+" ", lipgloss.Width(status)+3
+		}
 	}
-	return theme.StyleRule.Render(strings.Repeat("─", width-w-3)) + " " + usage + " " + theme.StyleRule.Render("─")
+	return left + dash(strings.Repeat("─", max(0, width-leftW-rightW))) + right
 }
 
 // connected reports whether a provider and a model are usable.
