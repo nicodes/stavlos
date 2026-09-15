@@ -12,9 +12,9 @@ import (
 )
 
 // The session chat (docs/super-chat.md) is a Transcript of its own, fed the
-// events of every agent: it keeps the human's posts, the agents' messages
-// to the human, and the permission prompts and questions, each line linked
-// to its agent. Tool calls and everything else pass it by.
+// events of every agent: it keeps the human's posts and the agents'
+// messages to the human, linked to the agent. Tool calls, prompts and every
+// notice stay in the agents' own chats.
 
 // NewChat returns an empty session chat.
 func NewChat() *Transcript {
@@ -27,9 +27,7 @@ func NewChat() *Transcript {
 // ChatEvent reports whether the session chat reads events of type typ.
 func ChatEvent(typ event.Type) bool {
 	switch typ {
-	case event.AgentSpawned, event.AgentRoleChanged, event.ChatPosted, event.MessageToUser,
-		event.PromptRequested, event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted,
-		event.AgentKilled:
+	case event.AgentSpawned, event.AgentRoleChanged, event.ChatPosted, event.MessageToUser, event.AgentKilled:
 		return true
 	}
 	return false
@@ -96,25 +94,6 @@ func (t *Transcript) applyChat(ev event.Event) {
 				return
 			}
 			t.appendItem(append([]Line{{Kind: LineBlank, Agent: ev.Agent}}, lines...))
-		}
-	case event.PromptRequested:
-		var p event.PromptRequestedPayload
-		if ev.Decode(&p) != nil {
-			return
-		}
-		lines := CleanLines(EventLines(ev))
-		for i := range lines {
-			if lines[i].Kind == LineNotice {
-				lines[i].Text = t.agentName(ev.Agent) + " · " + lines[i].Text
-			}
-		}
-		if r, ok := t.find(t.appendItem(linked(lines, ev.Agent)), isPromptLine); ok {
-			t.promptLine[p.ID] = r
-		}
-	case event.PromptAnswered, event.PromptWithdrawn, event.PromptDefaulted:
-		var p event.PromptRefPayload
-		if ev.Decode(&p) == nil {
-			t.settlePrompt(p.ID, ev.Type != event.PromptAnswered)
 		}
 	}
 }
