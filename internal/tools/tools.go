@@ -109,7 +109,6 @@ type ChildStatus struct {
 	State   string  `json:"state"`
 	Turn    int     `json:"turn"`
 	CostUSD float64 `json:"cost_usd"`
-	Summary string  `json:"summary,omitempty"`
 }
 
 // Set is a named collection.

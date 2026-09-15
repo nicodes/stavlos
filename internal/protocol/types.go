@@ -270,29 +270,29 @@ type ChannelCreateParams struct {
 	RootAgent string `json:"root_agent,omitempty"` // archetype; overrides config
 }
 type ChannelRef struct {
-	ID string `json:"id"`
+	Channel string `json:"channel"`
 }
 
 // ChannelRenameParams names a channel's new name: normalised like an agent's,
 // refused when another channel has it.
 type ChannelRenameParams struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	Channel string `json:"channel"`
+	Name    string `json:"name"`
 }
 type ChannelSetModelParams struct {
-	ID    string `json:"id"`
-	Model string `json:"model"`
+	Channel string `json:"channel"`
+	Model   string `json:"model"`
 }
 type ChannelSetModeParams struct {
-	ID   string `json:"id"`
-	Mode string `json:"mode"` // ask | auto | yolo
+	Channel string `json:"channel"`
+	Mode    string `json:"mode"` // ask | auto | yolo
 }
 
 // ChannelPostParams is a message to the channel chat: it reaches every
 // agent it @mentions as a steer, or the root agent when it mentions none.
 type ChannelPostParams struct {
-	ID   string `json:"id"`
-	Text string `json:"text"`
+	Channel string `json:"channel"`
+	Text    string `json:"text"`
 }
 
 // ChannelPostResult names the agents the message was delivered to.
@@ -303,8 +303,8 @@ type ChannelPostResult struct {
 // ChannelDirParams names a directory to add to or remove from the
 // channel's working set.
 type ChannelDirParams struct {
-	ID  string `json:"id"`
-	Dir string `json:"dir"` // absolute, ~ or relative to the channel directory
+	Channel string `json:"channel"`
+	Dir     string `json:"dir"` // absolute, ~ or relative to the channel directory
 }
 
 // Permission modes.
@@ -342,8 +342,6 @@ type AgentInfo struct {
 	Tokens        int              `json:"tokens"`                   // input+output total
 	Context       int              `json:"context,omitempty"`        // estimated tokens the next model call carries (what compaction measures)
 	ContextWindow int              `json:"context_window,omitempty"` // the model\'s window; 0 when unknown
-	Summary       string           `json:"summary,omitempty"`        // finish summary
-	Status        string           `json:"status,omitempty"`         // finish status
 	LastError     string           `json:"last_error,omitempty"`     // error that ended the most recent turn, if any
 	Monitors      []MonitorInfo    `json:"monitors,omitempty"`       // this agent's general monitors (not children)
 	Todos         []event.TodoItem `json:"todos,omitempty"`          // this agent\'s todo list, in creation order

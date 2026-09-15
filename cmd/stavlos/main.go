@@ -127,7 +127,7 @@ func startChannel(ctx context.Context, name string, args []string, fresh bool) e
 	d := cwd(*dir)
 	var s protocol.ChannelInfo
 	if res, lerr := client.Do(ctx, c, protocol.ChannelList, protocol.ChannelListParams{Dir: d}); lerr == nil && len(res.Channels) > 0 && (!fresh || res.Channels[0].Title == "" && *modelID == "" && *root == "") {
-		s, err = client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{ID: res.Channels[0].ID})
+		s, err = client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{Channel: res.Channels[0].ID})
 	} else {
 		s, err = client.Do(ctx, c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: d, Model: *modelID, RootAgent: *root})
 	}
@@ -158,7 +158,7 @@ func cmdOpen(ctx context.Context, _ string, args []string) error {
 	}
 	for _, ch := range res.Channels {
 		if ch.ID == want || ch.Name == want {
-			s, err := client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{ID: ch.ID})
+			s, err := client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{Channel: ch.ID})
 			if err != nil {
 				return err
 			}
