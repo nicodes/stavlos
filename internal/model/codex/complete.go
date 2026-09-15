@@ -201,12 +201,7 @@ func (a *accumulator) feed(payload []byte) error {
 				if u.InputTokensDetails != nil {
 					cached = u.InputTokensDetails.CachedTokens
 				}
-				a.usage.InputTokens = u.InputTokens - cached
-				if a.usage.InputTokens < 0 {
-					a.usage.InputTokens = 0
-				}
-				a.usage.CacheReadTokens = cached
-				a.usage.OutputTokens = u.OutputTokens
+				a.usage = model.UsageFrom(u.InputTokens, u.OutputTokens, cached)
 			}
 			a.final = r.Output
 		}

@@ -66,14 +66,20 @@ type accumulator struct {
 	onDelta  func(model.Delta)
 	text     strings.Builder
 	thinking strings.Builder
-	calls    map[int]*toolCall
+	calls    map[int]*callBuilder
 	finish   string
 	usage    model.Usage
-	sawUsage bool
+}
+
+// callBuilder is one tool call being streamed: its arguments arrive in
+// pieces, built up without copying the whole string at every chunk.
+type callBuilder struct {
+	id, name string
+	args     strings.Builder
 }
 
 func newAccumulator(onDelta func(model.Delta)) *accumulator {
-	return &accumulator{onDelta: onDelta, calls: map[int]*toolCall{}}
+	return &accumulator{onDelta: onDelta, calls: map[int]*callBuilder{}}
 }
 
 // Feed, Response and Terminal make the accumulator a stream.Codec.
@@ -91,17 +97,12 @@ func (a *accumulator) feed(payload []byte) error {
 	if chunk.Error != nil {
 		return fmt.Errorf("stream error: %s", chunk.Error.Message)
 	}
-	if chunk.Usage != nil {
-		a.sawUsage = true
-		a.usage.InputTokens = chunk.Usage.PromptTokens
-		a.usage.OutputTokens = chunk.Usage.CompletionTokens
-		if d := chunk.Usage.PromptTokensDetails; d != nil {
-			a.usage.CacheReadTokens = d.CachedTokens
-			a.usage.InputTokens -= d.CachedTokens
-			if a.usage.InputTokens < 0 {
-				a.usage.InputTokens = 0
-			}
+	if u := chunk.Usage; u != nil {
+		cached := 0
+		if u.PromptTokensDetails != nil {
+			cached = u.PromptTokensDetails.CachedTokens
 		}
+		a.usage = model.UsageFrom(u.PromptTokens, u.CompletionTokens, cached)
 	}
 	for _, ch := range chunk.Choices {
 		if ch.Index != 0 {
@@ -133,19 +134,19 @@ func (a *accumulator) feed(payload []byte) error {
 func (a *accumulator) feedToolCall(tc toolCall) {
 	cur, ok := a.calls[tc.Index]
 	if !ok {
-		cur = &toolCall{Index: tc.Index}
+		cur = &callBuilder{}
 		a.calls[tc.Index] = cur
 	}
 	if tc.ID != "" {
-		cur.ID = tc.ID
+		cur.id = tc.ID
 	}
 	if tc.Function.Name != "" {
-		if cur.Function.Name == "" {
+		if cur.name == "" {
 			a.onDelta(model.Delta{ToolName: tc.Function.Name})
 		}
-		cur.Function.Name = tc.Function.Name
+		cur.name = tc.Function.Name
 	}
-	cur.Function.Arguments += tc.Function.Arguments
+	cur.args.WriteString(tc.Function.Arguments)
 }
 
 func (a *accumulator) response() model.Response {
@@ -163,20 +164,15 @@ func (a *accumulator) response() model.Response {
 	sort.Ints(idx)
 	for n, i := range idx {
 		tc := a.calls[i]
-		args := strings.TrimSpace(tc.Function.Arguments)
+		args := strings.TrimSpace(tc.args.String())
 		if args == "" || !json.Valid([]byte(args)) {
 			args = "{}"
 		}
-		id := tc.ID
+		id := tc.id
 		if id == "" {
 			id = fmt.Sprintf("call_%d", n)
 		}
-		blocks = append(blocks, model.Block{
-			Type:  model.BlockToolUse,
-			ID:    id,
-			Name:  tc.Function.Name,
-			Input: json.RawMessage(args),
-		})
+		blocks = append(blocks, model.Block{Type: model.BlockToolUse, ID: id, Name: tc.name, Input: json.RawMessage(args)})
 	}
 	return model.Response{
 		Blocks:     blocks,

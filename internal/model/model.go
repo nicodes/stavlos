@@ -180,3 +180,40 @@ type Token struct {
 // TokenSource yields a fresh bearer token, refreshing if needed. Adapters
 // call it per request so a rotated token is picked up without a restart.
 type TokenSource func(ctx context.Context) (Token, error)
+
+// ToolSchema is a tool's input schema as providers want it: an empty
+// object schema when the tool declares none.
+func ToolSchema(d ToolDef) json.RawMessage {
+	if len(d.Schema) == 0 {
+		return json.RawMessage(`{"type":"object","properties":{}}`)
+	}
+	return d.Schema
+}
+
+// ToolArguments is a tool call's input as the wire carries it: "{}" when
+// empty.
+func ToolArguments(b Block) string {
+	if len(b.Input) == 0 {
+		return "{}"
+	}
+	return string(b.Input)
+}
+
+// ToolResultText is a tool result as every provider receives it: "(no
+// output)" for an empty one, and an error marked as such.
+func ToolResultText(b Block) string {
+	out := b.Content
+	if out == "" {
+		out = "(no output)"
+	}
+	if b.IsError && !strings.HasPrefix(out, "Error") {
+		out = "Error: " + out
+	}
+	return out
+}
+
+// UsageFrom is the usage of a call whose provider counts cached input
+// inside the input total: the cached part is reported apart.
+func UsageFrom(input, output, cached int) Usage {
+	return Usage{InputTokens: max(input-cached, 0), OutputTokens: output, CacheReadTokens: cached}
+}

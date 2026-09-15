@@ -105,17 +105,7 @@ func toTools(defs []model.ToolDef) []toolDef {
 	}
 	out := make([]toolDef, 0, len(defs))
 	for _, d := range defs {
-		params := d.Schema
-		if len(params) == 0 {
-			params = json.RawMessage(`{"type":"object","properties":{}}`)
-		}
-		out = append(out, toolDef{
-			Type:        "function",
-			Name:        d.Name,
-			Description: d.Description,
-			Parameters:  params,
-			Strict:      false,
-		})
+		out = append(out, toolDef{Type: "function", Name: d.Name, Description: d.Description, Parameters: model.ToolSchema(d)})
 	}
 	return out
 }
@@ -155,30 +145,10 @@ func toInput(msgs []model.Message) []inputItem {
 				})
 			case model.BlockToolUse:
 				flush()
-				args := string(b.Input)
-				if len(b.Input) == 0 {
-					args = "{}"
-				}
-				items = append(items, inputItem{
-					Type:      "function_call",
-					CallID:    b.ID,
-					Name:      b.Name,
-					Arguments: args,
-				})
+				items = append(items, inputItem{Type: "function_call", CallID: b.ID, Name: b.Name, Arguments: model.ToolArguments(b)})
 			case model.BlockToolResult:
 				flush()
-				out := b.Content
-				if out == "" {
-					out = "(no output)"
-				}
-				if b.IsError {
-					out = "ERROR: " + out
-				}
-				items = append(items, inputItem{
-					Type:   "function_call_output",
-					CallID: b.ToolUseID,
-					Output: out,
-				})
+				items = append(items, inputItem{Type: "function_call_output", CallID: b.ToolUseID, Output: model.ToolResultText(b)})
 			}
 		}
 		flush()
