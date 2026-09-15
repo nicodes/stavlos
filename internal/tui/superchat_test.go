@@ -143,7 +143,7 @@ func TestAsyncTabHoldsWhatIsDue(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
 	m.agents[0].Due = []string{"b", "user"}
-	if labels := strings.Join(m.tabTexts(), " · "); !strings.Contains(labels, "async 4 · todo") || strings.Contains(labels, "due") {
+	if labels := strings.Join(tabTexts(m), " · "); !strings.Contains(labels, "async 4 · todo") || strings.Contains(labels, "due") {
 		t.Fatalf("strip: %s", labels)
 	}
 	m.setFocus(focusAsync)
@@ -165,4 +165,13 @@ func TestAsyncTabHoldsWhatIsDue(t *testing.T) {
 	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "not waiting on anything, and no replies due") {
 		t.Fatalf("b waits on nothing and owes nothing:\n%s", body)
 	}
+}
+
+// tabTexts is the strip's tabs spelled out, "async 4", in tab order.
+func tabTexts(m Model) []string {
+	var out []string
+	for _, t := range m.tabs() {
+		out = append(out, t.text())
+	}
+	return out
 }

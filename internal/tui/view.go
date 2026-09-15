@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -872,28 +873,37 @@ func (m Model) tabDialogBox(bodyWidth int) (string, []int) {
 // tabDialogTitle is the open tab's title with its count; a prompt dialog
 // is named after the kind of prompt at the head of the queue.
 func (m Model) tabDialogTitle() string {
-	texts := m.tabTexts()
-	for i, f := range tabFocuses {
-		if f == m.focus {
-			t := texts[i]
-			if strings.HasPrefix(t, "mcp ") {
-				return "MCP" + t[3:]
-			}
-			return strings.ToUpper(t[:1]) + t[1:] // "permission 1/2" → "Permission 1/2"
+	for _, t := range m.tabs() {
+		if t.focus == m.focus {
+			return t.name + " " + t.count
 		}
 	}
 	return ""
 }
 
-// tabTexts is the strip's labels in tab order ("name count"); the dialog
-// titles are the same texts capitalised. Counts: permission and questions
-// read position/total while something waits ("1/2": the first of two;
-// "2/3": the second question of three) and "0" otherwise; todo and mcp
-// read done/total and connected/listed; the rest are plain counts.
-func (m Model) tabTexts() []string {
+// tab is one tab of the strip, as its label and its dialog's title show it.
+type tab struct {
+	focus focus
+	label string // the word on the strip: "permission", "questions", "async" …
+	name  string // the dialog's title: "Permission", "MCP" …
+	glyph string // drawn on the strip in place of the label (the prompt tabs, to save room)
+	count string
+	warn  bool // something waits on the human: warning-coloured while the tab is not open
+}
+
+// text is the tab as the strip would spell it out: "async 4".
+func (t tab) text() string { return t.label + " " + t.count }
+
+// tabs is every tab of the strip in tabFocuses order. Counts: permission
+// and questions read position/total while something waits ("1/2": the
+// first of two; "2/3": the second question of three) and "0" otherwise;
+// todo and mcp read done/total and connected/listed; the rest are plain
+// counts. A prompt tab is named after the kind of prompt at the head of
+// the queue ("trust").
+func (m Model) tabs() []tab {
 	perms, questions := m.promptCountsIn(m.scope) // an open, scoped dialog counts what it shows
 	permKind := string(protocol.PromptPermission)
-	if p := m.currentPrompt(); p != nil && p.Kind != protocol.PromptPermission {
+	if p := m.currentPrompt(); p != nil && p.Kind != "" && p.Kind != protocol.PromptPermission {
 		permKind = string(p.Kind) // "trust"
 	}
 	permCount := "0"
@@ -910,19 +920,25 @@ func (m Model) tabTexts() []string {
 	} else if questions > 0 {
 		qCount = fmt.Sprintf("1/%d", questions)
 	}
-	byTab := map[focus]string{
-		focusPermission: permKind + " " + permCount,
-		focusQuestions:  "questions " + qCount,
-		focusDirs:       fmt.Sprintf("dirs %d", len(m.channelDirs())),
-		focusAsync:      fmt.Sprintf("async %d", m.asyncCount()),
-		focusTodo:       "todo " + todoCount(m.selectedTodos()),
-		focusMCP:        "mcp " + mcpCount(m.selectedMCP()),
+	waitingPerms, waitingQuestions := m.promptCounts()
+	byTab := map[focus]tab{
+		focusPermission: {label: permKind, glyph: transcript.GlyphPermission, count: permCount, warn: waitingPerms > 0},
+		focusQuestions:  {label: "questions", glyph: transcript.GlyphPrompt, count: qCount, warn: waitingQuestions > 0},
+		focusDirs:       {label: "dirs", count: strconv.Itoa(len(m.channelDirs()))},
+		focusAsync:      {label: "async", count: strconv.Itoa(m.asyncCount())},
+		focusTodo:       {label: "todo", count: todoCount(m.selectedTodos())},
+		focusMCP:        {label: "mcp", name: "MCP", count: mcpCount(m.selectedMCP())},
 	}
-	texts := make([]string, len(tabFocuses))
+	tabs := make([]tab, len(tabFocuses))
 	for i, f := range tabFocuses {
-		texts[i] = byTab[f]
+		t := byTab[f]
+		t.focus = f
+		if t.name == "" && t.label != "" {
+			t.name = strings.ToUpper(t.label[:1]) + t.label[1:]
+		}
+		tabs[i] = t
 	}
-	return texts
+	return tabs
 }
 
 // tabBodyLines is the focused tab's body, laid out for width columns.
@@ -1136,11 +1152,9 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 		}
 		return m.focus == f
 	}
-	perms, questions := m.promptCounts()
-	texts := m.tabTexts()
-	text := make(map[focus]string, len(texts))
-	for i, f := range tabFocuses {
-		text[f] = texts[i]
+	byFocus := make(map[focus]tab, len(tabFocuses))
+	for _, t := range m.tabs() {
+		byFocus[t.focus] = t
 	}
 	tabs := make([]string, len(order))
 	spans := make([][]span[focus], len(layout))
@@ -1150,15 +1164,10 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 			first += len(layout[row])
 			row, x = row+1, 0
 		}
-		label := text[f]
-		// the prompt tabs show the glyph their prompts draw in place of the
-		// word, to save room: "! 1/2" (permission or trust), "? 0"; their
-		// dialogs keep the word in the title
-		switch _, count, _ := strings.Cut(label, " "); f {
-		case focusPermission:
-			label = transcript.GlyphPermission + " " + count
-		case focusQuestions:
-			label = transcript.GlyphPrompt + " " + count
+		t := byFocus[f]
+		label := t.text()
+		if t.glyph != "" { // "! 1/2" (permission or trust), "? 0"; the dialogs keep the word
+			label = t.glyph + " " + t.count
 		}
 		w := ansi.StringWidth(label)
 		spans[row] = append(spans[row], span[focus]{x, x + w, f})
@@ -1166,9 +1175,9 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 		switch {
 		case on(f):
 			tabs[i] = theme.StyleBoxTitleFocus.Render(label)
-		// An unfocused permission or questions tab with something waiting is
+		// An unfocused tab with something waiting on the human is
 		// warning-coloured so it stands out until someone opens it.
-		case f == focusPermission && perms > 0, f == focusQuestions && questions > 0:
+		case t.warn:
 			tabs[i] = theme.StyleWarn.Render(label)
 		default:
 			tabs[i] = theme.StyleDim.Render(label)
