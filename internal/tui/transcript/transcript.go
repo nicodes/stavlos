@@ -79,12 +79,13 @@ type Line struct {
 	Glyph     string // leader glyph for this line (Render styles it by Tone)
 	Tone      Tone   // in progress / error; zero means "as is"
 	callID    string
-	Tool      string // raw tool name on a LineTool line
-	Note      bool   // the agent's own text, which reaches no one: drawn dimmed
-	Agent     string // in the session chat: the agent this line links to
-	Who       string // the @name this line leads with, whose colour its glyph and name take: an agent\'s name, or "user"
-	Indent    int    // extra indent, two columns each (a chat reply's later lines, past its glyph)
-	TurnStart bool   // first line of the first item after a turn starts or ends: an agent\'s chat spaces turns apart there
+	Tool      string   // raw tool name on a LineTool line
+	Note      bool     // the agent's own text, which reaches no one: drawn dimmed
+	Agent     string   // in the session chat: the agent this line links to
+	Who       string   // the @name this line leads with, whose colour its glyph and name take: an agent\'s name, or "user"
+	Names     []string // @names coloured wherever this line mentions them (a session chat post\'s recipients)
+	Indent    int      // extra indent, two columns each (a chat reply's later lines, past its glyph)
+	TurnStart bool     // first line of the first item after a turn starts or ends: an agent\'s chat spaces turns apart there
 }
 
 // Tone colours a line's glyph by lifecycle: yellow while in progress, red

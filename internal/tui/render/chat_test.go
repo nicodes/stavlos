@@ -1,6 +1,7 @@
 package render
 
 import (
+	"github.com/charmbracelet/lipgloss"
 	"strings"
 	"testing"
 	"time"
@@ -47,5 +48,24 @@ func TestChatLongReplyExpands(t *testing.T) {
 	open := strings.Join(renderWith(c.All(), Options{Width: 80, Expanded: map[int]bool{1: true}}), "\n")
 	if !strings.Contains(open, "\n  five") || strings.Contains(open, "+2 lines") {
 		t.Fatalf("expanded:\n%s", open)
+	}
+}
+
+// TestChatPostColoursItsRecipients: a post asks for each recipient's colour
+// (its arrow takes the first one) and still reads as typed.
+func TestChatPostColoursItsRecipients(t *testing.T) {
+	c, ap := chatFeed()
+	ap(1, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "sync up with @Scout", To: []string{"main", "scout"}})
+	var asked []string
+	whoStyle := func(name string) lipgloss.Style {
+		asked = append(asked, name)
+		return lipgloss.NewStyle()
+	}
+	got := strings.Join(renderWith(c.All(), Options{Width: 80, WhoStyle: whoStyle}), "\n")
+	if got != "› @main sync up with @Scout" {
+		t.Fatalf("post: %q", got)
+	}
+	if strings.Join(asked, ",") != "main,main,scout" { // the arrow, then each @name as it appears
+		t.Fatalf("colours asked for %v", asked)
 	}
 }

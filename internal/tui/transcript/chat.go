@@ -61,7 +61,16 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.ChatPosted:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
-			t.appendItem(CleanLines(block(BlockUser, "", addressed(p.To, p.Text))))
+			lines := CleanLines(block(BlockUser, "", addressed(p.To, p.Text)))
+			for i := range lines {
+				if lines[i].Lead && len(p.To) > 0 {
+					// the arrow takes the (first) recipient's colour, and every
+					// recipient's @name takes its own
+					lines[i].Who, lines[i].Names = p.To[0], p.To
+					break
+				}
+			}
+			t.appendItem(lines)
 			for _, n := range p.To {
 				t.open[n] = true
 			}
