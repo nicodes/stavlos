@@ -71,6 +71,7 @@ type Model struct {
 	promptState  // what waits on the human, in every channel; survives a switch
 
 	navChannels []protocol.ChannelInfo // the sidebar's channels section: other channels of this directory, newest first
+	visited     map[string]replayed    // channels switched away from: what their replay built, so a return replays only what it missed
 	dirsNext    bool                   // another channel's gear was chosen: its dirs dialog opens once the switch lands
 
 	presets []protocol.PresetInfo
@@ -149,6 +150,57 @@ func newChannelState(id string, info protocol.ChannelInfo) channelState {
 		channelID: id, channel: info,
 		spawned: map[string]time.Time{}, parentOf: map[string]string{},
 		transcripts: map[string]*transcript.Transcript{}, renders: map[string]*render.Cache{},
+	}
+}
+
+// replayed is what replaying a channel's log built: kept when the TUI
+// switches away (Model.visited), so switching back subscribes from the
+// next seq instead of replaying the whole log again.
+type replayed struct {
+	spawned     map[string]time.Time
+	parentOf    map[string]string
+	transcripts map[string]*transcript.Transcript
+	seq         int64
+	left        time.Time
+}
+
+// maxVisited is how many channels keep their replay once left.
+const maxVisited = 8
+
+// stash keeps the bound channel's replay in visited, making room by
+// dropping the channel left longest ago. A channel whose snapshot never
+// landed has nothing worth keeping.
+func (m *Model) stash() {
+	if !m.reconciled || m.channelID == "" {
+		return
+	}
+	if m.visited == nil {
+		m.visited = map[string]replayed{}
+	}
+	for len(m.visited) >= maxVisited {
+		oldest := ""
+		for id, r := range m.visited {
+			if oldest == "" || r.left.Before(m.visited[oldest].left) {
+				oldest = id
+			}
+		}
+		delete(m.visited, oldest)
+	}
+	m.visited[m.channelID] = replayed{m.spawned, m.parentOf, m.transcripts, m.seq, time.Now()}
+}
+
+// restore puts back what replaying id built before, if it was visited:
+// the reconcile then subscribes from the seq after it. A stream cut off
+// when the TUI left is dropped; the events replayed since settle the rest.
+func (m *Model) restore(id string) {
+	r, ok := m.visited[id]
+	if !ok {
+		return
+	}
+	delete(m.visited, id)
+	m.spawned, m.parentOf, m.transcripts, m.seq = r.spawned, r.parentOf, r.transcripts, r.seq
+	for _, t := range m.transcripts {
+		t.ApplyStream(protocol.StreamNotification{Reset: true})
 	}
 }
 

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -59,5 +60,59 @@ func TestClaimThenGuards(t *testing.T) {
 	m.promptBusy = ""
 	if cmd := m.answerPromptDir(other, "/d"); cmd == nil || m.promptBusy != "o" {
 		t.Fatalf("our own claim: busy=%q", m.promptBusy)
+	}
+}
+
+// TestSwitchBackReplaysOnlyWhatItMissed: a channel switched away from keeps
+// what its replay built, so switching back subscribes after its last seq
+// and, with nothing new in the log, is caught up at once; the per-channel
+// cursors and armed keys still start over, and a stream cut off on leaving
+// is dropped.
+func TestSwitchBackReplaysOnlyWhatItMissed(t *testing.T) {
+	m := channelModel()
+	id := m.channelID
+	m.reconciled, m.loading, m.seq = true, false, 42
+	tr := m.transcript(chatView)
+	tr.ApplyStream(protocol.StreamNotification{Turn: 3, Text: "half a"})
+	m.chatCursor = 3
+
+	m.bindChannel(protocol.ChannelInfo{ID: "other", Dir: "/x"})
+	if m.seq != 0 || len(m.transcripts) != 0 {
+		t.Fatalf("a channel never visited starts empty: seq=%d transcripts=%d", m.seq, len(m.transcripts))
+	}
+	m.reconciled = true
+	m.bindChannel(protocol.ChannelInfo{ID: id, Dir: "/x"})
+	if m.seq != 42 || m.transcripts[chatView] != tr || m.chatCursor != 0 {
+		t.Fatalf("back on the channel: seq=%d same transcript=%v cursor=%d", m.seq, m.transcripts[chatView] == tr, m.chatCursor)
+	}
+	if len(tr.Tail()) != 0 {
+		t.Fatal("the stream cut off on leaving is dropped")
+	}
+	if _, kept := m.visited["other"]; !kept || len(m.visited) != 1 {
+		t.Fatalf("the channel left is kept, the one bound is not: %v", m.visited)
+	}
+	nm, _ := m.Update(reconcileMsg{res: protocol.ReconcileResult{Channel: protocol.ChannelInfo{ID: id, Dir: "/x"}, Seq: 42}})
+	if m = nm.(Model); m.loading {
+		t.Fatal("nothing past the kept seq: no replay to wait for")
+	}
+	nm, _ = m.Update(reconcileMsg{res: protocol.ReconcileResult{Channel: protocol.ChannelInfo{ID: id, Dir: "/x"}, Seq: 50}})
+	if m = nm.(Model); !m.loading || m.replayTo != 50 {
+		t.Fatalf("events past the kept seq replay: loading=%v to=%d", m.loading, m.replayTo)
+	}
+}
+
+// TestVisitedIsBounded: only the channels left most recently keep their
+// replay.
+func TestVisitedIsBounded(t *testing.T) {
+	m := channelModel()
+	for i := range maxVisited + 3 {
+		m.reconciled = true
+		m.bindChannel(protocol.ChannelInfo{ID: fmt.Sprintf("c%d", i), Dir: "/x"})
+	}
+	if len(m.visited) != maxVisited {
+		t.Fatalf("visited holds %d channels, want %d", len(m.visited), maxVisited)
+	}
+	if _, ok := m.visited["c1"]; ok {
+		t.Fatal("the channel left longest ago is dropped first")
 	}
 }

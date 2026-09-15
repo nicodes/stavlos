@@ -608,7 +608,9 @@ func channelRef(info protocol.ChannelInfo) string {
 // bindChannel rebinds the TUI to another channel: every per-channel
 // piece of state starts over and a fresh reconcile replays its history.
 func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
+	m.stash()
 	m.channelState = newChannelState(info.ID, info)
+	m.restore(info.ID)
 	m.superChat = true
 	m.layout()
 	m.input.Placeholder = m.placeholder()
