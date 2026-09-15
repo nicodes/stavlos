@@ -106,6 +106,7 @@ const (
 	GlyphError     = "!" // a turn error
 	GlyphKilled    = "⊘" // an agent was killed
 	GlyphTurn      = "◦" // a turn notice (cancelled, stopped, aborted)
+	GlyphNudge     = "↻" // the harness nudged the agent to reply
 	GlyphModel     = "⇄" // model changed
 	GlyphNotice    = "»" // a local notice (/help, lists)
 	GlyphPrompt    = "?" // a question for the user
@@ -264,7 +265,7 @@ func (t *Transcript) applyCompaction(ev event.Event) bool {
 		}
 	case event.TurnEnded, event.TurnAborted:
 		if t.compactItem >= 0 {
-			t.replaceItem(t.compactItem, []Line{{Kind: LineBlank}, {Kind: LineDim, Text: "compaction interrupted"}, {Kind: LineBlank}})
+			t.replaceItem(t.compactItem, []Line{{Kind: LineBlank}, {Kind: LineDim, Text: titled("Compaction interrupted", "")}, {Kind: LineBlank}})
 			t.compactItem = -1
 		}
 	}
@@ -922,7 +923,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		if p.Parent == "" {
 			return nil // the root's own spawn is not a message; keeps the home state empty
 		}
-		lines := []Line{{Kind: LineDim, Glyph: GlyphSpawn, Text: fmt.Sprintf("spawned %s (%s) · %s", p.Label, p.Archetype, p.Model)}}
+		lines := []Line{{Kind: LineDim, Glyph: GlyphSpawn, Text: titled("Spawned", fmt.Sprintf("%s (%s) · %s", p.Label, p.Archetype, p.Model))}}
 		if p.Task != "" {
 			lines = append(lines, blockWith(BlockChild, "task", p.Task, GlyphTask)...)
 		}
@@ -985,11 +986,11 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.ReminderQueued: decoded(func(p event.RepliesPayload) []Line {
-		return []Line{{Kind: LineDim, Text: "nudged: owes a reply to " + partyList(p.Names)}}
+		return []Line{{Kind: LineDim, Glyph: GlyphNudge, Text: titled("Nudged", "owes a reply to "+partyList(p.Names))}}
 	}),
 
 	event.ReplyMissing: decoded(func(p event.RepliesPayload) []Line {
-		return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneError, Text: "ended without replying to " + partyList(p.Names)}}
+		return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneError, Text: titled("Ended without replying", "to "+partyList(p.Names))}}
 	}),
 
 	event.ToolCallStarted: decoded(func(p event.ToolStartedPayload) []Line {
@@ -1015,7 +1016,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	event.TurnEnded: decoded(func(p event.TurnEndedPayload) []Line {
 		switch p.Reason {
 		case event.ReasonCancelled:
-			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn cancelled"}, {Kind: LineBlank}}
+			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: titled("Turn cancelled", "")}, {Kind: LineBlank}}
 		case event.ReasonError:
 			msg := p.Error
 			if msg == "" {
@@ -1023,7 +1024,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			}
 			return errorBlock(msg)
 		case event.ReasonMaxTokens:
-			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn stopped: max_tokens"}, {Kind: LineBlank}}
+			return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: titled("Turn stopped", "max_tokens")}, {Kind: LineBlank}}
 		case event.ReasonEndTurn:
 			// the reply speaks for itself
 		}
@@ -1031,11 +1032,11 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.TurnAborted: func(event.Event) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: "turn aborted (daemon restart)"}, {Kind: LineBlank}}
+		return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: titled("Turn aborted", "daemon restart")}, {Kind: LineBlank}}
 	},
 
 	event.AgentFinished: decoded(func(p event.AgentFinishedPayload) []Line {
-		head := Line{Kind: LineFinished, Text: "finished · " + p.Status, Block: BlockFinished, Glyph: GlyphFinished}
+		head := Line{Kind: LineFinished, Text: titled("Finished", p.Status), Block: BlockFinished, Glyph: GlyphFinished}
 		switch p.Status {
 		case "failure":
 			head.Glyph, head.Tone = GlyphFailed, ToneError
@@ -1063,11 +1064,11 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	},
 
 	event.AgentRoleChanged: decoded(func(p event.RoleChangedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "role → " + p.Role}}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Role", "→ "+p.Role)}}
 	}),
 
 	event.AgentModelChanged: decoded(func(p event.ModelChangedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "model → " + p.Model}}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Model", "→ "+p.Model)}}
 	}),
 
 	event.SessionYoloChanged: decoded(func(p event.YoloPayload) []Line { // legacy logs
@@ -1075,11 +1076,11 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		if p.On {
 			mode = protocol.ModeYolo
 		}
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + mode + " · " + protocol.ModeSummary(mode)}}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Mode", "→ "+mode+" · "+protocol.ModeSummary(mode))}}
 	}),
 
 	event.SessionModeChanged: decoded(func(p event.ModePayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "mode → " + p.Mode + " · " + protocol.ModeSummary(p.Mode)}}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Mode", "→ "+p.Mode+" · "+protocol.ModeSummary(p.Mode))}}
 	}),
 
 	event.AgentVariantChanged: decoded(func(p event.VariantChangedPayload) []Line {
@@ -1087,27 +1088,27 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		if v == "" {
 			v = "default"
 		}
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: "variant → " + v}}
+		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Variant", "→ "+v)}}
 	}),
 
 	event.MonitorStarted: decoded(func(p event.MonitorStartedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphToolMonitors, Tone: ToneWorking, Text: "job: " + p.Label}}
+		return []Line{{Kind: LineDim, Glyph: GlyphToolMonitors, Tone: ToneWorking, Text: titled("Job", p.Label)}}
 	}),
 
 	event.MCPStarted: decoded(func(p event.MCPStartedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: fmt.Sprintf("mcp: %s connected · %d tools", p.Server, len(p.Tools))}}
+		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: titled("MCP", fmt.Sprintf("%s connected · %d tools", p.Server, len(p.Tools)))}}
 	}),
 
 	event.MCPFailed: decoded(func(p event.MCPFailedPayload) []Line {
-		return []Line{{Kind: LineError, Glyph: GlyphToolMCP, Tone: ToneError, Text: fmt.Sprintf("mcp: %s failed: %s", p.Server, p.Error)}}
+		return []Line{{Kind: LineError, Glyph: GlyphToolMCP, Tone: ToneError, Text: titled("MCP", fmt.Sprintf("%s failed: %s", p.Server, p.Error))}}
 	}),
 
 	event.AgentDirAdded: decoded(func(p event.DirAddedPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphToolFiles, Text: fmt.Sprintf("dirs: + %s (%s)", format.ShortHome(p.Dir), p.Source)}}
+		return []Line{{Kind: LineDim, Glyph: GlyphToolFiles, Text: titled("Dirs", fmt.Sprintf("+ %s (%s)", format.ShortHome(p.Dir), p.Source))}}
 	}),
 
 	event.MCPStopped: decoded(func(p event.MCPRefPayload) []Line {
-		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: "mcp: " + p.Server + " stopped"}}
+		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: titled("MCP", p.Server+" stopped")}}
 	}),
 
 	event.MonitorFired: decoded(func(p event.MonitorFiredPayload) []Line {
@@ -1125,7 +1126,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	},
 
 	event.CompactionFailed: decoded(func(p event.CompactionPayload) []Line {
-		return []Line{{Kind: LineBlank}, {Kind: LineDim, Text: "compaction failed: " + p.Error}, {Kind: LineBlank}}
+		return []Line{{Kind: LineBlank}, {Kind: LineDim, Text: titled("Compaction failed", p.Error)}, {Kind: LineBlank}}
 	}),
 
 	event.Compacted: decoded(func(p event.CompactedPayload) []Line {
@@ -1143,16 +1144,16 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	event.PromptRequested: decoded(func(p event.PromptRequestedPayload) []Line {
 		switch p.Kind {
 		case "question":
-			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "question: " + format.FirstLine(p.Question)}}
+			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: titled("Question", format.FirstLine(p.Question))}}
 		case "trust":
-			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "trust requested"}}
+			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: titled("Trust requested", "")}}
 		default:
-			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "permission: " + p.Tool}}
+			return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: titled("Permission", p.Tool)}}
 		}
 	}),
 
 	event.PromptAnswered: decoded(func(p event.PromptAnsweredPayload) []Line {
-		ln := Line{Kind: LineNotice, Glyph: GlyphAnswer, Text: "answered: " + format.FirstLine(p.Answer)}
+		ln := Line{Kind: LineNotice, Glyph: GlyphAnswer, Text: titled("Answered", format.FirstLine(p.Answer))}
 		if strings.HasPrefix(strings.ToLower(p.Answer), "deny") {
 			ln.Tone = ToneError
 		}
@@ -1160,15 +1161,24 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.PromptDefaulted: decoded(func(p event.PromptAnsweredPayload) []Line {
-		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: "defaulted: " + format.FirstLine(p.Answer)}}
+		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: titled("Defaulted", format.FirstLine(p.Answer))}}
 	}),
 
 	event.PromptWithdrawn: func(event.Event) []Line {
-		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: "prompt withdrawn"}}
+		return []Line{{Kind: LineNotice, Glyph: GlyphAnswer, Tone: ToneError, Text: titled("Prompt withdrawn", "")}}
 	},
 }
 
 // --- helpers ---
+
+// titled is a status line's text: a bold, capitalised title, then the
+// detail ("**Mode** → yolo · …"), the way tool lines lead with their name.
+func titled(title, detail string) string {
+	if detail == "" {
+		return "**" + title + "**"
+	}
+	return "**" + title + "** " + detail
+}
 
 func decodeErr(ev event.Event, err error) []Line {
 	return []Line{{Kind: LineError, Text: fmt.Sprintf("(bad %s payload: %v)", ev.Type, err)}}
@@ -1182,19 +1192,20 @@ func monitorFiredLines(p event.MonitorFiredPayload) []Line {
 		head.Tone = ToneError
 	}
 	summary := strings.TrimSpace(p.Summary)
+	summary = strings.TrimPrefix(summary, "Job ") // the daemon's own "Job "go test" (m1): …"
 	if summary == "" {
-		summary = "monitor fired"
+		summary = "finished"
 	}
-	head.Text = summary
+	head.Text = titled("Job", summary)
 	lines := []Line{head}
 	return append(lines, OutputLines(strings.TrimRight(p.Output, "\n"))...)
 }
 
 // monitorStoppedLines renders "<glyph> monitor stopped (<reason>)".
 func monitorStoppedLines(kind, reason string) []Line {
-	text := "job stopped"
+	text := titled("Job stopped", "")
 	if reason = strings.TrimSpace(reason); reason != "" {
-		text += " (" + reason + ")"
+		text = titled("Job stopped", "("+reason+")")
 	}
 	return []Line{{Kind: LineDim, Glyph: GlyphToolMonitors, Tone: ToneError, Text: text}}
 }

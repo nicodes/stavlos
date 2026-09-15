@@ -380,7 +380,7 @@ func TestNotesAndReminders(t *testing.T) {
 	if strings.Join(notes, "|") != "Result|all good" {
 		t.Fatalf("notes %q", notes)
 	}
-	if strings.Join(notices, "|") != "nudged: owes a reply to you, scout|ended without replying to you" {
+	if strings.Join(notices, "|") != "**Nudged** owes a reply to you, scout|**Ended without replying** to you" {
 		t.Fatalf("notices %q", notices)
 	}
 }

@@ -514,25 +514,27 @@ func kindStyle(l transcript.Line) (leader, glyph string, style func(...string) s
 		return "", "", markdownStyle(theme.StyleBold)
 	case transcript.LineCode:
 		return " ", "", theme.StyleDim.Render
-	case transcript.LineDim, transcript.LineLabel, transcript.LineThink:
+	case transcript.LineDim:
+		return "", "", markdownStyle(theme.StyleDim) // status lines lead with a **bold** title
+	case transcript.LineLabel, transcript.LineThink:
 		return "", "", theme.StyleDim.Render
 	case transcript.LineModel:
 		return "", theme.StyleDim.Render("· "), theme.StyleDim.Render
 	case transcript.LineNotice:
-		return "", "", theme.StyleNotice.Render
+		return "", "", markdownStyle(theme.StyleNotice)
 	case transcript.LineTool:
 		return "", toolLineGlyph(l), renderToolText
 	case transcript.LineToolOut:
 		return "  ", "", theme.StyleToolOut.Render // under the tool name (after "◆ ")
 	case transcript.LineToolNote:
-		return "  ", "", theme.StyleDim.Render
+		return "  ", "", markdownStyle(theme.StyleDim)
 	case transcript.LineFinished:
 		if l.Tone == transcript.ToneError {
-			return "", "", theme.StyleError.Render
+			return "", "", markdownStyle(theme.StyleError)
 		}
-		return "", "", theme.StyleFinished.Render
+		return "", "", markdownStyle(theme.StyleFinished)
 	case transcript.LineError:
-		return "", "", theme.StyleError.Render
+		return "", "", markdownStyle(theme.StyleError)
 	}
 	return "", "", func(s ...string) string { return strings.Join(s, "") }
 }
