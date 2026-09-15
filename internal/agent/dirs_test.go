@@ -14,29 +14,43 @@ func TestBashPathCandidates(t *testing.T) {
 		want []string
 	}{
 		{"ls", nil},
-		{"cat README.md", nil},                                       // relative arguments stay in the working directory
-		{"/usr/bin/env python3 run.py", nil},                         // the program is not a data path
-		{"cat /etc/hostname", []string{"/etc/hostname"}},             // an absolute argument
-		{"grep -r x ~/other", []string{home() + "/other"}},           // ~ expands
-		{"cd /tmp/build && make", []string{"/tmp/build"}},            // cd target
-		{"cd ../sibling; ls", []string{"/work/sibling"}},             // relative cd target, from the channel directory
-		{"go test ./... > /tmp/out.txt", []string{"/tmp/out.txt"}},   // redirect target
-		{"make 2>/var/log/x.log", []string{"/var/log/x.log"}},        // attached redirect
-		{"rg --path=/srv/data foo", []string{"/srv/data"}},           // --flag=path
-		{"ls /opt/*/bin", []string{"/opt"}},                          // a glob is cut at its wildcard
-		{"echo hi > /dev/null", nil},                                 // /dev is never a boundary
-		{"cat \"/etc/passwd\"", []string{"/etc/passwd"}},             // quotes are stripped
-		{"cat ../../etc/passwd", []string{"/etc/passwd"}},            // parent-relative arguments leave the working directory
-		{"cp ../x .", []string{"/work/x"}},                           // one level up
-		{"cat ./a/../b", []string{"/work/repo/b"}},                   // a .. inside stays inside (the caller checks the set)
-		{"cat $HOME/.ssh/id_rsa", []string{home() + "/.ssh/id_rsa"}}, // $HOME expands
-		{"ls ${PWD}/sub", []string{"/work/repo/sub"}},                // $PWD is the working directory
-		{"cat $UNKNOWN/x", nil},                                      // an unknown variable is not a path we can judge
+		{"cat README.md", nil},                                         // relative arguments stay in the working directory
+		{"/usr/bin/env python3 run.py", nil},                           // the program is not a data path
+		{"cat /etc/hostname", []string{"/etc/hostname"}},               // an absolute argument
+		{"grep -r x ~/other", []string{home() + "/other"}},             // ~ expands
+		{"cd /tmp/build && make", []string{"/tmp/build"}},              // cd target
+		{"cd ../sibling; ls", []string{"/work/sibling"}},               // relative cd target, from the channel directory
+		{"go test ./... > /tmp/out.txt", []string{"/tmp/out.txt"}},     // redirect target
+		{"make 2>/var/log/x.log", []string{"/var/log/x.log"}},          // attached redirect
+		{"rg --path=/srv/data foo", []string{"/srv/data"}},             // --flag=path
+		{"ls /opt/*/bin", []string{"/opt"}},                            // a glob is cut at its wildcard
+		{"echo hi > /dev/null", nil},                                   // /dev is never a boundary
+		{"cat \"/etc/passwd\"", []string{"/etc/passwd"}},               // quotes are stripped
+		{"cat ../../etc/passwd", []string{"/etc/passwd"}},              // parent-relative arguments leave the working directory
+		{"cp ../x .", []string{"/work/x"}},                             // one level up
+		{"cat ./a/../b", []string{"/work/repo/b"}},                     // a .. inside stays inside (the caller checks the set)
+		{"cat $HOME/.ssh/id_rsa", []string{home() + "/.ssh/id_rsa"}},   // $HOME expands
+		{"ls ${PWD}/sub", []string{"/work/repo/sub"}},                  // $PWD is the working directory
+		{"cat $STAVLOS_UNSET_VAR/etc/passwd", []string{"/etc/passwd"}}, // an unset variable expands to nothing, as in the shell
+		{"cat ~root/.ssh/id_rsa", []string{homeOf("root") + "/.ssh/id_rsa"}},
 	}
 	for _, c := range cases {
 		if got := bashPathCandidates(c.cmd, base); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%q: got %v want %v", c.cmd, got, c.want)
 		}
+	}
+}
+
+// TestBashPathCandidatesFollowLinks: a relative argument that leads out of
+// the working directory through a symlink is judged where it leads.
+func TestBashPathCandidatesFollowLinks(t *testing.T) {
+	base, outside := t.TempDir(), t.TempDir()
+	os.Symlink(outside, filepath.Join(base, "link"))
+	os.WriteFile(filepath.Join(base, "plain.txt"), []byte("x"), 0o644)
+	got := bashPathCandidates("cat link/secret plain.txt", base)
+	real, _ := filepath.EvalSymlinks(outside)
+	if !reflect.DeepEqual(got, []string{filepath.Join(real, "secret")}) {
+		t.Fatalf("got %v", got)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/policy"
+	"github.com/nicodes/stavlos/internal/proc"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tools"
 )
@@ -28,13 +30,14 @@ import (
 
 type dirEntry struct{ path, source string }
 
-// resolveDir makes d absolute: ~ and ${env:NAME} expand, a relative path is
-// taken from base, and the result is cleaned.
+// resolveDir makes d absolute: ~, ~user and ${env:NAME} expand, a relative
+// path is taken from base, and the result is cleaned.
 func resolveDir(base, d string) string {
 	d = config.ExpandEnv(strings.TrimSpace(d))
-	if d == "~" || strings.HasPrefix(d, "~/") {
-		if h, err := os.UserHomeDir(); err == nil {
-			d = filepath.Join(h, strings.TrimPrefix(d, "~"))
+	if rest, ok := strings.CutPrefix(d, "~"); ok {
+		name, tail, _ := strings.Cut(rest, "/")
+		if h := homeOf(name); h != "" {
+			d = filepath.Join(h, tail)
 		}
 	}
 	if !filepath.IsAbs(d) {
@@ -192,11 +195,13 @@ func grantDir(p string) string {
 }
 
 // bashPathCandidates picks the paths a shell command line may touch, best
-// effort: absolute, ~ and parent-relative (../x) arguments (also after
-// --flag=), $HOME/$PWD/$TMPDIR-style arguments with those variables
-// expanded, cd targets and redirect targets (relative ones taken from
-// base). The program of each simple command and /dev/* are skipped; a glob
-// is cut at its first wildcard.
+// effort: absolute, ~ and ~user, and parent-relative (../x) arguments (also
+// after --flag=), variables expanded as the command's shell would see them
+// (an unset one expands to nothing, so "$X/etc" is "/etc"), relative
+// arguments that lead outside through a symlink, cd targets and redirect
+// targets (relative ones taken from base). The program of each simple
+// command and /dev/* are skipped; a glob is cut at its first wildcard. The
+// sandbox is the boundary for writes; this is what makes a command ask.
 func bashPathCandidates(cmd, base string) []string {
 	var out []string
 	add := func(p string) {
@@ -246,31 +251,52 @@ func bashPathCandidates(cmd, base string) []string {
 			val = tok[eq+1:]
 		}
 		q := expandShellVars(strings.Trim(val, "\"'"), base)
-		if strings.HasPrefix(q, "/") || q == "~" || strings.HasPrefix(q, "~/") || q == ".." || strings.HasPrefix(q, "../") || strings.Contains(q, "/../") {
+		switch {
+		case strings.HasPrefix(q, "/"), strings.HasPrefix(q, "~"), q == "..", strings.HasPrefix(q, "../"), strings.Contains(q, "/../"):
 			add(q)
+		case q != "" && !strings.HasPrefix(q, "-"):
+			// A relative argument that resolves outside the working
+			// directory went through a symlink: judge where it leads.
+			root := tools.ResolvePath(base, "")
+			if real := tools.ResolvePath(base, q); real != root && !strings.HasPrefix(real, root+string(filepath.Separator)) {
+				add(real)
+			}
 		}
 	}
 	return out
 }
 
-// expandShellVars expands the variables a path usually leans on: $HOME,
-// $PWD (the working directory), $TMPDIR and $USER. Others stay as written.
+// homeOf is the home directory of the named user ("" for the current
+// one), "" when there is no such user.
+func homeOf(name string) string {
+	if name == "" {
+		h, _ := os.UserHomeDir()
+		return h
+	}
+	if u, err := user.Lookup(name); err == nil {
+		return u.HomeDir
+	}
+	return ""
+}
+
+// expandShellVars expands variables the way the command's shell will: $PWD
+// is the working directory and the rest come from the environment child
+// processes get, where a scrubbed or unset variable is empty. Guessing
+// otherwise would let "$NOPE/etc/passwd" pass as a relative path.
 func expandShellVars(s, base string) string {
 	if !strings.Contains(s, "$") {
 		return s
 	}
-	return os.Expand(s, func(name string) string {
-		switch name {
-		case "HOME":
-			h, _ := os.UserHomeDir()
-			return h
-		case "PWD":
-			return base
-		case "TMPDIR":
-			return os.TempDir()
-		case "USER":
-			return os.Getenv("USER")
+	env := map[string]string{}
+	for _, kv := range proc.Env(nil) {
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			env[k] = v
 		}
-		return "$" + name
+	}
+	return os.Expand(s, func(name string) string {
+		if name == "PWD" {
+			return base
+		}
+		return env[name]
 	})
 }
