@@ -2283,7 +2283,7 @@ func (m *Model) chatKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.ChatBottom):
 		m.moveCursor(m.chatItems())
 	case key.Matches(msg, keys.Select):
-		// A long reply expands; a short message or a prompt opens its agent.
+		// A long reply expands; a short one opens its agent's own chat.
 		if m.chatItemFolds() || !m.followChatLink() {
 			m.toggleItem()
 		}
