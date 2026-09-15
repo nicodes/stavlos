@@ -407,14 +407,15 @@ func replaceStale(ctx context.Context, c *client.Client) (*client.Client, error)
 		return nil, nil
 	}
 	fmt.Fprintf(os.Stderr, "daemon build %s differs from this binary (%s); restarting it\n", short(st.Build), short(buildid.ID()))
-	if err := c.Shutdown(ctx); err != nil && st.PID > 0 {
-		// Older daemon without daemon.shutdown: ask the OS instead.
-		if p, perr := os.FindProcess(st.PID); perr == nil {
-			_ = p.Signal(syscall.SIGTERM)
+	sock := paths.Socket()
+	if err := c.Shutdown(ctx); err != nil {
+		// A daemon that cannot shut down on request is stopped by the pid
+		// the kernel reports for the socket, not the one it reports itself.
+		if pid, perr := socketPeerPID(sock); perr == nil {
+			_ = syscall.Kill(pid, syscall.SIGTERM)
 		}
 	}
 	c.Close()
-	sock := paths.Socket()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(sock); err != nil {

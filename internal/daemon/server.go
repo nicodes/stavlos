@@ -15,6 +15,7 @@ import (
 	"github.com/nicodes/stavlos/internal/agent"
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/model/registry"
+	"github.com/nicodes/stavlos/internal/peercred"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -64,6 +65,11 @@ type conn struct {
 	out  chan outMsg
 	done chan struct{}
 	once sync.Once
+	// ran is set for a peer the daemon itself runs (an agent's command, an
+	// MCP server, or anything they start): every request is refused, since
+	// such a process could answer its own permission prompts or switch its
+	// channel to yolo.
+	ran bool
 }
 
 type outMsg struct {
@@ -88,18 +94,21 @@ const (
 )
 
 func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
+	ran := false
 	if uc, ok := nc.(*net.UnixConn); ok {
-		if raw, err := uc.SyscallConn(); err != nil || !samePeer(raw) {
-			log.Printf("refused a connection from another user")
+		cred, err := peercred.OfSelf(uc)
+		if err != nil {
+			log.Printf("refused a connection: %v", err)
 			nc.Close()
 			return
 		}
+		ran = cred.PID != os.Getpid() && peercred.DescendsFrom(cred.PID, os.Getpid())
 	}
 	// Requests run under the connection's context: a client that goes away
 	// mid-login.wait (or mid-anything) takes its work with it.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), done: make(chan struct{})}
+	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), done: make(chan struct{}), ran: ran}
 	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.notify}
 	d.addClient(c.cl)
 	go c.writer()
@@ -196,6 +205,9 @@ func (c *conn) notify(method string, params json.RawMessage) {
 }
 
 func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protocol.Error) {
+	if c.ran {
+		return nil, &protocol.Error{Code: protocol.ErrForbidden, Message: "stavlos refuses connections from the processes its agents run"}
+	}
 	if req.V != protocol.Version {
 		return nil, &protocol.Error{Code: protocol.ErrVersion, Message: fmt.Sprintf("protocol version %d not served; this daemon serves %d", req.V, protocol.Version)}
 	}
@@ -260,5 +272,3 @@ func providerInfo(s registry.Status) protocol.ProviderInfo {
 	}
 	return info
 }
-
-var _ = log.Printf

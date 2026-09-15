@@ -6,13 +6,24 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/nicodes/stavlos/internal/auth"
 	"github.com/nicodes/stavlos/internal/buildid"
 	"github.com/nicodes/stavlos/internal/model/registry"
 	"github.com/nicodes/stavlos/internal/paths"
+	"golang.org/x/sys/unix"
 )
+
+// tightenPerms makes the data directory and the files an older build
+// created with looser modes private.
+func tightenPerms(dataDir string) {
+	_ = os.Chmod(dataDir, 0o700)
+	for _, name := range []string{"events.db", "events.db-wal", "events.db-shm", "auth.json", "stavlosd.log", "stavlosd.lock"} {
+		_ = os.Chmod(filepath.Join(dataDir, name), 0o600)
+	}
+}
 
 // Options configure Main. Empty fields take the standard locations.
 type Options struct {
@@ -33,9 +44,17 @@ func Main(ctx context.Context, o Options) error {
 	}
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// What the daemon creates is its user's alone, and it cannot be read
+	// through /proc or ptrace by another process of that user (an agent's
+	// command): /proc/<pid>/environ and mem would hand over its environment
+	// and the credentials it holds.
+	buildid.ID() // before a go run binary can be deleted under us
+	unix.Umask(0o077)
+	_ = unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0)
 	if err := os.MkdirAll(o.DataDir, 0o700); err != nil {
 		return err
 	}
+	tightenPerms(o.DataDir)
 	reg, err := registry.Default(ctx, auth.Open(paths.AuthFile()))
 	if err != nil {
 		return fmt.Errorf("model registry: %w", err)

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/nicodes/stavlos/internal/peercred"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -38,6 +39,14 @@ func Dial(socket string) (*Client, error) {
 	conn, err := net.Dial("unix", socket)
 	if err != nil {
 		return nil, err
+	}
+	// A socket served by another user is not our daemon: whatever answers
+	// would see every prompt and could answer it.
+	if uc, ok := conn.(*net.UnixConn); ok {
+		if _, err := peercred.OfSelf(uc); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("%s: %w", socket, err)
+		}
 	}
 	c := &Client{
 		conn:          conn,
