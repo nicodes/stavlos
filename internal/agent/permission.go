@@ -222,8 +222,11 @@ func denialText(ans escalation.Answer, d decision) string {
 
 // ask logs a prompt, puts it to the human, and logs how it ended.
 func (a *Agent) ask(ctx context.Context, info protocol.PromptInfo, callID string) escalation.Answer {
-	_ = a.record(event.AskRequested, event.AskRequestedPayload{ID: info.ID, Kind: string(info.Kind), CallID: callID, Tool: info.Tool, Question: info.Question})
-	ans := a.c.host.Prompt(ctx, info)
+	// ask.requested is logged once the prompt is open, so a client that sees
+	// it can list the prompt; the answer is logged after.
+	ans := a.c.host.Prompt(ctx, info, func() {
+		_ = a.record(event.AskRequested, event.AskRequestedPayload{ID: info.ID, Kind: string(info.Kind), CallID: callID, Tool: info.Tool, Question: info.Question})
+	})
 	res := event.AskResolvedPayload{ID: info.ID, Outcome: event.AskAnswered, Answer: ans.Value, By: ans.Client}
 	switch {
 	case ans.Withdrawn:

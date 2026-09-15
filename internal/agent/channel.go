@@ -37,7 +37,9 @@ type Host interface {
 	Resolve(modelID string) (model.Model, model.Info, error)
 	CheckModel(modelID string) error
 	Variants(modelID string) []string
-	Prompt(ctx context.Context, info protocol.PromptInfo) escalation.Answer
+	// Prompt asks the human and waits; opened runs once the prompt can be
+	// listed and answered, before any answer is taken.
+	Prompt(ctx context.Context, info protocol.PromptInfo, opened func()) escalation.Answer
 }
 
 // ErrNoModel is the turn error when an agent has no model to call.
