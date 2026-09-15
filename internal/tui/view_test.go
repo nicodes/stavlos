@@ -2226,16 +2226,16 @@ func TestSidebarNav(t *testing.T) {
 				t.Fatalf("row %d should be %d wide, got %d: %q", i, sidebarWidth-1, w, plain[i])
 			}
 		}
-		if !strings.HasPrefix(plain[0], "    ◐ @main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
+		if !strings.HasPrefix(plain[0], "  ◐ @main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
 			t.Fatalf("root row: %q", plain[0])
 		}
-		if !strings.HasPrefix(plain[1], "      ! @world-politic") || !strings.HasSuffix(plain[1], " $0.05") || strings.Count(plain[1], "!") != 1 {
+		if !strings.HasPrefix(plain[1], "    ! @world-politic") || !strings.HasSuffix(plain[1], " $0.05") || strings.Count(plain[1], "!") != 1 {
 			t.Fatalf("an agent waiting on a permission shows ! in place of its dot, and its cost: %q", plain[1])
 		}
 		if !strings.HasSuffix(strings.TrimRight(plain[2], " "), " @business (general)") {
 			t.Fatalf("a row with nothing on the right ends with the label: %q", plain[2])
 		}
-		if !strings.HasPrefix(plain[3], "      ? @asker") || !strings.HasSuffix(strings.TrimRight(plain[3], " "), "@asker (general)") {
+		if !strings.HasPrefix(plain[3], "    ? @asker") || !strings.HasSuffix(strings.TrimRight(plain[3], " "), "@asker (general)") {
 			t.Fatalf("an agent waiting on a question shows ? in place of its dot: %q", plain[3])
 		}
 		// the channel's own row: a permission waits in it, so ! takes its dot
@@ -2300,7 +2300,7 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if f := strings.Fields(plain[2]); len(body) != na+4 || !strings.HasPrefix(plain[0], "  + channel") || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
+		if f := strings.Fields(plain[2]); len(body) != na+4 || !strings.HasPrefix(plain[0], "+ channel") || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
 			len(f) != 3 || f[1] != "#proj" || f[2] != channelGear || strings.Join(strings.Fields(plain[na+3]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
 			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || m.channelRow() != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
