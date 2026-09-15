@@ -107,6 +107,7 @@ const (
 	GlyphKilled     = "⊘" // an agent was killed
 	GlyphTurn       = "◦" // a turn notice (cancelled, stopped, aborted)
 	GlyphNudge      = "↻" // the harness nudged the agent to reply
+	GlyphNotes      = "§" // the agent\'s own text: its notes, which reach no one
 	GlyphModel      = "⇄" // model changed
 	GlyphNotice     = "»" // a local notice (/help, lists)
 	GlyphPrompt     = "?" // a question for the user
@@ -842,8 +843,13 @@ func (t *Transcript) Tail() []Line {
 	for _, s := range t.stream {
 		switch s.kind {
 		case LineStream:
-			for _, l := range strings.Split(strings.TrimRight(s.text, "\n"), "\n") {
-				out = append(out, Line{Kind: LineStream, Text: l})
+			// drawn like the notes it becomes: "§ …", later lines past the glyph
+			for i, l := range strings.Split(strings.TrimRight(s.text, "\n"), "\n") {
+				ln := Line{Kind: LineStream, Text: l, Glyph: GlyphNotes}
+				if i > 0 {
+					ln.Glyph, ln.Indent = "", 1
+				}
+				out = append(out, ln)
 			}
 		case LineToolOut:
 			out = append(out, OutputLines(strings.TrimRight(s.text, "\n"))...)
@@ -991,9 +997,15 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 				}
 				hasText = true
 				// The text a turn ends with reaches no one (replies go
-				// through message): it reads as the agent's notes, dimmed.
+				// through message): it reads as the agent's notes, dimmed,
+				// "§ …" with later lines aligned under the text.
 				for _, l := range markdownLines(text) {
 					l.Note = true
+					if slices.ContainsFunc(lines, func(x Line) bool { return x.Glyph == GlyphNotes }) {
+						l.Indent = 1
+					} else {
+						l.Glyph = GlyphNotes
+					}
 					lines = append(lines, l)
 				}
 			case model.BlockThinking:
