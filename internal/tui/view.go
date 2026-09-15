@@ -1227,7 +1227,7 @@ func (m Model) agentWhoLabel(id string) string {
 // fullToolArg is toolArg without the one-line flattening for the tools
 // whose argument is text the user must read in full before approving.
 func fullToolArg(tool string, raw json.RawMessage) string {
-	switch toolname.Canonical(tool) {
+	switch tool {
 	case toolname.WebFetch:
 		var in struct {
 			URL string `json:"url"`

@@ -596,13 +596,12 @@ func (m *Model) channelDirs() []protocol.DirInfo {
 	return m.channel.Dirs
 }
 
-// onDirChanged keeps the channel's working directories in step with the log
-// (agent.dir_* are an older log's per-agent sets, replayed into the
-// channel's like the daemon does). The attach snapshot may already hold a
-// replayed add, so adds are idempotent.
+// onDirChanged keeps the channel's working directories in step with the log.
+// The attach snapshot may already hold a replayed add, so adds are
+// idempotent.
 func (m *Model) onDirChanged(ev event.Event) {
 	switch ev.Type {
-	case event.ChannelDirAdded, event.AgentDirAdded:
+	case event.ChannelDirAdded:
 		var p event.DirAddedPayload
 		if ev.Decode(&p) != nil || p.Dir == m.channel.Dir || slices.ContainsFunc(m.channel.Dirs, func(d protocol.DirInfo) bool { return d.Path == p.Dir }) {
 			return
@@ -2526,7 +2525,7 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd) {
 	target = ev.Agent
 	switch ev.Type {
-	case event.ChannelDirAdded, event.ChannelDirRemoved, event.AgentDirAdded, event.AgentDirRemoved:
+	case event.ChannelDirAdded, event.ChannelDirRemoved:
 		m.onDirChanged(ev) // the channel's set; the chat of the agent whose prompt added one notes it
 	case event.AgentSpawned:
 		if id := m.onAgentSpawned(ev); id != "" {
@@ -2546,7 +2545,7 @@ func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd)
 		if ev.Decode(&p) == nil {
 			m.channel.Model = p.Model
 		}
-	case event.ChannelYoloChanged, event.ChannelModeChanged:
+	case event.ChannelModeChanged:
 		m.onModeChanged(ev)
 	case event.TurnEnded:
 		var p event.TurnEndedPayload
@@ -2622,19 +2621,9 @@ func (m *Model) rememberPrompt(ev event.Event) {
 // in every agent's chat, like model and role changes: the event has no
 // agent of its own.
 func (m *Model) onModeChanged(ev event.Event) {
-	if ev.Type == event.ChannelYoloChanged { // legacy logs
-		var p event.YoloPayload
-		if ev.Decode(&p) == nil {
-			m.channel.Mode = protocol.ModeAsk
-			if p.On {
-				m.channel.Mode = protocol.ModeYolo
-			}
-		}
-	} else {
-		var p event.ModePayload
-		if ev.Decode(&p) == nil {
-			m.channel.Mode = p.Mode
-		}
+	var p event.ModePayload
+	if ev.Decode(&p) == nil {
+		m.channel.Mode = p.Mode
 	}
 	for _, a := range m.agents {
 		m.transcript(a.ID).Apply(ev)
@@ -2663,7 +2652,7 @@ func (m *Model) followChild(ev event.Event) {
 // tree, so the tree needs refreshing.
 func changesTree(ev event.Event) bool {
 	switch ev.Type {
-	case event.AgentSpawned, event.AgentFinished, event.AgentKilled,
+	case event.AgentSpawned, event.AgentKilled,
 		event.TurnStarted, event.TurnEnded, event.Usage,
 		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.ChannelModelChanged,
 		event.MonitorStarted, event.MonitorFired, event.MonitorStopped,
@@ -2676,7 +2665,7 @@ func changesTree(ev event.Event) bool {
 		if ev.Decode(&p) != nil {
 			return false
 		}
-		name := toolname.Canonical(p.Name)
+		name := p.Name
 		return name == toolname.Message || name == toolname.AgentCreate
 	}
 	return false

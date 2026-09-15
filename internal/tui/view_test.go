@@ -1806,14 +1806,9 @@ func TestModeChangeShowsInEveryChat(t *testing.T) {
 	if m.channel.Mode != "auto" || m.modeTag() != "AUTO" {
 		t.Fatalf("channel mode should follow the event: %q", m.channel.Mode)
 	}
-	// legacy yolo events still replay
-	m.applyEvent(event.Event{Seq: 10, Channel: "s", Type: event.ChannelYoloChanged, Time: time.Now(), Payload: event.MustPayload(event.YoloPayload{On: true})})
-	if m.channel.Mode != "yolo" || m.modeTag() != "YOLO" {
-		t.Fatalf("legacy yolo event: %q", m.channel.Mode)
-	}
 	// /mode lists the three modes with the current one marked
 	m.openMode()
-	if m.ov == nil || len(m.ov.items) != 3 || m.ov.items[2].id != "yolo" || !strings.Contains(m.ov.items[2].hint, "current") {
+	if m.ov == nil || len(m.ov.items) != 3 || m.ov.items[2].id != "yolo" || !strings.Contains(m.ov.items[1].hint, "current") {
 		t.Fatalf("mode dialog: %+v", m.ov)
 	}
 }

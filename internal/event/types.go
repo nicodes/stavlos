@@ -16,24 +16,19 @@ const (
 	ChannelCreated      Type = "channel.created"       // ChannelCreatedPayload
 	ChannelArchived     Type = "channel.archived"      // (none)
 	ChannelModelChanged Type = "channel.model_changed" // ModelChangedPayload
-	ChannelYoloChanged  Type = "channel.yolo_changed"  // YoloPayload (legacy: replayed as mode yolo/ask; new logs carry ChannelModeChanged)
 	ChannelModeChanged  Type = "channel.mode_changed"  // ModePayload: the channel's permission mode (ask | auto | yolo)
 	ChannelDirAdded     Type = "channel.dir_added"     // DirAddedPayload: a directory joined the channel\'s working set (every agent\'s); Agent is the agent whose boundary prompt added it, "" for the dirs tab
 	ChannelDirRemoved   Type = "channel.dir_removed"   // DirRefPayload: the human took a directory out of the channel\'s working set
 	ChatPosted          Type = "chat.posted"           // ChatPayload: the human\'s message in the channel chat, logged on the channel, and the agents it went to
 
 	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
-	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload (legacy: agents no longer finish; kept for old logs)
 	ResponseReceived    Type = "agent.response"        // ResponsePayload: an answer from another agent, logged on the recipient
 	MessageToUser       Type = "agent.message_to_user" // ChatPayload: a message tool call addressed to the human, logged on the sender
 	ReminderQueued      Type = "agent.reminder_queued" // RepliesPayload: a turn ended owing replies; one reminder starts the next turn
-	ReplyMissing        Type = "agent.reply_missing"   // RepliesPayload: a turn ended still owing replies it was reminded of
 	AgentKilled         Type = "agent.killed"          // AgentRefPayload
 	AgentModelChanged   Type = "agent.model_changed"   // ModelChangedPayload
 	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
 	AgentVariantChanged Type = "agent.variant_changed" // VariantChangedPayload: model variant (reasoning effort) switched
-	AgentDirAdded       Type = "agent.dir_added"       // DirAddedPayload (legacy: an agent's own set; replayed into the channel's)
-	AgentDirRemoved     Type = "agent.dir_removed"     // DirRefPayload (legacy: replayed as a removal from the channel's set)
 
 	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: wake armed for these ids (children or monitors)
 	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
@@ -120,12 +115,6 @@ type ModePayload struct {
 	Mode string `json:"mode"`
 }
 
-// YoloPayload records the channel's yolo switch: while on, every tool
-// call a policy would ask about is allowed without a prompt.
-type YoloPayload struct {
-	On bool `json:"on"`
-}
-
 // VariantChangedPayload records a model-variant switch; "" is the
 // provider default.
 type VariantChangedPayload struct {
@@ -133,18 +122,17 @@ type VariantChangedPayload struct {
 }
 
 type AgentSpawnedPayload struct {
-	ID        string   `json:"id"`
-	Parent    string   `json:"parent,omitempty"` // empty for the root
-	Archetype string   `json:"archetype"`
-	Label     string   `json:"label"`
-	Model     string   `json:"model"` // resolved provider/model-id
-	Task      string   `json:"task,omitempty"`
-	Depth     int      `json:"depth"`
-	Dirs      []string `json:"dirs,omitempty"` // legacy: directories the creator granted, replayed into the channel's set
+	ID        string `json:"id"`
+	Parent    string `json:"parent,omitempty"` // empty for the root
+	Archetype string `json:"archetype"`
+	Label     string `json:"label"`
+	Model     string `json:"model"` // resolved provider/model-id
+	Task      string `json:"task,omitempty"`
+	Depth     int    `json:"depth"`
 }
 
 // DirAddedPayload: Source is "human" (the dirs tab, or the answer to a
-// boundary prompt); logs from before the set was shared also carry "grant".
+// boundary prompt).
 type DirAddedPayload struct {
 	Dir    string `json:"dir"`
 	Source string `json:"source"`
@@ -161,12 +149,6 @@ type ResponsePayload struct {
 	From      string `json:"from"`
 	FromLabel string `json:"from_label,omitempty"`
 	Text      string `json:"text"`
-}
-
-type AgentFinishedPayload struct {
-	Summary   string     `json:"summary"`
-	Status    string     `json:"status"` // success | failure | partial
-	Artifacts []Artifact `json:"artifacts,omitempty"`
 }
 
 type Artifact struct {
@@ -279,7 +261,7 @@ type UserMessagePayload struct {
 	Text string      `json:"text"`
 	// From names the sending agent ("scout") when a prompt, steer or answer
 	// came from another agent in the channel; empty for humans. FromID is
-	// its id (logs from before it carry the name only).
+	// its id.
 	From   string `json:"from,omitempty"`
 	FromID string `json:"from_id,omitempty"`
 	Post   string `json:"post,omitempty"` // the channel chat post this input delivers

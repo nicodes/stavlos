@@ -9,7 +9,6 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
-	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -64,8 +63,8 @@ type recovery struct {
 // apply folds one logged event into the channel being rebuilt.
 func (r *recovery) apply(e event.Event) {
 	switch e.Type {
-	case event.ChannelCreated, event.ChannelArchived, event.ChannelModelChanged, event.ChannelYoloChanged, event.ChannelModeChanged,
-		event.ChannelDirAdded, event.ChannelDirRemoved, event.AgentDirAdded, event.AgentDirRemoved:
+	case event.ChannelCreated, event.ChannelArchived, event.ChannelModelChanged, event.ChannelModeChanged,
+		event.ChannelDirAdded, event.ChannelDirRemoved:
 		r.channel(e)
 	case event.AgentSpawned:
 		r.spawned(e)
@@ -73,7 +72,7 @@ func (r *recovery) apply(e event.Event) {
 		r.agentSetting(e)
 	case event.PromptQueued, event.SteerReceived, event.NoteQueued, event.UserMessage, event.ResponseReceived:
 		r.inbox(e)
-	case event.MessageToUser, event.ReminderQueued, event.ReplyMissing:
+	case event.MessageToUser, event.ReminderQueued:
 		r.replies(e)
 	case event.MonitorStarted, event.MonitorFired, event.MonitorStopped, event.MonitorArmed, event.MonitorDisarmed:
 		r.monitor(e)
@@ -112,22 +111,15 @@ func (r *recovery) channel(e event.Event) {
 		var p event.ModelChangedPayload
 		_ = e.Decode(&p)
 		s.model = p.Model
-	case event.ChannelYoloChanged: // legacy logs
-		var p event.YoloPayload
-		_ = e.Decode(&p)
-		s.mode = protocol.ModeAsk
-		if p.On {
-			s.mode = protocol.ModeYolo
-		}
 	case event.ChannelModeChanged:
 		var p event.ModePayload
 		_ = e.Decode(&p)
 		s.mode = p.Mode
-	case event.ChannelDirAdded, event.AgentDirAdded: // agent.dir_added: an older log's per-agent set, now the channel's
+	case event.ChannelDirAdded:
 		var p event.DirAddedPayload
 		_ = e.Decode(&p)
 		s.applyDirAdded(p.Dir, p.Source)
-	case event.ChannelDirRemoved, event.AgentDirRemoved:
+	case event.ChannelDirRemoved:
 		var p event.DirRefPayload
 		_ = e.Decode(&p)
 		s.applyDirRemoved(p.Dir)
@@ -146,20 +138,14 @@ func (r *recovery) spawned(e event.Event) {
 		preset = missingRolePreset(p.Archetype)
 	}
 	a := newAgent(s, p.ID, p.Parent, p.Archetype, p.Label, p.Model, p.Depth, preset)
-	// Logs from before unique names may repeat a label: names are claimed in
-	// creation order, so a replay always gives the same agent the same name.
+	// Names are claimed in creation order, so a replay gives every agent the
+	// name the live path gave it.
 	s.mu.Lock()
-	name, err := s.claimNameLocked(p.Label, p.Archetype, a.ID)
-	if err != nil {
-		name, _ = s.claimNameLocked("", "agent", a.ID)
-	}
+	name, _ := s.claimNameLocked(p.Label, p.Archetype, a.ID)
 	s.mu.Unlock()
 	a.Label = name
 	if !ok {
 		r.missingRole[a.ID] = missingRoleError(p.Archetype)
-	}
-	for _, d := range p.Dirs { // an older log's grants join the channel's set
-		s.applyDirAdded(d, "grant")
 	}
 	if par, ok := s.agents[p.Parent]; ok {
 		a.ctx, a.kill = context.WithCancel(par.ctx)
@@ -292,8 +278,7 @@ func (r *recovery) consumed(e event.Event) {
 
 // replies folds the reply bookkeeping of replies.go back in: a message to
 // the human settles what is owed to it, and a queued reminder counts as a
-// nudge and waits to start a turn; a missing reply (older logs) changes
-// nothing.
+// nudge and waits to start a turn.
 func (r *recovery) replies(e event.Event) {
 	a, ok := r.s.agents[e.Agent]
 	if !ok {
@@ -307,8 +292,6 @@ func (r *recovery) replies(e event.Event) {
 		_ = e.Decode(&p)
 		a.nudges++
 		a.remind = p.Parties
-	case event.ReplyMissing:
-		// older logs: the reply stayed owed, nothing to fold back in
 	}
 }
 

@@ -102,7 +102,7 @@ func (s *Channel) addDir(ctx context.Context, agent, dir, source string) error {
 }
 
 // applyDirAdded installs an added directory; the caller holds s.mu or is
-// replaying the log (where an older log's per-agent entries may repeat).
+// replaying the log.
 func (s *Channel) applyDirAdded(dir, source string) {
 	if dir == filepath.Clean(s.Dir) || slices.ContainsFunc(s.dirs, func(e dirEntry) bool { return e.path == dir }) {
 		return
