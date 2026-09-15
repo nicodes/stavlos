@@ -925,30 +925,16 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 	event.UserMessage: decoded(func(p event.UserMessagePayload) []Line {
 		switch p.Kind {
-		case event.MsgPrompt, "":
+		case event.MsgPrompt, "", event.MsgSteer: // a steer reads exactly like a prompt
 			if p.From != "" {
-				return block(BlockUser, "from "+p.From, p.Text)
+				return incoming("Message from "+p.From, p.Text)
 			}
-			return block(BlockUser, "", p.Text)
-		case event.MsgSteer: // shown exactly like a prompt: blue ›, no title
-			if p.From != "" {
-				return block(BlockUser, "from "+p.From, p.Text)
-			}
-			return block(BlockUser, "", p.Text)
+			return block(BlockUser, "", p.Text) // the human's own input: blue ›
 		case event.MsgAgentResponse:
-			// Reads like a tool line so it is obvious what it is:
-			// "⑂ Answer from scout" over the answer's text. The agent's own
-			// message call reads "Message  → name", so incoming and outgoing
-			// never look alike.
-			head := "**Answer**"
 			if p.From != "" {
-				head = "**Answer from " + p.From + "**"
+				return incoming("Answer from "+p.From, p.Text)
 			}
-			lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: head, Block: BlockChild, Glyph: GlyphChild}}
-			for _, l := range strings.Split(strings.TrimRight(p.Text, "\n"), "\n") {
-				lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild})
-			}
-			return append(lines, Line{Kind: LineBlank})
+			return incoming("Answer", p.Text)
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case event.MsgMonitorFired:
@@ -1227,6 +1213,18 @@ func blockWith(kind BlockKind, label, text, glyph string) []Line {
 			ln.Glyph = glyph
 		}
 		lines = append(lines, ln)
+	}
+	return append(lines, Line{Kind: LineBlank})
+}
+
+// incoming is what another agent sent this one, a message or an answer: a
+// tool-like head ("⑂ Message from scout") over its text. Only the human's
+// own input is drawn blue, and the agent's own message calls read
+// "Message  → name", so incoming and outgoing never look alike.
+func incoming(head, text string) []Line {
+	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: "**" + head + "**", Block: BlockChild, Glyph: GlyphChild}}
+	for _, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild})
 	}
 	return append(lines, Line{Kind: LineBlank})
 }

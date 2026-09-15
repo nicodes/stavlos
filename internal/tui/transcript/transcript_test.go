@@ -383,3 +383,31 @@ func TestNotesAndReminders(t *testing.T) {
 		t.Fatalf("notices %q", notices)
 	}
 }
+
+// TestOnlyHumanInputIsBlue: a prompt or steer from another agent reads like
+// an answer ("⑂ Message from main" over its text), never as the blue user
+// block the human's own input gets.
+func TestOnlyHumanInputIsBlue(t *testing.T) {
+	mk := func(p event.UserMessagePayload) []Line {
+		return EventLines(event.Event{Type: event.UserMessage, Time: time.Now(), Payload: event.MustPayload(p)})
+	}
+	for _, kind := range []event.MessageKind{event.MsgPrompt, event.MsgSteer} {
+		lines := mk(event.UserMessagePayload{Kind: kind, Text: "look at the parser", From: "main"})
+		var texts []string
+		for _, l := range lines {
+			if l.Block == BlockUser || l.Block == BlockSteer {
+				t.Fatalf("%s from an agent drawn as user input: %+v", kind, l)
+			}
+			if l.Text != "" {
+				texts = append(texts, l.Text)
+			}
+		}
+		if strings.Join(texts, "|") != "**Message from main**|look at the parser" || lines[1].Glyph != GlyphChild {
+			t.Fatalf("%s from an agent: %+v", kind, lines)
+		}
+	}
+	human := mk(event.UserMessagePayload{Kind: event.MsgSteer, Text: "and the tests"})
+	if human[1].Block != BlockUser || !human[1].Lead {
+		t.Fatalf("the human's input stays the blue user block: %+v", human)
+	}
+}
