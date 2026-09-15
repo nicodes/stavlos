@@ -117,7 +117,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	// a later prompt from the creator reads as a prompt
 	tr.Apply(mk(5, "c1", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "look around", From: "root"}))
-	if got := renderLines(tr.All()); !strings.Contains(strings.Join(got, "\n"), "› @root look around") {
+	if got := renderLines(tr.All()); !strings.Contains(strings.Join(got, "\n"), "» @root look around") {
 		t.Fatalf("a later prompt: %q", got)
 	}
 }
@@ -756,7 +756,7 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "delegate"}))
 	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "agent_response", From: "scout", Text: "Repository survey complete.\nNo edits were needed."}))
 	folded := renderWith(tr.All(), Options{Width: 80})
-	if !contains(folded, "› @scout Repository survey complete. +1") {
+	if !contains(folded, "» @scout Repository survey complete. +1") {
 		t.Fatalf("folded response should name itself and its sender:\n%s", strings.Join(folded, "\n"))
 	}
 	for _, l := range folded {
@@ -765,7 +765,7 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 		}
 	}
 	full := renderWith(tr.All(), Options{Width: 80, NoFold: true})
-	assertSubsequence(t, full, []string{"› @scout Repository survey complete.", "  No edits were needed."})
+	assertSubsequence(t, full, []string{"» @scout Repository survey complete.", "  No edits were needed."})
 }
 
 func TestSentMessageShowsItsText(t *testing.T) {
@@ -777,13 +777,13 @@ func TestSentMessageShowsItsText(t *testing.T) {
 	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "r1", Name: "message", Input: json.RawMessage(`{"to":"main","text":"Concise findings:\n- Go-only module"}`)}))
 	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "r1", Name: "message", Output: "answer delivered to main"}))
 	full := renderWith(tr.All(), Options{Width: 80, NoFold: true})
-	assertSubsequence(t, full, []string{"‹ @main Concise findings:", "  - Go-only module"})
+	assertSubsequence(t, full, []string{"« @main Concise findings:", "  - Go-only module"})
 	for _, l := range full {
 		if strings.Contains(l, "answer delivered to") {
 			t.Fatalf("the bare tool result should not show:\n%s", strings.Join(full, "\n"))
 		}
 	}
-	if folded := renderWith(tr.All(), Options{Width: 80}); !contains(folded, "‹ @main Concise findings: +1") {
+	if folded := renderWith(tr.All(), Options{Width: 80}); !contains(folded, "« @main Concise findings: +1") {
 		t.Fatalf("folded:\n%s", strings.Join(folded, "\n"))
 	}
 }

@@ -98,23 +98,24 @@ const (
 
 // Leader glyphs for chat items (see the glyph table in docs).
 const (
-	GlyphChild      = "⑂" // a child agent reported back (same fork as spawn)
-	GlyphReply      = "‹" // a response: an agent's reply in the session chat, a response to or from another agent
-	GlyphAsk        = "›" // a prompt to or from another agent (the human's own prompts draw › in blue)
-	GlyphSpawn      = "»" // a child agent was spawned: agent_create's mark, since its task is the prompt that made it
-	GlyphTask       = "▹" // the task handed to a child
-	GlyphFinished   = "✓" // an agent finished
-	GlyphError      = "!" // a turn error
-	GlyphKilled     = "⊘" // an agent was killed
-	GlyphTurn       = "◦" // a turn notice (cancelled, stopped, aborted)
-	GlyphNudge      = "↻" // the harness nudged the agent to reply
-	GlyphNotes      = "§" // the agent\'s own text: its notes, which reach no one
-	GlyphModel      = "⇄" // model changed
-	GlyphNotice     = "»" // a local notice (/help, lists)
-	GlyphPrompt     = "?" // a question for the user
-	GlyphAnswer     = "?" // the user's answer to a question (same mark as the question)
-	GlyphPermission = "!" // a permission or trust prompt, and its answer
-	GlyphFailed     = "✗" // a failed finish
+	GlyphChild      = "⑂"            // a child agent reported back (same fork as spawn)
+	GlyphReply      = "‹"            // what an agent sends the human: its message to @user, its reply in the session chat
+	GlyphToAgent    = "«"            // what an agent sends another agent: a prompt, a response, a spawn
+	GlyphFromAgent  = "»"            // what an agent receives from another agent (the human's own prompts draw › in blue)
+	GlyphSpawn      = GlyphFromAgent // a spawned agent's first item: received from its creator
+	GlyphTask       = "▹"            // the task handed to a child
+	GlyphFinished   = "✓"            // an agent finished
+	GlyphError      = "!"            // a turn error
+	GlyphKilled     = "⊘"            // an agent was killed
+	GlyphTurn       = "◦"            // a turn notice (cancelled, stopped, aborted)
+	GlyphNudge      = "↻"            // the harness nudged the agent to reply
+	GlyphNotes      = "§"            // the agent\'s own text: its notes, which reach no one
+	GlyphModel      = "⇄"            // model changed
+	GlyphNotice     = "»"            // a local notice (/help, lists)
+	GlyphPrompt     = "?"            // a question for the user
+	GlyphAnswer     = "?"            // the user's answer to a question (same mark as the question)
+	GlyphPermission = "!"            // a permission or trust prompt, and its answer
+	GlyphFailed     = "✗"            // a failed finish
 	GlyphCompacted  = "┄┄ compacted ┄┄"
 	// GlyphCompacting marks the rule of a compaction still running; Render
 	// draws the sweeping bar into it.
@@ -1312,16 +1313,16 @@ func blockWith(kind BlockKind, label, text, glyph string) []Line {
 }
 
 // received is what another agent sent this one, a prompt or a response:
-// "› @scout …" with the name bold and later lines aligned under the text.
-// What this agent sends reads "‹ @scout …" (its message calls), and only
-// the human's own input is drawn blue.
+// "» @scout …" with the name bold and later lines aligned under the text.
+// What this agent sends reads "« @scout …" (or "‹ @user …"), and only the
+// human's own input, "› @user …", is drawn blue.
 func received(from, text string) []Line {
 	body := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	first := body[0]
 	if from != "" {
 		first = strings.TrimSpace("**@" + from + "** " + first)
 	}
-	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: first, Block: BlockChild, Glyph: GlyphAsk}}
+	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: first, Block: BlockChild, Glyph: GlyphFromAgent}}
 	for _, l := range body[1:] {
 		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild, Indent: 1})
 	}
@@ -1618,18 +1619,21 @@ const (
 	GlyphToolShell    = "$" // shell, shell_kill (and the old bash names): the shell prompt
 	GlyphToolMonitors = "$" // async jobs are shell commands
 	GlyphToolAgents   = "⑂"
-	GlyphToolCreate   = "»" // agent_create: the double of a prompt's ›, since it makes the agent it prompts
-	GlyphToolTodo     = "✓" // todo_add, todo_update
-	GlyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
-	GlyphToolWeb      = "↗" // web_fetch, web_search
+	GlyphToolCreate   = GlyphToAgent // agent_create: sent to the agent it makes
+	GlyphToolTodo     = "✓"          // todo_add, todo_update
+	GlyphToolMCP      = "≡"          // mcp__<server>__<tool> and MCP server notices
+	GlyphToolWeb      = "↗"          // web_fetch, web_search
 )
 
 // CallGlyph is a tool line's glyph and the gap after it: ToolGlyph of its
-// tool, except that a message this agent sends reads ‹ (what it receives
-// reads ›).
+// tool, except that a message this agent sends reads « to another agent
+// and ‹ to the human.
 func CallGlyph(l Line) (string, string) {
 	if IsMessage(l) {
-		return GlyphReply, " "
+		if strings.HasPrefix(l.Text, "@user") {
+			return GlyphReply, " "
+		}
+		return GlyphToAgent, " "
 	}
 	return ToolGlyph(l.Tool)
 }
