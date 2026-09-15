@@ -109,8 +109,12 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return m.channelSettings(m.sbCursor)
 	case msg.String() == "n": // the next agent that needs you, selected at once
-		if i := m.nextNeedy(max(-1, m.sbCursor-m.channelRow()-1)); i >= 0 {
-			m.sbCursor = m.channelRow() + 1 + i
+		from := -1
+		if r, ok := m.sidebarAt(m.sbCursor); ok && r.kind == sbAgent {
+			from = r.k
+		}
+		if i := m.nextNeedy(from); i >= 0 {
+			m.sbCursor = m.sidebarIndex(sidebarRow{sbAgent, i})
 			m.openAgent(i)
 		} else {
 			return m.setStatus("no agent is waiting on you", false)
@@ -136,22 +140,73 @@ func (m *Model) nextNeedy(from int) int {
 // sidebarItems is how many rows the sidebar cursor can rest on: + channel,
 // the directory's channels and this channel's agents. The cursor counts them
 // top to bottom: 0 is + channel, then the channels alphabetically with this
-// channel's agents right under its row (channelRow).
+// channel's agents right under its row (sidebarRows).
 func (m *Model) sidebarItems() int {
-	return len(m.agents) + 2 + len(m.navChannels)
+	return len(m.sidebarRows())
 }
 
-// channelRow is the sidebar cursor index of this channel's row: after
-// + channel and the other channels named before it (navChannels is kept in
-// alphabetical order). Its agent i is channelRow()+1+i.
-func (m Model) channelRow() int {
-	n := 1
+// sidebarKind is what a sidebar row the cursor lands on is.
+type sidebarKind int
+
+const (
+	sbNewChannel sidebarKind = iota // the "channels" title, with its ✚
+	sbOther                         // another channel of this directory
+	sbHere                          // this channel: its chat
+	sbAgent                         // one of this channel's agents
+)
+
+// sidebarRow is one row the sidebar cursor lands on; k indexes navChannels
+// (sbOther) or agents (sbAgent).
+type sidebarRow struct {
+	kind sidebarKind
+	k    int
+}
+
+// sidebarRows is the sidebar's cursor rows top to bottom: the title, the
+// directory's channels named before this one (navChannels is in
+// alphabetical order), this channel, its agents, then the channels after
+// it. The sidebar cursor is an index into it; keys, clicks and drawing all
+// read it, so none of them works out where a row sits.
+func (m Model) sidebarRows() []sidebarRow {
+	before := 0
 	for _, s := range m.navChannels {
 		if compareChannels(s, m.channel) < 0 {
-			n++
+			before++
 		}
 	}
-	return n
+	rows := make([]sidebarRow, 0, 2+len(m.agents)+len(m.navChannels))
+	rows = append(rows, sidebarRow{kind: sbNewChannel})
+	for k := range before {
+		rows = append(rows, sidebarRow{sbOther, k})
+	}
+	rows = append(rows, sidebarRow{kind: sbHere})
+	for i := range m.agents {
+		rows = append(rows, sidebarRow{sbAgent, i})
+	}
+	for k := before; k < len(m.navChannels); k++ {
+		rows = append(rows, sidebarRow{sbOther, k})
+	}
+	return rows
+}
+
+// sidebarAt is the row at cursor index i.
+func (m Model) sidebarAt(i int) (sidebarRow, bool) {
+	rows := m.sidebarRows()
+	if i < 0 || i >= len(rows) {
+		return sidebarRow{}, false
+	}
+	return rows[i], true
+}
+
+// sidebarIndex is the cursor index of row r, or 0 (the title) when it is
+// not shown.
+func (m Model) sidebarIndex(r sidebarRow) int {
+	for i, x := range m.sidebarRows() {
+		if x == r {
+			return i
+		}
+	}
+	return 0
 }
 
 // sidebarSelect acts on the item under the cursor: + channel creates a
@@ -159,26 +214,27 @@ func (m Model) channelRow() int {
 // and an agent row that agent's own chat (both focus the input); another
 // channel's row opens that channel in place of this one.
 func (m *Model) sidebarSelect(i int) tea.Cmd {
-	na, here := len(m.agents), m.channelRow()
-	switch {
-	case i == 0:
+	r, ok := m.sidebarAt(i)
+	if !ok {
+		return nil
+	}
+	switch r.kind {
+	case sbNewChannel:
 		return m.newChannel()
-	case i < here:
-		return m.openOther(i - 1)
-	case i == here:
+	case sbOther:
+		return m.openOther(r.k)
+	case sbHere:
 		chat := m.openChat()
 		if cmd, ok := m.openWaiting(m.channelID, ""); ok {
 			return tea.Batch(chat, cmd)
 		}
 		return tea.Batch(chat, m.setFocus(focusInput))
-	case i <= here+na:
-		m.openAgent(i - here - 1)
+	case sbAgent:
+		m.openAgent(r.k)
 		if cmd, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
 			return cmd
 		}
 		return m.setFocus(focusInput)
-	case i-na-2 < len(m.navChannels):
-		return m.openOther(i - na - 2)
 	}
 	return nil
 }
@@ -186,14 +242,12 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 // channelAt is the channel a sidebar cursor index names: this channel (k
 // -1) or the directory's other channel k; ok is false for any other row.
 func (m Model) channelAt(i int) (k int, ok bool) {
-	here, na := m.channelRow(), len(m.agents)
-	switch {
-	case i == here:
+	switch r, _ := m.sidebarAt(i); r.kind {
+	case sbHere:
 		return -1, true
-	case i >= 1 && i < here:
-		return i - 1, true
-	case i > here+na && i-na-2 < len(m.navChannels):
-		return i - na - 2, true
+	case sbOther:
+		return r.k, true
+	case sbNewChannel, sbAgent:
 	}
 	return 0, false
 }
@@ -239,12 +293,11 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 		}
 		return cmd
 	}
-	_, items := m.sidebarBody(sidebarWidth - 1)
-	row := y - len(m.sidebarHeader(sidebarWidth-1))
-	if row < 0 || row >= len(items) || items[row] < 0 {
+	_, items := m.sidebarLines(m.vp.Height)
+	if y < 0 || y >= len(items) || items[y] < 0 {
 		return cmd
 	}
-	i := items[row]
+	i := items[y]
 	m.sbCursor = i
 	if i == 0 { // the channels title: only its + acts
 		if x >= sidebarWidth-3 {
@@ -255,19 +308,20 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 	if _, ok := m.channelAt(i); ok && x >= sidebarWidth-3 { // the gear at the row's right edge
 		return tea.Batch(cmd, m.channelSettings(i))
 	}
-	switch {
-	case i == m.channelRow():
+	switch r, _ := m.sidebarAt(i); r.kind {
+	case sbHere:
 		chat := m.openChat()
 		if open, ok := m.openWaiting(m.channelID, ""); ok {
 			return tea.Batch(cmd, chat, open)
 		}
 		return tea.Batch(cmd, chat)
-	case i > m.channelRow() && i <= m.channelRow()+len(m.agents):
-		m.openAgent(i - m.channelRow() - 1)
+	case sbAgent:
+		m.openAgent(r.k)
 		if open, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
 			return tea.Batch(cmd, open)
 		}
 		return cmd
+	case sbNewChannel, sbOther:
 	}
 	return tea.Batch(cmd, m.sidebarSelect(i))
 }

@@ -387,7 +387,8 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 	}
 	// the cursor is a row background (a visible marker here), never an arrow
 	markCursorForTest(t)
-	rows := m.treeRows(30)
+	body, _ := m.sidebarBody(30)
+	rows := body[2:] // under the channels title and this channel's row
 	if !strings.HasPrefix(rows[2], render.GutterMark) || strings.Contains(rows[0], render.GutterMark) || strings.Contains(strings.Join(rows, ""), "▶") || strings.Contains(strings.Join(rows, ""), "▸") {
 		t.Fatalf("cursor row: %q", rows)
 	}
@@ -2176,7 +2177,7 @@ func TestSidebarNav(t *testing.T) {
 			t.Fatalf("with the sidebar the strip's tabs skip dirs: %v", m.tabOrder())
 		}
 		m.setFocus(focusSidebar)
-		m.sbCursor = m.channelRow()
+		m.sbCursor = hereRow(m)
 		press(&m, tea.KeyMsg{Type: tea.KeyRight})
 		if m.focus != focusDirs {
 			t.Fatalf("→ on the channel row opens its dirs: %v", m.focus)
@@ -2187,7 +2188,7 @@ func TestSidebarNav(t *testing.T) {
 			nm, _ = nm.(Model).Update(tea.MouseMsg{X: sidebarWidth - 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 			m = nm.(Model)
 		}
-		gear(header + m.channelRow())
+		gear(header + hereRow(m))
 		if m.focus != focusDirs {
 			t.Fatalf("a click on the gear opens its dirs: %v", m.focus)
 		}
@@ -2280,7 +2281,7 @@ func TestSidebarNav(t *testing.T) {
 		na := len(m.agents)
 		if f := strings.Fields(plain[2]); len(body) != na+4 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
 			len(f) != 3 || f[1] != "#proj" || f[2] != channelGear || strings.Join(strings.Fields(plain[na+3]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
-			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || m.channelRow() != 2 {
+			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || hereRow(m) != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}
 		for _, i := range []int{1, 2, na + 3} {
@@ -2400,6 +2401,9 @@ func TestSidebarNav(t *testing.T) {
 
 // sidebarNavModel is a channel with the sidebar open: a root waiting on
 // its children, one blocked on a permission and one on a question.
+// hereRow is the sidebar cursor index of this channel's row.
+func hereRow(m Model) int { return m.sidebarIndex(sidebarRow{kind: sbHere}) }
+
 func sidebarNavModel() Model {
 	m := channelModel()
 	m.showTree = true
@@ -3004,7 +3008,7 @@ func TestPromptsAcrossChannels(t *testing.T) {
 	}
 	// opening @world-politics (b) from the sidebar opens the permission dialog on its own prompt
 	m.setFocus(focusSidebar)
-	m.sidebarSelect(m.channelRow() + 2)
+	m.sidebarSelect(hereRow(m) + 2)
 	if perms, _ := m.promptCountsIn(m.scope); m.focus != focusPermission || m.currentPrompt().ID != "p-here" || m.scope.agent != "b" || perms != 1 {
 		t.Fatalf("agent open: focus=%v prompt=%s scope=%+v perms=%d", m.focus, m.currentPrompt().ID, m.scope, perms)
 	}
@@ -3023,14 +3027,14 @@ func TestPromptsAcrossChannels(t *testing.T) {
 	m.closeDialog()
 	// @asker (d) waits on a question only: its open goes to the questions dialog
 	m.setFocus(focusSidebar)
-	m.sidebarSelect(m.channelRow() + 4)
+	m.sidebarSelect(hereRow(m) + 4)
 	if m.focus != focusQuestions || m.currentQuestion().ID != "q-here" {
 		t.Fatalf("agent with a question: focus=%v", m.focus)
 	}
 	m.closeDialog()
 	// opening this channel goes to its permission, not the other channel's
 	m.setFocus(focusSidebar)
-	m.sidebarSelect(m.channelRow())
+	m.sidebarSelect(hereRow(m))
 	if perms, _ := m.promptCountsIn(m.scope); m.focus != focusPermission || m.scope.channel != here || perms != 1 {
 		t.Fatalf("channel open: focus=%v scope=%+v perms=%d", m.focus, m.scope, perms)
 	}

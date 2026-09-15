@@ -566,13 +566,40 @@ func (m Model) channelView(f frame, width int) string {
 // badge and cost per row. What the tree selects, the rest of the screen
 // shows and the footer controls.
 func (m Model) sidebarView(height int) string {
-	inner := sidebarWidth - 1 // rows start at the left edge; one column of right padding
-	body, _ := m.sidebarBody(inner)
-	rows := append(m.sidebarHeader(inner), body...)
-	if len(rows) > height {
-		rows = rows[:height]
-	}
+	rows, _ := m.sidebarLines(height)
 	return lipgloss.NewStyle().Width(sidebarWidth).Height(height).MaxHeight(height).Render(strings.Join(rows, "\n"))
+}
+
+// sidebarLines is the sidebar as drawn height rows tall: the header, then
+// the window of the body that keeps the cursor's row in view (the body
+// scrolls once it is taller than the room under the header). items maps
+// each drawn row to its cursor index, -1 for rows the cursor skips; a
+// click reads it, so it always matches what is drawn.
+func (m Model) sidebarLines(height int) (rows []string, items []int) {
+	inner := sidebarWidth - 1 // rows start at the left edge; one column of right padding
+	header := m.sidebarHeader(inner)
+	body, bodyItems := m.sidebarBody(inner)
+	room := max(0, height-len(header))
+	start, end := 0, min(len(body), room)
+	if len(body) > room && room > 0 {
+		cur := 0
+		for r, it := range bodyItems {
+			if it == m.sbCursor {
+				cur = r
+			}
+		}
+		start, end = listWindow(cur, 0, len(body), room)
+	}
+	rows = append(header, body[start:end]...)
+	items = make([]int, len(header), len(rows))
+	for i := range items {
+		items[i] = -1
+	}
+	items = append(items, bodyItems[start:end]...)
+	if len(rows) > height {
+		rows, items = rows[:height], items[:height]
+	}
+	return rows, items
 }
 
 // sidebarHeader is what precedes the tree: the app name, a blank, the
@@ -649,7 +676,7 @@ func (m Model) metaTabAt(x, width int) (focus, bool) {
 // own), each "● #name ⚙" (its state dot, its name, its gear for the
 // channel's dirs), this channel's row (its chat) with its agent tree right
 // under it. items maps each row to its
-// cursor index (the title 0, then top to bottom; see channelRow), -1 for rows
+// cursor index (the title 0, then top to bottom; see sidebarRows), -1 for rows
 // the cursor skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	focused := m.focus == focusSidebar && m.sidebarVisible()
@@ -673,37 +700,35 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		channel(dot, channelLabel(s), theme.StyleDim, idx)
 	}
-	// the "channels" title, with its + (a new channel) a space in from the
-	// right edge, in the gears' column
-	line(theme.StyleBold.Render("channels")+strings.Repeat(" ", max(1, width-10))+theme.StyleDim.Render(newChannelMark)+" ", 0)
-	here, na := m.channelRow(), len(m.agents)
-	for k := 0; k < here-1; k++ {
-		other(m.navChannels[k], 1+k)
-	}
-	states := make([]protocol.AgentState, 0, na)
-	for _, a := range m.agents {
-		states = append(states, a.State)
-	}
-	style := theme.StyleDim
-	if m.superChat {
-		style = theme.StyleSelected
-	}
-	dot := stateDot(string(protocol.RollUp(states)))
-	if mark := promptMark(m.promptCountsIn(promptScope{channel: m.channelID})); mark != "" {
-		dot = mark
-	}
-	channel(dot, channelLabel(m.channel), style, here)
 	tree := m.treeRows(width)
-	rows = append(rows, tree...)
-	for i := range tree {
-		if i < na {
-			items = append(items, here+1+i)
-		} else {
-			items = append(items, -1) // the "(no agents)" row
+	for i, r := range m.sidebarRows() {
+		switch r.kind {
+		case sbNewChannel:
+			// the "channels" title, with its + (a new channel) a space in from
+			// the right edge, in the gears' column
+			line(theme.StyleBold.Render("channels")+strings.Repeat(" ", max(1, width-10))+theme.StyleDim.Render(newChannelMark)+" ", i)
+		case sbOther:
+			other(m.navChannels[r.k], i)
+		case sbHere:
+			states := make([]protocol.AgentState, 0, len(m.agents))
+			for _, a := range m.agents {
+				states = append(states, a.State)
+			}
+			style := theme.StyleDim
+			if m.superChat {
+				style = theme.StyleSelected
+			}
+			dot := stateDot(string(protocol.RollUp(states)))
+			if mark := promptMark(m.promptCountsIn(promptScope{channel: m.channelID})); mark != "" {
+				dot = mark
+			}
+			channel(dot, channelLabel(m.channel), style, i)
+			if len(m.agents) == 0 {
+				rows, items = append(rows, tree[0]), append(items, -1) // the "(no agents)" row
+			}
+		case sbAgent:
+			line(tree[r.k], i)
 		}
-	}
-	for k := here - 1; k < len(m.navChannels); k++ {
-		other(m.navChannels[k], 2+na+k)
 	}
 	return rows, items
 }
@@ -743,7 +768,6 @@ func (m Model) needsHuman(agent string) string {
 // the chat.
 func (m Model) treeRows(width int) []string {
 	rows := make([]string, 0, len(m.agents))
-	focused := m.focus == focusSidebar && m.sidebarVisible()
 	for i, a := range m.agents {
 		indent := "  " + strings.Repeat("  ", a.Depth) // one level under this channel's "#name" row
 		dot := agentDot(a)
@@ -792,11 +816,7 @@ func (m Model) treeRows(width int) []string {
 		if gap < 0 {
 			gap = 0
 		}
-		row := indent + dot + " " + text + strings.Repeat(" ", gap) + right
-		if focused && m.channelRow()+1+i == m.sbCursor {
-			row = render.Highlight(row, width)
-		}
-		rows = append(rows, row)
+		rows = append(rows, indent+dot+" "+text+strings.Repeat(" ", gap)+right)
 	}
 	if len(rows) == 0 {
 		rows = append(rows, theme.StyleDim.Render("  (no agents)"))
