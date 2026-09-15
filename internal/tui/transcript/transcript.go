@@ -101,7 +101,7 @@ const (
 	GlyphChild      = "⑂" // a child agent reported back (same fork as spawn)
 	GlyphReply      = "‹" // a response: an agent's reply in the session chat, a response to or from another agent
 	GlyphAsk        = "›" // a prompt to or from another agent (the human's own prompts draw › in blue)
-	GlyphSpawn      = "›" // a child agent was spawned: its task is a prompt to it
+	GlyphSpawn      = "»" // a child agent was spawned: agent_create's mark, since its task is the prompt that made it
 	GlyphTask       = "▹" // the task handed to a child
 	GlyphFinished   = "✓" // an agent finished
 	GlyphError      = "!" // a turn error
@@ -179,6 +179,8 @@ type Transcript struct {
 	turnVerb    string    // the indicator's verb for this turn ("Galloping")
 	compactItem int       // item of the running compaction's rule (replaced by the result), -1 when none
 	turnGap     bool      // a turn started or ended: the next item appended starts a new stretch (TurnStart)
+	spawnTask   string    // a spawned agent\'s task, held until its first prompt draws the spawn and the task as one item
+	spawnAs     string    // …and what it was spawned as: "scout (general) · model"
 
 	chat  bool              // the session chat (chat.go), not one agent's transcript
 	names map[string]string // in the chat: agent id → name
@@ -229,7 +231,7 @@ func (t *Transcript) Apply(ev event.Event) {
 		t.applyChat(ev)
 		return
 	}
-	if t.applyCompaction(ev) {
+	if t.applyCompaction(ev) || t.holdSpawn(ev) {
 		return
 	}
 	switch ev.Type {
@@ -246,13 +248,48 @@ func (t *Transcript) Apply(ev event.Event) {
 			return
 		}
 	}
-	lines := CleanLines(EventLines(ev))
+	lines := CleanLines(t.eventLines(ev))
 	t.answerGlyph(ev, lines)
 	t.appendItem(lines)
 	t.afterAppend(ev)
 	if ev.Type == event.TurnStarted || ev.Type == event.TurnEnded || ev.Type == event.TurnAborted {
 		t.turnGap = true // what follows starts a new stretch of the chat
 	}
+}
+
+// holdSpawn keeps a spawn that carries a task off the chat: the agent's
+// first prompt, which is that task, draws both as one item of its first
+// turn (see eventLines). A spawn without a task draws as usual.
+func (t *Transcript) holdSpawn(ev event.Event) bool {
+	if ev.Type != event.AgentSpawned {
+		return false
+	}
+	var p event.AgentSpawnedPayload
+	if ev.Decode(&p) != nil || p.Parent == "" || p.Task == "" {
+		return false
+	}
+	t.spawnTask, t.spawnAs = p.Task, fmt.Sprintf("%s (%s)", p.Label, p.Archetype)
+	if p.Model != "" {
+		t.spawnAs += " · " + p.Model
+	}
+	return true
+}
+
+// eventLines is EventLines, except for a spawned agent's first prompt from
+// its creator: "» Spawned by main as scout (general) · model" over the task.
+func (t *Transcript) eventLines(ev event.Event) []Line {
+	if ev.Type == event.UserMessage && t.spawnTask != "" {
+		var p event.UserMessagePayload
+		if ev.Decode(&p) == nil && p.From != "" && p.Text == t.spawnTask {
+			t.spawnTask = ""
+			lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: titled("Spawned by "+p.From, "as "+t.spawnAs), Block: BlockChild, Glyph: GlyphSpawn}}
+			for _, l := range strings.Split(strings.TrimRight(p.Text, "\n"), "\n") {
+				lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild})
+			}
+			return append(lines, Line{Kind: LineBlank})
+		}
+	}
+	return EventLines(ev)
 }
 
 // answerGlyph marks an answer, a default or a withdrawal with its prompt's

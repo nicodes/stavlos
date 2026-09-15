@@ -61,6 +61,7 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 	tr := NewTranscript()
 	evs := []event.Event{
 		mk(1, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look"}),
+		mk(2, "c1", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "look", From: "main"}), // the task: drawn with the spawn
 		mk(2, "c1", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "hello\nworld"}),
 		mk(3, "c1", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "k1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}),
 		mk(4, "c1", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "k1", Name: "shell", Output: "a\nb\nc\nd\ne"}),
@@ -83,8 +84,8 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 		}
 		return out
 	}
-	if k := kinds(0); k[LineDim] != 1 || k[LineLabel] != 1 || k[LineText] != 1 {
-		t.Fatalf("spawn item: %v", k)
+	if k := kinds(0); k[LineText] != 2 || k[LineDim] != 0 || k[LineLabel] != 0 || !strings.HasPrefix(lines[1].Text, "**Spawned by main** as scout (explorer) · m") {
+		t.Fatalf("spawn item (the spawn over its task): %v %+v", k, lines[1])
 	}
 	if k := kinds(1); k[LineText] != 2 || k[LineBlank] != 2 {
 		t.Fatalf("user item: %v", k)

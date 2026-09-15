@@ -101,7 +101,25 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	tr.Apply(mk(2, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Archetype: "explorer", Label: "scout", Model: "m", Task: "look around"}))
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"› Spawned scout (explorer) · m", "task", "▹ look around"})
+	if !tr.Empty() {
+		t.Fatalf("a spawn with a task waits for its first prompt: %q", got)
+	}
+	// the first prompt, the task from the creator, draws the spawn and the
+	// task as one item, not "Spawned" then "Prompt from"
+	tr.Apply(mk(3, "c1", event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.Apply(mk(4, "c1", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "look around", From: "root"}))
+	got = renderLines(tr.All())
+	assertSubsequence(t, got, []string{"» Spawned by root as scout (explorer) · m", "look around"})
+	for _, g := range got {
+		if strings.Contains(g, "Prompt from") || strings.Contains(g, "▹") {
+			t.Fatalf("the spawn and its task are one item: %q", got)
+		}
+	}
+	// a later prompt from the creator reads as a prompt
+	tr.Apply(mk(5, "c1", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "look around", From: "root"}))
+	if got := renderLines(tr.All()); !strings.Contains(strings.Join(got, "\n"), "› Prompt from root") {
+		t.Fatalf("a later prompt: %q", got)
+	}
 }
 
 func TestUserMessageKinds(t *testing.T) {
