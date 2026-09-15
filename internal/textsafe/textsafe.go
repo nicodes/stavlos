@@ -6,23 +6,42 @@
 package textsafe
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 )
 
 // Clean returns s without escape sequences (CSI, OSC, DCS, PM, APC, SOS and
 // two-character ESC sequences, terminated by BEL or ST where applicable),
-// C0 controls other than newline and tab, DEL, and C1 controls. Text is
-// otherwise unchanged; a string with nothing to remove is returned as is.
-func Clean(s string) string { return scrub(s, false) }
+// C0 controls other than newline and tab, DEL, C1 controls, and the bidi
+// controls that reorder how a line reads (U+202A–U+202E, U+2066–U+2069,
+// the LRM, RLM and ALM marks). Text is otherwise unchanged; a string with
+// nothing to remove is returned as is.
+func Clean(s string) string { return scrub(s, modeClean) }
 
-// Visible is Clean with each removed control shown as a caret sequence
-// ("^[" for ESC, "^A" for 0x01, "^?" for DEL, "<9b>" for a C1 byte), so a
-// human reading a permission dialog can see that something was hidden.
-func Visible(s string) string { return scrub(s, true) }
+// Visible is Clean with each removed control shown ("^[" for ESC, "^A" for
+// 0x01, "^?" for DEL, "<9b>" for a C1 byte, "<U+202E>" for a bidi control),
+// and zero-width characters shown too, so a human reading a permission
+// dialog sees that something was hidden or reordered.
+func Visible(s string) string { return scrub(s, modeVisible) }
 
-func scrub(s string, visible bool) string {
-	if !strings.ContainsFunc(s, isControl) && utf8.ValidString(s) {
+// Frame is the last line of defence for a whole terminal frame: it keeps
+// SGR sequences (ESC [ digits ; : m, the styling a TUI draws with) and
+// drops every other escape, control and bidi control. Text that reached
+// the frame without passing Clean can then restyle a few cells at most;
+// it cannot move the cursor, clear the screen or retitle the window.
+func Frame(s string) string { return scrub(s, modeFrame) }
+
+type mode int
+
+const (
+	modeClean mode = iota
+	modeVisible
+	modeFrame
+)
+
+func scrub(s string, m mode) string {
+	if !strings.ContainsFunc(s, func(r rune) bool { return isControl(r) || isBidi(r) || m == modeVisible && isInvisible(r) }) && utf8.ValidString(s) {
 		return s
 	}
 	var b strings.Builder
@@ -32,12 +51,24 @@ func scrub(s string, visible bool) string {
 		if r == utf8.RuneError && size == 1 && s[i] >= 0x80 && s[i] <= 0x9f {
 			r = rune(s[i]) // a raw C1 byte (not UTF-8): a control all the same
 		}
-		if !isControl(r) {
+		switch {
+		case m == modeFrame && r == 0x1b && sgrLen(s[i+1:]) > 0:
+			n := 1 + sgrLen(s[i+1:])
+			b.WriteString(s[i : i+n])
+			i += n
+			continue
+		case isBidi(r), m == modeVisible && isInvisible(r):
+			if m == modeVisible {
+				fmt.Fprintf(&b, "<U+%04X>", r)
+			}
+			i += size
+			continue
+		case !isControl(r):
 			b.WriteString(s[i : i+size])
 			i += size
 			continue
 		}
-		if visible {
+		if m == modeVisible {
 			b.WriteString(caret(r))
 		}
 		i += size
@@ -46,6 +77,34 @@ func scrub(s string, visible bool) string {
 		}
 	}
 	return b.String()
+}
+
+// sgrLen is the length of an SGR sequence at the start of s (the text after
+// ESC), 0 when s does not start one.
+func sgrLen(s string) int {
+	if !strings.HasPrefix(s, "[") {
+		return 0
+	}
+	for i := 1; i < len(s); i++ {
+		switch c := s[i]; {
+		case c == 'm':
+			return i + 1
+		case c >= '0' && c <= '9', c == ';', c == ':':
+		default:
+			return 0
+		}
+	}
+	return 0
+}
+
+// isBidi reports whether r is a bidi control that reorders text on screen.
+func isBidi(r rune) bool {
+	return r >= 0x202a && r <= 0x202e || r >= 0x2066 && r <= 0x2069 || r == 0x200e || r == 0x200f || r == 0x061c
+}
+
+// isInvisible reports whether r is a zero-width character Visible shows.
+func isInvisible(r rune) bool {
+	return r == 0x200b || r == 0x2060 || r == 0xfeff || r == 0x00ad
 }
 
 // isControl reports whether r is a C0 control (other than newline and

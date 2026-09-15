@@ -671,6 +671,12 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")}); cmd != nil || m.promptBusy != "" {
 		t.Fatal("a must not answer a trust prompt")
 	}
+	// A repository's names show their controls instead of obeying them.
+	evil := m
+	evil.prompts = []protocol.PromptInfo{{ID: "t", Kind: "trust", Input: []byte(`{"dir":"/x\u001b]0;pwn\u0007","hash":"h","files":["evil\u001b[2J\u202e.json"]}`)}}
+	if body := strings.Join(evil.tabBodyLines(80), "\n"); !strings.Contains(body, "/x^[") || !strings.Contains(body, "evil^[<U+202E>.json") || strings.Contains(body, "\x1b]") || strings.Contains(body, "\x1b[2J") {
+		t.Fatalf("trust body obeyed a control:\n%q", body)
+	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
 	if cmd := press(&m, space); cmd == nil || m.promptBusy != "t" {
 		t.Fatal("space on Not now should answer a trust prompt")

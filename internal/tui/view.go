@@ -356,7 +356,10 @@ func (m Model) View() string {
 	if kb > 0 {
 		frame = main + "\n" + keybar
 	}
-	return m.highlightSelection(frame)
+	// Everything from the daemon was cleaned on the way in; the frame is
+	// filtered once more so a field that was missed can restyle a few cells
+	// at most, never move the cursor or retitle the window.
+	return textsafe.Frame(m.highlightSelection(frame))
 }
 
 // isHome reports whether the selected agent has nothing to show yet.
@@ -1198,7 +1201,9 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 			Files []string `json:"files"`
 		}
 		_ = json.Unmarshal(p.Input, &t)
-		head := theme.StyleWorking.Render("◆") + " " + format.ShortHome(t.Dir)
+		// The directory and file names come from the repository: shown
+		// with their controls visible, like a command.
+		head := theme.StyleWorking.Render("◆") + " " + textsafe.Visible(format.ShortHome(t.Dir))
 		if who != "" {
 			head += "  " + theme.StyleDim.Render(who)
 		}
@@ -1208,7 +1213,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 				lines = append(lines, fmt.Sprintf("  (+%d more)", len(t.Files)-10))
 				break
 			}
-			lines = append(lines, "  "+f)
+			lines = append(lines, "  "+textsafe.Visible(f))
 		}
 	default:
 		g, gap := transcript.ToolGlyph(p.Tool)
