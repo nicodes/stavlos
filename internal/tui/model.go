@@ -3006,7 +3006,10 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	case key.Matches(msg, keys.Select):
 		return m.sidebarSelect(m.sbCursor)
-	case key.Matches(msg, keys.TabRight): // → on a channel row: its gear, the channel's dirs
+	case key.Matches(msg, keys.TabRight): // → on the title: its +; on a channel row: its gear, the channel's dirs
+		if m.sbCursor == 0 {
+			return m.newChannel()
+		}
 		return m.channelSettings(m.sbCursor)
 	case msg.String() == "n": // the next agent that needs you, selected at once
 		if i := m.nextNeedy(max(-1, m.sbCursor-m.channelRow()-1)); i >= 0 {
@@ -3180,6 +3183,12 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 	}
 	i := items[row]
 	m.sbCursor = i
+	if i == 0 { // the channels title: only its + acts
+		if x >= sidebarWidth-3 {
+			return tea.Batch(cmd, m.newChannel())
+		}
+		return cmd
+	}
 	if _, ok := m.channelAt(i); ok && x >= sidebarWidth-3 { // the gear at the row's right edge
 		return tea.Batch(cmd, m.channelSettings(i))
 	}

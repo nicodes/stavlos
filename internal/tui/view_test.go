@@ -2184,8 +2184,8 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		if header != 9 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" ||
-			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1 · ? 1/1") || strings.Contains(sb[sidebarTabsRow], "dirs") || strings.TrimSpace(sb[7]) != "" || !strings.HasPrefix(sb[8], "channels") || strings.Contains(strings.Join(sb, "\n"), "need you") {
+		if header != 8 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || !strings.HasPrefix(sb[4], "3 working · 1 waiting") || strings.TrimSpace(sb[5]) != "" ||
+			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1 · ? 1/1") || strings.Contains(sb[sidebarTabsRow], "dirs") || strings.TrimSpace(sb[7]) != "" || !strings.HasPrefix(sb[8], "channels ") || !strings.Contains(sb[8], " + ") || strings.Contains(sb[8], "↑/↓") || strings.Contains(strings.Join(sb, "\n"), "need you") {
 			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:9], "\n"))
 		}
 		// dirs is the open channel's: out of the tabs the strip walks, behind
@@ -2300,7 +2300,7 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if f := strings.Fields(plain[2]); len(body) != na+4 || !strings.HasPrefix(plain[0], "+ channel") || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
+		if f := strings.Fields(plain[2]); len(body) != na+4 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " + ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
 			len(f) != 3 || f[1] != "#proj" || f[2] != channelGear || strings.Join(strings.Fields(plain[na+3]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
 			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || m.channelRow() != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
@@ -2356,8 +2356,24 @@ func TestSidebarNav(t *testing.T) {
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeySpace})
 		if m.ov == nil || m.ov.kind != ovNewChannel || m.ov.mode != overlayInput {
-			t.Fatalf("space on + channel should open the naming popup: %+v", m.ov)
+			t.Fatalf("space on the channels title should open the naming popup: %+v", m.ov)
 		}
+		m.closeOverlay()
+		if press(&m, tea.KeyMsg{Type: tea.KeyRight}); m.ov == nil || m.ov.kind != ovNewChannel {
+			t.Fatalf("→ on the channels title opens it too: %+v", m.ov)
+		}
+		m.closeOverlay()
+		header := len(m.sidebarHeader(sidebarWidth - 1))
+		for _, x := range []int{3, sidebarWidth - 3} { // the title's text does nothing; its + opens the popup
+			nm, _ := m.Update(tea.MouseMsg{X: x, Y: header, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+			nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: header, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+			m = nm.(Model)
+			if (m.ov != nil) != (x == sidebarWidth-3) {
+				t.Fatalf("click at %d on the title: popup=%v", x, m.ov != nil)
+			}
+		}
+		m.setFocus(focusSidebar)
+		m.sbCursor = 0
 		if dv := stripANSI(m.ov.view(100, "")); !strings.Contains(dv, "New channel in") || strings.Contains(dv, "search") || strings.Contains(dv, "nothing to list") {
 			t.Fatalf("popup:\n%s", dv)
 		}
@@ -2408,7 +2424,7 @@ func TestSidebarNav(t *testing.T) {
 		m.setFocus(focusInput)
 		// the swarm line reads idle when nothing is happening
 		m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "general", State: "idle"}}
-		if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 9 {
+		if sl := m.swarmLine(); sl != "idle" || len(m.sidebarHeader(sidebarWidth-1)) != 8 {
 			t.Fatalf("idle swarm line: %q header %d", sl, len(m.sidebarHeader(sidebarWidth-1)))
 		}
 	})

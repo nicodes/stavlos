@@ -538,7 +538,7 @@ func (m Model) sidebarView(height int) string {
 // waiting", or "idle"), a blank, the ! and ? tabs (sidebarTabsRow; every
 // channel's prompts, so above the channels; the footer strip keeps only the
 // agent's row while the sidebar shows, and dirs sits behind each channel's
-// gear), a blank, and the "channels" heading. The tree's
+// gear), and a blank; the "channels" title is the body's first row. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	dir := format.ShortHome(m.channel.Dir)
@@ -556,7 +556,6 @@ func (m Model) sidebarHeader(width int) []string {
 		"",
 		ansi.Truncate(strings.Split(labels, "\n")[0], width, "…"),
 		"",
-		theme.StyleBold.Render("channels") + m.sidebarFocusHint(),
 	}
 }
 
@@ -576,12 +575,13 @@ func (m Model) stripRows() int {
 	return len(m.tabLayout())
 }
 
-// sidebarBody is everything under the header: the + channel row, then the
+// sidebarBody is everything under the header: the "channels" title with its
+// + for a new channel, then the
 // directory's channels in alphabetical order (they never move on their
 // own), each "● #name ⚙" (its state dot, its name, its gear for the
 // channel's dirs), this channel's row (its chat) with its agent tree right
 // under it. items maps each row to its
-// cursor index (+ channel 0, then top to bottom; see channelRow), -1 for rows
+// cursor index (the title 0, then top to bottom; see channelRow), -1 for rows
 // the cursor skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	focused := m.focus == focusSidebar && m.sidebarVisible()
@@ -605,7 +605,9 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		channel(dot, channelLabel(s), theme.StyleDim, idx)
 	}
-	line(theme.StyleDim.Render("+ channel")+strings.Repeat(" ", max(0, width-9)), 0)
+	// the "channels" title, with its + (a new channel) a space in from the
+	// right edge, in the gears' column
+	line(theme.StyleBold.Render("channels")+strings.Repeat(" ", max(1, width-10))+theme.StyleDim.Render("+")+" ", 0)
 	here, na := m.channelRow(), len(m.agents)
 	for k := 0; k < here-1; k++ {
 		other(m.navChannels[k], 1+k)
@@ -1595,14 +1597,6 @@ func mcpRows(items []protocol.MCPInfo, open map[string]bool, now time.Time, widt
 		}
 	}
 	return rows, owners
-}
-
-// sidebarFocusHint marks the agent list as focused.
-func (m Model) sidebarFocusHint() string {
-	if m.focus == focusSidebar && m.sidebarVisible() {
-		return theme.StyleDim.Render("  ↑/↓ enter")
-	}
-	return ""
 }
 
 // paletteViewFor is the "/" command dropdown when the input is typing a
