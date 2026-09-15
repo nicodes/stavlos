@@ -171,6 +171,7 @@ type Transcript struct {
 	prompts     map[string]int       // prompt id → item of the tool call it gates
 	promptLine  map[string]lineRef   // prompt id → its "?" line (tone flips when settled)
 	monitors    map[string]lineRef   // monitor id → its "started" line, or the shell call it grew from
+	toolLines   map[string][]lineRef // tool name → its call lines in transcript order: what lastUntiedCall walks instead of every line
 	children    map[string]lineRef   // child agent id → the agent_create line that spawned it
 	asks        map[string][]lineRef // agent name → message lines still waiting for its answer
 	promptKinds map[string]string    // prompt id → kind, so its answer draws the prompt's glyph
@@ -227,7 +228,7 @@ func (t *Transcript) TurnStats(now time.Time) (time.Duration, int) {
 func NewTranscript() *Transcript {
 	return &Transcript{
 		calls: map[string]lineRef{}, prompts: map[string]int{}, promptLine: map[string]lineRef{},
-		monitors: map[string]lineRef{}, children: map[string]lineRef{}, inputs: map[string]event.Input{}, callInputs: map[string]json.RawMessage{},
+		monitors: map[string]lineRef{}, toolLines: map[string][]lineRef{}, children: map[string]lineRef{}, inputs: map[string]event.Input{}, callInputs: map[string]json.RawMessage{},
 		asks: map[string][]lineRef{}, promptKinds: map[string]string{}, compactItem: -1,
 	}
 }
@@ -646,6 +647,7 @@ func (t *Transcript) appendItem(lines []Line) []lineRef {
 		for j := range run {
 			run[j].Item = i
 			refs = append(refs, lineRef{i, j})
+			t.indexTool(lineRef{i, j}, run[j])
 		}
 		t.items = append(t.items, run)
 		t.version++
@@ -668,6 +670,7 @@ func (t *Transcript) insertIntoItem(item int, lines []Line) []lineRef {
 	for j := range lines {
 		lines[j].Item = item
 		refs = append(refs, lineRef{item, len(t.items[item]) + j})
+		t.indexTool(refs[j], lines[j])
 	}
 	t.items[item] = append(t.items[item], lines...)
 	t.touch(item)
@@ -772,14 +775,34 @@ func (t *Transcript) lastUntiedCall(tool string, tied map[string]lineRef) (lineR
 	for _, r := range tied {
 		taken[r] = true
 	}
-	for i := len(t.items) - 1; i >= 0; i-- {
-		for j := len(t.items[i]) - 1; j >= 0; j-- {
-			if l := t.items[i][j]; l.Kind == LineTool && l.Tool == tool && !taken[lineRef{i, j}] {
-				return lineRef{i, j}, true
-			}
+	refs := t.toolLines[tool]
+	for i := len(refs) - 1; i >= 0; i-- {
+		r := refs[i]
+		if !t.valid(r) || taken[r] {
+			continue
+		}
+		if l := t.items[r.item][r.off]; l.Kind == LineTool && l.Tool == tool {
+			return r, true
 		}
 	}
 	return lineRef{}, false
+}
+
+// indexTool records a committed call line under its tool, keeping each
+// tool's refs in transcript order (a line added to an older item goes
+// before the later items' lines).
+func (t *Transcript) indexTool(r lineRef, l Line) {
+	if l.Kind != LineTool || l.Tool == "" {
+		return
+	}
+	refs := t.toolLines[l.Tool]
+	i, _ := slices.BinarySearchFunc(refs, r, func(a, b lineRef) int {
+		if a.item != b.item {
+			return a.item - b.item
+		}
+		return a.off - b.off
+	})
+	t.toolLines[l.Tool] = slices.Insert(refs, i, r)
 }
 
 // openCallItem returns the item of the most recently started, still-open
