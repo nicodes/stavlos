@@ -382,7 +382,7 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 	down := tea.KeyMsg{Type: tea.KeyDown}
 	m.handleKey(down)
 	m.handleKey(down)
-	if m.sbCursor != 3 || m.selected != 0 { // row 0 is the chat, agent i is row i+1
+	if m.sbCursor != 4 || m.selected != 0 { // row 0 is + channel, 1 this channel, agent i is row i+2
 		t.Fatalf("cursor %d selected %d", m.sbCursor, m.selected)
 	}
 	// the cursor is a row background (a visible marker here), never an arrow
@@ -1541,7 +1541,7 @@ func TestChannelItemAndBind(t *testing.T) {
 	}
 }
 
-func TestChannelsPickerSkipsEmptyChannels(t *testing.T) {
+func TestChannelsPickerListsEveryChannel(t *testing.T) {
 	m := channelModel()
 	m.channelID = "cur"
 	m.onChannels(channelsMsg{channels: []protocol.ChannelInfo{
@@ -1556,8 +1556,8 @@ func TestChannelsPickerSkipsEmptyChannels(t *testing.T) {
 	for _, it := range m.ov.items {
 		ids = append(ids, it.id)
 	}
-	if strings.Join(ids, " ") != "cur old" {
-		t.Fatalf("picker rows %v: the untouched channel should be left out, the current one kept", ids)
+	if strings.Join(ids, " ") != "cur empty old" {
+		t.Fatalf("picker rows %v: every channel is listed, a named one even before its first prompt", ids)
 	}
 }
 
@@ -2212,7 +2212,7 @@ func TestSidebarNav(t *testing.T) {
 		// n jumps to the next agent needing you and selects it; again wraps
 		m.setFocus(focusSidebar)
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-		if m.sbCursor != 2 || m.selectedID() != "b" || m.focus != focusSidebar {
+		if m.sbCursor != 3 || m.selectedID() != "b" || m.focus != focusSidebar {
 			t.Fatalf("n: cursor=%d selected=%s focus=%v", m.sbCursor, m.selectedID(), m.focus)
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
@@ -2238,10 +2238,10 @@ func TestSidebarNav(t *testing.T) {
 		// a click on a tree row selects that agent (rows start after the header)
 		m.setFocus(focusInput)
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 3, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 3, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 4, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 4, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
-		if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 3 {
+		if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 4 {
 			t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
 		}
 	})
@@ -2263,31 +2263,53 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if len(body) != na+3 || !strings.HasPrefix(plain[0], "  # proj ") || items[0] != 0 || items[na+1] != na+1 || items[na+2] != na+2 ||
-			!strings.HasPrefix(plain[na+1], "  # proj-2") || !strings.HasSuffix(plain[na+1], "● 2h00m") || !strings.HasPrefix(plain[na+2], "  # docs") || !strings.HasSuffix(plain[na+2], "○ 26h00m") {
+		if len(body) != na+4 || !strings.HasPrefix(plain[0], "  + channel") || !strings.HasPrefix(plain[1], "  # proj ") || items[0] != 0 || items[1] != 1 || items[na+2] != na+2 || items[na+3] != na+3 ||
+			!strings.HasPrefix(plain[na+2], "  # proj-2") || !strings.HasSuffix(plain[na+2], "● 2h00m") || !strings.HasPrefix(plain[na+3], "  # docs") || !strings.HasSuffix(plain[na+3], "○ 26h00m") {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}
-		for _, r := range plain[na+1:] {
+		for _, r := range plain[na+2:] {
 			if w := ansi.StringWidth(r); w != sidebarWidth-1 {
 				t.Fatalf("channel rows fill the width: %d %q", w, r)
 			}
 		}
-		for m.sbCursor != na+2 {
+		for m.sbCursor != na+3 {
 			press(&m, tea.KeyMsg{Type: tea.KeyDown})
 		}
 		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "opening #docs") {
 			t.Fatalf("space on a channel should open it: cmd=%v status=%q", cmd != nil, m.status)
 		}
-		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to this channel's row
+		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the + channel row
 		if m.sbCursor != 0 {
 			t.Fatalf("wrap: %d", m.sbCursor)
 		}
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
 		if !strings.Contains(m.status, "opening #proj-2") {
 			t.Fatalf("a click on a channel should open it: %q", m.status)
+		}
+	})
+	t.Run("+ channel creates one", func(t *testing.T) {
+		m := sidebarNavModel()
+		m.prompts = nil
+		// + channel sits above this channel's row, where the sidebar lands;
+		// once this channel has an exchange, space on it creates another
+		m.transcript(m.selectedID()).Apply(mk(1, m.selectedID(), event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}))
+		m.superChat = true // on the channel chat, the sidebar lands on this channel's row
+		m.setFocus(focusSidebar)
+		if m.sbCursor != 1 {
+			t.Fatalf("the sidebar lands on this channel's row: %d", m.sbCursor)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyUp})
+		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); m.sbCursor != 0 || cmd == nil || !strings.Contains(m.status, "creating a channel") {
+			t.Fatalf("space on + channel: cursor=%d cmd=%v status=%q", m.sbCursor, cmd != nil, m.status)
+		}
+		// a channel with no exchange yet is already the new one
+		e := newModel(context.Background(), nil, "s")
+		e.newChannel()
+		if !strings.Contains(e.status, "still empty") {
+			t.Fatalf("an empty channel should stay: %q", e.status)
 		}
 	})
 	t.Run("a selected agent's prompts come first", func(t *testing.T) {

@@ -533,7 +533,7 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 		return m.onChannelsListed(msg)
 	case switchedMsg:
 		if msg.err != nil {
-			return m.setStatus("resume: "+msg.err.Error(), true)
+			return m.setStatus("channel: "+msg.err.Error(), true)
 		}
 		return m.bindChannel(cleanChannel(msg.info))
 	case modelsMsg:
@@ -887,9 +887,9 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	case focusQuestions:
 		m.q.bind(m.currentQuestion())
 	case focusSidebar:
-		m.sbCursor = 0 // the chat row
+		m.sbCursor = 1 // this channel's row (row 0 is + channel)
 		if !m.superChat {
-			m.sbCursor = m.selected + 1
+			m.sbCursor = m.selected + 2
 		}
 	case focusAsync, focusDue, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0
@@ -2955,8 +2955,8 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.Select):
 		return m.sidebarSelect(m.sbCursor)
 	case msg.String() == "n": // the next agent that needs you, selected at once
-		if i := m.nextNeedy(m.sbCursor - 1); i >= 0 {
-			m.sbCursor = i + 1
+		if i := m.nextNeedy(m.sbCursor - 2); i >= 0 {
+			m.sbCursor = i + 2
 			m.openAgent(i)
 		} else {
 			return m.setStatus("no agent is waiting on you", false)
@@ -2979,35 +2979,48 @@ func (m *Model) nextNeedy(from int) int {
 	return -1
 }
 
-// sidebarItems is how many rows the sidebar cursor can rest on: this
-// channel, its agents and the directory's other channels. The cursor counts
-// them in that order: 0 is this channel, agent i is i+1, other channel k is
-// len(agents)+1+k.
+// sidebarItems is how many rows the sidebar cursor can rest on: + channel,
+// this channel, its agents and the directory's other channels. The cursor
+// counts them in that order: 0 is + channel, 1 this channel, agent i is i+2,
+// other channel k is len(agents)+2+k.
 func (m *Model) sidebarItems() int {
-	return len(m.agents) + 1 + len(m.navChannels)
+	return len(m.agents) + 2 + len(m.navChannels)
 }
 
-// sidebarSelect acts on the item under the cursor: this channel's row shows
-// its chat and an agent row that agent's own chat (both focus the input);
-// another channel's row opens that channel in place of this one.
+// sidebarSelect acts on the item under the cursor: + channel creates a
+// channel in this directory and opens it; this channel's row shows its chat
+// and an agent row that agent's own chat (both focus the input); another
+// channel's row opens that channel in place of this one.
 func (m *Model) sidebarSelect(i int) tea.Cmd {
 	na := len(m.agents)
 	switch {
 	case i == 0:
+		return m.newChannel()
+	case i == 1:
 		return tea.Batch(m.openChat(), m.setFocus(focusInput))
-	case i <= na:
-		m.openAgent(i - 1)
+	case i <= na+1:
+		m.openAgent(i - 2)
 		return m.setFocus(focusInput)
-	case i-na-1 < len(m.navChannels):
-		s := m.navChannels[i-na-1]
+	case i-na-2 < len(m.navChannels):
+		s := m.navChannels[i-na-2]
 		return tea.Batch(m.setStatus("opening #"+s.Name, false), switchChannelCmd(m.ctx, m.c, m.channelID, s.ID))
 	}
 	return nil
 }
 
+// newChannel is + channel: a new channel in this directory, opened in place
+// of this one. A channel with no exchange yet is already the new one, so it
+// is not left behind empty.
+func (m *Model) newChannel() tea.Cmd {
+	if m.isHome() {
+		return m.setStatus("this channel is still empty: it is the new one", false)
+	}
+	return tea.Batch(m.setStatus("creating a channel", false), newChannelCmd(m.ctx, m.c, m.channelID, m.channel.Dir))
+}
+
 // sidebarClick focuses the sidebar and acts on the row under the pointer
 // like space: the chat row or an agent row opens that chat (the sidebar
-// keeps focus), another channel's row opens that channel.
+// keeps focus), + channel or another channel's row acts like space.
 func (m *Model) sidebarClick(y int) tea.Cmd {
 	cmd := m.setFocus(focusSidebar)
 	_, items := m.sidebarBody(sidebarWidth - 1)
@@ -3018,10 +3031,10 @@ func (m *Model) sidebarClick(y int) tea.Cmd {
 	i := items[row]
 	m.sbCursor = i
 	switch {
-	case i == 0:
+	case i == 1:
 		return tea.Batch(cmd, m.openChat())
-	case i <= len(m.agents):
-		m.openAgent(i - 1)
+	case i >= 2 && i <= len(m.agents)+1:
+		m.openAgent(i - 2)
 		return cmd
 	}
 	return tea.Batch(cmd, m.sidebarSelect(i))
@@ -3725,9 +3738,6 @@ func (m *Model) onChannels(msg channelsMsg) tea.Cmd {
 	o := newOverlay(ovChannels, overlayList, "Channels in "+format.ShortHome(m.channel.Dir))
 	items := make([]overlayItem, 0, len(msg.channels))
 	for _, s := range msg.channels {
-		if s.Title == "" && s.ID != m.channelID {
-			continue // never prompted: nothing to resume
-		}
 		items = append(items, channelItem(s, s.ID == m.channelID))
 	}
 	if len(items) == 0 {

@@ -537,28 +537,33 @@ func (m Model) sidebarHeader(width int) []string {
 	}
 }
 
-// sidebarBody is everything under the header: this channel's row (its
-// chat), its agent tree, then the directory's other channels, a row each
-// with its state and age. items maps each row to its cursor index (this
-// channel 0, the agents 1…, then the other channels), -1 for rows the cursor
-// skips.
+// sidebarBody is everything under the header: the + channel row, this
+// channel's row (its chat), its agent tree, then the directory's other
+// channels, a row each with its state and age. items maps each row to its
+// cursor index (+ channel 0, this channel 1, the agents 2…, then the other
+// channels), -1 for rows the cursor skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	focused := m.focus == focusSidebar && m.sidebarVisible()
+	add := "  " + theme.StyleDim.Render("+ channel") + strings.Repeat(" ", max(0, width-11))
+	if focused && m.sbCursor == 0 {
+		add = render.Highlight(add, width)
+	}
+	rows, items = append(rows, add), append(items, 0)
 	label := format.Trunc(channelLabel(m.channel), width-3)
 	chat := theme.StyleDim.Render(label)
 	if m.superChat {
 		chat = theme.StyleSelected.Render(label)
 	}
 	chat = "  " + chat + strings.Repeat(" ", max(0, width-2-ansi.StringWidth(label)))
-	if focused && m.sbCursor == 0 {
+	if focused && m.sbCursor == 1 {
 		chat = render.Highlight(chat, width)
 	}
-	rows, items = append(rows, chat), append(items, 0)
+	rows, items = append(rows, chat), append(items, 1)
 	tree := m.treeRows(width)
 	rows = append(rows, tree...)
 	for i := range tree {
 		if i < len(m.agents) {
-			items = append(items, i+1)
+			items = append(items, i+2)
 		} else {
 			items = append(items, -1) // the "(no agents)" row
 		}
@@ -576,10 +581,10 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		gap := max(1, width-4-ansi.StringWidth(name)-ansi.StringWidth(age))
 		row := "  " + theme.StyleDim.Render(name) + strings.Repeat(" ", gap) + stateDot(string(s.State)) + " " + theme.StyleDim.Render(age)
-		if focused && m.sbCursor == na+1+k {
+		if focused && m.sbCursor == na+2+k {
 			row = render.Highlight(row, width)
 		}
-		rows, items = append(rows, row), append(items, na+1+k)
+		rows, items = append(rows, row), append(items, na+2+k)
 	}
 	return rows, items
 }
@@ -699,7 +704,7 @@ func (m Model) treeRows(width int) []string {
 			gap = 0
 		}
 		row := indent + dot + " " + text + strings.Repeat(" ", gap) + right
-		if focused && i+1 == m.sbCursor {
+		if focused && i+2 == m.sbCursor {
 			row = render.Highlight(row, width)
 		}
 		rows = append(rows, row)
