@@ -591,11 +591,12 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		rows, items = append(rows, text), append(items, idx)
 	}
-	// "  ● #name        ⚙": the channel's state dot, its name, and its gear at
-	// the right edge (→ on the row or a click on it: the channel's dirs)
+	// "● #name          ⚙", flush with the "channels" title: the channel's
+	// state dot, its name, and its gear at the right edge (→ on the row or a
+	// click on it: the channel's dirs)
 	channel := func(dot, name string, style lipgloss.Style, idx int) {
-		name = format.Trunc(name, width-7)
-		line("  "+dot+" "+style.Render(name)+strings.Repeat(" ", max(1, width-5-ansi.StringWidth(name)))+theme.StyleDim.Render(channelGear), idx)
+		name = format.Trunc(name, width-5)
+		line(dot+" "+style.Render(name)+strings.Repeat(" ", max(1, width-3-ansi.StringWidth(name)))+theme.StyleDim.Render(channelGear), idx)
 	}
 	other := func(s protocol.ChannelInfo, idx int) {
 		dot := stateDot(string(s.State))
@@ -604,7 +605,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		channel(dot, channelLabel(s), theme.StyleDim, idx)
 	}
-	line("  "+theme.StyleDim.Render("+ channel")+strings.Repeat(" ", max(0, width-11)), 0)
+	line(theme.StyleDim.Render("+ channel")+strings.Repeat(" ", max(0, width-9)), 0)
 	here, na := m.channelRow(), len(m.agents)
 	for k := 0; k < here-1; k++ {
 		other(m.navChannels[k], 1+k)
@@ -699,7 +700,7 @@ func (m Model) treeRows(width int) []string {
 	rows := make([]string, 0, len(m.agents))
 	focused := m.focus == focusSidebar && m.sidebarVisible()
 	for i, a := range m.agents {
-		indent := "    " + strings.Repeat("  ", a.Depth) // one level under this channel's "#name" row
+		indent := "  " + strings.Repeat("  ", a.Depth) // one level under this channel's "#name" row
 		dot := agentDot(a)
 		if b := m.needsHuman(a.ID); b != "" {
 			dot = theme.StyleWarn.Render(b) // waiting on the human: the mark takes the dot's place
