@@ -467,8 +467,11 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 		bs := blockStyle(l.Block)
 		style = markdownStyle(bs)
 		// User prompts and steers read like a shell: "› text" on the first
-		// line, later lines indented to align under it.
+		// line, later lines indented to align under it. Only the glyph (and
+		// the @user it leads with, see whoColours) takes the colour; the text
+		// reads as plain text.
 		if l.Kind == transcript.LineText && (l.Block == transcript.BlockUser || l.Block == transcript.BlockSteer) {
+			style = markdownStyle(lipgloss.NewStyle())
 			if l.Lead {
 				glyph = bs.Render("›") + " "
 			} else {
