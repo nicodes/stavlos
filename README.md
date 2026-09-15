@@ -102,7 +102,7 @@ The role decides what `/roles`, `/models` and `/variants` offer, and the daemon 
 
 Auto mode still asks before fetching from a host that is not listed, since a fetch sends a request off the machine, and before a search while no backend is configured; yolo asks for neither. Everything fetched is handed to the model as untrusted data.
 
-**Plan.** One `todo` tool keeps a per-agent list (a call adds steps, updates others by id, or both, and returns the list) that is logged, projected into the system prompt at every call (so it survives compaction) and shown to you in the todo tab.
+**Plan.** One `todo` tool keeps a per-agent list (a call adds steps, each free to start at any status, updates others by id, or both, and returns the list, so planning the work and starting its first step is one call) that is logged, projected into the system prompt at every call (so it survives compaction) and shown to you in the todo tab.
 
 **Work in directories.** A channel has one set of working directories, shared by every agent: the channel directory, the directories listed under `"dirs"` in `stavlos.json` (yours for every channel, a trusted project's for its channels, any path such as `/tmp`; only those files change them), plus whatever you add. Roles and `agent_create` grant none. A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
 
