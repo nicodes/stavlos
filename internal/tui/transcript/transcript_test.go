@@ -403,12 +403,34 @@ func TestOnlyHumanInputIsBlue(t *testing.T) {
 				texts = append(texts, l.Text)
 			}
 		}
-		if strings.Join(texts, "|") != "**Prompt from main**|look at the parser" || lines[1].Glyph != GlyphChild {
+		if strings.Join(texts, "|") != "**Prompt from main**|look at the parser" || lines[1].Glyph != GlyphAsk {
 			t.Fatalf("%s from an agent: %+v", kind, lines)
 		}
 	}
 	human := mk(event.UserMessagePayload{Kind: event.MsgSteer, Text: "and the tests"})
 	if human[1].Block != BlockUser || !human[1].Lead {
 		t.Fatalf("the human's input stays the blue user block: %+v", human)
+	}
+}
+
+// TestMessageArrows: a message call reads as the arrow of what it is, ›
+// for a prompt and ‹ for a response; other tools keep their glyph.
+func TestMessageArrows(t *testing.T) {
+	for _, c := range []struct {
+		line Line
+		want string
+	}{
+		{Line{Kind: LineTool, Tool: "message", Text: "Prompt  to scout"}, GlyphAsk},
+		{Line{Kind: LineTool, Tool: "message", Text: "Response  to main"}, GlyphReply},
+		{Line{Kind: LineTool, Tool: "message", Text: "Response  to you"}, GlyphReply},
+		{Line{Kind: LineTool, Tool: "shell", Text: "Shell  ls"}, GlyphToolShell},
+	} {
+		if g, _ := CallGlyph(c.line); g != c.want {
+			t.Errorf("%q: glyph %q, want %q", c.line.Text, g, c.want)
+		}
+	}
+	resp := EventLines(event.Event{Type: event.UserMessage, Time: time.Now(), Payload: event.MustPayload(event.UserMessagePayload{Kind: event.MsgAgentResponse, Text: "done", From: "scout"})})
+	if resp[1].Glyph != GlyphReply {
+		t.Fatalf("a response from an agent reads ‹: %+v", resp)
 	}
 }

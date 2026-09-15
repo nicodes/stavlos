@@ -541,7 +541,7 @@ func markdownStyle(base lipgloss.Style) func(...string) string {
 // toolLineGlyph is a tool call's glyph in the colour of its state, and the
 // gap after it.
 func toolLineGlyph(l transcript.Line) string {
-	g, gap := transcript.ToolGlyph(l.Tool)
+	g, gap := transcript.CallGlyph(l)
 	switch {
 	case l.Running || l.Tone == transcript.ToneWorking:
 		return theme.StyleWorking.Render(g) + gap // in progress: the glyph, yellow
