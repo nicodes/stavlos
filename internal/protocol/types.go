@@ -27,6 +27,7 @@ const (
 	MSessionArchive  = "session.archive"
 	MSessionSetModel = "session.set_model"
 	MSessionSetMode  = "session.set_mode" // permission mode: ask | auto | yolo
+	MSessionPost     = "session.post"     // the human\'s message in the session chat, delivered by @mention
 
 	MAgentTree       = "agent.tree"
 	MAgentSend       = "agent.send" // Prompt / Steer / Cancel / Kill
@@ -276,6 +277,18 @@ type SessionSetModelParams struct {
 type SessionSetModeParams struct {
 	ID   string `json:"id"`
 	Mode string `json:"mode"` // ask | auto | yolo
+}
+
+// SessionPostParams is a message to the session chat: it reaches every
+// agent it @mentions as a steer, or the root agent when it mentions none.
+type SessionPostParams struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+}
+
+// SessionPostResult names the agents the message was delivered to.
+type SessionPostResult struct {
+	To []string `json:"to"`
 }
 
 // Permission modes.

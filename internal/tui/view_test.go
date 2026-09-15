@@ -382,7 +382,7 @@ func TestSidebarFocusAndSelect(t *testing.T) {
 	down := tea.KeyMsg{Type: tea.KeyDown}
 	m.handleKey(down)
 	m.handleKey(down)
-	if m.sbCursor != 2 || m.selected != 0 {
+	if m.sbCursor != 3 || m.selected != 0 { // row 0 is the chat, agent i is row i+1
 		t.Fatalf("cursor %d selected %d", m.sbCursor, m.selected)
 	}
 	// the cursor is a row background (a visible marker here), never an arrow
@@ -2216,7 +2216,7 @@ func TestSidebarNav(t *testing.T) {
 		// n jumps to the next agent needing you and selects it; again wraps
 		m.setFocus(focusSidebar)
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-		if m.sbCursor != 1 || m.selectedID() != "b" || m.focus != focusSidebar {
+		if m.sbCursor != 2 || m.selectedID() != "b" || m.focus != focusSidebar {
 			t.Fatalf("n: cursor=%d selected=%s focus=%v", m.sbCursor, m.selectedID(), m.focus)
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
@@ -2242,10 +2242,10 @@ func TestSidebarNav(t *testing.T) {
 		// a click on a tree row selects that agent (rows start after the header)
 		m.setFocus(focusInput)
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 3, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 3, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
-		if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 2 {
+		if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 3 {
 			t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
 		}
 	})
@@ -2261,10 +2261,10 @@ func TestSidebarNav(t *testing.T) {
 		}
 		m.setFocus(focusSidebar)
 		body, items := m.sidebarBody(sidebarWidth - 1)
-		if len(body) != len(m.agents)+2 || items[len(m.agents)+1] != len(m.agents) || !strings.HasPrefix(stripANSI(body[len(m.agents)+1]), "sessions 2 ▸") {
+		if len(body) != len(m.agents)+3 || !strings.HasPrefix(stripANSI(body[0]), "  # chat") || items[0] != 0 || items[len(m.agents)+2] != len(m.agents)+1 || !strings.HasPrefix(stripANSI(body[len(m.agents)+2]), "sessions 2 ▸") {
 			t.Fatalf("folded sessions section:\n%s\n%v", strings.Join(body, "\n"), items)
 		}
-		for m.sbCursor != len(m.agents) {
+		for m.sbCursor != len(m.agents)+1 {
 			press(&m, tea.KeyMsg{Type: tea.KeyDown})
 		}
 		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd != nil || !m.navSessionsOpen || m.focus != focusSidebar {
@@ -2276,28 +2276,28 @@ func TestSidebarNav(t *testing.T) {
 			plainBody[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if len(body) != na+4 || !strings.HasPrefix(plainBody[na+1], "sessions ▾") || !strings.HasPrefix(plainBody[na+2], "  ● fix the login bug") || strings.Contains(plainBody[na+2], "\n") || !strings.HasSuffix(plainBody[na+2], "2h00m") || !strings.HasPrefix(plainBody[na+3], "  ○ docs sweep") || !strings.HasSuffix(plainBody[na+3], "26h00m") || items[na+3] != na+2 {
+		if len(body) != na+5 || !strings.HasPrefix(plainBody[na+2], "sessions ▾") || !strings.HasPrefix(plainBody[na+3], "  ● fix the login bug") || strings.Contains(plainBody[na+3], "\n") || !strings.HasSuffix(plainBody[na+3], "2h00m") || !strings.HasPrefix(plainBody[na+4], "  ○ docs sweep") || !strings.HasSuffix(plainBody[na+4], "26h00m") || items[na+4] != na+3 {
 			t.Fatalf("open sessions section:\n%s\n%v", strings.Join(plainBody, "\n"), items)
 		}
-		for _, r := range plainBody[na+2:] {
+		for _, r := range plainBody[na+3:] {
 			if w := ansi.StringWidth(r); w != sidebarWidth-1 {
 				t.Fatalf("session rows fill the width: %d %q", w, r)
 			}
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown})
-		if m.sbCursor != na+2 {
+		if m.sbCursor != na+3 {
 			t.Fatalf("cursor should walk into the sessions: %d", m.sbCursor)
 		}
 		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "resuming docs sweep") {
 			t.Fatalf("space on a session should resume it: cmd=%v status=%q", cmd != nil, m.status)
 		}
-		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the first agent
+		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the chat row
 		if m.sbCursor != 0 {
 			t.Fatalf("wrap: %d", m.sbCursor)
 		}
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
 		if m.navSessionsOpen {
 			t.Fatal("a click on the heading should fold the section")

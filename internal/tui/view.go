@@ -534,22 +534,32 @@ func (m Model) sidebarHeader(width int) []string {
 	}
 }
 
-// sidebarBody is everything under the header: the agent tree, a blank,
+// sidebarBody is everything under the header: the chat row, the agent tree, a blank,
 // the sessions heading ("sessions 3 ▸" folded, "sessions ▾" open) and,
 // open, one row per other session of this directory. items maps each row
-// to its cursor index (agents first, then the heading, then the
+// to its cursor index (the chat, the agents, the heading, then the
 // sessions), -1 for rows the cursor skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
+	focused := m.focus == focusSidebar && m.sidebarVisible()
+	// The session chat comes first, a row like an agent's.
+	chat := theme.StyleDim.Render("# chat")
+	if m.superChat {
+		chat = theme.StyleSelected.Render("# chat")
+	}
+	chat = "  " + chat + strings.Repeat(" ", max(0, width-8))
+	if focused && m.sbCursor == 0 {
+		chat = render.Highlight(chat, width)
+	}
+	rows, items = append(rows, chat), append(items, 0)
 	tree := m.treeRows(width)
 	rows = append(rows, tree...)
 	for i := range tree {
 		if i < len(m.agents) {
-			items = append(items, i)
+			items = append(items, i+1)
 		} else {
 			items = append(items, -1) // the "(no agents)" row
 		}
 	}
-	focused := m.focus == focusSidebar && m.sidebarVisible()
 	na := len(m.agents)
 	rows, items = append(rows, ""), append(items, -1)
 	head := "sessions"
@@ -564,10 +574,10 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	// The heading sits at the left edge like "agents"; the cursor on it is
 	// the row background, as everywhere in the sidebar.
 	headRow := theme.StyleBold.Render(head)
-	if focused && m.sbCursor == na {
+	if focused && m.sbCursor == na+1 {
 		headRow = render.Highlight(headRow, width)
 	}
-	rows, items = append(rows, headRow), append(items, na)
+	rows, items = append(rows, headRow), append(items, na+1)
 	if !m.navSessionsOpen {
 		return rows, items
 	}
@@ -592,11 +602,11 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 			gap = 1
 		}
 		row := "  " + stateDot(string(s.State)) + " " + theme.StyleDim.Render(title) + strings.Repeat(" ", gap) + theme.StyleDim.Render(age)
-		if focused && m.sbCursor == na+1+k {
+		if focused && m.sbCursor == na+2+k {
 			row = render.Highlight(row, width)
 		}
 		rows = append(rows, row)
-		items = append(items, na+1+k)
+		items = append(items, na+2+k)
 	}
 	return rows, items
 }
@@ -702,7 +712,7 @@ func (m Model) treeRows(width int) []string {
 			tint = r.Color
 		}
 		switch {
-		case i == m.selected:
+		case i == m.selected && !m.superChat:
 			text = roleStyle(tint).Inherit(theme.StyleSelected).Render(text)
 		case tint != "":
 			text = roleStyle(tint).Render(text)
@@ -717,7 +727,7 @@ func (m Model) treeRows(width int) []string {
 			gap = 0
 		}
 		row := indent + dot + " " + text + strings.Repeat(" ", gap) + right
-		if focused && i == m.sbCursor {
+		if focused && i+1 == m.sbCursor {
 			row = render.Highlight(row, width)
 		}
 		rows = append(rows, row)
@@ -1508,6 +1518,9 @@ func (m Model) sidebarFocusHint() string {
 func (m Model) paletteViewFor(width int) string {
 	if m.focus != focusInput {
 		return ""
+	}
+	if mm := m.mentionMatches(); len(mm) > 0 {
+		return mentionView(mm, m.palIdx, width)
 	}
 	pm := paletteMatches(m.input.Value())
 	if len(pm) == 0 {

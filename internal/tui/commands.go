@@ -129,6 +129,15 @@ func sendCmd(ctx context.Context, c *client.Client, agent string, kind protocol.
 	return resultCmd(ctx, ok, func(ctx context.Context) error { return c.Send(ctx, agent, kind, text) })
 }
 
+// postCmd sends the human's message to the session chat; the daemon
+// delivers it by @mention and refuses a mention that names no agent.
+func postCmd(ctx context.Context, c *client.Client, session, text string) tea.Cmd {
+	return resultCmd(ctx, "", func(ctx context.Context) error {
+		_, err := c.Post(ctx, session, text)
+		return err
+	})
+}
+
 // replyCmd claims prompt id and then replies to it. Claiming happens only
 // here, once the human acted (PRD §7.4).
 func replyCmd(ctx context.Context, c *client.Client, id string, reply func(ctx context.Context, c *client.Client) error) tea.Cmd {
