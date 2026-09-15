@@ -29,36 +29,39 @@ func CachePath() string { return filepath.Join(paths.CacheDir(), "models.json") 
 // fresh cache, else a stale cache, else the network, else the embedded
 // copy. stale reports that the caller should Refresh in the background (a
 // stale cache or the embedded fallback was returned). An error is returned
-// only if nothing parses.
-func Load(ctx context.Context) (c *Catalog, stale bool, err error) {
+// only if nothing parses. keep names the providers to keep (Parse).
+func Load(ctx context.Context, keep ...string) (c *Catalog, stale bool, err error) {
 	path := CachePath()
 	if data, fresh := readCache(path); data != nil {
-		if c, err := Parse(data); err == nil {
+		if c, err := Parse(data, keep...); err == nil {
 			return c, !fresh, nil
 		}
 	}
-	c, fetchErr := Refresh(ctx)
+	c, fetchErr := Refresh(ctx, keep...)
 	if fetchErr == nil {
 		return c, false, nil
 	}
-	c, err = Parse(fallbackJSON)
+	c, err = Parse(fallbackJSON, keep...)
 	if err != nil {
 		return nil, false, errors.Join(fmt.Errorf("modelsdev: fetch: %w", fetchErr), err)
 	}
 	return c, true, nil
 }
 
-// Refresh fetches the database, parses it and caches it.
-func Refresh(ctx context.Context) (*Catalog, error) {
+// Refresh fetches the database, parses the providers in keep and caches
+// only what it kept, so the next start reads kilobytes, not megabytes.
+func Refresh(ctx context.Context, keep ...string) (*Catalog, error) {
 	data, err := fetch(ctx)
 	if err != nil {
 		return nil, err
 	}
-	c, err := Parse(data)
+	c, err := Parse(data, keep...)
 	if err != nil {
 		return nil, err
 	}
-	writeCache(CachePath(), data) // best effort
+	if b, err := c.encode(); err == nil {
+		writeCache(CachePath(), b) // best effort
+	}
 	return c, nil
 }
 

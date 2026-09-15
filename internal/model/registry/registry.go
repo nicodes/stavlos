@@ -83,6 +83,15 @@ var subscriptions = []subscription{
 	},
 }
 
+// subscriptionIDs are the providers the catalog is kept for.
+func subscriptionIDs() []string {
+	ids := make([]string, len(subscriptions))
+	for i, s := range subscriptions {
+		ids[i] = s.id
+	}
+	return ids
+}
+
 func subscriptionByID(id string) (subscription, bool) {
 	for _, s := range subscriptions {
 		if s.id == id {
@@ -158,14 +167,14 @@ func (r *Registry) Store() *auth.Store { return r.store }
 // A stale catalog (an old cache, or the embedded copy) is used at once and
 // refreshed in the background, so startup never waits on the network.
 func Default(ctx context.Context, store *auth.Store) (*Registry, error) {
-	cat, stale, err := modelsdev.Load(ctx)
+	cat, stale, err := modelsdev.Load(ctx, subscriptionIDs()...)
 	if err != nil {
 		return nil, err
 	}
 	r := New(cat).WithStore(store)
 	if stale {
 		go func() {
-			if c, err := modelsdev.Refresh(context.WithoutCancel(ctx)); err == nil {
+			if c, err := modelsdev.Refresh(context.WithoutCancel(ctx), subscriptionIDs()...); err == nil {
 				r.SetCatalog(c)
 			}
 		}()
