@@ -669,6 +669,11 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	case p.Denied:
 		l.Suffix = "(denied)"
 	}
+	// A message delivered as the answer to an agent waiting on this one is
+	// its response, which only the result can tell.
+	if name, ok := strings.CutPrefix(p.Output, "answer delivered to "); ok && toolname.Canonical(p.Name) == toolname.Message && !p.IsError {
+		l.Text = "Response  to " + name
+	}
 	// A new message to an agent waits for its answer: yellow until the
 	// answer lands (see answered), like a shell call and its job.
 	if name, ok := messagedAgent(p); ok {
@@ -927,14 +932,14 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		switch p.Kind {
 		case event.MsgPrompt, "", event.MsgSteer: // a steer reads exactly like a prompt
 			if p.From != "" {
-				return incoming("Message from "+p.From, p.Text)
+				return incoming("Prompt from "+p.From, p.Text)
 			}
 			return block(BlockUser, "", p.Text) // the human's own input: blue ›
 		case event.MsgAgentResponse:
 			if p.From != "" {
-				return incoming("Answer from "+p.From, p.Text)
+				return incoming("Response from "+p.From, p.Text)
 			}
-			return incoming("Answer", p.Text)
+			return incoming("Response", p.Text)
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case event.MsgMonitorFired:
@@ -1217,10 +1222,11 @@ func blockWith(kind BlockKind, label, text, glyph string) []Line {
 	return append(lines, Line{Kind: LineBlank})
 }
 
-// incoming is what another agent sent this one, a message or an answer: a
-// tool-like head ("⑂ Message from scout") over its text. Only the human's
+// incoming is what another agent sent this one, a prompt or a response: a
+// tool-like head ("⑂ Prompt from scout") over its text. Only the human's
 // own input is drawn blue, and the agent's own message calls read
-// "Message  → name", so incoming and outgoing never look alike.
+// "Prompt  to name" or "Response  to name", so incoming and outgoing never
+// look alike.
 func incoming(head, text string) []Line {
 	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: "**" + head + "**", Block: BlockChild, Glyph: GlyphChild}}
 	for _, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
@@ -1317,6 +1323,9 @@ func toolLine(name string, input json.RawMessage) string {
 	name = toolname.Canonical(name) // a direct caller (a prompt, a test) may hold an old name
 	title := ToolTitle(name)
 	arg := ToolArg(name, input)
+	if name == toolname.Message && arg == "to you" {
+		title = "Response" // what an agent sends the human is always its response
+	}
 	if arg == "" {
 		return title
 	}
@@ -1394,7 +1403,10 @@ func ToolArg(name string, raw json.RawMessage) string {
 		if to == "" {
 			to = str("id") // a log from before message replaced agent_message
 		}
-		return "→ " + to
+		if l := strings.ToLower(strings.TrimPrefix(to, "@")); l == "user" || l == "human" {
+			to = "you"
+		}
+		return "to " + to
 	}
 	return compactArgs(raw)
 }
@@ -1402,6 +1414,9 @@ func ToolArg(name string, raw json.RawMessage) string {
 // ToolTitle is the display name of a tool on its chat line: titleCase of
 // the name, with MCP tools read as "server · tool".
 func ToolTitle(name string) string {
+	if name == toolname.Message {
+		return "Prompt" // "Response" once it is delivered as an answer, or when it goes to the human
+	}
 	if strings.HasPrefix(name, toolname.MCPPrefix) {
 		// mcp__server__tool reads "server · tool"
 		if parts := strings.SplitN(strings.TrimPrefix(name, toolname.MCPPrefix), "__", 2); len(parts) == 2 {
