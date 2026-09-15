@@ -436,3 +436,32 @@ func TestMessageArrows(t *testing.T) {
 		t.Fatalf("a response from an agent reads ‹: %+v", resp)
 	}
 }
+
+// TestTurnStartMarksItems: the first item after a turn starts or ends is
+// marked, and nothing else.
+func TestTurnStartMarksItems(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.Apply(mk(2, event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "one"}))
+	tr.Apply(mk(3, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "notes"}}}))
+	tr.Apply(mk(4, event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}))
+	tr.Apply(mk(5, event.TurnStarted, event.TurnPayload{Turn: 2}))
+	tr.Apply(mk(6, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "two"}))
+	var marked []string
+	for _, l := range tr.All() {
+		if l.TurnStart {
+			for _, x := range tr.All() {
+				if x.Item == l.Item && x.Text != "" {
+					marked = append(marked, x.Text)
+					break
+				}
+			}
+		}
+	}
+	if strings.Join(marked, "|") != "one|two" {
+		t.Fatalf("turn starts: %q", marked)
+	}
+}

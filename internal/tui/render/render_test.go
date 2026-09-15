@@ -850,3 +850,22 @@ func TestFoldedToolCallIsOneRow(t *testing.T) {
 		t.Fatalf("folded call should be one row ending in +4:\n%s", strings.Join(rows, "\n"))
 	}
 }
+
+// TestTurnGapsSpaceOnlyTurns: in an agent's chat nothing inside a turn is
+// spaced, and one blank row separates turns.
+func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
+	tr := transcript.NewTranscript()
+	tr.Apply(mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "list files"}))
+	tr.Apply(mk(3, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}))
+	tr.Apply(mk(4, "a", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a.go"}))
+	tr.Apply(mk(5, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "one file"}}}))
+	tr.Apply(mk(6, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}))
+	tr.Apply(mk(7, "a", event.TurnStarted, event.TurnPayload{Turn: 2}))
+	tr.Apply(mk(8, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "thanks"}))
+	got := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
+	want := "› list files\n$ Shell  ls\n  a.go\n§ one file\n\n› thanks"
+	if got != want {
+		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
+	}
+}

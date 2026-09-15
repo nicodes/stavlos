@@ -3222,6 +3222,7 @@ func (m *Model) refreshViewport() {
 		Active:   active,
 		Stats:    stats,
 		Expanded: m.expanded[m.viewID()],
+		TurnGaps: !m.superChat,
 		Cursor:   m.chatCursor,
 		Focused:  m.focus == focusChat,
 

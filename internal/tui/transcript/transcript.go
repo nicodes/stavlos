@@ -67,22 +67,23 @@ const (
 // wrapping) is applied later by Render so the builder stays a pure function
 // of events.
 type Line struct {
-	Kind    LineKind
-	Text    string
-	Block   BlockKind
-	Vis     Visibility
-	Running bool   // tool call still in progress (spinner glyph)
-	Err     bool   // tool call failed (red gear)
-	Suffix  string // dim trailer, e.g. "(cancelled)"
-	Item    int    // index of the item (event group) this line belongs to
-	Lead    bool   // first text line of a user/steer block: carries the "›" glyph
-	Glyph   string // leader glyph for this line (Render styles it by Tone)
-	Tone    Tone   // in progress / error; zero means "as is"
-	callID  string
-	Tool    string // raw tool name on a LineTool line
-	Note    bool   // the agent's own text, which reaches no one: drawn dimmed
-	Agent   string // in the session chat: the agent this line links to
-	Indent  int    // extra indent, two columns each (a chat reply's later lines, past its glyph)
+	Kind      LineKind
+	Text      string
+	Block     BlockKind
+	Vis       Visibility
+	Running   bool   // tool call still in progress (spinner glyph)
+	Err       bool   // tool call failed (red gear)
+	Suffix    string // dim trailer, e.g. "(cancelled)"
+	Item      int    // index of the item (event group) this line belongs to
+	Lead      bool   // first text line of a user/steer block: carries the "›" glyph
+	Glyph     string // leader glyph for this line (Render styles it by Tone)
+	Tone      Tone   // in progress / error; zero means "as is"
+	callID    string
+	Tool      string // raw tool name on a LineTool line
+	Note      bool   // the agent's own text, which reaches no one: drawn dimmed
+	Agent     string // in the session chat: the agent this line links to
+	Indent    int    // extra indent, two columns each (a chat reply's later lines, past its glyph)
+	TurnStart bool   // first line of the first item after a turn starts or ends: an agent\'s chat spaces turns apart there
 }
 
 // Tone colours a line's glyph by lifecycle: yellow while in progress, red
@@ -177,6 +178,7 @@ type Transcript struct {
 	turnTokens  int       // input + output tokens used so far this turn
 	turnVerb    string    // the indicator's verb for this turn ("Galloping")
 	compactItem int       // item of the running compaction's rule (replaced by the result), -1 when none
+	turnGap     bool      // a turn started or ended: the next item appended starts a new stretch (TurnStart)
 
 	chat  bool              // the session chat (chat.go), not one agent's transcript
 	names map[string]string // in the chat: agent id → name
@@ -248,6 +250,9 @@ func (t *Transcript) Apply(ev event.Event) {
 	t.answerGlyph(ev, lines)
 	t.appendItem(lines)
 	t.afterAppend(ev)
+	if ev.Type == event.TurnStarted || ev.Type == event.TurnEnded || ev.Type == event.TurnAborted {
+		t.turnGap = true // what follows starts a new stretch of the chat
+	}
 }
 
 // answerGlyph marks an answer, a default or a withdrawal with its prompt's
@@ -499,6 +504,9 @@ func (t *Transcript) appendItem(lines []Line) []lineRef {
 	for _, run := range splitThinking(lines) {
 		i := len(t.items)
 		run = slices.Clone(run) // each item owns its array: later inserts must not overwrite a neighbour
+		if t.turnGap {
+			run[0].TurnStart, t.turnGap = true, false
+		}
 		for j := range run {
 			run[j].Item = i
 			refs = append(refs, lineRef{i, j})
