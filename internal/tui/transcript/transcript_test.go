@@ -1,0 +1,600 @@
+package transcript
+
+import (
+	"encoding/json"
+	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/transcript/evtest"
+	"github.com/nicodes/stavlos/internal/tui/tuitest"
+	"strings"
+	"testing"
+	"time"
+)
+
+var mk = tuitest.Event
+
+// showThinkingForTest turns the (off by default) thinking display on for
+// one test.
+func showThinkingForTest(t *testing.T) {
+	t.Helper()
+	ShowThinking = true
+	t.Cleanup(func() { ShowThinking = false })
+}
+
+func TestToolLine(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{"shell", `{"command":"git status"}`, "Shell  git status"},
+		{"shell", `{"command":"ls\nfoo"}`, "Shell  ls foo"},
+		{"read", `{"path":"internal/agent/turn.go","offset":1}`, "Read  internal/agent/turn.go"},
+		{"shell", `{"command":"go test ./..."}`, "Shell  go test ./..."},
+		{"shell_kill", `{"id":"m1"}`, "Shell kill  m1"},
+		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
+		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look\naround"}`, "@scout look"},
+		{"message", `{"to":"scout","text":"go"}`, "@scout go"},
+		{"message", `{"to":"user","text":"done\nand more"}`, "@user done"},
+		{"agent_cancel", `{"id":"ag_1"}`, "Agent cancel  ag_1"},
+		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
+		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
+		{"shell", ``, "Shell"},
+	}
+	for _, c := range cases {
+		if got := toolLine(c.name, json.RawMessage(c.input)); got != c.want {
+			t.Errorf("toolLine(%s, %s) = %q, want %q", c.name, c.input, got, c.want)
+		}
+	}
+	long := toolLine("shell", json.RawMessage(`{"command":"`+strings.Repeat("x", 150)+`"}`))
+	if !strings.HasSuffix(long, "…") || len([]rune(long)) > len([]rune("Shell  "))+maxArgChars+1 {
+		t.Fatalf("args not truncated: %q", long)
+	}
+}
+
+func TestTranscriptItemsGroupEventLines(t *testing.T) {
+	tr := NewTranscript()
+	evtest.Apply(tr,
+		mk(1, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "a1", Role: "explorer", Name: "scout", Model: "m"}),
+		evtest.Input("c1", event.Input{Kind: event.InputRequest, Text: "look", From: "a1", FromName: "main"}), // the task: drawn with the spawn
+		evtest.Prompt("c1", "hello\nworld"),
+		evtest.Call("c1", "k1", "shell", `{"command":"ls"}`),
+		evtest.Done("c1", "k1", "shell", "a\nb\nc\nd\ne"),
+		mk(5, "c1", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "p/m", StopReason: "end_turn", Blocks: []model.Block{{Type: model.BlockText, Text: "Done."}}}),
+	)
+	if n := tr.Items(); n != 4 {
+		t.Fatalf("items: got %d, want 4 (spawn, user, tool, assistant)", n)
+	}
+	lines := tr.All()
+	kinds := func(item int) map[LineKind]int {
+		out := map[LineKind]int{}
+		for _, l := range lines {
+			if l.Item == item {
+				out[l.Kind]++
+			}
+		}
+		return out
+	}
+	if k := kinds(0); k[LineText] != 2 || k[LineDim] != 0 || k[LineLabel] != 0 || !strings.HasPrefix(lines[1].Text, "@main → @scout (explorer) · m") {
+		t.Fatalf("spawn item (the spawn over its task): %v %+v", k, lines[1])
+	}
+	if k := kinds(1); k[LineText] != 2 || k[LineBlank] != 2 {
+		t.Fatalf("user item: %v", k)
+	}
+	// The tool's output lines share the tool's item.
+	if k := kinds(2); k[LineTool] != 1 || k[LineToolOut] != 6 {
+		t.Fatalf("tool item: %v", k)
+	}
+	if k := kinds(3); k[LineText] != 1 || k[LineModel] != 0 || k[LineBlank] != 1 {
+		t.Fatalf("assistant item (no model trailer): %v", k)
+	}
+	if first, last := tr.ItemRange(2); first < 0 || lines[first].Kind != LineTool || lines[last].Kind != LineToolOut || last-first != 6 {
+		t.Fatalf("tool range: %d..%d", first, last)
+	}
+	if first, last := tr.ItemRange(9); first != -1 || last != -1 {
+		t.Fatalf("missing item range: %d..%d", first, last)
+	}
+	// Items are contiguous, in order, and never skip an index.
+	prev := -1
+	for _, l := range lines {
+		if l.Item < 0 || l.Item > prev+1 {
+			t.Fatalf("item %d after %d", l.Item, prev)
+		}
+		if l.Item > prev {
+			prev = l.Item
+		}
+	}
+
+	// The streaming buffer is the in-progress item after the committed ones.
+	tr.ApplyStream(protocol.StreamNotification{Agent: "c1", Turn: 2, Text: "more"})
+	if tr.Items() != 5 || tr.All()[len(tr.All())-1].Item != 4 {
+		t.Fatalf("stream item: items=%d", tr.Items())
+	}
+	// A notice is one item regardless of its line count.
+	tr.Apply(mk(7, "c1", event.TurnEnded, event.TurnEndedPayload{Turn: 2}))
+	tr.Notice("a", "b", "c")
+	if tr.Items() != 5 {
+		t.Fatalf("notice item: items=%d", tr.Items())
+	}
+}
+
+func TestThinkingIsItsOwnItem(t *testing.T) {
+	showThinkingForTest(t)
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	evtest.Apply(tr, evtest.Prompt("a", "hi"))
+	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "openai/gpt-5.4", Blocks: []model.Block{
+		{Type: model.BlockThinking, Text: "let me see"},
+		{Type: model.BlockText, Text: "here is the answer"},
+	}}))
+	lines := tr.All()
+	var thinkItem, textItem, userItem = -1, -1, -1
+	for _, l := range lines {
+		switch {
+		case l.Kind == LineThink:
+			thinkItem = l.Item
+		case l.Kind == LineText && strings.Contains(l.Text, "answer"):
+			textItem = l.Item
+		case l.Block == BlockUser && strings.Contains(l.Text, "hi"):
+			userItem = l.Item
+		}
+	}
+	if thinkItem < 0 || textItem < 0 || userItem < 0 {
+		t.Fatalf("missing lines: think=%d text=%d user=%d", thinkItem, textItem, userItem)
+	}
+	if !(userItem < thinkItem && thinkItem < textItem) {
+		t.Fatalf("items not separate/in order: user=%d think=%d text=%d", userItem, thinkItem, textItem)
+	}
+	if tr.Items() != 3 {
+		t.Fatalf("items %d", tr.Items())
+	}
+	// streaming: a thinking delta then text form two in-progress items
+	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 2, Thinking: "hmm"})
+	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 2, Text: "so far"})
+	all := tr.All()
+	last := all[len(all)-1]
+	prev := all[len(all)-2]
+	if prev.Kind != LineThink || last.Kind != LineStream || prev.Item == last.Item {
+		t.Fatalf("stream items: prev=%+v last=%+v", prev, last)
+	}
+}
+
+func TestAsyncJobJoinsItsCallLine(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	evtest.Apply(tr, evtest.Prompt("a", "run the tests"))
+	evtest.Apply(tr, evtest.Call("a", "c1", "shell", `{"command":"go test ./..."}`))
+	tr.Apply(mk(3, event.JobStarted, event.JobStartedPayload{ID: "m1", Command: "go test ./..."}))
+	tr.Apply(mk(4, event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "started job m1"}))
+	tr.Apply(mk(5, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "waiting"}}}))
+	lines := tr.All()
+	call := -1
+	for i, l := range lines {
+		if l.Kind == LineTool {
+			call = i
+		}
+		if strings.HasPrefix(l.Text, "job:") {
+			t.Fatalf("separate job line should not exist: %q", l.Text)
+		}
+	}
+	if call < 0 || lines[call].Tone != ToneWorking {
+		t.Fatalf("call line should be marked working: %+v", lines[call])
+	}
+	tr.Apply(mk(6, event.JobFinished, event.JobFinishedPayload{ID: "m1", Summary: "exited 1", Output: "FAIL", IsError: true, ExitCode: 1}))
+	lines = tr.All()
+	if lines[call].Tone != ToneError {
+		t.Fatalf("call line should be red after a failed job: %+v", lines[call])
+	}
+	first, last := tr.ItemRange(lines[call].Item)
+	joined := ""
+	for i := first; i <= last; i++ {
+		joined += lines[i].Text + "\n"
+	}
+	if !strings.Contains(joined, "exited 1") || !strings.Contains(joined, "FAIL") {
+		t.Fatalf("job outcome should nest under the call:\n%s", joined)
+	}
+	if strings.Contains(joined, "waiting") {
+		t.Fatalf("assistant text leaked into the call item:\n%s", joined)
+	}
+}
+
+func TestThinkingHiddenByDefault(t *testing.T) {
+	if ShowThinking {
+		t.Fatal("thinking should be hidden by default")
+	}
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, Thinking: "hmm"})
+	if !tr.Empty() {
+		t.Fatalf("a thinking delta should add nothing: %+v", tr.All())
+	}
+	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockThinking, Text: "let me see"}, {Type: model.BlockText, Text: "Hello"}}}))
+	sawText := false
+	for _, l := range tr.All() {
+		if l.Kind == LineThink || strings.Contains(l.Text, "let me see") {
+			t.Fatalf("thinking leaked into the chat: %+v", l)
+		}
+		if strings.Contains(l.Text, "Hello") {
+			sawText = true
+		}
+	}
+	if !sawText {
+		t.Fatalf("text should still show: %+v", tr.All())
+	}
+}
+
+func TestAgentCreateLineTracksChild(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`))
+	tr.Apply(mk(3, event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "agent_create", Output: "spawned scout (explorer) as x1"}))
+	line := func() Line {
+		for _, l := range tr.All() {
+			if l.Kind == LineTool && l.Tool == "agent_create" {
+				return l
+			}
+		}
+		t.Fatal("no agent_create line")
+		return Line{}
+	}
+	if line().Tone != ToneNone {
+		t.Fatalf("before the spawn: %v", line().Tone)
+	}
+	tr.ChildSpawned("x1")
+	if line().Tone != ToneWorking {
+		t.Fatalf("while the child runs the line should be working: %v", line().Tone)
+	}
+	// more lines after it do not lose the tie
+	evtest.Apply(tr, evtest.Call("a", "c2", "shell", `{"command":"ls"}`))
+	tr.Apply(mk(5, event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c2", Name: "shell", Output: "ok"}))
+	tr.ChildState("x1", "idle")
+	if line().Tone != ToneNone {
+		t.Fatalf("once the child idles the line should be grey: %v", line().Tone)
+	}
+	tr.ChildState("x1", "running")
+	if line().Tone != ToneWorking {
+		t.Fatalf("a follow-up turn makes it yellow again: %v", line().Tone)
+	}
+	tr.ChildState("x1", "idle")
+	// a second child that is killed turns its own line red; the first stays grey
+	evtest.Apply(tr, evtest.Call("a", "c3", "agent_create", `{"archetype":"tester","label":"checks","task":"test"}`))
+	tr.Apply(mk(7, event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c3", Name: "agent_create", Output: "spawned checks (tester) as x2"}))
+	tr.ChildSpawned("x2")
+	tr.ChildState("x2", "killed")
+	var tones []Tone
+	for _, l := range tr.All() {
+		if l.Kind == LineTool && l.Tool == "agent_create" {
+			tones = append(tones, l.Tone)
+		}
+	}
+	if len(tones) != 2 || tones[0] != ToneNone || tones[1] != ToneError {
+		t.Fatalf("tones %v", tones)
+	}
+}
+
+func TestMessageLineWaitsForTheAnswer(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	send := func(seq int64, callID, to, output string, isErr bool) {
+		evtest.Apply(tr, evtest.Call("a", callID, "message", `{"to":"`+to+`","text":"?"}`))
+		tr.Apply(mk(seq+1, event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: callID, Name: "message", Output: output, IsError: isErr}))
+	}
+	delivered := func(name string) string {
+		return "request delivered to " + name + "; its response wakes you between turns"
+	}
+	tone := func(to string) Tone {
+		for _, l := range tr.All() {
+			if l.Kind == LineTool && l.Tool == "message" && strings.HasPrefix(l.Text, "@"+to+" ") {
+				return l.Tone
+			}
+		}
+		t.Fatalf("no message line to %s", to)
+		return ToneNone
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	send(2, "p1", "scout", delivered("scout"), false)
+	if tone("scout") != ToneWorking {
+		t.Fatalf("a delivered message waits for its answer: %v", tone("scout"))
+	}
+	send(4, "p2", "lookout", delivered("lookout"), false)
+	tr.Apply(mk(6, event.TurnEnded, event.TurnEndedPayload{Turn: 1}))
+	// the first agent answers: only its line settles
+	tr.Apply(mk(7, event.TurnStarted, event.TurnPayload{Turn: 2}))
+	evtest.Apply(tr, evtest.From("a", event.InputResponse, "scout", "main"))
+	if tone("scout") != ToneNone || tone("lookout") != ToneWorking {
+		t.Fatalf("answered → grey, unanswered → still yellow: %v %v", tone("scout"), tone("lookout"))
+	}
+	// the second agent is killed before answering: red
+	tr.AskerGone("lookout")
+	if tone("lookout") != ToneError {
+		t.Fatalf("killed before answering → red: %v", tone("lookout"))
+	}
+	// two messages to one agent, one answer: both settle (a re-prompt is
+	// covered by the same reply)
+	send(9, "p4", "inspector", delivered("inspector"), false)
+	send(11, "p5", "inspector", delivered("inspector"), false)
+	evtest.Apply(tr, evtest.From("a", event.InputResponse, "inspector", "here"))
+	for _, l := range tr.All() {
+		if l.Kind == LineTool && l.Tool == "message" && strings.HasPrefix(l.Text, "@inspector ") && l.Tone != ToneNone {
+			t.Fatalf("one answer should settle both messages to that agent: %q tone %v", l.Text, l.Tone)
+		}
+	}
+	// nothing to wait for: a refused message, an answer, a message to the user
+	send(14, "p3", "ghost", `unknown agent "ghost"`, true)
+	send(16, "p6", "helper", "response delivered to helper", false)
+	send(18, "p7", "user", "message delivered to the user", false)
+	for _, to := range []string{"ghost", "helper", "user"} {
+		if tone(to) == ToneWorking {
+			t.Fatalf("a message to %s has nothing to wait for", to)
+		}
+	}
+}
+
+// TestNotesAndReminders: an agent's own text is marked as notes (it reaches
+// no one), input is not, and the reminder bookkeeping reads as notices with
+// the human as "you".
+func TestNotesAndReminders(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	evtest.Apply(tr, evtest.Prompt("a", "check it"))
+	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "# Result\nall good"}}}))
+	evtest.Apply(tr, evtest.Input("a", event.Input{Kind: event.InputReminder, Parties: []string{"user", "a1"}, Names: []string{"user", "scout"}}))
+	var notes, notices []string
+	for _, l := range tr.All() {
+		switch {
+		case l.Note:
+			notes = append(notes, l.Text)
+		case l.Kind == LineNotice || l.Kind == LineDim:
+			notices = append(notices, l.Text)
+		case strings.Contains(l.Text, "reminder from the harness"):
+			t.Fatalf("the reminder input is not shown: %+v", l)
+		}
+	}
+	if strings.Join(notes, "|") != "**Aside**|Result|all good" {
+		t.Fatalf("notes %q", notes)
+	}
+	if strings.Join(notices, "|") != "**Nudge** owes a reply to you, scout" {
+		t.Fatalf("notices %q", notices)
+	}
+}
+
+// TestOnlyHumanInputIsBlue: a message from another agent reads like a
+// received message ("› @main look at the parser"), never as the blue user
+// block the human's own input gets.
+func TestOnlyHumanInputIsBlue(t *testing.T) {
+	for kind, glyph := range map[event.InputKind]string{event.InputRequest: GlyphAsk, event.InputInfo: GlyphInfo} {
+		lines := InputLines(event.Input{Kind: kind, Text: "look at the parser", From: "a1", FromName: "main"}, "")
+		var texts []string
+		for _, l := range lines {
+			if l.Block == BlockUser || l.Block == BlockSteer {
+				t.Fatalf("%s from an agent drawn as user input: %+v", kind, l)
+			}
+			if l.Text != "" {
+				texts = append(texts, l.Text)
+			}
+		}
+		if strings.Join(texts, "|") != "@main look at the parser" || lines[1].Glyph != glyph {
+			t.Fatalf("%s from an agent: %+v", kind, lines)
+		}
+	}
+	for _, kind := range []event.InputKind{event.InputPrompt, event.InputSteer} {
+		human := InputLines(event.Input{Kind: kind, Text: "and the tests"}, "")
+		if human[1].Block != BlockUser || !human[1].Lead {
+			t.Fatalf("the human's %s stays the blue user block: %+v", kind, human)
+		}
+	}
+}
+
+// TestMessageArrows: what an agent sends reads ‹ and what it receives ›;
+// other tools keep their glyph.
+func TestMessageArrows(t *testing.T) {
+	for _, c := range []struct {
+		line Line
+		want string
+	}{
+		{Line{Kind: LineTool, Tool: "message", Text: "@scout look"}, GlyphReply},
+		{Line{Kind: LineTool, Tool: "message", Text: "@user done"}, GlyphReply},
+		{Line{Kind: LineTool, Tool: "shell", Text: "Shell  ls"}, GlyphToolShell},
+		{Line{Kind: LineTool, Tool: "read", Text: "Read  a.go"}, GlyphToolRead},
+		{Line{Kind: LineTool, Tool: "apply_patch", Text: "Apply patch  a.go"}, GlyphToolPatch},
+		{Line{Kind: LineTool, Tool: "web_search", Text: "Search  go vt"}, GlyphToolSearch},
+		{Line{Kind: LineTool, Tool: "web_fetch", Text: "Fetch  go.dev"}, GlyphToolWeb},
+		{Line{Kind: LineTool, Tool: "skill", Text: "Skill  deploy"}, GlyphToolFiles},
+		{Line{Kind: LineTool, Tool: "agent_create", Text: "@scout look"}, GlyphToolCreate},
+		{Line{Kind: LineTool, Tool: "agent_status", Text: "Agent status"}, GlyphToolAgents},
+	} {
+		if g, _ := CallGlyph(c.line); g != c.want {
+			t.Errorf("%q: glyph %q, want %q", c.line.Text, g, c.want)
+		}
+	}
+	resp := InputLines(event.Input{Kind: event.InputResponse, Text: "done", From: "a2", FromName: "scout"}, "")
+	if resp[1].Glyph != GlyphAsk || resp[1].Text != "@scout done" {
+		t.Fatalf("a response from an agent reads › @scout: %+v", resp)
+	}
+}
+
+// TestTurnStartMarksItems: the first item after a turn starts or ends is
+// marked, and nothing else.
+func TestTurnStartMarksItems(t *testing.T) {
+	tr := NewTranscript()
+	mk := func(seq int64, typ event.Type, p any) event.Event {
+		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
+	evtest.Apply(tr, evtest.Prompt("a", "one"))
+	tr.Apply(mk(3, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "notes"}}}))
+	tr.Apply(mk(4, event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}))
+	tr.Apply(mk(5, event.TurnStarted, event.TurnPayload{Turn: 2}))
+	evtest.Apply(tr, evtest.Prompt("a", "two"))
+	var marked []string
+	for _, l := range tr.All() {
+		if l.TurnStart {
+			for _, x := range tr.All() {
+				if x.Item == l.Item && x.Text != "" {
+					marked = append(marked, x.Text)
+					break
+				}
+			}
+		}
+	}
+	if strings.Join(marked, "|") != "@user one|@user two" {
+		t.Fatalf("turn starts: %q", marked)
+	}
+}
+
+// TestWhoNamesTheLine: every line that leads with an @name records whose it
+// is, so it can take their colour.
+func TestWhoNamesTheLine(t *testing.T) {
+	ev := func(typ event.Type, p any) event.Event {
+		return event.Event{Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	who := func(lines []Line) string {
+		for _, l := range lines {
+			if l.Who != "" {
+				return l.Who
+			}
+		}
+		return ""
+	}
+	cases := map[string][]Line{
+		"scout": toolStartedLines("message", "c1", json.RawMessage(`{"to":"@scout","text":"look"}`)),
+		"user":  toolStartedLines("message", "c2", json.RawMessage(`{"to":"user","text":"done"}`)),
+		"main":  InputLines(event.Input{Kind: event.InputRequest, Text: "go", From: "a1", FromName: "main"}, ""),
+	}
+	for want, lines := range cases {
+		if got := who(lines); got != want {
+			t.Errorf("who %q, want %q: %+v", got, want, lines)
+		}
+	}
+	human := InputLines(event.Input{Kind: event.InputPrompt, Text: "hi"}, "")
+	if who(human) != "user" {
+		t.Errorf("the human's prompt: %+v", human)
+	}
+	c := NewChat()
+	c.Apply(ev(event.ChatMessage, event.ChatPayload{From: "main", Text: "hello"}))
+	if who(c.All()) != "main" {
+		t.Errorf("a chat reply: %+v", c.All())
+	}
+}
+
+// TestDeniedCallShowsWhy: a denied call takes the ✗ glyph and its reason
+// sits next to the tool's name, with nothing under it.
+func TestDeniedCallShowsWhy(t *testing.T) {
+	for out, want := range map[string]string{
+		"Permission denied by the user: too risky":                                        "Shell (too risky)  rm x",
+		"Permission denied by the user.":                                                  "Shell  rm x",
+		"Denied by policy: shell rm x":                                                    "Shell (by policy)  rm x",
+		"Permission denied: nobody answered the prompt and the headless default is deny.": "Shell (no answer)  rm x",
+		"Denied in auto mode: /etc is outside the channel's working directories, and auto mode does not allow calls outside them.": "Shell (outside dirs, auto mode)  rm x",
+	} {
+		tr := NewTranscript()
+		evtest.Apply(tr, evtest.Call("", "c1", "shell", `{"command":"rm x"}`))
+		tr.Apply(event.Event{Seq: 2, Type: event.ToolFinished, Time: time.Now(), Payload: event.MustPayload(event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: out, IsError: true, Denied: true})})
+		var texts []string
+		for _, l := range tr.All() {
+			if l.Text != "" {
+				texts = append(texts, l.Text+l.Suffix)
+				if g, _ := CallGlyph(l); g != GlyphFailed {
+					t.Errorf("%q: glyph %q", out, g)
+				}
+			}
+		}
+		if strings.Join(texts, "|") != want {
+			t.Errorf("%q: %q", out, texts)
+		}
+	}
+}
+
+// TestAgentCreateReadsLikeAPrompt: creating an agent reads "⋙ @scout task",
+// names the agent it made (a taken label gets a suffix), keeps the rest of
+// the task under it and hides the "created" result.
+func TestAgentCreateReadsLikeAPrompt(t *testing.T) {
+	tr := NewTranscript()
+	evtest.Apply(tr, evtest.Call("", "c1", "agent_create", `{"archetype":"general","label":"scout","task":"look around\nthen report"}`))
+	tr.Apply(event.Event{Seq: 2, Type: event.ToolFinished, Time: time.Now(), Payload: event.MustPayload(event.ToolFinishedPayload{CallID: "c1", Name: "agent_create", Output: "created scout-2 (general), id a1; address it by its name"})})
+	var texts []string
+	for _, l := range tr.All() {
+		if l.Text != "" {
+			texts = append(texts, l.Text)
+		}
+		if l.Kind == LineTool && (l.Who != "scout-2" || !IsPromptCall(l)) {
+			t.Fatalf("call line: %+v", l)
+		}
+	}
+	if strings.Join(texts, "|") != "@scout-2 look around|then report" {
+		t.Fatalf("lines %q", texts)
+	}
+}
+
+// TestPatchShowsItsDiff: an apply_patch call shows its diff under it (file
+// headers, anchors, changed and context lines) and no success summary.
+func TestPatchShowsItsDiff(t *testing.T) {
+	patch := "*** Begin Patch\n*** Update File: a.go\n*** Move to: b.go\n@@ func run() {\n ctx := x\n-old()\n+new()\n*** Add File: c.md\n+hello\n*** Delete File: d.txt\n*** End Patch"
+	input, _ := json.Marshal(map[string]string{"patch": patch})
+	tr := NewTranscript()
+	evtest.Apply(tr, evtest.Call("a", "c1", "apply_patch", string(input)))
+	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Output: "updated a.go → b.go\nadded c.md (1 lines)\ndeleted d.txt"}))
+	var got []string
+	for _, l := range tr.All() {
+		if strings.Contains(l.Text, "updated a.go") {
+			t.Fatal("the success summary adds nothing under the diff")
+		}
+		if l.Kind == LineToolOut && l.Vis != VisCollapsed {
+			d := "."
+			if l.Diff != 0 {
+				d = string(rune(l.Diff))
+			}
+			got = append(got, d+"|"+l.Text)
+		}
+	}
+	want := "f|a.go / f|→ b.go / @|@@ func run() { / .| ctx := x / -|-old() / +|+new() / f|c.md (new) / +|+hello / f|d.txt (deleted)"
+	if strings.Join(got, " / ") != want {
+		t.Fatalf("diff:\n%s\nwant:\n%s", strings.Join(got, " / "), want)
+	}
+}
+
+// TestWebToolTitles: the web tools read as plain verbs.
+func TestWebToolTitles(t *testing.T) {
+	if got := ToolTitle("web_fetch"); got != "Fetch" {
+		t.Fatalf("web_fetch: %q", got)
+	}
+	if got := ToolTitle("web_search"); got != "Search" {
+		t.Fatalf("web_search: %q", got)
+	}
+}
+
+// TestInfoMessagesDrawDoubleArrows: an info message reads « when sent and »
+// when received; a request or response keeps ‹ and ›.
+func TestInfoMessagesDrawDoubleArrows(t *testing.T) {
+	for kind, want := range map[string]string{"info": GlyphInfoSent, "request": GlyphReply, "": GlyphReply} {
+		input, _ := json.Marshal(map[string]string{"to": "scout", "text": "fyi", "kind": kind})
+		lines := toolStartedLines("message", "c1", input)
+		if g, _ := CallGlyph(lines[0]); g != want {
+			t.Errorf("sent %q: glyph %q, want %q", kind, g, want)
+		}
+	}
+	for kind, want := range map[event.InputKind]string{event.InputInfo: GlyphInfo, event.InputRequest: GlyphAsk, event.InputResponse: GlyphAsk} {
+		lines := InputLines(event.Input{Kind: kind, Text: "fyi", From: "a1", FromName: "main"}, "")
+		if lines[1].Glyph != want {
+			t.Errorf("received %q: glyph %q, want %q", kind, lines[1].Glyph, want)
+		}
+	}
+	if GlyphSpawn != "⋙" || GlyphToolCreate != "⋙" {
+		t.Fatal("a new agent reads ⋙")
+	}
+}

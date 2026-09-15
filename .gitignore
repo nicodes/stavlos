@@ -1,0 +1,7 @@
+/stavlos
+/stavlosd
+/bin/
+*.db
+*.db-wal
+*.db-shm
+.stavlos/stavlos.local.json
