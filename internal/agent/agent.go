@@ -148,41 +148,38 @@ func (a *Agent) signal() {
 // into its user messages: every queued prompt (coalesced), any steers
 // received while idle, and every child result waiting in the mailbox. A
 // turn starts only for a prompt, a steer, or an armed wake; results alone
-// never start one (PRD §6.3).
+// never start one (PRD §6.3). The queues are taken under a.mu and the
+// senders named after it is released: naming one takes the sender's lock,
+// and two agents with inputs from each other must never wait on each other.
 func (a *Agent) takeInputs() []event.UserMessagePayload {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.state == StateKilled {
-		return nil
-	}
-	if len(a.prompts) == 0 && len(a.steers) == 0 && len(a.wakes) == 0 && len(a.remind) == 0 {
+	if a.state == StateKilled || len(a.prompts) == 0 && len(a.steers) == 0 && len(a.wakes) == 0 && len(a.remind) == 0 {
+		a.mu.Unlock()
 		return nil
 	}
 	a.wakes = map[string]bool{}
+	prompts, steers, notes, responses, monDone, remind := a.prompts, a.steers, a.notes, a.responses, a.monDone, a.remind
+	a.prompts, a.steers, a.notes, a.responses, a.monDone, a.remind = nil, nil, nil, nil, nil, nil
+	a.mu.Unlock()
+
 	var in []event.UserMessagePayload
-	for _, q := range a.prompts {
+	for _, q := range prompts {
 		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source)})
 	}
-	a.prompts = nil
-	for _, q := range a.steers { // idle: a steer is just a prompt, and reads as one
+	for _, q := range steers { // idle: a steer is just a prompt, and reads as one
 		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source), Post: q.post})
 	}
-	a.steers = nil
-	for _, q := range a.notes {
+	for _, q := range notes {
 		in = append(in, event.UserMessagePayload{Kind: event.MsgNote, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source)})
 	}
-	a.notes = nil
-	for _, r := range a.responses {
+	for _, r := range responses {
 		in = append(in, event.UserMessagePayload{Kind: event.MsgAgentResponse, Text: r.text, From: r.label, FromID: r.from})
 	}
-	a.responses = nil
-	for _, r := range a.monDone {
+	for _, r := range monDone {
 		in = append(in, event.UserMessagePayload{Kind: event.MsgMonitorFired, Text: monitorText(r)})
 	}
-	a.monDone = nil
-	if len(a.remind) > 0 {
-		in = append(in, event.UserMessagePayload{Kind: event.MsgReminder, Text: a.s.reminderText(a.remind)})
-		a.remind = nil
+	if len(remind) > 0 {
+		in = append(in, event.UserMessagePayload{Kind: event.MsgReminder, Text: a.s.reminderText(remind)})
 	}
 	return in
 }
