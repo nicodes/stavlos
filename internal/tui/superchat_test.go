@@ -126,3 +126,27 @@ func TestSuperChatLoaderUntilReply(t *testing.T) {
 		t.Fatalf("the reply replaces the loader:\n%s", view)
 	}
 }
+
+// TestDueTab: the due tab lists who is waiting on the selected agent's
+// reply, you first; space opens that chat.
+func TestDueTab(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.agents[0].Due = []string{"b", "user"}
+	if labels := strings.Join(m.tabTexts(), " · "); !strings.Contains(labels, "async 2 · due 2 · todo") {
+		t.Fatalf("strip: %s", labels)
+	}
+	m.setFocus(focusDue)
+	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
+	if !strings.Contains(strings.Split(body, "\n")[0], "you  the session chat") || !strings.Contains(body, "world-politics (general)") {
+		t.Fatalf("due body:\n%s", body)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
+	if m.selectedID() != "b" || m.superChat || isTab(m.focus) {
+		t.Fatalf("space on an agent opens its chat: selected %s super %v focus %v", m.selectedID(), m.superChat, m.focus)
+	}
+	m.setFocus(focusDue)
+	if body := stripANSI(strings.Join(m.tabBodyLines(80), "\n")); !strings.Contains(body, "no replies due") {
+		t.Fatalf("b owes nothing:\n%s", body)
+	}
+}

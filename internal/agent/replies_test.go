@@ -50,8 +50,26 @@ func TestReminderThenMissing(t *testing.T) {
 	if in := root.Info(); in.Turn != 2 || len(um) != 2 || um[1].Kind != event.MsgReminder {
 		t.Fatalf("turn %d, inputs %+v", in.Turn, um)
 	}
-	if owed := root.replyState(root.owed); len(owed) != 0 {
-		t.Fatalf("a missing reply is dropped: %v", owed)
+	if owed := root.replyState(root.owed); !reflect.DeepEqual(owed, []string{"user"}) || !reflect.DeepEqual(root.Info().Due, []string{"user"}) {
+		t.Fatalf("a missing reply stays due: owed %v due %v", owed, root.Info().Due)
+	}
+
+	// The next turn, whatever starts it, sees what is due in its
+	// instructions; a new message from the human earns a new reminder, and
+	// the missing reply is recorded once per reminder.
+	runTurn(t, s, h, "again")
+	waitUntil(t, h, func() bool {
+		return len(h.ofType(event.ReplyMissing, root.ID)) == 2 && root.StateOf() == StateIdle
+	})
+	reqs := fm.requests()
+	if sys := reqs[len(reqs)-1].System; !strings.Contains(sys, "# Replies due") || !strings.Contains(sys, "You still owe a reply to: user.") {
+		t.Fatalf("system prompt should list what is due:\n%s", sys)
+	}
+	if q := repliesOf(t, h, event.ReminderQueued, root.ID); len(q) != 2 {
+		t.Fatalf("reminders %v", q)
+	}
+	if in := root.Info(); in.Turn != 4 {
+		t.Fatalf("turns %d: one reminder per message, no retries", in.Turn)
 	}
 }
 

@@ -284,7 +284,7 @@ func (r *recovery) consumed(e event.Event) {
 
 // replies folds the reply bookkeeping of replies.go back in: a message to
 // the human settles what is owed to it, a queued reminder marks its parties
-// reminded and waits to start a turn, a missing reply drops its parties.
+// reminded and waits to start a turn, a missing reply marks them recorded.
 func (r *recovery) replies(e event.Event) {
 	a, ok := r.s.agents[e.Agent]
 	if !ok {
@@ -304,7 +304,7 @@ func (r *recovery) replies(e event.Event) {
 		var p event.RepliesPayload
 		_ = e.Decode(&p)
 		for _, party := range p.Parties {
-			a.settle(party)
+			a.flagged[party] = true // recorded once; the reply stays due
 		}
 	}
 }

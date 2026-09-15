@@ -12,9 +12,12 @@ import (
 
 // Replies (docs/super-chat.md): every message an agent takes in, from the
 // human or from another agent, is owed a reply sent with the message tool;
-// the text a turn ends with reaches no one. A turn that ends owing replies
-// gets one reminder, and a turn that ends still owing a party it was
-// reminded of records the reply as missing. Nothing retries.
+// the text a turn ends with reaches no one. What is owed stays due until
+// the agent messages that party (or the party is killed): it is listed in
+// the system prompt on every model call. The first turn that ends owing a
+// party gets one reminder turn; a turn that ends still owing a party it was
+// reminded of records the reply as missing, once. Nothing retries, and a
+// new message from the party starts its reminder over.
 
 // senderID is the agent id of an envelope source "agent:<id>", "" for
 // anything else.
@@ -54,6 +57,7 @@ func (a *Agent) took(in event.UserMessagePayload) {
 	a.mu.Lock()
 	a.owed[party] = true
 	delete(a.reminded, party)
+	delete(a.flagged, party)
 	if party == tools.User {
 		a.lastPost = in.Post
 	}
@@ -74,12 +78,30 @@ func (a *Agent) settle(party string) {
 	a.mu.Lock()
 	delete(a.owed, party)
 	delete(a.reminded, party)
+	delete(a.flagged, party)
 	a.mu.Unlock()
+}
+
+// due lists the parties the agent owes a reply, sorted.
+func (a *Agent) due() []string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.dueLocked()
+}
+
+func (a *Agent) dueLocked() []string {
+	out := make([]string, 0, len(a.owed))
+	for p := range a.owed {
+		out = append(out, p)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // endReplies runs when a turn ends on its own (not cancelled, not failed):
 // parties still owed a reply get a reminder queued, which starts the next
-// turn, and parties reminded already are recorded as missing and dropped.
+// turn, and parties reminded already are recorded as missing, once. They
+// stay due either way.
 func (a *Agent) endReplies(ctx context.Context, reason event.TurnReason) {
 	if reason != event.ReasonEndTurn && reason != event.ReasonMaxTokens || !a.s.Config().Reminders {
 		return
@@ -87,11 +109,13 @@ func (a *Agent) endReplies(ctx context.Context, reason event.TurnReason) {
 	var remind, missing []string
 	a.mu.Lock()
 	for p := range a.owed {
-		if a.reminded[p] {
+		switch {
+		case a.reminded[p] && !a.flagged[p]:
 			missing = append(missing, p)
-			delete(a.owed, p)
-			delete(a.reminded, p)
-		} else {
+			a.flagged[p] = true
+		case a.reminded[p]:
+			// already recorded; it stays due in the system prompt
+		default:
 			remind = append(remind, p)
 			a.reminded[p] = true
 		}
