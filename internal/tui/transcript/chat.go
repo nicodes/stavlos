@@ -17,7 +17,7 @@ import (
 func NewChat() *Transcript {
 	t := NewTranscript()
 	t.chat = true
-	t.names, t.posts = map[string]string{}, map[string]int{}
+	t.names, t.posts, t.open = map[string]string{}, map[string]int{}, map[string]int{}
 	return t
 }
 
@@ -57,10 +57,7 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.ChatPosted:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
-			refs := t.appendItem(CleanLines(block(BlockUser, "", addressed(p.To, p.Text))))
-			if p.ID != "" && len(refs) > 0 {
-				t.posts[p.ID] = refs[0].item
-			}
+			t.post(p)
 		}
 	case event.MessageToUser:
 		var p event.ChatPayload
@@ -86,6 +83,9 @@ func (t *Transcript) applyChat(ev event.Event) {
 					lines[i].Indent = 1
 				}
 				t.insertIntoItem(item, lines)
+				if t.open[from] == item {
+					delete(t.open, from) // answered: the next post to it starts a new thread
+				}
 				return
 			}
 			t.appendItem(append([]Line{{Kind: LineBlank, Agent: ev.Agent}}, lines...))
@@ -109,6 +109,38 @@ func (t *Transcript) applyChat(ev event.Event) {
 		if ev.Decode(&p) == nil {
 			t.settlePrompt(p.ID, ev.Type != event.PromptAnswered)
 		}
+	}
+}
+
+// post adds the human's post to the chat. A post to agents that are all
+// still waiting to reply in the same thread joins that thread, since one
+// reply will cover both; otherwise it starts a thread of its own. Either
+// way its agents now wait to reply in its thread.
+func (t *Transcript) post(p event.ChatPayload) {
+	lines := CleanLines(block(BlockUser, "", addressed(p.To, p.Text)))
+	item, grouped := -1, len(p.To) > 0
+	for _, n := range p.To {
+		open, ok := t.open[n]
+		if !ok || item >= 0 && open != item {
+			grouped = false
+			break
+		}
+		item = open
+	}
+	if grouped {
+		t.insertIntoItem(item, lines[1:]) // no blank line between grouped posts
+	} else {
+		refs := t.appendItem(lines)
+		if len(refs) == 0 {
+			return
+		}
+		item = refs[0].item
+	}
+	if p.ID != "" {
+		t.posts[p.ID] = item
+	}
+	for _, n := range p.To {
+		t.open[n] = item
 	}
 }
 

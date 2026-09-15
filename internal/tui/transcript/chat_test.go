@@ -99,3 +99,45 @@ func TestChatThreadsRepliesUnderPosts(t *testing.T) {
 		t.Fatalf("standalone %q", got)
 	}
 }
+
+// TestChatGroupsPostsToAWaitingAgent: a post to an agent that has not
+// replied yet joins its open thread; a reply closes it; a post to several
+// agents groups only when they all wait in the same thread.
+func TestChatGroupsPostsToAWaitingAgent(t *testing.T) {
+	c := NewChat()
+	seq := int64(0)
+	apply := func(agent string, typ event.Type, p any) {
+		seq++
+		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
+	}
+	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
+	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Label: "scout"})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "what's the stack?", To: []string{"main"}})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p2", Text: "and the tests?", To: []string{"main"}})
+	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "Go; go test", Post: "p2"})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p3", Text: "one more", To: []string{"main"}})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p4", Text: "@main @scout sync up", To: []string{"main", "scout"}})
+	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "late answer to p1", Post: "p1"})
+
+	item := func(i int) string {
+		var out []string
+		for _, l := range c.All() {
+			if l.Item == i && l.Text != "" {
+				out = append(out, strings.Repeat(">", l.Indent)+l.Text)
+			}
+		}
+		return strings.Join(out, "|")
+	}
+	if n := c.Items(); n != 3 {
+		t.Fatalf("items %d", n)
+	}
+	if got := item(0); got != "@main what's the stack?|@main and the tests?|>@main Go; go test|>@main late answer to p1" {
+		t.Fatalf("grouped thread %q", got)
+	}
+	if got := item(1); got != "@main one more" {
+		t.Fatalf("after a reply a new thread starts: %q", got)
+	}
+	if got := item(2); got != "@main @scout sync up" {
+		t.Fatalf("scout was not waiting, so no grouping: %q", got)
+	}
+}
