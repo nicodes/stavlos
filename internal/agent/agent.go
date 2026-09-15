@@ -197,7 +197,7 @@ func (a *Agent) infoLocked() protocol.AgentInfo {
 	st := a.state()
 	rv := a.s.roleLocked(st)
 	info := protocol.AgentInfo{
-		ID: a.ID, Channel: a.s.ID, Parent: a.Parent, Archetype: st.role, Label: st.name,
+		ID: a.ID, Channel: a.s.ID, Parent: a.Parent, Role: st.role, Name: st.name,
 		Model: st.model, Variant: st.variant, Depth: a.Depth, State: st.status(), Turn: st.turn,
 		Queued: len(st.inbox), CostUSD: st.cost, Tokens: st.tokens,
 		Context: a.ctxTokens, ContextWindow: a.ctxWindow, LastError: st.lastError,

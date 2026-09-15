@@ -69,7 +69,7 @@ func TestMentionAutocomplete(t *testing.T) {
 	for _, r := range "@main @b" {
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
-	if mm := m.mentionMatches(); len(mm) != 1 || mm[0].Label != "business" {
+	if mm := m.mentionMatches(); len(mm) != 1 || mm[0].Name != "business" {
 		t.Fatalf("matches %+v", mm)
 	}
 	if pv := stripANSI(m.paletteViewFor(80)); !strings.Contains(pv, "▸ @business") {

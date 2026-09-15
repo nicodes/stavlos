@@ -110,7 +110,7 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 	out := make([]tools.ChildStatus, 0, len(ids))
 	for _, aid := range ids {
 		a := s.st.agents[aid]
-		out = append(out, tools.ChildStatus{ID: aid, Parent: a.parent, Label: a.name, Archetype: a.role, State: string(a.status()), Turn: a.turn, CostUSD: a.cost, You: aid == caller})
+		out = append(out, tools.ChildStatus{ID: aid, Parent: a.parent, Name: a.name, Role: a.role, State: string(a.status()), Turn: a.turn, CostUSD: a.cost, You: aid == caller})
 	}
 	return out, nil
 }

@@ -41,7 +41,7 @@ func snap(s *Channel) []snapshot {
 			inbox = append(inbox, string(i.Kind)+":"+i.Text)
 		}
 		out = append(out, snapshot{
-			ID: in.ID, Parent: in.Parent, Archetype: in.Archetype, Label: in.Label, Model: in.Model, Variant: in.Variant, State: string(in.State),
+			ID: in.ID, Parent: in.Parent, Archetype: in.Role, Label: in.Name, Model: in.Model, Variant: in.Variant, State: string(in.State),
 			Depth: in.Depth, Turn: in.Turn, Queued: in.Queued, Tokens: in.Tokens, CostUSD: in.CostUSD, LastError: in.LastError,
 			Awaiting: in.Awaiting, Due: in.Due, Todos: in.Todos, Dirs: s.dirInfosLocked(), Children: append([]string(nil), st.children...),
 			Inbox: inbox, LastPost: st.lastPost, Nudges: st.nudges,
@@ -261,7 +261,7 @@ func TestRecoverMissingRoleIsReadOnly(t *testing.T) {
 	t.Cleanup(s2.Stop)
 	r := s2.Root()
 	in := r.Info()
-	if in.Archetype != "lead" || !strings.Contains(in.LastError, "no longer exists") {
+	if in.Role != "lead" || !strings.Contains(in.LastError, "no longer exists") {
 		t.Fatalf("%+v", in)
 	}
 	if p := r.role().preset; strings.Join(p.Tools, ",") != "read" || len(p.Spawn) != 0 || len(p.MCP) != 0 {

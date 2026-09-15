@@ -1966,7 +1966,7 @@ func (m *Model) escCancel() tea.Cmd {
 		return sendCmd(m.ctx, m.c, a.ID, protocol.KindCancel, "", "cancel sent")
 	}
 	m.cancelArmed = time.Now()
-	return m.setStatusFor("press esc again to cancel "+a.Label+"'s turn", true, cancelWindow)
+	return m.setStatusFor("press esc again to cancel "+a.Name+"'s turn", true, cancelWindow)
 }
 
 // agentBusy reports whether the selected agent is mid-turn.
@@ -2660,8 +2660,8 @@ func (m *Model) onAgentSpawned(ev event.Event) string {
 	if !m.loading && m.findAgent(p.ID) < 0 {
 		// Placeholder until the debounced tree refresh lands.
 		m.agents = append(m.agents, protocol.AgentInfo{
-			ID: p.ID, Channel: ev.Channel, Parent: p.Parent, Archetype: p.Role,
-			Label: p.Name, Model: p.Model, Variant: p.Variant, Depth: p.Depth, State: protocol.AgentIdle,
+			ID: p.ID, Channel: ev.Channel, Parent: p.Parent, Role: p.Role,
+			Name: p.Name, Model: p.Model, Variant: p.Variant, Depth: p.Depth, State: protocol.AgentIdle,
 		})
 	}
 	if p.Parent != "" {
@@ -2977,7 +2977,7 @@ func (m *Model) selectedAgent() *protocol.AgentInfo {
 
 func (m *Model) agentLabel(id string) string {
 	if i := m.findAgent(id); i >= 0 {
-		return m.agents[i].Label
+		return m.agents[i].Name
 	}
 	return id
 }
@@ -3006,7 +3006,7 @@ func (m *Model) moveSelection(delta int) tea.Cmd {
 	}
 	m.openAgent(wrapIndex(m.selected+delta, n))
 	if !m.sidebarVisible() {
-		return m.setStatusFor("→ "+m.agents[m.selected].Label, false, selectDuration)
+		return m.setStatusFor("→ "+m.agents[m.selected].Name, false, selectDuration)
 	}
 	return nil
 }
@@ -3900,8 +3900,8 @@ func (m *Model) whoStyle(name string) lipgloss.Style {
 	}
 	tint := "green"
 	for _, a := range m.agents {
-		if a.Label == name {
-			if r := m.roleInfo(a.Archetype); r != nil && r.Color != "" {
+		if a.Name == name {
+			if r := m.roleInfo(a.Role); r != nil && r.Color != "" {
 				tint = r.Color
 			}
 			break
@@ -3914,8 +3914,8 @@ func (m *Model) whoStyle(name string) lipgloss.Style {
 func (m *Model) whoKey() string {
 	var b strings.Builder
 	for _, a := range m.agents {
-		b.WriteString(a.Label + "=")
-		if r := m.roleInfo(a.Archetype); r != nil {
+		b.WriteString(a.Name + "=")
+		if r := m.roleInfo(a.Role); r != nil {
 			b.WriteString(r.Color)
 		}
 		b.WriteByte(';')
@@ -3926,7 +3926,7 @@ func (m *Model) whoKey() string {
 // selectedRole is the selected agent's role, nil when unknown.
 func (m *Model) selectedRole() *protocol.PresetInfo {
 	if a := m.selectedAgent(); a != nil {
-		return m.roleInfo(a.Archetype)
+		return m.roleInfo(a.Role)
 	}
 	return nil
 }

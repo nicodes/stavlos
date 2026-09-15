@@ -166,7 +166,7 @@ func (m *Model) mentionMatches() []protocol.AgentInfo {
 	}
 	var out []protocol.AgentInfo
 	for _, a := range m.agents {
-		if a.State != protocol.AgentKilled && strings.HasPrefix(strings.ToLower(a.Label), prefix) {
+		if a.State != protocol.AgentKilled && strings.HasPrefix(strings.ToLower(a.Name), prefix) {
 			out = append(out, a)
 		}
 	}
@@ -176,7 +176,7 @@ func (m *Model) mentionMatches() []protocol.AgentInfo {
 // completeMention replaces the @name being typed with a's name and a space.
 func (m *Model) completeMention(a protocol.AgentInfo) {
 	v := m.input.Value()
-	m.input.SetValue(v[:strings.LastIndexByte(v, '@')+1] + a.Label + " ")
+	m.input.SetValue(v[:strings.LastIndexByte(v, '@')+1] + a.Name + " ")
 	m.input.CursorEnd()
 	m.palIdx = 0
 }
@@ -198,7 +198,7 @@ func mentionView(matches []protocol.AgentInfo, idx, width int) string {
 		if i == idx {
 			marker, style = theme.StyleAccent.Render("▸")+" ", theme.StyleAccent.Bold(true)
 		}
-		rows = append(rows, ansi.Truncate(marker+style.Render("@"+a.Label)+"  "+theme.StyleDim.Render(a.Archetype+" · "+string(a.State)), width, "…"))
+		rows = append(rows, ansi.Truncate(marker+style.Render("@"+a.Name)+"  "+theme.StyleDim.Render(a.Role+" · "+string(a.State)), width, "…"))
 	}
 	rows = append(rows, theme.StyleDim.Render("  ↑/↓ move · tab or enter complete · esc clear"))
 	return lipgloss.NewStyle().Width(width).Render(strings.Join(rows, "\n"))

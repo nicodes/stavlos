@@ -697,7 +697,7 @@ func TestRoleSwitchDuringTurn(t *testing.T) {
 	close(gate)
 	h.waitTurnEnd(t, root.ID, 1)
 	<-done
-	if in := root.Info(); in.State != "idle" || (in.Archetype != "lead" && in.Archetype != "other") {
+	if in := root.Info(); in.State != "idle" || (in.Role != "lead" && in.Role != "other") {
 		t.Fatalf("%+v", in)
 	}
 }
