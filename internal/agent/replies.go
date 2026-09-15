@@ -62,7 +62,7 @@ func (a *Agent) endReplies(reason event.TurnReason) {
 	if reason != event.ReasonEndTurn && reason != event.ReasonMaxTokens {
 		return
 	}
-	s := a.s
+	s := a.c
 	s.mu.Lock()
 	st := a.state()
 	if !s.cfg.Reminders || len(st.owed) == 0 || st.nudges >= maxNudges || st.waiting() {
@@ -77,11 +77,11 @@ func (a *Agent) endReplies(reason event.TurnReason) {
 }
 
 // partyNamesLocked is how parties read: "user", or the agent's name.
-func (s *Channel) partyNamesLocked(parties []string) []string {
+func (c *Channel) partyNamesLocked(parties []string) []string {
 	names := make([]string, len(parties))
 	for i, p := range parties {
 		names[i] = p
-		if a := s.st.agents[p]; a != nil {
+		if a := c.st.agents[p]; a != nil {
 			names[i] = a.name
 		}
 	}

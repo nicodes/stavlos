@@ -27,15 +27,15 @@ type promptPrefix struct {
 
 // buildContext is the system prompt and tool list for a model call.
 func (a *Agent) buildContext(rv roleView, cfg *config.Effective) (string, []model.ToolDef) {
-	dirs := a.s.dirPaths()
+	dirs := a.c.dirPaths()
 	mdefs := a.mcpDefs()
 	key := prefixKey(cfg, rv, dirs, mdefs)
-	a.s.mu.Lock()
+	a.c.mu.Lock()
 	if p := a.prefix; p.key == key {
-		a.s.mu.Unlock()
+		a.c.mu.Unlock()
 		return p.system, p.defs
 	}
-	a.s.mu.Unlock()
+	a.c.mu.Unlock()
 	var sb strings.Builder
 	a.writePreamble(&sb, rv, cfg, dirs)
 	defs := a.toolDefs(a.toolNames(&sb, rv))
@@ -44,9 +44,9 @@ func (a *Agent) buildContext(rv roleView, cfg *config.Effective) (string, []mode
 		defs = append(defs, mdefs...)
 	}
 	p := promptPrefix{key: key, system: sb.String(), defs: defs}
-	a.s.mu.Lock()
+	a.c.mu.Lock()
 	a.prefix = p
-	a.s.mu.Unlock()
+	a.c.mu.Unlock()
 	return p.system, p.defs
 }
 
@@ -68,7 +68,7 @@ func prefixKey(cfg *config.Effective, rv roleView, dirs []string, mdefs []model.
 func (a *Agent) writePreamble(sb *strings.Builder, rv roleView, cfg *config.Effective, dirs []string) {
 	sb.WriteString(rv.preset.Body)
 	sb.WriteString("\n\n")
-	fmt.Fprintf(sb, "Working directory: %s\n", a.s.Dir)
+	fmt.Fprintf(sb, "Working directory: %s\n", a.c.Dir)
 	if len(dirs) > 1 {
 		fmt.Fprintf(sb, "The channel's working directories, shared by every agent: %s. Reading, editing or running commands outside them needs the human's approval.\n", strings.Join(dirs, ", "))
 	} else {
@@ -117,7 +117,7 @@ func (a *Agent) toolNames(sb *strings.Builder, rv roleView) []string {
 	if canOrchestrate(rv) {
 		sb.WriteString("\n# Delegation\nYou may create child agents with agent_create. Archetypes available to you:\n")
 		for _, arch := range rv.preset.Spawn {
-			if p, ok := a.s.Config().Presets[arch]; ok {
+			if p, ok := a.c.Config().Presets[arch]; ok {
 				fmt.Fprintf(sb, "- %s: %s\n", arch, p.Description)
 			}
 		}
@@ -130,7 +130,7 @@ func (a *Agent) toolNames(sb *strings.Builder, rv roleView) []string {
 // stateNote is what the model is told about the moment of this call: the
 // turn budget, the fan-out limit, the todo list. "" when nothing applies.
 func (a *Agent) stateNote(rv roleView, cfg *config.Effective) string {
-	s := a.s
+	s := a.c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := a.state()
@@ -172,7 +172,7 @@ func (a *Agent) toolDefs(names []string) []model.ToolDef {
 			continue
 		}
 		seen[n] = true
-		if t, ok := a.s.tools[n]; ok {
+		if t, ok := a.c.tools[n]; ok {
 			defs = append(defs, t.Def())
 		}
 	}

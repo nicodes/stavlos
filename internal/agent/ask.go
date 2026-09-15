@@ -22,7 +22,7 @@ func (k askAPI) Ask(ctx context.Context, qs []protocol.Question) ([]string, erro
 		texts = append(texts, q.Question)
 	}
 	ans := a.ask(ctx, protocol.PromptInfo{
-		ID: NewID("p"), Channel: a.s.ID, ChannelName: a.s.Name(), Agent: a.ID, From: rv.name, Kind: protocol.PromptQuestion, Tool: toolname.AskUser,
+		ID: NewID("p"), Channel: a.c.ID, ChannelName: a.c.Name(), Agent: a.ID, From: rv.name, Kind: protocol.PromptQuestion, Tool: toolname.AskUser,
 		Question: fmt.Sprintf("%s asks: %s", rv.name, strings.Join(texts, " | ")), Questions: qs,
 	}, "")
 	if ans.Withdrawn {

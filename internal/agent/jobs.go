@@ -35,15 +35,15 @@ func (j jobsAPI) AdoptCommand(command string, job tools.Job, timeout time.Durati
 func (j jobsAPI) Stop(id string) error { return j.a.stopJob(id, "stopped by agent") }
 
 func (j jobsAPI) Has(id string) bool {
-	j.a.s.mu.Lock()
-	defer j.a.s.mu.Unlock()
+	j.a.c.mu.Lock()
+	defer j.a.c.mu.Unlock()
 	_, ok := j.a.jobs[id]
 	return ok
 }
 
 // adoptJob takes over a running command as a background job.
 func (a *Agent) adoptJob(command string, job tools.Job, timeout time.Duration) (string, error) {
-	s := a.s
+	s := a.c
 	s.mu.Lock()
 	if a.state().killed {
 		s.mu.Unlock()
@@ -66,7 +66,7 @@ func (a *Agent) adoptJob(command string, job tools.Job, timeout time.Duration) (
 // watchJob waits for a job: it kills it at the timeout (counted from its
 // start) or when its context ends, and reports how it exited.
 func (a *Agent) watchJob(ctx context.Context, run *jobRun, timeout time.Duration) {
-	defer a.s.wg.Done()
+	defer a.c.wg.Done()
 	if timeout <= 0 {
 		timeout = time.Hour
 	}
@@ -94,7 +94,7 @@ func (a *Agent) watchJob(ctx context.Context, run *jobRun, timeout time.Duration
 // finishJob logs a job's result with its input in one transaction, unless
 // the job was stopped meanwhile.
 func (a *Agent) finishJob(run *jobRun, res event.JobFinishedPayload) {
-	s := a.s
+	s := a.c
 	s.mu.Lock()
 	if a.jobs[run.id] != run {
 		s.mu.Unlock()
@@ -110,7 +110,7 @@ func (a *Agent) finishJob(run *jobRun, res event.JobFinishedPayload) {
 
 // stopJob kills a running job and logs that it was stopped.
 func (a *Agent) stopJob(id, reason string) error {
-	s := a.s
+	s := a.c
 	s.mu.Lock()
 	run, ok := a.jobs[id]
 	if !ok {

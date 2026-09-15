@@ -34,12 +34,12 @@ var sandboxHiddenHome = []string{
 
 // sandboxSpec is the boundary for the channel's commands under cfg, nil
 // when the sandbox is turned off.
-func (s *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
+func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 	if !cfg.Sandbox.Enabled {
 		return nil
 	}
 	spec := &sandbox.Spec{Network: cfg.Sandbox.Network}
-	for _, d := range s.dirPaths() {
+	for _, d := range c.dirPaths() {
 		d = tools.ResolvePath("", d)
 		spec.Writable = append(spec.Writable, d)
 		for _, ro := range sandboxReadOnly {
@@ -51,7 +51,7 @@ func (s *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 	spec.Writable = append(spec.Writable, cfg.Sandbox.Writable...)
 	// The channel's scratch directory is TMPDIR, and replaces /tmp unless a
 	// working directory lives there (it would vanish under the mount).
-	tmp := filepath.Join(paths.CacheDir(), "tmp", s.ID)
+	tmp := filepath.Join(paths.CacheDir(), "tmp", c.ID)
 	if err := os.MkdirAll(tmp, 0o700); err == nil {
 		spec.Tmp, spec.PrivateTmp = tmp, !anyWithin(dirs, os.TempDir())
 	}

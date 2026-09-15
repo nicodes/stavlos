@@ -11,10 +11,10 @@ import (
 // orchestrator implements tools.Orchestrator on top of a channel (PRD §6.4).
 // Messages and status reach any agent in the channel: a child, a sibling,
 // or the caller's parent. Cancelling stays with the parent.
-type orchestrator struct{ s *Channel }
+type orchestrator struct{ c *Channel }
 
 func (o orchestrator) Spawn(ctx context.Context, parent, role, label, task, modelID string) (id, name string, err error) {
-	a, err := o.s.spawn(ctx, parent, role, label, task, modelID)
+	a, err := o.c.spawn(ctx, parent, role, label, task, modelID)
 	if err != nil {
 		return "", "", err
 	}
@@ -29,7 +29,7 @@ func (o orchestrator) Spawn(ctx context.Context, parent, role, label, task, mode
 // to the human is always a response. The bookkeeping is the input's apply,
 // so a request's wait exists the moment it is delivered.
 func (o orchestrator) Message(caller, to, text, kind string) (string, error) {
-	s := o.s
+	s := o.c
 	s.mu.Lock()
 	from := s.st.agents[caller]
 	if from == nil {
@@ -74,7 +74,7 @@ func (o orchestrator) Message(caller, to, text, kind string) (string, error) {
 }
 
 func (o orchestrator) Cancel(parent, id string) error {
-	s := o.s
+	s := o.c
 	s.mu.Lock()
 	c, ok := s.resolveLocked(id)
 	if !ok || c.parent != parent {
@@ -93,7 +93,7 @@ func (o orchestrator) Cancel(parent, id string) error {
 // Status describes one agent (any in the channel) or, with no id, the
 // whole channel tree in pre-order.
 func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
-	s := o.s
+	s := o.c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.st.agents[caller]; !ok {
@@ -116,7 +116,7 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 }
 
 func (o orchestrator) CanSpawn(agent string) (bool, string) {
-	s := o.s
+	s := o.c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, ok := s.st.agents[agent]
@@ -127,7 +127,7 @@ func (o orchestrator) CanSpawn(agent string) (bool, string) {
 }
 
 func (o orchestrator) Archetypes(agent string) []string {
-	s := o.s
+	s := o.c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	a, ok := s.st.agents[agent]

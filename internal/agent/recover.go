@@ -46,37 +46,37 @@ const lostJob = "background job lost in a daemon restart; rerun it if you still 
 // open turns are aborted, prompts nobody answered withdrawn, a compaction in
 // flight failed, and each lost job's result queued for its agent. Killed
 // agents, and every agent of an archived channel, stay down.
-func (s *Channel) resume(ctx context.Context) error {
-	s.mu.Lock()
+func (c *Channel) resume(ctx context.Context) error {
+	c.mu.Lock()
 	var evs []event.Event
-	for _, id := range s.st.order {
-		st := s.st.agents[id]
+	for _, id := range c.st.order {
+		st := c.st.agents[id]
 		if st.inTurn {
-			evs = append(evs, s.event(id, event.TurnAborted, event.TurnPayload{Turn: st.turn}))
+			evs = append(evs, c.event(id, event.TurnAborted, event.TurnPayload{Turn: st.turn}))
 		}
 		for _, ask := range sortedKeys(st.asks) {
-			evs = append(evs, s.event(id, event.AskResolved, event.AskResolvedPayload{ID: ask, Outcome: event.AskWithdrawn}))
+			evs = append(evs, c.event(id, event.AskResolved, event.AskResolvedPayload{ID: ask, Outcome: event.AskWithdrawn}))
 		}
 		if st.compacting {
-			evs = append(evs, s.event(id, event.CompactionFailed, event.CompactionPayload{Error: "interrupted by a daemon restart"}))
+			evs = append(evs, c.event(id, event.CompactionFailed, event.CompactionPayload{Error: "interrupted by a daemon restart"}))
 		}
-		if st.killed || s.st.archived {
+		if st.killed || c.st.archived {
 			continue
 		}
 		for _, job := range sortedKeys(st.jobs) {
 			evs = append(evs,
-				s.event(id, event.JobFinished, event.JobFinishedPayload{ID: job, Summary: lostJob, IsError: true, ExitCode: -1}),
-				s.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputJob, Job: job}))
+				c.event(id, event.JobFinished, event.JobFinishedPayload{ID: job, Summary: lostJob, IsError: true, ExitCode: -1}),
+				c.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputJob, Job: job}))
 		}
 	}
-	wake, err := s.commitLocked(ctx, evs...)
+	wake, err := c.commitLocked(ctx, evs...)
 	if err != nil {
-		s.mu.Unlock()
+		c.mu.Unlock()
 		return err
 	}
-	for _, id := range s.st.order {
-		a, st := s.agents[id], s.st.agents[id]
-		if st.killed || s.st.archived {
+	for _, id := range c.st.order {
+		a, st := c.agents[id], c.st.agents[id]
+		if st.killed || c.st.archived {
 			a.kill()
 			continue
 		}
@@ -85,10 +85,10 @@ func (s *Channel) resume(ctx context.Context) error {
 			wake = append(wake, a)
 		}
 	}
-	if s.st.archived {
-		s.cancel()
+	if c.st.archived {
+		c.cancel()
 	}
-	s.mu.Unlock()
+	c.mu.Unlock()
 	signal(wake)
 	return nil
 }

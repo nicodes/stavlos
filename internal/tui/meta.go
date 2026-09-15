@@ -73,7 +73,7 @@ func (m *Model) modeTag() string {
 // variant open their dialogs.
 func (m *Model) metaAction(part metaPart) tea.Cmd {
 	switch part {
-	case metaYolo:
+	case metaMode:
 		if m.modeTag() == "ASK" {
 			return m.openMode()
 		}
@@ -121,7 +121,7 @@ type metaPart int
 
 const (
 	metaNone    metaPart = iota
-	metaYolo             // the ASK/AUTO/YOLO mode tag: AUTO and YOLO go back to ask, ASK opens /mode
+	metaMode             // the ASK/AUTO/YOLO mode tag: AUTO and YOLO go back to ask, ASK opens /mode
 	metaRole             // "label (role)": click opens /roles
 	metaModel            // the model: click opens /models
 	metaVariant          // the variant: click opens /variants

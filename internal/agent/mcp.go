@@ -136,12 +136,12 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 		return
 	}
 	cmd := exec.CommandContext(a.ctx, config.ExpandEnv(def.Command), expandAll(def.Args)...)
-	cmd.Dir = a.s.Dir
+	cmd.Dir = a.c.Dir
 	cmd.Env = proc.Env(cfg.PassEnv) // scrubbed like a shell command's; the definition's env: adds what the server needs
 	for k, v := range def.Env {
 		cmd.Env = append(cmd.Env, k+"="+config.ExpandEnv(v))
 	}
-	if spec := a.s.sandboxSpec(cfg); spec != nil {
+	if spec := a.c.sandboxSpec(cfg); spec != nil {
 		if _, err := sandbox.Wrap(cmd, *spec); err != nil {
 			fail(fmt.Errorf("sandbox: %v", err))
 			return
@@ -211,10 +211,10 @@ func (a *Agent) armMCPIdle() {
 		a.mcp.idle.Stop()
 	}
 	a.mcp.idle = time.AfterFunc(MCPIdleAfter, func() {
-		a.s.mu.Lock()
+		a.c.mu.Lock()
 		st := a.state()
 		idle := !st.inTurn && !st.startsTurn()
-		a.s.mu.Unlock()
+		a.c.mu.Unlock()
 		if idle {
 			a.stopMCP("", true)
 		}

@@ -37,7 +37,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	finish := func(out string, isErr, cancelled, denied bool) {
 		_ = a.record(event.ToolFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied})
 	}
-	t, ok := a.s.tools[c.Name]
+	t, ok := a.c.tools[c.Name]
 	if !ok {
 		t, ok = a.mcpTool(c.Name) // an MCP server's tool, owned by this agent
 	}
@@ -86,17 +86,17 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	if sub.Kind == policy.KindCommand && verb == policy.Allow && !shellcmd.Simple(arg) {
 		verb = policy.Ask
 	}
-	dirs := a.s.dirPaths()
+	dirs := a.c.dirPaths()
 	// An edit to the files that steer the harness itself asks whatever
 	// policy says and whatever the mode.
-	control := controlFile(c.Name, sub, a.s.Dir, dirs)
+	control := controlFile(c.Name, sub, a.c.Dir, dirs)
 	if control != "" && verb == policy.Allow {
 		verb, arg = policy.Ask, control
 	}
-	a.s.mu.Lock()
-	covered := verb == policy.Ask && a.s.st.permits.covers(c.Name, sub)
-	mode := a.s.st.mode
-	a.s.mu.Unlock()
+	a.c.mu.Lock()
+	covered := verb == policy.Ask && a.c.st.permits.covers(c.Name, sub)
+	mode := a.c.st.mode
+	a.c.mu.Unlock()
 	// What the human allowed for the channel answers an ask, never a deny.
 	if covered {
 		verb = policy.Allow
@@ -109,7 +109,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	// allows.
 	boundary, why := "", ""
 	if verb != policy.Deny {
-		if dir := outsideDir(sub, a.s.Dir, dirs); dir != "" {
+		if dir := outsideDir(sub, a.c.Dir, dirs); dir != "" {
 			boundary = dir
 			switch mode {
 			case protocol.ModeYolo:
@@ -176,7 +176,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	// the call itself; the prompt carries it for display.
 	prefix := prefixFor(d.sub.Kind, d.arg)
 	ans := a.ask(turnCtx, protocol.PromptInfo{
-		ID: NewID("p"), Channel: a.s.ID, ChannelName: a.s.Name(), Agent: a.ID, From: rv.name, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
+		ID: NewID("p"), Channel: a.c.ID, ChannelName: a.c.Name(), Agent: a.ID, From: rv.name, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
 		Question: question, Dir: d.boundary, Prefix: prefix,
 	}, c.ID)
 	if ans.Withdrawn {
@@ -186,10 +186,10 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	case protocol.AnswerAllowPrefix, protocol.AnswerAllowAlways:
 		var grants []event.Event
 		if ans.Value == protocol.AnswerAllowPrefix && prefix != "" {
-			grants = append(grants, a.s.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: c.Name, Prefix: prefix}))
+			grants = append(grants, a.c.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: c.Name, Prefix: prefix}))
 		} else {
 			for _, v := range d.sub.Values { // the call as a whole: every path it touches
-				grants = append(grants, a.s.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: c.Name, Call: v}))
+				grants = append(grants, a.c.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: c.Name, Call: v}))
 			}
 		}
 		_ = a.recordAll(grants...)
@@ -200,9 +200,9 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	if d.boundary != "" && ans.Value != protocol.AnswerAllow {
 		dir := d.boundary
 		if strings.TrimSpace(ans.Dir) != "" {
-			dir = resolveDir(a.s.Dir, ans.Dir) // the human edited the offered directory
+			dir = resolveDir(a.c.Dir, ans.Dir) // the human edited the offered directory
 		}
-		_ = a.s.addDir(context.Background(), a.ID, dir, "human")
+		_ = a.c.addDir(context.Background(), a.ID, dir, "human")
 	}
 	return "", false, true
 }
@@ -223,7 +223,7 @@ func denialText(ans escalation.Answer, d decision) string {
 // ask logs a prompt, puts it to the human, and logs how it ended.
 func (a *Agent) ask(ctx context.Context, info protocol.PromptInfo, callID string) escalation.Answer {
 	_ = a.record(event.AskRequested, event.AskRequestedPayload{ID: info.ID, Kind: string(info.Kind), CallID: callID, Tool: info.Tool, Question: info.Question})
-	ans := a.s.host.Prompt(ctx, info)
+	ans := a.c.host.Prompt(ctx, info)
 	res := event.AskResolvedPayload{ID: info.ID, Outcome: event.AskAnswered, Answer: ans.Value, By: ans.Client}
 	switch {
 	case ans.Withdrawn:
@@ -239,11 +239,11 @@ func (a *Agent) ask(ctx context.Context, info protocol.PromptInfo, callID string
 
 // toolEnv is what a tool gets from this agent for one call.
 func (a *Agent) toolEnv(turn int, c model.Block, rv roleView, cfg *config.Effective) *tools.Env {
-	return &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{s: a.s}, Mon: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a},
+	return &tools.Env{Dir: a.c.Dir, Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Mon: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a},
 		MaxOutput: cfg.Compaction.MaxToolOutput, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
-		Sandbox: a.s.sandboxSpec(cfg),
+		Sandbox: a.c.sandboxSpec(cfg),
 		Partial: func(out string) {
-			a.s.host.Stream(protocol.StreamNotification{Channel: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: out})
+			a.c.host.Stream(protocol.StreamNotification{Channel: a.c.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: out})
 		}}
 }
 

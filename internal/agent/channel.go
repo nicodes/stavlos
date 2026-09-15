@@ -87,34 +87,34 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, role string)
 }
 
 // event builds an event of the channel.
-func (s *Channel) event(agent string, t event.Type, payload any) event.Event {
-	e := event.Event{Channel: s.ID, Agent: agent, Type: t}
+func (c *Channel) event(agent string, t event.Type, payload any) event.Event {
+	e := event.Event{Channel: c.ID, Agent: agent, Type: t}
 	if payload != nil {
 		e.Payload = event.MustPayload(payload)
 	}
 	return e
 }
 
-// commitLocked logs events and applies them. The caller holds s.mu and
+// commitLocked logs events and applies them. The caller holds c.mu and
 // signals the returned agents once it has released it.
-func (s *Channel) commitLocked(ctx context.Context, evs ...event.Event) ([]*Agent, error) {
-	if s.stopped {
+func (c *Channel) commitLocked(ctx context.Context, evs ...event.Event) ([]*Agent, error) {
+	if c.stopped {
 		return nil, errStopped
 	}
 	if len(evs) == 0 {
 		return nil, nil
 	}
-	out, err := s.host.Append(ctx, evs...)
+	out, err := c.host.Append(ctx, evs...)
 	if err != nil {
 		return nil, err
 	}
 	var fx effects
 	for _, e := range out {
-		s.st.apply(e, &fx)
+		c.st.apply(e, &fx)
 	}
 	var wake []*Agent
 	for _, id := range fx.wake {
-		if a, ok := s.agents[id]; ok {
+		if a, ok := c.agents[id]; ok {
 			wake = append(wake, a)
 		}
 	}
@@ -122,10 +122,10 @@ func (s *Channel) commitLocked(ctx context.Context, evs ...event.Event) ([]*Agen
 }
 
 // commit is commitLocked for a caller that does not hold the lock.
-func (s *Channel) commit(ctx context.Context, evs ...event.Event) error {
-	s.mu.Lock()
-	wake, err := s.commitLocked(ctx, evs...)
-	s.mu.Unlock()
+func (c *Channel) commit(ctx context.Context, evs ...event.Event) error {
+	c.mu.Lock()
+	wake, err := c.commitLocked(ctx, evs...)
+	c.mu.Unlock()
 	signal(wake)
 	return err
 }
@@ -139,33 +139,33 @@ func signal(agents []*Agent) {
 // Start logs the channel's creation under name and spawns its main agent.
 // A channel may start with no model or an unconnected provider: the first
 // turn reports the problem (PRD §8.4).
-func (s *Channel) Start(ctx context.Context, name string) error {
-	s.mu.Lock()
-	role, modelID := s.st.role, s.st.model
-	if _, ok := s.cfg.Presets[role]; !ok {
-		s.mu.Unlock()
+func (c *Channel) Start(ctx context.Context, name string) error {
+	c.mu.Lock()
+	role, modelID := c.st.role, c.st.model
+	if _, ok := c.cfg.Presets[role]; !ok {
+		c.mu.Unlock()
 		return fmt.Errorf("root preset %q not found", role)
 	}
-	_, err := s.commitLocked(ctx, s.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: s.Dir, Model: modelID, Role: role}))
-	s.mu.Unlock()
+	_, err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.Dir, Model: modelID, Role: role}))
+	c.mu.Unlock()
 	if err != nil {
 		return err
 	}
-	_, err = s.spawn(ctx, "", role, "main", "", "")
+	_, err = c.spawn(ctx, "", role, "main", "", "")
 	return err
 }
 
 // Stop ends every agent without logging (daemon shutdown) and waits for
 // their goroutines.
-func (s *Channel) Stop() {
-	s.mu.Lock()
-	s.stopped = true
-	agents := make([]*Agent, 0, len(s.agents))
-	for _, a := range s.agents {
+func (c *Channel) Stop() {
+	c.mu.Lock()
+	c.stopped = true
+	agents := make([]*Agent, 0, len(c.agents))
+	for _, a := range c.agents {
 		agents = append(agents, a)
 	}
-	s.mu.Unlock()
-	s.cancel()
+	c.mu.Unlock()
+	c.cancel()
 	for _, a := range agents {
 		a.stopMCP("", false)
 	}
@@ -173,7 +173,7 @@ func (s *Channel) Stop() {
 	// ignores it must not hold the daemon's shutdown hostage.
 	done := make(chan struct{})
 	go func() {
-		s.wg.Wait()
+		c.wg.Wait()
 		close(done)
 	}()
 	select {
@@ -188,136 +188,136 @@ const stopTimeout = 10 * time.Second
 // --- settings ---
 
 // Config returns the effective config.
-func (s *Channel) Config() *config.Effective {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cfg
+func (c *Channel) Config() *config.Effective {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cfg
 }
 
 // SetConfig swaps the effective config (after a trust decision or edit).
-func (s *Channel) SetConfig(cfg *config.Effective) {
-	s.mu.Lock()
-	s.cfg = cfg
-	s.mu.Unlock()
+func (c *Channel) SetConfig(cfg *config.Effective) {
+	c.mu.Lock()
+	c.cfg = cfg
+	c.mu.Unlock()
 }
 
 // Name is the channel's name, shown as #name.
-func (s *Channel) Name() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.st.name
+func (c *Channel) Name() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.st.name
 }
 
 // Model returns the channel-selected model.
-func (s *Channel) Model() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.st.model
+func (c *Channel) Model() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.st.model
 }
 
 // Mode reports the channel's permission mode.
-func (s *Channel) Mode() string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.st.mode
+func (c *Channel) Mode() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.st.mode
 }
 
 // Archived reports whether the channel is archived.
-func (s *Channel) Archived() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.st.archived
+func (c *Channel) Archived() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.st.archived
 }
 
 // SetMode switches the channel's permission mode. Deny rules, questions and
 // the trust prompt are unaffected in every mode.
-func (s *Channel) SetMode(ctx context.Context, mode string) error {
+func (c *Channel) SetMode(ctx context.Context, mode string) error {
 	switch mode {
 	case protocol.ModeAsk, protocol.ModeAuto, protocol.ModeYolo:
 	default:
 		return fmt.Errorf("unknown mode %q: ask, auto or yolo", mode)
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.st.mode == mode {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.st.mode == mode {
 		return nil
 	}
-	_, err := s.commitLocked(ctx, s.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Mode: event.Str(mode)}))
+	_, err := c.commitLocked(ctx, c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Mode: event.Str(mode)}))
 	return err
 }
 
 // Rename takes a new name, which the daemon has normalised and checked.
-func (s *Channel) Rename(ctx context.Context, name string) error {
-	return s.commit(ctx, s.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Name: event.Str(name)}))
+func (c *Channel) Rename(ctx context.Context, name string) error {
+	return c.commit(ctx, c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Name: event.Str(name)}))
 }
 
 // SetModel changes the channel model: future spawns and the main agent's
 // inherited default (running agents keep theirs, PRD §8.3).
-func (s *Channel) SetModel(ctx context.Context, id string) error {
-	if err := s.host.CheckModel(id); err != nil {
+func (c *Channel) SetModel(ctx context.Context, id string) error {
+	if err := c.host.CheckModel(id); err != nil {
 		return err
 	}
-	return s.commit(ctx, s.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Model: event.Str(id)}))
+	return c.commit(ctx, c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Model: event.Str(id)}))
 }
 
 // Archive kills every agent and marks the channel archived.
-func (s *Channel) Archive(ctx context.Context) error {
-	if root := s.Root(); root != nil {
-		_ = s.Kill(root.ID)
+func (c *Channel) Archive(ctx context.Context) error {
+	if root := c.Root(); root != nil {
+		_ = c.Kill(root.ID)
 	}
-	err := s.commit(ctx, s.event("", event.ChannelArchived, nil))
-	s.cancel()
+	err := c.commit(ctx, c.event("", event.ChannelArchived, nil))
+	c.cancel()
 	return err
 }
 
 // --- agents ---
 
 // Agent looks up an agent by id.
-func (s *Channel) Agent(id string) (*Agent, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	a, ok := s.agents[id]
+func (c *Channel) Agent(id string) (*Agent, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	a, ok := c.agents[id]
 	return a, ok
 }
 
 // Root returns the main agent.
-func (s *Channel) Root() *Agent {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if len(s.st.order) == 0 {
+func (c *Channel) Root() *Agent {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.st.order) == 0 {
 		return nil
 	}
-	return s.agents[s.st.order[0]]
+	return c.agents[c.st.order[0]]
 }
 
 // Agents returns agents in pre-order (main first, children after parents).
-func (s *Channel) Agents() []*Agent {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.agentsLocked()
+func (c *Channel) Agents() []*Agent {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.agentsLocked()
 }
 
-func (s *Channel) agentsLocked() []*Agent {
-	ids := s.preorderLocked()
+func (c *Channel) agentsLocked() []*Agent {
+	ids := c.preorderLocked()
 	out := make([]*Agent, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, s.agents[id])
+		out = append(out, c.agents[id])
 	}
 	return out
 }
 
 // preorderLocked lists agent ids parents first, siblings in spawn order.
-func (s *Channel) preorderLocked() []string {
+func (c *Channel) preorderLocked() []string {
 	var out []string
 	var walk func(id string)
 	walk = func(id string) {
 		out = append(out, id)
-		for _, c := range s.st.agents[id].children {
-			walk(c)
+		for _, child := range c.st.agents[id].children {
+			walk(child)
 		}
 	}
-	for _, id := range s.st.order {
-		if s.st.agents[s.st.agents[id].parent] == nil {
+	for _, id := range c.st.order {
+		if c.st.agents[c.st.agents[id].parent] == nil {
 			walk(id)
 		}
 	}
@@ -326,19 +326,19 @@ func (s *Channel) preorderLocked() []string {
 
 // resolveLocked finds an agent by id, by name (with or without "@", in any
 // case), or by a unique prefix of its id of at least four characters.
-func (s *Channel) resolveLocked(ref string) (*agentState, bool) {
+func (c *Channel) resolveLocked(ref string) (*agentState, bool) {
 	ref = strings.TrimPrefix(strings.TrimSpace(ref), "@")
-	if a, ok := s.st.agents[ref]; ok {
+	if a, ok := c.st.agents[ref]; ok {
 		return a, true
 	}
-	if id, ok := s.st.names[normalizeName(ref)]; ok && ref != "" {
-		return s.st.agents[id], true
+	if id, ok := c.st.names[normalizeName(ref)]; ok && ref != "" {
+		return c.st.agents[id], true
 	}
 	if len(ref) < 4 {
 		return nil, false
 	}
 	var found *agentState
-	for id, a := range s.st.agents {
+	for id, a := range c.st.agents {
 		if strings.HasPrefix(id, ref) {
 			if found != nil {
 				return nil, false // ambiguous
@@ -350,24 +350,24 @@ func (s *Channel) resolveLocked(ref string) (*agentState, bool) {
 }
 
 // Tree describes every agent, in pre-order.
-func (s *Channel) Tree() []protocol.AgentInfo {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (c *Channel) Tree() []protocol.AgentInfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	var out []protocol.AgentInfo
-	for _, a := range s.agentsLocked() {
+	for _, a := range c.agentsLocked() {
 		out = append(out, a.infoLocked())
 	}
 	return out
 }
 
 // Info describes the channel.
-func (s *Channel) Info() protocol.ChannelInfo {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (c *Channel) Info() protocol.ChannelInfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	var states []protocol.AgentState
 	live, cost := 0, 0.0
-	for _, id := range s.st.order {
-		a := s.st.agents[id]
+	for _, id := range c.st.order {
+		a := c.st.agents[id]
 		states = append(states, a.status())
 		cost += a.cost
 		if !a.killed {
@@ -375,16 +375,16 @@ func (s *Channel) Info() protocol.ChannelInfo {
 		}
 	}
 	return protocol.ChannelInfo{
-		ID: s.ID, Name: s.st.name, Dir: s.Dir, Model: s.st.model, RootAgent: s.st.role,
-		Created: s.Created.Format(time.RFC3339), Archived: s.st.archived,
-		Live: live, CostUSD: cost, TrustPending: s.cfg.TrustPending, Mode: s.st.mode,
-		State: protocol.RollUp(states), Dirs: s.dirInfosLocked(),
+		ID: c.ID, Name: c.st.name, Dir: c.Dir, Model: c.st.model, RootAgent: c.st.role,
+		Created: c.Created.Format(time.RFC3339), Archived: c.st.archived,
+		Live: live, CostUSD: cost, TrustPending: c.cfg.TrustPending, Mode: c.st.mode,
+		State: protocol.RollUp(states), Dirs: c.dirInfosLocked(),
 	}
 }
 
 // Presets lists the roles available to the channel.
-func (s *Channel) Presets() []protocol.PresetInfo {
-	cfg := s.Config()
+func (c *Channel) Presets() []protocol.PresetInfo {
+	cfg := c.Config()
 	var out []protocol.PresetInfo
 	for _, p := range cfg.Presets {
 		info := protocol.PresetInfo{Name: p.Name, Description: p.Description, Mode: p.Mode, Spawn: p.Spawn, Color: p.Color, MaxTurns: p.MaxTurns}
@@ -399,9 +399,9 @@ func (s *Channel) Presets() []protocol.PresetInfo {
 
 // busyLocked counts agents in a turn or about to start one; idle children
 // waiting for a follow-up cost nothing and do not count against fan-out.
-func (s *Channel) busyLocked() int {
+func (c *Channel) busyLocked() int {
 	n := 0
-	for _, a := range s.st.agents {
+	for _, a := range c.st.agents {
 		if a.busy() {
 			n++
 		}
@@ -412,14 +412,14 @@ func (s *Channel) busyLocked() int {
 // resolveModel implements PRD §8.3 under the role's whitelist: an explicit
 // spawn argument must be allowed; otherwise the parent's (or the channel's)
 // model is inherited when the role allows it, else the role's default.
-func (s *Channel) resolveModelLocked(spawnArg string, preset config.Preset, parent *agentState) (string, error) {
+func (c *Channel) resolveModelLocked(spawnArg string, preset config.Preset, parent *agentState) (string, error) {
 	if spawnArg != "" {
 		if !preset.AllowsModel(spawnArg) {
 			return "", fmt.Errorf("role %s does not allow model %s (allowed: %s)", preset.Name, spawnArg, modelList(preset))
 		}
 		return spawnArg, nil
 	}
-	inherited := s.st.model
+	inherited := c.st.model
 	if parent != nil {
 		inherited = parent.model
 	}
@@ -453,16 +453,16 @@ func fitVariant(p config.Preset, id, want string) string {
 // spawn creates and starts an agent; parentID is "" for the main agent. A
 // task becomes the child's first input, a request from its parent, logged
 // with the spawn in one transaction.
-func (s *Channel) spawn(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, error) {
-	s.mu.Lock()
-	a, wake, err := s.spawnLocked(ctx, parentID, role, label, task, modelArg)
-	s.mu.Unlock()
+func (c *Channel) spawn(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, error) {
+	c.mu.Lock()
+	a, wake, err := c.spawnLocked(ctx, parentID, role, label, task, modelArg)
+	c.mu.Unlock()
 	signal(wake)
 	return a, err
 }
 
-func (s *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, []*Agent, error) {
-	preset, ok := s.cfg.Presets[role]
+func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, []*Agent, error) {
+	preset, ok := c.cfg.Presets[role]
 	if !ok {
 		return nil, nil, fmt.Errorf("unknown archetype %q", role)
 	}
@@ -472,11 +472,11 @@ func (s *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 		if reservedNames[normalizeName(label)] {
 			return nil, nil, fmt.Errorf("label %q is reserved: a child's name appears on its messages, so it may not read as the human or the system", label)
 		}
-		if parent = s.st.agents[parentID]; parent == nil || parent.killed {
+		if parent = c.st.agents[parentID]; parent == nil || parent.killed {
 			return nil, nil, fmt.Errorf("parent %q not found", parentID)
 		}
 		depth = parent.depth + 1
-		if pp := s.roleLocked(parent).preset; !contains(pp.Spawn, role) {
+		if pp := c.roleLocked(parent).preset; !contains(pp.Spawn, role) {
 			return nil, nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", pp.Name, role, pp.Spawn)
 		}
 		if !preset.CanBeSubagent() {
@@ -485,7 +485,7 @@ func (s *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 	} else if !preset.CanBePrimary() {
 		return nil, nil, fmt.Errorf("role %q is subagent-only: it cannot be the main agent", role)
 	}
-	modelID, err := s.resolveModelLocked(modelArg, preset, parent)
+	modelID, err := c.resolveModelLocked(modelArg, preset, parent)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -494,7 +494,7 @@ func (s *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 		if modelID == "" {
 			return nil, nil, errors.New(ErrNoModel)
 		}
-		if err := s.host.CheckModel(modelID); err != nil {
+		if err := c.host.CheckModel(modelID); err != nil {
 			return nil, nil, err
 		}
 		if modelID == parent.model {
@@ -503,27 +503,27 @@ func (s *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 	}
 	variant = fitVariant(preset, modelID, variant)
 	id := NewID("a")
-	name, err := s.st.uniqueName(label, role, id)
+	name, err := c.st.uniqueName(label, role, id)
 	if err != nil {
 		return nil, nil, err
 	}
-	parentCtx := s.ctx
-	if p := s.agents[parentID]; p != nil {
+	parentCtx := c.ctx
+	if p := c.agents[parentID]; p != nil {
 		parentCtx = p.ctx
 	}
-	a := newAgent(s, id, parentID, depth, parentCtx)
-	s.agents[id] = a
-	evs := []event.Event{s.event(id, event.AgentSpawned, event.AgentSpawnedPayload{ID: id, Parent: parentID, Role: role, Name: name, Model: modelID, Variant: variant, Depth: depth})}
+	a := newAgent(c, id, parentID, depth, parentCtx)
+	c.agents[id] = a
+	evs := []event.Event{c.event(id, event.AgentSpawned, event.AgentSpawnedPayload{ID: id, Parent: parentID, Role: role, Name: name, Model: modelID, Variant: variant, Depth: depth})}
 	if task != "" {
 		in := event.Input{ID: NewID("i"), Kind: event.InputPrompt, Text: task}
 		if parent != nil {
 			in.Kind, in.From, in.FromName = event.InputRequest, parentID, parent.name
 		}
-		evs = append(evs, s.event(id, event.InputQueued, in))
+		evs = append(evs, c.event(id, event.InputQueued, in))
 	}
-	wake, err := s.commitLocked(ctx, evs...)
+	wake, err := c.commitLocked(ctx, evs...)
 	if err != nil {
-		delete(s.agents, id)
+		delete(c.agents, id)
 		a.kill()
 		return nil, nil, err
 	}
@@ -532,33 +532,33 @@ func (s *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 }
 
 // canSpawnLocked reports whether agent p may create a child now.
-func (s *Channel) canSpawnLocked(p *agentState) (bool, string) {
-	if p.depth+1 >= s.cfg.Limits.MaxDepth {
-		return false, fmt.Sprintf("max depth %d reached", s.cfg.Limits.MaxDepth)
+func (c *Channel) canSpawnLocked(p *agentState) (bool, string) {
+	if p.depth+1 >= c.cfg.Limits.MaxDepth {
+		return false, fmt.Sprintf("max depth %d reached", c.cfg.Limits.MaxDepth)
 	}
-	if s.busyLocked() >= s.cfg.Limits.MaxAgents {
-		return false, fmt.Sprintf("max busy agents %d reached (idle children do not count)", s.cfg.Limits.MaxAgents)
+	if c.busyLocked() >= c.cfg.Limits.MaxAgents {
+		return false, fmt.Sprintf("max busy agents %d reached (idle children do not count)", c.cfg.Limits.MaxAgents)
 	}
-	if len(s.roleLocked(p).preset.Spawn) == 0 {
+	if len(c.roleLocked(p).preset.Spawn) == 0 {
 		return false, "this archetype cannot spawn"
 	}
 	return true, ""
 }
 
 // SpawnFromClient spawns on behalf of a human (PRD §9).
-func (s *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, task, modelArg string) (string, error) {
-	s.mu.Lock()
-	p := s.st.agents[parentID]
+func (c *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, task, modelArg string) (string, error) {
+	c.mu.Lock()
+	p := c.st.agents[parentID]
 	if p == nil {
-		s.mu.Unlock()
+		c.mu.Unlock()
 		return "", fmt.Errorf("agent %q not found", parentID)
 	}
-	if ok, why := s.canSpawnLocked(p); !ok {
-		s.mu.Unlock()
+	if ok, why := c.canSpawnLocked(p); !ok {
+		c.mu.Unlock()
 		return "", errors.New(why)
 	}
-	a, wake, err := s.spawnLocked(ctx, parentID, role, label, task, modelArg)
-	s.mu.Unlock()
+	a, wake, err := c.spawnLocked(ctx, parentID, role, label, task, modelArg)
+	c.mu.Unlock()
 	signal(wake)
 	if err != nil {
 		return "", err
@@ -569,8 +569,8 @@ func (s *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, ta
 // --- the human's messages ---
 
 // Send queues a prompt for an agent: it runs after the current turn.
-func (s *Channel) Send(ctx context.Context, agentID, text, source string) error {
-	a, ok := s.Agent(agentID)
+func (c *Channel) Send(ctx context.Context, agentID, text, source string) error {
+	a, ok := c.Agent(agentID)
 	if !ok {
 		return fmt.Errorf("agent %q not found", agentID)
 	}
@@ -578,8 +578,8 @@ func (s *Channel) Send(ctx context.Context, agentID, text, source string) error 
 }
 
 // Steer delivers a steer: it reaches the agent at its next model call.
-func (s *Channel) Steer(ctx context.Context, agentID, text, source string) error {
-	a, ok := s.Agent(agentID)
+func (c *Channel) Steer(ctx context.Context, agentID, text, source string) error {
+	a, ok := c.Agent(agentID)
 	if !ok {
 		return fmt.Errorf("agent %q not found", agentID)
 	}
@@ -591,50 +591,50 @@ func (s *Channel) Steer(ctx context.Context, agentID, text, source string) error
 // each as a steer that is owed a reply. A post with no leading name goes to
 // the main agent; a leading name that is no live agent refuses the whole
 // post. The post and its deliveries are one transaction.
-func (s *Channel) Post(ctx context.Context, text, _ string) ([]string, error) {
+func (c *Channel) Post(ctx context.Context, text, _ string) ([]string, error) {
 	refs, message := protocol.Addressees(text)
 	if strings.TrimSpace(message) == "" {
 		return nil, errors.New("empty message")
 	}
-	s.mu.Lock()
+	c.mu.Lock()
 	var targets []*agentState
 	for _, ref := range refs {
-		a, ok := s.resolveLocked(ref)
+		a, ok := c.resolveLocked(ref)
 		switch {
 		case !ok:
-			s.mu.Unlock()
+			c.mu.Unlock()
 			return nil, fmt.Errorf("no agent named @%s in this channel", ref)
 		case a.killed:
-			s.mu.Unlock()
+			c.mu.Unlock()
 			return nil, fmt.Errorf("@%s is killed", ref)
 		case !slices.Contains(targets, a):
 			targets = append(targets, a)
 		}
 	}
 	if len(targets) == 0 {
-		if len(s.st.order) == 0 {
-			s.mu.Unlock()
+		if len(c.st.order) == 0 {
+			c.mu.Unlock()
 			return nil, errors.New("the channel has no agents")
 		}
-		targets = []*agentState{s.st.agents[s.st.order[0]]}
+		targets = []*agentState{c.st.agents[c.st.order[0]]}
 	}
 	post := NewID("post")
 	names := make([]string, len(targets))
 	evs := []event.Event{{}}
 	for i, a := range targets {
 		names[i] = a.name
-		evs = append(evs, s.event(a.id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputSteer, Text: message, Post: post}))
+		evs = append(evs, c.event(a.id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputSteer, Text: message, Post: post}))
 	}
-	evs[0] = s.event("", event.ChatPosted, event.ChatPayload{ID: post, Text: message, To: names})
-	wake, err := s.commitLocked(ctx, evs...)
-	s.mu.Unlock()
+	evs[0] = c.event("", event.ChatPosted, event.ChatPayload{ID: post, Text: message, To: names})
+	wake, err := c.commitLocked(ctx, evs...)
+	c.mu.Unlock()
 	signal(wake)
 	return names, err
 }
 
 // Cancel ends an agent's current turn.
-func (s *Channel) Cancel(agentID string) error {
-	a, ok := s.Agent(agentID)
+func (c *Channel) Cancel(agentID string) error {
+	a, ok := c.Agent(agentID)
 	if !ok {
 		return fmt.Errorf("agent %q not found", agentID)
 	}
@@ -643,31 +643,31 @@ func (s *Channel) Cancel(agentID string) error {
 }
 
 // Kill tears down an agent and its subtree, children first.
-func (s *Channel) Kill(agentID string) error {
-	s.mu.Lock()
-	if _, ok := s.st.agents[agentID]; !ok {
-		s.mu.Unlock()
+func (c *Channel) Kill(agentID string) error {
+	c.mu.Lock()
+	if _, ok := c.st.agents[agentID]; !ok {
+		c.mu.Unlock()
 		return fmt.Errorf("agent %q not found", agentID)
 	}
 	var victims []*Agent
 	var evs []event.Event
 	var walk func(id string)
 	walk = func(id string) {
-		st := s.st.agents[id]
-		for _, c := range st.children {
-			walk(c)
+		st := c.st.agents[id]
+		for _, child := range st.children {
+			walk(child)
 		}
 		if !st.killed {
-			victims = append(victims, s.agents[id])
-			evs = append(evs, s.event(id, event.AgentKilled, nil))
+			victims = append(victims, c.agents[id])
+			evs = append(evs, c.event(id, event.AgentKilled, nil))
 		}
 	}
 	walk(agentID)
-	_, err := s.commitLocked(context.Background(), evs...)
+	_, err := c.commitLocked(context.Background(), evs...)
 	for _, a := range victims {
 		a.jobs = map[string]*jobRun{} // their processes end with the agent's context
 	}
-	s.mu.Unlock()
+	c.mu.Unlock()
 	for _, a := range victims {
 		a.kill()
 		a.stopMCP("", false)
