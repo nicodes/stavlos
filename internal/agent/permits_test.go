@@ -20,4 +20,9 @@ func TestPrefixFor(t *testing.T) {
 	if len(p.prefixes["shell"]) != 1 || !p.covers("shell", policy.Command("go test ./...")) || p.covers("shell", policy.Command("go build")) || !p.covers("read", policy.Path("/etc/hosts")) || p.covers("read", policy.Path("/etc/passwd")) {
 		t.Fatal("permits")
 	}
+	// A patch is covered only when every path it touches is.
+	p.rememberCall("apply_patch", "a.go")
+	if !p.covers("apply_patch", policy.Path("a.go")) || p.covers("apply_patch", policy.Path("a.go", "../../.bashrc")) || p.covers("apply_patch", policy.Path()) {
+		t.Fatal("a permit for one path covered another")
+	}
 }

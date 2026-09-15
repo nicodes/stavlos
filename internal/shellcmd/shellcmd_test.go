@@ -89,7 +89,14 @@ func TestPrefix(t *testing.T) {
 		"awk '{print}'":                "",
 		"ssh host rm -rf /":            "",
 		"! grep x":                     "",
-		"find . -name x":               "find", // find is not a wrapper: -exec is the policy's problem, not the prefix's
+		"find . -name x":               "", // unlisted: find -exec runs programs
+		"sed -i s/a/b/ f":              "",
+		"tar xf a.tar":                 "",
+		"npm exec rimraf /":            "",
+		"docker run --rm x":            "",
+		"uv run rm -rf /":              "",
+		"some-launcher rm -rf /":       "",
+		"rm -rf build":                 "rm",
 	}
 	for cmd, want := range cases {
 		if got := Prefix(cmd); got != want {

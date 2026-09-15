@@ -161,3 +161,69 @@ func TestApplyPatchWritesAtomically(t *testing.T) {
 		t.Fatal("temporary file left behind")
 	}
 }
+
+// TestApplyPatchSectionsChain: each section sees the ones before it — two
+// updates to one file, a delete and add of one path, an update after a
+// move — and an insertion whose anchor is missing is an error, not an
+// append at the end of the file.
+func TestApplyPatchSectionsChain(t *testing.T) {
+	dir := t.TempDir()
+	env := &Env{Dir: dir}
+	run := func(patch string) Result {
+		in, _ := json.Marshal(map[string]string{"patch": patch})
+		return patchTool{}.Run(context.Background(), in, env)
+	}
+	read := func(name string) string {
+		b, _ := os.ReadFile(filepath.Join(dir, name))
+		return string(b)
+	}
+	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\ntwo\nthree\n"), 0o644)
+	if r := run("*** Begin Patch\n*** Update File: a.txt\n-one\n+uno\n*** Update File: a.txt\n-three\n+tres\n*** End Patch"); r.IsError || read("a.txt") != "uno\ntwo\ntres\n" {
+		t.Fatalf("two updates: %+v %q", r, read("a.txt"))
+	}
+	if r := run("*** Begin Patch\n*** Delete File: a.txt\n*** Add File: a.txt\n+fresh\n*** End Patch"); r.IsError || read("a.txt") != "fresh\n" {
+		t.Fatalf("delete and add: %+v %q", r, read("a.txt"))
+	}
+	if r := run("*** Begin Patch\n*** Update File: a.txt\n*** Move to: b.txt\n-fresh\n+moved\n*** Update File: b.txt\n-moved\n+edited\n*** End Patch"); r.IsError || read("b.txt") != "edited\n" || read("a.txt") != "" {
+		t.Fatalf("update after move: %+v %q", r, read("b.txt"))
+	}
+	if r := run("*** Begin Patch\n*** Update File: b.txt\n@@ not a line of the file\n+inserted\n*** End Patch"); !r.IsError || !strings.Contains(r.Output, "anchor not found") || read("b.txt") != "edited\n" {
+		t.Fatalf("missing anchor: %+v %q", r, read("b.txt"))
+	}
+}
+
+// TestApplyPatchKeepsCRLF: a CRLF file is patched with LF hunks and keeps
+// its line endings.
+func TestApplyPatchKeepsCRLF(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "w.txt"), []byte("one\r\ntwo\r\n"), 0o644)
+	in, _ := json.Marshal(map[string]string{"patch": "*** Begin Patch\n*** Update File: w.txt\n one\n-two\n+2\n+3\n*** End Patch"})
+	if r := (patchTool{}).Run(context.Background(), in, &Env{Dir: dir}); r.IsError {
+		t.Fatal(r.Output)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "w.txt")); string(b) != "one\r\n2\r\n3\r\n" {
+		t.Fatalf("%q", b)
+	}
+}
+
+// TestApplyPatchIgnoresPlantedTempLinks: the temporary file is created
+// fresh under a random name, so a link planted where the old fixed name
+// was is never written through, and nothing is left behind.
+func TestApplyPatchIgnoresPlantedTempLinks(t *testing.T) {
+	dir := t.TempDir()
+	victim := filepath.Join(t.TempDir(), "victim")
+	os.WriteFile(victim, []byte("safe\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "f.txt"), []byte("a\n"), 0o644)
+	os.Symlink(victim, filepath.Join(dir, "f.txt.stavlos-tmp"))
+	in, _ := json.Marshal(map[string]string{"patch": "*** Begin Patch\n*** Update File: f.txt\n-a\n+b\n*** End Patch"})
+	if r := (patchTool{}).Run(context.Background(), in, &Env{Dir: dir}); r.IsError {
+		t.Fatal(r.Output)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "safe\n" {
+		t.Fatalf("wrote through a planted link: %q", b)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 2 {
+		t.Fatalf("left behind: %v", entries)
+	}
+}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -92,105 +93,141 @@ func (patchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if err != nil {
 		return errf("patch: %v", err)
 	}
-	if err := writeStaged(plan); err != nil {
+	if err := plan.write(); err != nil {
 		return errf("patch: %v", err)
 	}
 	return Result{Output: patchSummary(ops)}
 }
 
-// stagedFile is one change of a patch, computed in memory before any write.
+// A patch is staged in memory against an overlay of the files it touches,
+// keyed by resolved path: each section sees the result of the ones before
+// it, so two updates to one file chain, a delete and an add of one path
+// replace it, and an update after a move edits the moved file. Nothing is
+// written until every section has applied.
+
+// stagedFile is one path's state in the overlay.
 type stagedFile struct {
 	path    string
-	content string
+	exists  bool   // after the patch
+	content string // after the patch, when exists
 	mode    os.FileMode
-	prev    []byte // what was there (nil for a new file), for rollback
-	delete  bool
+	had     bool   // the file existed before the patch
+	prev    []byte // its content then, for rollback
 }
 
-// stagePatch reads every file and applies every hunk in memory, so a
-// failure leaves nothing half-applied.
-func stagePatch(ops []patchOp, env *Env) ([]stagedFile, error) {
-	var plan []stagedFile
+// overlay is the patch's view of the filesystem.
+type overlay struct {
+	files map[string]*stagedFile
+	order []string // first-touch order, for writing
+}
+
+// file is a path's state, read from disk on first touch.
+func (o *overlay) file(abs, shown string) (*stagedFile, error) {
+	if f, ok := o.files[abs]; ok {
+		return f, nil
+	}
+	f := &stagedFile{path: abs, mode: 0o644}
+	switch fi, err := os.Stat(abs); {
+	case errors.Is(err, fs.ErrNotExist):
+	case err != nil:
+		return nil, fmt.Errorf("%s: %v", shown, err)
+	case fi.IsDir():
+		return nil, fmt.Errorf("%s is a directory", shown)
+	default:
+		b, err := os.ReadFile(abs)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", shown, err)
+		}
+		f.exists, f.had, f.content, f.prev, f.mode = true, true, string(b), b, fi.Mode().Perm()
+	}
+	o.files[abs] = f
+	o.order = append(o.order, abs)
+	return f, nil
+}
+
+// stagePatch applies every section to the overlay, so a failure leaves
+// nothing half-applied.
+func stagePatch(ops []patchOp, env *Env) (*overlay, error) {
+	o := &overlay{files: map[string]*stagedFile{}}
 	for _, op := range ops {
-		abs := resolve(env, op.path)
+		f, err := o.file(resolve(env, op.path), op.path)
+		if err != nil {
+			return nil, err
+		}
 		switch op.kind {
 		case "add":
-			if _, err := os.Lstat(abs); err == nil {
-				return nil, fmt.Errorf("%s already exists (delete it first to replace it)", op.path)
+			if f.exists {
+				return nil, fmt.Errorf("%s already exists (delete it first in the same patch to replace it)", op.path)
 			}
-			plan = append(plan, stagedFile{path: abs, content: strings.Join(op.added, "\n") + "\n", mode: 0o644})
+			f.exists, f.content = true, strings.Join(op.added, "\n")+"\n"
 		case "delete":
-			fi, err := os.Lstat(abs)
-			if err != nil {
-				return nil, fmt.Errorf("%s: %v", op.path, err)
+			if !f.exists {
+				return nil, fmt.Errorf("%s: no such file", op.path)
 			}
-			if fi.IsDir() {
-				return nil, fmt.Errorf("%s is a directory", op.path)
-			}
-			plan = append(plan, stagedFile{path: abs, delete: true})
+			f.exists = false
 		case "update":
-			staged, err := stageUpdate(op, abs, env)
-			if err != nil {
+			if err := o.update(op, f, env); err != nil {
 				return nil, err
 			}
-			plan = append(plan, staged...)
 		}
 	}
-	return plan, nil
+	return o, nil
 }
 
-// stageUpdate applies an update section's hunks, and its move, in memory.
-func stageUpdate(op patchOp, abs string, env *Env) ([]stagedFile, error) {
-	fi, err := os.Stat(abs)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %v", op.path, err)
+// update applies an update section's hunks, and its move, to the overlay.
+func (o *overlay) update(op patchOp, f *stagedFile, env *Env) error {
+	if !f.exists {
+		return fmt.Errorf("%s: no such file", op.path)
 	}
-	b, err := os.ReadFile(abs)
+	out, err := applyHunks(f.content, op.hunks)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %v", op.path, err)
-	}
-	out, err := applyHunks(string(b), op.hunks)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %v", op.path, err)
+		return fmt.Errorf("%s: %v", op.path, err)
 	}
 	if op.moveTo == "" {
-		return []stagedFile{{path: abs, content: out, mode: fi.Mode().Perm(), prev: b}}, nil
+		f.content = out
+		return nil
 	}
-	to := resolve(env, op.moveTo)
-	if _, err := os.Lstat(to); err == nil {
-		return nil, fmt.Errorf("cannot move %s to %s: it already exists", op.path, op.moveTo)
+	to, err := o.file(resolve(env, op.moveTo), op.moveTo)
+	if err != nil {
+		return err
 	}
-	return []stagedFile{{path: abs, delete: true}, {path: to, content: out, mode: fi.Mode().Perm()}}, nil
+	if to.exists {
+		return fmt.Errorf("cannot move %s to %s: it already exists", op.path, op.moveTo)
+	}
+	f.exists = false
+	to.exists, to.content, to.mode = true, out, f.mode
+	return nil
 }
 
-// writeStaged writes a staged patch: each file through a temporary file
-// renamed into place, so a reader never sees a half-written file, and the
-// deletions last, so a failed write never costs a file. A failed write
+// write puts the overlay on disk: each changed file through a temporary
+// file renamed into place, so a reader never sees a half-written file, and
+// the deletions last, so a failed write never costs a file. A failed write
 // rolls back the writes before it.
-func writeStaged(plan []stagedFile) error {
-	var done []stagedFile
+func (o *overlay) write() error {
+	var done []*stagedFile
 	rollback := func() {
 		for i := len(done) - 1; i >= 0; i-- {
-			if st := done[i]; st.prev == nil {
-				_ = os.Remove(st.path)
+			if f := done[i]; f.had {
+				_ = writeAtomic(f.path, f.prev, f.mode)
 			} else {
-				_ = os.WriteFile(st.path, st.prev, st.mode)
+				_ = os.Remove(f.path)
 			}
 		}
 	}
-	for _, st := range plan {
-		if st.delete {
+	for _, abs := range o.order {
+		f := o.files[abs]
+		if !f.exists || f.had && f.content == string(f.prev) {
 			continue
 		}
-		if err := writeAtomic(st); err != nil {
+		if err := writeAtomic(f.path, []byte(f.content), f.mode); err != nil {
 			rollback()
 			return err
 		}
-		done = append(done, st)
+		done = append(done, f)
 	}
-	for _, st := range plan {
-		if st.delete {
-			if err := os.Remove(st.path); err != nil {
+	for _, abs := range o.order {
+		if f := o.files[abs]; f.had && !f.exists {
+			if err := os.Remove(f.path); err != nil {
 				return fmt.Errorf("%v (the other changes were applied)", err)
 			}
 		}
@@ -198,21 +235,31 @@ func writeStaged(plan []stagedFile) error {
 	return nil
 }
 
-// writeAtomic writes one staged file through a temporary file renamed into
-// place.
-func writeAtomic(st stagedFile) error {
-	if err := os.MkdirAll(filepath.Dir(st.path), 0o755); err != nil {
+// writeAtomic writes a file through a temporary file created beside it
+// (O_EXCL, a random name: a link planted at a guessable name is never
+// followed) and renamed into place.
+func writeAtomic(path string, content []byte, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	tmp := st.path + ".stavlos-tmp"
-	if err := os.WriteFile(tmp, []byte(st.content), st.mode); err != nil {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".stavlos-*")
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, st.path); err != nil {
-		_ = os.Remove(tmp)
-		return err
+	_, err = tmp.Write(content)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
 	}
-	return nil
+	if err == nil {
+		err = os.Chmod(tmp.Name(), mode)
+	}
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+	}
+	return err
 }
 
 // patchSummary is the result text: one line per file section.
@@ -391,6 +438,12 @@ func (p *patchParser) content(l string) error {
 // trailing whitespace, then ignoring all surrounding whitespace); the run
 // is replaced by the context and added lines.
 func applyHunks(content string, hunks []hunk) (string, error) {
+	// A CRLF file is patched as LF and written back as CRLF: the model
+	// writes hunks without carriage returns, and the file keeps its endings.
+	crlf := strings.Contains(content, "\r\n")
+	if crlf {
+		content = strings.ReplaceAll(content, "\r\n", "\n")
+	}
 	hadTrailingNL := strings.HasSuffix(content, "\n")
 	lines := strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 	if content == "" {
@@ -415,12 +468,15 @@ func applyHunks(content string, hunks []hunk) (string, error) {
 			old, new = old[:len(old)-1], new[:len(new)-1]
 		}
 		if len(old) == 0 {
-			// pure insertion: after the anchor, else at EOF
+			// pure insertion: after the anchor, or at EOF when it has none;
+			// an anchor that is not there is an error, never a silent append.
 			at := len(lines)
 			if h.anchor != "" {
-				if i := findLine(lines, h.anchor, searchFrom); i >= 0 {
-					at = i + 1
+				i := findLine(lines, h.anchor, searchFrom)
+				if i < 0 {
+					return "", fmt.Errorf("hunk %d: anchor not found: %s", hi+1, h.anchor)
 				}
+				at = i + 1
 			}
 			lines = splice(lines, at, at, new)
 			searchFrom = at + len(new)
@@ -467,6 +523,9 @@ func applyHunks(content string, hunks []hunk) (string, error) {
 	out := strings.Join(lines, "\n")
 	if hadTrailingNL || out != "" {
 		out += "\n"
+	}
+	if crlf {
+		out = strings.ReplaceAll(out, "\n", "\r\n")
 	}
 	return out, nil
 }
