@@ -979,7 +979,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.ReminderQueued: decoded(func(p event.RepliesPayload) []Line {
-		return []Line{{Kind: LineNotice, Glyph: GlyphPrompt, Tone: ToneWorking, Text: "reminded: no reply yet to " + partyList(p.Names)}}
+		return []Line{{Kind: LineDim, Text: "nudged: owes a reply to " + partyList(p.Names)}}
 	}),
 
 	event.ReplyMissing: decoded(func(p event.RepliesPayload) []Line {
