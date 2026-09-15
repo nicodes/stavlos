@@ -45,7 +45,7 @@ func (m Model) keyHints() []dialog.Hint {
 	case focusSidebar:
 		return []dialog.Hint{hint("↑/↓", "move"), hint("space", "open"), hint("n", "next agent needing you"), hint("→", "channel dirs"), hint("enter", "input"), hint("tab", "next section"), hint("esc", "back to input"), hint("ctrl+b", "close sidebar"), hint("pgup/pgdn", "scroll"), hint("ctrl+c", "quit")}
 	case focusMeta:
-		return []dialog.Hint{hint("←/→", "choose"), hint("space", "open (mode tag: back to ask)"), hint("enter", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint("←/→", "choose"), hint("space", "open"), hint("enter", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusTabs:
 		return []dialog.Hint{hint("←/→", "choose"), hint("space", "open"), hint("enter", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusChat:
