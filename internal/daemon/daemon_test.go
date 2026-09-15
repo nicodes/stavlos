@@ -1821,7 +1821,7 @@ func TestWorkingDirectories(t *testing.T) {
 	if pr.Tool != "read" || !strings.Contains(pr.Question, "outside the channel's directories") || !strings.Contains(pr.Question, outside) {
 		t.Fatalf("boundary prompt %+v", pr)
 	}
-	pending := h.d.esc.Pending(s.ID)
+	pending := h.pending(s.ID)
 	if len(pending) != 1 || pending[0].Dir != outside {
 		t.Fatalf("pending %+v", pending)
 	}
@@ -1942,7 +1942,7 @@ func TestBoundaryPromptEditedDir(t *testing.T) {
 	root := agents[0].ID
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, root)
-	pending := h.d.esc.Pending(s.ID)
+	pending := h.pending(s.ID)
 	if len(pending) != 1 || pending[0].Dir != filepath.Join(outside, "sub") {
 		t.Fatalf("offered dir %+v", pending)
 	}
@@ -1994,13 +1994,13 @@ func TestDenyReasonReachesTheAgent(t *testing.T) {
 	root := agents[0].ID
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, root)
-	p := h.d.esc.Pending(s.ID)[0]
+	p := h.pending(s.ID)[0]
 	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
 	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerDeny, Reason: "use apply_patch instead"})); err != nil {
 		t.Fatal(err)
 	}
 	h.waitFor(event.AskRequested, root)
-	p = h.d.esc.Pending(s.ID)[0]
+	p = h.pending(s.ID)[0]
 	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
 	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerDeny, Reason: ""})); err != nil {
 		t.Fatal(err)
@@ -2045,7 +2045,7 @@ func TestAllowPrefix(t *testing.T) {
 	root := agents[0].ID
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"}))
 	h.waitFor(event.AskRequested, root)
-	p := h.d.esc.Pending(s.ID)[0]
+	p := h.pending(s.ID)[0]
 	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
 	if p.Prefix != "touch" {
 		t.Fatalf("prompt prefix %q", p.Prefix)
@@ -2055,7 +2055,7 @@ func TestAllowPrefix(t *testing.T) {
 	}
 	// the second echo runs without a prompt; the chained one asks
 	h.waitFor(event.AskRequested, root)
-	p = h.d.esc.Pending(s.ID)[0]
+	p = h.pending(s.ID)[0]
 	if !strings.Contains(string(p.Input), "touch three; touch four") {
 		t.Fatalf("second prompt should be the chained command: %s", p.Input)
 	}
@@ -2253,7 +2253,7 @@ func TestAskUser(t *testing.T) {
 	if agents[0].State != "blocked" {
 		t.Fatalf("an asking agent is blocked: %+v", agents[0].State)
 	}
-	p := h.d.esc.Pending(s.ID)[0]
+	p := h.pending(s.ID)[0]
 	if len(p.Questions) != 2 || p.Questions[0].Options[0].Label != "Postgres" {
 		t.Fatalf("pending %+v", p)
 	}
@@ -2711,4 +2711,18 @@ func channels(ctx context.Context, c *rpc.Client, dir string, archived bool) ([]
 func prompts(ctx context.Context, c *rpc.Client, channel string) ([]protocol.PromptInfo, error) {
 	r, err := rpc.Do(ctx, c, protocol.PromptList, protocol.PromptListParams{Channel: channel})
 	return r.Prompts, err
+}
+
+// pending lists a channel's open prompts, waiting (up to ten seconds) until
+// there is one: an agent logs ask.requested before the prompt reaches the
+// escalation manager, so an event alone does not mean the prompt is listed.
+func (h *harness) pending(channel string) []protocol.PromptInfo {
+	h.t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if p := h.d.esc.Pending(channel); len(p) > 0 || time.Now().After(deadline) {
+			return p
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
