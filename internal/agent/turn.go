@@ -12,7 +12,7 @@ import (
 // run is the agent's goroutine: it waits to be woken, then runs turns while
 // its inbox holds something that starts one.
 func (a *Agent) run() {
-	defer a.s.wg.Done()
+	defer a.c.wg.Done()
 	for {
 		select {
 		case <-a.ctx.Done():
@@ -33,7 +33,7 @@ func (a *Agent) run() {
 // it logs turn.started and takes the whole inbox in one transaction (PRD
 // §6.3: queued prompts coalesce, answers and job results come along).
 func (a *Agent) beginTurn() (int, context.Context, bool) {
-	s := a.s
+	s := a.c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := a.state()
@@ -63,10 +63,10 @@ func (a *Agent) runTurn(ctx context.Context, turn int) {
 	a.disarmMCPIdle()
 	t := &turnRun{a: a, ctx: ctx, turn: turn}
 	defer func() {
-		a.s.mu.Lock()
+		a.c.mu.Lock()
 		cancel := a.cancelTurn
 		a.cancelTurn = nil
-		a.s.mu.Unlock()
+		a.c.mu.Unlock()
 		if cancel != nil {
 			cancel()
 		}
@@ -103,7 +103,7 @@ func (t *turnRun) end(reason event.TurnReason, errText string) {
 // step is one model call and the tool calls it asks for. It returns
 // done=true with the reason when the turn is over.
 func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
-	a, s := t.a, t.a.s
+	a, s := t.a, t.a.c
 	if t.ctx.Err() != nil {
 		return event.ReasonCancelled, "", true
 	}
@@ -176,7 +176,7 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 // wait for the turn to end (steers, requests, info), and reports a log
 // write that failed since the last step.
 func (t *turnRun) takeMidTurn() error {
-	a, s := t.a, t.a.s
+	a, s := t.a, t.a.c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := a.logErr; err != nil {

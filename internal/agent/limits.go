@@ -10,7 +10,7 @@ import (
 // reportTurnLimit answers every agent still waiting on a, so a subagent
 // that ran out of turns does not leave its askers waiting forever.
 func (a *Agent) reportTurnLimit(limit int) {
-	s := a.s
+	s := a.c
 	s.mu.Lock()
 	st := a.state()
 	text := fmt.Sprintf("%s reached its turn limit of %d without answering; message it again only if you raise the limit in its role, or delegate elsewhere.", st.name, limit)

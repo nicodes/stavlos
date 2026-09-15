@@ -15,7 +15,7 @@ import (
 // /compact asked for it mid-turn, or when it has grown past the threshold
 // of the model's context window. It records the size the call will carry.
 func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info model.Info, system string, defs []model.ToolDef) []model.Message {
-	s := a.s
+	s := a.c
 	s.mu.Lock()
 	st := a.state()
 	history := st.hist.History()
@@ -45,7 +45,7 @@ const summaryInputMax = 400_000
 // that ended (all, for /compact) or the last one within the older two
 // thirds of the history (automatic), replaced by the model's summary.
 func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all bool) error {
-	s := a.s
+	s := a.c
 	s.mu.Lock()
 	st := a.state()
 	if st.compacting {

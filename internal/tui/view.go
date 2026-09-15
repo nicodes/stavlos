@@ -224,7 +224,7 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 		x += 3
 	}
 	if modeTag != "" {
-		part(metaYolo, modeTag, modeTagStyle(modeTag))
+		part(metaMode, modeTag, modeTagStyle(modeTag))
 		sep()
 	}
 	name := label

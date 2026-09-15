@@ -44,23 +44,23 @@ func resolveDir(base, d string) string {
 
 // dirPaths is the working set: the channel directory, then the added
 // directories in the order they came.
-func (s *Channel) dirPaths() []string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.dirPathsLocked()
+func (c *Channel) dirPaths() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.dirPathsLocked()
 }
 
-func (s *Channel) dirPathsLocked() []string {
-	out := []string{s.Dir}
-	for _, d := range s.st.dirs {
+func (c *Channel) dirPathsLocked() []string {
+	out := []string{c.Dir}
+	for _, d := range c.st.dirs {
 		out = append(out, d.path)
 	}
 	return out
 }
 
-func (s *Channel) dirInfosLocked() []protocol.DirInfo {
-	out := []protocol.DirInfo{{Path: s.Dir, Source: "channel"}}
-	for _, d := range s.st.dirs {
+func (c *Channel) dirInfosLocked() []protocol.DirInfo {
+	out := []protocol.DirInfo{{Path: c.Dir, Source: "channel"}}
+	for _, d := range c.st.dirs {
 		out = append(out, protocol.DirInfo{Path: d.path, Source: d.source})
 	}
 	return out
@@ -83,39 +83,39 @@ func inDirs(dirs []string, p string) bool {
 // addDir puts a directory in the working set, logged on agent (the one
 // whose boundary prompt added it, "" for the dirs tab). A directory already
 // inside the set is a no-op.
-func (s *Channel) addDir(ctx context.Context, agent, dir, source string) error {
+func (c *Channel) addDir(ctx context.Context, agent, dir, source string) error {
 	dir = filepath.Clean(dir)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if inDirs(s.dirPathsLocked(), dir) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if inDirs(c.dirPathsLocked(), dir) {
 		return nil
 	}
-	_, err := s.commitLocked(ctx, s.event(agent, event.ChannelDirAdded, event.DirPayload{Dir: dir, Source: source}))
+	_, err := c.commitLocked(ctx, c.event(agent, event.ChannelDirAdded, event.DirPayload{Dir: dir, Source: source}))
 	return err
 }
 
 // AddDir is the human's add (an absolute path, ~, or a path relative to the
 // channel directory).
-func (s *Channel) AddDir(ctx context.Context, dir string) error {
+func (c *Channel) AddDir(ctx context.Context, dir string) error {
 	if strings.TrimSpace(dir) == "" {
 		return fmt.Errorf("a directory is required")
 	}
-	return s.addDir(ctx, "", resolveDir(s.Dir, dir), "human")
+	return c.addDir(ctx, "", resolveDir(c.Dir, dir), "human")
 }
 
 // RemoveDir takes a directory out of the working set. The channel
 // directory stays.
-func (s *Channel) RemoveDir(ctx context.Context, dir string) error {
-	dir = resolveDir(s.Dir, dir)
-	if dir == filepath.Clean(s.Dir) {
+func (c *Channel) RemoveDir(ctx context.Context, dir string) error {
+	dir = resolveDir(c.Dir, dir)
+	if dir == filepath.Clean(c.Dir) {
 		return fmt.Errorf("the channel directory cannot be removed")
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !slices.ContainsFunc(s.st.dirs, func(e dirEntry) bool { return e.path == dir }) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !slices.ContainsFunc(c.st.dirs, func(e dirEntry) bool { return e.path == dir }) {
 		return fmt.Errorf("%s is not one of the channel's directories", dir)
 	}
-	_, err := s.commitLocked(ctx, s.event("", event.ChannelDirRemoved, event.DirPayload{Dir: dir}))
+	_, err := c.commitLocked(ctx, c.event("", event.ChannelDirRemoved, event.DirPayload{Dir: dir}))
 	return err
 }
 

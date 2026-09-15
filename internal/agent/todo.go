@@ -53,14 +53,14 @@ func (t todosAPI) Update(id, status, text string) error {
 }
 
 func (t todosAPI) List() []event.TodoItem {
-	t.a.s.mu.Lock()
-	defer t.a.s.mu.Unlock()
+	t.a.c.mu.Lock()
+	defer t.a.c.mu.Unlock()
 	return append([]event.TodoItem(nil), t.a.state().todos...)
 }
 
 // change logs the list edit makes of a copy of the current one.
 func (t todosAPI) change(edit func(*agentState, []event.TodoItem) ([]event.TodoItem, error)) error {
-	s := t.a.s
+	s := t.a.c
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := t.a.state()
