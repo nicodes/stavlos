@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/config"
+	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tools"
@@ -78,8 +79,8 @@ func (a *Agent) writePreamble(sb *strings.Builder, rv roleView, cfg *config.Effe
 	if a.Parent != "" {
 		fmt.Fprintf(sb, "You are a subagent (archetype %s) created by a parent agent (id %s) named %s. Your task arrives as the first message. When it is done, or cannot be done, answer with message, kind response, to the agent that asked (the message names it); it only sees what you put there. You stay alive afterwards: the parent or another agent may message you again, and you keep your context.\n", rv.role, a.Parent, rv.parentName)
 	}
-	if cfg.AgentsMD != "" {
-		sb.WriteString("\n# Project instructions (AGENTS.md)\n\n" + cfg.AgentsMD + "\n")
+	if section := instructions.Section(cfg.Instructions, instructions.Budget); section != "" {
+		sb.WriteString("\n" + section)
 	}
 	if sk := skills(cfg, rv); len(sk) > 0 {
 		sb.WriteString("\n# Skills\nLoad a skill with the skill tool when its description matches your task.\n")

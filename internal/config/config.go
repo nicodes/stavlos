@@ -12,11 +12,13 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
@@ -235,14 +237,23 @@ type Effective struct {
 		Threshold     float64
 		MaxToolOutput int
 	}
-	MCP      map[string]MCP
-	Search   Search          // web_search backend, key expanded
-	PassEnv  []string        // environment variables child processes keep although their names look like secrets
-	Policy   *policy.Layered // global and local rules as the base; the trusted project's rules as an overlay that can only tighten
-	Presets  map[string]Preset
-	Skills   map[string]Skill
-	AgentsMD string
-	Plugins  []string
+	MCP     map[string]MCP
+	Search  Search          // web_search backend, key expanded
+	PassEnv []string        // environment variables child processes keep although their names look like secrets
+	Policy  *policy.Layered // global and local rules as the base; the trusted project's rules as an overlay that can only tighten
+	Presets map[string]Preset
+	Skills  map[string]Skill
+	// Instructions are the AGENTS.md files every agent follows, general
+	// first: the user's own file, then, once the project is trusted, the
+	// files from the repository root down to the channel directory.
+	Instructions []instructions.File
+	// ProjectTrusted reports that the project layer is trusted, so the
+	// instructions of subdirectories reach agents as they work there.
+	ProjectTrusted bool
+	// InstructionFiles are the project's instructions files the trust hash
+	// covers, absolute: the chain above and every nested one.
+	InstructionFiles []string
+	Plugins          []string
 	// Reminders gives an agent that ends a turn owing a reply one reminder
 	// turn (docs/super-chat.md).
 	Reminders bool
@@ -280,7 +291,6 @@ func Load(dir string, trust Trust) (*Effective, error) {
 
 	// project layer (trust-gated)
 	pdir := paths.ProjectDir(dir)
-	agentsMD := filepath.Join(dir, "AGENTS.md")
 	files, hash, err := ProjectHash(dir)
 	if err != nil {
 		return nil, err
@@ -288,6 +298,11 @@ func Load(dir string, trust Trust) (*Effective, error) {
 	if len(files) > 0 {
 		e.TrustHash = hash
 		e.TrustFiles = files
+		for _, f := range files {
+			if slices.Contains(instructions.Names, filepath.Base(f)) && !strings.HasPrefix(f, ".stavlos") {
+				e.InstructionFiles = append(e.InstructionFiles, filepath.Join(dir, f))
+			}
+		}
 		if trust != nil && trust.Trusted(dir, hash) {
 			// stavlos.json and stavlos.local.json are both the repository's:
 			// trust-gated, hashed, and able only to tighten.
@@ -306,9 +321,8 @@ func Load(dir string, trust Trust) (*Effective, error) {
 			if err := e.loadSkills(filepath.Join(pdir, "skills")); err != nil {
 				return nil, err
 			}
-			if b, err := os.ReadFile(agentsMD); err == nil {
-				e.AgentsMD = string(b)
-			}
+			e.ProjectTrusted = true
+			e.Instructions = append(e.Instructions, instructions.Chain(dir)...)
 		} else {
 			e.TrustPending = true
 		}
@@ -382,6 +396,7 @@ func LoadGlobal() (*Effective, error) {
 		e.Policy = policy.Layer(e.Policy.Base().Merge(policy.New(policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Allow})), e.Policy.Overlays()...)
 	}
 	e.Plugins = gf.Plugins
+	e.Instructions = instructions.Global() // the user's own, trusted like the rest of this layer
 	if err := e.loadPresets(filepath.Join(gdir, "agents"), "global"); err != nil {
 		return nil, err
 	}
@@ -992,8 +1007,9 @@ func parseSize(s string) (int, error) {
 	return n * mult, nil
 }
 
-// ProjectHash lists the trust-gated files under dir (.stavlos/**, plus
-// AGENTS.md) and hashes their contents (PRD §10.6).
+// ProjectHash lists the trust-gated files of dir (.stavlos/**, and the
+// instructions files agents follow there) and hashes their contents (PRD
+// §10.6).
 func ProjectHash(dir string) ([]string, string, error) {
 	var files []string
 	pdir := paths.ProjectDir(dir)
@@ -1014,8 +1030,15 @@ func ProjectHash(dir string) ([]string, string, error) {
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return nil, "", err
 	}
-	if _, err := os.Stat(filepath.Join(dir, "AGENTS.md")); err == nil {
-		files = append(files, "AGENTS.md")
+	// The instructions agents will follow: the files from the repository
+	// root down to dir, and those below it that reach agents as they work.
+	for _, f := range instructions.Chain(dir) {
+		rel, _ := filepath.Rel(dir, f.Path)
+		files = append(files, rel)
+	}
+	for _, p := range instructions.Nested(dir) {
+		rel, _ := filepath.Rel(dir, p)
+		files = append(files, rel)
 	}
 	if len(files) == 0 {
 		return nil, "", nil
