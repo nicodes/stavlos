@@ -233,7 +233,7 @@ func (d *Daemon) agentChannel(agentID string) (*agent.Channel, *agent.Agent, err
 }
 
 // CreateChannel creates and starts a channel in dir.
-func (d *Daemon) CreateChannel(ctx context.Context, dir, modelID, root string) (*agent.Channel, error) {
+func (d *Daemon) CreateChannel(ctx context.Context, dir, modelID, root, want string) (*agent.Channel, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
@@ -254,6 +254,11 @@ func (d *Daemon) CreateChannel(ctx context.Context, dir, modelID, root string) (
 		return nil, err
 	}
 	name := agent.UniqueName(filepath.Base(dir), "channel", func(n string) bool { return taken[n] })
+	if strings.TrimSpace(want) != "" {
+		if name, err = checkName(want, taken); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.Start(ctx, name); err != nil {
 		return nil, err
 	}
@@ -287,23 +292,33 @@ func (d *Daemon) RenameChannel(ctx context.Context, id, want string) error {
 	if err != nil {
 		return err
 	}
-	name := agent.NormalizeName(strings.TrimPrefix(strings.TrimSpace(want), "#"))
-	if name == "" {
-		return fmt.Errorf("%q has no letters or digits to name a channel with", want)
-	}
 	d.nameMu.Lock()
 	defer d.nameMu.Unlock()
 	taken, err := d.channelNames(ctx, id)
 	if err != nil {
 		return err
 	}
-	if taken[name] {
-		return fmt.Errorf("#%s is taken by another channel", name)
+	name, err := checkName(want, taken)
+	if err != nil {
+		return err
 	}
 	if err := s.Rename(ctx, name); err != nil {
 		return err
 	}
 	return d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Name: name, Dir: s.Dir, Created: s.Created, Archived: s.Archived()})
+}
+
+// checkName normalises a name the human chose ("#Docs Site" becomes
+// docs-site) and refuses one that leaves nothing or another channel has.
+func checkName(want string, taken map[string]bool) (string, error) {
+	name := agent.NormalizeName(strings.TrimPrefix(strings.TrimSpace(want), "#"))
+	if name == "" {
+		return "", fmt.Errorf("%q has no letters or digits to name a channel with", want)
+	}
+	if taken[name] {
+		return "", fmt.Errorf("#%s is taken by another channel", name)
+	}
+	return name, nil
 }
 
 // channelNames is every channel's name but except's. Callers hold d.nameMu.

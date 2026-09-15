@@ -108,7 +108,7 @@ var handlers = map[string]handler{
 		return protocol.ChannelListResult{Channels: list}, nil
 	}),
 	protocol.MChannelCreate: typed(func(ctx context.Context, c *conn, p protocol.ChannelCreateParams) (any, error) {
-		s, err := c.d.CreateChannel(ctx, p.Dir, p.Model, p.RootAgent)
+		s, err := c.d.CreateChannel(ctx, p.Dir, p.Model, p.RootAgent, p.Name)
 		if err != nil {
 			return nil, err
 		}

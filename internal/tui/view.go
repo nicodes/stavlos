@@ -331,6 +331,9 @@ func (m Model) View() string {
 
 // isHome reports whether the selected agent has nothing to show yet.
 func (m Model) isHome() bool {
+	if m.opened {
+		return false
+	}
 	t := m.transcripts[m.selectedID()]
 	return t == nil || t.Empty()
 }

@@ -350,11 +350,15 @@ type switchedMsg struct {
 	err  error
 }
 
-// newChannelCmd is + channel: a new channel in dir, bound like a resumed one.
-func newChannelCmd(ctx context.Context, c *client.Client, from, dir string) tea.Cmd {
+// newChannelCmd is + channel: a channel named name in dir, bound like a
+// resumed one. The current channel is left only once the new one exists, so
+// a refused name keeps the TUI where it was.
+func newChannelCmd(ctx context.Context, c *client.Client, from, dir, name string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		_ = c.Unsubscribe(ctx, from)
-		info, err := c.CreateChannel(ctx, dir, "", "")
+		info, err := c.CreateNamedChannel(ctx, dir, name)
+		if err == nil {
+			_ = c.Unsubscribe(ctx, from)
+		}
 		return switchedMsg{info, err}
 	})
 }

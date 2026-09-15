@@ -33,19 +33,21 @@ type overlayMode int
 const (
 	overlayList  overlayMode = iota // search field + list
 	overlayLogin                    // device-code sign-in (no field, no list)
+	overlayInput                    // a text field only (naming a channel): enter submits, space types
 )
 
 // overlayKind tells Model what a submit means.
 type overlayKind int
 
 const (
-	ovProviders overlayKind = iota // pick a provider
-	ovMethods                      // pick a login method (providers with more than one)
-	ovModels                       // pick a model
-	ovRoles                        // pick a role (preset) for the selected agent
-	ovVariants                     // pick a model variant (reasoning effort) for the selected agent
-	ovChannels                     // pick a channel of this directory to resume
-	ovMode                         // pick the channel's permission mode (ask | auto | yolo)
+	ovProviders  overlayKind = iota // pick a provider
+	ovMethods                       // pick a login method (providers with more than one)
+	ovModels                        // pick a model
+	ovRoles                         // pick a role (preset) for the selected agent
+	ovVariants                      // pick a model variant (reasoning effort) for the selected agent
+	ovChannels                      // pick a channel of this directory to resume
+	ovMode                          // pick the channel's permission mode (ask | auto | yolo)
+	ovNewChannel                    // name a new channel of this directory
 )
 
 // loginState is what the login mode shows. Before url is set the login is
@@ -226,6 +228,9 @@ func (o *overlay) view(bodyWidth int, spinner string) string {
 	switch o.mode {
 	case overlayLogin:
 		lines = append(lines, o.loginLines(inner, spinner)...)
+	case overlayInput:
+		o.input.Width = inner - len([]rune(o.input.Prompt)) - 1
+		lines = append(lines, o.input.View())
 	default:
 		o.input.Width = inner - len([]rune(o.input.Prompt)) - 1
 		lines = append(lines, o.input.View(), "")
