@@ -424,6 +424,8 @@ func TestMessageArrows(t *testing.T) {
 		{Line{Kind: LineTool, Tool: "message", Text: "Response  to main"}, GlyphReply},
 		{Line{Kind: LineTool, Tool: "message", Text: "Response  to you"}, GlyphReply},
 		{Line{Kind: LineTool, Tool: "shell", Text: "Shell  ls"}, GlyphToolShell},
+		{Line{Kind: LineTool, Tool: "agent_create", Text: "Agent create  scout (general)"}, GlyphToolCreate},
+		{Line{Kind: LineTool, Tool: "agent_status", Text: "Agent status"}, GlyphToolAgents},
 	} {
 		if g, _ := CallGlyph(c.line); g != c.want {
 			t.Errorf("%q: glyph %q, want %q", c.line.Text, g, c.want)
