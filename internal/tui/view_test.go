@@ -3063,3 +3063,41 @@ func TestPromptsAcrossChannels(t *testing.T) {
 		t.Fatalf("prompts after a switch: %d", len(m.prompts))
 	}
 }
+
+// TestChannelChatFooterIsTheChannels: the channel chat's footer carries only
+// what is the channel's: the mode tag, the channel's tokens and cost, and no
+// async · due · todo · mcp tabs; an agent's chat has them all back. The view
+// fills the window either way.
+func TestChannelChatFooterIsTheChannels(t *testing.T) {
+	m := channelModel()
+	m.reconciled = false // connected: the right side shows usage, not the sign-in nudge
+	m.width, m.height = 100, 30
+	m.agents[0].Tokens, m.agents[0].CostUSD = 1500, 0.02
+	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
+	m.transcript(m.agents[0].ID).Notice("hello") // not the home screen
+	for _, tree := range []bool{false, true} {
+		m.showTree = tree
+		m.openChat()
+		m.layout()
+		left, spans := m.metaLeft()
+		if !m.superChat || stripANSI(left) != "ASK" || len(spans) != 1 || len(m.metaParts()) != 1 {
+			t.Fatalf("channel chat meta: %q %v %v", stripANSI(left), spans, m.metaParts())
+		}
+		if right := stripANSI(m.footerRightView()); strings.Contains(right, "%") || right != "2k tokens · $0.02" {
+			t.Fatalf("channel chat right side: %q", right)
+		}
+		if sv := stripANSI(m.sectionsView(100)); strings.Contains(sv, "async") || slices.Contains(m.tabOrder(), focusAsync) || (tree == (sv != "")) {
+			t.Fatalf("channel chat strip (tree %v): %q %v", tree, sv, m.tabOrder())
+		}
+		if got := strings.Count(m.View(), "\n") + 1; got != m.height {
+			t.Fatalf("channel chat view is %d lines, want %d (tree %v)", got, m.height, tree)
+		}
+		m.openAgent(0)
+		if sv := stripANSI(m.sectionsView(100)); !strings.Contains(sv, "async") || len(m.metaParts()) != 4 || !strings.Contains(stripANSI(m.footerRightView()), "31%") {
+			t.Fatalf("agent chat footer: %q %v %q", sv, m.metaParts(), stripANSI(m.footerRightView()))
+		}
+		if got := strings.Count(m.View(), "\n") + 1; got != m.height {
+			t.Fatalf("agent chat view is %d lines, want %d (tree %v)", got, m.height, tree)
+		}
+	}
+}

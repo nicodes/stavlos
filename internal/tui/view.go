@@ -193,6 +193,19 @@ func metaLine(label, role, model, variant string, queued int, modeTag string, se
 }
 
 // metaLineSpans is metaLine plus where each clickable part was drawn.
+// modeTagStyle colours the mode tag: dim ASK (every permission asks), accent
+// AUTO (allowed inside the directories, denied outside), warning YOLO
+// (nothing asks).
+func modeTagStyle(tag string) lipgloss.Style {
+	switch tag {
+	case "AUTO":
+		return theme.StyleAccent
+	case "YOLO":
+		return theme.StyleWarn
+	}
+	return theme.StyleDim
+}
+
 func metaLineSpans(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) (string, []span[metaPart]) {
 	var b strings.Builder
 	var spans []span[metaPart]
@@ -211,14 +224,7 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 		x += 3
 	}
 	if modeTag != "" {
-		st := theme.StyleDim // ASK: every permission asks
-		switch modeTag {
-		case "AUTO":
-			st = theme.StyleAccent // AUTO: allowed inside the directories, denied outside
-		case "YOLO":
-			st = theme.StyleWarn // YOLO: nothing asks
-		}
-		part(metaYolo, modeTag, st)
+		part(metaYolo, modeTag, modeTagStyle(modeTag))
 		sep()
 	}
 	name := label
@@ -393,6 +399,13 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 	sel := metaNone
 	if m.focus == focusMeta {
 		sel = m.metaSel
+	}
+	if m.superChat { // the channel chat: only what is the channel's, its permission mode
+		tag, st := m.modeTag(), modeTagStyle(m.modeTag())
+		if sel == metaYolo {
+			st = theme.StyleBoxTitleFocus
+		}
+		return st.Render(tag), []span[metaPart]{{0, ansi.StringWidth(tag), metaYolo}}
 	}
 	nameStyle := lipgloss.NewStyle()
 	if r := m.roleInfo(role); r != nil {
@@ -1292,6 +1305,10 @@ func (m Model) statusLine(width int) string {
 
 func (m Model) footerRightView() string {
 	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.channel.Model}
+	if m.superChat { // the channel chat: the channel's tokens and cost, not one agent's context
+		f.tokens, f.cost = m.totalTokens(), m.totalCost()
+		return footerRight(f)
+	}
 	if a := m.selectedAgent(); a != nil {
 		f.label, f.tokens, f.cost = a.Label, a.Tokens, a.CostUSD
 		f.context, f.window = a.Context, a.ContextWindow

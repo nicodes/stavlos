@@ -239,10 +239,15 @@ var tabFocuses = slices.Concat(tabRows...)
 // channels) and dirs out of the tabs, behind each channel's gear instead,
 // since the directories are that channel's.
 func (m Model) tabLayout() [][]focus {
+	top := tabRows[0]
 	if m.sidebarVisible() {
-		return [][]focus{{focusPermission, focusQuestions}, tabRows[1]}
+		top = []focus{focusPermission, focusQuestions}
 	}
-	return tabRows
+	rows := [][]focus{top}
+	if !m.superChat { // async · due · todo · mcp are an agent's: its own chat has them, the channel chat does not
+		rows = append(rows, tabRows[1])
+	}
+	return rows
 }
 
 // tabOrder is tabLayout's tabs in order: what the strip's highlight walks.
@@ -1733,6 +1738,9 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 // metaParts lists the meta row's parts in order: the mode tag, the role,
 // the model and the variant.
 func (m *Model) metaParts() []metaPart {
+	if m.superChat {
+		return []metaPart{metaYolo} // the channel chat: only the channel's mode; role, model and variant are an agent's
+	}
 	return []metaPart{metaYolo, metaRole, metaModel, metaVariant}
 }
 
@@ -3278,6 +3286,7 @@ func (m *Model) viewID() string {
 func (m *Model) openChat() tea.Cmd {
 	if !m.superChat {
 		m.superChat = true
+		m.layout() // the footer drops the agent's tabs
 		m.selectionChanged()
 	}
 	m.input.Placeholder = m.placeholder()
@@ -3292,6 +3301,7 @@ func (m *Model) openAgent(i int) {
 	}
 	m.selected, m.superChat = i, false
 	m.input.Placeholder = m.placeholder()
+	m.layout() // the footer gets the agent's tabs back
 	m.selectionChanged()
 }
 
@@ -3368,9 +3378,9 @@ func (m *Model) layout() {
 	m.dirInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.dirInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
-	bodyH := m.height - kb - 2 - (m.inputRows() + 1) // key bar, status line + rule, input rows + meta row
+	bodyH := m.height - kb - 2 - (m.inputRows() + 1) - 1 // key bar, status line + rule, input rows + meta row, the blank line under the input
 	if sv := m.sectionsView(m.width); sv != "" {
-		bodyH -= strings.Count(sv, "\n") + 1 + 1 // plus the blank line between the input and the meta row
+		bodyH -= strings.Count(sv, "\n") + 1 // the strip, which the channel chat may not have at all
 	}
 	if pv := m.paletteViewFor(m.width); pv != "" {
 		bodyH -= strings.Count(pv, "\n") + 1
@@ -3971,6 +3981,7 @@ func channelRef(info protocol.ChannelInfo) string {
 func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
 	m.channelState = newChannelState(info.ID, info)
 	m.superChat = true
+	m.layout()
 	m.input.Placeholder = m.placeholder()
 	m.follow = true
 	m.input.Reset()
