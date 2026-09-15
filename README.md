@@ -104,7 +104,7 @@ Auto mode approves fetches like any read-only call. Everything fetched is handed
 
 **Plan.** One `todo` tool keeps a per-agent list (a call adds steps, updates others by id, or both, and returns the list) that is logged, projected into the system prompt at every call (so it survives compaction) and shown to you in the todo tab.
 
-**Work in directories.** A channel has one set of working directories, shared by every agent: the channel directory, the directories listed under `"dirs"` in the global `stavlos.json` (every channel gets them, and only that file changes them), plus whatever you add. Roles and `agent_create` grant none. A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
+**Work in directories.** A channel has one set of working directories, shared by every agent: the channel directory, the directories listed under `"dirs"` in `stavlos.json` (yours for every channel, a trusted project's for its channels, any path such as `/tmp`; only those files change them), plus whatever you add. Roles and `agent_create` grant none. A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
 
 **Use MCP servers.** A role's `mcp:` list starts MCP servers for that agent alone (stdio servers defined under `mcp` in `stavlos.json`). The model sees their tools as `mcp__<server>__<tool>` and calls them through the usual permission path.
 

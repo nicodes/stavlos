@@ -288,7 +288,7 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 			return m.setStatus("the channel directory cannot be changed", true)
 		}
 		if d.Source == "config" {
-			return m.setStatus("set by dirs in the global stavlos.json: change it there", true)
+			return m.setStatus("set by dirs in stavlos.json: change it there", true)
 		}
 		m.dirEdit = d.Path
 		m.dirInput.SetValue(d.Path)
@@ -303,7 +303,7 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 			return m.setStatus("the channel directory cannot be removed", true)
 		}
 		if d.Source == "config" {
-			return m.setStatus("set by dirs in the global stavlos.json: remove it there", true)
+			return m.setStatus("set by dirs in stavlos.json: remove it there", true)
 		}
 		return removeDirCmd(m.ctx, m.c, m.channelID, d.Path)
 	}

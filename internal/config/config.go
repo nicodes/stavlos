@@ -43,7 +43,7 @@ type File struct {
 	Plugins    []string       `json:"plugins,omitempty"`
 	Reminders  *bool          `json:"reminders,omitempty"` // remind an agent that ends a turn owing a reply (default true)
 	Sandbox    *SandboxConfig `json:"sandbox,omitempty"`   // the OS boundary shell commands and MCP servers run in
-	Dirs       []string       `json:"dirs,omitempty"`      // directories every channel works in besides its own (global only)
+	Dirs       []string       `json:"dirs,omitempty"`      // directories every channel works in besides its own (yours, and a trusted project\'s)
 }
 
 // SandboxConfig shapes the sandbox (global layer only). Paths may use ~
@@ -265,9 +265,9 @@ type Effective struct {
 		Writable, Hide   []string // expanded, absolute
 	}
 
-	// Dirs are the directories every channel works in besides its own (the
-	// global stavlos.json's dirs), ~ and ${env:NAME} expanded; a relative one
-	// is taken from each channel's directory.
+	// Dirs are the directories every channel works in besides its own: the
+	// global stavlos.json's dirs, then a trusted project's. ~ and ${env:NAME}
+	// are expanded; a relative one is taken from each channel's directory.
 	Dirs []string
 
 	// TrustPending is true when a project layer exists but has not been
@@ -500,8 +500,6 @@ func (e *Effective) checkRepositoryFile(f File) error {
 		return errors.New("env: is global only: a repository cannot pass secrets to the processes agents run")
 	case f.Sandbox != nil:
 		return errors.New("sandbox: is global only: a repository cannot widen the boundary its commands run in")
-	case len(f.Dirs) > 0:
-		return errors.New("dirs: is global only: a repository cannot add directories its agents may work in")
 	case f.Search != nil:
 		return errors.New("search: is global only: a repository cannot choose where queries and keys go")
 	case len(f.Plugins) > 0:
