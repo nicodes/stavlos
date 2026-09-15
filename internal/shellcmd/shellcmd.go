@@ -274,71 +274,109 @@ func Commands(cmd string) []string {
 // control operator, parenthesis, brace word, backtick and $( — the places a
 // new command may start.
 func segments(cmd string) []string {
-	var out []string
-	var cur strings.Builder
-	cut := func() {
-		if s := strings.TrimSpace(cur.String()); s != "" {
-			out = append(out, s)
-		}
-		cur.Reset()
-	}
-	rs := []rune(cmd)
-	state := quoteNone
-	for i := 0; i < len(rs); i++ {
-		r := rs[i]
-		switch state {
+	sc := segmenter{rs: []rune(cmd)}
+	for ; sc.i < len(sc.rs); sc.i++ {
+		switch sc.state {
 		case quoteSingle:
-			cur.WriteRune(r)
-			if r == '\'' {
-				state = quoteNone
+			sc.cur.WriteRune(sc.rs[sc.i])
+			if sc.rs[sc.i] == '\'' {
+				sc.state = quoteNone
 			}
-			continue
 		case quoteDouble:
-			switch {
-			case r == '"':
-				state = quoteNone
-				cur.WriteRune(r)
-			case r == '\\' && i+1 < len(rs):
-				cur.WriteRune(r)
-				i++
-				cur.WriteRune(rs[i])
-			case r == '`', r == '$' && i+1 < len(rs) && rs[i+1] == '(':
-				// A substitution inside double quotes runs a command too.
-				cut()
-				state = quoteNone
-				if r == '$' {
-					i++
-				}
-			default:
-				cur.WriteRune(r)
-			}
-			continue
+			sc.double()
 		case quoteNone:
-		}
-		switch {
-		case r == '\'':
-			state = quoteSingle
-			cur.WriteRune(r)
-		case r == '"':
-			state = quoteDouble
-			cur.WriteRune(r)
-		case r == '\\' && i+1 < len(rs):
-			cur.WriteRune(r)
-			i++
-			cur.WriteRune(rs[i])
-		case strings.ContainsRune(";&|\n\r()`", r), r == '$' && i+1 < len(rs) && rs[i+1] == '(':
-			cut()
-			if r == '$' {
-				i++
-			}
-		case (r == '{' || r == '}') && (i == 0 || rs[i-1] == ' ' || rs[i-1] == '\t') && (i+1 == len(rs) || rs[i+1] == ' ' || rs[i+1] == '\t' || rs[i+1] == ';'):
-			cut()
-		default:
-			cur.WriteRune(r)
+			sc.bare()
 		}
 	}
-	cut()
-	return out
+	sc.cut()
+	return sc.out
+}
+
+// segmenter walks a command line for segments.
+type segmenter struct {
+	rs    []rune
+	i     int
+	state quoteState
+	cur   strings.Builder
+	out   []string
+}
+
+func (sc *segmenter) cut() {
+	if s := strings.TrimSpace(sc.cur.String()); s != "" {
+		sc.out = append(sc.out, s)
+	}
+	sc.cur.Reset()
+}
+
+// at reports whether the text at the current rune starts with s.
+func (sc *segmenter) at(s string) bool {
+	return strings.HasPrefix(string(sc.rs[sc.i:min(len(sc.rs), sc.i+len(s))]), s)
+}
+
+// escaped copies a backslash and the rune it escapes.
+func (sc *segmenter) escaped() {
+	sc.cur.WriteRune(sc.rs[sc.i])
+	if sc.i+1 < len(sc.rs) {
+		sc.i++
+		sc.cur.WriteRune(sc.rs[sc.i])
+	}
+}
+
+// substitution cuts at a backtick or $( and reports whether there was one.
+func (sc *segmenter) substitution() bool {
+	switch {
+	case sc.at("`"):
+	case sc.at("$("):
+		sc.i++
+	default:
+		return false
+	}
+	sc.cut()
+	return true
+}
+
+func (sc *segmenter) double() {
+	switch r := sc.rs[sc.i]; {
+	case r == '"':
+		sc.state = quoteNone
+		sc.cur.WriteRune(r)
+	case r == '\\':
+		sc.escaped()
+	case sc.substitution():
+		sc.state = quoteNone // a substitution inside double quotes runs a command too
+	default:
+		sc.cur.WriteRune(r)
+	}
+}
+
+func (sc *segmenter) bare() {
+	switch r := sc.rs[sc.i]; {
+	case r == '\'':
+		sc.state = quoteSingle
+		sc.cur.WriteRune(r)
+	case r == '"':
+		sc.state = quoteDouble
+		sc.cur.WriteRune(r)
+	case r == '\\':
+		sc.escaped()
+	case sc.substitution():
+	case strings.ContainsRune(";&|\n\r()", r), sc.braceWord():
+		sc.cut()
+	default:
+		sc.cur.WriteRune(r)
+	}
+}
+
+// braceWord reports whether the current rune is a brace standing as a word
+// of its own: a command group, not brace expansion.
+func (sc *segmenter) braceWord() bool {
+	r := sc.rs[sc.i]
+	if r != '{' && r != '}' {
+		return false
+	}
+	before := sc.i == 0 || sc.rs[sc.i-1] == ' ' || sc.rs[sc.i-1] == '\t'
+	after := sc.i+1 == len(sc.rs) || strings.ContainsRune(" \t;", sc.rs[sc.i+1])
+	return before && after
 }
 
 // launchers run the command that follows them; the value is how many
