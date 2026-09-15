@@ -864,7 +864,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	case focusAsync, focusDue, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0
 	case focusMeta:
-		m.metaSel = m.metaParts()[0] // always the leftmost part: YOLO while on, else the role
+		m.metaSel = m.metaParts()[0] // always the leftmost part: the mode tag
 	case focusTabs:
 		m.tabSel = 0 // always the leftmost tab: permission
 	}
@@ -1652,18 +1652,15 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 	return nil
 }
 
-// metaParts lists the meta row's parts in order, the mode tag only while
-// the mode is not ask.
+// metaParts lists the meta row's parts in order: the mode tag, the role,
+// the model and the variant.
 func (m *Model) metaParts() []metaPart {
-	parts := []metaPart{}
-	if m.modeTag() != "" {
-		parts = append(parts, metaYolo)
-	}
-	return append(parts, metaRole, metaModel, metaVariant)
+	return []metaPart{metaYolo, metaRole, metaModel, metaVariant}
 }
 
-// modeTag is the meta row's tag for the session's permission mode: "AUTO"
-// or "YOLO", "" in ask mode.
+// modeTag is the meta row's tag for the session's permission mode: "ASK",
+// "AUTO" or "YOLO". It is always there, so turning auto or yolo off leaves
+// the tag in place rather than taking it away.
 func (m *Model) modeTag() string {
 	switch m.session.Mode {
 	case protocol.ModeAuto:
@@ -1671,15 +1668,18 @@ func (m *Model) modeTag() string {
 	case protocol.ModeYolo:
 		return "YOLO"
 	}
-	return ""
+	return "ASK"
 }
 
 // metaAction is what a part of the meta row does when picked, by click or
-// enter: the mode tag goes back to ask; the role, model and variant open
-// their dialogs.
+// enter: AUTO and YOLO go back to ask, ASK opens /mode; the role, model and
+// variant open their dialogs.
 func (m *Model) metaAction(part metaPart) tea.Cmd {
 	switch part {
 	case metaYolo:
+		if m.modeTag() == "ASK" {
+			return m.openMode()
+		}
 		return setModeCmd(m.ctx, m.c, m.sessionID, protocol.ModeAsk)
 	case metaRole:
 		return rolesCmd(m.ctx, m.c, m.sessionID, false)
@@ -1758,7 +1758,7 @@ type metaPart int
 
 const (
 	metaNone    metaPart = iota
-	metaYolo             // the AUTO/YOLO mode tag: click goes back to ask
+	metaYolo             // the ASK/AUTO/YOLO mode tag: AUTO and YOLO go back to ask, ASK opens /mode
 	metaRole             // "label (role)": click opens /roles
 	metaModel            // the model: click opens /models
 	metaVariant          // the variant: click opens /variants

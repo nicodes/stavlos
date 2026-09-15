@@ -172,7 +172,7 @@ func promptBoxWidth(width int) int {
 // sel is the part highlighted while the row has keyboard focus (metaNone
 // otherwise).
 // nameStyle tints the "label (role)" part (the role's colour, or plain).
-// modeTag is "AUTO" or "YOLO" (the session's permission mode), "" for ask.
+// modeTag is "ASK", "AUTO" or "YOLO" (the session's permission mode), "" for none.
 func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) string {
 	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel, nameStyle)
 	return line
@@ -197,9 +197,12 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 		x += 3
 	}
 	if modeTag != "" {
-		st := theme.StyleWarn // YOLO: nothing asks
-		if modeTag == "AUTO" {
-			st = theme.StyleAccent // AUTO: only the boundary asks
+		st := theme.StyleDim // ASK: every permission asks
+		switch modeTag {
+		case "AUTO":
+			st = theme.StyleAccent // AUTO: allowed inside the directories, denied outside
+		case "YOLO":
+			st = theme.StyleWarn // YOLO: nothing asks
 		}
 		part(metaYolo, modeTag, st)
 		sep()

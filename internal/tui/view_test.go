@@ -459,11 +459,11 @@ func TestTabCyclesFocus(t *testing.T) {
 			t.Fatalf("shift+tab: focus=%v follow=%v", m.focus, m.follow)
 		}
 		press(&m, tab, tab, tab) // chat → input → strip → meta row
-		if m.focus != focusMeta || m.metaSel != metaRole || m.input.Focused() {
+		if m.focus != focusMeta || m.metaSel != metaYolo || m.input.Focused() {
 			t.Fatalf("tab x3: focus=%v sel=%v", m.focus, m.metaSel)
 		}
-		press(&m, left) // leftmost already (no YOLO): stays
-		press(&m, right)
+		press(&m, left) // leftmost already (the ASK tag): stays
+		press(&m, right, right)
 		if m.metaSel != metaModel {
 			t.Fatalf("→ should move to the model: %v", m.metaSel)
 		}
@@ -1051,7 +1051,7 @@ func TestSessionViewFillsHeight(t *testing.T) {
 				ri = i
 			}
 		}
-		if ri < 0 || si < 2 || si+1 >= len(lines) || !strings.HasPrefix(lines[ri+1], "›") || strings.TrimSpace(lines[si-1]) != "" || !strings.HasPrefix(lines[si+1], "coder ·") {
+		if ri < 0 || si < 2 || si+1 >= len(lines) || !strings.HasPrefix(lines[ri+1], "›") || strings.TrimSpace(lines[si-1]) != "" || !strings.HasPrefix(lines[si+1], "ASK · coder ·") {
 			t.Fatalf("focus %v: under the rule come the input, a blank line, the strip, then the meta row:\n%s", f, stripANSI(v))
 		}
 	}
@@ -1093,7 +1093,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	meta, strip := -1, -1
 	for i, l := range lines {
 		switch {
-		case strings.HasPrefix(l, "coder · "):
+		case strings.HasPrefix(l, "ASK · coder · "):
 			meta = i
 		case strings.HasPrefix(l, "permission "):
 			strip = i
@@ -1361,7 +1361,7 @@ func TestFocusAlwaysLandsLeftmost(t *testing.T) {
 	if m.focus != focusTabs || m.tabSel != 1 {
 		t.Fatalf("setup: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, tab, right, right) // strip → meta row, then over to the variant
+	press(&m, tab, right, right, right) // strip → meta row, then over to the variant
 	if m.focus != focusMeta || m.metaSel != metaVariant {
 		t.Fatalf("setup: focus=%v sel=%v", m.focus, m.metaSel)
 	}
@@ -1371,8 +1371,8 @@ func TestFocusAlwaysLandsLeftmost(t *testing.T) {
 		t.Fatalf("strip should land on permission: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, tab)
-	if m.focus != focusMeta || m.metaSel != metaRole {
-		t.Fatalf("meta row should land on the role: focus=%v sel=%v", m.focus, m.metaSel)
+	if m.focus != focusMeta || m.metaSel != metaYolo {
+		t.Fatalf("meta row should land on the mode tag (ASK): focus=%v sel=%v", m.focus, m.metaSel)
 	}
 	// with YOLO on, the leftmost part of the meta row is the YOLO tag
 	m.session.Mode = protocol.ModeYolo
@@ -1742,12 +1742,12 @@ func TestMetaRowHits(t *testing.T) {
 			t.Fatalf("x=%d: got %v want %v", c.x, got, c.want)
 		}
 	}
-	// without yolo the row starts at the name; a missing variant reads "default"
+	// in ask mode the row starts with the ASK tag; a missing variant reads "default"
 	m.session.Mode = protocol.ModeAsk
 	m.agents[0].Variant = ""
-	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "", metaNone, lipgloss.NewStyle()))
-	if m.metaHit(0) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
-		t.Fatalf("no-yolo row: %q", row)
+	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "ASK", metaNone, lipgloss.NewStyle()))
+	if !strings.HasPrefix(row, "ASK · main") || m.metaHit(0) != metaYolo || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "main")])) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
+		t.Fatalf("ask row: %q", row)
 	}
 }
 

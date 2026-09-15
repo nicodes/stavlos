@@ -24,6 +24,7 @@ type decision struct {
 	arg      string      // the subject value the verdict is about (a patch's worst path)
 	verb     policy.Verb // allow, ask or deny after every rule has spoken
 	boundary string      // the directory the call reaches outside the working set, "" when inside
+	why      string      // the denial when the harness refuses without a rule (auto outside the directories)
 }
 
 // runTool applies policy, escalates if needed, executes, and logs.
@@ -46,7 +47,11 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	case policy.Allow:
 		// runs below
 	case policy.Deny:
-		finish("Denied by policy: "+c.Name+" "+d.arg, true, false, true)
+		why := d.why
+		if why == "" {
+			why = "Denied by policy: " + c.Name + " " + d.arg
+		}
+		finish(why, true, false, true)
 		return
 	case policy.Ask:
 		denial, withdrawn, allowed := a.escalate(turnCtx, c, d, rv)
@@ -94,19 +99,30 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 	if verb == policy.Ask && mode != protocol.ModeAsk {
 		verb = policy.Allow // auto and yolo answer every policy ask with allow
 	}
-	// A call that reaches outside the agent's working directories asks
-	// first, even when policy allows the tool; only yolo answers that too.
-	// The prompt names the directory; "allow_always" adds it to the agent.
-	boundary := ""
+	// A call that reaches outside the agent's working directories is judged
+	// by the mode even when policy allows the tool: ask mode asks (the prompt
+	// names the directory; "allow_always" adds it to the agent), auto denies
+	// it, yolo allows it.
+	boundary, why := "", ""
 	if verb != policy.Deny {
 		if dir := a.outsideDir(sub); dir != "" {
 			boundary = dir
-			if mode != protocol.ModeYolo {
+			switch mode {
+			case protocol.ModeYolo:
+			case protocol.ModeAuto:
+				verb, why = policy.Deny, autoOutside(dir)
+			default:
 				verb = policy.Ask
 			}
 		}
 	}
-	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary}
+	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why}
+}
+
+// autoOutside is what an agent is told when auto mode denies a call outside
+// its working directories.
+func autoOutside(dir string) string {
+	return "Denied in auto mode: " + dir + " is outside your working directories, and auto mode does not allow calls outside them."
 }
 
 // escalate asks the human about a call and records what they allowed for
@@ -146,6 +162,9 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 		}
 		if ans.Defaulted {
 			why = "Permission denied: nobody answered the prompt and the headless default is deny."
+		}
+		if ans.Client == protocol.ModeAuto && d.boundary != "" {
+			why = autoOutside(d.boundary) // waiting when the session switched to auto
 		}
 		return why, false, false
 	}
