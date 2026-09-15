@@ -1743,7 +1743,7 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 			m.toggleItem()
 		}
 		return cmd
-	case y >= lay.strip && y < lay.strip+m.stripRows(): // a tab label opens that tab's dialog
+	case y >= lay.strip && y < lay.strip+lay.stripRows: // a tab label opens that tab's dialog
 		if f, ok := m.tabAt(x, y-lay.strip); ok {
 			return m.openTab(f)
 		}
@@ -1892,28 +1892,16 @@ func (m *Model) metaHit(x int) metaPart {
 // the rule come the palette (while open), the input, a blank line, the
 // strip and the meta row.
 type rowLayout struct {
-	input int // first row of the input (it may span several)
-	strip int // the tab strip's first line (it has len(tabRows))
-	meta  int // the meta row
+	input     int // first row of the input (it may span several)
+	strip     int // the tab strip's first line
+	stripRows int // how many lines the strip takes
+	meta      int // the meta row, -1 when hidden
 }
 
 // rows derives the row layout the same way channelView stacks its parts.
 func (m *Model) rows() rowLayout {
-	y := m.vp.Height + 1 // the rule (the status and usage sit on it)
-	if pv := m.paletteViewFor(m.width); pv != "" {
-		y += strings.Count(pv, "\n") + 1
-	}
-	lay := rowLayout{input: y}
-	y += m.inputRows()
-	if m.stripRows() > 0 || m.metaShown() {
-		y++ // the blank line under the input
-	}
-	lay.strip = y
-	lay.meta = y + m.stripRows()
-	if !m.metaShown() {
-		lay.meta = -1
-	}
-	return lay
+	f := m.computeFrame()
+	return rowLayout{input: f.input, strip: f.strip, stripRows: f.stripRows, meta: f.metaRow}
 }
 
 // tabAt maps a position on the strip (x, and row within the strip) to the
@@ -3409,27 +3397,9 @@ func (m *Model) layout() {
 	m.promptInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.promptInput.Prompt)) - 1 // inside the tab dialog, under promptBox's indent
 	m.dirInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.dirInput.Prompt)) - 1
 
-	_, kb := m.keyBarView()
-	bodyH := m.height - kb - 1 - m.inputRows() // key bar, the rule (with the status and usage on it), the input rows
-	sv := m.sectionsView(m.width)
-	if sv != "" {
-		bodyH -= strings.Count(sv, "\n") + 1 // the strip, which the channel chat may not have at all
-	}
-	if m.metaShown() {
-		bodyH-- // the meta row
-	}
-	if sv != "" || m.metaShown() {
-		bodyH-- // the blank line under the input
-	}
-	if pv := m.paletteViewFor(m.width); pv != "" {
-		bodyH -= strings.Count(pv, "\n") + 1
-	}
-	if bodyH < 1 {
-		bodyH = 1
-	}
 	vw := m.contentWidth()
 	widthChanged := vw != m.vp.Width
-	m.vp.Width, m.vp.Height = vw, bodyH
+	m.vp.Width, m.vp.Height = vw, m.computeFrame().bodyH
 	if widthChanged {
 		m.refreshViewport()
 	} else if m.follow {

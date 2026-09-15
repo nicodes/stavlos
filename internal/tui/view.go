@@ -335,7 +335,8 @@ func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "starting…"
 	}
-	keybar, kb := m.keyBarView()
+	f := m.computeFrame()
+	keybar, kb := f.keybar, f.keybarRows
 	mainH := m.height - kb
 	if mainH < 1 {
 		mainH = 1
@@ -344,7 +345,7 @@ func (m Model) View() string {
 	if m.isHome() {
 		main = m.homeView(m.width, mainH)
 	} else {
-		main = m.channelView(m.width, mainH)
+		main = m.channelView(f, m.width)
 	}
 	if m.ov != nil {
 		m.ov.hints = m.keyHints() // the dialog's own keys, shown whatever the key bar setting
@@ -526,7 +527,7 @@ func (m Model) homeView(width, height int) string {
 }
 
 // channelView is the transcript over the input box, plus the sidebar.
-func (m Model) channelView(width, height int) string {
+func (m Model) channelView(f frame, width int) string {
 	cw := m.contentWidth()
 	// The chat shares the top with the sidebar; everything from the rule down
 	// (the status and usage sit on the rule) spans the whole window, so the
@@ -541,18 +542,17 @@ func (m Model) channelView(width, height int) string {
 	// then the tab strip and the meta row (mode tag, role, model, variant,
 	// usage).
 	parts := []string{top, m.ruleLine(width)}
-	if pv := m.paletteViewFor(width); pv != "" {
-		parts = append(parts, pv)
+	if f.palette != "" {
+		parts = append(parts, f.palette)
 	}
 	parts = append(parts, m.inputBoxView(width))
-	sv := m.sectionsView(width)
-	if sv != "" || m.metaShown() {
+	if f.sections != "" || f.meta {
 		parts = append(parts, "") // air between the input and what sits under it
 	}
-	if sv != "" {
-		parts = append(parts, sv)
+	if f.sections != "" {
+		parts = append(parts, f.sections)
 	}
-	if m.metaShown() {
+	if f.meta {
 		parts = append(parts, m.metaRow(width))
 	}
 	return padLines(strings.Join(parts, "\n"), width)
