@@ -66,8 +66,8 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if len(e.Instructions) != 1 || e.Instructions[0].Text != "Use light models." || !e.ProjectTrusted || len(e.InstructionFiles) != 1 {
 		t.Fatalf("AGENTS.md: %+v %v", e.Instructions, e.InstructionFiles)
 	}
-	if verb(e.Policy, "shell", "git push x") != policy.Ask {
-		t.Fatal("project loosened git push")
+	if verb(e.Policy, "shell", "git push x") != policy.Allow {
+		t.Fatal("the project's git push rule replaces the global one")
 	}
 	if verb(e.Policy, "shell", "curl x") != policy.Deny {
 		t.Fatal("project tighten lost")
@@ -76,16 +76,17 @@ func TestLoadLayersAndTrust(t *testing.T) {
 		t.Fatal("builtin missing")
 	}
 
-	// A project rule with a longer literal prefix than a global deny does
-	// not shadow it: layering is the most restrictive decision, not a merge.
+	// Project and global rules merge as if they were one file: the most
+	// specific pattern wins, so a project's git* allow is more specific than
+	// a global *--force* deny.
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"policy":{"shell":{"*":"allow","*--force*":"deny"}}}`), 0o644)
 	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{"policy":{"shell":{"git*":"allow"}}}`), 0o644)
 	e, err = Load(dir, allTrust{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if verb(e.Policy, "shell", "git push --force") != policy.Deny || verb(e.Policy, "shell", "git status") != policy.Allow {
-		t.Fatal("project rule shadowed a global deny")
+	if got := verb(e.Policy, "shell", "git push --force"); got != policy.Allow || verb(e.Policy, "shell", "git status") != policy.Allow || verb(e.Policy, "shell", "rm --force x") != policy.Deny {
+		t.Fatalf("project rules merge with the global ones, the most specific pattern winning: git push --force is %s", got)
 	}
 }
 
@@ -273,40 +274,35 @@ func TestLoadGlobalReadsNoDirectory(t *testing.T) {
 	}
 }
 
-// TestRepositoryLayersOnlyTighten: once trusted, stavlos.json and
-// stavlos.local.json tighten the global layer and cannot loosen it or set
-// what is global only.
-func TestRepositoryLayersOnlyTighten(t *testing.T) {
+// TestRepositoryLayersTakePrecedence: once trusted, stavlos.json and
+// stavlos.local.json set anything the global file can, local over project
+// over global: a rule for the same pattern replaces the global one, and env,
+// search, plugins, an allow escalation default, raised limits and the
+// sandbox all apply. An untrusted project sets nothing.
+func TestRepositoryLayersTakePrecedence(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"policy":{"shell":{"rm *":"deny","ls*":"allow"}}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"policy":{"shell":{"rm *":"deny","ls*":"allow"}},"limits":{"maxAgents":6}}`), 0o644)
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".stavlos"), 0o755)
-	local := filepath.Join(dir, ".stavlos", "stavlos.local.json")
-	os.WriteFile(local, []byte(`{"policy":{"shell":{"rm *":"allow","ls -la":"deny"}}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{"limits":{"maxAgents":20},"env":{"pass":["GITHUB_TOKEN"]},"search":{"provider":"brave"},"plugins":["x"],"escalation":{"default":"allow"},"sandbox":{"enabled":false}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.local.json"), []byte(`{"policy":{"shell":{"rm *":"allow","ls -la":"deny"}},"limits":{"maxAgents":30}}`), 0o644)
 	e, err := Load(dir, allTrust{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if verb(e.Policy, "shell", "rm x") != policy.Deny || verb(e.Policy, "shell", "ls -la") != policy.Deny || verb(e.Policy, "shell", "ls") != policy.Allow {
-		t.Fatal("the local layer loosened or failed to tighten")
+	if verb(e.Policy, "shell", "rm x") != policy.Allow || verb(e.Policy, "shell", "ls -la") != policy.Deny || verb(e.Policy, "shell", "ls") != policy.Allow {
+		t.Fatal("the local layer's rules take precedence")
 	}
-	for body, want := range map[string]string{
-		`{"env":{"pass":["GITHUB_TOKEN"]}}`:  "env: is global only",
-		`{"search":{"provider":"brave"}}`:    "search: is global only",
-		`{"plugins":["x"]}`:                  "plugins: is global only",
-		`{"escalation":{"default":"allow"}}`: "escalation.default",
-		`{"limits":{"maxAgents":99}}`:        "limits: a repository may only lower them",
-		`{"sandbox":{"enabled":false}}`:      "sandbox: is global only",
-	} {
-		for _, f := range []string{local, filepath.Join(dir, ".stavlos", "stavlos.json")} {
-			os.Remove(local)
-			os.WriteFile(f, []byte(body), 0o644)
-			if _, err := Load(dir, allTrust{}); err == nil || !strings.Contains(err.Error(), want) {
-				t.Errorf("%s in %s: got %v, want %q", body, filepath.Base(f), err, want)
-			}
-			os.Remove(f)
-		}
+	if e.Limits.MaxAgents != 30 || !contains(e.PassEnv, "GITHUB_TOKEN") || e.Search.Provider != "brave" || !contains(e.Plugins, "x") || e.Escalation.Default != policy.Allow || e.Sandbox.Enabled {
+		t.Fatalf("a project sets what the global file can: limits %+v env %v search %q plugins %v default %s sandbox %v", e.Limits, e.PassEnv, e.Search.Provider, e.Plugins, e.Escalation.Default, e.Sandbox.Enabled)
+	}
+	if verb(e.Policy, "web_search", "q") != policy.Allow {
+		t.Fatal("a project's search backend allows web_search")
+	}
+	e, err = Load(dir, noTrust{})
+	if err != nil || e.Limits.MaxAgents != 6 || !e.Sandbox.Enabled || e.Search.Provider != "" {
+		t.Fatalf("an untrusted project sets nothing: %v %+v", err, e.Limits)
 	}
 }
 

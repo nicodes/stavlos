@@ -47,7 +47,7 @@ type File struct {
 	Hosts      []string       `json:"hosts,omitempty"`     // hosts web_fetch reaches without asking: github.com, *.example.com, or * (yours, and a trusted project\'s)
 }
 
-// SandboxConfig shapes the sandbox (global layer only). Paths may use ~
+// SandboxConfig shapes the sandbox (any layer; a trusted project's wins). Paths may use ~
 // and ${env:NAME}.
 type SandboxConfig struct {
 	Enabled  *bool    `json:"enabled,omitempty"`  // default true
@@ -251,12 +251,13 @@ type Effective struct {
 		Threshold     float64
 		MaxToolOutput int
 	}
-	MCP     map[string]MCP
-	Search  Search          // web_search backend, key expanded
-	PassEnv []string        // environment variables child processes keep although their names look like secrets
-	Policy  *policy.Layered // global and local rules as the base; the trusted project's rules as an overlay that can only tighten
-	Presets map[string]Preset
-	Skills  map[string]Skill
+	MCP         map[string]MCP
+	Search      Search          // web_search backend, key expanded
+	PassEnv     []string        // environment variables child processes keep although their names look like secrets
+	searchRuled bool            // a layer's policy decided web_search, so a search backend does not allow it
+	Policy      *policy.Layered // every layer's rules merged in order (defaults, global, project, local); roles add overlays that only tighten
+	Presets     map[string]Preset
+	Skills      map[string]Skill
 	// Instructions are the AGENTS.md files every agent follows, general
 	// first: the user's own file, then, once the project is trusted, the
 	// files from the repository root down to the channel directory.
@@ -322,8 +323,9 @@ func Load(dir string, trust Trust) (*Effective, error) {
 			}
 		}
 		if trust != nil && trust.Trusted(dir, hash) {
-			// stavlos.json and stavlos.local.json are both the repository's:
-			// trust-gated, hashed, and able only to tighten.
+			// stavlos.json and stavlos.local.json are both the repository's,
+			// trust-gated and hashed; they set anything the global file can,
+			// the local file over the project's over the global one.
 			for _, l := range []struct{ file, layer string }{{"stavlos.json", "project"}, {"stavlos.local.json", "local"}} {
 				f, err := readFile(filepath.Join(pdir, l.file))
 				if err != nil {
@@ -333,6 +335,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 					return nil, fmt.Errorf("%s config: %w", l.layer, err)
 				}
 			}
+			e.allowSearch()
 			if err := e.loadPresets(filepath.Join(pdir, "agents"), "project"); err != nil {
 				return nil, err
 			}
@@ -382,6 +385,15 @@ func Defaults() File {
 	}
 }
 
+// allowSearch allows web_search once a search backend is configured, unless
+// a layer's policy decided web_search itself: without a backend every query
+// would go to the keyless fallback, a third party the user never chose.
+func (e *Effective) allowSearch() {
+	if e.Search.Provider != "" && !e.searchRuled {
+		e.Policy = policy.Layer(e.Policy.Base().Merge(policy.New(policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Allow})), e.Policy.Overlays()...)
+	}
+}
+
 // LoadGlobal is the daemon-wide configuration: the defaults and the global
 // layer, nothing from any directory. It is what the daemon itself runs on
 // (escalation timers, the fallback for a channel whose own config fails to
@@ -391,7 +403,7 @@ func LoadGlobal() (*Effective, error) {
 
 	// defaults, then the global layer over them
 	e.Policy = policy.Layer(policy.New())
-	if err := e.applyFile(Defaults(), "global"); err != nil {
+	if err := e.applyFile(Defaults(), "defaults"); err != nil {
 		return nil, fmt.Errorf("defaults: %w", err)
 	}
 	for _, p := range builtinPresets() {
@@ -407,14 +419,7 @@ func LoadGlobal() (*Effective, error) {
 	if err := e.applyFile(gf, "global"); err != nil {
 		return nil, fmt.Errorf("global config: %w", err)
 	}
-	// web_search asks until a backend is configured: without one every
-	// query would go to the keyless fallback, a third party the user never
-	// chose. With one, it is allowed like any read-only call unless the
-	// file says otherwise.
-	if _, explicit := gf.Policy[toolname.WebSearch]; e.Search.Provider != "" && !explicit {
-		e.Policy = policy.Layer(e.Policy.Base().Merge(policy.New(policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Allow})), e.Policy.Overlays()...)
-	}
-	e.Plugins = gf.Plugins
+	e.allowSearch()
 	e.Instructions = instructions.Global() // the user's own, trusted like the rest of this layer
 	if err := e.loadPresets(filepath.Join(gdir, "agents"), "global"); err != nil {
 		return nil, err
@@ -429,9 +434,12 @@ func LoadGlobal() (*Effective, error) {
 // that cannot be applied is an error, never a silent fallback to the
 // default (an unreadable deny rule is the worst kind of failure).
 func (e *Effective) applyFile(f File, layer string) error {
-	if layer != "global" {
-		if err := e.checkRepositoryFile(f); err != nil {
-			return err
+	if _, ok := f.Policy[toolname.WebSearch]; ok && layer != "defaults" {
+		e.searchRuled = true // a layer decided web_search itself: a search backend does not allow it
+	}
+	for _, pl := range f.Plugins {
+		if !contains(e.Plugins, pl) {
+			e.Plugins = append(e.Plugins, pl)
 		}
 	}
 	if f.Model != "" {
@@ -500,37 +508,9 @@ func (e *Effective) applyFile(f File, layer string) error {
 	if err != nil {
 		return err
 	}
-	if layer != "global" {
-		// A repository's rules are an overlay: they can only tighten what
-		// the global layer decides (PRD §10.6).
-		e.Policy = e.Policy.With(rules)
-	} else {
-		e.Policy = policy.Layer(e.Policy.Base().Merge(rules), e.Policy.Overlays()...)
-	}
-	return nil
-}
-
-// checkRepositoryFile refuses what a repository's files may not set,
-// however trusted: anything that loosens the global layer (secrets passed
-// to child processes, an allow default for unanswered prompts, higher
-// limits) or chooses where data goes (a search backend and its key,
-// plugins). Everything else they set tightens or is the project's own
-// business (model, roles, MCP servers, which run sandboxed).
-func (e *Effective) checkRepositoryFile(f File) error {
-	switch {
-	case f.Env != nil:
-		return errors.New("env: is global only: a repository cannot pass secrets to the processes agents run")
-	case f.Sandbox != nil:
-		return errors.New("sandbox: is global only: a repository cannot widen the boundary its commands run in")
-	case f.Search != nil:
-		return errors.New("search: is global only: a repository cannot choose where queries and keys go")
-	case len(f.Plugins) > 0:
-		return errors.New("plugins: is global only")
-	case f.Escalation != nil && policy.Verb(f.Escalation.Default) == policy.Allow:
-		return errors.New("escalation.default: a repository cannot make unanswered prompts allow")
-	case f.Limits != nil && (f.Limits.MaxDepth > e.Limits.MaxDepth || f.Limits.MaxAgents > e.Limits.MaxAgents):
-		return errors.New("limits: a repository may only lower them")
-	}
+	// Every layer's rules merge in order, a later layer's rule replacing an
+	// earlier one's for the same tool and pattern (PRD §10.6).
+	e.Policy = policy.Layer(e.Policy.Base().Merge(rules), e.Policy.Overlays()...)
 	return nil
 }
 
