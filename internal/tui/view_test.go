@@ -1518,11 +1518,11 @@ func TestCtrlCTwiceQuits(t *testing.T) {
 func TestChannelItemAndBind(t *testing.T) {
 	created := time.Now().Add(-3 * time.Hour).Format(time.RFC3339)
 	it := channelItem(protocol.ChannelInfo{ID: "s1", Name: "proj", Title: "fix the login bug", Created: created, Model: "openai/gpt-5", CostUSD: 0.12, Live: 2}, false)
-	if it.label != "# proj" || !strings.HasPrefix(it.hint, "fix the login bug · 3h00m ago · openai/gpt-5 · $0.12 · 2 live") || it.good {
+	if it.label != "#proj" || !strings.HasPrefix(it.hint, "fix the login bug · 3h00m ago · openai/gpt-5 · $0.12 · 2 live") || it.good {
 		t.Fatalf("item: %+v", it)
 	}
 	it = channelItem(protocol.ChannelInfo{ID: "s2", Name: "proj-2", Created: created}, true)
-	if it.label != "# proj-2" || !strings.HasSuffix(it.hint, "current") || !it.good {
+	if it.label != "#proj-2" || !strings.HasSuffix(it.hint, "current") || !it.good {
 		t.Fatalf("current empty item: %+v", it)
 	}
 
@@ -2249,9 +2249,8 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		m.prompts = nil
 		// every channel of the directory in alphabetical order, whichever is
-		// open: this one keeps its place with its agents under it, the
-		// others show their state and age; space on one opens it, and so
-		// does a click
+		// open, each led by its state dot: this one keeps its place with its
+		// agents under it; space on another opens it, and so does a click
 		m.channel.Name = "proj"
 		m.navChannels = resumable([]protocol.ChannelInfo{
 			{ID: "s-old", Name: "proj-2", Title: "fix the login bug", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
@@ -2264,12 +2263,12 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if len(body) != na+4 || !strings.HasPrefix(plain[0], "  + channel") || !strings.HasPrefix(plain[1], "  # docs") || !strings.HasSuffix(plain[1], "○ 26h00m") ||
-			!strings.HasPrefix(plain[2], "  # proj ") || !strings.HasPrefix(plain[na+3], "  # proj-2") || !strings.HasSuffix(plain[na+3], "● 2h00m") ||
+		if f := strings.Fields(plain[2]); len(body) != na+4 || !strings.HasPrefix(plain[0], "  + channel") || strings.TrimRight(plain[1], " ") != "  ○ #docs" ||
+			len(f) != 2 || f[1] != "#proj" || strings.TrimRight(plain[na+3], " ") != "  ● #proj-2" || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
 			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || m.channelRow() != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}
-		for _, i := range []int{1, na + 3} {
+		for _, i := range []int{1, 2, na + 3} {
 			if w := ansi.StringWidth(plain[i]); w != sidebarWidth-1 {
 				t.Fatalf("channel rows fill the width: %d %q", w, plain[i])
 			}
