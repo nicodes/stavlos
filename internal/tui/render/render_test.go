@@ -732,9 +732,9 @@ func markCursorForTest(t *testing.T) {
 func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 	tr := transcript.NewTranscript()
 	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "delegate"}))
-	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "agent_response", From: "scout (a1b2c3d4)", Text: "Repository survey complete.\nNo edits were needed."}))
+	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "agent_response", From: "scout", Text: "Repository survey complete.\nNo edits were needed."}))
 	folded := renderWith(tr.All(), Options{Width: 80})
-	if !contains(folded, "⑂ Agent response received · scout (a1b2c3d4) +2") {
+	if !contains(folded, "⑂ Answer from scout +2") {
 		t.Fatalf("folded response should name itself and its sender:\n%s", strings.Join(folded, "\n"))
 	}
 	for _, l := range folded {
@@ -743,25 +743,25 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 		}
 	}
 	full := renderWith(tr.All(), Options{Width: 80, NoFold: true})
-	assertSubsequence(t, full, []string{"⑂ Agent response received · scout (a1b2c3d4)", "Repository survey complete.", "No edits were needed."})
+	assertSubsequence(t, full, []string{"⑂ Answer from scout", "Repository survey complete.", "No edits were needed."})
 }
 
-func TestDeliveredResponseShowsItsText(t *testing.T) {
+func TestSentMessageShowsItsText(t *testing.T) {
 	tr := transcript.NewTranscript()
 	mk := func(seq int64, typ event.Type, p any) event.Event {
 		return event.Event{Seq: seq, Agent: "a", Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
 	}
 	tr.Apply(mk(1, event.TurnStarted, event.TurnPayload{Turn: 1}))
-	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "r1", Name: "agent_response", Input: json.RawMessage(`{"to":"a4e33e14942","text":"Concise findings:\n- Go-only module"}`)}))
-	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "r1", Name: "agent_response", Output: "response delivered to a4e33e14942"}))
+	tr.Apply(mk(2, event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "r1", Name: "message", Input: json.RawMessage(`{"to":"main","text":"Concise findings:\n- Go-only module"}`)}))
+	tr.Apply(mk(3, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "r1", Name: "message", Output: "answer delivered to main"}))
 	full := renderWith(tr.All(), Options{Width: 80, NoFold: true})
-	assertSubsequence(t, full, []string{"⑂ Agent response delivered  → a4e33e14942", "  Concise findings:", "  - Go-only module"})
+	assertSubsequence(t, full, []string{"⑂ Message  → main", "  Concise findings:", "  - Go-only module"})
 	for _, l := range full {
-		if strings.Contains(l, "response delivered to") {
+		if strings.Contains(l, "answer delivered to") {
 			t.Fatalf("the bare tool result should not show:\n%s", strings.Join(full, "\n"))
 		}
 	}
-	if folded := renderWith(tr.All(), Options{Width: 80}); !contains(folded, "⑂ Agent response delivered  → a4e33e14942 +2") {
+	if folded := renderWith(tr.All(), Options{Width: 80}); !contains(folded, "⑂ Message  → main +2") {
 		t.Fatalf("folded:\n%s", strings.Join(folded, "\n"))
 	}
 }

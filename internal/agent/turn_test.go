@@ -429,7 +429,7 @@ func TestDelegation(t *testing.T) {
 			<-release
 			parent := req.System[strings.Index(req.System, "created by a parent agent (id ")+len("created by a parent agent (id "):]
 			parent = parent[:strings.IndexByte(parent, ')')]
-			return call("k1", "agent_response", `{"to":"`+parent+`","text":"found it"}`), nil
+			return call("k1", "message", `{"to":"`+parent+`","text":"found it"}`), nil
 		}},
 	}
 	s, h := newTestSession(t, testConfig{}, fm)
@@ -462,7 +462,7 @@ func TestDelegation(t *testing.T) {
 		t.Fatalf("%+v", in)
 	}
 	um := userMessages(h, root.ID)
-	if last := um[len(um)-1]; last.Kind != "agent_response" || !strings.HasPrefix(last.From, "scout (") {
+	if last := um[len(um)-1]; last.Kind != "agent_response" || last.From != "scout" {
 		t.Fatalf("%+v", last)
 	}
 	// Kill the child: the parent forgets it, the child is done.
@@ -715,5 +715,30 @@ func TestLogWriteFailureEndsTheTurn(t *testing.T) {
 	fm.steps = []step{reply(text("fine"))}
 	if end := runTurn(t, s, h, "again"); end.Reason != "end_turn" {
 		t.Fatalf("%+v", end)
+	}
+}
+
+// TestMessageToUser: a message to the human ("@Human" is the same
+// recipient as "user") is logged on the sender, and the model is told it
+// was delivered.
+func TestMessageToUser(t *testing.T) {
+	fm := &fakeModel{steps: []step{
+		reply(call("c1", "message", `{"to":"@Human","text":"done: see a.go"}`)),
+		reply(text("ok")),
+	}}
+	s, h := newTestSession(t, testConfig{}, fm)
+	root := s.Root()
+	runTurn(t, s, h, "go")
+	var p event.TextPayload
+	if sent := h.ofType(event.MessageToUser, root.ID); len(sent) != 1 || sent[0].Decode(&p) != nil || p.Text != "done: see a.go" {
+		t.Fatalf("%+v\n%s", p, h.dump())
+	}
+	fin := h.ofType(event.ToolCallFinished, root.ID)
+	var f event.ToolFinishedPayload
+	if _ = fin[len(fin)-1].Decode(&f); f.IsError || f.Output != "message delivered to the user" {
+		t.Fatalf("%+v", f)
+	}
+	if in := root.Info(); len(in.Awaiting) != 0 {
+		t.Fatalf("a message to the human waits on nobody: %+v", in.Awaiting)
 	}
 }

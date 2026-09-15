@@ -2,8 +2,8 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/config"
@@ -26,7 +26,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 		s: s, cfg: cfg,
 		openTurns: map[string]int{}, openMonitors: map[string]event.MonitorStartedPayload{}, monitorOwner: map[string]string{},
 		prompts: map[string][]queued{}, steers: map[string][]queued{}, responses: map[string][]response{},
-		askTargets: map[string]string{}, finished: map[string]bool{}, missingRole: map[string]string{},
+		finished: map[string]bool{}, missingRole: map[string]string{},
 	}
 	for _, e := range events {
 		r.apply(e)
@@ -55,7 +55,6 @@ type recovery struct {
 	prompts      map[string][]queued
 	steers       map[string][]queued
 	responses    map[string][]response
-	askTargets   map[string]string // agent_message call id → asked agent, while the call is open
 	finished     map[string]bool
 	missingRole  map[string]string // agent id → why it runs read-only (set after replay: turns clear lastError)
 }
@@ -75,8 +74,6 @@ func (r *recovery) apply(e event.Event) {
 		r.monitor(e)
 	case event.TurnStarted, event.TurnEnded, event.TurnAborted, event.Usage:
 		r.turn(e)
-	case event.ToolCallStarted, event.ToolCallFinished:
-		r.toolCall(e)
 	case event.PermitGranted:
 		var p event.PermitPayload
 		if e.Decode(&p) == nil {
@@ -220,6 +217,13 @@ func (r *recovery) inbox(e event.Event) {
 		var p event.TextPayload
 		_ = e.Decode(&p)
 		r.steers[e.Agent] = append(r.steers[e.Agent], queued{p.Text, p.Source})
+		// A steer from an agent is a message it now waits on: the live path
+		// logs one only for a new message (an answer is ResponseReceived).
+		if caller, ok := strings.CutPrefix(p.Source, "agent:"); ok {
+			if a, ok := r.s.agents[caller]; ok {
+				a.awaiting[e.Agent]++
+			}
+		}
 	case event.UserMessage:
 		r.consumed(e)
 	case event.ResponseReceived:
@@ -322,33 +326,6 @@ func (r *recovery) turn(e event.Event) {
 			_ = e.Decode(&p)
 			a.usage.tokens += p.Usage.InputTokens + p.Usage.OutputTokens
 			a.usage.cost += p.CostUSD
-		}
-	}
-}
-
-func (r *recovery) toolCall(e event.Event) {
-	if e.Type == event.ToolCallStarted {
-		var p event.ToolStartedPayload
-		if _ = e.Decode(&p); toolname.Canonical(p.Name) == toolname.AgentMessage {
-			var in struct{ ID string }
-			if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
-				r.askTargets[p.CallID] = in.ID
-			}
-		}
-		return
-	}
-	var p event.ToolFinishedPayload
-	_ = e.Decode(&p)
-	target, ok := r.askTargets[p.CallID]
-	if !ok {
-		return
-	}
-	delete(r.askTargets, p.CallID)
-	// The model may have addressed the peer by a prefix; the live path keyed
-	// the expectation on the resolved id, so does replay.
-	if a, ok := r.s.agents[e.Agent]; ok && !p.IsError && !p.Cancelled && !p.Denied {
-		if peer, ok := r.s.resolve(target); ok {
-			a.awaiting[peer.ID]++
 		}
 	}
 }

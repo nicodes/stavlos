@@ -16,7 +16,7 @@
     }
   },
   {
-    "description": "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its agent_response comes back to you as a new message between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive for the rest of the session: agent_message it again for follow-ups (it keeps its context). There is nothing to clean up.",
+    "description": "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its answer (a message to you) wakes you between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive for the rest of the session: message it again for follow-ups (it keeps its context). There is nothing to clean up.",
     "name": "agent_create",
     "schema": {
       "properties": {
@@ -48,48 +48,6 @@
         "archetype",
         "label",
         "task"
-      ],
-      "type": "object"
-    }
-  },
-  {
-    "description": "Send a message to any other agent in this session (a child, a sibling, or your parent). It reaches the agent at its next step: mid-turn if it is busy, as a new turn if it is idle. The recipient sees it as coming from you and answers with agent_response, which wakes you between turns. agent_status lists every agent and its id.",
-    "name": "agent_message",
-    "schema": {
-      "properties": {
-        "id": {
-          "description": "Target agent: its name or id (any agent in the session)",
-          "type": "string"
-        },
-        "text": {
-          "description": "Message",
-          "type": "string"
-        }
-      },
-      "required": [
-        "id",
-        "text"
-      ],
-      "type": "object"
-    }
-  },
-  {
-    "description": "Answer an agent that prompted you. The text lands in that agent's mailbox and wakes it between turns; you stay alive and can be prompted again. Use it once per asker; answer the human in your normal reply instead.",
-    "name": "agent_response",
-    "schema": {
-      "properties": {
-        "text": {
-          "description": "Your answer: what you did or found, with exact paths and results",
-          "type": "string"
-        },
-        "to": {
-          "description": "The asking agent's name or id (the message you are answering names it)",
-          "type": "string"
-        }
-      },
-      "required": [
-        "to",
-        "text"
       ],
       "type": "object"
     }
@@ -170,6 +128,27 @@
       },
       "required": [
         "questions"
+      ],
+      "type": "object"
+    }
+  },
+  {
+    "description": "Send text to another agent in this session (a child, a sibling, or your parent) by name, or to the human as \"user\". To an agent that is waiting on you, because it gave you a task or asked you something, this is your answer: it wakes that agent between turns. To any other agent it is a new message: it reaches them at their next step, mid-turn if they are busy, and their answer wakes you. agent_status lists every agent.",
+    "name": "message",
+    "schema": {
+      "properties": {
+        "text": {
+          "description": "The message. The recipient sees only what you put here: include exact paths and results",
+          "type": "string"
+        },
+        "to": {
+          "description": "An agent's name or id, or \"user\" for the human",
+          "type": "string"
+        }
+      },
+      "required": [
+        "to",
+        "text"
       ],
       "type": "object"
     }

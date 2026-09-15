@@ -288,3 +288,14 @@ func TestReadStopsAtTheBudget(t *testing.T) {
 		t.Errorf("clip split a rune: %q", c[:10])
 	}
 }
+
+func TestRecipient(t *testing.T) {
+	for in, want := range map[string]string{
+		"user": "user", "@User": "user", " human ": "user", "@HUMAN": "user",
+		"scout": "scout", "@scout-2": "scout-2", "0192ab": "0192ab",
+	} {
+		if got := Recipient(in); got != want {
+			t.Errorf("Recipient(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

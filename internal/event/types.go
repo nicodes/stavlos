@@ -22,6 +22,7 @@ const (
 	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
 	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload (legacy: agents no longer finish; kept for old logs)
 	ResponseReceived    Type = "agent.response"        // ResponsePayload: an answer from another agent, logged on the recipient
+	MessageToUser       Type = "agent.message_to_user" // TextPayload: a message tool call addressed to the human, logged on the sender
 	AgentKilled         Type = "agent.killed"          // AgentRefPayload
 	AgentModelChanged   Type = "agent.model_changed"   // ModelChangedPayload
 	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
@@ -150,8 +151,8 @@ type DirRefPayload struct {
 	Dir string `json:"dir"`
 }
 
-// ResponsePayload is an agent_response delivered to this agent: who sent
-// it and what it said. It is consumed by the recipient's next turn as a
+// ResponsePayload is an answer delivered to this agent (a message from an
+// agent it was waiting on): who sent it and what it said. It is consumed by the recipient's next turn as a
 // user message of kind "agent_response".
 type ResponsePayload struct {
 	From      string `json:"from"`

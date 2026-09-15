@@ -61,7 +61,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 				<-release
 				parent := req.System[strings.Index(req.System, "created by a parent agent (id ")+len("created by a parent agent (id "):]
 				parent = parent[:strings.IndexByte(parent, ')')]
-				return call("k3", "agent_response", `{"to":"`+parent+`","text":"found it"}`), nil
+				return call("k3", "message", `{"to":"`+parent+`","text":"found it"}`), nil
 			},
 		},
 	}
@@ -94,11 +94,11 @@ func TestRecoverRoundTrip(t *testing.T) {
 	// replay must reproduce: an expectation keyed on the resolved id (then
 	// settled), a job armed then fired.
 	fm.steps = []step{
-		reply(call("c4", "agent_message", `{"id":"`+child.ID[:6]+`","text":"anything else?"}`)),
+		reply(call("c4", "message", `{"to":"`+child.ID[:6]+`","text":"anything else?"}`)),
 		reply(call("c5", "shell", `{"command":"true","background":true}`)),
 		reply(text("waiting")),
 	}
-	fm.childSteps = []step{reply(call("k4", "agent_response", `{"to":"`+root.ID+`","text":"nothing else"}`))}
+	fm.childSteps = []step{reply(call("k4", "message", `{"to":"`+root.ID+`","text":"nothing else"}`))}
 	_ = s.SetMode(ctx, protocol.ModeYolo)
 	runTurn(t, s, h, "ask the child")
 	waitUntil(t, h, func() bool {

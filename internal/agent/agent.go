@@ -32,7 +32,7 @@ type queued struct {
 	text, source string
 }
 
-// response is an agent_response waiting in the mailbox: who answered (id
+// response is an answer waiting in the mailbox: who answered (id
 // and label) and the answer.
 type response struct {
 	from, label, text string
@@ -60,8 +60,8 @@ type Agent struct {
 	turn        int
 	prompts     []queued              // Prompt inbox
 	steers      []queued              // Steer inbox
-	responses   []response            // answers from other agents (agent_response), not yet delivered
-	awaiting    map[string]int        // agent id → questions asked of it (agent_message, a child's task); cleared by its next answer
+	responses   []response            // answers from other agents, not yet delivered
+	awaiting    map[string]int        // agent id → questions asked of it (a message, a child's task); cleared by its next answer
 	todos       []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
 	todoSeq     int                   // last todo id issued
 	mcps        map[string]*mcpServer // MCP servers this agent has started (name → server)
@@ -246,7 +246,7 @@ func (a *Agent) closeDone() {
 	}
 }
 
-// deliverResponse is an agent_response addressed to this agent (PRD §6.3):
+// deliverResponse is an answer addressed to this agent (PRD §6.3):
 // it goes to the mailbox and always wakes the agent between turns, the way
 // a job's exit does. Nothing is injected into a running turn.
 func (a *Agent) deliverResponse(from, label, text string) {
@@ -261,12 +261,19 @@ func (a *Agent) deliverResponse(from, label, text string) {
 	a.signal()
 }
 
-// expect records a question put to agent id (an agent_message, or a child's
+// expect records a question put to agent id (a message, or a child's
 // task): until its answer lands the agent reads as "waiting" when idle.
 func (a *Agent) expect(id string) {
 	a.mu.Lock()
 	a.awaiting[id]++
 	a.mu.Unlock()
+}
+
+// isAwaiting reports whether the agent waits on an answer from agent id.
+func (a *Agent) isAwaiting(id string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.awaiting[id] > 0
 }
 
 // forget drops every expectation of agent id (it was killed: no answer is

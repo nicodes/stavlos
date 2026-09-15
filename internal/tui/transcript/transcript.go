@@ -158,8 +158,7 @@ type Transcript struct {
 	promptLine map[string]lineRef   // prompt id → its "?" line (tone flips when settled)
 	monitors   map[string]lineRef   // monitor id → its "started" line, or the shell call it grew from
 	children   map[string]lineRef   // child agent id → the agent_create line that spawned it
-	askTarget  map[string]string    // agent_message call id → the agent it asked (until the call finishes)
-	asks       map[string][]lineRef // agent id → agent_message lines still waiting for its answer
+	asks       map[string][]lineRef // agent name → message lines still waiting for its answer
 	monKinds   map[string]string    // monitor id → kind, for the glyph on later events
 
 	streamTurn  int
@@ -203,7 +202,7 @@ func NewTranscript() *Transcript {
 	return &Transcript{
 		calls: map[string]lineRef{}, prompts: map[string]int{}, promptLine: map[string]lineRef{},
 		monitors: map[string]lineRef{}, monKinds: map[string]string{}, children: map[string]lineRef{},
-		askTarget: map[string]string{}, asks: map[string][]lineRef{}, compactItem: -1,
+		asks: map[string][]lineRef{}, compactItem: -1,
 	}
 }
 
@@ -268,12 +267,6 @@ func (t *Transcript) applyToolCall(ev event.Event) bool {
 		}
 		if r, ok := t.find(t.appendItem(CleanLines(EventLines(ev))), isToolLine); ok {
 			t.calls[p.CallID] = r
-		}
-		if toolname.Canonical(p.Name) == toolname.AgentMessage {
-			var in struct{ ID string }
-			if json.Unmarshal(p.Input, &in) == nil && in.ID != "" {
-				t.askTarget[p.CallID] = in.ID
-			}
 		}
 		return true
 	}
@@ -402,7 +395,7 @@ func (t *Transcript) afterAppend(ev event.Event) {
 		}
 	case event.UserMessage:
 		var p event.UserMessagePayload
-		if ev.Decode(&p) == nil && p.Kind == "agent_response" {
+		if ev.Decode(&p) == nil && p.Kind == event.MsgAgentResponse {
 			t.answered(p.From)
 		}
 	case event.AssistantMessage:
@@ -663,36 +656,49 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	case p.Denied:
 		l.Suffix = "(denied)"
 	}
-	// A delivered agent_message waits for that agent's answer: yellow until
-	// its agent_response lands (see answered), like a shell call and its job.
-	if target, ok := t.askTarget[p.CallID]; ok {
-		delete(t.askTarget, p.CallID)
-		if !p.IsError && !p.Cancelled && !p.Denied {
-			l.Tone = ToneWorking
-			t.asks[target] = append(t.asks[target], r)
-		}
+	// A new message to an agent waits for its answer: yellow until the
+	// answer lands (see answered), like a shell call and its job.
+	if name, ok := messagedAgent(p); ok {
+		l.Tone = ToneWorking
+		t.asks[name] = append(t.asks[name], r)
 	}
 	delete(t.calls, p.CallID)
 }
 
-// answered settles every outstanding agent_message to the agent named in a
-// response's From ("label (shortid)" or a bare id): one answer covers all
-// the questions asked of it so far.
-func (t *Transcript) answered(from string) {
-	for target, refs := range t.asks {
-		if len(refs) == 0 || (from != target && !strings.Contains(from, "("+format.ShortID(target)+")")) {
-			continue
-		}
-		t.setTone(refs, ToneNone)
-		delete(t.asks, target)
+// messageDelivered starts the result of a message that the sender now
+// waits on (an answer or a message to the user reads differently).
+const messageDelivered = "message delivered to "
+
+// messagedAgent is the name of the agent a finished message call is waiting
+// on: set only for a new message delivered to an agent, not for an answer,
+// a message to the user, or a call that failed.
+func messagedAgent(p event.ToolFinishedPayload) (string, bool) {
+	if toolname.Canonical(p.Name) != toolname.Message || p.IsError || p.Cancelled || p.Denied {
+		return "", false
 	}
+	rest, ok := strings.CutPrefix(p.Output, messageDelivered)
+	if !ok {
+		return "", false
+	}
+	name, _, _ := strings.Cut(rest, ";")
+	if name == "" || name == "the user" {
+		return "", false
+	}
+	return name, true
 }
 
-// AskerGone marks every outstanding agent_message to a killed agent red:
-// no answer is coming.
-func (t *Transcript) AskerGone(id string) {
-	t.setTone(t.asks[id], ToneError)
-	delete(t.asks, id)
+// answered settles every outstanding message to the agent named in an
+// answer's From: one answer covers all the questions asked of it so far.
+func (t *Transcript) answered(from string) {
+	t.setTone(t.asks[from], ToneNone)
+	delete(t.asks, from)
+}
+
+// AskerGone marks every outstanding message to a killed agent (by name)
+// red: no answer is coming.
+func (t *Transcript) AskerGone(name string) {
+	t.setTone(t.asks[name], ToneError)
+	delete(t.asks, name)
 }
 
 func (t *Transcript) setTone(refs []lineRef, tone Tone) {
@@ -904,14 +910,14 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 				return block(BlockUser, "from "+p.From, p.Text)
 			}
 			return block(BlockUser, "", p.Text)
-		case "agent_response":
+		case event.MsgAgentResponse:
 			// Reads like a tool line so it is obvious what it is:
-			// "⑂ Response from scout (a1b2c3d4)" over the answer's text. The
-			// agent's own agent_response call reads "Agent response  → id",
-			// so incoming and outgoing never look alike.
-			head := "**Agent response received**"
+			// "⑂ Answer from scout" over the answer's text. The agent's own
+			// message call reads "Message  → name", so incoming and outgoing
+			// never look alike.
+			head := "**Answer**"
 			if p.From != "" {
-				head += " · " + p.From
+				head = "**Answer from " + p.From + "**"
 			}
 			lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: head, Block: BlockChild, Glyph: GlyphChild}}
 			for _, l := range strings.Split(strings.TrimRight(p.Text, "\n"), "\n") {
@@ -956,7 +962,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 	event.ToolCallStarted: decoded(func(p event.ToolStartedPayload) []Line {
 		p.Name = toolname.Canonical(p.Name) // logs from before a rename read as the current tool
-		if p.Name == toolname.AgentResponse {
+		if p.Name == toolname.Message {
 			// The message itself is the interesting part: show it under the
 			// call the way an incoming answer shows its text.
 			var in struct{ Text string }
@@ -968,8 +974,8 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.ToolCallFinished: decoded(func(p event.ToolFinishedPayload) []Line {
-		if toolname.Canonical(p.Name) == toolname.AgentResponse && !p.IsError {
-			return nil // the message already sits under the call; "response delivered" adds nothing
+		if toolname.Canonical(p.Name) == toolname.Message && !p.IsError {
+			return nil // the text already sits under the call; "delivered" adds nothing
 		}
 		return OutputLines(strings.TrimRight(p.Output, "\n"))
 	}),
@@ -1318,7 +1324,7 @@ func ToolArg(name string, raw json.RawMessage) string {
 		default:
 			return arch
 		}
-	case toolname.AgentMessage, toolname.AgentCancel, toolname.AgentStatus:
+	case toolname.AgentCancel, toolname.AgentStatus:
 		return str("id")
 	case toolname.Skill:
 		return str("name")
@@ -1345,18 +1351,19 @@ func ToolArg(name string, raw json.RawMessage) string {
 			out += "  " + tx
 		}
 		return out
-	case toolname.AgentResponse:
-		return "→ " + str("to") // outgoing: who it answers
+	case toolname.Message:
+		to := str("to")
+		if to == "" {
+			to = str("id") // a log from before message replaced agent_message
+		}
+		return "→ " + to
 	}
 	return compactArgs(raw)
 }
 
-// toolTitle is the display name of a tool on its chat line: titleCase of
-// the name; agent_response reads as what it did.
+// ToolTitle is the display name of a tool on its chat line: titleCase of
+// the name, with MCP tools read as "server · tool".
 func ToolTitle(name string) string {
-	if name == toolname.AgentResponse {
-		return "Agent response delivered"
-	}
 	if strings.HasPrefix(name, toolname.MCPPrefix) {
 		// mcp__server__tool reads "server · tool"
 		if parts := strings.SplitN(strings.TrimPrefix(name, toolname.MCPPrefix), "__", 2); len(parts) == 2 {
@@ -1471,7 +1478,7 @@ const (
 func ToolGlyph(tool string) (string, string) {
 	tool = toolname.Canonical(tool)
 	switch {
-	case strings.HasPrefix(tool, "agent_"):
+	case strings.HasPrefix(tool, "agent_") || tool == toolname.Message:
 		return GlyphToolAgents, " "
 	case tool == toolname.Shell || tool == toolname.ShellKill:
 		return GlyphToolShell, " "
