@@ -21,7 +21,11 @@ func (m *Model) animating() bool {
 		return true
 	}
 	t := m.transcripts[m.viewID()]
-	return t != nil && (t.InTurn() || t.Running() || len(t.Waiting()) > 0)
+	if t != nil && (t.InTurn() || t.Running() || len(t.Waiting()) > 0) {
+		return true
+	}
+	_, waiting := m.waitingOn() // an agent between turns waiting on agents or jobs keeps its spinner
+	return !m.superChat && waiting
 }
 
 // ensureSpin schedules the spinner's tick when something animates and no
