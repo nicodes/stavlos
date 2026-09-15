@@ -128,12 +128,18 @@ func paletteView(matches []Command, idx, width int) string {
 	return lipgloss.NewStyle().Width(width).Render(strings.Join(rows, "\n"))
 }
 
-// mentionPrefix is the @name being typed at the end of the input: what
-// follows the last "@" that starts a word, while it is still a name.
+// mentionPrefix is the @name being typed among the names at the front of
+// the input (the post's recipients): what follows the last "@", while every
+// word before it is an @name too and it is still a name itself.
 func mentionPrefix(input string) (string, bool) {
 	i := strings.LastIndexByte(input, '@')
-	if i < 0 || i > 0 && nameByte(input[i-1]) {
+	if i < 0 || i > 0 && input[i-1] != ' ' {
 		return "", false
+	}
+	for _, word := range strings.Fields(input[:i]) {
+		if !strings.HasPrefix(word, "@") {
+			return "", false
+		}
 	}
 	for j := i + 1; j < len(input); j++ {
 		if !nameByte(input[j]) {

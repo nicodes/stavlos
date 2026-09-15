@@ -573,17 +573,20 @@ func (s *Session) Steer(ctx context.Context, agentID, text, source string) error
 }
 
 // Post is the human's message in the session chat (docs/super-chat.md):
-// it is delivered as a steer to every agent it @mentions, or to the root
-// when it mentions none, and logged once on the session as chat.posted. A
-// mention that names no live agent refuses the whole message before
-// anything is delivered. It returns the names it went to.
+// the @names at its front say which agents it goes to, and what follows is
+// delivered to each as a steer, exactly as written (an @ inside it is the
+// author's own). A post with no leading name goes to the root. A leading
+// name that is no live agent refuses the whole post before anything is
+// delivered. It is logged once on the session as chat.posted, and returns
+// the names it went to.
 func (s *Session) Post(ctx context.Context, text, source string) ([]string, error) {
-	if strings.TrimSpace(text) == "" {
+	refs, message := protocol.Addressees(text)
+	if strings.TrimSpace(message) == "" {
 		return nil, errors.New("empty message")
 	}
 	var targets []*Agent
 	seen := map[string]bool{}
-	for _, ref := range protocol.Mentions(text) {
+	for _, ref := range refs {
 		a, ok := s.resolve(ref)
 		if !ok {
 			return nil, fmt.Errorf("no agent named @%s in this session", ref)
@@ -609,11 +612,11 @@ func (s *Session) Post(ctx context.Context, text, source string) ([]string, erro
 		names[i] = a.LabelNow()
 	}
 	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.ChatPosted,
-		Payload: event.MustPayload(event.ChatPayload{ID: id, Text: text, To: names})}); err != nil {
+		Payload: event.MustPayload(event.ChatPayload{ID: id, Text: message, To: names})}); err != nil {
 		return nil, err
 	}
 	for _, a := range targets {
-		if err := a.steer(ctx, text, source, id); err != nil {
+		if err := a.steer(ctx, message, source, id); err != nil {
 			return names, err
 		}
 	}

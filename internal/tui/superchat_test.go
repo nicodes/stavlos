@@ -22,7 +22,7 @@ func TestSuperChatView(t *testing.T) {
 	m.prompts = nil
 	m.superChat = true
 	m.applyEvent(chatEvent(1, "b", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b", Parent: "a", Label: "world-politics"}))
-	m.applyEvent(chatEvent(2, "", event.ChatPosted, event.ChatPayload{Text: "@world-politics summarise", To: []string{"world-politics"}}))
+	m.applyEvent(chatEvent(2, "", event.ChatPosted, event.ChatPayload{Text: "summarise", To: []string{"world-politics"}}))
 	m.applyEvent(chatEvent(3, "b", event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "shell"}))
 	m.applyEvent(chatEvent(4, "b", event.MessageToUser, event.ChatPayload{From: "world-politics", Text: "three headlines"}))
 	view := stripANSI(m.vp.View())
@@ -66,7 +66,7 @@ func TestMentionAutocomplete(t *testing.T) {
 	m.prompts = nil
 	m.superChat = true
 	m.setFocus(focusInput)
-	for _, r := range "ask @b" {
+	for _, r := range "@main @b" {
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
 	}
 	if mm := m.mentionMatches(); len(mm) != 1 || mm[0].Label != "business" {
@@ -76,10 +76,10 @@ func TestMentionAutocomplete(t *testing.T) {
 		t.Fatalf("dropdown:\n%s", pv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyTab})
-	if m.input.Value() != "ask @business " || m.focus != focusInput || len(m.mentionMatches()) != 0 {
+	if m.input.Value() != "@main @business " || m.focus != focusInput || len(m.mentionMatches()) != 0 {
 		t.Fatalf("tab completes: %q focus %v", m.input.Value(), m.focus)
 	}
-	for in, want := range map[string]bool{"@": true, "hi @wor": true, "me@exa": false, "@a b": false} {
+	for in, want := range map[string]bool{"@": true, "@main @wor": true, "hi @wor": false, "me@exa": false, "@a b": false} { // only among the leading names
 		if _, ok := mentionPrefix(in); ok != want {
 			t.Errorf("mentionPrefix(%q) = %v", in, ok)
 		}

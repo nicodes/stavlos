@@ -512,34 +512,36 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 	return b.String()
 }
 
-// paintNames draws text with each @name of names in that one's colour
-// (bold), wherever it is mentioned, and the rest in style: a session chat
-// post's recipients.
+// paintNames draws a post's leading @names, each bold in that agent's
+// colour, and the rest of the text in style: the names at the front are the
+// recipients, and an @ after them belongs to the message.
 func paintNames(text string, names []string, style func(...string) string, who func(string) lipgloss.Style) string {
 	var b strings.Builder
-	start := 0
-	for i := 0; i < len(text); i++ {
-		if text[i] != '@' || i > 0 && nameByte(text[i-1]) {
-			continue
-		}
+	i := 0
+	for i < len(text) && text[i] == '@' {
 		j := i + 1
 		for j < len(text) && nameByte(text[j]) {
 			j++
 		}
+		name := ""
 		for _, n := range names {
 			if strings.EqualFold(text[i+1:j], n) {
-				if start < i {
-					b.WriteString(style(text[start:i]))
-				}
-				b.WriteString(who(n).Bold(true).Render(text[i:j]))
-				start = j
+				name = n
 				break
 			}
 		}
-		i = j - 1
+		if name == "" {
+			break
+		}
+		k := j
+		for k < len(text) && text[k] == ' ' {
+			k++
+		}
+		b.WriteString(who(name).Bold(true).Render(text[i:j]) + text[j:k])
+		i = k
 	}
-	if start < len(text) {
-		b.WriteString(style(text[start:]))
+	if i < len(text) {
+		b.WriteString(style(text[i:]))
 	}
 	return b.String()
 }

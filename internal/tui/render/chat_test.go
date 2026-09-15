@@ -24,7 +24,7 @@ func TestChatRendersInOrder(t *testing.T) {
 	ap(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Label: "main"})
 	ap(2, "b", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b", Label: "scout"})
 	ap(3, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "what's the stack?", To: []string{"main"}})
-	ap(4, "", event.ChatPosted, event.ChatPayload{ID: "p2", Text: "@scout check the tests", To: []string{"scout"}})
+	ap(4, "", event.ChatPosted, event.ChatPayload{ID: "p2", Text: "check the tests", To: []string{"scout"}})
 	ap(5, "a", event.MessageToUser, event.ChatPayload{From: "main", Text: "Go 1.27\nSQLite event log", Post: "p1"})
 	ap(6, "b", event.MessageToUser, event.ChatPayload{From: "scout", Text: "All pass", Post: "p2"})
 	got := strings.Join(renderWith(c.All(), Options{Width: 80}), "\n")
@@ -51,8 +51,8 @@ func TestChatLongReplyExpands(t *testing.T) {
 	}
 }
 
-// TestChatPostColoursItsRecipients: a post asks for each recipient's colour
-// (its arrow takes the first one) and still reads as typed.
+// TestChatPostColoursItsRecipients: a post shows its recipients in front,
+// each in its colour (the arrow takes the first), and its message as typed.
 func TestChatPostColoursItsRecipients(t *testing.T) {
 	c, ap := chatFeed()
 	ap(1, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "sync up with @Scout", To: []string{"main", "scout"}})
@@ -62,10 +62,10 @@ func TestChatPostColoursItsRecipients(t *testing.T) {
 		return lipgloss.NewStyle()
 	}
 	got := strings.Join(renderWith(c.All(), Options{Width: 80, WhoStyle: whoStyle}), "\n")
-	if got != "› @main sync up with @Scout" {
+	if got != "› @main @scout sync up with @Scout" { // the message's own @Scout is left alone
 		t.Fatalf("post: %q", got)
 	}
-	if strings.Join(asked, ",") != "main,main,scout" { // the arrow, then each @name as it appears
+	if strings.Join(asked, ",") != "main,main,scout" { // the arrow, then each leading @name
 		t.Fatalf("colours asked for %v", asked)
 	}
 }
