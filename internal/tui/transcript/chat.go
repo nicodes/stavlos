@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/format"
 )
 
@@ -16,7 +17,7 @@ import (
 func NewChat() *Transcript {
 	t := NewTranscript()
 	t.chat = true
-	t.names, t.roles, t.posts = map[string]string{}, map[string]string{}, map[string]int{}
+	t.names, t.posts = map[string]string{}, map[string]int{}
 	return t
 }
 
@@ -46,20 +47,17 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.AgentSpawned:
 		var p event.AgentSpawnedPayload
 		if ev.Decode(&p) == nil && p.ID != "" {
-			t.names[p.ID], t.roles[p.ID] = p.Label, p.Archetype
+			t.names[p.ID] = p.Label
 		}
 	case event.AgentRoleChanged:
 		var p event.RoleChangedPayload
-		if ev.Decode(&p) == nil {
-			if p.Label != "" {
-				t.names[ev.Agent] = p.Label
-			}
-			t.roles[ev.Agent] = p.Role
+		if ev.Decode(&p) == nil && p.Label != "" {
+			t.names[ev.Agent] = p.Label
 		}
 	case event.ChatPosted:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
-			refs := t.appendItem(CleanLines(block(BlockUser, "to "+strings.Join(p.To, ", "), p.Text)))
+			refs := t.appendItem(CleanLines(block(BlockUser, "", addressed(p.To, p.Text))))
 			if p.ID != "" && len(refs) > 0 {
 				t.posts[p.ID] = refs[0].item
 			}
@@ -67,16 +65,18 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.MessageToUser:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
-			// Reads like an agent's reply in its own chat, under the
-			// sender's "name (role)".
+			// Reads like an agent's reply in its own chat, with the
+			// sender's @name before it.
 			from := p.From
 			if from == "" {
 				from = t.agentName(ev.Agent)
 			}
-			if role := t.roles[ev.Agent]; role != "" {
-				from += " (" + role + ")"
+			lines := markdownLines(strings.TrimRight(p.Text, "\n"))
+			if len(lines) > 0 && (lines[0].Kind == LineText || lines[0].Kind == LineHeading) {
+				lines[0].Text = "@" + from + " " + lines[0].Text
+			} else {
+				lines = append([]Line{{Kind: LineText, Text: "@" + from}}, lines...)
 			}
-			lines := append([]Line{{Kind: LineLabel, Text: from}}, markdownLines(strings.TrimRight(p.Text, "\n"))...)
 			lines = linked(CleanLines(append(lines, Line{Kind: LineBlank})), ev.Agent)
 			// A reply joins the thread of the post it answers, indented under
 			// it, wherever that post is; a message with no known post stands
@@ -110,6 +110,26 @@ func (t *Transcript) applyChat(ev event.Event) {
 			t.settlePrompt(p.ID, ev.Type != event.PromptAnswered)
 		}
 	}
+}
+
+// addressed puts the @names a post went to before its text, leaving out
+// those the text already mentions: "what's the stack?" sent to main reads
+// "@main what's the stack?".
+func addressed(to []string, text string) string {
+	mentioned := map[string]bool{}
+	for _, n := range protocol.Mentions(text) {
+		mentioned[n] = true
+	}
+	var pre []string
+	for _, n := range to {
+		if !mentioned[strings.ToLower(n)] {
+			pre = append(pre, "@"+n)
+		}
+	}
+	if len(pre) == 0 {
+		return text
+	}
+	return strings.Join(pre, " ") + " " + text
 }
 
 // agentName is how the chat names agent id: its name once spawned, a short

@@ -17,5 +17,5 @@ func TestChatThreadRendersIndented(t *testing.T) {
 	ap(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Label: "main", Archetype: "general"})
 	ap(2, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "what's the stack?", To: []string{"main"}})
 	ap(3, "a", event.MessageToUser, event.ChatPayload{From: "main", Text: "Go 1.27, SQLite event log.", Post: "p1"})
-	assertSubsequence(t, renderWith(c.All(), Options{Width: 80}), []string{"to main", "› what's the stack?", "  main (general)", "  Go 1.27, SQLite event log."})
+	assertSubsequence(t, renderWith(c.All(), Options{Width: 80}), []string{"› @main what's the stack?", "  @main Go 1.27, SQLite event log."})
 }
