@@ -192,6 +192,8 @@ type Transcript struct {
 	callInputs  map[string]json.RawMessage // a tool call's arguments, until its tool.started
 	spawnAs     string                     // …and what it was spawned as: "scout (general) · model"
 
+	self string // this agent's name, from its spawn: the other side of every message it sends or receives
+
 	chat  bool              // the channel chat (chat.go), not one agent's transcript
 	names map[string]string // in the chat: agent id → name
 	open  map[string]bool   // in the chat: agents a post is still waiting on
@@ -251,6 +253,11 @@ func (t *Transcript) Apply(ev event.Event) {
 	switch ev.Type {
 	case event.AssistantMessage:
 		t.rememberCalls(ev)
+	case event.AgentUpdated:
+		var p event.AgentUpdatedPayload
+		if ev.Decode(&p) == nil && p.Name != nil {
+			t.self = *p.Name // renamed: what it sends and receives from here on names it so
+		}
 	case event.InputQueued:
 		t.queueInput(ev)
 	case event.InputTaken:
@@ -314,7 +321,7 @@ func (t *Transcript) applyTaken(ev event.Event) {
 			continue
 		}
 		delete(t.inputs, id)
-		lines := InputLines(in)
+		lines := InputLines(in, t.self)
 		if id == t.spawnTask {
 			t.spawnTask, lines = "", t.spawnLines(in)
 		}
@@ -325,25 +332,26 @@ func (t *Transcript) applyTaken(ev event.Event) {
 	}
 }
 
-// InputLines draws an input as the chat shows it: the human's own words
-// blue after "@user", another agent's under its name. A job's result nests
-// under its call and a reminder showed when it was queued, so neither draws
-// again.
-func InputLines(in event.Input) []Line {
+// InputLines draws an input to agent to as the chat shows it, from its
+// sender to it: the human's own words after "@user → @to", another agent's
+// after "@scout → @to" (just the sender while to is unknown). A job's result
+// nests under its call and a reminder showed when it was queued, so neither
+// draws again.
+func InputLines(in event.Input, to string) []Line {
 	switch in.Kind {
 	case event.InputPrompt, event.InputSteer:
-		lines := block(BlockUser, "", "**@user** "+in.Text)
+		lines := block(BlockUser, "", fromTo(toolname.User, to)+" "+in.Text)
 		for i := range lines {
 			if lines[i].Lead {
-				lines[i].Who = "user"
+				lines[i].Who, lines[i].Names = toolname.User, names(toolname.User, to)
 				break
 			}
 		}
 		return lines
 	case event.InputRequest, event.InputResponse:
-		return received(in.FromName, in.Text, GlyphAsk)
+		return received(in.FromName, to, in.Text, GlyphAsk)
 	case event.InputInfo:
-		return received(in.FromName, in.Text, GlyphInfo) // needs no reply
+		return received(in.FromName, to, in.Text, GlyphInfo) // needs no reply
 	default:
 	}
 	return nil
@@ -370,7 +378,11 @@ func (t *Transcript) rememberCalls(ev event.Event) {
 func (t *Transcript) holdSpawn(ev event.Event) bool {
 	if ev.Type == event.AgentSpawned {
 		var p event.AgentSpawnedPayload
-		if ev.Decode(&p) != nil || p.Parent == "" {
+		if ev.Decode(&p) != nil {
+			return false
+		}
+		t.self = p.Name // a transcript is only given its own agent's spawn
+		if p.Parent == "" {
 			return false
 		}
 		t.spawnHeld, t.spawnParent = ev, p.Parent
@@ -397,7 +409,12 @@ func (t *Transcript) holdSpawn(ev event.Event) bool {
 // spawnLines draws a child's first task with its spawn: "» @main as scout
 // (general) · model" over the task.
 func (t *Transcript) spawnLines(in event.Input) []Line {
-	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: titled("@"+in.FromName, "as "+t.spawnAs), Block: BlockChild, Glyph: GlyphSpawn, Who: in.FromName}}
+	head := Line{Kind: LineText, Text: titled("@"+in.FromName, "as "+t.spawnAs), Block: BlockChild, Glyph: GlyphSpawn, Who: in.FromName}
+	if t.self != "" { // "» @main → @scout (general) · model"
+		head.Text = fromTo(in.FromName, t.self) + " " + strings.TrimPrefix(t.spawnAs, t.self+" ")
+		head.Names = names(in.FromName, t.self)
+	}
+	lines := []Line{{Kind: LineBlank}, head}
 	for _, l := range strings.Split(strings.TrimRight(in.Text, "\n"), "\n") {
 		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild, Indent: 1})
 	}
@@ -455,7 +472,11 @@ func (t *Transcript) applyToolCall(ev event.Event) bool {
 		}
 		input := t.callInputs[p.CallID]
 		delete(t.callInputs, p.CallID)
-		if r, ok := t.find(t.appendItem(CleanLines(toolStartedLines(p.Name, p.CallID, input))), isToolLine); ok {
+		lines := toolStartedLines(p.Name, p.CallID, input)
+		if lines[0].Who != "" && t.self != "" { // a message or a task: "‹ @main → @scout …"
+			lines[0].Text, lines[0].Names = "@"+t.self+" → "+lines[0].Text, names(t.self, lines[0].Who)
+		}
+		if r, ok := t.find(t.appendItem(CleanLines(lines)), isToolLine); ok {
 			t.calls[p.CallID] = r
 		}
 		return true
@@ -881,8 +902,22 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	// name gets a suffix): the line names the agent it made.
 	if p.Name == toolname.AgentCreate && !p.IsError {
 		if rest, ok := strings.CutPrefix(p.Output, "created "); ok {
-			if name, _, ok := strings.Cut(rest, " ("); ok && name != l.Who && strings.HasPrefix(l.Text, "@"+l.Who) {
-				l.Text, l.Who = "@"+name+strings.TrimPrefix(l.Text, "@"+l.Who), name
+			if name, _, ok := strings.Cut(rest, " ("); ok && name != l.Who {
+				at := -1 // the recipient's @name: after the arrow, or leading the line
+				if i := strings.Index(l.Text, "→ @"+l.Who); i >= 0 {
+					at = i + len("→ ")
+				} else if strings.HasPrefix(l.Text, "@"+l.Who) {
+					at = 0
+				}
+				if at >= 0 {
+					l.Text = l.Text[:at] + "@" + name + l.Text[at+1+len(l.Who):]
+					for k, n := range l.Names {
+						if n == l.Who {
+							l.Names[k] = name
+						}
+					}
+					l.Who = name
+				}
 			}
 		}
 	}
@@ -1433,21 +1468,38 @@ func blockWith(kind BlockKind, label, text, glyph string) []Line {
 	return append(lines, Line{Kind: LineBlank})
 }
 
-// received is what another agent sent this one, a prompt or a response:
-// "› @scout …" with the name bold and later lines aligned under the text.
-// What this agent sends reads "‹ @scout …" (its message calls), and only
-// the human's own input is drawn blue. An info message reads » instead.
-func received(from, text, glyph string) []Line {
+// received is what another agent sent agent to, a prompt or a response:
+// "› @scout → @main …" with each name in its colour and later lines aligned
+// under the text. What this agent sends reads "‹ @main → @scout …" (its
+// message calls). An info message reads » instead.
+func received(from, to, text, glyph string) []Line {
 	body := strings.Split(strings.TrimRight(text, "\n"), "\n")
-	first := body[0]
+	head := Line{Kind: LineText, Text: body[0], Block: BlockChild, Glyph: glyph, Who: from}
 	if from != "" {
-		first = strings.TrimSpace("**@" + from + "** " + first)
+		head.Text, head.Names = strings.TrimSpace(fromTo(from, to)+" "+body[0]), names(from, to)
 	}
-	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: first, Block: BlockChild, Glyph: glyph, Who: from}}
+	lines := []Line{{Kind: LineBlank}, head}
 	for _, l := range body[1:] {
 		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild, Indent: 1})
 	}
 	return append(lines, Line{Kind: LineBlank})
+}
+
+// fromTo is how a message names its two sides, "@main → @scout"; just
+// "@main" while the other side is unknown.
+func fromTo(from, to string) string {
+	if to == "" {
+		return "@" + from
+	}
+	return "@" + from + " → @" + to
+}
+
+// names are the sides fromTo names, each painted in its own colour.
+func names(from, to string) []string {
+	if to == "" {
+		return []string{from}
+	}
+	return []string{from, to}
 }
 
 func errorBlock(text string) []Line { return errorBlockWith(text, GlyphError) }

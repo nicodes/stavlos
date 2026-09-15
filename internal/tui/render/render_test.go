@@ -72,7 +72,7 @@ func TestBuildTranscript(t *testing.T) {
 	)
 	got := renderLines(transcript.Build(evs))
 	assertSubsequence(t, got, []string{
-		"› @user hello",
+		"› @user → @root hello",
 		"  world",
 		"$ Shell  sleep 100 (cancelled)",
 		"  partial",
@@ -104,7 +104,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	tr.Apply(mk(3, "c1", event.TurnStarted, event.TurnPayload{Turn: 1}))
 	tr.Apply(mk(4, "c1", event.InputTaken, event.InputTakenPayload{Turn: 1, IDs: []string{"task"}}))
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"⋙ @root as scout (explorer) · m", "  look around"})
+	assertSubsequence(t, got, []string{"⋙ @root → @scout (explorer) · m", "  look around"})
 	for _, g := range got {
 		if strings.Contains(g, "Prompt from") || strings.Contains(g, "▹") {
 			t.Fatalf("the spawn and its task are one item: %q", got)
@@ -112,7 +112,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	// a later prompt from the creator reads as a prompt
 	evtest.Apply(tr, evtest.From("c1", event.InputRequest, "root", "look around"))
-	if got := renderLines(tr.All()); !strings.Contains(strings.Join(got, "\n"), "› @root look around") {
+	if got := renderLines(tr.All()); !strings.Contains(strings.Join(got, "\n"), "› @root → @scout look around") {
 		t.Fatalf("a later prompt: %q", got)
 	}
 }

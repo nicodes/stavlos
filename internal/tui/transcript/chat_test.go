@@ -51,21 +51,21 @@ func TestChatKeepsOnlyPostsAndReplies(t *testing.T) {
 	if n := c.Items(); n != 2 {
 		t.Fatalf("items %d, want the post and the reply:\n%+v", n, c.All())
 	}
-	if got := chatItem(c, 0) + " || " + chatItem(c, 1); got != "@scout look around || @scout Found it|>the bug is in `parse`" {
+	if got := chatItem(c, 0) + " || " + chatItem(c, 1); got != "@user → @scout look around || @scout → @user Found it|>the bug is in `parse`" {
 		t.Fatalf("chat %q", got)
 	}
 	for _, l := range c.All() {
 		// the reply reads like an agent's reply: markdown prose, not a
 		// quoted block, and grey like an aside (only the human's posts keep
 		// the text colour)
-		if l.Text == "@scout Found it" && (l.Kind != LineHeading || l.Block != BlockNone || !l.Note || l.Agent != "b2" || l.Glyph != GlyphReply) {
+		if l.Text == "@scout → @user Found it" && (l.Kind != LineHeading || l.Block != BlockNone || !l.Note || l.Agent != "b2" || l.Glyph != GlyphReply) {
 			t.Fatalf("reply line: %+v", l)
 		}
 		if l.Lead && l.Note {
 			t.Fatalf("the human's post keeps the text colour: %+v", l)
 		}
-		if l.Lead && (l.Who != "scout" || len(l.Names) != 1 || l.Names[0] != "scout") {
-			t.Fatalf("the post's arrow and @name take its recipient's colour: %+v", l)
+		if l.Lead && (l.Who != "user" || strings.Join(l.Names, ",") != "user,scout") {
+			t.Fatalf("the post's glyph takes its sender's colour, and each @name its own: %+v", l)
 		}
 	}
 	if ItemAgent(c.All(), 0) != "" || ItemAgent(c.All(), 1) != "b2" {
@@ -90,7 +90,7 @@ func TestChatInArrivalOrder(t *testing.T) {
 	for i := range c.Items() {
 		got = append(got, chatItem(c, i))
 	}
-	want := "@scout check the tests / @main what's the stack? / @main and the setup? / @main Go 1.27 / @scout All 42 pass."
+	want := "@user → @scout check the tests / @user → @main what's the stack? / @user → @main and the setup? / @main → @user Go 1.27 / @scout → @user All 42 pass."
 	if strings.Join(got, " / ") != want {
 		t.Fatalf("chat:\n%s\nwant:\n%s", strings.Join(got, " / "), want)
 	}
@@ -105,7 +105,7 @@ func TestChatNamesFollowRenames(t *testing.T) {
 		evtest.Ev("a1", event.AgentUpdated, event.AgentUpdatedPayload{Role: event.Str("coder"), Name: event.Str("coder")}),
 		toUser("a1", "", "hello", ""),
 	)
-	if got := chatItem(c, 0); got != "@coder hello" {
+	if got := chatItem(c, 0); got != "@coder → @user hello" {
 		t.Fatalf("chat %q", got)
 	}
 }
@@ -158,7 +158,7 @@ func TestChatFoldsLongReplies(t *testing.T) {
 			collapsedOnly = append(collapsedOnly, l.Text)
 		}
 	}
-	if strings.Join(always, "|") != "@main one|two|three" || strings.Join(expanded, "|") != "four|five|six" || strings.Join(collapsedOnly, "|") != "… +3 lines" {
+	if strings.Join(always, "|") != "@main → @user one|two|three" || strings.Join(expanded, "|") != "four|five|six" || strings.Join(collapsedOnly, "|") != "… +3 lines" {
 		t.Fatalf("always %q expanded %q collapsed %q", always, expanded, collapsedOnly)
 	}
 	if !ItemFolds(c.All(), 1) || ItemFolds(c.All(), 2) || ItemFolds(c.All(), 0) {

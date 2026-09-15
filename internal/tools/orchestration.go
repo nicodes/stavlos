@@ -75,7 +75,7 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 // --- message / cancel / status ---
 
 // User is the recipient that stands for the human.
-const User = "user"
+const User = toolname.User
 
 // Recipient normalises a message's to: the human is always "user" (also
 // spelt "human", "@user"); anything else is an agent name or id with a

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tui/format"
 )
 
@@ -60,12 +61,15 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.ChatPosted:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
-			lines := CleanLines(block(BlockUser, "", addressed(p.To, p.Text)))
+			text := addressed(p.To, p.Text)
+			if len(p.To) > 0 {
+				text = "@" + toolname.User + " → " + text // from the human, to each recipient
+			}
+			lines := CleanLines(block(BlockUser, "", text))
 			for i := range lines {
 				if lines[i].Lead && len(p.To) > 0 {
-					// the arrow takes the (first) recipient's colour, and every
-					// recipient's @name takes its own
-					lines[i].Who, lines[i].Names = p.To[0], p.To
+					// the glyph takes the sender's colour, and every @name its own
+					lines[i].Who, lines[i].Names = toolname.User, append([]string{toolname.User}, p.To...)
 					break
 				}
 			}
@@ -82,9 +86,10 @@ func (t *Transcript) applyChat(ev event.Event) {
 	}
 }
 
-// reply adds an agent's message to the human, in grey: "‹ @main …", the mirror of
-// a post's "› …", read like the agent's reply in its own chat, with later
-// lines aligned under the text and a long one folded.
+// reply adds an agent's message to the human, in grey: "‹ @main → @user …",
+// the mirror of a post's "› @user → @main …", read like the agent's reply in
+// its own chat, with later lines aligned under the text and a long one
+// folded.
 func (t *Transcript) reply(agent string, p event.ChatPayload) {
 	from := p.From
 	if from == "" {
@@ -92,11 +97,11 @@ func (t *Transcript) reply(agent string, p event.ChatPayload) {
 	}
 	lines := markdownLines(strings.TrimRight(p.Text, "\n"))
 	if len(lines) > 0 && (lines[0].Kind == LineText || lines[0].Kind == LineHeading) {
-		lines[0].Text = "@" + from + " " + lines[0].Text
+		lines[0].Text = "@" + from + " → @" + toolname.User + " " + lines[0].Text
 	} else {
-		lines = append([]Line{{Kind: LineText, Text: "@" + from}}, lines...)
+		lines = append([]Line{{Kind: LineText, Text: "@" + from + " → @" + toolname.User}}, lines...)
 	}
-	lines[0].Glyph, lines[0].Who = GlyphReply, from
+	lines[0].Glyph, lines[0].Who, lines[0].Names = GlyphReply, from, []string{from, toolname.User}
 	for i := range lines {
 		lines[i].Note = true // grey like an aside: only the human's posts keep the text colour
 		if i > 0 {

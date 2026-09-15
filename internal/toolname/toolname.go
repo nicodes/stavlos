@@ -75,3 +75,7 @@ func Expand(names []string) []string {
 	}
 	return out
 }
+
+// User is the name that stands for the human: a message's recipient
+// ("@user"), and the sender of what the human types.
+const User = "user"
