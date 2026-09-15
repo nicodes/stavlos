@@ -454,7 +454,7 @@ func TestFoldingToOneLine(t *testing.T) {
 	plain := nonblank(renderWith(lines, Options{Width: 80}))
 	joined := strings.Join(plain, "\n")
 	// the human's input in full; the agent's own text folds like the rest
-	for _, want := range []string{"line one", "line two", "final answer +1"} {
+	for _, want := range []string{"line one", "line two", "final answer"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in\n%s", want, joined)
 		}
@@ -470,8 +470,8 @@ func TestFoldingToOneLine(t *testing.T) {
 	for _, l := range plain {
 		if strings.Contains(l, "Shell") {
 			toolRows++
-			if !strings.Contains(l, "+") {
-				t.Fatalf("folded tool row lacks +N: %q", l)
+			if strings.Contains(l, " +") {
+				t.Fatalf("a fully folded row carries no +N (only the cursor preview does): %q", l)
 			}
 		}
 	}
@@ -757,7 +757,7 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 	tr.Apply(mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "delegate"}))
 	tr.Apply(mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "agent_response", From: "scout", Text: "Repository survey complete.\nNo edits were needed."}))
 	folded := renderWith(tr.All(), Options{Width: 80})
-	if !contains(folded, "› @scout Repository survey complete. +1") {
+	if !contains(folded, "› @scout Repository survey complete.") {
 		t.Fatalf("folded response should name itself and its sender:\n%s", strings.Join(folded, "\n"))
 	}
 	for _, l := range folded {
@@ -784,7 +784,7 @@ func TestSentMessageShowsItsText(t *testing.T) {
 			t.Fatalf("the bare tool result should not show:\n%s", strings.Join(full, "\n"))
 		}
 	}
-	if folded := renderWith(tr.All(), Options{Width: 80}); !contains(folded, "‹ @main Concise findings: +1") {
+	if folded := renderWith(tr.All(), Options{Width: 80}); !contains(folded, "‹ @main Concise findings:") {
 		t.Fatalf("folded:\n%s", strings.Join(folded, "\n"))
 	}
 }
@@ -865,8 +865,8 @@ func TestFoldedToolCallIsOneRow(t *testing.T) {
 			rows = append(rows, r)
 		}
 	}
-	if len(rows) != 1 || !strings.Contains(rows[0], "Shell") || !strings.HasSuffix(strings.TrimRight(rows[0], " "), "+4") || ansi.StringWidth(rows[0]) > 60 {
-		t.Fatalf("folded call should be one row ending in +4:\n%s", strings.Join(rows, "\n"))
+	if len(rows) != 1 || !strings.Contains(rows[0], "Shell") || strings.Contains(rows[0], "+4") || ansi.StringWidth(rows[0]) > 60 {
+		t.Fatalf("folded call should be one row, with no +N:\n%s", strings.Join(rows, "\n"))
 	}
 }
 

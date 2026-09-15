@@ -1413,6 +1413,10 @@ func TestRoles(t *testing.T) {
 	os.WriteFile(filepath.Join(roles, "boss.md"), []byte("---\ndescription: Boss\nmode: primary\n---\nYou boss.\n"), 0o644)
 
 	work := t.TempDir()
+	// The root's second message must reach the child after its first model
+	// call: one that lands before it is taken into turn 1, and the turn over
+	// the limit this test waits for never comes.
+	kidCalled := make(chan struct{})
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
@@ -1430,6 +1434,11 @@ func TestRoles(t *testing.T) {
 			if !last.IsError || !strings.Contains(last.Content, "primary-only") {
 				t.Errorf("a primary-only role must not be spawnable: %+v", last)
 			}
+			select {
+			case <-kidCalled:
+			case <-time.After(10 * time.Second):
+				t.Error("the child never made its first model call")
+			}
 			return call("c3", "message", `{"to":"kid","text":"again"}`) // by name
 		},
 		func(model.Request) model.Response { return text("sent") },
@@ -1443,6 +1452,7 @@ func TestRoles(t *testing.T) {
 	}
 	fm.childSteps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
+			close(kidCalled)
 			if !strings.Contains(req.System, "turn 1 of at most 1") {
 				t.Errorf("the child should be told its turn budget:\n%s", req.System)
 			}
