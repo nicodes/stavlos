@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -1518,7 +1519,47 @@ func TestMain(m *testing.M) {
 		runStubMCPServer()
 		return
 	}
+	if sock := os.Getenv("STAVLOS_TEST_DIAL"); sock != "" {
+		dialAndReport(sock)
+		return
+	}
 	os.Exit(m.Run())
+}
+
+// dialAndReport is a child process of the test (so of its daemon) calling
+// daemon.status; it prints the error code it got.
+func dialAndReport(sock string) {
+	c, err := rpc.Dial(sock)
+	if err != nil {
+		fmt.Println("dial:", err)
+		return
+	}
+	defer c.Close()
+	_, err = c.Status(context.Background())
+	var pe *protocol.Error
+	if errors.As(err, &pe) {
+		fmt.Println("code", pe.Code)
+		return
+	}
+	fmt.Println("err", err)
+}
+
+// TestProcessesTheDaemonRunsAreRefused: a process descended from the daemon
+// (what an agent's shell command is) gets ErrForbidden for every request,
+// while the daemon's real clients are served.
+func TestProcessesTheDaemonRunsAreRefused(t *testing.T) {
+	setupConfig(t)
+	h := newHarness(t, t.TempDir(), &fakeModel{})
+	defer h.cancel()
+	cmd := exec.Command(os.Args[0])
+	cmd.Env = append(os.Environ(), "STAVLOS_TEST_DIAL="+h.sock)
+	out, err := cmd.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), fmt.Sprint("code ", protocol.ErrForbidden)) {
+		t.Fatalf("child: %v %s", err, out)
+	}
+	if _, err := h.c.Status(context.Background()); err != nil {
+		t.Fatalf("the harness's own client was refused: %v", err)
+	}
 }
 
 func runStubMCPServer() {

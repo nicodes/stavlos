@@ -22,6 +22,11 @@ func TestEnvScrub(t *testing.T) {
 	t.Setenv("SSH_AUTH_SOCK", "/run/ssh")
 	t.Setenv("GOPATH", "/go")
 	t.Setenv("TOKENIZER_PARALLELISM", "false") // contains TOKEN: scrubbed, and listed as the price of a simple rule
+	t.Setenv("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1/bus")
+	t.Setenv("MY_ODD_CREDS", "x") // no telltale name: the allowlist keeps it out
+	t.Setenv("NPM_CONFIG__AUTH", "x")
+	t.Setenv("GOOGLE_API_KEY", "x")
+	t.Setenv("GIT_AUTHOR_NAME", "me")
 	env := Env([]string{"GITHUB_TOKEN"}, "EXTRA=1")
 	has := func(name string) bool {
 		for _, kv := range env {
@@ -31,12 +36,12 @@ func TestEnvScrub(t *testing.T) {
 		}
 		return false
 	}
-	for _, gone := range []string{"OPENAI_API_KEY", "MY_APIKEY", "AWS_SECRET_ACCESS_KEY", "AWS_CHANNEL_TOKEN", "DB_PASSWORD", "http_passwd", "GOOGLE_APPLICATION_CREDENTIALS", "SSH_PRIVATE_KEY", "STAVLOS_WEB_ALLOW_LOCAL", "TOKENIZER_PARALLELISM"} {
+	for _, gone := range []string{"OPENAI_API_KEY", "MY_APIKEY", "AWS_SECRET_ACCESS_KEY", "AWS_CHANNEL_TOKEN", "DB_PASSWORD", "http_passwd", "GOOGLE_APPLICATION_CREDENTIALS", "SSH_PRIVATE_KEY", "STAVLOS_WEB_ALLOW_LOCAL", "TOKENIZER_PARALLELISM", "SSH_AUTH_SOCK", "DBUS_SESSION_BUS_ADDRESS", "MY_ODD_CREDS", "NPM_CONFIG__AUTH", "GOOGLE_API_KEY"} {
 		if has(gone) {
 			t.Errorf("%s should be scrubbed", gone)
 		}
 	}
-	for _, kept := range []string{"GITHUB_TOKEN", "SSH_AUTH_SOCK", "GOPATH", "PATH", "EXTRA"} {
+	for _, kept := range []string{"GITHUB_TOKEN", "GOPATH", "PATH", "EXTRA", "GIT_AUTHOR_NAME"} {
 		if !has(kept) {
 			t.Errorf("%s should be kept", kept)
 		}

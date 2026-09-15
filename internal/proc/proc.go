@@ -125,15 +125,38 @@ func (t *tail) detach() {
 	t.mu.Unlock()
 }
 
-// secretName matches environment variable names that usually hold
-// credentials. SSH_AUTH_SOCK and the like are not secrets and stay.
-var secretName = regexp.MustCompile(`(?i)(API[_-]?KEY|APIKEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|PRIVATE[_-]?KEY)`)
+// A child process gets an allowlist of the daemon's environment: what
+// programs need to find themselves and behave (the path, the home, the
+// locale, toolchain settings). Everything else stays out, whatever it is
+// called: a credential with an unusual name, a D-Bus address (systemd-run
+// would start a process outside every restriction), an ssh-agent socket
+// (signing with the user's keys), a display. Config env.pass adds names.
 
-// Env is the daemon's environment for a child process: every variable
-// except STAVLOS_* (the harness's own switches) and those whose names look
-// like credentials, so a command the model runs cannot read them back. A
-// name listed in pass is kept regardless (a token a build legitimately
-// needs); extra is appended last and wins.
+// passNames are variables children keep by name.
+var passNames = map[string]bool{
+	"PATH": true, "HOME": true, "USER": true, "LOGNAME": true, "SHELL": true, "TERM": true, "COLORTERM": true, "TERM_PROGRAM": true,
+	"LANG": true, "LANGUAGE": true, "TZ": true, "TMPDIR": true, "PWD": true, "HOSTNAME": true, "SHLVL": true,
+	"EDITOR": true, "VISUAL": true, "PAGER": true, "LESS": true, "NO_COLOR": true, "FORCE_COLOR": true, "CI": true,
+	"CC": true, "CXX": true, "CFLAGS": true, "CXXFLAGS": true, "CPPFLAGS": true, "LDFLAGS": true, "LD_LIBRARY_PATH": true, "MAKEFLAGS": true,
+	"JAVA_HOME": true, "VIRTUAL_ENV": true,
+	"GIT_AUTHOR_NAME": true, "GIT_AUTHOR_EMAIL": true, "GIT_COMMITTER_NAME": true, "GIT_COMMITTER_EMAIL": true,
+}
+
+// passPrefixes are families of toolchain variables children keep.
+var passPrefixes = []string{
+	"LC_", "XDG_CONFIG_", "XDG_DATA_", "XDG_CACHE_HOME", "XDG_STATE_HOME",
+	"GO", "CARGO_", "RUSTUP_", "RUSTC", "NODE_", "NPM_CONFIG_", "PNPM_", "YARN_", "BUN_", "DENO_",
+	"PYTHON", "PIP_", "UV_", "POETRY_", "CONDA_", "PYENV_", "MISE_", "ASDF_", "NVM_", "VOLTA_",
+	"GRADLE_", "MAVEN_", "ANDROID_", "DOTNET_", "PKG_CONFIG",
+}
+
+// secretName matches variable names that usually hold credentials; such a
+// variable is dropped even when its family is allowed (GOOGLE_API_KEY).
+var secretName = regexp.MustCompile(`(?i)(API[_-]?KEY|APIKEY|SECRET|TOKEN|PASSWORD|PASSWD|CREDENTIAL|PRIVATE[_-]?KEY|(^|_)AUTH($|_))`)
+
+// Env is the environment for a child process: the daemon's variables that
+// pass (see Passes), every name listed in pass (config env.pass, for a
+// token a build legitimately needs), then extra, which wins.
 func Env(pass []string, extra ...string) []string {
 	keep := map[string]bool{}
 	for _, n := range pass {
@@ -152,7 +175,20 @@ func Env(pass []string, extra ...string) []string {
 	return append(out, extra...)
 }
 
-// Passes reports whether a variable name survives the scrub on its own.
+// Passes reports whether a variable reaches child processes on its own:
+// allowlisted, not the harness's own (STAVLOS_*), and not named like a
+// credential.
 func Passes(name string) bool {
-	return !strings.HasPrefix(name, "STAVLOS_") && !secretName.MatchString(name)
+	if strings.HasPrefix(name, "STAVLOS_") || secretName.MatchString(name) {
+		return false
+	}
+	if passNames[name] {
+		return true
+	}
+	for _, p := range passPrefixes {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
 }

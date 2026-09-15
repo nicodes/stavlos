@@ -211,6 +211,7 @@ const (
 	ErrNotFound       = -32001
 	ErrConflict       = -32002 // e.g. prompt already claimed, late answer
 	ErrTrust          = -32003 // project layer pending trust
+	ErrForbidden      = -32004 // the caller may not use the daemon (a process the daemon runs)
 )
 
 // --- params / results ---

@@ -35,16 +35,3 @@ func lockDataDir(dataDir string) (*os.File, error) {
 	_, _ = f.WriteAt([]byte(strconv.Itoa(os.Getpid())), 0)
 	return f, nil
 }
-
-// samePeer reports whether the connection's peer runs as this process's
-// user. The socket is 0600 in a 0700 directory; this is the second line
-// for the moment between Listen and Chmod, and for a socket path a user
-// pointed somewhere shared.
-func samePeer(c interface{ Control(func(fd uintptr)) error }) bool {
-	ok := false
-	_ = c.Control(func(fd uintptr) {
-		cred, err := unix.GetsockoptUcred(int(fd), unix.SOL_SOCKET, unix.SO_PEERCRED)
-		ok = err == nil && int(cred.Uid) == os.Getuid()
-	})
-	return ok
-}

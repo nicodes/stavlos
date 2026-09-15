@@ -15,14 +15,12 @@ var (
 	id   string
 )
 
-// The hash is taken when the program starts: a `go run` binary may be
-// deleted while the daemon it launched is still running, and hashing it
-// later would read nothing.
-func init() { ID() }
-
 // ID returns a short hash of the executable's contents. Two binaries built
 // from the same source have the same ID regardless of path, so a `go run`
-// with unchanged code does not restart the daemon.
+// with unchanged code does not restart the daemon. It is computed on first
+// use, not at init: every process the sandbox starts re-executes this
+// binary, and hashing it there would cost a full read per command. The
+// daemon calls it as it starts, while a `go run` binary still exists.
 func ID() string {
 	once.Do(func() {
 		id = compute()
