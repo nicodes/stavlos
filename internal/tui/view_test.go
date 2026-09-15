@@ -2194,13 +2194,13 @@ func TestSidebarNav(t *testing.T) {
 				t.Fatalf("row %d should be %d wide, got %d: %q", i, sidebarWidth-1, w, plain[i])
 			}
 		}
-		if !strings.HasPrefix(plain[0], "    ◐ main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
+		if !strings.HasPrefix(plain[0], "    ◐ @main (general)") || !strings.HasSuffix(plain[0], " $0.20") || strings.Contains(plain[0], "waiting") {
 			t.Fatalf("root row: %q", plain[0])
 		}
-		if !strings.HasPrefix(plain[1], "      ● world-politics") || !strings.HasSuffix(plain[1], "… ! $0.05") {
+		if !strings.HasPrefix(plain[1], "      ● @world-politic") || !strings.HasSuffix(plain[1], "… ! $0.05") {
 			t.Fatalf("blocked child row should carry the badge and cost: %q", plain[1])
 		}
-		if !strings.HasSuffix(strings.TrimRight(plain[2], " "), "business (general)") {
+		if !strings.HasSuffix(strings.TrimRight(plain[2], " "), " @business (general)") {
 			t.Fatalf("a row with nothing on the right ends with the label: %q", plain[2])
 		}
 		if !strings.HasSuffix(plain[3], " ?") {
