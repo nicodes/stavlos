@@ -1708,7 +1708,8 @@ func todoArg(raw json.RawMessage) string {
 }
 
 // ToolTitle is the display name of a tool on its chat line: titleCase of
-// the name, with MCP tools read as "server · tool".
+// the name, bar the few that read shorter without it, with MCP tools read
+// as "server · tool".
 func ToolTitle(name string) string {
 	if strings.HasPrefix(name, toolname.MCPPrefix) {
 		// mcp__server__tool reads "server · tool"
@@ -1721,6 +1722,8 @@ func ToolTitle(name string) string {
 		return "Fetch"
 	case toolname.WebSearch:
 		return "Search"
+	case toolname.ApplyPatch:
+		return "Patch"
 	}
 	return titleCase(name)
 }
