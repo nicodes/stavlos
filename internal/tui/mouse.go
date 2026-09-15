@@ -286,41 +286,41 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 			return m.metaAction(metaMode)
 		}
 		return m.setFocus(focusInput)
-	case y == lay.meta: // the meta row: its parts are buttons, and so are the agent's tabs at its right end
+	case y == lay.rule: // the divider: the agent's role, model and variant are buttons, and so are its tabs
 		if f, ok := m.metaTabAt(x, m.width); ok {
 			return m.openTab(f)
 		}
 		if part := m.metaHit(x); part != metaNone {
 			return m.metaAction(part)
 		}
-		return m.setFocus(focusInput)
 	}
 	return nil
 }
 
-// metaHit maps an x position on the meta row to the part drawn there.
+// metaHit maps a column of the divider to the role, model or variant drawn
+// there.
 func (m *Model) metaHit(x int) metaPart {
-	_, spans := m.metaLeft()
-	if part, ok := hitSpan(spans, x); ok {
+	d := m.divider(m.width)
+	if part, ok := hitSpan(d.metaSpans, x-d.metaX); ok {
 		return part
 	}
 	return metaNone
 }
 
-// rowLayout is where the channel view's pieces sit, in screen rows: under
-// the rule come the palette (while open), the input, a blank line, the
-// strip and the meta row.
+// rowLayout is where the channel view's pieces sit, in screen rows: the
+// divider, then the palette (while open), the input, a blank line and the
+// strip.
 type rowLayout struct {
+	rule      int // the divider
 	input     int // first row of the input (it may span several)
 	strip     int // the tab strip's first line
 	stripRows int // how many lines the strip takes
-	meta      int // the meta row, -1 when hidden
 }
 
 // rows derives the row layout the same way channelView stacks its parts.
 func (m *Model) rows() rowLayout {
 	f := m.computeFrame()
-	return rowLayout{input: f.input, strip: f.strip, stripRows: f.stripRows, meta: f.metaRow}
+	return rowLayout{rule: f.rule, input: f.input, strip: f.strip, stripRows: f.stripRows}
 }
 
 // itemAtRow maps a viewport content row to the chat item drawn there.

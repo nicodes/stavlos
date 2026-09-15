@@ -1050,15 +1050,16 @@ func TestChannelViewFillsHeight(t *testing.T) {
 				si = i
 			}
 		}
-		// under the rule: the input, a blank line, the strip (! ? dirs), then the meta row with the agent's tabs at its right end
+		// the divider leads with the agent and carries its tabs; under it come
+		// the input, a blank line and the strip (! ? dirs), the last row
 		ri := -1
 		for i := 0; i < si; i++ {
 			if strings.HasPrefix(lines[i], "─") {
 				ri = i
 			}
 		}
-		if ri < 0 || si < 2 || si+1 >= len(lines) || !strings.HasPrefix(lines[ri+1], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" || !strings.HasPrefix(lines[si+1], "coder ·") || !strings.Contains(lines[si+1], "async ") {
-			t.Fatalf("focus %v: under the rule come the input, a blank line, the strip, then the meta row:\n%s", f, stripANSI(v))
+		if ri < 0 || si < 2 || si != len(lines)-1 || !strings.HasPrefix(lines[ri], "─ coder ·") || !strings.Contains(lines[ri], "async ") || !strings.HasPrefix(lines[ri+1], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" {
+			t.Fatalf("focus %v: the divider carries the agent and its tabs, then come the input, a blank line and the strip:\n%s", f, stripANSI(v))
 		}
 	}
 }
@@ -1086,42 +1087,40 @@ func TestPermissionShowsWholeCommand(t *testing.T) {
 	}
 }
 
-func TestMetaRowAndStripRepo(t *testing.T) {
+func TestDividerAndStripRepo(t *testing.T) {
 	m := channelModel()
 	m.showTree = false
-	m.hideKeys = false // the key bar is off by default; this test checks the row above it
+	m.hideKeys = false // the key bar is off by default; this test checks the rows above it
 	m.channel.Dir = "/repo/project"
 	m.channel.Model, m.agents[0].Model = "chatgpt/gpt-5", "chatgpt/gpt-5"
 	m.agents[0].Tokens, m.agents[0].CostUSD = 1500, 0.02
 	m.width, m.height = 100, 30
 	m.layout()
 	lines := strings.Split(stripANSI(m.View()), "\n")
-	meta, strip := -1, -1
+	rule, strip := -1, -1
 	for i, l := range lines {
 		switch {
-		case strings.HasPrefix(l, "coder · "):
-			meta = i
+		case strings.HasPrefix(l, "─ coder · "):
+			rule = i
 		case strings.HasPrefix(l, "! "):
 			strip = i
 		}
 	}
-	if meta < 0 || strip < 0 {
-		t.Fatalf("no meta row or strip:\n%s", strings.Join(lines, "\n"))
+	if rule < 0 || strip != rule+3 {
+		t.Fatalf("no divider or strip under it:\n%s", strings.Join(lines, "\n"))
 	}
-	// role and model on the left, tokens and cost on the right, no dots; no
+	// the agent on the left, its tabs then tokens and cost on the right; no
 	// context figure while the window is unknown
-	// the usage sits on the divider over the input, not the meta row (no
-	// context figure while the window is unknown)
-	if row := lines[meta]; strings.Contains(row, "tokens") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) > 100 ||
-		!strings.HasSuffix(lines[strip-3], "─ 2k tokens · $0.02 ─") || strings.Contains(lines[strip-3], "%") {
-		t.Fatalf("meta row %q, divider %q", row, lines[strip-3])
+	if row := lines[rule]; !strings.HasPrefix(row, "─ coder · gpt-5 · default ─") || !strings.Contains(row, "─ async 0 · todo 0 · mcp 0 · 2k tokens · $0.02 ─") ||
+		strings.Contains(row, "%") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) != 100 {
+		t.Fatalf("divider %q", row)
 	}
-	// with a window: "used% · used/window" and the cost; the channel's tokens are in the sidebar
+	// with a window: "used% · used/window tokens" and the cost; the channel's tokens are in the sidebar
 	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
-	if right := stripANSI(m.footerRightView()); right != "31% · 62k/200k · $0.02" {
-		t.Fatalf("meta right: %q", right)
+	if right := stripANSI(m.footerRightView()); right != "31% · 62k/200k tokens · $0.02" {
+		t.Fatalf("usage: %q", right)
 	}
-	if got := stripANSI(contextBar(250_000, 200_000)); got != "100% · 250k/200k" {
+	if got := stripANSI(contextBar(250_000, 200_000)); got != "100% · 250k/200k tokens" {
 		t.Fatalf("context %q", got)
 	}
 	if contextBar(5, 0) != "" {
@@ -1170,8 +1169,8 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if nm.(Model).compactTick {
 		t.Fatal("the tick should stop when no chat is compacting")
 	}
-	if strip < 3 || meta != strip+1 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], " ASK › ") || !strings.HasPrefix(lines[strip-3], "─") {
-		t.Fatalf("under the rule come the input, a blank line, the strip, then the meta row:\n%s", strings.Join(lines, "\n"))
+	if strip < 3 || rule != strip-3 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], " ASK › ") {
+		t.Fatalf("under the divider come the input, a blank line and the strip:\n%s", strings.Join(lines, "\n"))
 	}
 	// the repo is not on the strip (the dirs tab shows it)
 	if strings.Contains(strings.Join(lines, "\n"), "/repo/project") {
@@ -1437,10 +1436,10 @@ func TestTodoTabAndDialog(t *testing.T) {
 	m.width, m.height = max(m.width, 120), max(m.height, 40)
 	m.layout()
 	lay := m.rows()
-	row := stripANSI(m.metaRow(m.width)) // the agent's tabs sit at the meta row's right end
+	row := stripANSI(m.ruleLine(m.width)) // the agent's tabs sit on the divider, before the usage
 	x := ansi.StringWidth(row[:strings.Index(row, "todo")]) + 1
-	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.meta, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.meta, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.rule, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.rule, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
 	if m.focus != focusTodo {
 		t.Fatalf("clicking the todo label should open its dialog: %v", m.focus)
@@ -1677,12 +1676,12 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 		m = nm.(Model)
 	}
 	lay := m.rows()
-	// the agent's tabs sit at the meta row's right end
+	// the agent's tabs sit on the divider, before the usage
 	metaCol := func(sub string) int {
-		row := stripANSI(m.metaRow(m.width))
+		row := stripANSI(m.ruleLine(m.width))
 		return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1
 	}
-	click(metaCol("async"), lay.meta)
+	click(metaCol("async"), lay.rule)
 	if m.focus != focusAsync {
 		t.Fatalf("clicking the async label should open the async tab: %v", m.focus)
 	}
@@ -1708,8 +1707,8 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	}
 	m.selected = 0
 	// the strip labels still open dialogs directly while one is up
-	click(metaCol("async"), lay.meta)
-	click(metaCol("todo"), lay.meta)
+	click(metaCol("async"), lay.rule)
+	click(metaCol("todo"), lay.rule)
 	if m.focus != focusTodo {
 		t.Fatalf("clicking a strip label should open that tab's dialog: %v", m.focus)
 	}
@@ -1736,26 +1735,26 @@ func TestMetaRowHits(t *testing.T) {
 	m.agents = []protocol.AgentInfo{{ID: "a", Name: "main", Role: "coder", Model: "openai/gpt-5", Variant: "high"}}
 	m.selected = 0
 	m.channel.Mode = protocol.ModeYolo
-	// "main (coder) · openai/gpt-5 · high" (the mode tag leads the input)
-	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone, lipgloss.NewStyle()))
+	// "─ main (coder) · gpt-5 · high ───" leads the divider (the mode tag leads the input)
+	row := stripANSI(m.ruleLine(m.width))
 	at := func(sub string) int { return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1 } // a column, not a byte offset
 	for _, c := range []struct {
 		x    int
 		want metaPart
 	}{
-		{at("main"), metaRole}, {at("(coder)"), metaRole},
-		{at("gpt-5"), metaModel}, {at("high"), metaVariant}, {len(row) + 5, metaNone},
+		{0, metaNone}, {at("main"), metaRole}, {at("(coder)"), metaRole},
+		{at("gpt-5"), metaModel}, {at("high"), metaVariant}, {m.width - 1, metaNone},
 	} {
 		if got := m.metaHit(c.x); got != c.want {
-			t.Fatalf("x=%d: got %v want %v", c.x, got, c.want)
+			t.Fatalf("x=%d: got %v want %v\n%q", c.x, got, c.want, row)
 		}
 	}
-	// whatever the mode, the row starts with the role; a missing variant reads "default"
+	// whatever the mode, the divider starts with the role; a missing variant reads "default"
 	m.channel.Mode = protocol.ModeAsk
 	m.agents[0].Variant = ""
-	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "", metaNone, lipgloss.NewStyle()))
-	if !strings.HasPrefix(row, "main (coder)") || m.metaHit(0) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "main")])) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
-		t.Fatalf("ask row: %q", row)
+	row = stripANSI(m.ruleLine(m.width))
+	if !strings.HasPrefix(row, "─ main (coder)") || m.metaHit(2) != metaRole || m.metaHit(at("default")+1) != metaVariant {
+		t.Fatalf("ask divider: %q", row)
 	}
 }
 
@@ -2193,7 +2192,7 @@ func TestSidebarNav(t *testing.T) {
 		}
 		m.closeDialog()
 		// with the sidebar showing, the footer strip keeps only the agent's row
-		if sv := stripANSI(m.sectionsView(120)); sv != "" || !strings.Contains(stripANSI(m.metaRow(120)), "async") { // no footer strip: the agent's tabs sit at the meta row's right end
+		if sv := stripANSI(m.sectionsView(120)); sv != "" || !strings.Contains(stripANSI(m.ruleLine(120)), "async") { // no footer strip: the agent's tabs sit on the divider
 			t.Fatalf("strip with the sidebar:\n%s", sv)
 		}
 		rows := m.treeRows(sidebarWidth - 1)
@@ -3060,7 +3059,7 @@ func TestChannelChatFooterIsTheChannels(t *testing.T) {
 		m.openChat()
 		m.layout()
 		left, spans := m.metaLeft()
-		if !m.superChat || left != "" || len(spans) != 0 || len(m.metaParts()) != 0 || m.metaShown() {
+		if !m.superChat || left != "" || len(spans) != 0 || len(m.metaParts()) != 0 {
 			t.Fatalf("channel chat meta: %q %v %v", stripANSI(left), spans, m.metaParts())
 		}
 		if right := stripANSI(m.footerRightView()); right != "2k tokens · $0.02" { // the rollup of tokens and cost, no context percentage
@@ -3073,7 +3072,7 @@ func TestChannelChatFooterIsTheChannels(t *testing.T) {
 			t.Fatalf("channel chat view is %d lines, want %d (tree %v)", got, m.height, tree)
 		}
 		m.openAgent(0)
-		if sv := stripANSI(m.metaRow(100)); !strings.Contains(sv, "async") || len(m.metaParts()) != 3 || !strings.Contains(stripANSI(m.footerRightView()), "31%") {
+		if sv := stripANSI(m.ruleLine(100)); !strings.Contains(sv, "async") || len(m.metaParts()) != 3 || !strings.Contains(stripANSI(m.footerRightView()), "31%") {
 			t.Fatalf("agent chat footer: %q %v %q", sv, m.metaParts(), stripANSI(m.footerRightView()))
 		}
 		if got := strings.Count(m.View(), "\n") + 1; got != m.height {
@@ -3107,10 +3106,10 @@ func TestModeTagLeadsTheInput(t *testing.T) {
 	}
 }
 
-// TestStatusSitsOnTheDivider: the transient status is on the divider's left
-// end, the usage on its right; there is no line for it between the chat and
-// the divider, and on a narrow window the status is cut before the usage.
-func TestStatusSitsOnTheDivider(t *testing.T) {
+// TestStatusSitsOverTheDivider: the transient status sits at the right end of
+// the chat's last row, not on the divider, which keeps the agent at its left
+// and the usage at its right; a long status is cut to the row.
+func TestStatusSitsOverTheDivider(t *testing.T) {
 	m := channelModel()
 	m.reconciled = false // connected: the usage shows
 	m.width, m.height = 100, 30
@@ -3120,25 +3119,20 @@ func TestStatusSitsOnTheDivider(t *testing.T) {
 	m.layout()
 	m.setStatus("copied 3 lines", false)
 	lines := strings.Split(stripANSI(m.View()), "\n")
-	rule := -1
-	for i, l := range lines {
-		if strings.HasPrefix(l, "─") {
-			rule = i
-			break
-		}
-	}
-	if rule < 0 || !strings.HasPrefix(lines[rule], "─ copied 3 lines ─") || !strings.HasSuffix(lines[rule], "─ 2k tokens · $0.02 ─") || ansi.StringWidth(lines[rule]) != m.width {
+	rule := m.rows().rule
+	if !strings.HasPrefix(lines[rule], "───") || strings.Contains(lines[rule], "copied") || !strings.HasSuffix(lines[rule], "─ 2k tokens · $0.02 ─") || ansi.StringWidth(lines[rule]) != m.width {
 		t.Fatalf("divider: %q", lines[rule])
 	}
-	if strings.Contains(strings.Join(lines[:rule], "\n"), "copied") || len(lines) != m.height {
-		t.Fatalf("the status has no line of its own above the divider:\n%s", strings.Join(lines, "\n"))
+	if above := lines[rule-1]; !strings.HasSuffix(above, "copied 3 lines") || ansi.StringWidth(above) != m.width || len(lines) != m.height {
+		t.Fatalf("the status sits at the right of the row above the divider:\n%s", strings.Join(lines, "\n"))
 	}
 	if r := m.rows(); r.input != rule+1 {
 		t.Fatalf("rows: input at %d, divider at %d", r.input, rule)
 	}
 	m.setStatus(strings.Repeat("a long status ", 10), true)
-	if d := stripANSI(m.ruleLine(60)); ansi.StringWidth(d) != 60 || !strings.HasSuffix(d, "─ 2k tokens · $0.02 ─") || !strings.Contains(d, "…") {
-		t.Fatalf("narrow divider: %q", d)
+	lines = strings.Split(stripANSI(m.View()), "\n")
+	if above := lines[rule-1]; !strings.Contains(above, "…") || ansi.StringWidth(above) != m.width {
+		t.Fatalf("a long status is cut to the row: %q", above)
 	}
 }
 

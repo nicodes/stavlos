@@ -294,7 +294,7 @@ func footerRight(f footerInfo) string {
 	return theme.StyleDim.Render(format.Tokens(f.tokens)+" tokens") + cost
 }
 
-// contextBar reads how full the model's context is — "31% · 62k/200k" — which
+// contextBar reads how full the model's context is — "31% · 62k/200k tokens" — which
 // is what auto-compaction watches (it summarises at 80%). Dim until 70%,
 // warning-coloured from there. "" when the window is unknown.
 func contextBar(context, window int) string {
@@ -302,7 +302,7 @@ func contextBar(context, window int) string {
 	if !ok {
 		return ""
 	}
-	return st.Render(fmt.Sprintf("%d%% · %s/%s", pct, format.Tokens(context), format.Tokens(window)))
+	return st.Render(fmt.Sprintf("%d%% · %s/%s tokens", pct, format.Tokens(context), format.Tokens(window)))
 }
 
 // contextFill is how full the context is, in percent (at most 100), and its
@@ -418,14 +418,10 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 	return metaLineSpans(label, role, model, variant, queued, "", sel, nameStyle) // the mode tag leads the input instead
 }
 
-// metaShown reports whether the meta row is drawn: an agent's chat names its
-// role, model and variant there, and the sign-in nudge sits there while
-// nothing is connected; the channel chat has nothing else for it.
-func (m Model) metaShown() bool { return !m.superChat || !m.connected() }
-
-// metaRow is the line under the divider: role and model on the left, tokens
-// and cost (or a transient status) on the right, dot separators within
-// each side. The left side is truncated first when they collide.
+// metaRow is the home screen's line under the input: role and model on the
+// left, the sign-in nudge and the agent's tabs on the right, dot separators
+// within each side. The left side is truncated first when they collide. A
+// chat carries all of it on the divider instead (divider).
 func (m Model) metaRow(width int) string {
 	left, _ := m.metaLeft()
 	var parts []string // the usage sits on the divider over the input (ruleLine)
@@ -527,29 +523,39 @@ func (m Model) channelView(f frame, width int) string {
 	// (the status and usage sit on the rule) spans the whole window, so the
 	// footer cuts the sidebar off, not the other way round.
 	top := padLines(m.vp.View(), cw)
+	if status := m.statusText(); status != "" { // the transient message, at the right of the chat's last row
+		top = withStatus(top, status, cw)
+	}
 	if m.sidebarVisible() {
 		h := m.vp.Height
 		sep := theme.StyleSep.Render(strings.TrimSuffix(strings.Repeat("│ \n", h), "\n")) // a space keeps the chat off the line
 		top = lipgloss.JoinHorizontal(lipgloss.Top, m.sidebarView(h), sep, top)           // the sidebar sits on the left
 	}
-	// Under the rule: the palette (while open) and the input, a blank line,
-	// then the tab strip and the meta row (mode tag, role, model, variant,
-	// usage).
+	// Under the divider: the palette (while open) and the input, then a blank
+	// line and the tab strip when there is one.
 	parts := []string{top, m.ruleLine(width)}
 	if f.palette != "" {
 		parts = append(parts, f.palette)
 	}
 	parts = append(parts, m.inputBoxView(width))
-	if f.sections != "" || f.meta {
-		parts = append(parts, "") // air between the input and what sits under it
-	}
 	if f.sections != "" {
-		parts = append(parts, f.sections)
-	}
-	if f.meta {
-		parts = append(parts, m.metaRow(width))
+		parts = append(parts, "", f.sections) // air between the input and the strip
 	}
 	return padLines(strings.Join(parts, "\n"), width)
+}
+
+// withStatus draws the transient status at the right end of the last row of
+// top (width columns wide), over whatever the chat has there.
+func withStatus(top, status string, width int) string {
+	lines := strings.Split(top, "\n")
+	if width < 8 {
+		return top
+	}
+	status = ansi.Truncate(status, width-4, "…")
+	keep := width - lipgloss.Width(status) - 1
+	last := ansi.Truncate(lines[len(lines)-1], keep, "")
+	lines[len(lines)-1] = last + strings.Repeat(" ", max(0, width-lipgloss.Width(last)-lipgloss.Width(status))) + status
+	return strings.Join(lines, "\n")
 }
 
 // sidebarView is the left panel — the swarm nav: the header (app name,
@@ -639,8 +645,8 @@ func (m Model) stripRows() int {
 	return 1
 }
 
-// agentTabs is the agent's tab row, async · due · todo · mcp, as the meta
-// row draws it at its right end; "" in the channel chat.
+// agentTabs is the agent's tab row, async · todo · mcp, as the divider draws
+// it before the usage; "" in the channel chat.
 func (m Model) agentTabs() string {
 	if m.superChat {
 		return ""
@@ -650,15 +656,14 @@ func (m Model) agentTabs() string {
 	return lines[len(lines)-1]
 }
 
-// metaTabAt maps a column of the meta row, drawn width wide, to the agent tab
+// metaTabAt maps a column of the divider, drawn width wide, to the agent tab
 // drawn there.
 func (m Model) metaTabAt(x, width int) (focus, bool) {
-	tabs := m.agentTabs()
-	if tabs == "" {
+	d := m.divider(width)
+	if d.tabsX < 0 {
 		return 0, false
 	}
-	_, spans := m.tabLabels(m.currentPrompt())
-	return hitSpan(spans[len(spans)-1], x-(width-lipgloss.Width(tabs)))
+	return hitSpan(d.tabSpans, x-d.tabsX)
 }
 
 // sidebarBody is everything under the header: the "channels" title with its
@@ -1392,28 +1397,55 @@ func (m Model) footerRightView() string {
 	return footerRight(f)
 }
 
-// ruleLine is the divider over the input, with the transient status at its
-// left end and the usage at its right, "─ copied ──── 69k tokens · $0.00 ─": the channel's in the channel chat, the
-// selected agent's context and cost in its own. A plain rule while nothing
-// is connected (the meta row carries the sign-in nudge then) or when the
-// usage does not fit.
-func (m Model) ruleLine(width int) string {
+// divider is the line over the input and where its buttons were drawn:
+// the selected agent's role, model and variant at its left end ("─ main
+// (general) · gpt-5.4 · default ───"), then at its right the agent's tabs
+// and the usage, or the sign-in nudge while nothing is connected ("async 0
+// · todo 0 · mcp 0 · 31% · 62k/200k tokens · $0.02 ─"). The channel chat
+// has no agent, so only its usage. When they do not fit, the tabs go first,
+// then the usage, and the left side is cut.
+type divider struct {
+	line      string
+	metaX     int // column where the role, model and variant start
+	metaSpans []span[metaPart]
+	tabsX     int // column where the agent's tabs start, -1 when not drawn
+	tabSpans  []span[focus]
+}
+
+func (m Model) divider(width int) divider {
 	dash := theme.StyleRule.Render
+	d := divider{tabsX: -1}
+	tabs, usage := m.agentTabs(), m.footerRightView()
 	right, rightW := "", 0
-	if m.connected() {
-		if usage := m.footerRightView(); usage != "" && lipgloss.Width(usage)+4 <= width {
-			right, rightW = " "+usage+" "+dash("─"), lipgloss.Width(usage)+3
+	fit := func(parts ...string) bool {
+		text := strings.Join(slices.DeleteFunc(parts, func(p string) bool { return p == "" }), theme.StyleDim.Render(" · "))
+		if text == "" || lipgloss.Width(text)+4 > width {
+			return false
 		}
+		right, rightW = " "+text+" "+dash("─"), lipgloss.Width(text)+3
+		return true
+	}
+	switch {
+	case tabs != "" && fit(tabs, usage):
+		d.tabsX = width - rightW + 1
+		_, spans := m.tabLabels(m.currentPrompt())
+		d.tabSpans = spans[len(spans)-1]
+	case fit(usage):
 	}
 	left, leftW := "", 0
-	if status := m.statusText(); status != "" { // the transient message, cut before the usage is
+	if meta, spans := m.metaLeft(); meta != "" {
 		if avail := width - rightW - 4; avail >= 4 {
-			status = ansi.Truncate(status, avail, "…")
-			left, leftW = dash("─")+" "+status+" ", lipgloss.Width(status)+3
+			meta = ansi.Truncate(meta, avail, "…")
+			left, leftW = dash("─")+" "+meta+" ", lipgloss.Width(meta)+3
+			d.metaX, d.metaSpans = 2, spans
 		}
 	}
-	return left + dash(strings.Repeat("─", max(0, width-leftW-rightW))) + right
+	d.line = left + dash(strings.Repeat("─", max(0, width-leftW-rightW))) + right
+	return d
 }
+
+// ruleLine is the divider as drawn width wide.
+func (m Model) ruleLine(width int) string { return m.divider(width).line }
 
 // connected reports whether a provider and a model are usable.
 func (m Model) connected() bool {

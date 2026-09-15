@@ -28,20 +28,20 @@ Selecting an agent in the sidebar opens its own chat, with its tool calls and no
 
 Agents reply with the `message` tool, to you or to another agent. The text an agent ends a turn with is its notes: it reaches no one and shows dimmed in its chat. Every message an agent receives, from you or from another agent, is owed a reply. Whenever a turn ends with a reply still owed, the agent is nudged with another turn, unless it is waiting on an agent or a job (their result wakes it anyway). After three nudges in a row with no reply it is left alone until it replies or something new arrives. The due tab lists who is still owed. `"reminders": false` in `stavlos.json` turns nudges off.
 
-The meta row under the input shows the selected agent's role, model and variant, then how full its context is (`31% of 200k`, orange from 70%), its tokens and its cost. Context is compacted on its own when an agent's history passes 80% of its model's window: older turns become a summary. `/compact` does it for the selected agent right away, or before its next model call if it is busy. A compaction is an item in the chat: a rule with a sweeping bar while it runs, replaced in place by `┄┄ compacted 84k → 12k tokens ┄┄` and the summary when it is done.
+The divider over the input shows the selected agent's role, model and variant at its left end, and at its right the agent's async, todo and mcp tabs, then how full its context is (`31% · 62k/200k tokens`, orange from 70%) and its cost. A passing message such as "copied" appears at the right end of the chat row just above the divider. Context is compacted on its own when an agent's history passes 80% of its model's window: older turns become a summary. `/compact` does it for the selected agent right away, or before its next model call if it is busy. A compaction is an item in the chat: a rule with a sweeping bar while it runs, replaced in place by `┄┄ compacted 84k → 12k tokens ┄┄` and the summary when it is done.
 
 ### Focus and keys
 
-- Tab and shift+tab cycle focus from top to bottom: the chat, the input, the tab strip, the meta row, and the sidebar (ctrl+b).
-- Space is the select key everywhere outside a text field. It opens the highlighted tab or meta-row part, picks a dialog row, selects an agent, and expands a tool call's output in the chat.
+- Tab and shift+tab cycle focus from top to bottom: the chat, the input, the tab strip, the agent's role, model and variant on the divider, and the sidebar (ctrl+b).
+- Space is the select key everywhere outside a text field. It opens the highlighted tab or divider part, picks a dialog row, selects an agent, and expands a tool call's output in the chat.
 - Enter anywhere but the input closes what is open and returns to typing.
 - In the chat, ↑/↓ move item by item. In the input, ↑/↓ walk your prompt history; on the start screen they recall the first prompts of this directory's earlier channels, and `/channels` picks one to resume.
-- On the meta row, ←/→ pick the mode tag, role, model or variant, and enter opens its dialog. `/roles`, `/models` and `/variants` open the same dialogs.
+- On the divider, ←/→ pick the role, model or variant, and enter opens its dialog; a click on the mode tag before the input's › switches the mode. `/roles`, `/models` and `/variants` open the same dialogs.
 - The "/" palette lists every command. `/help` shows a key bar at the bottom (off by default; `/help` again hides it).
 
 ### The tab strip
 
-The tabs, each always there with its count, are "permission" and "questions" (shown as `! n · ? n`, every channel's prompts), "dirs" (the channel's directories), and an agent's own "async", "todo" and "mcp". In an agent's chat the last three sit at the right end of the meta row; `! ? dirs` sit in the strip under the input while the sidebar is hidden, and in the sidebar (with dirs behind each channel's ⚙) while it shows. Tab lands on the leftmost, ←/→ move the highlight, enter or a click opens that tab's dialog, and esc returns to where you came from.
+The tabs, each always there with its count, are "permission" and "questions" (shown as `! n · ? n`, every channel's prompts), "dirs" (the channel's directories), and an agent's own "async", "todo" and "mcp". In an agent's chat the last three sit on the divider, before the usage; `! ? dirs` sit in the strip under the input while the sidebar is hidden, and in the sidebar (with dirs behind each channel's ⚙) while it shows. Tab lands on the leftmost, ←/→ move the highlight, enter or a click opens that tab's dialog, and esc returns to where you came from.
 
 - **permission** holds the permission prompts. The permission and questions dialogs show the selected agent's prompt first and the oldest one otherwise, while the strip counts every prompt in the channel.
 - **questions** holds `ask_user` batches (see below).
