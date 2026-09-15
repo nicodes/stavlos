@@ -203,6 +203,12 @@ func (c *Client) SetChannelMode(ctx context.Context, id, mode string) error {
 	return c.Call(ctx, protocol.MChannelSetMode, protocol.ChannelSetModeParams{ID: id, Mode: mode}, nil)
 }
 
+// RenameChannel gives a channel another name; the daemon normalises it and
+// refuses one another channel has.
+func (c *Client) RenameChannel(ctx context.Context, id, name string) error {
+	return c.Call(ctx, protocol.MChannelRename, protocol.ChannelRenameParams{ID: id, Name: name}, nil)
+}
+
 // Post sends the human's message to the channel chat: every @mentioned
 // agent gets it as a steer, the root agent when none is mentioned. It
 // returns the names of the agents it went to.

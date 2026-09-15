@@ -1,7 +1,8 @@
 // Command stavlos is the CLI and TUI client (PRD §7.2).
 //
-//	stavlos                 start a new channel in the current directory and open the TUI
-//	stavlos resume [id]     resume the latest (or given) channel for this directory
+//	stavlos                 open this directory's channel (a new one if it has none) in the TUI
+//	stavlos new             start another channel in the current directory
+//	stavlos open <#name>    open a channel by name or id
 //	stavlos channels        list channels
 //	stavlos daemon          run the daemon in the foreground
 //	stavlos status          daemon status
@@ -66,11 +67,12 @@ func commandOf(args []string) (cmd string, rest []string) {
 	return "", args
 }
 
-// subcommands maps each command word to its handler; "" starts a channel.
+// subcommands maps each command word to its handler; "" opens the
+// directory's channel.
 var subcommands = map[string]func(ctx context.Context, cmd string, args []string) error{
-	"":          cmdNew,
+	"":          cmdStart,
 	"new":       cmdNew,
-	"resume":    cmdResume,
+	"open":      cmdOpen,
 	"channels":  cmdChannels,
 	"daemon":    cmdDaemon,
 	"status":    cmdStatus,
@@ -92,14 +94,27 @@ var subcommands = map[string]func(ctx context.Context, cmd string, args []string
 	"--version": cmdVersion,
 }
 
-// cmdNew starts a channel in a directory (reusing its newest channel while
+// cmdStart opens the directory's channel in the TUI: its newest, or a new
+// one when the directory has none (--model and --root apply only then).
+func cmdStart(ctx context.Context, _ string, args []string) error {
+	return startChannel(ctx, "stavlos", args, false)
+}
+
+// cmdNew starts another channel in a directory (reusing its newest while
 // that one was never prompted) and opens the TUI.
 func cmdNew(ctx context.Context, _ string, args []string) error {
-	fs := flag.NewFlagSet("new", flag.ContinueOnError)
-	modelID := fs.String("model", "", "provider/model-id for this channel")
-	root := fs.String("root", "", "root archetype (default from config)")
+	return startChannel(ctx, "new", args, true)
+}
+
+// startChannel opens a directory's newest channel or creates one: when fresh
+// a new one unless the newest was never prompted, otherwise only when the
+// directory has none.
+func startChannel(ctx context.Context, name string, args []string, fresh bool) error {
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	modelID := fs.String("model", "", "provider/model-id for a new channel")
+	root := fs.String("root", "", "root archetype for a new channel (default from config)")
 	dir := fs.String("dir", "", "working directory (default: cwd)")
-	noTUI := fs.Bool("no-tui", false, "create the channel and print its id without opening the TUI")
+	noTUI := fs.Bool("no-tui", false, "open or create the channel and print its id without opening the TUI")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -109,11 +124,8 @@ func cmdNew(ctx context.Context, _ string, args []string) error {
 	}
 	defer c.Close()
 	d := cwd(*dir)
-	// A channel only counts once someone has prompted it: if the
-	// directory's newest channel is still untouched, reuse it instead of
-	// leaving another empty one behind.
 	var s protocol.ChannelInfo
-	if list, lerr := c.Channels(ctx, d, false); lerr == nil && len(list) > 0 && list[0].Title == "" && *modelID == "" && *root == "" {
+	if list, lerr := c.Channels(ctx, d, false); lerr == nil && len(list) > 0 && (!fresh || list[0].Title == "" && *modelID == "" && *root == "") {
 		s, err = c.ResumeChannel(ctx, list[0].ID)
 	} else {
 		s, err = c.CreateChannel(ctx, d, *modelID, *root)
@@ -128,31 +140,31 @@ func cmdNew(ctx context.Context, _ string, args []string) error {
 	return tui.Run(ctx, c, s.ID)
 }
 
-// cmdResume reattaches to a channel (the directory's newest by default).
-func cmdResume(ctx context.Context, _ string, args []string) error {
+// cmdOpen opens a channel by #name or id; without one, the directory's.
+func cmdOpen(ctx context.Context, _ string, args []string) error {
+	if len(args) == 0 {
+		return cmdStart(ctx, "", nil)
+	}
 	c, err := connect(ctx, true)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
-	id := ""
-	if len(args) > 0 {
-		id = args[0]
-	} else {
-		list, err := c.Channels(ctx, cwd(""), false)
-		if err != nil {
-			return err
-		}
-		if len(list) == 0 {
-			return errors.New("no channels for this directory; run `stavlos` to start one")
-		}
-		id = list[0].ID
-	}
-	s, err := c.ResumeChannel(ctx, id)
+	want := strings.TrimPrefix(args[0], "#")
+	list, err := c.Channels(ctx, "", false)
 	if err != nil {
 		return err
 	}
-	return tui.Run(ctx, c, s.ID)
+	for _, ch := range list {
+		if ch.ID == want || ch.Name == want {
+			s, err := c.ResumeChannel(ctx, ch.ID)
+			if err != nil {
+				return err
+			}
+			return tui.Run(ctx, c, s.ID)
+		}
+	}
+	return fmt.Errorf("no channel #%s (stavlos channels lists them)", want)
 }
 
 func cmdChannels(ctx context.Context, _ string, _ []string) error {
@@ -170,7 +182,7 @@ func cmdChannels(ctx context.Context, _ string, _ []string) error {
 		if s.Archived {
 			archived = " (archived)"
 		}
-		fmt.Printf("%s  %-40s %-30s live=%d cost=$%.4f seq=%d%s\n", s.ID, s.Dir, s.Model, s.Live, s.CostUSD, s.Seq, archived)
+		fmt.Printf("#%-24s %s  %-40s %-30s live=%d cost=$%.4f seq=%d%s\n", s.Name, s.ID, s.Dir, s.Model, s.Live, s.CostUSD, s.Seq, archived)
 	}
 	return nil
 }
@@ -291,8 +303,9 @@ func cmdVersion(context.Context, string, []string) error {
 }
 
 const usage = `usage:
-  stavlos [--model p/m] [--root archetype] [--dir d]   new channel + TUI
-  stavlos resume [channel-id]                           resume + TUI
+  stavlos [--model p/m] [--root archetype] [--dir d]   this directory's channel (new if none) + TUI
+  stavlos new [--model p/m] [--root archetype] [--dir d]   another channel + TUI
+  stavlos open <#name|id>                               a channel by name + TUI
   stavlos channels | status | tree <channel>
   stavlos send|steer|cancel|kill <agent> [text]
   stavlos auth login [provider] | auth list | auth logout [provider]

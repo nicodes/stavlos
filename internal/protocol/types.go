@@ -24,6 +24,7 @@ const (
 	MChannelCreate    = "channel.create"
 	MChannelResume    = "channel.resume"
 	MChannelArchive   = "channel.archive"
+	MChannelRename    = "channel.rename" // give the channel another name, unique across the daemon
 	MChannelSetModel  = "channel.set_model"
 	MChannelSetMode   = "channel.set_mode"   // permission mode: ask | auto | yolo
 	MChannelPost      = "channel.post"       // the human\'s message in the channel chat, delivered by @mention
@@ -235,6 +236,7 @@ type DaemonStatusResult struct {
 
 type ChannelInfo struct {
 	ID           string       `json:"id"`
+	Name         string       `json:"name"` // unique across the daemon, shown as #name
 	Dir          string       `json:"dir"`
 	Model        string       `json:"model"`
 	RootAgent    string       `json:"root_agent"`
@@ -265,6 +267,13 @@ type ChannelCreateParams struct {
 }
 type ChannelRef struct {
 	ID string `json:"id"`
+}
+
+// ChannelRenameParams names a channel's new name: normalised like an agent's,
+// refused when another channel has it.
+type ChannelRenameParams struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 type ChannelSetModelParams struct {
 	ID    string `json:"id"`

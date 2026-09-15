@@ -1517,12 +1517,12 @@ func TestCtrlCTwiceQuits(t *testing.T) {
 
 func TestChannelItemAndBind(t *testing.T) {
 	created := time.Now().Add(-3 * time.Hour).Format(time.RFC3339)
-	it := channelItem(protocol.ChannelInfo{ID: "s1", Title: "fix the login bug", Created: created, Model: "openai/gpt-5", CostUSD: 0.12, Live: 2}, false)
-	if it.label != "fix the login bug" || !strings.HasPrefix(it.hint, "3h00m ago · openai/gpt-5 · $0.12 · 2 live") || it.good {
+	it := channelItem(protocol.ChannelInfo{ID: "s1", Name: "proj", Title: "fix the login bug", Created: created, Model: "openai/gpt-5", CostUSD: 0.12, Live: 2}, false)
+	if it.label != "# proj" || !strings.HasPrefix(it.hint, "fix the login bug · 3h00m ago · openai/gpt-5 · $0.12 · 2 live") || it.good {
 		t.Fatalf("item: %+v", it)
 	}
-	it = channelItem(protocol.ChannelInfo{ID: "s2", Created: created}, true)
-	if it.label != "(empty channel)" || !strings.HasSuffix(it.hint, "current") || !it.good {
+	it = channelItem(protocol.ChannelInfo{ID: "s2", Name: "proj-2", Created: created}, true)
+	if it.label != "# proj-2" || !strings.HasSuffix(it.hint, "current") || !it.good {
 		t.Fatalf("current empty item: %+v", it)
 	}
 
@@ -2245,58 +2245,49 @@ func TestSidebarNav(t *testing.T) {
 			t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
 		}
 	})
-	t.Run("the channels section", func(t *testing.T) {
+	t.Run("the directory's other channels", func(t *testing.T) {
 		m := sidebarNavModel()
 		m.prompts = nil
-		// the channels section: folded by default with the count, space on its
-		// heading unfolds it, ↓ walks into it, space on a channel resumes it;
-		// a click does the same
+		// under this channel and its agents come the directory's other
+		// channels, by name with their state and age; space on one opens it,
+		// and so does a click
+		m.channel.Name = "proj"
 		m.navChannels = []protocol.ChannelInfo{
-			{ID: "s-old", Title: "fix the login bug\nplease", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
-			{ID: "s-older", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
+			{ID: "s-old", Name: "proj-2", Title: "fix the login bug", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
+			{ID: "s-older", Name: "docs", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
 		}
 		m.setFocus(focusSidebar)
 		body, items := m.sidebarBody(sidebarWidth - 1)
-		if len(body) != len(m.agents)+3 || !strings.HasPrefix(stripANSI(body[0]), "  # chat") || items[0] != 0 || items[len(m.agents)+2] != len(m.agents)+1 || !strings.HasPrefix(stripANSI(body[len(m.agents)+2]), "channels 2 ▸") {
-			t.Fatalf("folded channels section:\n%s\n%v", strings.Join(body, "\n"), items)
-		}
-		for m.sbCursor != len(m.agents)+1 {
-			press(&m, tea.KeyMsg{Type: tea.KeyDown})
-		}
-		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd != nil || !m.navChannelsOpen || m.focus != focusSidebar {
-			t.Fatalf("space on the heading should unfold: open=%v focus=%v", m.navChannelsOpen, m.focus)
-		}
-		body, items = m.sidebarBody(sidebarWidth - 1)
-		plainBody := make([]string, len(body))
+		plain := make([]string, len(body))
 		for i, r := range body {
-			plainBody[i] = stripANSI(r)
+			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if len(body) != na+5 || !strings.HasPrefix(plainBody[na+2], "channels ▾") || !strings.HasPrefix(plainBody[na+3], "  ● fix the login bug") || strings.Contains(plainBody[na+3], "\n") || !strings.HasSuffix(plainBody[na+3], "2h00m") || !strings.HasPrefix(plainBody[na+4], "  ○ docs sweep") || !strings.HasSuffix(plainBody[na+4], "26h00m") || items[na+4] != na+3 {
-			t.Fatalf("open channels section:\n%s\n%v", strings.Join(plainBody, "\n"), items)
+		if len(body) != na+3 || !strings.HasPrefix(plain[0], "  # proj ") || items[0] != 0 || items[na+1] != na+1 || items[na+2] != na+2 ||
+			!strings.HasPrefix(plain[na+1], "  # proj-2") || !strings.HasSuffix(plain[na+1], "● 2h00m") || !strings.HasPrefix(plain[na+2], "  # docs") || !strings.HasSuffix(plain[na+2], "○ 26h00m") {
+			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}
-		for _, r := range plainBody[na+3:] {
+		for _, r := range plain[na+1:] {
 			if w := ansi.StringWidth(r); w != sidebarWidth-1 {
 				t.Fatalf("channel rows fill the width: %d %q", w, r)
 			}
 		}
-		press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown})
-		if m.sbCursor != na+3 {
-			t.Fatalf("cursor should walk into the channels: %d", m.sbCursor)
+		for m.sbCursor != na+2 {
+			press(&m, tea.KeyMsg{Type: tea.KeyDown})
 		}
-		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "resuming docs sweep") {
-			t.Fatalf("space on a channel should resume it: cmd=%v status=%q", cmd != nil, m.status)
+		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "opening #docs") {
+			t.Fatalf("space on a channel should open it: cmd=%v status=%q", cmd != nil, m.status)
 		}
-		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the chat row
+		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to this channel's row
 		if m.sbCursor != 0 {
 			t.Fatalf("wrap: %d", m.sbCursor)
 		}
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
-		if m.navChannelsOpen {
-			t.Fatal("a click on the heading should fold the section")
+		if !strings.Contains(m.status, "opening #proj-2") {
+			t.Fatalf("a click on a channel should open it: %q", m.status)
 		}
 	})
 	t.Run("a selected agent's prompts come first", func(t *testing.T) {

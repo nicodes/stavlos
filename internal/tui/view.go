@@ -537,19 +537,19 @@ func (m Model) sidebarHeader(width int) []string {
 	}
 }
 
-// sidebarBody is everything under the header: the chat row, the agent tree, a blank,
-// the channels heading ("channels 3 ▸" folded, "channels ▾" open) and,
-// open, one row per other channel of this directory. items maps each row
-// to its cursor index (the chat, the agents, the heading, then the
-// channels), -1 for rows the cursor skips.
+// sidebarBody is everything under the header: this channel's row (its
+// chat), its agent tree, then the directory's other channels, a row each
+// with its state and age. items maps each row to its cursor index (this
+// channel 0, the agents 1…, then the other channels), -1 for rows the cursor
+// skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	focused := m.focus == focusSidebar && m.sidebarVisible()
-	// The channel chat comes first, a row like an agent's.
-	chat := theme.StyleDim.Render("# chat")
+	label := format.Trunc(channelLabel(m.channel), width-3)
+	chat := theme.StyleDim.Render(label)
 	if m.superChat {
-		chat = theme.StyleSelected.Render("# chat")
+		chat = theme.StyleSelected.Render(label)
 	}
-	chat = "  " + chat + strings.Repeat(" ", max(0, width-8))
+	chat = "  " + chat + strings.Repeat(" ", max(0, width-2-ansi.StringWidth(label)))
 	if focused && m.sbCursor == 0 {
 		chat = render.Highlight(chat, width)
 	}
@@ -564,63 +564,32 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 	}
 	na := len(m.agents)
-	rows, items = append(rows, ""), append(items, -1)
-	head := "channels"
-	switch {
-	case m.navChannelsOpen:
-		head += " ▾"
-	case len(m.navChannels) > 0:
-		head += fmt.Sprintf(" %d ▸", len(m.navChannels))
-	default:
-		head += " ▸"
-	}
-	// The heading sits at the left edge like "agents"; the cursor on it is
-	// the row background, as everywhere in the sidebar.
-	headRow := theme.StyleBold.Render(head)
-	if focused && m.sbCursor == na+1 {
-		headRow = render.Highlight(headRow, width)
-	}
-	rows, items = append(rows, headRow), append(items, na+1)
-	if !m.navChannelsOpen {
-		return rows, items
-	}
-	if len(m.navChannels) == 0 {
-		return append(rows, theme.StyleDim.Render("    (no other channels here)")), append(items, -1)
-	}
 	for k, s := range m.navChannels {
 		age := ""
 		if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
 			age = format.Elapsed(time.Since(t))
 		}
-		avail := width - 4 - len([]rune(age)) - 1
-		if avail < 4 {
-			avail = 4
+		avail := max(4, width-4-ansi.StringWidth(age)-1)
+		name := channelLabel(s)
+		if ansi.StringWidth(name) > avail {
+			name = format.Trunc(name, avail-1)
 		}
-		title := channelTitle(s)
-		if len([]rune(title)) > avail {
-			title = format.Trunc(title, avail-1)
-		}
-		gap := width - 4 - ansi.StringWidth(title) - len([]rune(age))
-		if gap < 1 {
-			gap = 1
-		}
-		row := "  " + stateDot(string(s.State)) + " " + theme.StyleDim.Render(title) + strings.Repeat(" ", gap) + theme.StyleDim.Render(age)
-		if focused && m.sbCursor == na+2+k {
+		gap := max(1, width-4-ansi.StringWidth(name)-ansi.StringWidth(age))
+		row := "  " + theme.StyleDim.Render(name) + strings.Repeat(" ", gap) + stateDot(string(s.State)) + " " + theme.StyleDim.Render(age)
+		if focused && m.sbCursor == na+1+k {
 			row = render.Highlight(row, width)
 		}
-		rows = append(rows, row)
-		items = append(items, na+2+k)
+		rows, items = append(rows, row), append(items, na+1+k)
 	}
 	return rows, items
 }
 
-// channelTitle is a channel's first prompt, flattened to one line.
-func channelTitle(s protocol.ChannelInfo) string {
-	t := strings.Join(strings.Fields(s.Title), " ")
-	if t == "" {
-		return "(empty channel)"
+// channelLabel is a channel's label in the sidebar and the picker: "# name".
+func channelLabel(s protocol.ChannelInfo) string {
+	if s.Name == "" {
+		return "# channel"
 	}
-	return t
+	return "# " + s.Name
 }
 
 // swarmLine counts the agents working and waiting on an answer; "idle"
@@ -676,7 +645,7 @@ func (m Model) treeRows(width int) []string {
 	rows := make([]string, 0, len(m.agents))
 	focused := m.focus == focusSidebar && m.sidebarVisible()
 	for i, a := range m.agents {
-		indent := "    " + strings.Repeat("  ", a.Depth) // one level under the channels heading's "# chat"
+		indent := "    " + strings.Repeat("  ", a.Depth) // one level under this channel's "# name" row
 		dot := agentDot(a)
 		// The right column: the badge (warning) and the cost (dim), with a
 		// space before it whenever it is not empty.

@@ -63,7 +63,7 @@ type recovery struct {
 // apply folds one logged event into the channel being rebuilt.
 func (r *recovery) apply(e event.Event) {
 	switch e.Type {
-	case event.ChannelCreated, event.ChannelArchived, event.ChannelModelChanged, event.ChannelModeChanged,
+	case event.ChannelCreated, event.ChannelArchived, event.ChannelModelChanged, event.ChannelRenamed, event.ChannelModeChanged,
 		event.ChannelDirAdded, event.ChannelDirRemoved:
 		r.channel(e)
 	case event.AgentSpawned:
@@ -101,12 +101,16 @@ func (r *recovery) channel(e event.Event) {
 	case event.ChannelCreated:
 		var p event.ChannelCreatedPayload
 		_ = e.Decode(&p)
-		s.model, s.rootArch = p.Model, p.RootAgent
+		s.name, s.model, s.rootArch = p.Name, p.Model, p.RootAgent
 		if s.Dir == "" {
 			s.Dir = p.Dir
 		}
 	case event.ChannelArchived:
 		s.archived = true
+	case event.ChannelRenamed:
+		var p event.NamePayload
+		_ = e.Decode(&p)
+		s.name = p.Name
 	case event.ChannelModelChanged:
 		var p event.ModelChangedPayload
 		_ = e.Decode(&p)

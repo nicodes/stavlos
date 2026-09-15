@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -41,6 +42,7 @@ type Daemon struct {
 	logins  map[string]*pendingLogin
 
 	appendMu sync.Mutex // orders Append + broadcast across agents
+	nameMu   sync.Mutex // serialises choosing and checking channel names
 
 	mu           sync.RWMutex
 	channels     map[string]*agent.Channel
@@ -245,10 +247,17 @@ func (d *Daemon) CreateChannel(ctx context.Context, dir, modelID, root string) (
 	}
 	id := agent.NewID("c")
 	s := agent.New(d, id, dir, cfg, modelID, root)
-	if err := s.Start(ctx); err != nil {
+	d.nameMu.Lock()
+	defer d.nameMu.Unlock()
+	taken, err := d.channelNames(ctx, "")
+	if err != nil {
 		return nil, err
 	}
-	if err := d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Dir: dir, Created: s.Created}); err != nil {
+	name := agent.UniqueName(filepath.Base(dir), "channel", func(n string) bool { return taken[n] })
+	if err := s.Start(ctx, name); err != nil {
+		return nil, err
+	}
+	if err := d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Name: name, Dir: dir, Created: s.Created}); err != nil {
 		return nil, err
 	}
 	d.mu.Lock()
@@ -267,7 +276,49 @@ func (d *Daemon) ArchiveChannel(ctx context.Context, id string) error {
 	if err := s.Archive(ctx); err != nil {
 		return err
 	}
-	return d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Dir: s.Dir, Created: s.Created, Archived: true})
+	return d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Name: s.Name(), Dir: s.Dir, Created: s.Created, Archived: true})
+}
+
+// RenameChannel gives a channel another name: normalised like an agent's
+// ("#Docs Site" becomes docs-site), refused when it leaves nothing or another
+// channel, archived or not, has it.
+func (d *Daemon) RenameChannel(ctx context.Context, id, want string) error {
+	s, err := d.channel(id)
+	if err != nil {
+		return err
+	}
+	name := agent.NormalizeName(strings.TrimPrefix(strings.TrimSpace(want), "#"))
+	if name == "" {
+		return fmt.Errorf("%q has no letters or digits to name a channel with", want)
+	}
+	d.nameMu.Lock()
+	defer d.nameMu.Unlock()
+	taken, err := d.channelNames(ctx, id)
+	if err != nil {
+		return err
+	}
+	if taken[name] {
+		return fmt.Errorf("#%s is taken by another channel", name)
+	}
+	if err := s.Rename(ctx, name); err != nil {
+		return err
+	}
+	return d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Name: name, Dir: s.Dir, Created: s.Created, Archived: s.Archived()})
+}
+
+// channelNames is every channel's name but except's. Callers hold d.nameMu.
+func (d *Daemon) channelNames(ctx context.Context, except string) (map[string]bool, error) {
+	rows, err := d.Log.Channels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	taken := map[string]bool{}
+	for _, r := range rows {
+		if r.ID != except {
+			taken[r.Name] = true
+		}
+	}
+	return taken, nil
 }
 
 // ChannelList returns infos.
@@ -291,7 +342,7 @@ func (d *Daemon) ChannelList(ctx context.Context, dir string, archived bool) ([]
 		if ok {
 			info = s.Info()
 		} else {
-			info = protocol.ChannelInfo{ID: r.ID, Dir: r.Dir, Created: r.Created.Format(time.RFC3339), Archived: r.Archived}
+			info = protocol.ChannelInfo{ID: r.ID, Name: r.Name, Dir: r.Dir, Created: r.Created.Format(time.RFC3339), Archived: r.Archived}
 		}
 		info.Seq, info.Title = r.LastSeq, r.Title
 		out = append(out, info)

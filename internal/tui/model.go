@@ -81,8 +81,7 @@ type Model struct {
 	uiPrefs      // display choices; they survive a switch
 	dialogs      // the open overlay and sign-in
 
-	navChannels     []protocol.ChannelInfo // the sidebar's channels section: other channels of this directory, newest first
-	navChannelsOpen bool                   // the section is expanded
+	navChannels []protocol.ChannelInfo // the sidebar's channels section: other channels of this directory, newest first
 
 	presets []protocol.PresetInfo
 
@@ -2447,6 +2446,11 @@ func (m *Model) command(text string) tea.Cmd {
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
 	case "/channels", "/resume", "/channel":
 		return channelsCmd(m.ctx, m.c, m.channel.Dir, channelsPicker)
+	case "/rename":
+		if rest == "" {
+			return m.setStatus("usage: /rename <name>", true)
+		}
+		return renameChannelCmd(m.ctx, m.c, m.channelID, strings.TrimPrefix(rest, "#"))
 	case "/compact":
 		if c := needAgent(); c != nil {
 			return c
@@ -2539,6 +2543,11 @@ func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd)
 		if !m.loading && !m.compactTick {
 			m.compactTick = true
 			cmds = append(cmds, compactTickCmd())
+		}
+	case event.ChannelRenamed:
+		var p event.NamePayload
+		if ev.Decode(&p) == nil {
+			m.channel.Name = textsafe.Clean(p.Name)
 		}
 	case event.ChannelModelChanged:
 		var p event.ModelChangedPayload
@@ -2970,22 +2979,17 @@ func (m *Model) nextNeedy(from int) int {
 	return -1
 }
 
-// sidebarItems is how many rows the sidebar cursor can rest on: the chat,
-// the agents, the channels heading, and the channels while the section is
-// open. The cursor counts them in that order: 0 is the chat, agent i is
-// i+1, the heading len(agents)+1.
+// sidebarItems is how many rows the sidebar cursor can rest on: this
+// channel, its agents and the directory's other channels. The cursor counts
+// them in that order: 0 is this channel, agent i is i+1, other channel k is
+// len(agents)+1+k.
 func (m *Model) sidebarItems() int {
-	n := len(m.agents) + 2
-	if m.navChannelsOpen {
-		n += len(m.navChannels)
-	}
-	return n
+	return len(m.agents) + 1 + len(m.navChannels)
 }
 
-// sidebarSelect acts on the item under the cursor: the chat row shows the
-// channel chat and an agent row that agent's own chat (both focus the
-// input), the channels heading folds or unfolds, a channel is resumed in
-// place of the current one.
+// sidebarSelect acts on the item under the cursor: this channel's row shows
+// its chat and an agent row that agent's own chat (both focus the input);
+// another channel's row opens that channel in place of this one.
 func (m *Model) sidebarSelect(i int) tea.Cmd {
 	na := len(m.agents)
 	switch {
@@ -2994,19 +2998,16 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 	case i <= na:
 		m.openAgent(i - 1)
 		return m.setFocus(focusInput)
-	case i == na+1:
-		m.navChannelsOpen = !m.navChannelsOpen
-		return nil
-	case i-na-2 < len(m.navChannels):
-		s := m.navChannels[i-na-2]
-		return tea.Batch(m.setStatus("resuming "+channelTitle(s), false), switchChannelCmd(m.ctx, m.c, m.channelID, s.ID))
+	case i-na-1 < len(m.navChannels):
+		s := m.navChannels[i-na-1]
+		return tea.Batch(m.setStatus("opening #"+s.Name, false), switchChannelCmd(m.ctx, m.c, m.channelID, s.ID))
 	}
 	return nil
 }
 
 // sidebarClick focuses the sidebar and acts on the row under the pointer
 // like space: the chat row or an agent row opens that chat (the sidebar
-// keeps focus), the channels heading toggles, a channel row resumes it.
+// keeps focus), another channel's row opens that channel.
 func (m *Model) sidebarClick(y int) tea.Cmd {
 	cmd := m.setFocus(focusSidebar)
 	_, items := m.sidebarBody(sidebarWidth - 1)
@@ -3736,14 +3737,13 @@ func (m *Model) onChannels(msg channelsMsg) tea.Cmd {
 	return m.openOverlay(o)
 }
 
-// channelItem is one row of the /channels picker: the first prompt (or
-// "(empty channel)") with when it started, its model, cost and live agents.
+// channelItem is one row of the /channels picker: its #name, then its first
+// prompt, when it started, its model, cost and live agents.
 func channelItem(s protocol.ChannelInfo, current bool) overlayItem {
-	label := s.Title
-	if label == "" {
-		label = "(empty channel)"
-	}
 	var meta []string
+	if title := strings.Join(strings.Fields(s.Title), " "); title != "" {
+		meta = append(meta, format.Trunc(title, 40))
+	}
 	if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
 		meta = append(meta, format.Elapsed(time.Since(t))+" ago")
 	}
@@ -3759,7 +3759,7 @@ func channelItem(s protocol.ChannelInfo, current bool) overlayItem {
 	if current {
 		meta = append(meta, "current")
 	}
-	return overlayItem{id: s.ID, label: format.Trunc(label, 60), hint: strings.Join(meta, " · "), good: current}
+	return overlayItem{id: s.ID, label: channelLabel(s), hint: strings.Join(meta, " · "), good: current}
 }
 
 // bindChannel rebinds the TUI to another channel: every per-channel

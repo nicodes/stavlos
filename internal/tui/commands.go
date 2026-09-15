@@ -258,6 +258,12 @@ func replaceDirCmd(ctx context.Context, c *client.Client, channel, oldDir, newDi
 	})
 }
 
+// renameChannelCmd is /rename: the daemon normalises the name and refuses one
+// another channel has.
+func renameChannelCmd(ctx context.Context, c *client.Client, channel, name string) tea.Cmd {
+	return resultCmd(ctx, "channel renamed", func(ctx context.Context) error { return c.RenameChannel(ctx, channel, name) })
+}
+
 func setModeCmd(ctx context.Context, c *client.Client, channel, mode string) tea.Cmd {
 	return resultCmd(ctx, "mode "+mode+": "+protocol.ModeSummary(mode), func(ctx context.Context) error { return c.SetChannelMode(ctx, channel, mode) })
 }

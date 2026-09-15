@@ -16,6 +16,7 @@ const (
 	ChannelCreated      Type = "channel.created"       // ChannelCreatedPayload
 	ChannelArchived     Type = "channel.archived"      // (none)
 	ChannelModelChanged Type = "channel.model_changed" // ModelChangedPayload
+	ChannelRenamed      Type = "channel.renamed"       // NamePayload: the channel\'s new name
 	ChannelModeChanged  Type = "channel.mode_changed"  // ModePayload: the channel's permission mode (ask | auto | yolo)
 	ChannelDirAdded     Type = "channel.dir_added"     // DirAddedPayload: a directory joined the channel\'s working set (every agent\'s); Agent is the agent whose boundary prompt added it, "" for the dirs tab
 	ChannelDirRemoved   Type = "channel.dir_removed"   // DirRefPayload: the human took a directory out of the channel\'s working set
@@ -91,9 +92,15 @@ func (e Event) Decode(v any) error {
 // --- payloads ---
 
 type ChannelCreatedPayload struct {
+	Name      string `json:"name"` // unique across the daemon, shown as #name
 	Dir       string `json:"dir"`
 	Model     string `json:"model"`
 	RootAgent string `json:"root_agent"` // archetype
+}
+
+// NamePayload is a channel's new name.
+type NamePayload struct {
+	Name string `json:"name"`
 }
 
 type ModelChangedPayload struct {
