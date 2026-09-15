@@ -90,6 +90,7 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 	r := itemRows{item: lines[0].Item, spaced: isSpaced(lines), turn: lines[0].TurnStart}
 	f, folded := o.folds(lines)[r.item]
 	cur := o.Focused && r.item == o.Cursor
+	lit := cur || o.Expanded[r.item] // the item being read: its text reads lighter
 	for i, l := range lines {
 		if !o.showLine(l) || l.Kind == transcript.LineBlank || folded && !f.show[i] {
 			continue
@@ -102,7 +103,7 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 		if folded && len(f.show) == 1 {
 			l = oneRow(l, o)
 		}
-		for _, part := range strings.Split(renderLine(l, o, cur), "\n") {
+		for _, part := range strings.Split(renderLine(l, o, lit), "\n") {
 			if cur {
 				part = highlight(part, o.Width)
 			}
@@ -444,9 +445,10 @@ func (o Options) showLine(l transcript.Line) bool {
 }
 
 // renderLine draws one logical line: a leader (block border or indent), an
-// optional glyph, and the wrapped, styled text. The cursor highlight is
-// applied by renderChatItem.
-func renderLine(l transcript.Line, o Options, cursor bool) string {
+// optional glyph, and the wrapped, styled text; lit (the item under the
+// cursor, or expanded) draws the text lighter (litStyle). The cursor
+// highlight is applied by renderChatItem.
+func renderLine(l transcript.Line, o Options, lit bool) string {
 	if l.Kind == transcript.LineRule {
 		if l.Text == transcript.GlyphCompacting {
 			return centerText(theme.StyleRule.Render("┄┄ compacting ")+CompactSweep(o.CompactFrame)+theme.StyleRule.Render(" ┄┄"), o.Width)
@@ -482,6 +484,9 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 		}
 	}
 
+	if lit {
+		style = litStyle(l, style)
+	}
 	glyph, text, name, nameStyle := whoColours(l, o, glyph, text)
 
 	glyphW := ansi.StringWidth(glyph)
@@ -630,6 +635,58 @@ func kindStyle(l transcript.Line) (leader, glyph string, style func(...string) s
 		return "", "", markdownStyle(theme.StyleError)
 	}
 	return "", "", func(s ...string) string { return strings.Join(s, "") }
+}
+
+// litStyle is a line's text style in the item being read (under the cursor,
+// or expanded): lighter than the rest of the chat, dim text and plain text
+// alike, so the part being read stands out. Lines whose colour is their
+// meaning (an error, a finish, a diff's added and removed lines) keep it;
+// glyphs and @names are coloured apart and keep theirs.
+func litStyle(l transcript.Line, style func(...string) string) func(...string) string {
+	switch l.Kind {
+	case transcript.LineHeading:
+		return markdownStyle(theme.StyleLit.Bold(true))
+	case transcript.LineNotice:
+		return markdownStyle(theme.StyleLit.Italic(true))
+	case transcript.LineCode, transcript.LineLabel, transcript.LineThink, transcript.LineModel:
+		return theme.StyleLit.Render
+	case transcript.LineTool:
+		if transcript.IsPromptCall(l) {
+			return litMessageText
+		}
+		return litToolText
+	case transcript.LineToolOut:
+		switch l.Diff {
+		case '+', '-':
+			return style
+		case 'f':
+			return theme.StyleLit.Bold(true).Render
+		}
+		return theme.StyleLit.Render
+	case transcript.LineFinished, transcript.LineError:
+		return style
+	default:
+		return markdownStyle(theme.StyleLit)
+	}
+}
+
+// litToolText is renderToolText in the item being read: the bold name, then
+// the argument, all light.
+func litToolText(strs ...string) string {
+	s := strings.Join(strs, "")
+	if name, rest, ok := strings.Cut(s, "  "); ok {
+		return theme.StyleLit.Bold(true).Render(name) + theme.StyleLit.Render("  "+rest)
+	}
+	return theme.StyleLit.Bold(true).Render(s)
+}
+
+// litMessageText is renderMessageText in the item being read.
+func litMessageText(strs ...string) string {
+	s := strings.Join(strs, "")
+	if name, rest, ok := strings.Cut(s, " "); ok && strings.HasPrefix(s, "@") {
+		return theme.StyleLit.Bold(true).Render(name) + " " + theme.StyleLit.Render(rest)
+	}
+	return theme.StyleLit.Render(s)
 }
 
 // markdownStyle renders **bold** spans over base.
