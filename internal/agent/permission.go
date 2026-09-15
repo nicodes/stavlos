@@ -77,14 +77,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 	// Policy judges every value of the subject (each path a patch touches)
 	// and the most restrictive decision wins; the prompt names that value.
 	sub := t.Subject(c.Input)
-	arg := sub.Primary()
-	pol := a.policy(rv)
-	verb := pol.Decide(c.Name, arg)
-	for _, x := range sub.Values[min(1, len(sub.Values)):] {
-		if v := pol.Decide(c.Name, x); v.Rank() > verb.Rank() {
-			verb, arg = v, x
-		}
-	}
+	verb, arg := a.policy(rv).Decide(c.Name, sub)
 	// A command allow rule speaks for one simple command: "cat *" says
 	// nothing about "cat x; rm -rf ~" or "cat x > ~/.bashrc". A compound
 	// command asks (auto and yolo then answer as they do for any ask).

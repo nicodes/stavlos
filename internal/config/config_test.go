@@ -45,7 +45,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if e.AgentsMD != "" {
 		t.Fatal("untrusted AGENTS.md loaded")
 	}
-	if e.Policy.Decide("shell", "curl x") != policy.Allow {
+	if verb(e.Policy, "shell", "curl x") != policy.Allow {
 		t.Fatal("untrusted project policy applied")
 	}
 
@@ -66,10 +66,10 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if e.AgentsMD != "Use light models." {
 		t.Fatal("AGENTS.md")
 	}
-	if e.Policy.Decide("shell", "git push x") != policy.Ask {
+	if verb(e.Policy, "shell", "git push x") != policy.Ask {
 		t.Fatal("project loosened git push")
 	}
-	if e.Policy.Decide("shell", "curl x") != policy.Deny {
+	if verb(e.Policy, "shell", "curl x") != policy.Deny {
 		t.Fatal("project tighten lost")
 	}
 	if _, ok := e.Presets["general"]; !ok {
@@ -84,7 +84,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Policy.Decide("shell", "git push --force") != policy.Deny || e.Policy.Decide("shell", "git status") != policy.Allow {
+	if verb(e.Policy, "shell", "git push --force") != policy.Deny || verb(e.Policy, "shell", "git status") != policy.Allow {
 		t.Fatal("project rule shadowed a global deny")
 	}
 }
@@ -96,12 +96,12 @@ func TestReadOnlyBashAllowedByDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, cmd := range []string{"grep -rn foo .", "rg foo", "find . -name '*.go'", "ls -la", "git status", "git log --oneline", "cat go.mod"} {
-		if v := e.Policy.Decide("shell", cmd); v != policy.Allow {
+		if v := verb(e.Policy, "shell", cmd); v != policy.Allow {
 			t.Errorf("%q: %s, want allow", cmd, v)
 		}
 	}
 	for _, cmd := range []string{"rm -rf x", "git push origin main", "go test ./...", "grepx"} {
-		if v := e.Policy.Decide("shell", cmd); v == policy.Allow {
+		if v := verb(e.Policy, "shell", cmd); v == policy.Allow {
 			t.Errorf("%q should not be allowed by default", cmd)
 		}
 	}
@@ -159,7 +159,7 @@ You review.
 		t.Fatalf("tools %v", p.Tools)
 	}
 	pol := p.PresetPolicy()
-	if pol.Decide("shell", "git push origin") != policy.Deny || pol.Decide("shell", "ls") != policy.Ask || pol.Decide("read", "x") != policy.Allow {
+	if verb(pol, "shell", "git push origin") != policy.Deny || verb(pol, "shell", "ls") != policy.Ask || verb(pol, "read", "x") != policy.Allow {
 		t.Fatalf("rules %+v", pol.Rules())
 	}
 	// whitelist helpers
@@ -238,7 +238,7 @@ func TestExampleCoderRoleParses(t *testing.T) {
 	if p.Name != "coder" || p.Mode != ModeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
 		t.Fatalf("%+v", p)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo,web_fetch" || p.PresetPolicy().Decide("shell", "git push origin main") != policy.Deny || p.PresetPolicy().Decide("web_fetch", "https://x.slack.com/y") != policy.Deny {
+	if strings.Join(p.Tools, ",") != "shell,read,apply_patch,skill,todo,web_fetch" || verb(p.PresetPolicy(), "shell", "git push origin main") != policy.Deny || verb(p.PresetPolicy(), "web_fetch", "https://x.slack.com/y") != policy.Deny {
 		t.Fatalf("tools %v rules %+v", p.Tools, p.PresetPolicy().Rules())
 	}
 }
@@ -258,7 +258,7 @@ func TestLoadGlobalReadsNoDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Dir != "" || e.Model != "fake/m1" || e.Escalation.Default != policy.Deny || e.Escalation.AnswerTimeout != 7*time.Second || e.Policy.Decide("shell", "rm x") != policy.Ask {
+	if e.Dir != "" || e.Model != "fake/m1" || e.Escalation.Default != policy.Deny || e.Escalation.AnswerTimeout != 7*time.Second || verb(e.Policy, "shell", "rm x") != policy.Ask {
 		t.Fatalf("%+v", e)
 	}
 	// Load on that directory does apply the local layer: the two are distinct.
@@ -266,7 +266,7 @@ func TestLoadGlobalReadsNoDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if l.Escalation.Default != policy.Allow || l.Policy.Decide("shell", "rm x") != policy.Allow {
+	if l.Escalation.Default != policy.Allow || verb(l.Policy, "shell", "rm x") != policy.Allow {
 		t.Fatalf("%+v", l)
 	}
 }
@@ -308,7 +308,7 @@ func TestConfigValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Escalation.ClaimTimeout != 10*time.Second || e.Escalation.Default != policy.Allow || e.Compaction.Threshold != 0.5 || e.Compaction.MaxToolOutput != 64*1024 || e.Search.Provider != "brave" || e.Search.APIKey != "k" || e.Policy.Decide("shell", "rm -rf x") != policy.Deny {
+	if e.Escalation.ClaimTimeout != 10*time.Second || e.Escalation.Default != policy.Allow || e.Compaction.Threshold != 0.5 || e.Compaction.MaxToolOutput != 64*1024 || e.Search.Provider != "brave" || e.Search.APIKey != "k" || verb(e.Policy, "shell", "rm -rf x") != policy.Deny {
 		t.Fatalf("%+v", e)
 	}
 	if n, err := parseSize("1mb"); err != nil || n != 1<<20 {
@@ -337,7 +337,7 @@ func TestWebSearchAsksUntilConfigured(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := e.Policy.Decide("web_search", "anything"); got != want {
+		if got := verb(e.Policy, "web_search", "anything"); got != want {
 			t.Errorf("%s: web_search %s want %s", cfg, got, want)
 		}
 	}
@@ -357,7 +357,7 @@ func TestRoleToolsAreRemovedNotListed(t *testing.T) {
 		t.Fatalf("tools %s", got)
 	}
 	pol := p.PresetPolicy()
-	if pol.Decide("shell", "ls") != policy.Deny || pol.Decide("mcp__github__merge", "") != policy.Deny || pol.Decide("message", "user") != policy.Deny {
+	if verb(pol, "shell", "ls") != policy.Deny || verb(pol, "mcp__github__merge", "") != policy.Deny || verb(pol, "message", "user") != policy.Deny {
 		t.Fatalf("rules %+v", pol.Rules())
 	}
 	if _, err := ReadPreset(writeRole(t, "---\ndescription: d\ntools: [read]\n---\nx")); err == nil || !strings.Contains(err.Error(), "deny removes one") {
@@ -383,4 +383,21 @@ func TestRoleDirsRemoved(t *testing.T) {
 	if _, err := ReadPreset(path); err == nil || !strings.Contains(err.Error(), "dirs: was removed") {
 		t.Fatalf("err %v", err)
 	}
+}
+
+// verb is a policy's decision on one argument: a command line for shell,
+// text otherwise.
+func verb(p any, tool, arg string) policy.Verb {
+	sub := policy.Text(arg)
+	if tool == "shell" {
+		sub = policy.Command(arg)
+	}
+	switch p := p.(type) {
+	case *policy.Layered:
+		v, _ := p.Decide(tool, sub)
+		return v
+	case *policy.Set:
+		return p.Decide(tool, sub)
+	}
+	panic("not a policy")
 }

