@@ -691,7 +691,7 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	// Only "general" ships built in; a user preset comes from agents/<name>.md.
 	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "roles")
 	_ = os.MkdirAll(agentsDir, 0o755)
-	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools: [read, shell]\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
+	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools:\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
@@ -1163,7 +1163,7 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "roles")
 	_ = os.MkdirAll(agentsDir, 0o755)
 	presetFile := filepath.Join(agentsDir, "coder.md")
-	os.WriteFile(presetFile, []byte("---\ndescription: Old coder\ntools: [read, shell]\n---\nYou are the old coder.\n"), 0o644)
+	os.WriteFile(presetFile, []byte("---\ndescription: Old coder\ntools:\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are the old coder.\n"), 0o644)
 	work := t.TempDir()
 	data := t.TempDir()
 	fm := &fakeModel{}
@@ -1421,7 +1421,7 @@ func TestRoles(t *testing.T) {
 	roles := filepath.Join(g, "roles")
 	os.MkdirAll(roles, 0o755)
 	os.WriteFile(filepath.Join(roles, "lead.md"), []byte("---\ndescription: Leads\nmode: primary\nmodels:\n  - id: fake/m1\n    variants: [high]\nspawn: [limited, boss, general]\n---\nYou lead.\n"), 0o644)
-	os.WriteFile(filepath.Join(roles, "limited.md"), []byte("---\ndescription: Limited\nmode: subagent\nmodels: [fake/m2]\nmax_turns: 1\ntools: [read]\n---\nYou are limited.\n"), 0o644)
+	os.WriteFile(filepath.Join(roles, "limited.md"), []byte("---\ndescription: Limited\nmode: subagent\nmodels: [fake/m2]\nmax_turns: 1\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are limited.\n"), 0o644)
 	os.WriteFile(filepath.Join(roles, "boss.md"), []byte("---\ndescription: Boss\nmode: primary\n---\nYou boss.\n"), 0o644)
 
 	work := t.TempDir()
@@ -1559,7 +1559,7 @@ func TestMCPServersPerAgent(t *testing.T) {
 	cfg := fmt.Sprintf(`{"model":"fake/m1","reminders":false,"rootAgent":"mcpuser","mcp":{"echo":{"command":%q,"env":{"STAVLOS_TEST_MCP_SERVER":"1","GREETING":"${env:STAVLOS_TEST_GREETING}"}}},"policy":{"mcp__echo__*":"allow"}}`, exe)
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(cfg), 0o644)
 	os.MkdirAll(filepath.Join(g, "roles"), 0o755)
-	os.WriteFile(filepath.Join(g, "roles", "mcpuser.md"), []byte("---\ndescription: Uses MCP\nmcp: [echo, missing]\ntools: [read]\n---\nYou use tools.\n"), 0o644)
+	os.WriteFile(filepath.Join(g, "roles", "mcpuser.md"), []byte("---\ndescription: Uses MCP\nmcp: [echo, missing]\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou use tools.\n"), 0o644)
 
 	work := t.TempDir()
 	fm := &fakeModel{}
