@@ -38,12 +38,6 @@ func TestFileToolsAndShell(t *testing.T) {
 	if !strings.Contains(r.Output, "2\tthere") {
 		t.Fatal(r.Output)
 	}
-	if _, ok := ts["grep"]; ok {
-		t.Fatal("grep should be gone: shell covers it")
-	}
-	if _, ok := ts["glob"]; ok {
-		t.Fatal("glob should be gone: shell covers it")
-	}
 	var partial strings.Builder
 	env.Partial = func(s string) { partial.WriteString(s) }
 	r = ts["shell"].Run(ctx, json.RawMessage(`{"command":"echo hi; exit 3"}`), env)

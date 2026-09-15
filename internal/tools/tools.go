@@ -118,7 +118,7 @@ type Set map[string]Tool
 func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
-		shellTool{}, readTool{}, patchTool{}, skillTool{},
+		shellTool{}, readTool{}, grepTool{}, globTool{}, patchTool{}, skillTool{},
 		spawnTool{}, messageTool{}, cancelTool{}, statusTool{},
 		shellKillTool{},
 		todoAddTool{}, todoUpdateTool{}, askTool{},

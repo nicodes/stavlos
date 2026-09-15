@@ -305,6 +305,8 @@ func LoadGlobal() (*Effective, error) {
 	e.Compaction.MaxToolOutput = 32 * 1024
 	e.Policy = policy.Layer(policy.New(
 		policy.Rule{Tool: toolname.Read, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Grep, Pattern: "*", Verb: policy.Allow},
+		policy.Rule{Tool: toolname.Glob, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.Skill, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.AgentCreate, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.Message, Pattern: "*", Verb: policy.Allow},
@@ -317,23 +319,6 @@ func LoadGlobal() (*Effective, error) {
 		policy.Rule{Tool: toolname.TodoAdd, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.AskUser, Pattern: "*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.TodoUpdate, Pattern: "*", Verb: policy.Allow},
-		// Read-only shell commands are allowed by default so searching and
-		// looking around never prompts; anything that writes still asks.
-		policy.Rule{Tool: toolname.Shell, Pattern: "grep *", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "rg *", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "find *", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "ls*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "cat *", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "head *", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "tail *", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "wc *", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "pwd", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "tree*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "git status*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "git log*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "git diff*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "git show*", Verb: policy.Allow},
-		policy.Rule{Tool: toolname.Shell, Pattern: "git blame*", Verb: policy.Allow},
 		policy.Rule{Tool: toolname.ApplyPatch, Pattern: "*", Verb: policy.Ask},
 	))
 	for _, p := range builtinPresets() {
@@ -680,7 +665,7 @@ type roleFile struct {
 // one (todo stands for todo_add and todo_update). The messaging set and
 // ask_user come on top for every agent, shell_kill with shell, and the
 // lifecycle tools with a non-empty spawn list.
-var RoleTools = []string{toolname.Shell, toolname.Read, toolname.ApplyPatch, toolname.Skill, toolname.GroupTodo, toolname.WebFetch, toolname.WebSearch}
+var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.GroupTodo, toolname.WebFetch, toolname.WebSearch}
 
 // ReadPreset parses one roles/<name>.md file.
 func ReadPreset(path string) (Preset, error) {
@@ -1027,7 +1012,7 @@ func builtinPresets() []Preset {
 			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
 Work carefully: read before you edit, prefer small targeted changes, and run the project's tests or build after changing code.
-Search and read with shell (grep -rn, rg, find, ls) and read; edit with apply_patch. A slow command such as a test suite continues as a background job on its own; start servers with background: true.
+Find files with glob, search their contents with grep, read them with read, and edit with apply_patch; shell is for building, testing and running things, and every command asks the human unless the channel's mode answers for them. A slow command such as a test suite continues as a background job on its own; start servers with background: true.
 Delegate independent pieces of work to subagents when that saves your own context or lets things run in parallel: give each a specific task and a short label, then keep working or end your turn; each child's answer comes back to you as a message. A child stays alive in the channel: message it again for follow-ups. Subagents can delegate too.
 Report what you changed and what you verified.`,
 		},
