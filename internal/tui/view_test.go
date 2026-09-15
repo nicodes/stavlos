@@ -2555,7 +2555,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "read", Agent: "a", Input: []byte(`{"path":"/etc/hosts"}`), Dir: "/etc"}}
 	m.setFocus(focusPermission)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
-	for _, w := range []string{"⌕ /etc/hosts  coder", "outside its directories · /etc", "▸ ● Allow once", "  ○ Allow and add /etc  the agent keeps the directory for the session", "  ○ Allow and add another directory…  type the path", "  ○ Deny"} {
+	for _, w := range []string{"☰ /etc/hosts  coder", "outside its directories · /etc", "▸ ● Allow once", "  ○ Allow and add /etc  the agent keeps the directory for the session", "  ○ Allow and add another directory…  type the path", "  ○ Deny"} {
 		if !strings.Contains(body, w) {
 			t.Fatalf("boundary prompt body missing %q:\n%s", w, body)
 		}

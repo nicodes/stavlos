@@ -1746,7 +1746,8 @@ func CleanLines(lines []Line) []Line {
 // clock for monitors; the fork for agent tools.
 const (
 	GlyphToolFiles    = "◆" // file tools (skill)
-	GlyphToolRead     = "⌕" // read: looking into a file
+	GlyphToolRead     = "☰" // read: the lines of a file
+	GlyphToolSearch   = "⌕" // web_search: a magnifying glass
 	GlyphToolPatch    = "±" // apply_patch: a diff
 	GlyphToolShell    = "$" // shell, shell_kill (and the old bash names): the shell prompt
 	GlyphToolMonitors = "$" // async jobs are shell commands
@@ -1754,7 +1755,7 @@ const (
 	GlyphToolCreate   = "»" // agent_create: the double of a prompt's ›, since it makes the agent it prompts
 	GlyphToolTodo     = "□" // todo_add, todo_update
 	GlyphToolMCP      = "≡" // mcp__<server>__<tool> and MCP server notices
-	GlyphToolWeb      = "↗" // web_fetch, web_search
+	GlyphToolWeb      = "↗" // web_fetch
 )
 
 // CallGlyph is a tool line's glyph and the gap after it: ToolGlyph of its
@@ -1811,6 +1812,8 @@ func ToolGlyph(tool string) (string, string) {
 		return GlyphToolTodo, " "
 	case strings.HasPrefix(tool, toolname.MCPPrefix):
 		return GlyphToolMCP, " "
+	case tool == toolname.WebSearch:
+		return GlyphToolSearch, " "
 	case strings.HasPrefix(tool, "web_"):
 		return GlyphToolWeb, " "
 	}
