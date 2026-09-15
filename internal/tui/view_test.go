@@ -2290,26 +2290,43 @@ func TestSidebarNav(t *testing.T) {
 			t.Fatalf("a click on a channel should open it: %q", m.status)
 		}
 	})
-	t.Run("+ channel creates one", func(t *testing.T) {
+	t.Run("+ channel names a new one", func(t *testing.T) {
 		m := sidebarNavModel()
 		m.prompts = nil
 		// + channel sits above this channel's row, where the sidebar lands;
-		// once this channel has an exchange, space on it creates another
-		m.transcript(m.selectedID()).Apply(mk(1, m.selectedID(), event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}))
+		// space on it opens a popup naming the new channel: typing (spaces
+		// included) fills the field, enter creates it, esc cancels
 		m.superChat = true // on the channel chat, the sidebar lands on this channel's row
 		m.setFocus(focusSidebar)
 		if m.sbCursor != 1 {
 			t.Fatalf("the sidebar lands on this channel's row: %d", m.sbCursor)
 		}
-		press(&m, tea.KeyMsg{Type: tea.KeyUp})
-		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); m.sbCursor != 0 || cmd == nil || !strings.Contains(m.status, "creating a channel") {
-			t.Fatalf("space on + channel: cursor=%d cmd=%v status=%q", m.sbCursor, cmd != nil, m.status)
+		press(&m, tea.KeyMsg{Type: tea.KeyUp}, tea.KeyMsg{Type: tea.KeySpace})
+		if m.ov == nil || m.ov.kind != ovNewChannel || m.ov.mode != overlayInput {
+			t.Fatalf("space on + channel should open the naming popup: %+v", m.ov)
 		}
-		// a channel with no exchange yet is already the new one
-		e := newModel(context.Background(), nil, "s")
-		e.newChannel()
-		if !strings.Contains(e.status, "still empty") {
-			t.Fatalf("an empty channel should stay: %q", e.status)
+		if dv := stripANSI(m.ov.view(100, "")); !strings.Contains(dv, "New channel in") || strings.Contains(dv, "search") || strings.Contains(dv, "nothing to list") {
+			t.Fatalf("popup:\n%s", dv)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("site")}, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune(" ")}, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ops")})
+		if m.ov == nil || m.ov.input.Value() != "site ops" {
+			t.Fatalf("space types in the popup: %+v", m.ov)
+		}
+		if hs := m.keyHints(); len(hs) != 2 || hs[0].Key != "enter" || hs[1].Key != "esc" {
+			t.Fatalf("hints %+v", hs)
+		}
+		if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.ov != nil || !strings.Contains(m.status, "creating a channel") {
+			t.Fatalf("enter should create: cmd=%v ov=%v status=%q", cmd != nil, m.ov != nil, m.status)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeySpace})
+		if press(&m, tea.KeyMsg{Type: tea.KeyEsc}); m.ov != nil {
+			t.Fatal("esc should cancel the popup")
+		}
+		// the new channel opens on its chat, empty as it is, never the splash
+		nm, _ := m.Update(switchedMsg{info: protocol.ChannelInfo{ID: "new", Name: "site-ops", Dir: "/x"}})
+		m = nm.(Model)
+		if m.channelID != "new" || m.isHome() {
+			t.Fatalf("switched channel: id=%s home=%v", m.channelID, m.isHome())
 		}
 	})
 	t.Run("a selected agent's prompts come first", func(t *testing.T) {

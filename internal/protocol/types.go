@@ -261,6 +261,7 @@ type ChannelListResult struct {
 }
 
 type ChannelCreateParams struct {
+	Name      string `json:"name,omitempty"` // "" = the directory's base name; otherwise normalised and refused when taken
 	Dir       string `json:"dir"`
 	Model     string `json:"model,omitempty"`      // overrides config
 	RootAgent string `json:"root_agent,omitempty"` // archetype; overrides config

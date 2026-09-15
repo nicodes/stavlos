@@ -184,6 +184,14 @@ func (c *Client) CreateChannel(ctx context.Context, dir, modelID, root string) (
 	return r, err
 }
 
+// CreateNamedChannel creates a channel in dir under name; the daemon
+// normalises it and refuses one another channel has.
+func (c *Client) CreateNamedChannel(ctx context.Context, dir, name string) (protocol.ChannelInfo, error) {
+	var r protocol.ChannelInfo
+	err := c.Call(ctx, protocol.MChannelCreate, protocol.ChannelCreateParams{Dir: dir, Name: name}, &r)
+	return r, err
+}
+
 func (c *Client) ResumeChannel(ctx context.Context, id string) (protocol.ChannelInfo, error) {
 	var r protocol.ChannelInfo
 	err := c.Call(ctx, protocol.MChannelResume, protocol.ChannelRef{ID: id}, &r)

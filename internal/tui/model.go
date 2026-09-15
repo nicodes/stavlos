@@ -130,6 +130,7 @@ type channelState struct {
 	transcripts map[string]*transcript.Transcript
 	renders     map[string]*render.Cache // per agent: rendered rows of its transcript's items
 	superChat   bool                     // the channel chat is shown instead of the selected agent's own (docs/super-chat.md)
+	opened      bool                     // reached from inside the TUI (+ channel, the sidebar, the picker): its chat shows even while empty, never the splash
 	seq         int64
 	loading     bool  // replaying events up to replayTo
 	replayTo    int64 // seq from reconcile
@@ -535,7 +536,9 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 		if msg.err != nil {
 			return m.setStatus("channel: "+msg.err.Error(), true)
 		}
-		return m.bindChannel(cleanChannel(msg.info))
+		cmd := m.bindChannel(cleanChannel(msg.info))
+		m.opened = true // switched to from inside the TUI: the channel's chat, not the splash
+		return cmd
 	case modelsMsg:
 		return m.onModels(msg)
 	}
@@ -3008,14 +3011,12 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 	return nil
 }
 
-// newChannel is + channel: a new channel in this directory, opened in place
-// of this one. A channel with no exchange yet is already the new one, so it
-// is not left behind empty.
+// newChannel is + channel: a popup names a new channel of this directory,
+// which then opens in place of this one.
 func (m *Model) newChannel() tea.Cmd {
-	if m.isHome() {
-		return m.setStatus("this channel is still empty: it is the new one", false)
-	}
-	return tea.Batch(m.setStatus("creating a channel", false), newChannelCmd(m.ctx, m.c, m.channelID, m.channel.Dir))
+	o := newOverlay(ovNewChannel, overlayInput, "New channel in "+format.ShortHome(m.channel.Dir))
+	o.input.Placeholder = "name, shown as #name"
+	return m.openOverlay(o)
 }
 
 // sidebarClick focuses the sidebar and acts on the row under the pointer
@@ -3325,6 +3326,15 @@ func (m *Model) overlayKey(msg tea.KeyMsg) tea.Cmd {
 	if o.mode == overlayLogin {
 		return m.loginKey(msg)
 	}
+	if o.mode == overlayInput { // a text field: space types, enter submits
+		switch {
+		case key.Matches(msg, keys.OvClose):
+			return m.closeOverlay()
+		case key.Matches(msg, keys.OvSelect):
+			return m.overlaySubmit(false)
+		}
+		return o.update(msg)
+	}
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeOverlay()
@@ -3418,6 +3428,12 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 			return nil
 		}
 		return tea.Batch(m.closeOverlay(), setModeCmd(m.ctx, m.c, m.channelID, it.id))
+	case ovNewChannel:
+		name := strings.TrimSpace(o.input.Value())
+		if name == "" {
+			return nil
+		}
+		return tea.Batch(m.closeOverlay(), m.setStatus("creating a channel", false), newChannelCmd(m.ctx, m.c, m.channelID, m.channel.Dir, name))
 	case ovChannels:
 		it := o.selected()
 		if it == nil {

@@ -2547,6 +2547,14 @@ func TestChannelNames(t *testing.T) {
 	if err := h.c.RenameChannel(ctx, a.ID, "!!"); err == nil {
 		t.Fatal("a name with nothing left should be refused")
 	}
+	// a channel created under a chosen name keeps it, normalised; a taken
+	// one is refused before anything starts
+	if n, err := h.c.CreateNamedChannel(ctx, dir, "Site Ops"); err != nil || n.Name != "site-ops" {
+		t.Fatalf("named create: %+v %v", n, err)
+	}
+	if _, err := h.c.CreateNamedChannel(ctx, dir, "#proj"); err == nil || !strings.Contains(err.Error(), "taken") {
+		t.Fatalf("a taken name on create: %v", err)
+	}
 	names := func(list func(context.Context, string, bool) ([]protocol.ChannelInfo, error)) map[string]bool {
 		ss, _ := list(ctx, dir, false)
 		out := map[string]bool{}
@@ -2555,13 +2563,13 @@ func TestChannelNames(t *testing.T) {
 		}
 		return out
 	}
-	if got := names(h.c.Channels); len(got) != 2 || !got["proj"] || !got["docs-site"] {
+	if got := names(h.c.Channels); len(got) != 3 || !got["proj"] || !got["docs-site"] || !got["site-ops"] {
 		t.Fatalf("names %v", got)
 	}
 	h.close()
 	h2 := newHarness(t, data, &fakeModel{})
 	defer h2.close()
-	if got := names(h2.c.Channels); len(got) != 2 || !got["proj"] || !got["docs-site"] {
+	if got := names(h2.c.Channels); len(got) != 3 || !got["proj"] || !got["docs-site"] || !got["site-ops"] {
 		t.Fatalf("names after a restart %v", got)
 	}
 }
