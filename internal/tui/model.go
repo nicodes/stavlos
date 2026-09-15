@@ -3788,6 +3788,15 @@ func channelItem(s protocol.ChannelInfo, current bool) overlayItem {
 	return overlayItem{id: s.ID, label: channelLabel(s), hint: strings.Join(meta, " · "), good: current}
 }
 
+// channelRef names a channel in a status line: "#name", or its short id
+// before it has one.
+func channelRef(info protocol.ChannelInfo) string {
+	if info.Name == "" {
+		return format.ShortID(info.ID)
+	}
+	return "#" + info.Name
+}
+
 // bindChannel rebinds the TUI to another channel: every per-channel
 // piece of state starts over and a fresh reconcile replays its history.
 func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
@@ -3798,7 +3807,7 @@ func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
 	m.input.Reset()
 	m.refreshViewport()
 	m.layout()
-	return tea.Batch(m.setFocus(focusInput), reconcileCmd(m.ctx, m.c, m.channelID), m.setStatus("resumed "+format.ShortID(info.ID), false))
+	return tea.Batch(m.setFocus(focusInput), reconcileCmd(m.ctx, m.c, m.channelID), m.setStatus("opened "+channelRef(info), false))
 }
 
 // openVariants is /variants: with no argument it opens the picker for the
