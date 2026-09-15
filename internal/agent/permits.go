@@ -2,6 +2,7 @@ package agent
 
 import (
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
@@ -107,4 +108,29 @@ func urlHost(raw string) string {
 		return ""
 	}
 	return strings.ToLower(u.Hostname())
+}
+
+// hostsAllow reports whether the host of every URL is in hosts
+// (stavlos.json's hosts): "*" is every host, "*.example.com" each subdomain
+// of example.com, anything else that host itself.
+func hostsAllow(hosts, urls []string) bool {
+	if len(hosts) == 0 || len(urls) == 0 {
+		return false
+	}
+	for _, raw := range urls {
+		host := urlHost(raw)
+		listed := host != "" && slices.ContainsFunc(hosts, func(h string) bool {
+			if h == "*" {
+				return true
+			}
+			if domain, ok := strings.CutPrefix(h, "*."); ok {
+				return strings.HasSuffix(host, "."+domain)
+			}
+			return host == h
+		})
+		if !listed {
+			return false
+		}
+	}
+	return true
 }

@@ -104,8 +104,9 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	covered := verb == policy.Ask && a.c.st.permits.covers(c.Name, sub)
 	mode := a.c.st.mode
 	a.c.mu.Unlock()
-	// What the human allowed for the channel answers an ask, never a deny.
-	if covered {
+	// What the human allowed for the channel answers an ask, never a deny,
+	// and so do the hosts stavlos.json lists for a fetch.
+	if covered || verb == policy.Ask && sub.Kind == policy.KindURL && hostsAllow(cfg.Hosts, sub.Values) {
 		verb = policy.Allow
 	}
 	if verb == policy.Ask && control == "" && (mode == protocol.ModeYolo || mode == protocol.ModeAuto && !egress(c.Name, sub)) {

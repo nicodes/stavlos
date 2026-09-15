@@ -44,6 +44,7 @@ type File struct {
 	Reminders  *bool          `json:"reminders,omitempty"` // remind an agent that ends a turn owing a reply (default true)
 	Sandbox    *SandboxConfig `json:"sandbox,omitempty"`   // the OS boundary shell commands and MCP servers run in
 	Dirs       []string       `json:"dirs,omitempty"`      // directories every channel works in besides its own (yours, and a trusted project\'s)
+	Hosts      []string       `json:"hosts,omitempty"`     // hosts web_fetch reaches without asking: github.com, *.example.com, or * (yours, and a trusted project\'s)
 }
 
 // SandboxConfig shapes the sandbox (global layer only). Paths may use ~
@@ -103,6 +104,16 @@ func ExpandEnv(s string) string {
 var envRef = regexp.MustCompile(`\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}`)
 
 // expandPath expands ${env:NAME} and a leading ~ and cleans the result.
+// validHost reports whether h is a hosts entry: *, *.domain, or a host name
+// (no scheme, port or path).
+func validHost(h string) bool {
+	if h == "*" {
+		return true
+	}
+	h = strings.TrimPrefix(h, "*.")
+	return h != "" && !strings.ContainsAny(h, "/:*@?# ")
+}
+
 func expandPath(p string) string {
 	p = ExpandEnv(strings.TrimSpace(p))
 	if p == "~" || strings.HasPrefix(p, "~/") {
@@ -269,6 +280,10 @@ type Effective struct {
 	// global stavlos.json's dirs, then a trusted project's. ~ and ${env:NAME}
 	// are expanded; a relative one is taken from each channel's directory.
 	Dirs []string
+	// Hosts are the hosts web_fetch reaches without asking, in every mode:
+	// the global stavlos.json's, then a trusted project's; "*" is every host
+	// and "*.example.com" each subdomain of example.com.
+	Hosts []string
 
 	// TrustPending is true when a project layer exists but has not been
 	// confirmed; in that case project content has NOT been merged.
@@ -451,6 +466,13 @@ func (e *Effective) applyFile(f File, layer string) error {
 	}
 	for _, d := range f.Dirs {
 		e.Dirs = append(e.Dirs, expandPath(d))
+	}
+	for _, h := range f.Hosts {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if !validHost(h) {
+			return fmt.Errorf("hosts: %q: a host name such as github.com, *.example.com, or * for every host", h)
+		}
+		e.Hosts = append(e.Hosts, h)
 	}
 	if err := e.applyLimits(f.Limits); err != nil {
 		return err
