@@ -64,8 +64,7 @@ type Agent struct {
 	responses   []response            // answers from other agents, not yet delivered
 	awaiting    map[string]int        // agent id → questions asked of it (a message, a child's task); cleared by its next answer
 	owed        map[string]bool       // parties owed a reply ("user" or an agent id) by the messages taken in (replies.go)
-	reminded    map[string]bool       // owed parties already reminded once
-	flagged     map[string]bool       // reminded parties already recorded as missing a reply
+	nudges      int                   // reminder turns in a row with no reply; they stop at maxNudges
 	remind      []string              // parties a queued reminder names; it starts a turn
 	lastPost    string                // the session chat post the human's latest input delivered; a message to the user answers it
 	todos       []event.TodoItem      // the agent\'s todo list, in creation order (todo.changed snapshots)
@@ -102,7 +101,7 @@ func newAgent(s *Session, id, parent, archetype, label, modelID string, depth in
 	return &Agent{
 		ID: id, Parent: parent, Archetype: archetype, Label: label, Depth: depth,
 		s: s, preset: preset, modelID: modelID, state: StateIdle,
-		wake: make(chan struct{}, 1), armed: map[string]bool{}, wakes: map[string]bool{}, monitors: map[string]*Monitor{}, awaiting: map[string]int{}, owed: map[string]bool{}, reminded: map[string]bool{}, flagged: map[string]bool{}, done: make(chan struct{}),
+		wake: make(chan struct{}, 1), armed: map[string]bool{}, wakes: map[string]bool{}, monitors: map[string]*Monitor{}, awaiting: map[string]int{}, owed: map[string]bool{}, done: make(chan struct{}),
 	}
 }
 

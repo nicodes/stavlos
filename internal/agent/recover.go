@@ -89,8 +89,7 @@ func (r *recovery) apply(e event.Event) {
 		}
 		for _, o := range r.s.agents {
 			delete(o.awaiting, e.Agent)
-			delete(o.owed, e.Agent)
-			delete(o.reminded, e.Agent)
+			o.settle(e.Agent)
 		}
 	}
 }
@@ -283,8 +282,9 @@ func (r *recovery) consumed(e event.Event) {
 }
 
 // replies folds the reply bookkeeping of replies.go back in: a message to
-// the human settles what is owed to it, a queued reminder marks its parties
-// reminded and waits to start a turn, a missing reply marks them recorded.
+// the human settles what is owed to it, and a queued reminder counts as a
+// nudge and waits to start a turn; a missing reply (older logs) changes
+// nothing.
 func (r *recovery) replies(e event.Event) {
 	a, ok := r.s.agents[e.Agent]
 	if !ok {
@@ -296,16 +296,10 @@ func (r *recovery) replies(e event.Event) {
 	case event.ReminderQueued:
 		var p event.RepliesPayload
 		_ = e.Decode(&p)
-		for _, party := range p.Parties {
-			a.reminded[party] = true
-		}
-		a.remind = append(a.remind, p.Parties...)
+		a.nudges++
+		a.remind = p.Parties
 	case event.ReplyMissing:
-		var p event.RepliesPayload
-		_ = e.Decode(&p)
-		for _, party := range p.Parties {
-			a.flagged[party] = true // recorded once; the reply stays due
-		}
+		// older logs: the reply stayed owed, nothing to fold back in
 	}
 }
 

@@ -370,7 +370,7 @@ func TestNotesAndReminders(t *testing.T) {
 		switch {
 		case l.Note:
 			notes = append(notes, l.Text)
-		case l.Kind == LineNotice:
+		case l.Kind == LineNotice || l.Kind == LineDim:
 			notices = append(notices, l.Text)
 		case strings.Contains(l.Text, "reminder from the harness"):
 			t.Fatalf("the reminder input is not shown: %+v", l)
@@ -379,7 +379,7 @@ func TestNotesAndReminders(t *testing.T) {
 	if strings.Join(notes, "|") != "Result|all good" {
 		t.Fatalf("notes %q", notes)
 	}
-	if strings.Join(notices, "|") != "reminded: no reply yet to you, scout|ended without replying to you" {
+	if strings.Join(notices, "|") != "nudged: owes a reply to you, scout|ended without replying to you" {
 		t.Fatalf("notices %q", notices)
 	}
 }

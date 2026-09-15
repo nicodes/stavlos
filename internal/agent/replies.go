@@ -12,12 +12,16 @@ import (
 
 // Replies (docs/super-chat.md): every message an agent takes in, from the
 // human or from another agent, is owed a reply sent with the message tool;
-// the text a turn ends with reaches no one. What is owed stays due until
-// the agent messages that party (or the party is killed): it is listed in
-// the system prompt on every model call. The first turn that ends owing a
-// party gets one reminder turn; a turn that ends still owing a party it was
-// reminded of records the reply as missing, once. Nothing retries, and a
-// new message from the party starts its reminder over.
+// the text a turn ends with reaches no one. Whenever a turn ends on its own
+// with replies still owed, and the agent is not waiting on an agent or a
+// job (whose result wakes it anyway), a reminder turn is queued naming
+// everyone still owed. After maxNudges reminders in a row with no reply the
+// agent is left alone; a reply or a new message resets the count. What is
+// owed is exposed as AgentInfo.Due, never injected into the prompt.
+
+// maxNudges bounds reminder turns in a row that get no reply, so a stuck
+// model (one that keeps running out of output, say) cannot loop.
+const maxNudges = 3
 
 // senderID is the agent id of an envelope source "agent:<id>", "" for
 // anything else.
@@ -45,10 +49,10 @@ func owedBy(in event.UserMessagePayload) string {
 	return ""
 }
 
-// took records the reply a logged input is owed. A new message from a
-// party already reminded starts its reminder over. The human's input also
-// sets the post a message to the user answers: its chat post, or none for
-// a message typed in the agent's own chat.
+// took records the reply a logged input is owed and resets the nudge
+// count. The human's input also sets the post a message to the user
+// answers: its chat post, or none for a message typed in the agent's own
+// chat.
 func (a *Agent) took(in event.UserMessagePayload) {
 	party := owedBy(in)
 	if party == "" {
@@ -56,8 +60,7 @@ func (a *Agent) took(in event.UserMessagePayload) {
 	}
 	a.mu.Lock()
 	a.owed[party] = true
-	delete(a.reminded, party)
-	delete(a.flagged, party)
+	a.nudges = 0
 	if party == tools.User {
 		a.lastPost = in.Post
 	}
@@ -72,23 +75,17 @@ func (a *Agent) currentPost() string {
 	return a.lastPost
 }
 
-// settle clears the reply owed to party: the agent messaged them, or they
-// are gone.
+// settle clears the reply owed to party (the agent messaged them, or they
+// are gone) and resets the nudge count.
 func (a *Agent) settle(party string) {
 	a.mu.Lock()
 	delete(a.owed, party)
-	delete(a.reminded, party)
-	delete(a.flagged, party)
+	a.nudges = 0
 	a.mu.Unlock()
 }
 
-// due lists the parties the agent owes a reply, sorted.
-func (a *Agent) due() []string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.dueLocked()
-}
-
+// dueLocked lists the parties the agent owes a reply, sorted. Callers hold
+// a.mu.
 func (a *Agent) dueLocked() []string {
 	out := make([]string, 0, len(a.owed))
 	for p := range a.owed {
@@ -99,37 +96,23 @@ func (a *Agent) dueLocked() []string {
 }
 
 // endReplies runs when a turn ends on its own (not cancelled, not failed):
-// parties still owed a reply get a reminder queued, which starts the next
-// turn, and parties reminded already are recorded as missing, once. They
-// stay due either way.
+// if replies are still owed, the agent is not waiting on an agent or a job,
+// and the nudges in a row are under maxNudges, a reminder naming everyone
+// owed is queued and starts the next turn.
 func (a *Agent) endReplies(ctx context.Context, reason event.TurnReason) {
 	if reason != event.ReasonEndTurn && reason != event.ReasonMaxTokens || !a.s.Config().Reminders {
 		return
 	}
-	var remind, missing []string
 	a.mu.Lock()
-	for p := range a.owed {
-		switch {
-		case a.reminded[p] && !a.flagged[p]:
-			missing = append(missing, p)
-			a.flagged[p] = true
-		case a.reminded[p]:
-			// already recorded; it stays due in the system prompt
-		default:
-			remind = append(remind, p)
-			a.reminded[p] = true
-		}
+	if len(a.owed) == 0 || a.nudges >= maxNudges || a.waitingOn() {
+		a.mu.Unlock()
+		return
 	}
-	sort.Strings(remind)
-	a.remind = append(a.remind, remind...)
+	parties := a.dueLocked()
+	a.nudges++
+	a.remind = parties
 	a.mu.Unlock()
-	sort.Strings(missing)
-	if len(missing) > 0 {
-		_, _ = a.record(ctx, event.ReplyMissing, event.RepliesPayload{Parties: missing, Names: a.s.partyNames(missing)})
-	}
-	if len(remind) > 0 {
-		_, _ = a.record(ctx, event.ReminderQueued, event.RepliesPayload{Parties: remind, Names: a.s.partyNames(remind)})
-	}
+	_, _ = a.record(ctx, event.ReminderQueued, event.RepliesPayload{Parties: parties, Names: a.s.partyNames(parties)})
 }
 
 // partyNames is how parties read to a model or a human: "user", or the
@@ -148,6 +131,6 @@ func (s *Session) partyNames(parties []string) []string {
 // reminderText is the input a reminder turn starts with.
 func (s *Session) reminderText(parties []string) string {
 	names := s.partyNames(parties)
-	return fmt.Sprintf("[reminder from the harness] Your last turn ended without replying to %s. The text you end a turn with reaches no one: send each reply with message (to: %s). If there is nothing more to say, a one-line message still tells them where things stand. There is no second reminder.",
+	return fmt.Sprintf("[reminder from the harness] Your last turn ended without replying to %s. The text you end a turn with reaches no one: send each reply with message (to: %s). If there is nothing more to say, a one-line message still tells them where things stand.",
 		strings.Join(names, ", "), strings.Join(names, " or "))
 }
