@@ -61,19 +61,6 @@ func (m *Model) cycleFocus(delta int) tea.Cmd {
 	return m.setFocus(order[((i+delta)%n+n)%n])
 }
 
-// textEntry reports whether a text field outside the input has the keys:
-// the question answer, the dirs path field, or a boundary prompt's edited
-// directory. Enter submits there and space types a space.
-func (m *Model) textEntry() bool {
-	if m.permEdit != "" || (m.focus == focusDirs && m.dirEdit != "") {
-		return true
-	}
-	if m.focus == focusQuestions && m.currentQuestion() != nil {
-		return true // enter confirms an answer there
-	}
-	return false
-}
-
 // closeOverlayToInput drops the overlay and puts the input in focus, wherever
 // the overlay was opened from (enter's job).
 func (m *Model) closeOverlayToInput() tea.Cmd {
