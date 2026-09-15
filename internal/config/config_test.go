@@ -297,6 +297,7 @@ func TestRepositoryLayersOnlyTighten(t *testing.T) {
 		`{"plugins":["x"]}`:                  "plugins: is global only",
 		`{"escalation":{"default":"allow"}}`: "escalation.default",
 		`{"limits":{"maxAgents":99}}`:        "limits: a repository may only lower them",
+		`{"sandbox":{"enabled":false}}`:      "sandbox: is global only",
 	} {
 		for _, f := range []string{local, filepath.Join(dir, ".stavlos", "stavlos.json")} {
 			os.Remove(local)
@@ -438,4 +439,22 @@ func verb(p any, tool, arg string) policy.Verb {
 		return p.Decide(tool, sub)
 	}
 	panic("not a policy")
+}
+
+// TestSandboxConfig: the sandbox is on with the network by default; the
+// global layer can turn either off and add paths, with ~ expanded.
+func TestSandboxConfig(t *testing.T) {
+	g := t.TempDir()
+	t.Setenv("STAVLOS_CONFIG_DIR", g)
+	e, err := LoadGlobal()
+	if err != nil || !e.Sandbox.Enabled || !e.Sandbox.Network {
+		t.Fatalf("defaults %+v %v", e.Sandbox, err)
+	}
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"sandbox":{"network":false,"writable":["~/.cache/x"],"hide":["${env:STAVLOS_TEST_HIDE}/y"]}}`), 0o644)
+	t.Setenv("STAVLOS_TEST_HIDE", "/srv")
+	e, err = LoadGlobal()
+	home, _ := os.UserHomeDir()
+	if err != nil || !e.Sandbox.Enabled || e.Sandbox.Network || strings.Join(e.Sandbox.Writable, ",") != filepath.Join(home, ".cache/x") || strings.Join(e.Sandbox.Hide, ",") != "/srv/y" {
+		t.Fatalf("%+v %v", e.Sandbox, err)
+	}
 }

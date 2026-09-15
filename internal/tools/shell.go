@@ -70,7 +70,7 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if a.Background && env.Mon == nil {
 		return errf("background jobs are not available to this agent")
 	}
-	job, err := proc.Start(a.Command, env.Dir, proc.Env(env.PassEnv), env.Partial)
+	job, err := proc.Start(a.Command, env.Dir, proc.Env(env.PassEnv), env.Partial, env.Sandbox)
 	if err != nil {
 		return errf("%v", err)
 	}

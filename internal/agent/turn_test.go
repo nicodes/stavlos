@@ -12,6 +12,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/sandbox"
 )
 
 // catGrep allows two commands, so the cases below can show what an allow
@@ -764,5 +765,41 @@ func TestMessageToUser(t *testing.T) {
 	}
 	if in := root.Info(); len(in.Awaiting) != 0 {
 		t.Fatalf("a message to the human waits on nobody: %+v", in.Awaiting)
+	}
+}
+
+// TestSandboxHoldsInYolo: yolo answers every prompt, but the command still
+// runs in the channel's sandbox: a write outside the working directories
+// fails at the kernel, and the harness's data directory is not there to read.
+func TestSandboxHoldsInYolo(t *testing.T) {
+	if lvl, _ := sandbox.Probe(); lvl == sandbox.None {
+		t.Skip("no sandbox on this system")
+	}
+	// Outside every writable path: not the working directory, /tmp or a
+	// cache (t.TempDir may live in one), but the home directory itself.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip(err)
+	}
+	dir, err := os.MkdirTemp(home, ".stavlos-sandbox-test-")
+	if err != nil {
+		t.Skip(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	outside := filepath.Join(dir, "outside.txt")
+	os.WriteFile(outside, []byte("before\n"), 0o644)
+	cmd := "echo after > " + outside + "; echo exit=$?"
+	fm := &fakeModel{steps: []step{reply(call("c1", "shell", `{"command":"`+cmd+`"}`)), reply(text("ok"))}}
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1"}`}, fm)
+	if err := s.SetMode(context.Background(), protocol.ModeYolo); err != nil {
+		t.Fatal(err)
+	}
+	runTurn(t, s, h, "go")
+	fin := finished(h, s.Root().ID)
+	if len(fin) != 1 || !strings.Contains(fin[0].Output, "exit=1") {
+		t.Fatalf("the write outside should fail: %+v", fin)
+	}
+	if b, _ := os.ReadFile(outside); string(b) != "before\n" {
+		t.Fatalf("the sandbox let a write through: %q", b)
 	}
 }

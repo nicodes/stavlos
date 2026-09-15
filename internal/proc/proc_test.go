@@ -54,7 +54,7 @@ func TestEnvScrub(t *testing.T) {
 func TestStartKillTail(t *testing.T) {
 	var mu sync.Mutex
 	var streamed strings.Builder
-	j, err := Start("echo one; echo two; sleep 30", t.TempDir(), Env(nil), func(s string) { mu.Lock(); streamed.WriteString(s); mu.Unlock() })
+	j, err := Start("echo one; echo two; sleep 30", t.TempDir(), Env(nil), func(s string) { mu.Lock(); streamed.WriteString(s); mu.Unlock() }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,13 +80,13 @@ func TestStartKillTail(t *testing.T) {
 	}
 	// The child sees a scrubbed environment.
 	t.Setenv("MY_SECRET", "s")
-	j, _ = Start("echo \"[$MY_SECRET][$HOME]\"", t.TempDir(), Env(nil), nil)
+	j, _ = Start("echo \"[$MY_SECRET][$HOME]\"", t.TempDir(), Env(nil), nil, nil)
 	<-j.Done()
 	if j.Output() != "[]["+os.Getenv("HOME")+"]\n" {
 		t.Fatalf("child env: %q", j.Output())
 	}
 	// The tail cap keeps the end of a long output.
-	j, _ = Start("yes 0123456789abcdef | head -c 599998", t.TempDir(), Env(nil), nil)
+	j, _ = Start("yes 0123456789abcdef | head -c 599998", t.TempDir(), Env(nil), nil, nil)
 	<-j.Done()
 	out := j.Output()
 	if len(out) > OutputCap+64 || len(out) < OutputCap/2 || !strings.HasPrefix(out, "… [earlier output dropped] …") || !strings.HasSuffix(out, "0123456789abcdef\n") {

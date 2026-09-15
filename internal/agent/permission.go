@@ -228,7 +228,7 @@ func (a *Agent) grantPermit(p event.PermitPayload) {
 func (a *Agent) toolEnv(turn int, c model.Block, rv roleView) *tools.Env {
 	cfg := a.s.Config()
 	return &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg, rv), Orch: a.orch(), Mon: a.monitorsAPI(), Todo: a.todoAPIIfEnabled(), Ask: a.askAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
-		Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
+		Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv, Sandbox: a.s.sandboxSpec(cfg),
 		Partial: func(s string) {
 			a.s.host.Stream(protocol.StreamNotification{Channel: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
 		}}
