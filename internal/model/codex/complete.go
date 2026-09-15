@@ -14,16 +14,13 @@ import (
 // Complete streams one Responses call. On ctx cancellation it returns the
 // partial accumulation with ctx.Err().
 func (m *client) Complete(ctx context.Context, req model.Request, onDelta func(model.Delta)) (model.Response, error) {
-	if onDelta == nil {
-		onDelta = func(model.Delta) {}
-	}
 	body, err := buildBody(m.id, req)
 	if err != nil {
 		return model.Response{}, fmt.Errorf("codex: %w", err)
 	}
 	return stream.Complete(ctx, stream.Request{
 		Name: "codex", Client: m.p.http, URL: m.p.endpoint, Body: body, Header: m.p.header, OnStatus: onStatus,
-	}, newAccumulator(onDelta))
+	}, onDelta, func(d func(model.Delta)) stream.Codec { return newAccumulator(d) })
 }
 
 // event is the union of stream event shapes we care about.

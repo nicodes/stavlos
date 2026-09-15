@@ -62,10 +62,24 @@ func serve(t *testing.T, h http.HandlerFunc) *httptest.Server {
 }
 
 func call(ctx context.Context, url string, c *codec) (model.Response, error) {
-	return Complete(ctx, Request{Name: "test", URL: url, Body: []byte(`{}`)}, c)
+	return Complete(ctx, Request{Name: "test", URL: url, Body: []byte(`{}`)}, nil, same(c))
+}
+
+// same is a codec factory handing out one codec for every attempt.
+func same(c Codec) func(func(model.Delta)) Codec {
+	return func(func(model.Delta)) Codec { return c }
+}
+
+// noRetry turns mid-stream retries off for a test that pins how one attempt
+// ends.
+func noRetry(t *testing.T) {
+	old := MidStreamRetries
+	MidStreamRetries = 0
+	t.Cleanup(func() { MidStreamRetries = old })
 }
 
 func TestEndings(t *testing.T) {
+	noRetry(t)
 	cases := []struct {
 		name, body string
 		wantErr    string // "" = none
@@ -148,7 +162,7 @@ func TestRetries(t *testing.T) {
 				return errors.New("log in again")
 			}
 			return nil
-		}}, &codec{})
+		}}, nil, same(&codec{}))
 		if err == nil || err.Error() != "log in again" || hits.Load() != 1 {
 			t.Fatalf("err %v hits %d", err, hits.Load())
 		}
@@ -169,7 +183,7 @@ func TestRetries(t *testing.T) {
 			headers.Add(1)
 			h.Set("Authorization", "Bearer t")
 			return nil
-		}}, &codec{})
+		}}, nil, same(&codec{}))
 		if err != nil || headers.Load() != 2 {
 			t.Fatalf("err %v header calls %d", err, headers.Load())
 		}
@@ -186,6 +200,7 @@ func TestIdleAndCancel(t *testing.T) {
 		<-r.Context().Done()
 	}
 	t.Run("idle", func(t *testing.T) {
+		noRetry(t)
 		old := IdleTimeout
 		IdleTimeout = 150 * time.Millisecond
 		defer func() { IdleTimeout = old }()
@@ -206,6 +221,67 @@ func TestIdleAndCancel(t *testing.T) {
 		res, err := call(ctx, serve(t, stall).URL, c)
 		if !errors.Is(err, context.Canceled) || res.Blocks[0].Text != "partial" {
 			t.Fatalf("res %+v err %v", res, err)
+		}
+	})
+}
+
+// streamingCodec is codec streaming each payload as text ("tool" as a tool
+// call starting) through the delta callback of its attempt.
+type streamingCodec struct {
+	codec
+	onDelta func(model.Delta)
+}
+
+func (c *streamingCodec) Feed(p []byte) error {
+	switch string(p) {
+	case "tool":
+		c.onDelta(model.Delta{ToolName: "shell"})
+	case "end", "fin", "boom":
+	default:
+		c.onDelta(model.Delta{Text: string(p)})
+	}
+	return c.codec.Feed(p)
+}
+
+// TestMidStreamRetry: a stream that breaks off is sent again once, after a
+// Reset delta, with a fresh codec; not when a tool call had begun, and not
+// when the provider itself failed the stream.
+func TestMidStreamRetry(t *testing.T) {
+	run := func(t *testing.T, first string) (model.Response, []model.Delta, int32, error) {
+		var hits atomic.Int32
+		srv := serve(t, func(w http.ResponseWriter, _ *http.Request) {
+			if hits.Add(1) == 1 {
+				_, _ = io.WriteString(w, first) // then the response ends without a terminal event
+				return
+			}
+			_, _ = io.WriteString(w, "data: ok\n\ndata: end\n\n")
+		})
+		var mu sync.Mutex
+		var deltas []model.Delta
+		res, err := Complete(context.Background(), Request{Name: "test", URL: srv.URL, Body: []byte(`{}`)},
+			func(d model.Delta) { mu.Lock(); deltas = append(deltas, d); mu.Unlock() },
+			func(onDelta func(model.Delta)) Codec { return &streamingCodec{onDelta: onDelta} })
+		return res, deltas, hits.Load(), err
+	}
+	t.Run("broken stream retried", func(t *testing.T) {
+		res, deltas, hits, err := run(t, "data: par\n\n")
+		if err != nil || res.Blocks[0].Text != "ok" || hits != 2 {
+			t.Fatalf("res %+v err %v hits %d", res, err, hits)
+		}
+		if len(deltas) != 3 || deltas[0].Text != "par" || !deltas[1].Reset || deltas[2].Text != "ok" {
+			t.Fatalf("deltas %+v", deltas)
+		}
+	})
+	t.Run("not after a tool call began", func(t *testing.T) {
+		_, _, hits, err := run(t, "data: tool\n\n")
+		if !errors.Is(err, ErrIncomplete) || hits != 1 {
+			t.Fatalf("err %v hits %d", err, hits)
+		}
+	})
+	t.Run("not when the provider failed the stream", func(t *testing.T) {
+		_, _, hits, err := run(t, "data: boom\n\n")
+		if err == nil || !strings.Contains(err.Error(), "bad event") || hits != 1 {
+			t.Fatalf("err %v hits %d", err, hits)
 		}
 	})
 }

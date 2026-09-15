@@ -946,9 +946,12 @@ func (t *Transcript) stopRunning() {
 // starting in the model's response.
 func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
 	n.Text, n.Thinking = textsafe.Clean(n.Text), textsafe.Clean(n.Thinking)
-	if n.Turn != t.streamTurn {
+	if n.Turn != t.streamTurn || n.Reset {
 		t.streamTurn = n.Turn
 		t.stream = nil
+	}
+	if n.Reset {
+		return // the call is being sent again: its output starts over
 	}
 	k := len(t.stream)
 	switch {
