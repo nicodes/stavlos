@@ -42,6 +42,10 @@ type Options struct {
 	// TurnGaps is an agent's chat: no spacing inside a turn, one blank row
 	// before each item that starts a new turn (or follows one).
 	TurnGaps bool
+	// WhoStyle colours the glyph and leading @name of a line that names
+	// someone (Line.Who); WhoKey changes whenever its colours do.
+	WhoStyle func(name string) lipgloss.Style
+	WhoKey   string
 	// CompactFrame animates a running compaction's rule (the sweeping bar).
 	CompactFrame int
 }
@@ -224,7 +228,8 @@ type renderKey struct {
 	rev                     uint64
 	width                   int
 	details, noFold, cursor bool
-	expanded                int8 // per-item override: 0 none, 1 collapsed, 2 expanded
+	expanded                int8   // per-item override: 0 none, 1 collapsed, 2 expanded
+	who                     string // Options.WhoKey
 	frame                   int
 }
 
@@ -257,7 +262,7 @@ func Transcript(t *transcript.Transcript, c *Cache, o Options) (string, map[int]
 			tail = tail[k:]
 			continue
 		}
-		key := renderKey{epoch: epoch, rev: t.Rev(i), width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i}
+		key := renderKey{epoch: epoch, rev: t.Rev(i), width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i, who: o.WhoKey}
 		if v, ok := o.Expanded[i]; ok {
 			key.expanded = 1
 			if v {
@@ -475,6 +480,8 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 		}
 	}
 
+	glyph, text, name, nameStyle := whoColours(l, o, glyph, text)
+
 	glyphW := ansi.StringWidth(glyph)
 	avail := o.Width - 1 - ansi.StringWidth(leader) - glyphW
 	parts := []string{text}
@@ -491,9 +498,42 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 			b.WriteString(leader)
 			b.WriteString(glyph)
 		}
+		if i == 0 && name != "" && strings.HasPrefix(p, name) {
+			b.WriteString(nameStyle.Render(name) + style(p[len(name):]))
+			continue
+		}
 		b.WriteString(style(p))
 	}
 	return b.String()
+}
+
+// whoColours gives a line that names someone (Line.Who) that one's colour
+// on its glyph and its leading @name: the role's colour for an agent, blue
+// for the human. A glyph showing a state (running, waiting, failed) keeps
+// it. It returns the glyph, the text with the name's bold markers dropped,
+// the name to draw ("" when the text does not lead with it) and its style.
+func whoColours(l transcript.Line, o Options, glyph, text string) (string, string, string, lipgloss.Style) {
+	if l.Who == "" || o.WhoStyle == nil {
+		return glyph, text, "", lipgloss.Style{}
+	}
+	ws := o.WhoStyle(l.Who)
+	if !l.Running && !l.Err && l.Tone == transcript.ToneNone {
+		switch {
+		case l.Kind == transcript.LineTool:
+			g, gap := transcript.CallGlyph(l)
+			glyph = ws.Render(g) + gap
+		case l.Glyph != "":
+			glyph = ws.Render(l.Glyph) + " "
+		case l.Lead:
+			glyph = ws.Render("›") + " "
+		}
+	}
+	name := "@" + l.Who
+	text = strings.Replace(text, "**"+name+"**", name, 1)
+	if !strings.HasPrefix(text, name) {
+		name = ""
+	}
+	return glyph, text, name, ws.Bold(true)
 }
 
 // kindStyle is how a line of l's kind is drawn: its leader (an indent), a

@@ -467,3 +467,38 @@ func TestTurnStartMarksItems(t *testing.T) {
 		t.Fatalf("turn starts: %q", marked)
 	}
 }
+
+// TestWhoNamesTheLine: every line that leads with an @name records whose it
+// is, so it can take their colour.
+func TestWhoNamesTheLine(t *testing.T) {
+	ev := func(typ event.Type, p any) event.Event {
+		return event.Event{Type: typ, Time: time.Now(), Payload: event.MustPayload(p)}
+	}
+	who := func(lines []Line) string {
+		for _, l := range lines {
+			if l.Who != "" {
+				return l.Who
+			}
+		}
+		return ""
+	}
+	cases := map[string][]Line{
+		"scout": EventLines(ev(event.ToolCallStarted, event.ToolStartedPayload{CallID: "c1", Name: "message", Input: json.RawMessage(`{"to":"@scout","text":"look"}`)})),
+		"user":  EventLines(ev(event.ToolCallStarted, event.ToolStartedPayload{CallID: "c2", Name: "message", Input: json.RawMessage(`{"to":"user","text":"done"}`)})),
+		"main":  EventLines(ev(event.UserMessage, event.UserMessagePayload{Kind: event.MsgPrompt, Text: "go", From: "main"})),
+	}
+	for want, lines := range cases {
+		if got := who(lines); got != want {
+			t.Errorf("who %q, want %q: %+v", got, want, lines)
+		}
+	}
+	human := EventLines(ev(event.UserMessage, event.UserMessagePayload{Kind: event.MsgPrompt, Text: "hi"}))
+	if who(human) != "user" {
+		t.Errorf("the human's prompt: %+v", human)
+	}
+	c := NewChat()
+	c.Apply(ev(event.MessageToUser, event.ChatPayload{From: "main", Text: "hello"}))
+	if who(c.All()) != "main" {
+		t.Errorf("a chat reply: %+v", c.All())
+	}
+}
