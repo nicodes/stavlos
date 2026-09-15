@@ -368,7 +368,10 @@ func TestMailbox(t *testing.T) {
 		s, h := newTestSession(t, testConfig{json: `{"model":"fake/m1","policy":{"shell":{"echo*":"allow"}}}`}, fm)
 		root := s.Root()
 		_ = root.Prompt(context.Background(), "go", "human:test")
-		waitUntil(t, h, func() bool { return root.StateOf() == StateRunning })
+		// Wait for the first model call to be in flight, not just for the
+		// turn to start: a steer before that call would land in it instead
+		// of the next one.
+		waitUntil(t, h, func() bool { return len(fm.requests()) == 1 })
 		_ = root.Steer(context.Background(), "hurry", "human:test")
 		close(gate)
 		e := h.waitFor(t, event.TurnEnded, root.ID)
