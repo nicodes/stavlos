@@ -537,8 +537,8 @@ func (m Model) sidebarView(height int) string {
 // the meta row shows per agent), the swarm state ("3 working · 1
 // waiting", or "idle"), a blank, the ! and ? tabs (sidebarTabsRow; every
 // channel's prompts, so above the channels; the footer strip keeps only the
-// agent's row while the sidebar shows, and dirs is a row under the open
-// channel), a blank, and the "channels" heading. The tree's
+// agent's row while the sidebar shows, and dirs sits behind each channel's
+// gear), a blank, and the "channels" heading. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	dir := format.ShortHome(m.channel.Dir)
@@ -560,7 +560,11 @@ func (m Model) sidebarHeader(width int) []string {
 	}
 }
 
-// sidebarTabsRow is the sidebar header row that holds the ! ? dirs tabs.
+// channelGear ends every channel row: → on the row or a click on it opens the
+// channel's dirs.
+const channelGear = "⚙"
+
+// sidebarTabsRow is the sidebar header row that holds the ! and ? tabs.
 const sidebarTabsRow = 6
 
 // stripRows is how many tab rows the footer strip draws: both, or only the
@@ -574,8 +578,9 @@ func (m Model) stripRows() int {
 
 // sidebarBody is everything under the header: the + channel row, then the
 // directory's channels in alphabetical order (they never move on their
-// own), each "● #name" with its state dot first, this channel's row (its
-// chat) with its dirs row and then its agent tree right under it. items maps each row to its
+// own), each "● #name ⚙" (its state dot, its name, its gear for the
+// channel's dirs), this channel's row (its chat) with its agent tree right
+// under it. items maps each row to its
 // cursor index (+ channel 0, then top to bottom; see channelRow), -1 for rows
 // the cursor skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
@@ -586,10 +591,11 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		rows, items = append(rows, text), append(items, idx)
 	}
-	// "  ● #name": the channel's state dot, then its name, padded to the width
+	// "  ● #name        ⚙": the channel's state dot, its name, and its gear at
+	// the right edge (→ on the row or a click on it: the channel's dirs)
 	channel := func(dot, name string, style lipgloss.Style, idx int) {
-		name = format.Trunc(name, width-5)
-		line("  "+dot+" "+style.Render(name)+strings.Repeat(" ", max(0, width-4-ansi.StringWidth(name))), idx)
+		name = format.Trunc(name, width-7)
+		line("  "+dot+" "+style.Render(name)+strings.Repeat(" ", max(1, width-5-ansi.StringWidth(name)))+theme.StyleDim.Render(channelGear), idx)
 	}
 	other := func(s protocol.ChannelInfo, idx int) {
 		dot := stateDot(string(s.State))
@@ -616,24 +622,17 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		dot = mark
 	}
 	channel(dot, channelLabel(m.channel), style, here)
-	// the open channel's dirs, above its agents: the directories are the channel's
-	dirs := fmt.Sprintf("dirs %d", len(m.channelDirs()))
-	dirsStyle := theme.StyleDim
-	if m.focus == focusDirs {
-		dirsStyle = theme.StyleBoxTitleFocus
-	}
-	line("    "+dirsStyle.Render(dirs)+strings.Repeat(" ", max(0, width-4-len(dirs))), here+1)
 	tree := m.treeRows(width)
 	rows = append(rows, tree...)
 	for i := range tree {
 		if i < na {
-			items = append(items, here+2+i)
+			items = append(items, here+1+i)
 		} else {
 			items = append(items, -1) // the "(no agents)" row
 		}
 	}
 	for k := here - 1; k < len(m.navChannels); k++ {
-		other(m.navChannels[k], 3+na+k)
+		other(m.navChannels[k], 2+na+k)
 	}
 	return rows, items
 }
@@ -748,7 +747,7 @@ func (m Model) treeRows(width int) []string {
 			gap = 0
 		}
 		row := indent + dot + " " + text + strings.Repeat(" ", gap) + right
-		if focused && m.channelRow()+2+i == m.sbCursor {
+		if focused && m.channelRow()+1+i == m.sbCursor {
 			row = render.Highlight(row, width)
 		}
 		rows = append(rows, row)
