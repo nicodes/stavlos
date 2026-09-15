@@ -518,8 +518,8 @@ func starterConfig(model string) config.File {
 		Model:      model,
 		Limits:     &config.Limits{MaxDepth: 3, MaxAgents: 6},
 		Escalation: &config.Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: "deny"},
-		// Read-only commands (grep, rg, find, ls, git status/log/diff, …)
-		// are allowed by the built-in defaults.
+		// No shell command is allowed by default (searching is the grep and
+		// glob tools); allow the ones you trust here, or answer the prompt.
 		Policy: map[string]any{
 			"shell":       map[string]any{"git push*": "ask", "rm -rf*": "deny"},
 			"apply_patch": map[string]any{"**": "ask"},

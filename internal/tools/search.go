@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
@@ -125,7 +126,7 @@ func walkGrep(ctx context.Context, env *Env, a grepInput, re *regexp.Regexp, lim
 					more = true
 					return false
 				}
-				lines = append(lines, fmt.Sprintf("%s:%d:%s", shown, no, cutRunes(sc.Text(), grepMaxLine)))
+				lines = append(lines, fmt.Sprintf("%s:%d:%s", shown, no, clip.Head(sc.Text(), grepMaxLine)))
 			}
 		}
 		return true
@@ -213,7 +214,7 @@ func matchList(lines []string, more bool, limit int, what string, maxOutput int)
 	if more {
 		out += fmt.Sprintf("\n… (stopped at %d %s; narrow the pattern or the path, or raise limit)", limit, what)
 	}
-	return Result{Output: clip(out, maxOutput)}
+	return Result{Output: clip.Middle(out, maxOutput)}
 }
 
 // runRG runs ripgrep in dir with the given arguments on path ("" for dir

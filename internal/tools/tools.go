@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-	"unicode/utf8"
 
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
@@ -143,46 +142,6 @@ var (
 
 func errf(format string, a ...any) Result {
 	return Result{Output: fmt.Sprintf(format, a...), IsError: true}
-}
-
-// Clip truncates tool output to max bytes (0 = 32k), keeping the head and
-// the tail.
-func Clip(s string, max int) string { return clip(s, max) }
-
-func clip(s string, max int) string {
-	if max <= 0 {
-		max = 32 * 1024
-	}
-	if len(s) <= max {
-		return s
-	}
-	head := max * 2 / 3
-	tail := max - head
-	return cutRunes(s, head) + fmt.Sprintf("\n\n… [%d bytes truncated] …\n\n", len(s)-max) + tailRunes(s, tail)
-}
-
-// cutRunes returns at most n bytes of s, cut on a rune boundary so the
-// model never receives half a character.
-func cutRunes(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return s[:n]
-}
-
-// tailRunes returns at most the last n bytes of s, cut on a rune boundary.
-func tailRunes(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	i := len(s) - n
-	for i < len(s) && !utf8.RuneStart(s[i]) {
-		i++
-	}
-	return s[i:]
 }
 
 func decode(input json.RawMessage, v any) error {
