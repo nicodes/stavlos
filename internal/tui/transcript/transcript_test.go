@@ -503,14 +503,14 @@ func TestWhoNamesTheLine(t *testing.T) {
 	}
 }
 
-// TestDeniedCallShowsWhy: a denied call reads its denial next to the
-// tool's name, with the reason when there is one, and nothing under it.
+// TestDeniedCallShowsWhy: a denied call takes the ✗ glyph and its reason
+// sits next to the tool's name, with nothing under it.
 func TestDeniedCallShowsWhy(t *testing.T) {
 	for out, want := range map[string]string{
-		"Permission denied by the user: too risky":                                        "Shell (denied: too risky)  rm x",
-		"Permission denied by the user.":                                                  "Shell (denied)  rm x",
-		"Denied by policy: shell rm x":                                                    "Shell (denied by policy)  rm x",
-		"Permission denied: nobody answered the prompt and the headless default is deny.": "Shell (denied: no answer)  rm x",
+		"Permission denied by the user: too risky":                                        "Shell (too risky)  rm x",
+		"Permission denied by the user.":                                                  "Shell  rm x",
+		"Denied by policy: shell rm x":                                                    "Shell (by policy)  rm x",
+		"Permission denied: nobody answered the prompt and the headless default is deny.": "Shell (no answer)  rm x",
 	} {
 		tr := NewTranscript()
 		tr.Apply(event.Event{Seq: 1, Type: event.ToolCallStarted, Time: time.Now(), Payload: event.MustPayload(event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"rm x"}`)})})
@@ -519,6 +519,9 @@ func TestDeniedCallShowsWhy(t *testing.T) {
 		for _, l := range tr.All() {
 			if l.Text != "" {
 				texts = append(texts, l.Text+l.Suffix)
+				if g, _ := CallGlyph(l); g != GlyphFailed {
+					t.Errorf("%q: glyph %q", out, g)
+				}
 			}
 		}
 		if strings.Join(texts, "|") != want {

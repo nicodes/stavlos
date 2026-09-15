@@ -200,7 +200,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"⌕ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "⌕ Read (denied)  b.go"})
+	assertSubsequence(t, got, []string{"⌕ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "✗ Read  b.go"})
 	if n := count(got, "  line"); n != transcript.MaxOutputCollapsed {
 		t.Fatalf("collapsed: want %d output lines, got %d", transcript.MaxOutputCollapsed, n)
 	}
@@ -914,7 +914,7 @@ func TestWhoColoursGlyphAndName(t *testing.T) {
 }
 
 // TestDeniedCallReadsOnItsLine: folded or not, a denied call is one line
-// with its denial next to the tool's name.
+// led by ✗, its reason next to the tool's name.
 func TestDeniedCallReadsOnItsLine(t *testing.T) {
 	tr := transcript.NewTranscript()
 	tr.Apply(mk(1, "a", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"rm -rf build"}`)}))
@@ -926,7 +926,7 @@ func TestDeniedCallReadsOnItsLine(t *testing.T) {
 				rows = append(rows, r)
 			}
 		}
-		if len(rows) != 1 || rows[0] != "$ Shell (denied: not now)  rm -rf build" {
+		if len(rows) != 1 || rows[0] != "✗ Shell (not now)  rm -rf build" {
 			t.Fatalf("denied call rows (nofold %v): %q", o.NoFold, rows)
 		}
 	}

@@ -115,7 +115,7 @@ const (
 	GlyphPrompt     = "?" // a question for the user
 	GlyphAnswer     = "?" // the user's answer to a question (same mark as the question)
 	GlyphPermission = "!" // a permission or trust prompt, and its answer
-	GlyphFailed     = "✗" // a failed finish
+	GlyphFailed     = "✗" // a denied call (in place of its tool's glyph), a failed finish
 	GlyphCompacted  = "┄┄ compacted ┄┄"
 	// GlyphCompacting marks the rule of a compaction still running; Render
 	// draws the sweeping bar into it.
@@ -742,15 +742,18 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	case p.Cancelled:
 		l.Suffix = "(cancelled)"
 	case p.Denied:
-		// next to the tool's name, "Shell (denied: not now)  rm -rf build":
-		// a denial reads on the one line, whatever the tool
+		// "✗ Shell (not now)  rm -rf build": the ✗ takes the tool's glyph so a
+		// denial is easy to spot, and its reason sits next to the tool's name
+		l.Glyph = GlyphFailed
 		mark := denialMark(p.Output)
-		if title, arg, ok := strings.Cut(l.Text, "  "); ok && !IsMessage(*l) {
-			l.Text = title + " " + mark + "  " + arg
-		} else if !IsMessage(*l) {
-			l.Text += " " + mark
-		} else {
+		switch title, arg, ok := strings.Cut(l.Text, "  "); {
+		case mark == "":
+		case IsMessage(*l):
 			l.Suffix = mark
+		case ok:
+			l.Text = title + " " + mark + "  " + arg
+		default:
+			l.Text += " " + mark
 		}
 	}
 	// A new message to an agent waits for its answer: yellow until the
@@ -1269,23 +1272,23 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 // --- helpers ---
 
-// denialMark is what a denied call carries next to its name: "(denied)",
-// "(denied: <the human's reason>)", "(denied by policy)" or
-// "(denied: no answer)" when nobody could answer the prompt.
+// denialMark is why a call was denied, for next to its name: "(<the
+// human's reason>)", "(by policy)", "(no answer)" when nobody could answer
+// the prompt, or "" when the human gave no reason.
 func denialMark(output string) string {
 	out := strings.TrimSpace(output)
 	switch {
 	case strings.HasPrefix(out, "Denied by policy:"):
-		return "(denied by policy)"
+		return "(by policy)"
 	case strings.HasPrefix(out, "Permission denied: nobody answered"):
-		return "(denied: no answer)"
+		return "(no answer)"
 	}
 	if reason, ok := strings.CutPrefix(out, "Permission denied by the user:"); ok {
 		if reason = strings.TrimSuffix(strings.TrimSpace(reason), "."); reason != "" {
-			return "(denied: " + reason + ")"
+			return "(" + reason + ")"
 		}
 	}
-	return "(denied)"
+	return ""
 }
 
 // titled is a status line's text: a bold, capitalised title, then the
@@ -1668,6 +1671,9 @@ const (
 // tool, except that a message this agent sends reads ‹ (what it receives
 // reads ›).
 func CallGlyph(l Line) (string, string) {
+	if l.Glyph != "" {
+		return l.Glyph, " " // a denied call's ✗
+	}
 	if IsMessage(l) {
 		return GlyphReply, " "
 	}
