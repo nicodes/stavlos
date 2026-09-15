@@ -59,3 +59,48 @@ func TestPostDeliversByMention(t *testing.T) {
 		t.Fatalf("chat.posted log: %v", posts)
 	}
 }
+
+// TestMessageAnswersTheLatestPost: a message to the human names the chat
+// post the agent last took in, and none after the human wrote to it
+// directly.
+func TestMessageAnswersTheLatestPost(t *testing.T) {
+	fm := &fakeModel{steps: []step{
+		reply(call("c1", "message", `{"to":"user","text":"one"}`)), reply(text("n")),
+		reply(call("c2", "message", `{"to":"user","text":"two"}`)), reply(text("n")),
+		reply(call("c3", "message", `{"to":"user","text":"three"}`)), reply(text("n")),
+	}}
+	s, h := newTestSession(t, testConfig{}, fm)
+	root := s.Root()
+	ctx := context.Background()
+	sent := func(n int) bool {
+		return len(h.ofType(event.MessageToUser, root.ID)) == n && root.StateOf() == StateIdle
+	}
+	if _, err := s.Post(ctx, "first", "human:test"); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h, func() bool { return sent(1) })
+	if _, err := s.Post(ctx, "second", "human:test"); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h, func() bool { return sent(2) })
+	if err := root.Steer(ctx, "direct", "human:test"); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h, func() bool { return sent(3) })
+
+	var posts []string
+	for _, e := range h.ofType(event.ChatPosted, "") {
+		var p event.ChatPayload
+		_ = e.Decode(&p)
+		posts = append(posts, p.ID)
+	}
+	var answers []string
+	for _, e := range h.ofType(event.MessageToUser, root.ID) {
+		var p event.ChatPayload
+		_ = e.Decode(&p)
+		answers = append(answers, p.Post)
+	}
+	if len(posts) != 2 || posts[0] == "" || !reflect.DeepEqual(answers, []string{posts[0], posts[1], ""}) {
+		t.Fatalf("posts %q answers %q", posts, answers)
+	}
+}

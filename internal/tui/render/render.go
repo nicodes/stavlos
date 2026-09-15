@@ -418,6 +418,7 @@ func renderLine(l transcript.Line, o Options, cursor bool) string {
 		return centerText(theme.StyleRule.Render(l.Text), o.Width)
 	}
 	leader, glyph, style := kindStyle(l)
+	leader = strings.Repeat("  ", l.Indent) + leader
 	text := l.Text
 	if l.Suffix != "" {
 		text += " " + l.Suffix

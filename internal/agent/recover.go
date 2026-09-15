@@ -217,11 +217,11 @@ func (r *recovery) inbox(e event.Event) {
 	case event.PromptQueued:
 		var p event.TextPayload
 		_ = e.Decode(&p)
-		r.prompts[e.Agent] = append(r.prompts[e.Agent], queued{p.Text, p.Source})
+		r.prompts[e.Agent] = append(r.prompts[e.Agent], queued{p.Text, p.Source, p.Post})
 	case event.SteerReceived:
 		var p event.TextPayload
 		_ = e.Decode(&p)
-		r.steers[e.Agent] = append(r.steers[e.Agent], queued{p.Text, p.Source})
+		r.steers[e.Agent] = append(r.steers[e.Agent], queued{p.Text, p.Source, p.Post})
 		// A steer from an agent is a message it now waits on: the live path
 		// logs one only for a new message (an answer is ResponseReceived).
 		if caller, ok := strings.CutPrefix(p.Source, "agent:"); ok {

@@ -603,16 +603,17 @@ func (s *Session) Post(ctx context.Context, text, source string) ([]string, erro
 		}
 		targets = []*Agent{root}
 	}
+	id := NewID("post")
 	names := make([]string, len(targets))
 	for i, a := range targets {
 		names[i] = a.LabelNow()
 	}
 	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.ChatPosted,
-		Payload: event.MustPayload(event.ChatPayload{Text: text, To: names})}); err != nil {
+		Payload: event.MustPayload(event.ChatPayload{ID: id, Text: text, To: names})}); err != nil {
 		return nil, err
 	}
 	for _, a := range targets {
-		if err := a.Steer(ctx, text, source); err != nil {
+		if err := a.steer(ctx, text, source, id); err != nil {
 			return names, err
 		}
 	}

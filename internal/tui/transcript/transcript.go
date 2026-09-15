@@ -82,6 +82,7 @@ type Line struct {
 	Tool    string // raw tool name on a LineTool line
 	Note    bool   // the agent's own text, which reaches no one: drawn dimmed
 	Agent   string // in the session chat: the agent this line links to
+	Indent  int    // nesting depth, two columns each (a reply under its post in the session chat)
 }
 
 // Tone colours a line's glyph by lifecycle: yellow while in progress, red
@@ -174,6 +175,7 @@ type Transcript struct {
 	chat  bool              // the session chat (chat.go), not one agent's transcript
 	names map[string]string // in the chat: agent id → name
 	roles map[string]string // in the chat: agent id → role
+	posts map[string]int    // in the chat: post id → its item, which its replies join
 }
 
 // turnVerbs are the horse-flavoured labels the turn indicator cycles

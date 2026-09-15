@@ -16,7 +16,7 @@ import (
 func NewChat() *Transcript {
 	t := NewTranscript()
 	t.chat = true
-	t.names, t.roles = map[string]string{}, map[string]string{}
+	t.names, t.roles, t.posts = map[string]string{}, map[string]string{}, map[string]int{}
 	return t
 }
 
@@ -59,7 +59,10 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.ChatPosted:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
-			t.appendItem(CleanLines(block(BlockUser, "to "+strings.Join(p.To, ", "), p.Text)))
+			refs := t.appendItem(CleanLines(block(BlockUser, "to "+strings.Join(p.To, ", "), p.Text)))
+			if p.ID != "" && len(refs) > 0 {
+				t.posts[p.ID] = refs[0].item
+			}
 		}
 	case event.MessageToUser:
 		var p event.ChatPayload
@@ -73,9 +76,19 @@ func (t *Transcript) applyChat(ev event.Event) {
 			if role := t.roles[ev.Agent]; role != "" {
 				from += " (" + role + ")"
 			}
-			lines := []Line{{Kind: LineBlank}, {Kind: LineLabel, Text: from}}
-			lines = append(lines, markdownLines(strings.TrimRight(p.Text, "\n"))...)
-			t.appendItem(linked(CleanLines(append(lines, Line{Kind: LineBlank})), ev.Agent))
+			lines := append([]Line{{Kind: LineLabel, Text: from}}, markdownLines(strings.TrimRight(p.Text, "\n"))...)
+			lines = linked(CleanLines(append(lines, Line{Kind: LineBlank})), ev.Agent)
+			// A reply joins the thread of the post it answers, indented under
+			// it, wherever that post is; a message with no known post stands
+			// on its own at the end.
+			if item, ok := t.posts[p.Post]; ok {
+				for i := range lines {
+					lines[i].Indent = 1
+				}
+				t.insertIntoItem(item, lines)
+				return
+			}
+			t.appendItem(append([]Line{{Kind: LineBlank, Agent: ev.Agent}}, lines...))
 		}
 	case event.PromptRequested:
 		var p event.PromptRequestedPayload

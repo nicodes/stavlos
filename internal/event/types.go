@@ -182,6 +182,7 @@ type AgentRefPayload struct {
 type TextPayload struct {
 	Text   string `json:"text"`
 	Source string `json:"source,omitempty"`
+	Post   string `json:"post,omitempty"` // the session chat post a steer delivers
 }
 
 // MonitorPayload lists child ids whose finish wakes (or no longer wakes) the agent.
@@ -280,15 +281,18 @@ type UserMessagePayload struct {
 	// its id (logs from before it carry the name only).
 	From   string `json:"from,omitempty"`
 	FromID string `json:"from_id,omitempty"`
+	Post   string `json:"post,omitempty"` // the session chat post this input delivers
 }
 
 // ChatPayload is a message in the session chat: the human's post (To: the
 // names of the agents it was delivered to) or an agent's message to the
 // human (From: the agent's name).
 type ChatPayload struct {
+	ID   string   `json:"id,omitempty"` // a post's id
 	From string   `json:"from,omitempty"`
 	Text string   `json:"text"`
 	To   []string `json:"to,omitempty"`
+	Post string   `json:"post,omitempty"` // a message to the human: the post it answers
 }
 
 // RepliesPayload names the parties a turn ended owing a reply: "user" or

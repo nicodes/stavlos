@@ -171,7 +171,7 @@ func (t *turnRun) injectSteers() {
 	a.steers = nil
 	a.mu.Unlock()
 	for _, st := range steers {
-		in := event.UserMessagePayload{Turn: t.turn, Kind: event.MsgSteer, Text: st.text, From: a.s.senderLabel(st.source), FromID: senderID(st.source)}
+		in := event.UserMessagePayload{Turn: t.turn, Kind: event.MsgSteer, Text: st.text, From: a.s.senderLabel(st.source), FromID: senderID(st.source), Post: st.post}
 		_, _ = a.record(t.bg, event.UserMessage, in)
 		a.took(in)
 	}

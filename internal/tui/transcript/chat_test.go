@@ -59,3 +59,43 @@ func TestChatKeepsPostsMessagesAndPrompts(t *testing.T) {
 		}
 	}
 }
+
+// TestChatThreadsRepliesUnderPosts: a reply joins its post's item, indented,
+// even after newer posts; a message with no known post stands alone.
+func TestChatThreadsRepliesUnderPosts(t *testing.T) {
+	c := NewChat()
+	seq := int64(0)
+	apply := func(agent string, typ event.Type, p any) {
+		seq++
+		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
+	}
+	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main", Archetype: "general"})
+	apply("b2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b2", Parent: "a1", Label: "scout", Archetype: "general"})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "@scout check the tests", To: []string{"scout"}})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p2", Text: "what's the stack?", To: []string{"main"}})
+	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "Go 1.27", Post: "p2"})
+	apply("b2", event.MessageToUser, event.ChatPayload{From: "scout", Text: "All 42 pass.", Post: "p1"})
+	apply("b2", event.MessageToUser, event.ChatPayload{From: "scout", Text: "also: one flaky test"})
+
+	if n := c.Items(); n != 3 {
+		t.Fatalf("items %d, want two threads and a standalone message", n)
+	}
+	item := func(i int) string {
+		var out []string
+		for _, l := range c.All() {
+			if l.Item == i && l.Text != "" {
+				out = append(out, strings.Repeat(">", l.Indent)+l.Text)
+			}
+		}
+		return strings.Join(out, "|")
+	}
+	if got := item(0); got != "to scout|@scout check the tests|>scout (general)|>All 42 pass." {
+		t.Fatalf("first thread %q", got)
+	}
+	if got := item(1); got != "to main|what's the stack?|>main (general)|>Go 1.27" {
+		t.Fatalf("second thread %q", got)
+	}
+	if got := item(2); got != "scout (general)|also: one flaky test" {
+		t.Fatalf("standalone %q", got)
+	}
+}
