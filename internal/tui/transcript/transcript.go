@@ -173,6 +173,7 @@ type Transcript struct {
 
 	chat  bool              // the session chat (chat.go), not one agent's transcript
 	names map[string]string // in the chat: agent id → name
+	roles map[string]string // in the chat: agent id → role
 }
 
 // turnVerbs are the horse-flavoured labels the turn indicator cycles
