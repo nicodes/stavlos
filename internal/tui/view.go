@@ -540,39 +540,21 @@ func (m Model) sidebarHeader(width int) []string {
 	}
 }
 
-// sidebarBody is everything under the header: the + channel row, this
-// channel's row (its chat), its agent tree, then the directory's other
-// channels, a row each with its state and age. items maps each row to its
-// cursor index (+ channel 0, this channel 1, the agents 2…, then the other
-// channels), -1 for rows the cursor skips.
+// sidebarBody is everything under the header: the + channel row, then the
+// directory's channels in alphabetical order (they never move on their
+// own), this channel's row (its chat) with its agent tree right under it,
+// each other channel a row with its state and age. items maps each row to its
+// cursor index (+ channel 0, then top to bottom; see channelRow), -1 for rows
+// the cursor skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	focused := m.focus == focusSidebar && m.sidebarVisible()
-	add := "  " + theme.StyleDim.Render("+ channel") + strings.Repeat(" ", max(0, width-11))
-	if focused && m.sbCursor == 0 {
-		add = render.Highlight(add, width)
-	}
-	rows, items = append(rows, add), append(items, 0)
-	label := format.Trunc(channelLabel(m.channel), width-3)
-	chat := theme.StyleDim.Render(label)
-	if m.superChat {
-		chat = theme.StyleSelected.Render(label)
-	}
-	chat = "  " + chat + strings.Repeat(" ", max(0, width-2-ansi.StringWidth(label)))
-	if focused && m.sbCursor == 1 {
-		chat = render.Highlight(chat, width)
-	}
-	rows, items = append(rows, chat), append(items, 1)
-	tree := m.treeRows(width)
-	rows = append(rows, tree...)
-	for i := range tree {
-		if i < len(m.agents) {
-			items = append(items, i+2)
-		} else {
-			items = append(items, -1) // the "(no agents)" row
+	line := func(text string, idx int) {
+		if focused && m.sbCursor == idx {
+			text = render.Highlight(text, width)
 		}
+		rows, items = append(rows, text), append(items, idx)
 	}
-	na := len(m.agents)
-	for k, s := range m.navChannels {
+	other := func(s protocol.ChannelInfo, idx int) {
 		age := ""
 		if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
 			age = format.Elapsed(time.Since(t))
@@ -583,11 +565,30 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 			name = format.Trunc(name, avail-1)
 		}
 		gap := max(1, width-4-ansi.StringWidth(name)-ansi.StringWidth(age))
-		row := "  " + theme.StyleDim.Render(name) + strings.Repeat(" ", gap) + stateDot(string(s.State)) + " " + theme.StyleDim.Render(age)
-		if focused && m.sbCursor == na+2+k {
-			row = render.Highlight(row, width)
+		line("  "+theme.StyleDim.Render(name)+strings.Repeat(" ", gap)+stateDot(string(s.State))+" "+theme.StyleDim.Render(age), idx)
+	}
+	line("  "+theme.StyleDim.Render("+ channel")+strings.Repeat(" ", max(0, width-11)), 0)
+	here, na := m.channelRow(), len(m.agents)
+	for k := 0; k < here-1; k++ {
+		other(m.navChannels[k], 1+k)
+	}
+	label := format.Trunc(channelLabel(m.channel), width-3)
+	chat := theme.StyleDim.Render(label)
+	if m.superChat {
+		chat = theme.StyleSelected.Render(label)
+	}
+	line("  "+chat+strings.Repeat(" ", max(0, width-2-ansi.StringWidth(label))), here)
+	tree := m.treeRows(width)
+	rows = append(rows, tree...)
+	for i := range tree {
+		if i < na {
+			items = append(items, here+1+i)
+		} else {
+			items = append(items, -1) // the "(no agents)" row
 		}
-		rows, items = append(rows, row), append(items, na+2+k)
+	}
+	for k := here - 1; k < len(m.navChannels); k++ {
+		other(m.navChannels[k], 2+na+k)
 	}
 	return rows, items
 }
@@ -707,7 +708,7 @@ func (m Model) treeRows(width int) []string {
 			gap = 0
 		}
 		row := indent + dot + " " + text + strings.Repeat(" ", gap) + right
-		if focused && i+2 == m.sbCursor {
+		if focused && m.channelRow()+1+i == m.sbCursor {
 			row = render.Highlight(row, width)
 		}
 		rows = append(rows, row)

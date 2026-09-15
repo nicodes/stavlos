@@ -1545,9 +1545,9 @@ func TestChannelsPickerListsEveryChannel(t *testing.T) {
 	m := channelModel()
 	m.channelID = "cur"
 	m.onChannels(channelsMsg{channels: []protocol.ChannelInfo{
-		{ID: "cur", Created: time.Now().Format(time.RFC3339)},
-		{ID: "empty", Created: time.Now().Format(time.RFC3339)},
-		{ID: "old", Title: "fix the login bug", Created: time.Now().Format(time.RFC3339)},
+		{ID: "cur", Name: "beta", Created: time.Now().Format(time.RFC3339)},
+		{ID: "empty", Name: "gamma", Created: time.Now().Format(time.RFC3339)},
+		{ID: "old", Name: "alpha", Title: "fix the login bug", Created: time.Now().Format(time.RFC3339)},
 	}})
 	if m.ov == nil || m.ov.kind != ovChannels {
 		t.Fatal("picker should open")
@@ -1556,8 +1556,8 @@ func TestChannelsPickerListsEveryChannel(t *testing.T) {
 	for _, it := range m.ov.items {
 		ids = append(ids, it.id)
 	}
-	if strings.Join(ids, " ") != "cur empty old" {
-		t.Fatalf("picker rows %v: every channel is listed, a named one even before its first prompt", ids)
+	if strings.Join(ids, " ") != "old cur empty" {
+		t.Fatalf("picker rows %v: every channel is listed, alphabetically, a named one even before its first prompt", ids)
 	}
 }
 
@@ -2245,17 +2245,18 @@ func TestSidebarNav(t *testing.T) {
 			t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
 		}
 	})
-	t.Run("the directory's other channels", func(t *testing.T) {
+	t.Run("the directory's channels, alphabetically", func(t *testing.T) {
 		m := sidebarNavModel()
 		m.prompts = nil
-		// under this channel and its agents come the directory's other
-		// channels, by name with their state and age; space on one opens it,
-		// and so does a click
+		// every channel of the directory in alphabetical order, whichever is
+		// open: this one keeps its place with its agents under it, the
+		// others show their state and age; space on one opens it, and so
+		// does a click
 		m.channel.Name = "proj"
-		m.navChannels = []protocol.ChannelInfo{
+		m.navChannels = resumable([]protocol.ChannelInfo{
 			{ID: "s-old", Name: "proj-2", Title: "fix the login bug", State: "working", Created: time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)},
 			{ID: "s-older", Name: "docs", Title: "docs sweep", Created: time.Now().Add(-26 * time.Hour).UTC().Format(time.RFC3339)},
-		}
+		}, m.channelID)
 		m.setFocus(focusSidebar)
 		body, items := m.sidebarBody(sidebarWidth - 1)
 		plain := make([]string, len(body))
@@ -2263,28 +2264,33 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if len(body) != na+4 || !strings.HasPrefix(plain[0], "  + channel") || !strings.HasPrefix(plain[1], "  # proj ") || items[0] != 0 || items[1] != 1 || items[na+2] != na+2 || items[na+3] != na+3 ||
-			!strings.HasPrefix(plain[na+2], "  # proj-2") || !strings.HasSuffix(plain[na+2], "● 2h00m") || !strings.HasPrefix(plain[na+3], "  # docs") || !strings.HasSuffix(plain[na+3], "○ 26h00m") {
+		if len(body) != na+4 || !strings.HasPrefix(plain[0], "  + channel") || !strings.HasPrefix(plain[1], "  # docs") || !strings.HasSuffix(plain[1], "○ 26h00m") ||
+			!strings.HasPrefix(plain[2], "  # proj ") || !strings.HasPrefix(plain[na+3], "  # proj-2") || !strings.HasSuffix(plain[na+3], "● 2h00m") ||
+			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || m.channelRow() != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}
-		for _, r := range plain[na+2:] {
-			if w := ansi.StringWidth(r); w != sidebarWidth-1 {
-				t.Fatalf("channel rows fill the width: %d %q", w, r)
+		for _, i := range []int{1, na + 3} {
+			if w := ansi.StringWidth(plain[i]); w != sidebarWidth-1 {
+				t.Fatalf("channel rows fill the width: %d %q", w, plain[i])
 			}
 		}
-		for m.sbCursor != na+3 {
+		for m.sbCursor != 1 {
 			press(&m, tea.KeyMsg{Type: tea.KeyDown})
 		}
 		if cmd := press(&m, tea.KeyMsg{Type: tea.KeySpace}); cmd == nil || !strings.Contains(m.status, "opening #docs") {
 			t.Fatalf("space on a channel should open it: cmd=%v status=%q", cmd != nil, m.status)
 		}
+		for m.sbCursor != na+3 {
+			press(&m, tea.KeyMsg{Type: tea.KeyDown})
+		}
 		press(&m, tea.KeyMsg{Type: tea.KeyDown}) // wraps to the + channel row
 		if m.sbCursor != 0 {
 			t.Fatalf("wrap: %d", m.sbCursor)
 		}
+		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}) // from + channel, n still finds an agent
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 3, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 3, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
 		if !strings.Contains(m.status, "opening #proj-2") {
 			t.Fatalf("a click on a channel should open it: %q", m.status)
