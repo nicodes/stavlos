@@ -1038,7 +1038,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 	event.UserMessage: decoded(func(p event.UserMessagePayload) []Line {
 		switch p.Kind {
-		case event.MsgPrompt, "", event.MsgSteer: // a steer reads exactly like a prompt
+		case event.MsgPrompt, "", event.MsgSteer, event.MsgNote: // a steer or a note reads exactly like a prompt
 			if p.From != "" {
 				return received(p.From, p.Text)
 			}

@@ -167,9 +167,14 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 func (t *turnRun) injectSteers() {
 	a := t.a
 	a.mu.Lock()
-	steers := a.steers
-	a.steers = nil
+	steers, notes := a.steers, a.notes
+	a.steers, a.notes = nil, nil
 	a.mu.Unlock()
+	defer func() { // notes land after the steers, needing no reply
+		for _, q := range notes {
+			_, _ = a.record(t.bg, event.UserMessage, event.UserMessagePayload{Turn: t.turn, Kind: event.MsgNote, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source)})
+		}
+	}()
 	for _, st := range steers {
 		in := event.UserMessagePayload{Turn: t.turn, Kind: event.MsgSteer, Text: st.text, From: a.s.senderLabel(st.source), FromID: senderID(st.source), Post: st.post}
 		_, _ = a.record(t.bg, event.UserMessage, in)

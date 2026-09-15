@@ -61,6 +61,7 @@ type Agent struct {
 	turn        int
 	prompts     []queued              // Prompt inbox
 	steers      []queued              // Steer inbox
+	notes       []queued              // messages that need no reply: taken at the next step or with the next turn, never starting one
 	responses   []response            // answers from other agents, not yet delivered
 	awaiting    map[string]int        // agent id → questions asked of it (a message, a child's task); cleared by its next answer
 	owed        map[string]bool       // parties owed a reply ("user" or an agent id) by the messages taken in (replies.go)
@@ -169,6 +170,10 @@ func (a *Agent) takeInputs() []event.UserMessagePayload {
 		in = append(in, event.UserMessagePayload{Kind: event.MsgPrompt, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source), Post: q.post})
 	}
 	a.steers = nil
+	for _, q := range a.notes {
+		in = append(in, event.UserMessagePayload{Kind: event.MsgNote, Text: q.text, From: a.s.senderLabel(q.source), FromID: senderID(q.source)})
+	}
+	a.notes = nil
 	for _, r := range a.responses {
 		in = append(in, event.UserMessagePayload{Kind: event.MsgAgentResponse, Text: r.text, From: r.label, FromID: r.from})
 	}
@@ -220,6 +225,23 @@ func (a *Agent) steer(ctx context.Context, text, source, post string) error {
 	a.steers = append(a.steers, queued{text, source, post})
 	a.mu.Unlock()
 	a.signal()
+	return nil
+}
+
+// note queues a message that needs no reply: it reaches the agent at its
+// next model call when a turn is running, or with the inputs of its next
+// turn, and never starts one.
+func (a *Agent) note(ctx context.Context, text, source string) error {
+	if !a.Alive() {
+		return fmt.Errorf("agent %s is %s", a.ID, a.StateOf())
+	}
+	if _, err := a.s.host.Append(ctx, event.Event{Session: a.s.ID, Agent: a.ID, Type: event.NoteQueued,
+		Payload: event.MustPayload(event.TextPayload{Text: text, Source: source})}); err != nil {
+		return err
+	}
+	a.mu.Lock()
+	a.notes = append(a.notes, queued{text: text, source: source})
+	a.mu.Unlock()
 	return nil
 }
 
@@ -561,7 +583,7 @@ func (a *Agent) Info() protocol.AgentInfo {
 	info := protocol.AgentInfo{
 		ID: a.ID, Session: a.s.ID, Parent: a.Parent, Archetype: a.Archetype, Label: a.Label,
 		Model: a.modelID, Variant: a.variant, Depth: a.Depth, State: state, Turn: a.turn,
-		Queued:  len(a.prompts) + len(a.steers) + len(a.responses),
+		Queued:  len(a.prompts) + len(a.steers) + len(a.notes) + len(a.responses),
 		CostUSD: a.usage.cost, Tokens: a.usage.tokens,
 		Context: a.ctxTokens, ContextWindow: a.ctxWindow,
 	}

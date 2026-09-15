@@ -133,10 +133,14 @@
     }
   },
   {
-    "description": "Send text to another agent in this session (a child, a sibling, or your parent) by name, or to the human as \"user\". To an agent that is waiting on you, because it gave you a task or asked you something, this is your answer: it wakes that agent between turns. To any other agent it is a new message: it reaches them at their next step, mid-turn if they are busy, and their answer wakes you. agent_status lists every agent.",
+    "description": "Send text to another agent in this session (a child, a sibling, or your parent) by name, or to the human as \"user\". To an agent that is waiting on you, because it gave you a task or asked you something, this is your answer: it wakes that agent between turns. To any other agent it is a new message: it reaches them at their next step, mid-turn if they are busy, and their answer wakes you. Set no_reply for a message that needs no answer (thanks, an acknowledgement, a closing note): the recipient owes you nothing, you do not wait on it, and it does not wake an idle agent. agent_status lists every agent.",
     "name": "message",
     "schema": {
       "properties": {
+        "no_reply": {
+          "description": "True when the message needs no answer (thanks, acknowledgements, closing notes): nobody owes a reply or waits, and an idle recipient is not woken",
+          "type": "boolean"
+        },
         "text": {
           "description": "The message. The recipient sees only what you put here: include exact paths and results",
           "type": "string"
