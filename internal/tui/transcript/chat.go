@@ -16,7 +16,7 @@ import (
 func NewChat() *Transcript {
 	t := NewTranscript()
 	t.chat = true
-	t.names = map[string]string{}
+	t.names, t.roles = map[string]string{}, map[string]string{}
 	return t
 }
 
@@ -46,12 +46,15 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.AgentSpawned:
 		var p event.AgentSpawnedPayload
 		if ev.Decode(&p) == nil && p.ID != "" {
-			t.names[p.ID] = p.Label
+			t.names[p.ID], t.roles[p.ID] = p.Label, p.Archetype
 		}
 	case event.AgentRoleChanged:
 		var p event.RoleChangedPayload
-		if ev.Decode(&p) == nil && p.Label != "" {
-			t.names[ev.Agent] = p.Label
+		if ev.Decode(&p) == nil {
+			if p.Label != "" {
+				t.names[ev.Agent] = p.Label
+			}
+			t.roles[ev.Agent] = p.Role
 		}
 	case event.ChatPosted:
 		var p event.ChatPayload
@@ -61,11 +64,18 @@ func (t *Transcript) applyChat(ev event.Event) {
 	case event.MessageToUser:
 		var p event.ChatPayload
 		if ev.Decode(&p) == nil {
+			// Reads like an agent's reply in its own chat, under the
+			// sender's "name (role)".
 			from := p.From
 			if from == "" {
 				from = t.agentName(ev.Agent)
 			}
-			t.appendItem(linked(CleanLines(blockWith(BlockChild, from, p.Text, GlyphChild)), ev.Agent))
+			if role := t.roles[ev.Agent]; role != "" {
+				from += " (" + role + ")"
+			}
+			lines := []Line{{Kind: LineBlank}, {Kind: LineLabel, Text: from}}
+			lines = append(lines, markdownLines(strings.TrimRight(p.Text, "\n"))...)
+			t.appendItem(linked(CleanLines(append(lines, Line{Kind: LineBlank})), ev.Agent))
 		}
 	case event.PromptRequested:
 		var p event.PromptRequestedPayload
