@@ -871,7 +871,8 @@ func TestFoldedToolCallIsOneRow(t *testing.T) {
 }
 
 // TestTurnGapsSpaceOnlyTurns: in an agent's chat nothing inside a turn is
-// spaced, and one blank row separates turns.
+// spaced, and one blank row separates turns; what happens between turns
+// stays with the turn before, except a nudge, which opens the next.
 func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	tr := transcript.NewTranscript()
 	tr.Apply(mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}))
@@ -909,6 +910,22 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 		mk(8, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "thanks"}),
 	} {
 		tr.Apply(ev)
+	}
+	// a mode change between turns stays with the turn before the gap
+	between := transcript.NewTranscript()
+	for _, ev := range []event.Event{
+		mk(1, "a", event.TurnStarted, event.TurnPayload{Turn: 1}),
+		mk(2, "a", event.UserMessage, event.UserMessagePayload{Turn: 1, Kind: "prompt", Text: "go"}),
+		mk(3, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "done"}}}),
+		mk(4, "a", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "end_turn"}),
+		mk(5, "", event.SessionModeChanged, event.ModePayload{Mode: "auto"}),
+		mk(6, "a", event.TurnStarted, event.TurnPayload{Turn: 2}),
+		mk(7, "a", event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "prompt", Text: "again"}),
+	} {
+		between.Apply(ev)
+	}
+	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user go\n§ done\n⇄ Mode → auto · allows inside the agent's directories, denies outside them\n\n› @user again" {
+		t.Fatalf("a between-turn mode change:\n%s", got)
 	}
 	// the loader keeps one blank row above it
 	working := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true, Working: true, Spinner: "◐", Verb: "Trotting"}), "\n")
