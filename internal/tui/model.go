@@ -1737,7 +1737,7 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 		}
 		return cmd
 	case y >= lay.strip && y < lay.strip+m.stripRows(): // a tab label opens that tab's dialog
-		if f, ok := m.tabAt(x, y-lay.strip+len(m.tabLayout())-m.stripRows()); ok {
+		if f, ok := m.tabAt(x, y-lay.strip); ok {
 			return m.openTab(f)
 		}
 	case y >= lay.input && y < lay.input+m.inputRows(): // the input lines; the mode tag before the › is a button
@@ -1745,7 +1745,10 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 			return m.metaAction(metaYolo)
 		}
 		return m.setFocus(focusInput)
-	case y == lay.meta: // the meta row: its parts are buttons
+	case y == lay.meta: // the meta row: its parts are buttons, and so are the agent's tabs at its right end
+		if f, ok := m.metaTabAt(x, m.width); ok {
+			return m.openTab(f)
+		}
 		if part := m.metaHit(x); part != metaNone {
 			return m.metaAction(part)
 		}

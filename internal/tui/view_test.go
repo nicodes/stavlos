@@ -251,12 +251,12 @@ func TestAgentRows(t *testing.T) {
 	m.spawned = spawned
 	m.agents = agents
 	m.selected = 0
-	view := stripANSI(m.sectionsView(100))
+	view := stripANSI(tabsView(m, 100))
 	if !strings.Contains(view, "async 2") || strings.Contains(view, "agents") || strings.Contains(view, "scout") || strings.Contains(view, "grandchild") {
 		t.Fatalf("collapsed async tab should only count:\n%s", view)
 	}
 	m.focus = focusAsync
-	if view = stripANSI(m.sectionsView(100)); strings.Contains(view, "scout") {
+	if view = stripANSI(tabsView(m, 100)); strings.Contains(view, "scout") {
 		t.Fatalf("the strip never lists agents:\n%s", view)
 	}
 	view = stripANSI(m.tabDialog(100))
@@ -312,12 +312,12 @@ func TestMonitorRows(t *testing.T) {
 	m := channelModel()
 	m.agents = []protocol.AgentInfo{{ID: "root", Label: "coder", Archetype: "coder", State: "idle", Monitors: monitors[:3]}}
 	m.selected = 0
-	view := stripANSI(m.sectionsView(100))
+	view := stripANSI(tabsView(m, 100))
 	if !strings.Contains(view, "async 3") || strings.Count(view, "\n") != 1 {
 		t.Fatalf("collapsed async tab:\n%s", view)
 	}
 	m.focus = focusAsync
-	if view := stripANSI(m.sectionsView(100)); strings.Count(view, "\n") != 1 {
+	if view := stripANSI(tabsView(m, 100)); strings.Count(view, "\n") != 1 {
 		t.Fatalf("the strip keeps its two rows with a tab open:\n%s", view)
 	}
 	// the dialog: title (with esc: close), a blank line, one row per job, inside the border
@@ -342,8 +342,8 @@ func TestMonitorRows(t *testing.T) {
 	m.focus = focusInput
 	m.agents[0].Monitors = nil
 	m.layout()
-	if m.vp.Height != collapsed || !strings.Contains(stripANSI(m.sectionsView(100)), "async 0") {
-		t.Fatalf("layout: viewport %d without jobs, want %d:\n%s", m.vp.Height, collapsed, stripANSI(m.sectionsView(100)))
+	if m.vp.Height != collapsed || !strings.Contains(stripANSI(tabsView(m, 100)), "async 0") {
+		t.Fatalf("layout: viewport %d without jobs, want %d:\n%s", m.vp.Height, collapsed, stripANSI(tabsView(m, 100)))
 	}
 }
 
@@ -653,7 +653,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	}
 	m.promptBusy = ""
 	m.focus = focusInput
-	if pv := stripANSI(m.sectionsView(80)); !strings.Contains(pv, "! 1/1") || strings.Count(pv, "\n") != 1 {
+	if pv := stripANSI(tabsView(m, 80)); !strings.Contains(pv, "! 1/1") || strings.Count(pv, "\n") != 1 {
 		t.Fatalf("unfocused prompt should be one strip line: %q", pv)
 	}
 	m.focus = focusPermission
@@ -914,7 +914,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`)}}
 
 	// unfocused: one strip line, counts only
-	sv := stripANSI(m.sectionsView(100))
+	sv := stripANSI(tabsView(m, 100))
 	if strings.Count(sv, "\n") != 1 || !strings.Contains(sv, "async 2") || strings.Contains(sv, "agents") || !strings.Contains(sv, "! 1/1") ||
 		strings.Contains(sv, "scout") || strings.Contains(sv, "checks") || strings.Contains(sv, "make test") || strings.Contains(sv, "tab to") {
 		t.Fatalf("collapsed strip should only count:\n%s", sv)
@@ -930,7 +930,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("the strip should highlight permission without a dialog: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
-	if sv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(sv, "\n") != 1 || strings.Contains(sv, "make test") {
+	if sv := stripANSI(tabsView(m, 100)); m.focus != focusPermission || strings.Count(sv, "\n") != 1 || strings.Contains(sv, "make test") {
 		t.Fatalf("the strip should stay one line with the permission open: focus=%v\n%s", m.focus, sv)
 	}
 	// the dialog: the subject row "$ command  name (role)", then the options
@@ -973,7 +973,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("enter should select the child under the cursor: %s focus %v", m.selectedID(), m.focus)
 	}
 	// now the selected agent waits on nothing: the tab stays, reading 0
-	if v := stripANSI(m.sectionsView(100)); !strings.Contains(v, "async 0") {
+	if v := stripANSI(tabsView(m, 100)); !strings.Contains(v, "async 0") {
 		t.Fatalf("empty async tab:\n%s", v)
 	}
 }
@@ -988,7 +988,7 @@ func TestSectionTabStrip(t *testing.T) {
 	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`), Prefix: "make test"}}
 
 	// unfocused: the channel's tabs over the agent's, counts only
-	v := stripANSI(m.sectionsView(100))
+	v := stripANSI(tabsView(m, 100))
 	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · ? 0 · dirs 0\nasync 2 · due 0 · todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
@@ -996,7 +996,7 @@ func TestSectionTabStrip(t *testing.T) {
 	// async focused: the strip is unchanged; the dialog has its own title,
 	// a blank line, then the awaited agent's row over the job's row
 	m.focus = focusAsync
-	if sv := stripANSI(m.sectionsView(100)); strings.Count(sv, "\n") != 1 || strings.Contains(sv, "scout") {
+	if sv := stripANSI(tabsView(m, 100)); strings.Count(sv, "\n") != 1 || strings.Contains(sv, "scout") {
 		t.Fatalf("strip with async focused:\n%s", sv)
 	}
 	v = stripANSI(m.tabDialog(100))
@@ -1022,7 +1022,7 @@ func TestSectionTabStrip(t *testing.T) {
 	// no prompt: the tab stays with a zero count and the generic hint
 	m.prompts = nil
 	m.focus = focusInput
-	if v := stripANSI(m.sectionsView(100)); !strings.Contains(v, "! 0") || strings.Contains(v, "tab to") {
+	if v := stripANSI(tabsView(m, 100)); !strings.Contains(v, "! 0") || strings.Contains(v, "tab to") {
 		t.Fatalf("empty permission tab:\n%s", v)
 	}
 }
@@ -1045,14 +1045,14 @@ func TestChannelViewFillsHeight(t *testing.T) {
 				si = i
 			}
 		}
-		// under the rule: the input, a blank line, the strip's two rows, then the meta row
+		// under the rule: the input, a blank line, the strip (! ? dirs), then the meta row with the agent's tabs at its right end
 		ri := -1
 		for i := 0; i < si; i++ {
 			if strings.HasPrefix(lines[i], "─") {
 				ri = i
 			}
 		}
-		if ri < 0 || si < 2 || si+2 >= len(lines) || !strings.HasPrefix(lines[ri+1], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" || !strings.HasPrefix(lines[si+1], "async ") || !strings.HasPrefix(lines[si+2], "coder ·") {
+		if ri < 0 || si < 2 || si+1 >= len(lines) || !strings.HasPrefix(lines[ri+1], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" || !strings.HasPrefix(lines[si+1], "coder ·") || !strings.Contains(lines[si+1], "async ") {
 			t.Fatalf("focus %v: under the rule come the input, a blank line, the strip, then the meta row:\n%s", f, stripANSI(v))
 		}
 	}
@@ -1165,8 +1165,8 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if nm.(Model).compactTick {
 		t.Fatal("the tick should stop when no chat is compacting")
 	}
-	if strip < 3 || meta != strip+2 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], " ASK › ") || !strings.HasPrefix(lines[strip-3], "─") {
-		t.Fatalf("under the rule come the input, a blank line, the strip's two rows, then the meta row:\n%s", strings.Join(lines, "\n"))
+	if strip < 3 || meta != strip+1 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], " ASK › ") || !strings.HasPrefix(lines[strip-3], "─") {
+		t.Fatalf("under the rule come the input, a blank line, the strip, then the meta row:\n%s", strings.Join(lines, "\n"))
 	}
 	// the repo is not on the strip (the dirs tab shows it)
 	if strings.Contains(strings.Join(lines, "\n"), "/repo/project") {
@@ -1384,7 +1384,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Archetype = "general"
 	// empty: the tab reads (0) and its dialog says so
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "async 0 · due 0 · todo 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 · due 0 · todo 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	m.focus = focusTodo
@@ -1399,7 +1399,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 		{ID: "t4", Text: "Write docs", Status: "cancelled"},
 	}
 	// the count is done (finished + cancelled) over total
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo 2/4") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 2/4") {
 		t.Fatalf("strip with items:\n%s", sv)
 	}
 	// tab → strip, → x5 lands on todo, enter opens its dialog
@@ -1429,10 +1429,13 @@ func TestTodoTabAndDialog(t *testing.T) {
 	}
 	// clicking the todo label on the strip opens the dialog
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	m.width, m.height = max(m.width, 120), max(m.height, 40)
+	m.layout()
 	lay := m.rows()
-	x := len("async 0 · due 0 · ") + 1 // the agent's row, under the channel's
-	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.strip + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.strip + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	row := stripANSI(m.metaRow(m.width)) // the agent's tabs sit at the meta row's right end
+	x := ansi.StringWidth(row[:strings.Index(row, "todo")]) + 1
+	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.meta, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.meta, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
 	if m.focus != focusTodo {
 		t.Fatalf("clicking the todo label should open its dialog: %v", m.focus)
@@ -1670,9 +1673,12 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 		m = nm.(Model)
 	}
 	lay := m.rows()
-	// the strip's second row, the selected agent's, starts with "async 2"
-	agentsX := 1
-	click(agentsX, lay.strip+1)
+	// the agent's tabs sit at the meta row's right end
+	metaCol := func(sub string) int {
+		row := stripANSI(m.metaRow(m.width))
+		return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1
+	}
+	click(metaCol("async"), lay.meta)
 	if m.focus != focusAsync {
 		t.Fatalf("clicking the async label should open the async tab: %v", m.focus)
 	}
@@ -1698,8 +1704,8 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	}
 	m.selected = 0
 	// the strip labels still open dialogs directly while one is up
-	click(agentsX, lay.strip+1)
-	click(agentsX+len("async 2")+3+len("due 0")+3, lay.strip+1) // "todo 0"
+	click(metaCol("async"), lay.meta)
+	click(metaCol("todo"), lay.meta)
 	if m.focus != focusTodo {
 		t.Fatalf("clicking a strip label should open that tab's dialog: %v", m.focus)
 	}
@@ -2184,7 +2190,7 @@ func TestSidebarNav(t *testing.T) {
 		}
 		m.closeDialog()
 		// with the sidebar showing, the footer strip keeps only the agent's row
-		if sv := stripANSI(m.sectionsView(120)); strings.Contains(sv, "dirs") || !strings.HasPrefix(sv, "async") || strings.Count(sv, "\n") != 0 {
+		if sv := stripANSI(m.sectionsView(120)); sv != "" || !strings.Contains(stripANSI(m.metaRow(120)), "async") { // no footer strip: the agent's tabs sit at the meta row's right end
 			t.Fatalf("strip with the sidebar:\n%s", sv)
 		}
 		rows := m.treeRows(sidebarWidth - 1)
@@ -2484,7 +2490,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 
 func TestMCPTabAndDialog(t *testing.T) {
 	m := channelModel()
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "todo 0 · mcp 0") || !strings.Contains(sv, "? 0 · dirs 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 0 · mcp 0") || !strings.Contains(sv, "? 0 · dirs 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	started := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
@@ -2493,7 +2499,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		{Name: "docs", State: "failed", Error: "spawn npx: not found"},
 		{Name: "linear", State: "pending"},
 	}
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "mcp 1/3") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "mcp 1/3") {
 		t.Fatalf("strip with servers:\n%s", sv)
 	}
 	// tab → strip, → x6 lands on mcp, enter opens its dialog
@@ -2549,7 +2555,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	m := channelModel()
 	m.channel.Dirs = []protocol.DirInfo{{Path: "/repo", Source: "channel"}, {Path: "/srv/shared", Source: "human"}, {Path: "/tmp/build", Source: "human"}}
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "dirs 3") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "dirs 3") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	tab := tea.KeyMsg{Type: tea.KeyTab}
@@ -2832,7 +2838,7 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 func TestQuestionsTabAndDialog(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Archetype = "general"
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "! 0 · ? 0 · dirs 0\nasync") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "! 0 · ? 0 · dirs 0\nasync") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user", Questions: []protocol.Question{
@@ -2845,7 +2851,7 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 	if m.focus != focusQuestions || m.currentPrompt() != nil {
 		t.Fatalf("a question should open the questions dialog: focus=%v", m.focus)
 	}
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "? 1/3") || !strings.Contains(sv, "! 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "? 1/3") || !strings.Contains(sv, "! 0") {
 		t.Fatalf("strip with a question:\n%s", sv)
 	}
 	dv := stripANSI(m.tabDialog(120))
@@ -3061,7 +3067,7 @@ func TestChannelChatFooterIsTheChannels(t *testing.T) {
 			t.Fatalf("channel chat view is %d lines, want %d (tree %v)", got, m.height, tree)
 		}
 		m.openAgent(0)
-		if sv := stripANSI(m.sectionsView(100)); !strings.Contains(sv, "async") || len(m.metaParts()) != 3 || !strings.Contains(stripANSI(m.footerRightView()), "31%") {
+		if sv := stripANSI(m.metaRow(100)); !strings.Contains(sv, "async") || len(m.metaParts()) != 3 || !strings.Contains(stripANSI(m.footerRightView()), "31%") {
 			t.Fatalf("agent chat footer: %q %v %q", sv, m.metaParts(), stripANSI(m.footerRightView()))
 		}
 		if got := strings.Count(m.View(), "\n") + 1; got != m.height {
@@ -3128,4 +3134,11 @@ func TestStatusSitsOnTheDivider(t *testing.T) {
 	if d := stripANSI(m.ruleLine(60)); ansi.StringWidth(d) != 60 || !strings.HasSuffix(d, "─ 2k tokens · $0.02 ─") || !strings.Contains(d, "…") {
 		t.Fatalf("narrow divider: %q", d)
 	}
+}
+
+// tabsView is every tab label as laid out, a line per row, wherever it is
+// drawn: the footer strip, the sidebar, the meta row's right end.
+func tabsView(m Model, _ int) string {
+	labels, _ := m.tabLabels(m.currentPrompt())
+	return labels
 }
