@@ -262,7 +262,8 @@ type footerInfo struct {
 
 // footerRight builds the right side of the meta row: a sign-in nudge,
 // nothing on the home view (the left side already names the role and
-// model), or the tokens and cost separated by a dot. The
+// model), or how full the context is and the cost ("2% · 22k/1.1m · $0.00",
+// or the session's tokens when the window is unknown). The
 // repo sits on the tab strip; waiting permissions and /help are not
 // repeated here either (the strip shows the former, the "/" palette lists
 // every command).
@@ -273,14 +274,13 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
-	s := format.Tokens(f.tokens) + " tokens · $" + format.Cost(f.cost)
 	if bar := contextBar(f.context, f.window); bar != "" {
-		s = bar + " · " + s
+		return bar + " · $" + format.Cost(f.cost) // the session's total tokens are in the sidebar
 	}
-	return s
+	return format.Tokens(f.tokens) + " tokens · $" + format.Cost(f.cost)
 }
 
-// contextBar reads how full the model's context is — "31% of 200k" — which
+// contextBar reads how full the model's context is — "31% · 62k/200k" — which
 // is what auto-compaction watches (it summarises at 80%). Dim until 70%,
 // warning-coloured from there. "" when the window is unknown.
 func contextBar(context, window int) string {
@@ -295,7 +295,7 @@ func contextBar(context, window int) string {
 	if pct >= 70 {
 		st = theme.StyleWarn
 	}
-	return st.Render(fmt.Sprintf("%d%% of %s", pct, format.Tokens(window)))
+	return st.Render(fmt.Sprintf("%d%% · %s/%s", pct, format.Tokens(context), format.Tokens(window)))
 }
 
 // --- view ---
@@ -1022,7 +1022,7 @@ func (m Model) sectionTabs(p *protocol.PromptInfo, width int) string {
 	return ansi.Truncate(labels, width, "…") // the session directory lives in the dirs tab
 }
 
-// tabLabels is "permission (n) · agents (n) · async (n)": the highlighted
+// tabLabels is "! 1/2 · ? 0 · async (n) · …": the highlighted
 // tab (while the strip has focus) or the open one (while its dialog is up)
 // in accent, the rest dim; with where each label was drawn.
 func (m Model) tabLabels(p *protocol.PromptInfo) (string, []span[focus]) {
@@ -1039,6 +1039,15 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, []span[focus]) {
 	x := 0
 	for i, f := range tabFocuses {
 		label := texts[i]
+		// the prompt tabs show the glyph their prompts draw in place of the
+		// word, to save room: "! 1/2" (permission or trust), "? 0"; their
+		// dialogs keep the word in the title
+		switch _, count, _ := strings.Cut(label, " "); f {
+		case focusPermission:
+			label = transcript.GlyphPermission + " " + count
+		case focusQuestions:
+			label = transcript.GlyphPrompt + " " + count
+		}
 		w := ansi.StringWidth(label)
 		spans = append(spans, span[focus]{x, x + w, f})
 		x += w + 3 // " · "
