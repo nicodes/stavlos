@@ -57,13 +57,17 @@ func (readTool) Def() model.ToolDef {
 		Schema: schemaOf(readInput{})}
 }
 
-// readMaxLines bounds one read: past it the tool says how to continue.
-const readMaxLines = 5000
+// readDefaultLines is what one read returns without a limit; readMaxLines
+// bounds any read. Past either the tool says how to continue.
+const (
+	readDefaultLines = 2000
+	readMaxLines     = 5000
+)
 
 type readInput struct {
 	Path   string `json:"path" desc:"File path, absolute or relative to the working directory" req:"true"`
 	Offset int    `json:"offset" desc:"1-based first line to return (default 1)"`
-	Limit  int    `json:"limit" desc:"Max lines to return (default 2000)"`
+	Limit  int    `json:"limit" desc:"Max lines to return (default 2000, max 5000)"`
 }
 
 func (readTool) Subject(in json.RawMessage) policy.Subject { return policy.Path(pathArg(in)) }
@@ -80,13 +84,10 @@ func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if a.Offset < 1 {
 		a.Offset = 1
 	}
-	if a.Limit <= 0 || a.Limit > readMaxLines {
-		a.Limit = readMaxLines
-		if a.Limit > 2000 && a.Limit != readMaxLines {
-			a.Limit = 2000
-		}
-	}
-	if a.Limit == readMaxLines && a.Limit > 2000 {
+	switch {
+	case a.Limit <= 0:
+		a.Limit = readDefaultLines
+	case a.Limit > readMaxLines:
 		a.Limit = readMaxLines
 	}
 	budget := env.MaxOutput
