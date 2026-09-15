@@ -741,7 +741,7 @@ func (m Model) treeRows(width int) []string {
 	return rows
 }
 
-// sectionsView is the one-line strip at the bottom of the footer: the tabs
+// sectionsView is the two-line strip at the bottom of the footer: the tabs
 // with their counts (always shown, "(0)" when empty). The body of whichever tab has
 // focus is a dialog (tabDialog), not an inline block.
 func (m Model) sectionsView(width int) string {
@@ -1019,13 +1019,19 @@ func answered(answers []string) int {
 // prompts waiting, which is warning orange). Key hints live in the key bar.
 func (m Model) sectionTabs(p *protocol.PromptInfo, width int) string {
 	labels, _ := m.tabLabels(p)
-	return ansi.Truncate(labels, width, "…") // the session directory lives in the dirs tab
+	rows := strings.Split(labels, "\n")
+	for i := range rows {
+		rows[i] = ansi.Truncate(rows[i], width, "…") // the session directory lives in the dirs tab
+	}
+	return strings.Join(rows, "\n")
 }
 
-// tabLabels is "! 1/2 · ? 0 · async (n) · …": the highlighted
-// tab (while the strip has focus) or the open one (while its dialog is up)
-// in accent, the rest dim; with where each label was drawn.
-func (m Model) tabLabels(p *protocol.PromptInfo) (string, []span[focus]) {
+// tabLabels is the strip, a line per row of tabRows: "! 1/2 · ? 0" (the
+// session's) over "async n · due n · todo … · mcp … · dirs n" (the selected
+// agent's). The highlighted tab (while the strip has focus) or the open one
+// (while its dialog is up) is in accent, the rest dim; with where each label
+// was drawn, per row.
+func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 	on := func(f focus) bool {
 		if m.focus == focusTabs {
 			return tabFocuses[m.tabSel] == f
@@ -1035,9 +1041,13 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, []span[focus]) {
 	perms, questions := m.promptCounts()
 	texts := m.tabTexts()
 	tabs := make([]string, len(texts))
-	spans := make([]span[focus], 0, len(texts))
-	x := 0
+	spans := make([][]span[focus], len(tabRows))
+	row, x, first := 0, 0, 0 // first: the index of row's first tab
 	for i, f := range tabFocuses {
+		if i-first == len(tabRows[row]) {
+			first += len(tabRows[row])
+			row, x = row+1, 0
+		}
 		label := texts[i]
 		// the prompt tabs show the glyph their prompts draw in place of the
 		// word, to save room: "! 1/2" (permission or trust), "? 0"; their
@@ -1049,7 +1059,7 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, []span[focus]) {
 			label = transcript.GlyphPrompt + " " + count
 		}
 		w := ansi.StringWidth(label)
-		spans = append(spans, span[focus]{x, x + w, f})
+		spans[row] = append(spans[row], span[focus]{x, x + w, f})
 		x += w + 3 // " · "
 		switch {
 		case on(f):
@@ -1062,7 +1072,13 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, []span[focus]) {
 			tabs[i] = theme.StyleDim.Render(label)
 		}
 	}
-	return strings.Join(tabs, theme.StyleDim.Render(" · ")), spans
+	lines := make([]string, len(tabRows))
+	first = 0
+	for r, tr := range tabRows {
+		lines[r] = strings.Join(tabs[first:first+len(tr)], theme.StyleDim.Render(" · "))
+		first += len(tr)
+	}
+	return strings.Join(lines, "\n"), spans
 }
 
 // cursorRows puts the ▸ marker (as in every dialog) on the row under

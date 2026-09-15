@@ -312,12 +312,12 @@ func TestMonitorRows(t *testing.T) {
 	m.agents = []protocol.AgentInfo{{ID: "root", Label: "coder", Archetype: "coder", State: "idle", Monitors: monitors[:3]}}
 	m.selected = 0
 	view := stripANSI(m.sectionsView(100))
-	if !strings.Contains(view, "async 3") || strings.Count(view, "\n") != 0 {
+	if !strings.Contains(view, "async 3") || strings.Count(view, "\n") != 1 {
 		t.Fatalf("collapsed async tab:\n%s", view)
 	}
 	m.focus = focusAsync
-	if view := stripANSI(m.sectionsView(100)); strings.Count(view, "\n") != 0 {
-		t.Fatalf("the strip stays one line with a tab open:\n%s", view)
+	if view := stripANSI(m.sectionsView(100)); strings.Count(view, "\n") != 1 {
+		t.Fatalf("the strip keeps its two rows with a tab open:\n%s", view)
 	}
 	// the dialog: title (with esc: close), a blank line, one row per job, inside the border
 	if view := stripANSI(m.tabDialog(100)); !strings.Contains(view, "esc: close") || !inOrder(view, "Async 3", "go test", "cooldown") {
@@ -652,7 +652,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	}
 	m.promptBusy = ""
 	m.focus = focusInput
-	if pv := stripANSI(m.sectionsView(80)); !strings.Contains(pv, "! 1/1") || strings.Count(pv, "\n") != 0 {
+	if pv := stripANSI(m.sectionsView(80)); !strings.Contains(pv, "! 1/1") || strings.Count(pv, "\n") != 1 {
 		t.Fatalf("unfocused prompt should be one strip line: %q", pv)
 	}
 	m.focus = focusPermission
@@ -914,7 +914,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 
 	// unfocused: one strip line, counts only
 	sv := stripANSI(m.sectionsView(100))
-	if strings.Count(sv, "\n") != 0 || !strings.Contains(sv, "async 2") || strings.Contains(sv, "agents") || !strings.Contains(sv, "! 1/1") ||
+	if strings.Count(sv, "\n") != 1 || !strings.Contains(sv, "async 2") || strings.Contains(sv, "agents") || !strings.Contains(sv, "! 1/1") ||
 		strings.Contains(sv, "scout") || strings.Contains(sv, "checks") || strings.Contains(sv, "make test") || strings.Contains(sv, "tab to") {
 		t.Fatalf("collapsed strip should only count:\n%s", sv)
 	}
@@ -929,7 +929,7 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("the strip should highlight permission without a dialog: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
-	if sv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(sv, "\n") != 0 || strings.Contains(sv, "make test") {
+	if sv := stripANSI(m.sectionsView(100)); m.focus != focusPermission || strings.Count(sv, "\n") != 1 || strings.Contains(sv, "make test") {
 		t.Fatalf("the strip should stay one line with the permission open: focus=%v\n%s", m.focus, sv)
 	}
 	// the dialog: the subject row "$ command  name (role)", then the options
@@ -986,16 +986,16 @@ func TestSectionTabStrip(t *testing.T) {
 	m.selected = 0
 	m.prompts = []protocol.PromptInfo{{ID: "p1", Kind: "permission", Tool: "shell", Agent: "root", Input: []byte(`{"command":"make test"}`), Prefix: "make test"}}
 
-	// unfocused: all three titles on one line, counts only
+	// unfocused: the session's tabs over the agent's, counts only
 	v := stripANSI(m.sectionsView(100))
-	if strings.Count(v, "\n") != 0 || !strings.Contains(v, "! 1/1 · ? 0 · async 2 · due 0 · todo") ||
+	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · ? 0\nasync 2 · due 0 · todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
 	// async focused: the strip is unchanged; the dialog has its own title,
 	// a blank line, then the awaited agent's row over the job's row
 	m.focus = focusAsync
-	if sv := stripANSI(m.sectionsView(100)); strings.Count(sv, "\n") != 0 || strings.Contains(sv, "scout") {
+	if sv := stripANSI(m.sectionsView(100)); strings.Count(sv, "\n") != 1 || strings.Contains(sv, "scout") {
 		t.Fatalf("strip with async focused:\n%s", sv)
 	}
 	v = stripANSI(m.tabDialog(100))
@@ -1044,14 +1044,14 @@ func TestSessionViewFillsHeight(t *testing.T) {
 				si = i
 			}
 		}
-		// under the rule: the input, a blank line, the strip, then the meta row
+		// under the rule: the input, a blank line, the strip's two rows, then the meta row
 		ri := -1
 		for i := 0; i < si; i++ {
 			if strings.HasPrefix(lines[i], "─") {
 				ri = i
 			}
 		}
-		if ri < 0 || si < 2 || si+1 >= len(lines) || !strings.HasPrefix(lines[ri+1], "›") || strings.TrimSpace(lines[si-1]) != "" || !strings.HasPrefix(lines[si+1], "ASK · coder ·") {
+		if ri < 0 || si < 2 || si+2 >= len(lines) || !strings.HasPrefix(lines[ri+1], "›") || strings.TrimSpace(lines[si-1]) != "" || !strings.HasPrefix(lines[si+1], "async ") || !strings.HasPrefix(lines[si+2], "ASK · coder ·") {
 			t.Fatalf("focus %v: under the rule come the input, a blank line, the strip, then the meta row:\n%s", f, stripANSI(v))
 		}
 	}
@@ -1161,8 +1161,8 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if nm.(Model).compactTick {
 		t.Fatal("the tick should stop when no chat is compacting")
 	}
-	if strip < 3 || meta != strip+1 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], "›") || !strings.HasPrefix(lines[strip-3], "─") {
-		t.Fatalf("under the rule come the input, a blank line, the strip, then the meta row:\n%s", strings.Join(lines, "\n"))
+	if strip < 3 || meta != strip+2 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], "›") || !strings.HasPrefix(lines[strip-3], "─") {
+		t.Fatalf("under the rule come the input, a blank line, the strip's two rows, then the meta row:\n%s", strings.Join(lines, "\n"))
 	}
 	// the repo is not on the strip (the dirs tab shows it)
 	if strings.Contains(strings.Join(lines, "\n"), "/repo/project") {
@@ -1432,9 +1432,9 @@ func TestTodoTabAndDialog(t *testing.T) {
 	// clicking the todo label on the strip opens the dialog
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
 	lay := m.rows()
-	x := len("! 0 · ? 0 · async 0 · due 0 · ") + 1
-	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.strip, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.strip, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	x := len("async 0 · due 0 · ") + 1 // the agent's row, under the session's
+	nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.strip + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.strip + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
 	if m.focus != focusTodo {
 		t.Fatalf("clicking the todo label should open its dialog: %v", m.focus)
@@ -1672,9 +1672,9 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 		m = nm.(Model)
 	}
 	lay := m.rows()
-	// the strip sits right under the rule; "async 2" starts after "! 0 · ? 0 · "
-	agentsX := len("! 0 · ? 0") + 3 + 1
-	click(agentsX, lay.strip)
+	// the strip's second row, the selected agent's, starts with "async 2"
+	agentsX := 1
+	click(agentsX, lay.strip+1)
 	if m.focus != focusAsync {
 		t.Fatalf("clicking the async label should open the async tab: %v", m.focus)
 	}
@@ -1700,8 +1700,8 @@ func TestMouseClicksFocusTabsAndInput(t *testing.T) {
 	}
 	m.selected = 0
 	// the strip labels still open dialogs directly while one is up
-	click(agentsX, lay.strip)
-	click(agentsX+len("async 2")+3+len("due 0")+3, lay.strip) // "todo 0"
+	click(agentsX, lay.strip+1)
+	click(agentsX+len("async 2")+3+len("due 0")+3, lay.strip+1) // "todo 0"
 	if m.focus != focusTodo {
 		t.Fatalf("clicking a strip label should open that tab's dialog: %v", m.focus)
 	}
@@ -2779,7 +2779,7 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 func TestQuestionsTabAndDialog(t *testing.T) {
 	m := sessionModel()
 	m.agents[0].Archetype = "general"
-	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "! 0 · ? 0 · async") {
+	if sv := stripANSI(m.sectionsView(120)); !strings.Contains(sv, "! 0 · ? 0\nasync") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user", Questions: []protocol.Question{
@@ -2895,5 +2895,26 @@ func TestControlsNeverReachTheTerminal(t *testing.T) {
 	m.upsertPrompt(protocol.PromptInfo{ID: "q", Kind: "question", Question: "pick\x9b2K one"})
 	if p := m.prompts[m.findPrompt("q")]; p.Question != "pick one" {
 		t.Fatalf("question %q", p.Question)
+	}
+}
+
+// TestTabRowsMoveVertically: ↑/↓ on the strip move the highlight between the
+// session's row and the agent's, keeping the column where the row allows.
+func TestTabRowsMoveVertically(t *testing.T) {
+	for _, c := range []struct {
+		sel  int
+		down bool
+		want int
+	}{
+		{0, true, 2},  // ! → async
+		{1, true, 3},  // ? → due
+		{2, false, 0}, // async → !
+		{6, false, 1}, // dirs → ? (clamped to the shorter row)
+		{0, false, 0}, // top row stays
+		{4, true, 4},  // bottom row stays
+	} {
+		if got := otherRowTab(c.sel, c.down); got != c.want {
+			t.Errorf("otherRowTab(%d, %v) = %d, want %d", c.sel, c.down, got, c.want)
+		}
 	}
 }

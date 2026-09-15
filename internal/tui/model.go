@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -202,7 +203,16 @@ const (
 
 // tabFocuses are the tabs of the strip under the chat, left to right. They
 // are one stop in the tab cycle; ←/→ move between them.
-var tabFocuses = []focus{focusPermission, focusQuestions, focusAsync, focusDue, focusTodo, focusMCP, focusDirs}
+// tabRows is the strip's two rows: on top what belongs to the whole session
+// (the prompt queue every agent adds to), below what belongs to the selected
+// agent.
+var tabRows = [][]focus{
+	{focusPermission, focusQuestions},
+	{focusAsync, focusDue, focusTodo, focusMCP, focusDirs},
+}
+
+// tabFocuses is every tab in strip order: the top row, then the bottom.
+var tabFocuses = slices.Concat(tabRows...)
 
 // isTab reports whether f is one of the strip's tabs.
 func isTab(f focus) bool {
@@ -794,8 +804,8 @@ func (m *Model) focusAvailable(f focus) bool {
 }
 
 // tabsKey handles keys while the strip has focus: ←/→ move the highlight
-// (no wrap), enter opens the highlighted tab's dialog, esc returns to the
-// input.
+// (no wrap), ↑/↓ move it to the other row, enter opens the highlighted
+// tab's dialog, esc returns to the input.
 func (m *Model) tabsKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.OvClose):
@@ -808,6 +818,8 @@ func (m *Model) tabsKey(msg tea.KeyMsg) tea.Cmd {
 		if m.tabSel < len(tabFocuses)-1 {
 			m.tabSel++
 		}
+	case key.Matches(msg, keys.OvUp), key.Matches(msg, keys.OvDown):
+		m.tabSel = otherRowTab(m.tabSel, key.Matches(msg, keys.OvDown))
 	case key.Matches(msg, keys.Select):
 		return m.setFocus(tabFocuses[m.tabSel])
 	}
@@ -1637,8 +1649,8 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 			m.toggleItem()
 		}
 		return cmd
-	case y == lay.strip: // a tab label opens that tab's dialog
-		if f, ok := m.tabAt(x); ok {
+	case y >= lay.strip && y < lay.meta: // a tab label opens that tab's dialog
+		if f, ok := m.tabAt(x, y-lay.strip); ok {
 			return m.setFocus(f)
 		}
 	case y >= lay.input && y < lay.input+m.inputRows(): // the input lines
@@ -1778,7 +1790,7 @@ func (m *Model) metaHit(x int) metaPart {
 // strip and the meta row.
 type rowLayout struct {
 	input int // first row of the input (it may span several)
-	strip int // the tab strip line
+	strip int // the tab strip's first line (it has len(tabRows))
 	meta  int // the meta row
 }
 
@@ -1791,14 +1803,18 @@ func (m *Model) rows() rowLayout {
 	lay := rowLayout{input: y}
 	y += m.inputRows() + 1 // the input, then the blank line under it
 	lay.strip = y
-	lay.meta = y + 1
+	lay.meta = y + len(tabRows)
 	return lay
 }
 
-// tabAt maps an x position on the strip to the tab label drawn there.
-func (m *Model) tabAt(x int) (focus, bool) {
+// tabAt maps a position on the strip (x, and row within the strip) to the
+// tab label drawn there.
+func (m *Model) tabAt(x, row int) (focus, bool) {
 	_, spans := m.tabLabels(m.currentPrompt())
-	return hitSpan(spans, x)
+	if row < 0 || row >= len(spans) {
+		return 0, false
+	}
+	return hitSpan(spans[row], x)
 }
 
 // itemAtRow maps a viewport content row to the chat item drawn there.
@@ -3853,4 +3869,23 @@ func (m *Model) chatCache(id string) *render.Cache {
 		m.renders[id] = c
 	}
 	return c
+}
+
+// otherRowTab is the tab ↑ (down false) or ↓ (down true) moves the strip's
+// highlight to from tab sel: the same place in the row above or below,
+// clamped to that row's length; sel itself on the first or last row.
+func otherRowTab(sel int, down bool) int {
+	row, col, start := 0, sel, 0
+	for row < len(tabRows)-1 && col >= len(tabRows[row]) {
+		col -= len(tabRows[row])
+		start += len(tabRows[row])
+		row++
+	}
+	switch {
+	case down && row < len(tabRows)-1:
+		return start + len(tabRows[row]) + min(col, len(tabRows[row+1])-1)
+	case !down && row > 0:
+		return start - len(tabRows[row-1]) + min(col, len(tabRows[row-1])-1)
+	}
+	return sel
 }
