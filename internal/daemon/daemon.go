@@ -49,6 +49,8 @@ type Daemon struct {
 	trustPrompts map[string]string // dir → prompt id
 	trust        *trustStore
 	lock         *os.File // the data directory's lock, held until Close
+
+	streams *streams // stream deltas waiting to be sent together
 }
 
 // New locks the data directory, opens the log and registry and recovers
@@ -59,6 +61,7 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 		return nil, err
 	}
 	d := &Daemon{Registry: reg, DataDir: dataDir, lock: lock, channels: map[string]*agent.Channel{}, clients: map[string]*client{}, trustPrompts: map[string]string{}, logins: map[string]*pendingLogin{}}
+	d.streams = newStreams(d.sendStream)
 	lg, err := eventlog.Open(filepath.Join(dataDir, "events.db"), d.committed)
 	if err != nil {
 		lock.Close()
@@ -140,6 +143,11 @@ func (d *Daemon) Append(ctx context.Context, evs ...event.Event) ([]event.Event,
 // in sequence; each event is encoded once for all of them, and delivery
 // only queues, so a slow client never holds up a commit.
 func (d *Daemon) committed(evs []event.Event) {
+	for i, e := range evs {
+		if i == 0 || e.Channel != evs[i-1].Channel {
+			d.streams.flush(e.Channel) // what streamed goes out before the event that settles it
+		}
+	}
 	clients := d.clientList()
 	for _, e := range evs {
 		line := eventLine(e)
@@ -149,7 +157,11 @@ func (d *Daemon) committed(evs []event.Event) {
 	}
 }
 
-func (d *Daemon) Stream(n protocol.StreamNotification) {
+func (d *Daemon) Stream(n protocol.StreamNotification) { d.streams.add(n) }
+
+// sendStream sends one (coalesced) stream delta to the channel's
+// subscribers.
+func (d *Daemon) sendStream(n protocol.StreamNotification) {
 	b, _ := json.Marshal(n)
 	line := notification(protocol.NStream, b)
 	d.eachSubscribed(n.Channel, func(c *client) { c.send(line, true) })
