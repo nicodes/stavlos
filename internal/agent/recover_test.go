@@ -66,7 +66,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 				<-release
 				parent := req.System[strings.Index(req.System, "created by a parent agent (id ")+len("created by a parent agent (id "):]
 				parent = parent[:strings.IndexByte(parent, ')')]
-				return call("k3", "message", `{"to":"`+parent+`","text":"found it"}`), nil
+				return call("k3", "message", `{"to":"`+parent+`","text":"found it","kind":"response"}`), nil
 			},
 		},
 	}
@@ -103,7 +103,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 		reply(call("c5", "shell", `{"command":"true","background":true}`)),
 		reply(text("waiting")),
 	}
-	fm.childSteps = []step{reply(call("k4", "message", `{"to":"`+root.ID+`","text":"nothing else"}`))}
+	fm.childSteps = []step{reply(call("k4", "message", `{"to":"`+root.ID+`","text":"nothing else","kind":"response"}`))}
 	_ = s.SetMode(ctx, protocol.ModeYolo)
 	runTurn(t, s, h, "ask the child")
 	waitUntil(t, h, func() bool {

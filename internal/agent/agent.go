@@ -306,13 +306,6 @@ func (a *Agent) expect(id string) {
 	a.mu.Unlock()
 }
 
-// isAwaiting reports whether the agent waits on an answer from agent id.
-func (a *Agent) isAwaiting(id string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.awaiting[id] > 0
-}
-
 // forget drops every expectation of agent id (it was killed: no answer is
 // coming).
 func (a *Agent) forget(id string) {

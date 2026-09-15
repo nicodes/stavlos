@@ -61,14 +61,16 @@ func (o orchestrator) Spawn(ctx context.Context, parent, archetype, label, task,
 }
 
 // Message sends the caller's text to the human or to another agent in the
-// session. To an agent waiting on the caller it is the answer: delivered
-// between turns, settling the wait. To any other agent it is a new message:
-// delivered at its next step (mid-turn if it is busy, a new turn if idle),
-// and the caller now waits on it.
-func (o orchestrator) Message(caller, to, text string, noReply bool) (string, error) {
+// session, as the caller said it is: a request (the recipient owes a reply,
+// the caller waits on it; it reaches the recipient at its next step, mid-turn
+// if busy, a new turn if idle), a response (it settles what the caller owed
+// and is delivered between turns, clearing the recipient's wait) or info
+// (nobody owes or waits, and it never wakes the recipient). What goes to the
+// human is always a response.
+func (o orchestrator) Message(caller, to, text, kind string) (string, error) {
 	from, hasFrom := o.s.Agent(caller)
 	if to == tools.User {
-		post := "" // the chat post this answers, so the chat threads it under that post
+		post := "" // the chat post this answers, so the chat can place it
 		if hasFrom {
 			post = from.currentPost()
 		}
@@ -88,27 +90,24 @@ func (o orchestrator) Message(caller, to, text string, noReply bool) (string, er
 	if !c.Alive() {
 		return "", fmt.Errorf("agent %q is %s", to, c.StateOf())
 	}
-	if c.isAwaiting(caller) {
+	switch kind {
+	case tools.KindResponse:
 		if err := o.answer(caller, c, text); err != nil {
 			return "", err
 		}
 		if hasFrom {
 			from.settle(c.ID)
 		}
-		return "answer delivered to " + c.LabelNow(), nil
-	}
-	if noReply {
-		// a note: nothing is owed or awaited, and an idle recipient sleeps on
+		return "response delivered to " + c.LabelNow(), nil
+	case tools.KindInfo:
 		if err := c.note(context.Background(), text, "agent:"+caller); err != nil {
 			return "", err
 		}
-		if hasFrom {
-			from.settle(c.ID)
-		}
-		return "note delivered to " + c.LabelNow() + "; it needs no reply and does not wake it", nil
+		return "info delivered to " + c.LabelNow() + "; it needs no reply and does not wake it", nil
 	}
-	// The expectation is registered before delivery: a recipient that
-	// answers (or hits its turn limit) at once must find its asker waiting.
+	// A request. The expectation is registered before delivery: a recipient
+	// that responds (or hits its turn limit) at once must find its asker
+	// waiting.
 	if hasFrom {
 		from.expect(c.ID)
 	}
@@ -118,10 +117,7 @@ func (o orchestrator) Message(caller, to, text string, noReply bool) (string, er
 		}
 		return "", err
 	}
-	if hasFrom {
-		from.settle(c.ID)
-	}
-	return "message delivered to " + c.LabelNow() + "; its answer wakes you between turns", nil
+	return "request delivered to " + c.LabelNow() + "; its response wakes you between turns", nil
 }
 
 // answer delivers the caller's text to c as an answer: logged on c, then

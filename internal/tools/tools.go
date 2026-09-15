@@ -87,12 +87,11 @@ type Orchestrator interface {
 	// grant it, each of which must be inside the parent's own.
 	Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (id, name string, err error)
 	// Message sends text from the caller to an agent (name or id) or to
-	// User. To an agent waiting on the caller it is an answer, delivered
-	// between turns; to any other agent a new message, delivered at its next
-	// step, that the caller then waits on, or with noReply a note that
-	// nobody owes or waits on and that never wakes the recipient. It returns
-	// the tool result.
-	Message(caller, to, text string, noReply bool) (string, error)
+	// User, as kind KindRequest (the recipient owes a reply, the caller
+	// waits; delivered at its next step), KindResponse (settles a request,
+	// delivered between turns to the agent waiting on it) or KindInfo (no
+	// reply, no wait, never wakes the recipient). It returns the tool result.
+	Message(caller, to, text, kind string) (string, error)
 	Cancel(parent, id string) error
 	Status(parent, id string) ([]ChildStatus, error)
 	// CanSpawn reports whether depth/fan-out limits currently permit a spawn.

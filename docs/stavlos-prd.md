@@ -228,7 +228,7 @@ Available to any agent whose preset permits them:
 | Tool | Effect |
 |---|---|
 | `agent_create(archetype, label, task, model?)` | Create a child agent; returns its ID immediately; the task is its first prompt |
-| `message(to, text)` | To an agent waiting on the caller: the answer, delivered between turns. To any other agent in the session: a `Steer` at its next step (mid-turn if busy, a new turn if idle), which the caller then waits on. To `user`: a message for the human. With `no_reply`: a note nobody owes a reply to or waits on, which reaches the recipient at its next step or with its next turn and never wakes it |
+| `message(to, text, kind)` | `request` (the default): a `Steer` at the recipient's next step (mid-turn if busy, a new turn if idle); the recipient owes a reply and the caller waits on it. `response`: answers a request, delivered between turns, settling what the caller owed and the recipient's wait. `info`: a note nobody owes or waits on, delivered at the next step or with the next turn, never waking the recipient. To `user`: always a response, for the human |
 | `agent_cancel(id)` | Deliver a `Cancel` to one of your children |
 | `agent_status(id?)` | State and usage (§4.4) of one agent, or the whole session tree |
 

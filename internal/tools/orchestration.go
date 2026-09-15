@@ -89,17 +89,24 @@ func Recipient(to string) string {
 	return to
 }
 
+// Message kinds.
+const (
+	KindRequest  = "request"  // asks for something: the recipient owes a reply, the sender waits (the default)
+	KindResponse = "response" // answers a request: settles it and wakes the agent waiting on it
+	KindInfo     = "info"     // needs no reply: nobody owes or waits, and an idle recipient is not woken
+)
+
 type messageTool struct{}
 
 func (messageTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Message, Description: "Send text to another agent in this session (a child, a sibling, or your parent) by name, or to the human as \"user\". To an agent that is waiting on you, because it gave you a task or asked you something, this is your answer: it wakes that agent between turns. To any other agent it is a new message: it reaches them at their next step, mid-turn if they are busy, and their answer wakes you. Set no_reply for a message that needs no answer (thanks, an acknowledgement, a closing note): the recipient owes you nothing, you do not wait on it, and it does not wake an idle agent. agent_status lists every agent.",
+	return model.ToolDef{Name: toolname.Message, Description: "Send text to another agent in this session (a child, a sibling, or your parent) by name, or to the human as \"user\". kind says what it is. request (the default) asks for something: it reaches them at their next step, mid-turn if they are busy, they owe you a reply, and their response wakes you. response answers a request someone sent you (a task, a question): it settles it and wakes the agent waiting on it between turns. info tells them something that needs no reply (thanks, an acknowledgement, a closing note): nobody owes or waits, and it does not wake an idle agent. A question back to an agent waiting on you is a request; your answer is a response. What you send the user is always a response. agent_status lists every agent.",
 		Schema: schemaOf(messageInput{})}
 }
 
 type messageInput struct {
-	To      string `json:"to" desc:"An agent's name or id, or \"user\" for the human" req:"true"`
-	Text    string `json:"text" desc:"The message. The recipient sees only what you put here: include exact paths and results" req:"true"`
-	NoReply bool   `json:"no_reply" desc:"True when the message needs no answer (thanks, acknowledgements, closing notes): nobody owes a reply or waits, and an idle recipient is not woken"`
+	To   string `json:"to" desc:"An agent's name or id, or \"user\" for the human" req:"true"`
+	Text string `json:"text" desc:"The message. The recipient sees only what you put here: include exact paths and results" req:"true"`
+	Kind string `json:"kind" desc:"request (the default): you want something and wait for it; response: this answers a request you received; info: no reply needed"`
 }
 
 func (messageTool) Subject(in json.RawMessage) policy.Subject {
@@ -118,7 +125,15 @@ func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 	if strings.TrimSpace(a.Text) == "" {
 		return errf("text is required")
 	}
-	out, err := env.Orch.Message(env.Agent, Recipient(a.To), a.Text, a.NoReply)
+	kind := strings.ToLower(strings.TrimSpace(a.Kind))
+	switch kind {
+	case "":
+		kind = KindRequest
+	case KindRequest, KindResponse, KindInfo:
+	default:
+		return errf("kind %q: use request, response or info", a.Kind)
+	}
+	out, err := env.Orch.Message(env.Agent, Recipient(a.To), a.Text, kind)
 	if err != nil {
 		return errf("%v", err)
 	}

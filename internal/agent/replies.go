@@ -131,6 +131,6 @@ func (s *Session) partyNames(parties []string) []string {
 // reminderText is the input a reminder turn starts with.
 func (s *Session) reminderText(parties []string) string {
 	names := s.partyNames(parties)
-	return fmt.Sprintf("[reminder from the harness] Your last turn ended without replying to %s. The text you end a turn with reaches no one: send each reply with message (to: %s). If there is nothing more to say, a one-line message still tells them where things stand.",
+	return fmt.Sprintf("[reminder from the harness] Your last turn ended without replying to %s. The text you end a turn with reaches no one: send each reply with message (to: %s, kind: response). If there is nothing more to say, a one-line message still tells them where things stand.",
 		strings.Join(names, ", "), strings.Join(names, " or "))
 }
