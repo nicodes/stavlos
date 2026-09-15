@@ -503,18 +503,26 @@ func TestWhoNamesTheLine(t *testing.T) {
 	}
 }
 
-// TestDeniedCallShowsWhy: a denied call gets "✗ Permission denied" under
-// it, with the reason when there is one, instead of its output.
+// TestDeniedCallShowsWhy: a denied call reads its denial next to the
+// tool's name, with the reason when there is one, and nothing under it.
 func TestDeniedCallShowsWhy(t *testing.T) {
 	for out, want := range map[string]string{
-		"Permission denied by the user: too risky":                                        "**Permission denied** · too risky",
-		"Permission denied by the user.":                                                  "**Permission denied**",
-		"Denied by policy: shell rm -rf ~":                                                "**Permission denied** · by policy",
-		"Permission denied: nobody answered the prompt and the headless default is deny.": "**Permission denied** · nobody answered the prompt and the headless default is deny",
+		"Permission denied by the user: too risky":                                        "Shell (denied: too risky)  rm x",
+		"Permission denied by the user.":                                                  "Shell (denied)  rm x",
+		"Denied by policy: shell rm x":                                                    "Shell (denied by policy)  rm x",
+		"Permission denied: nobody answered the prompt and the headless default is deny.": "Shell (denied: no answer)  rm x",
 	} {
-		lines := EventLines(event.Event{Type: event.ToolCallFinished, Time: time.Now(), Payload: event.MustPayload(event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: out, IsError: true, Denied: true})})
-		if len(lines) != 1 || lines[0].Text != want || lines[0].Glyph != GlyphFailed {
-			t.Errorf("%q: %+v", out, lines)
+		tr := NewTranscript()
+		tr.Apply(event.Event{Seq: 1, Type: event.ToolCallStarted, Time: time.Now(), Payload: event.MustPayload(event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"rm x"}`)})})
+		tr.Apply(event.Event{Seq: 2, Type: event.ToolCallFinished, Time: time.Now(), Payload: event.MustPayload(event.ToolFinishedPayload{CallID: "c1", Name: "shell", Output: out, IsError: true, Denied: true})})
+		var texts []string
+		for _, l := range tr.All() {
+			if l.Text != "" {
+				texts = append(texts, l.Text+l.Suffix)
+			}
+		}
+		if strings.Join(texts, "|") != want {
+			t.Errorf("%q: %q", out, texts)
 		}
 	}
 }
