@@ -32,16 +32,13 @@ func TestToolLine(t *testing.T) {
 		{"shell", `{"command":"git status"}`, "Shell  git status"},
 		{"shell", `{"command":"ls\nfoo"}`, "Shell  ls foo"},
 		{"read", `{"path":"internal/agent/turn.go","offset":1}`, "Read  internal/agent/turn.go"},
-		{"bash", `{"command":"ls"}`, "Shell  ls"}, // a log from before the rename reads as the current tool
 		{"shell", `{"command":"go test ./..."}`, "Shell  go test ./..."},
 		{"shell_kill", `{"id":"m1"}`, "Shell kill  m1"},
 		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
 		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look\naround"}`, "@scout look"},
 		{"message", `{"to":"scout","text":"go"}`, "@scout go"},
 		{"message", `{"to":"user","text":"done\nand more"}`, "@user done"},
-		{"agent_message", `{"id":"ag_1","text":"go"}`, "@ag_1 go"}, // logs from before message
 		{"agent_cancel", `{"id":"ag_1"}`, "Agent cancel  ag_1"},
-		{"agent_response", `{"to":"ag_2","text":"found it"}`, "@ag_2 found it"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
 		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
 		{"shell", ``, "Shell"},
@@ -66,13 +63,12 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 		mk(3, "c1", event.ToolCallStarted, event.ToolStartedPayload{Turn: 1, CallID: "k1", Name: "shell", Input: json.RawMessage(`{"command":"ls"}`)}),
 		mk(4, "c1", event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "k1", Name: "shell", Output: "a\nb\nc\nd\ne"}),
 		mk(5, "c1", event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Model: "p/m", StopReason: "end_turn", Blocks: []model.Block{{Type: model.BlockText, Text: "Done."}}}),
-		mk(6, "c1", event.AgentFinished, event.AgentFinishedPayload{Summary: "ok", Status: "success"}),
 	}
 	for _, ev := range evs {
 		tr.Apply(ev)
 	}
-	if n := tr.Items(); n != 5 {
-		t.Fatalf("items: got %d, want 5 (spawn, user, tool, assistant, finished)", n)
+	if n := tr.Items(); n != 4 {
+		t.Fatalf("items: got %d, want 4 (spawn, user, tool, assistant)", n)
 	}
 	lines := tr.All()
 	kinds := func(item int) map[LineKind]int {
@@ -97,9 +93,6 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 	if k := kinds(3); k[LineText] != 1 || k[LineModel] != 0 || k[LineBlank] != 1 {
 		t.Fatalf("assistant item (no model trailer): %v", k)
 	}
-	if k := kinds(4); k[LineFinished] != 1 || k[LineText] != 1 {
-		t.Fatalf("finished item: %v", k)
-	}
 	if first, last := tr.ItemRange(2); first < 0 || lines[first].Kind != LineTool || lines[last].Kind != LineToolOut || last-first != 6 {
 		t.Fatalf("tool range: %d..%d", first, last)
 	}
@@ -119,13 +112,13 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 
 	// The streaming buffer is the in-progress item after the committed ones.
 	tr.ApplyStream(protocol.StreamNotification{Agent: "c1", Turn: 2, Text: "more"})
-	if tr.Items() != 6 || tr.All()[len(tr.All())-1].Item != 5 {
+	if tr.Items() != 5 || tr.All()[len(tr.All())-1].Item != 4 {
 		t.Fatalf("stream item: items=%d", tr.Items())
 	}
 	// A notice is one item regardless of its line count.
 	tr.Apply(mk(7, "c1", event.TurnEnded, event.TurnEndedPayload{Turn: 2}))
 	tr.Notice("a", "b", "c")
-	if tr.Items() != 6 {
+	if tr.Items() != 5 {
 		t.Fatalf("notice item: items=%d", tr.Items())
 	}
 }
@@ -366,7 +359,6 @@ func TestNotesAndReminders(t *testing.T) {
 	tr.Apply(mk(2, event.AssistantMessage, event.AssistantMessagePayload{Turn: 1, Blocks: []model.Block{{Type: model.BlockText, Text: "# Result\nall good"}}}))
 	tr.Apply(mk(3, event.ReminderQueued, event.RepliesPayload{Parties: []string{"user", "a1"}, Names: []string{"user", "scout"}}))
 	tr.Apply(mk(4, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: event.MsgReminder, Text: "[reminder from the harness] ..."}))
-	tr.Apply(mk(5, event.ReplyMissing, event.RepliesPayload{Parties: []string{"user"}, Names: []string{"user"}}))
 	var notes, notices []string
 	for _, l := range tr.All() {
 		switch {
@@ -381,7 +373,7 @@ func TestNotesAndReminders(t *testing.T) {
 	if strings.Join(notes, "|") != "**Aside**|Result|all good" {
 		t.Fatalf("notes %q", notes)
 	}
-	if strings.Join(notices, "|") != "**Nudge** owes a reply to you, scout|**Ended without replying** to you" {
+	if strings.Join(notices, "|") != "**Nudge** owes a reply to you, scout" {
 		t.Fatalf("notices %q", notices)
 	}
 }

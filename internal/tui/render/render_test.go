@@ -73,7 +73,6 @@ func TestBuildTranscript(t *testing.T) {
 			{Type: model.BlockText, Text: "Done."},
 		}}),
 		mk(7, "a1", event.TurnEnded, event.TurnEndedPayload{Turn: 1, Reason: "cancelled"}),
-		mk(8, "a1", event.AgentFinished, event.AgentFinishedPayload{Summary: "all good", Status: "success"}),
 	}
 	got := renderLines(transcript.Build(evs))
 	assertSubsequence(t, got, []string{
@@ -84,8 +83,6 @@ func TestBuildTranscript(t *testing.T) {
 		"◌ thinking…",
 		"§ Aside Done.",
 		"◦ Turn cancelled",
-		"✓ Finished success",
-		"all good",
 	})
 	for _, g := range got {
 		if strings.Contains(g, "usage") || strings.Contains(g, "turn.started") || strings.Contains(g, "spawned") {
@@ -126,11 +123,11 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 func TestUserMessageKinds(t *testing.T) {
 	lines := transcript.Build([]event.Event{
 		mk(1, "a", event.UserMessage, event.UserMessagePayload{Kind: "steer", Text: "focus"}),
-		mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: "child_finished", Text: "child done"}),
+		mk(2, "a", event.UserMessage, event.UserMessagePayload{Kind: event.MsgMonitorFired, Text: "child done"}),
 		mk(3, "a", event.UserMessage, event.UserMessagePayload{Kind: "prompt", Text: "hi"}),
 	})
 	got := renderLines(lines)
-	assertSubsequence(t, got, []string{"› @user focus", "agent response", "⑂ child done", "› @user hi"})
+	assertSubsequence(t, got, []string{"› @user focus", "job result", "$ child done", "› @user hi"})
 	for _, l := range got {
 		if strings.TrimSpace(l) == "steer" {
 			t.Fatalf("a steer should carry no title:\n%s", strings.Join(got, "\n"))
@@ -430,7 +427,7 @@ func TestFoldingToOneLine(t *testing.T) {
 	tr.Apply(mk(4, event.PromptRequested, event.PromptRequestedPayload{ID: "p1", Kind: "permission", Tool: "shell"}))
 	tr.Apply(mk(5, event.PromptAnswered, event.PromptAnsweredPayload{ID: "p1", Answer: "allow"}))
 	tr.Apply(mk(6, event.ToolCallFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a\nb\nc\nd\ne"}))
-	tr.Apply(mk(7, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: "child_finished", Text: "Child agent \"scout\"finished.\n\nfound it"}))
+	tr.Apply(mk(7, event.UserMessage, event.UserMessagePayload{Turn: 2, Kind: event.MsgMonitorFired, Text: "Job \"scout\" exited.\n\nfound it"}))
 	tr.Apply(mk(8, event.AssistantMessage, event.AssistantMessagePayload{Turn: 2, Model: "openai/gpt-5.4", Blocks: []model.Block{{Type: model.BlockText, Text: "final answer\nwith two lines"}}}))
 	lines := tr.All()
 	toolItem, childItem := -1, -1

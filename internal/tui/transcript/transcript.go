@@ -501,7 +501,7 @@ func (t *Transcript) afterAppend(ev event.Event) {
 		}
 	case event.AssistantMessage:
 		t.stream = nil
-	case event.TurnEnded, event.TurnAborted, event.AgentFinished, event.AgentKilled:
+	case event.TurnEnded, event.TurnAborted, event.AgentKilled:
 		t.stream = nil
 		t.turn = false
 		t.stopRunning()
@@ -774,7 +774,7 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	}
 	// A created agent's name may differ from the label asked for (a taken
 	// name gets a suffix): the line names the agent it made.
-	if toolname.Canonical(p.Name) == toolname.AgentCreate && !p.IsError {
+	if p.Name == toolname.AgentCreate && !p.IsError {
 		if rest, ok := strings.CutPrefix(p.Output, "created "); ok {
 			if name, _, ok := strings.Cut(rest, " ("); ok && name != l.Who && strings.HasPrefix(l.Text, "@"+l.Who) {
 				l.Text, l.Who = "@"+name+strings.TrimPrefix(l.Text, "@"+l.Who), name
@@ -810,7 +810,7 @@ const messageDelivered = "request delivered to "
 // on: set only for a new message delivered to an agent, not for an answer,
 // a message to the user, or a call that failed.
 func messagedAgent(p event.ToolFinishedPayload) (string, bool) {
-	if toolname.Canonical(p.Name) != toolname.Message || p.IsError || p.Cancelled || p.Denied {
+	if p.Name != toolname.Message || p.IsError || p.Cancelled || p.Denied {
 		return "", false
 	}
 	rest, ok := strings.CutPrefix(p.Output, messageDelivered)
@@ -863,7 +863,7 @@ func (t *Transcript) stopRunning() {
 // ToolName+Text is partial tool output; ToolName alone is a tool_use block
 // starting in the model's response.
 func (t *Transcript) ApplyStream(n protocol.StreamNotification) {
-	n.Text, n.Thinking, n.ToolName = textsafe.Clean(n.Text), textsafe.Clean(n.Thinking), toolname.Canonical(n.ToolName)
+	n.Text, n.Thinking = textsafe.Clean(n.Text), textsafe.Clean(n.Thinking)
 	if n.Turn != t.streamTurn {
 		t.streamTurn = n.Turn
 		t.stream = nil
@@ -1059,8 +1059,6 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			return lines
 		case event.MsgAgentResponse:
 			return received(p.From, p.Text, GlyphAsk)
-		case "child_finished": // legacy: finished children from old logs
-			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case event.MsgMonitorFired:
 			return blockWith(BlockChild, "job result", p.Text, GlyphToolMonitors)
 		case event.MsgReminder:
@@ -1121,12 +1119,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return []Line{{Kind: LineDim, Glyph: GlyphNudge, Text: titled("Nudge", "owes a reply to "+partyList(p.Names))}}
 	}),
 
-	event.ReplyMissing: decoded(func(p event.RepliesPayload) []Line {
-		return []Line{{Kind: LineNotice, Glyph: GlyphNudge, Tone: ToneError, Text: titled("Ended without replying", "to "+partyList(p.Names))}}
-	}),
-
 	event.ToolCallStarted: decoded(func(p event.ToolStartedPayload) []Line {
-		p.Name = toolname.Canonical(p.Name) // logs from before a rename read as the current tool
 		if p.Name == toolname.Message || p.Name == toolname.AgentCreate {
 			// "‹ @scout first line" (a message) or "» @scout first line" (the
 			// task that creates it), then the rest of the text under it
@@ -1155,7 +1148,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		if p.Denied {
 			return nil // the denial reads on the call's own line (see finishCall)
 		}
-		if name := toolname.Canonical(p.Name); (name == toolname.Message || name == toolname.AgentCreate || name == toolname.ApplyPatch) && !p.IsError {
+		if name := p.Name; (name == toolname.Message || name == toolname.AgentCreate || name == toolname.ApplyPatch) && !p.IsError {
 			return nil // the text or diff already sits under the call; "delivered", "created" or "updated" adds nothing
 		}
 		return OutputLines(strings.TrimRight(p.Output, "\n"))
@@ -1183,30 +1176,6 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		return []Line{{Kind: LineDim, Glyph: GlyphTurn, Tone: ToneError, Text: titled("Turn aborted", "daemon restart")}, {Kind: LineBlank}}
 	},
 
-	event.AgentFinished: decoded(func(p event.AgentFinishedPayload) []Line {
-		head := Line{Kind: LineFinished, Text: titled("Finished", p.Status), Block: BlockFinished, Glyph: GlyphFinished}
-		switch p.Status {
-		case "failure":
-			head.Glyph, head.Tone = GlyphFailed, ToneError
-		case "partial":
-			head.Tone = ToneWorking
-		}
-		lines := []Line{{Kind: LineBlank}, head}
-		if s := strings.TrimRight(p.Summary, "\n"); s != "" {
-			for _, l := range strings.Split(s, "\n") {
-				lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockFinished})
-			}
-		}
-		for _, a := range p.Artifacts {
-			s := "• " + a.Path
-			if a.Description != "" {
-				s += " — " + a.Description
-			}
-			lines = append(lines, Line{Kind: LineDim, Text: s, Block: BlockFinished})
-		}
-		return append(lines, Line{Kind: LineBlank})
-	}),
-
 	event.AgentKilled: func(event.Event) []Line {
 		return errorBlockWith("killed", GlyphKilled)
 	},
@@ -1217,14 +1186,6 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 	event.AgentModelChanged: decoded(func(p event.ModelChangedPayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Model", "→ "+p.Model)}}
-	}),
-
-	event.ChannelYoloChanged: decoded(func(p event.YoloPayload) []Line { // legacy logs
-		mode := protocol.ModeAsk
-		if p.On {
-			mode = protocol.ModeYolo
-		}
-		return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Mode", "→ "+mode+" · "+protocol.ModeSummary(mode))}}
 	}),
 
 	event.ChannelModeChanged: decoded(func(p event.ModePayload) []Line {
@@ -1252,7 +1213,6 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.ChannelDirAdded: decoded(dirAddedLines),
-	event.AgentDirAdded:   decoded(dirAddedLines), // an older log's per-agent set
 
 	event.MCPStopped: decoded(func(p event.MCPRefPayload) []Line {
 		return []Line{{Kind: LineDim, Glyph: GlyphToolMCP, Text: titled("MCP", p.Server+" stopped")}}
@@ -1507,7 +1467,6 @@ func truncLines(text string, n int, kind LineKind) []Line {
 // toolLine renders "Bash  git status": the tool name title-cased and its
 // most relevant argument.
 func toolLine(name string, input json.RawMessage) string {
-	name = toolname.Canonical(name) // a direct caller (a prompt, a test) may hold an old name
 	if name == toolname.Message || name == toolname.AgentCreate {
 		// what this agent sends: "@scout look at the parser" (its first
 		// line), for a message and for the task that creates an agent
@@ -1591,9 +1550,6 @@ func ToolArg(name string, raw json.RawMessage) string {
 		return out
 	case toolname.Message:
 		to := str("to")
-		if to == "" {
-			to = str("id") // a log from before message replaced agent_message
-		}
 		to = strings.TrimPrefix(to, "@")
 		if l := strings.ToLower(to); l == "user" || l == "human" {
 			to = "user"
@@ -1793,13 +1749,13 @@ func CallGlyph(l Line) (string, string) {
 
 // IsMessage reports whether l is a message call's line.
 func IsMessage(l Line) bool {
-	return l.Kind == LineTool && toolname.Canonical(l.Tool) == toolname.Message
+	return l.Kind == LineTool && l.Tool == toolname.Message
 }
 
 // IsPromptCall reports whether l is a call that prompts an agent by name,
 // "@scout …": a message, or the agent_create that makes it.
 func IsPromptCall(l Line) bool {
-	return IsMessage(l) || l.Kind == LineTool && toolname.Canonical(l.Tool) == toolname.AgentCreate
+	return IsMessage(l) || l.Kind == LineTool && l.Tool == toolname.AgentCreate
 }
 
 // promptOf is who a prompting call names and what it says: a message's
@@ -1808,7 +1764,7 @@ func IsPromptCall(l Line) bool {
 func promptOf(name string, input json.RawMessage) (who, text string) {
 	var in struct{ To, ID, Text, Label, Task string }
 	_ = json.Unmarshal(input, &in)
-	if toolname.Canonical(name) == toolname.AgentCreate {
+	if name == toolname.AgentCreate {
 		return in.Label, strings.TrimSpace(in.Task)
 	}
 	return strings.TrimPrefix(ToolArg(name, input), "@"), strings.TrimSpace(in.Text)
@@ -1816,7 +1772,6 @@ func promptOf(name string, input json.RawMessage) (who, text string) {
 
 // toolGlyph returns the glyph for a tool name and the gap after it.
 func ToolGlyph(tool string) (string, string) {
-	tool = toolname.Canonical(tool)
 	switch {
 	case tool == toolname.Read:
 		return GlyphToolRead, " "

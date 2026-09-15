@@ -51,39 +51,6 @@ var (
 	Ask = []string{AskUser}
 )
 
-// legacy maps names an older log may carry to the tool that replaced
-// them, where the input shape is the same and the old call reads correctly
-// under the new name. Names with no successor (write, edit, monitor,
-// agent_finish) are left as they are and render generically.
-var legacy = map[string]string{
-	"bash":            Shell,
-	"bash_async":      Shell,
-	"bash_async_kill": ShellKill,
-	"spawn":           AgentCreate,
-	"agent_message":   Message,
-	"agent_response":  Message,
-	"agent_prompt":    Message,
-	"agent_steer":     Message,
-	"send":            Message,
-	"steer":           Message,
-	"agent_result":    Message,
-	"result":          Message,
-	"agent_kill":      AgentCancel,
-	"kill":            AgentCancel,
-	"cancel":          AgentCancel,
-	"status":          AgentStatus,
-}
-
-// Canonical is the current name for a tool name read from a log: the name
-// itself for current tools and unknown ones, the successor for renamed
-// ones.
-func Canonical(name string) string {
-	if cur, ok := legacy[name]; ok {
-		return cur
-	}
-	return name
-}
-
 // Expand replaces group entries in a role's tools: list with the tools
 // they stand for, keeping order and dropping duplicates.
 func Expand(names []string) []string {

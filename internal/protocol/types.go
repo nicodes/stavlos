@@ -579,7 +579,7 @@ type PromptNotification struct {
 // MonitorInfo is a general monitor owned by an agent: a background command,
 // a file watch, or a timer. Children are not monitors; they are agents.
 // DirInfo is one of the channel's working directories and where it came
-// from: channel (the channel directory) | human | grant (older logs).
+// from: channel (the channel directory) | human.
 type DirInfo struct {
 	Path   string `json:"path"`
 	Source string `json:"source"`
