@@ -304,28 +304,6 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// wrapIndex brings i into [0, n) cyclically; n must be positive.
-func wrapIndex(i, n int) int { return (i%n + n) % n }
-
-// stepCursor applies ↑/↓ to a cursor over n rows, wrapping at both ends;
-// with letters, k and j move it too (lists with no text field taking the
-// keys). It reports whether the key was a move, even over no rows.
-func stepCursor(msg tea.KeyMsg, cur *int, n int, letters bool) bool {
-	up := key.Matches(msg, keys.SelUp) || letters && msg.String() == "k"
-	down := key.Matches(msg, keys.SelDown) || letters && msg.String() == "j"
-	if !up && !down {
-		return false
-	}
-	if n > 0 {
-		d := 1
-		if up {
-			d = -1
-		}
-		*cur = wrapIndex(*cur+d, n)
-	}
-	return true
-}
-
 // listKey is the key handling of a read-only list dialog (todo): ↑/↓ (or
 // j/k) move over n rows, esc closes.
 func (m *Model) listKey(msg tea.KeyMsg, n int) tea.Cmd {

@@ -83,15 +83,7 @@ func paletteView(matches []Command, idx, width int) string {
 	if idx >= len(matches) {
 		idx = len(matches) - 1
 	}
-	// window of paletteMax rows around the selection
-	start := 0
-	if idx >= paletteMax {
-		start = idx - paletteMax + 1
-	}
-	end := start + paletteMax
-	if end > len(matches) {
-		end = len(matches)
-	}
+	start, end := listWindow(idx, 0, len(matches), paletteMax)
 	nameW := 0
 	for _, c := range matches {
 		if n := len([]rune(c.Name + " " + c.Args)); n > nameW {
@@ -112,10 +104,8 @@ func paletteView(matches []Command, idx, width int) string {
 		if pad < 0 {
 			pad = 0
 		}
-		marker := "  "
-		nameStyle := theme.StyleAccent
+		marker, nameStyle := cursorMarker(i == idx), theme.StyleAccent
 		if i == idx {
-			marker = theme.StyleAccent.Render("▸") + " "
 			nameStyle = theme.StyleAccent.Bold(true)
 		}
 		row := marker + nameStyle.Render(strings.Split(left, " ")[0]) + strings.TrimPrefix(left, strings.Split(left, " ")[0]) + strings.Repeat(" ", pad+2) + theme.StyleDim.Render(c.Desc)
@@ -186,17 +176,13 @@ func mentionView(matches []protocol.AgentInfo, idx, width int) string {
 	if idx < 0 || idx >= len(matches) {
 		idx = 0
 	}
-	start := 0
-	if idx >= paletteMax {
-		start = idx - paletteMax + 1
-	}
-	end := min(start+paletteMax, len(matches))
+	start, end := listWindow(idx, 0, len(matches), paletteMax)
 	var rows []string
 	for i := start; i < end; i++ {
 		a := matches[i]
-		marker, style := "  ", theme.StyleAccent
+		marker, style := cursorMarker(i == idx), theme.StyleAccent
 		if i == idx {
-			marker, style = theme.StyleAccent.Render("▸")+" ", theme.StyleAccent.Bold(true)
+			style = theme.StyleAccent.Bold(true)
 		}
 		rows = append(rows, ansi.Truncate(marker+style.Render("@"+a.Name)+"  "+theme.StyleDim.Render(a.Role+" · "+string(a.State)), width, "…"))
 	}
