@@ -1,6 +1,7 @@
 package transcript
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
@@ -74,6 +75,7 @@ func (t *Transcript) applyChat(ev event.Event) {
 			} else {
 				lines = append([]Line{{Kind: LineText, Text: "@" + from}}, lines...)
 			}
+			lines = collapsed(lines)
 			lines = linked(CleanLines(append(lines, Line{Kind: LineBlank})), ev.Agent)
 			// A reply joins the thread of the post it answers, indented under
 			// it, wherever that post is; a message with no known post stands
@@ -142,6 +144,29 @@ func (t *Transcript) post(p event.ChatPayload) {
 	for _, n := range p.To {
 		t.open[n] = item
 	}
+}
+
+// collapsed folds a long reply the way tool output folds: its first
+// MaxOutputCollapsed lines, then "… +N lines" until the item is expanded.
+func collapsed(lines []Line) []Line {
+	if len(lines) <= MaxOutputCollapsed {
+		return lines
+	}
+	for i := MaxOutputCollapsed; i < len(lines); i++ {
+		lines[i].Vis = VisExpanded
+	}
+	return append(lines, Line{Kind: LineDim, Text: fmt.Sprintf("… +%d lines", len(lines)-MaxOutputCollapsed), Vis: VisCollapsed})
+}
+
+// ItemFolds reports whether committed item i of lines has lines that show
+// only while collapsed or only while expanded (tool output, a long reply).
+func ItemFolds(lines []Line, item int) bool {
+	for _, l := range lines {
+		if l.Item == item && l.Vis != VisAlways {
+			return true
+		}
+	}
+	return false
 }
 
 // addressed puts the @names a post went to before its text, leaving out

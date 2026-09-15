@@ -90,3 +90,22 @@ func TestMentionAutocomplete(t *testing.T) {
 		t.Fatal("an agent's own chat has no mentions")
 	}
 }
+
+// TestSuperChatSpaceExpandsALongReply: space on a thread with a long reply
+// expands it in place instead of leaving the chat.
+func TestSuperChatSpaceExpandsALongReply(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.superChat = true
+	m.applyEvent(chatEvent(1, "a", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a", Label: "main"}))
+	m.applyEvent(chatEvent(2, "", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "summarise", To: []string{"main"}}))
+	m.applyEvent(chatEvent(3, "a", event.MessageToUser, event.ChatPayload{From: "main", Text: "alpha\nbravo\ncharlie\ndelta\nfoxtrot", Post: "p1"}))
+	if view := stripANSI(m.vp.View()); !strings.Contains(view, "@main alpha") || strings.Contains(view, "foxtrot") {
+		t.Fatalf("collapsed view:\n%s", view)
+	}
+	m.setFocus(focusChat)
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
+	if !m.superChat || !strings.Contains(stripANSI(m.vp.View()), "foxtrot") {
+		t.Fatalf("space should expand the reply in the chat: super=%v\n%s", m.superChat, stripANSI(m.vp.View()))
+	}
+}
