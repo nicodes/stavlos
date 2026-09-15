@@ -30,7 +30,7 @@ func TestKeyBarLinesWrap(t *testing.T) {
 }
 
 func TestKeyHintsByContext(t *testing.T) {
-	m := Model{width: 100, height: 30, sessionState: newSessionState("", protocol.SessionInfo{})}
+	m := Model{width: 100, height: 30, channelState: newChannelState("", protocol.ChannelInfo{})}
 	has := func(hs []dialog.Hint, key string) bool {
 		for _, h := range hs {
 			if h.Key == key {

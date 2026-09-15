@@ -23,7 +23,7 @@ type Result struct {
 
 // Env is what a tool gets from the calling agent.
 type Env struct {
-	Dir       string           // session working directory
+	Dir       string           // channel working directory
 	Skills    map[string]Skill // skills this agent may load
 	Agent     string           // caller agent id
 	Orch      Orchestrator     // nil if the agent cannot orchestrate
@@ -83,7 +83,7 @@ type Tool interface {
 // Orchestrator is implemented by the agent runtime (PRD §6.4).
 type Orchestrator interface {
 	// Spawn creates a child and returns its id and the name it got (label,
-	// normalised and made unique in the session).
+	// normalised and made unique in the channel).
 	Spawn(ctx context.Context, parent, archetype, label, task, modelID string) (id, name string, err error)
 	// Message sends text from the caller to an agent (name or id) or to
 	// User, as kind KindRequest (the recipient owes a reply, the caller

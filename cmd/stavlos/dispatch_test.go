@@ -6,7 +6,7 @@ import (
 )
 
 // TestCommandOf: command words and the dash-spelled commands reach their
-// handler; other leading flags start a session; unknown words stay unknown.
+// handler; other leading flags start a channel; unknown words stay unknown.
 func TestCommandOf(t *testing.T) {
 	for _, c := range []struct {
 		args     []string

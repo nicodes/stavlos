@@ -10,10 +10,10 @@ import (
 	"github.com/nicodes/stavlos/internal/shellcmd"
 )
 
-// permits are the allows a human granted for the rest of a session: exact
-// calls ("Allow for this session") and prefixes ("Allow go test for this
-// session": a command prefix, a host). They answer a policy Ask; they
-// never override a Deny, and they last for the session, across daemon
+// permits are the allows a human granted for the rest of a channel: exact
+// calls ("Allow for this channel") and prefixes ("Allow go test for this
+// channel": a command prefix, a host). They answer a policy Ask; they
+// never override a Deny, and they last for the channel, across daemon
 // restarts (each is logged as permit.granted and replayed) (PRD §10.3).
 type permits struct {
 	mu       sync.Mutex
@@ -47,7 +47,7 @@ func (p *permits) apply(g event.PermitPayload) {
 	}
 }
 
-// rememberCall allows this exact call for the session.
+// rememberCall allows this exact call for the channel.
 func (p *permits) rememberCall(tool, arg string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -58,7 +58,7 @@ func (p *permits) rememberCall(tool, arg string) {
 }
 
 // rememberPrefix allows every call of tool the prefix covers for the
-// session. The prefix is the daemon's own (prefixFor of the call being
+// channel. The prefix is the daemon's own (prefixFor of the call being
 // answered), never a client's.
 func (p *permits) rememberPrefix(tool, prefix string) {
 	if prefix == "" {
@@ -77,7 +77,7 @@ func (p *permits) rememberPrefix(tool, prefix string) {
 	p.prefixes[tool] = append(p.prefixes[tool], prefix)
 }
 
-// prefixFor is what "allow … for this session" may remember for a call:
+// prefixFor is what "allow … for this channel" may remember for a call:
 // the command prefix for a command (shellcmd.Prefix), the host for a URL,
 // "" for subjects without a sensible prefix.
 func prefixFor(kind policy.Kind, arg string) string {

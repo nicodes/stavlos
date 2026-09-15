@@ -1,5 +1,5 @@
 // Package event defines the append-only event vocabulary (PRD §3.3, §4.2).
-// Every state change in a session is exactly one of these.
+// Every state change in a channel is exactly one of these.
 package event
 
 import (
@@ -13,14 +13,14 @@ import (
 type Type string
 
 const (
-	SessionCreated      Type = "session.created"       // SessionCreatedPayload
-	SessionArchived     Type = "session.archived"      // (none)
-	SessionModelChanged Type = "session.model_changed" // ModelChangedPayload
-	SessionYoloChanged  Type = "session.yolo_changed"  // YoloPayload (legacy: replayed as mode yolo/ask; new logs carry SessionModeChanged)
-	SessionModeChanged  Type = "session.mode_changed"  // ModePayload: the session's permission mode (ask | auto | yolo)
-	SessionDirAdded     Type = "session.dir_added"     // DirAddedPayload: a directory joined the session\'s working set (every agent\'s); Agent is the agent whose boundary prompt added it, "" for the dirs tab
-	SessionDirRemoved   Type = "session.dir_removed"   // DirRefPayload: the human took a directory out of the session\'s working set
-	ChatPosted          Type = "chat.posted"           // ChatPayload: the human\'s message in the session chat, logged on the session, and the agents it went to
+	ChannelCreated      Type = "channel.created"       // ChannelCreatedPayload
+	ChannelArchived     Type = "channel.archived"      // (none)
+	ChannelModelChanged Type = "channel.model_changed" // ModelChangedPayload
+	ChannelYoloChanged  Type = "channel.yolo_changed"  // YoloPayload (legacy: replayed as mode yolo/ask; new logs carry ChannelModeChanged)
+	ChannelModeChanged  Type = "channel.mode_changed"  // ModePayload: the channel's permission mode (ask | auto | yolo)
+	ChannelDirAdded     Type = "channel.dir_added"     // DirAddedPayload: a directory joined the channel\'s working set (every agent\'s); Agent is the agent whose boundary prompt added it, "" for the dirs tab
+	ChannelDirRemoved   Type = "channel.dir_removed"   // DirRefPayload: the human took a directory out of the channel\'s working set
+	ChatPosted          Type = "chat.posted"           // ChatPayload: the human\'s message in the channel chat, logged on the channel, and the agents it went to
 
 	AgentSpawned        Type = "agent.spawned"         // AgentSpawnedPayload
 	AgentFinished       Type = "agent.finished"        // AgentFinishedPayload (legacy: agents no longer finish; kept for old logs)
@@ -32,8 +32,8 @@ const (
 	AgentModelChanged   Type = "agent.model_changed"   // ModelChangedPayload
 	AgentRoleChanged    Type = "agent.role_changed"    // RoleChangedPayload: the agent's preset was switched
 	AgentVariantChanged Type = "agent.variant_changed" // VariantChangedPayload: model variant (reasoning effort) switched
-	AgentDirAdded       Type = "agent.dir_added"       // DirAddedPayload (legacy: an agent's own set; replayed into the session's)
-	AgentDirRemoved     Type = "agent.dir_removed"     // DirRefPayload (legacy: replayed as a removal from the session's set)
+	AgentDirAdded       Type = "agent.dir_added"       // DirAddedPayload (legacy: an agent's own set; replayed into the channel's)
+	AgentDirRemoved     Type = "agent.dir_removed"     // DirRefPayload (legacy: replayed as a removal from the channel's set)
 
 	MonitorArmed    Type = "monitor.armed"    // MonitorPayload: wake armed for these ids (children or monitors)
 	MonitorDisarmed Type = "monitor.disarmed" // MonitorPayload
@@ -64,7 +64,7 @@ const (
 	PromptClaimed   Type = "prompt.claimed"   // PromptRefPayload
 	PromptAnswered  Type = "prompt.answered"  // PromptAnsweredPayload
 	PromptWithdrawn Type = "prompt.withdrawn" // PromptRefPayload
-	PermitGranted   Type = "permit.granted"   // PermitPayload: the human allowed a call or a prefix for the rest of the session
+	PermitGranted   Type = "permit.granted"   // PermitPayload: the human allowed a call or a prefix for the channel
 	PromptDefaulted Type = "prompt.defaulted" // PromptAnsweredPayload
 
 	Usage     Type = "usage"     // UsagePayload (PRD §4.4)
@@ -76,9 +76,9 @@ const (
 
 // Event is one log record.
 type Event struct {
-	Global  int64           `json:"global"`  // total order across sessions
-	Seq     int64           `json:"seq"`     // per-session, contiguous from 1
-	Session string          `json:"session"` // session id
+	Global  int64           `json:"global"`  // total order across channels
+	Seq     int64           `json:"seq"`     // per-channel, contiguous from 1
+	Channel string          `json:"channel"` // channel id
 	Agent   string          `json:"agent,omitempty"`
 	Type    Type            `json:"type"`
 	Time    time.Time       `json:"time"`
@@ -95,12 +95,10 @@ func (e Event) Decode(v any) error {
 
 // --- payloads ---
 
-type SessionCreatedPayload struct {
-	Dir        string `json:"dir"`
-	Model      string `json:"model"`
-	RootAgent  string `json:"root_agent"` // archetype
-	ForkedFrom string `json:"forked_from,omitempty"`
-	ForkSeq    int64  `json:"fork_seq,omitempty"`
+type ChannelCreatedPayload struct {
+	Dir       string `json:"dir"`
+	Model     string `json:"model"`
+	RootAgent string `json:"root_agent"` // archetype
 }
 
 type ModelChangedPayload struct {
@@ -114,15 +112,15 @@ type RoleChangedPayload struct {
 	Label string `json:"label"`
 }
 
-// ModePayload records the session's permission mode: ask (every policy
-// ask prompts), auto (asks are allowed inside the session's working
+// ModePayload records the channel's permission mode: ask (every policy
+// ask prompts), auto (asks are allowed inside the channel's working
 // directories, calls outside them are denied), yolo (everything a policy would
 // ask about is allowed, boundary included). Deny rules hold in every mode.
 type ModePayload struct {
 	Mode string `json:"mode"`
 }
 
-// YoloPayload records the session's yolo switch: while on, every tool
+// YoloPayload records the channel's yolo switch: while on, every tool
 // call a policy would ask about is allowed without a prompt.
 type YoloPayload struct {
 	On bool `json:"on"`
@@ -142,7 +140,7 @@ type AgentSpawnedPayload struct {
 	Model     string   `json:"model"` // resolved provider/model-id
 	Task      string   `json:"task,omitempty"`
 	Depth     int      `json:"depth"`
-	Dirs      []string `json:"dirs,omitempty"` // legacy: directories the creator granted, replayed into the session's set
+	Dirs      []string `json:"dirs,omitempty"` // legacy: directories the creator granted, replayed into the channel's set
 }
 
 // DirAddedPayload: Source is "human" (the dirs tab, or the answer to a
@@ -184,7 +182,7 @@ type AgentRefPayload struct {
 type TextPayload struct {
 	Text   string `json:"text"`
 	Source string `json:"source,omitempty"`
-	Post   string `json:"post,omitempty"` // the session chat post a steer delivers
+	Post   string `json:"post,omitempty"` // the channel chat post a steer delivers
 }
 
 // MonitorPayload lists child ids whose finish wakes (or no longer wakes) the agent.
@@ -280,14 +278,14 @@ type UserMessagePayload struct {
 	Kind MessageKind `json:"kind"`
 	Text string      `json:"text"`
 	// From names the sending agent ("scout") when a prompt, steer or answer
-	// came from another agent in the session; empty for humans. FromID is
+	// came from another agent in the channel; empty for humans. FromID is
 	// its id (logs from before it carry the name only).
 	From   string `json:"from,omitempty"`
 	FromID string `json:"from_id,omitempty"`
-	Post   string `json:"post,omitempty"` // the session chat post this input delivers
+	Post   string `json:"post,omitempty"` // the channel chat post this input delivers
 }
 
-// ChatPayload is a message in the session chat: the human's post (To: the
+// ChatPayload is a message in the channel chat: the human's post (To: the
 // names of the agents it was delivered to) or an agent's message to the
 // human (From: the agent's name).
 type ChatPayload struct {
@@ -356,7 +354,7 @@ type PromptRequestedPayload struct {
 	Questions json.RawMessage `json:"questions,omitempty"` // kind question: the protocol.Question batch, as JSON
 }
 
-// PermitPayload is an allow the human granted for the session: either an
+// PermitPayload is an allow the human granted for the channel: either an
 // exact call (Call, the policy subject it matched) or a prefix (a command
 // prefix, a host) covering every call of the tool it fits. Replayed on
 // recovery, so a restart does not ask again.

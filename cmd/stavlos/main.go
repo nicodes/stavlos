@@ -1,13 +1,13 @@
 // Command stavlos is the CLI and TUI client (PRD §7.2).
 //
-//	stavlos                 start a new session in the current directory and open the TUI
-//	stavlos resume [id]     resume the latest (or given) session for this directory
-//	stavlos sessions        list sessions
+//	stavlos                 start a new channel in the current directory and open the TUI
+//	stavlos resume [id]     resume the latest (or given) channel for this directory
+//	stavlos channels        list channels
 //	stavlos daemon          run the daemon in the foreground
 //	stavlos status          daemon status
 //	stavlos init            write a starter global config
 //	stavlos trust [dir]     review and confirm a project's .stavlos/ layer
-//	stavlos tree <session>  print the agent tree
+//	stavlos tree <channel>  print the agent tree
 //	stavlos send|steer|cancel|kill <agent> [text]
 //	stavlos auth login      sign in to a subscription (tokens go to auth.json)
 //	stavlos version         print the version (also --version)
@@ -55,7 +55,7 @@ func run(args []string) error {
 
 // commandOf splits the command word off args. A first argument naming a
 // command (including --help and --version) is that command; any other
-// word is an unknown command; leading flags belong to a new session.
+// word is an unknown command; leading flags belong to a new channel.
 func commandOf(args []string) (cmd string, rest []string) {
 	if len(args) == 0 {
 		return "", nil
@@ -66,12 +66,12 @@ func commandOf(args []string) (cmd string, rest []string) {
 	return "", args
 }
 
-// subcommands maps each command word to its handler; "" starts a session.
+// subcommands maps each command word to its handler; "" starts a channel.
 var subcommands = map[string]func(ctx context.Context, cmd string, args []string) error{
 	"":          cmdNew,
 	"new":       cmdNew,
 	"resume":    cmdResume,
-	"sessions":  cmdSessions,
+	"channels":  cmdChannels,
 	"daemon":    cmdDaemon,
 	"status":    cmdStatus,
 	"init":      func(_ context.Context, _ string, args []string) error { return initConfig(args) },
@@ -92,14 +92,14 @@ var subcommands = map[string]func(ctx context.Context, cmd string, args []string
 	"--version": cmdVersion,
 }
 
-// cmdNew starts a session in a directory (reusing its newest session while
+// cmdNew starts a channel in a directory (reusing its newest channel while
 // that one was never prompted) and opens the TUI.
 func cmdNew(ctx context.Context, _ string, args []string) error {
 	fs := flag.NewFlagSet("new", flag.ContinueOnError)
-	modelID := fs.String("model", "", "provider/model-id for this session")
+	modelID := fs.String("model", "", "provider/model-id for this channel")
 	root := fs.String("root", "", "root archetype (default from config)")
 	dir := fs.String("dir", "", "working directory (default: cwd)")
-	noTUI := fs.Bool("no-tui", false, "create the session and print its id without opening the TUI")
+	noTUI := fs.Bool("no-tui", false, "create the channel and print its id without opening the TUI")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -109,14 +109,14 @@ func cmdNew(ctx context.Context, _ string, args []string) error {
 	}
 	defer c.Close()
 	d := cwd(*dir)
-	// A session only counts once someone has prompted it: if the
-	// directory's newest session is still untouched, reuse it instead of
+	// A channel only counts once someone has prompted it: if the
+	// directory's newest channel is still untouched, reuse it instead of
 	// leaving another empty one behind.
-	var s protocol.SessionInfo
-	if list, lerr := c.Sessions(ctx, d, false); lerr == nil && len(list) > 0 && list[0].Title == "" && *modelID == "" && *root == "" {
-		s, err = c.ResumeSession(ctx, list[0].ID)
+	var s protocol.ChannelInfo
+	if list, lerr := c.Channels(ctx, d, false); lerr == nil && len(list) > 0 && list[0].Title == "" && *modelID == "" && *root == "" {
+		s, err = c.ResumeChannel(ctx, list[0].ID)
 	} else {
-		s, err = c.CreateSession(ctx, d, *modelID, *root)
+		s, err = c.CreateChannel(ctx, d, *modelID, *root)
 	}
 	if err != nil {
 		return err
@@ -128,7 +128,7 @@ func cmdNew(ctx context.Context, _ string, args []string) error {
 	return tui.Run(ctx, c, s.ID)
 }
 
-// cmdResume reattaches to a session (the directory's newest by default).
+// cmdResume reattaches to a channel (the directory's newest by default).
 func cmdResume(ctx context.Context, _ string, args []string) error {
 	c, err := connect(ctx, true)
 	if err != nil {
@@ -139,29 +139,29 @@ func cmdResume(ctx context.Context, _ string, args []string) error {
 	if len(args) > 0 {
 		id = args[0]
 	} else {
-		list, err := c.Sessions(ctx, cwd(""), false)
+		list, err := c.Channels(ctx, cwd(""), false)
 		if err != nil {
 			return err
 		}
 		if len(list) == 0 {
-			return errors.New("no sessions for this directory; run `stavlos` to start one")
+			return errors.New("no channels for this directory; run `stavlos` to start one")
 		}
 		id = list[0].ID
 	}
-	s, err := c.ResumeSession(ctx, id)
+	s, err := c.ResumeChannel(ctx, id)
 	if err != nil {
 		return err
 	}
 	return tui.Run(ctx, c, s.ID)
 }
 
-func cmdSessions(ctx context.Context, _ string, _ []string) error {
+func cmdChannels(ctx context.Context, _ string, _ []string) error {
 	c, err := connect(ctx, false)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
-	list, err := c.Sessions(ctx, "", true)
+	list, err := c.Channels(ctx, "", true)
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func cmdTrust(ctx context.Context, _ string, args []string) error {
 
 func cmdTree(ctx context.Context, _ string, args []string) error {
 	if len(args) < 1 {
-		return errors.New("usage: stavlos tree <session>")
+		return errors.New("usage: stavlos tree <channel>")
 	}
 	c, err := connect(ctx, false)
 	if err != nil {
@@ -291,9 +291,9 @@ func cmdVersion(context.Context, string, []string) error {
 }
 
 const usage = `usage:
-  stavlos [--model p/m] [--root archetype] [--dir d]   new session + TUI
-  stavlos resume [session-id]                           resume + TUI
-  stavlos sessions | status | tree <session>
+  stavlos [--model p/m] [--root archetype] [--dir d]   new channel + TUI
+  stavlos resume [channel-id]                           resume + TUI
+  stavlos channels | status | tree <channel>
   stavlos send|steer|cancel|kill <agent> [text]
   stavlos auth login [provider] | auth list | auth logout [provider]
   stavlos trust [dir] | init [--model p/m] | daemon

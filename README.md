@@ -9,7 +9,7 @@ cd ~/some/project
 go run ~/path/to/stavlos/cmd/stavlos     # or: go install ./cmd/stavlos, then `stavlos`
 ```
 
-The TUI opens immediately. With nothing configured, the first prompt answers "no model selected"; run `/providers` to sign in and `/models` to pick a model. The first model you pick becomes your default for future sessions.
+The TUI opens immediately. With nothing configured, the first prompt answers "no model selected"; run `/providers` to sign in and `/models` to pick a model. The first model you pick becomes your default for future channels.
 
 Stavlos uses your existing subscription, not platform API keys. `/providers` offers two sign-ins:
 
@@ -22,7 +22,7 @@ Tokens live in `~/.local/share/stavlos/auth.json` (mode 0600) and refresh automa
 
 ### Talking to agents
 
-A session opens on its chat, where you talk to every agent. Start a message with one or more `@name`s, separated by spaces, to send it to those agents (`@` autocompletes them); the names are not part of the message, and an `@` later in it is left alone. A message with no leading name goes to `main`, the root agent, and a leading name that is no agent refuses the message. Agents answer you there with `message`. Posts and replies show in the order they happen, and while an agent you messaged has not replied yet, a loader at the bottom names it. Only posts and replies show there: tool calls, permission prompts, questions and notices stay in each agent's own chat, and the strip and sidebar badges still tell you when something is waiting on you. Space on a short reply opens that agent's chat.
+A channel opens on its chat, where you talk to every agent. Start a message with one or more `@name`s, separated by spaces, to send it to those agents (`@` autocompletes them); the names are not part of the message, and an `@` later in it is left alone. A message with no leading name goes to `main`, the root agent, and a leading name that is no agent refuses the message. Agents answer you there with `message`. Posts and replies show in the order they happen, and while an agent you messaged has not replied yet, a loader at the bottom names it. Only posts and replies show there: tool calls, permission prompts, questions and notices stay in each agent's own chat, and the strip and sidebar badges still tell you when something is waiting on you. Space on a short reply opens that agent's chat.
 
 Selecting an agent in the sidebar opens its own chat, with its tool calls and notes, where typing talks to that agent alone. The "# chat" row at the top of the sidebar, or `/chat`, goes back. If an agent is busy, your message reaches it at its next step. The input grows as your message wraps; ctrl+j breaks a line and enter sends. If the agent is busy, your message reaches it at its next step. `/queue <text>` waits for the current turn to end instead, and esc pressed twice on an empty input cancels the current turn (the first press warns).
 
@@ -35,7 +35,7 @@ The meta row under the input shows the selected agent's role, model and variant,
 - Tab and shift+tab cycle focus from top to bottom: the chat, the input, the tab strip, the meta row, and the sidebar (ctrl+b).
 - Space is the select key everywhere outside a text field. It opens the highlighted tab or meta-row part, picks a dialog row, selects an agent, and expands a tool call's output in the chat.
 - Enter anywhere but the input closes what is open and returns to typing.
-- In the chat, ↑/↓ move item by item. In the input, ↑/↓ walk your prompt history; on the start screen they recall the first prompts of this directory's earlier sessions, and `/sessions` picks one to resume.
+- In the chat, ↑/↓ move item by item. In the input, ↑/↓ walk your prompt history; on the start screen they recall the first prompts of this directory's earlier channels, and `/channels` picks one to resume.
 - On the meta row, ←/→ pick the mode tag, role, model or variant, and enter opens its dialog. `/roles`, `/models` and `/variants` open the same dialogs.
 - The "/" palette lists every command. `/help` shows a key bar at the bottom (off by default; `/help` again hides it).
 
@@ -43,31 +43,31 @@ The meta row under the input shows the selected agent's role, model and variant,
 
 A strip under the input holds seven tabs, each always there with its count: "permission", "questions", "async", "due", "todo", "mcp" and "dirs". Tab lands on the leftmost, ←/→ move the highlight, enter or a click opens that tab's dialog, and esc returns to where you came from.
 
-- **permission** holds the permission prompts. The permission and questions dialogs show the selected agent's prompt first and the oldest one otherwise, while the strip counts every prompt in the session.
+- **permission** holds the permission prompts. The permission and questions dialogs show the selected agent's prompt first and the oldest one otherwise, while the strip counts every prompt in the channel.
 - **questions** holds `ask_user` batches (see below).
 - **async** shows what the selected agent is waiting on: the agents whose answer it expects (a child it tasked, a sibling or parent it messaged) and its running shell jobs.
 - **due** is the other direction: who is waiting on the selected agent's reply, you first, then any agent that messaged it. Space opens that chat.
 - **todo** lists the selected agent's plan.
 - **mcp** lists its MCP servers with their state, tool count and uptime.
-- **dirs** edits its working directories: `a` adds, enter replaces, ctrl+d removes; the session directory stays.
+- **dirs** edits its working directories: `a` adds, enter replaces, ctrl+d removes; the channel directory stays.
 
 ### The sidebar
 
-The sidebar (ctrl+b) is the swarm nav: the session directory, its tokens and cost, the swarm state (`3 working · 1 waiting`), then a "channels" heading over the "# chat" row and, one level in, the agent tree with a `!` or `?` badge on any agent whose permission or question is pending and its cost at the right edge. ↑/↓ move, space selects, `n` jumps to the next agent waiting on you, and a click on a row selects it.
+The sidebar (ctrl+b) is the swarm nav: the channel directory, its tokens and cost, the swarm state (`3 working · 1 waiting`), then a "channels" heading over the "# chat" row and, one level in, the agent tree with a `!` or `?` badge on any agent whose permission or question is pending and its cost at the right edge. ↑/↓ move, space selects, `n` jumps to the next agent waiting on you, and a click on a row selects it.
 
-Under the tree, a folded "sessions" section lists this directory's other sessions, each with a state dot (full orange while an agent works, half while one waits, empty when idle). Space unfolds it, and space on a session resumes it in place.
+Under the tree, a folded "channels" section lists this directory's other channels, each with a state dot (full orange while an agent works, half while one waits, empty when idle). Space unfolds it, and space on a channel resumes it in place.
 
 ### Permissions and modes
 
 Permission prompts show the command (or path) with the asking agent after it, then a fixed list of answers; ↑/↓ move and space chooses:
 
-- A plain permission offers "Allow once", "Allow for this session" (this exact call), "Allow `<prefix>` for this session" for a simple shell command, and "Deny", which opens a row for an optional reason the agent reads. The prefix is the first word, or two for git, go, npm, cargo, make, docker and the like: `go test` then covers every `go test …` that is not chained, piped or redirected. It is never offered for wrappers such as `bash`, `env`, `sudo` or `python`.
+- A plain permission offers "Allow once", "Allow for this channel" (this exact call), "Allow `<prefix>` for this channel" for a simple shell command, and "Deny", which opens a row for an optional reason the agent reads. The prefix is the first word, or two for git, go, npm, cargo, make, docker and the like: `go test` then covers every `go test …` that is not chained, piped or redirected. It is never offered for wrappers such as `bash`, `env`, `sudo` or `python`.
 - A boundary prompt, for a call outside the agent's directories, offers "Allow once", "Allow and add <dir>", "Allow and add another directory…" and "Deny". "Allow and add" puts the directory on that agent: the whole git checkout when the path is inside one, else the path's directory.
 - The trust prompt for a project's `.stavlos/` offers "Trust this project's config" or "Not now".
 
 Esc closes a dialog with the prompt still waiting.
 
-`/mode` picks the session's permission mode:
+`/mode` picks the channel's permission mode:
 
 - **ask**, the default, prompts for every policy ask and every call outside an agent's directories.
 - **auto** (`/auto`) approves permissions inside the agent's directories; a call outside them is denied, and the agent is told that auto mode does not allow it (switch to ask to grant a directory with "Allow and add").
@@ -88,20 +88,20 @@ The role decides what `/roles`, `/models` and `/variants` offer, and the daemon 
 
 ## What agents can do
 
-**Delegate and message.** Delegating to child agents is the model's job (`agent_create`). Every agent has a unique name in its session (the root is `main`; a name already taken gets a suffix, `scout-2`), and agents talk with one tool, `message`, addressed by name to any other agent or to you as `user`. Each message has a kind. A request (the default) asks for something: the recipient owes a reply, the sender waits, and it reaches the recipient at its next step, even mid-turn. A response answers a request, such as a child finishing its task: it settles it and wakes the agent waiting on it between turns, never mid-turn. Info needs no reply (thanks, an acknowledgement): nobody owes or waits, and an idle recipient is not woken for it. So an agent that is waiting on you can still be asked a question first: that question is a request, and your answer later is a response. A role can keep its agents from messaging you with a deny rule on `message` for `user`. A child idles with its context intact for follow-ups for the rest of the session: nothing kills it, and its MCP servers stop after ten idle minutes. There is no wait tool.
+**Delegate and message.** Delegating to child agents is the model's job (`agent_create`). Every agent has a unique name in its channel (the root is `main`; a name already taken gets a suffix, `scout-2`), and agents talk with one tool, `message`, addressed by name to any other agent or to you as `user`. Each message has a kind. A request (the default) asks for something: the recipient owes a reply, the sender waits, and it reaches the recipient at its next step, even mid-turn. A response answers a request, such as a child finishing its task: it settles it and wakes the agent waiting on it between turns, never mid-turn. Info needs no reply (thanks, an acknowledgement): nobody owes or waits, and an idle recipient is not woken for it. So an agent that is waiting on you can still be asked a question first: that question is a request, and your answer later is a response. A role can keep its agents from messaging you with a deny rule on `message` for `user`. A child idles with its context intact for follow-ups for the rest of the channel: nothing kills it, and its MCP servers stop after ten idle minutes. There is no wait tool.
 
 **Run commands.** Agents run commands with one `shell` tool. Read-only commands such as `grep`, `rg`, `find`, `ls`, `cat` and `git status`/`log`/`diff` run without a prompt, but only as one simple command: chain, pipe or redirect one and it asks. A call waits up to 15 seconds; a command still running then continues as a background job (the call returns its id and the output so far), and `background: true` skips the wait for servers. A job's exit wakes its agent the same way a response does, and `shell_kill` stops a job. Every command and MCP server runs with a scrubbed environment, without `STAVLOS_*` or any variable whose name looks like a credential, so list what a build really needs under `"env": {"pass": ["GITHUB_TOKEN"]}` in `stavlos.json`.
 
 **Reach the web.**
 
-- `web_fetch` returns one page as markdown, 20k characters at a time, with HTML boiled down to headings, text, lists, links and code. http is upgraded to https, credentials are stripped, private and local addresses are refused, cross-host redirects are reported rather than followed, and pages are cached for 15 minutes. It asks by default, and the dialog offers "Allow <host> for this session". The policy in `stavlos.json` allow-lists hosts (`"web_fetch": {"https://github.com/*": "allow"}`, matched against the URL as it will be fetched: lower-case host, https, no credentials), and roles may tighten further per URL.
+- `web_fetch` returns one page as markdown, 20k characters at a time, with HTML boiled down to headings, text, lists, links and code. http is upgraded to https, credentials are stripped, private and local addresses are refused, cross-host redirects are reported rather than followed, and pages are cached for 15 minutes. It asks by default, and the dialog offers "Allow <host> for this channel". The policy in `stavlos.json` allow-lists hosts (`"web_fetch": {"https://github.com/*": "allow"}`, matched against the URL as it will be fetched: lower-case host, https, no credentials), and roles may tighten further per URL.
 - `web_search` returns title, URL and snippet. Out of the box it uses Exa's free, keyless endpoint, the same one OpenCode uses, which has no published rate limit and may change. For your own quota, configure a backend under `search` in `stavlos.json`: `{"provider": "brave" | "tavily" | "exa", "apiKey": "${env:BRAVE_KEY}"}`. It asks until you configure a backend (its keyless fallback is a third party you never chose) and is allowed once you have.
 
 Auto mode approves fetches like any read-only call. Everything fetched is handed to the model as untrusted data.
 
 **Plan.** `todo_add` and `todo_update` keep a per-agent list that is logged, projected into the system prompt at every call (so it survives compaction) and shown to you in the todo tab.
 
-**Work in directories.** Every agent may read, edit and run commands in the session directory plus its role's `dirs`. A parent can grant a child directories from its own set at `agent_create`. A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
+**Work in directories.** Every agent may read, edit and run commands in the channel directory plus its role's `dirs`. A parent can grant a child directories from its own set at `agent_create`. A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
 
 **Use MCP servers.** A role's `mcp:` list starts MCP servers for that agent alone (stdio servers defined under `mcp` in `stavlos.json`). The model sees their tools as `mcp__<server>__<tool>` and calls them through the usual permission path.
 
@@ -110,9 +110,9 @@ Auto mode approves fetches like any read-only call. Everything fetched is handed
 ## Other commands
 
 ```sh
-stavlos resume [id]            # reattach to the latest session for this directory
-stavlos sessions               # list sessions (they survive daemon restarts)
-stavlos tree <session>         # agent tree with state and cost
+stavlos resume [id]            # reattach to the latest channel for this directory
+stavlos channels               # list channels (they survive daemon restarts)
+stavlos tree <channel>         # agent tree with state and cost
 stavlos send|steer|cancel|kill <agent> [text]
 stavlos trust [dir]            # confirm a project's .stavlos/ layer
 stavlos init [--model p/m]     # write a starter global config
@@ -130,7 +130,7 @@ Put a `.stavlos/` directory in a repository to add roles (`roles/<name>.md`), sk
 
 Implemented: daemon with SQLite event log, actor scheduler, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend) and Grok subscription adapters with browser and device-code sign-in, models.dev metadata.
 
-Not yet: Discord service, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, session fork in the TUI (the protocol supports it), a sandbox for shell commands.
+Not yet: Discord service, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork in the TUI (the protocol supports it), a sandbox for shell commands.
 
 ## Development
 

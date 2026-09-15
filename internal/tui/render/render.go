@@ -352,7 +352,7 @@ type fold struct {
 const PreviewLines = 3
 
 // folds decides which items collapse to a single line. The human's input
-// always shows in full, and so does text still streaming and the session
+// always shows in full, and so does text still streaming and the channel
 // chat's messages (which fold by their own lines); everything else (the
 // agent's notes, tool calls with their output and permission notices,
 // thinking, prompts and responses from other agents, spawns, errors,

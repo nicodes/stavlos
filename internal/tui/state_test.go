@@ -8,12 +8,12 @@ import (
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
-// TestBindSessionStartsOver: switching sessions leaves nothing of the old
+// TestBindChannelStartsOver: switching channels leaves nothing of the old
 // one behind — not the agents and transcripts, and not a half-answered
 // question, an open reason row, an armed esc or a cursor — while display
 // choices stay.
-func TestBindSessionStartsOver(t *testing.T) {
-	m := sessionModel()
+func TestBindChannelStartsOver(t *testing.T) {
+	m := channelModel()
 	m.prompts = []protocol.PromptInfo{{ID: "p"}}
 	m.promptBusy, m.permSel, m.permFor, m.permEdit, m.dirEdit = "p", 2, "p", "deny", "add"
 	m.q = questionState{id: "q", idx: 1, typing: true}
@@ -24,13 +24,13 @@ func TestBindSessionStartsOver(t *testing.T) {
 	m.expanded = map[string]map[int]bool{"a": {1: true}}
 	m.showTree, m.details = true, true
 
-	info := protocol.SessionInfo{ID: "next", Dir: "/x"}
-	m.bindSession(info)
-	want := newSessionState("next", info)
-	want.superChat = true                               // a bound session opens on its chat
-	want.itemRows, want.renders = m.itemRows, m.renders // drawn by the refresh inside bindSession
-	if !reflect.DeepEqual(m.sessionState, want) {
-		t.Fatalf("session state after bind:\n%+v\nwant\n%+v", m.sessionState, want)
+	info := protocol.ChannelInfo{ID: "next", Dir: "/x"}
+	m.bindChannel(info)
+	want := newChannelState("next", info)
+	want.superChat = true                               // a bound channel opens on its chat
+	want.itemRows, want.renders = m.itemRows, m.renders // drawn by the refresh inside bindChannel
+	if !reflect.DeepEqual(m.channelState, want) {
+		t.Fatalf("channel state after bind:\n%+v\nwant\n%+v", m.channelState, want)
 	}
 	if !m.showTree || !m.details || !m.follow {
 		t.Fatalf("display choices should survive: tree=%v details=%v follow=%v", m.showTree, m.details, m.follow)
@@ -40,7 +40,7 @@ func TestBindSessionStartsOver(t *testing.T) {
 // TestClaimThenGuards: one answer at a time per prompt, none to a prompt
 // another client holds, whatever the answer is.
 func TestClaimThenGuards(t *testing.T) {
-	m := sessionModel()
+	m := channelModel()
 	p := &protocol.PromptInfo{ID: "p", Kind: protocol.PromptPermission}
 	if cmd := m.answerPrompt(p, "allow"); cmd == nil || m.promptBusy != "p" || !m.claimedByUs["p"] {
 		t.Fatalf("first answer: busy=%q claimed=%v", m.promptBusy, m.claimedByUs["p"])

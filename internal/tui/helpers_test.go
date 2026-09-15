@@ -54,7 +54,7 @@ var ansiRE = regexp.MustCompile(`\x1b\[[0-9;?]*[A-Za-z]`)
 func stripANSI(s string) string { return ansiRE.ReplaceAllString(s, "") }
 
 func mk(seq int64, agent string, typ event.Type, payload any) event.Event {
-	return event.Event{Seq: seq, Session: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
+	return event.Event{Seq: seq, Channel: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
 }
 
 // markCursorForTest swaps the (background colour) cursor highlight for a

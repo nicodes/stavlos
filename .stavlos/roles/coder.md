@@ -7,7 +7,7 @@ description: Implements features and fixes bugs in Go; runs the tests before rep
 mode: all
 
 # Model whitelist, in order; the first entry is the default. Omit the key to
-# allow any model and inherit the parent's (or the session's) choice.
+# allow any model and inherit the parent's (or the channel's) choice.
 models:
   - id: openai/gpt-5.1-codex
     variants: [medium, high]        # allowed for this model; the first is its default

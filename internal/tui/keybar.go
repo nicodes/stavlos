@@ -22,7 +22,7 @@ func (m Model) keyHints() []dialog.Hint {
 		}
 		return h
 	case m.ov != nil && m.ov.kind == ovModels:
-		return []dialog.Hint{hint("space", "set for this agent"), hint("ctrl+s", "set session default"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("enter", "input"), hint("esc", "close")}
+		return []dialog.Hint{hint("space", "set for this agent"), hint("ctrl+s", "set channel default"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("enter", "input"), hint("esc", "close")}
 	case m.ov != nil:
 		return []dialog.Hint{hint("space", "select"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("enter", "input"), hint("esc", "close")}
 	}

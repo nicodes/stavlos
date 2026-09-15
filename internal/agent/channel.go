@@ -1,4 +1,4 @@
-// Package agent implements sessions, the actor model, and the turn loop
+// Package agent implements channels, the actor model, and the turn loop
 // (PRD §5, §6).
 package agent
 
@@ -21,7 +21,7 @@ import (
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// Host is what the daemon provides to sessions.
+// Host is what the daemon provides to channels.
 type Host interface {
 	Append(ctx context.Context, e event.Event) (event.Event, error)
 	Stream(n protocol.StreamNotification)
@@ -31,8 +31,8 @@ type Host interface {
 	Prompt(ctx context.Context, info protocol.PromptInfo) escalation.Answer
 }
 
-// Session is a root agent plus its subtree, bound to a directory (PRD §5).
-type Session struct {
+// Channel is a root agent plus its subtree, bound to a directory (PRD §5).
+type Channel struct {
 	ID      string
 	Dir     string
 	Created time.Time
@@ -42,7 +42,7 @@ type Session struct {
 
 	mu       sync.RWMutex
 	cfg      *config.Effective
-	model    string // session-selected model
+	model    string // channel-selected model
 	rootArch string
 	agents   map[string]*Agent
 	names    map[string]string // agent name → id; a name is never released, so a mention never changes meaning
@@ -50,25 +50,25 @@ type Session struct {
 	archived bool
 	ctx      context.Context
 	cancel   context.CancelFunc
-	permits  permits    // the human's session-scoped allows (exact calls, prefixes); they answer asks, never denies
-	mode     string     // permission mode: ask (every ask prompts) | auto (asks inside the session's dirs are allowed, calls outside denied) | yolo (every ask is allowed)
-	dirs     []dirEntry // the working set beyond the session directory, shared by every agent: what the human added (logged)
+	permits  permits    // the human's channel-scoped allows (exact calls, prefixes); they answer asks, never denies
+	mode     string     // permission mode: ask (every ask prompts) | auto (asks inside the channel's dirs are allowed, calls outside denied) | yolo (every ask is allowed)
+	dirs     []dirEntry // the working set beyond the channel directory, shared by every agent: what the human added (logged)
 }
 
-// Mode reports the session's permission mode (protocol.ModeAsk by default).
-func (s *Session) Mode() string {
+// Mode reports the channel's permission mode (protocol.ModeAsk by default).
+func (s *Channel) Mode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.mode
 }
 
 // Yolo reports whether every policy ask is allowed, boundary included.
-func (s *Session) Yolo() bool { return s.Mode() == protocol.ModeYolo }
+func (s *Channel) Yolo() bool { return s.Mode() == protocol.ModeYolo }
 
-// SetMode switches the session's permission mode and logs it. Explicit
+// SetMode switches the channel's permission mode and logs it. Explicit
 // deny rules, model questions and the trust prompt are unaffected in every
 // mode.
-func (s *Session) SetMode(ctx context.Context, mode string) error {
+func (s *Channel) SetMode(ctx context.Context, mode string) error {
 	switch mode {
 	case protocol.ModeAsk, protocol.ModeAuto, protocol.ModeYolo:
 	default:
@@ -81,7 +81,7 @@ func (s *Session) SetMode(ctx context.Context, mode string) error {
 	if !changed {
 		return nil
 	}
-	_, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.SessionModeChanged, Payload: event.MustPayload(event.ModePayload{Mode: mode})})
+	_, err := s.host.Append(ctx, event.Event{Channel: s.ID, Type: event.ChannelModeChanged, Payload: event.MustPayload(event.ModePayload{Mode: mode})})
 	return err
 }
 
@@ -95,9 +95,9 @@ func NewID(prefix string) string {
 	return prefix + hex.EncodeToString(b)
 }
 
-// New creates a session object without logging anything; use Create or
+// New creates a channel object without logging anything; use Create or
 // Recover on the daemon side.
-func New(host Host, id, dir string, cfg *config.Effective, modelID, rootArch string) *Session {
+func New(host Host, id, dir string, cfg *config.Effective, modelID, rootArch string) *Channel {
 	ctx, cancel := context.WithCancel(context.Background())
 	if rootArch == "" {
 		rootArch = cfg.RootAgent
@@ -105,7 +105,7 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, rootArch str
 	if modelID == "" {
 		modelID = cfg.Model
 	}
-	return &Session{
+	return &Channel{
 		ID: id, Dir: dir, Created: time.Now().UTC(),
 		host: host, tools: tools.Builtin(),
 		cfg: cfg, model: modelID, rootArch: rootArch,
@@ -114,15 +114,15 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, rootArch str
 	}
 }
 
-// Start logs SessionCreated and spawns the root agent.
-// A session may start with no model or an unconnected provider: the TUI
+// Start logs ChannelCreated and spawns the root agent.
+// A channel may start with no model or an unconnected provider: the TUI
 // opens regardless and the first turn reports the problem (PRD §8.4).
-func (s *Session) Start(ctx context.Context) error {
+func (s *Channel) Start(ctx context.Context) error {
 	if _, ok := s.cfg.Presets[s.rootArch]; !ok {
 		return fmt.Errorf("root preset %q not found", s.rootArch)
 	}
-	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.SessionCreated,
-		Payload: event.MustPayload(event.SessionCreatedPayload{Dir: s.Dir, Model: s.model, RootAgent: s.rootArch})}); err != nil {
+	if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Type: event.ChannelCreated,
+		Payload: event.MustPayload(event.ChannelCreatedPayload{Dir: s.Dir, Model: s.model, RootAgent: s.rootArch})}); err != nil {
 		return err
 	}
 	_, err := s.spawn(ctx, "", s.rootArch, "main", "", "") // the root is always "main (role)"
@@ -130,48 +130,48 @@ func (s *Session) Start(ctx context.Context) error {
 }
 
 // Config returns the effective config.
-func (s *Session) Config() *config.Effective {
+func (s *Channel) Config() *config.Effective {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.cfg
 }
 
 // SetConfig swaps the effective config (after a trust decision or edit).
-func (s *Session) SetConfig(cfg *config.Effective) {
+func (s *Channel) SetConfig(cfg *config.Effective) {
 	s.mu.Lock()
 	s.cfg = cfg
 	s.mu.Unlock()
 }
 
-// Model returns the session-selected model.
-func (s *Session) Model() string {
+// Model returns the channel-selected model.
+func (s *Channel) Model() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.model
 }
 
-// SetModel changes the session model (affects future spawns and the root's
+// SetModel changes the channel model (affects future spawns and the root's
 // inherited default; running agents keep theirs — PRD §8.3).
-func (s *Session) SetModel(ctx context.Context, id string) error {
+func (s *Channel) SetModel(ctx context.Context, id string) error {
 	if err := s.host.CheckModel(id); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	s.model = id
 	s.mu.Unlock()
-	_, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.SessionModelChanged, Payload: event.MustPayload(event.ModelChangedPayload{Model: id})})
+	_, err := s.host.Append(ctx, event.Event{Channel: s.ID, Type: event.ChannelModelChanged, Payload: event.MustPayload(event.ModelChangedPayload{Model: id})})
 	return err
 }
 
-// Archived reports whether the session is archived.
-func (s *Session) Archived() bool {
+// Archived reports whether the channel is archived.
+func (s *Channel) Archived() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.archived
 }
 
-// Archive kills every agent and marks the session archived.
-func (s *Session) Archive(ctx context.Context) error {
+// Archive kills every agent and marks the channel archived.
+func (s *Channel) Archive(ctx context.Context) error {
 	if root := s.Root(); root != nil {
 		_ = s.Kill(root.ID)
 	}
@@ -179,15 +179,15 @@ func (s *Session) Archive(ctx context.Context) error {
 	s.archived = true
 	s.mu.Unlock()
 	s.cancel()
-	_, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.SessionArchived})
+	_, err := s.host.Append(ctx, event.Event{Channel: s.ID, Type: event.ChannelArchived})
 	return err
 }
 
 // Stop cancels all agents without logging (daemon shutdown).
-func (s *Session) Stop() { s.cancel() }
+func (s *Channel) Stop() { s.cancel() }
 
 // Agent looks up an agent.
-func (s *Session) Agent(id string) (*Agent, bool) {
+func (s *Channel) Agent(id string) (*Agent, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	a, ok := s.agents[id]
@@ -197,7 +197,7 @@ func (s *Session) Agent(id string) (*Agent, bool) {
 // resolve finds an agent by its id, its name (with or without "@", in any
 // case), or a unique prefix of its id of at least four characters (models
 // sometimes copy a shortened id from a status line).
-func (s *Session) resolve(ref string) (*Agent, bool) {
+func (s *Channel) resolve(ref string) (*Agent, bool) {
 	ref = strings.TrimPrefix(strings.TrimSpace(ref), "@")
 	if a, ok := s.Agent(ref); ok {
 		return a, true
@@ -224,8 +224,8 @@ func (s *Session) resolve(ref string) (*Agent, bool) {
 	return found, found != nil
 }
 
-// agentsSnapshot lists the session's agents in creation order.
-func (s *Session) agentsSnapshot() []*Agent {
+// agentsSnapshot lists the channel's agents in creation order.
+func (s *Channel) agentsSnapshot() []*Agent {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]*Agent, 0, len(s.order))
@@ -238,7 +238,7 @@ func (s *Session) agentsSnapshot() []*Agent {
 }
 
 // Root returns the root agent.
-func (s *Session) Root() *Agent {
+func (s *Channel) Root() *Agent {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if len(s.order) == 0 {
@@ -248,7 +248,7 @@ func (s *Session) Root() *Agent {
 }
 
 // Agents returns agents in pre-order (root first, children after parents).
-func (s *Session) Agents() []*Agent {
+func (s *Channel) Agents() []*Agent {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	byParent := map[string][]*Agent{}
@@ -269,7 +269,7 @@ func (s *Session) Agents() []*Agent {
 }
 
 // Live counts agents that are not finished or killed.
-func (s *Session) Live() int {
+func (s *Channel) Live() int {
 	n := 0
 	for _, a := range s.Agents() {
 		if a.Alive() {
@@ -282,7 +282,7 @@ func (s *Session) Live() int {
 // Busy counts agents that are working or have work queued; idle children
 // waiting for a follow-up cost nothing and do not count against the
 // fan-out limit.
-func (s *Session) Busy() int {
+func (s *Channel) Busy() int {
 	n := 0
 	for _, a := range s.Agents() {
 		st := a.StateOf()
@@ -297,7 +297,7 @@ func (s *Session) Busy() int {
 }
 
 // Cost sums usage across agents.
-func (s *Session) Cost() float64 {
+func (s *Channel) Cost() float64 {
 	c := 0.0
 	for _, a := range s.Agents() {
 		c += a.Cost()
@@ -306,11 +306,11 @@ func (s *Session) Cost() float64 {
 }
 
 // Info builds the protocol view.
-func (s *Session) Info() protocol.SessionInfo {
+func (s *Channel) Info() protocol.ChannelInfo {
 	s.mu.RLock()
 	cfg := s.cfg
 	s.mu.RUnlock()
-	return protocol.SessionInfo{
+	return protocol.ChannelInfo{
 		ID: s.ID, Dir: s.Dir, Model: s.Model(), RootAgent: s.rootArch,
 		Created: s.Created.Format(time.RFC3339), Archived: s.Archived(),
 		Live: s.Live(), CostUSD: s.Cost(), TrustPending: cfg.TrustPending, Mode: s.Mode(),
@@ -320,7 +320,7 @@ func (s *Session) Info() protocol.SessionInfo {
 
 // state sums the agents up (protocol.RollUp): working while any agent is
 // in a turn, waiting while any expects an answer, idle otherwise.
-func (s *Session) state() protocol.SessionState {
+func (s *Channel) state() protocol.ChannelState {
 	var states []protocol.AgentState
 	for _, a := range s.Agents() {
 		states = append(states, a.Info().State)
@@ -329,7 +329,7 @@ func (s *Session) state() protocol.SessionState {
 }
 
 // Presets lists archetypes.
-func (s *Session) Presets() []protocol.PresetInfo {
+func (s *Channel) Presets() []protocol.PresetInfo {
 	cfg := s.Config()
 	var out []protocol.PresetInfo
 	for _, p := range cfg.Presets {
@@ -345,9 +345,9 @@ func (s *Session) Presets() []protocol.PresetInfo {
 
 // resolveModel implements PRD §8.3 under the role's whitelist: an explicit
 // spawn argument must be allowed; otherwise the parent's (or the
-// session's) model is inherited when the role allows it, else the role's
+// channel's) model is inherited when the role allows it, else the role's
 // default (its first listed model).
-func (s *Session) resolveModel(spawnArg string, preset config.Preset, parent *Agent) (string, error) {
+func (s *Channel) resolveModel(spawnArg string, preset config.Preset, parent *Agent) (string, error) {
 	if spawnArg != "" {
 		if !preset.AllowsModel(spawnArg) {
 			return "", fmt.Errorf("role %s does not allow model %s (allowed: %s)", preset.Name, spawnArg, modelList(preset))
@@ -388,7 +388,7 @@ func fitVariant(p config.Preset, id, want string) string {
 
 // spawn creates and starts an agent. parent=="" for the root. grants are
 // directories the parent hands down; each must be inside the parent's own.
-func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, modelArg string) (*Agent, error) {
+func (s *Channel) spawn(ctx context.Context, parentID, archetype, label, task, modelArg string) (*Agent, error) {
 	cfg := s.Config()
 	preset, ok := cfg.Presets[archetype]
 	if !ok {
@@ -450,12 +450,12 @@ func (s *Session) spawn(ctx context.Context, parentID, archetype, label, task, m
 	if parent != nil {
 		parent.addChild(a.ID)
 	}
-	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Agent: a.ID, Type: event.AgentSpawned,
+	if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Agent: a.ID, Type: event.AgentSpawned,
 		Payload: event.MustPayload(event.AgentSpawnedPayload{ID: a.ID, Parent: parentID, Archetype: archetype, Label: name, Model: modelID, Task: task, Depth: depth})}); err != nil {
 		return nil, err
 	}
 	if a.variant != "" { // inherited: logged so recovery restores it
-		if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Agent: a.ID, Type: event.AgentVariantChanged,
+		if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Agent: a.ID, Type: event.AgentVariantChanged,
 			Payload: event.MustPayload(event.VariantChangedPayload{Variant: a.variant})}); err != nil {
 			return nil, err
 		}
@@ -507,7 +507,7 @@ func normalizeName(label string) string {
 // normalises to nothing, then "agent"), with a -2, -3, … suffix when the
 // name is taken. Names are never released: a killed or renamed agent keeps
 // its old one reserved. Callers hold s.mu.
-func (s *Session) claimNameLocked(want, fallback, id string) (string, error) {
+func (s *Channel) claimNameLocked(want, fallback, id string) (string, error) {
 	base := normalizeName(want)
 	if base == "" {
 		base = normalizeName(fallback)
@@ -542,7 +542,7 @@ func contains(xs []string, x string) bool {
 // --- human-facing envelope entry points (same inbox as agents, PRD §6.1) ---
 
 // Send queues a Prompt.
-func (s *Session) Send(ctx context.Context, agentID, text, source string) error {
+func (s *Channel) Send(ctx context.Context, agentID, text, source string) error {
 	a, ok := s.Agent(agentID)
 	if !ok {
 		return fmt.Errorf("agent %q not found", agentID)
@@ -551,7 +551,7 @@ func (s *Session) Send(ctx context.Context, agentID, text, source string) error 
 }
 
 // Steer delivers a Steer.
-func (s *Session) Steer(ctx context.Context, agentID, text, source string) error {
+func (s *Channel) Steer(ctx context.Context, agentID, text, source string) error {
 	a, ok := s.Agent(agentID)
 	if !ok {
 		return fmt.Errorf("agent %q not found", agentID)
@@ -559,14 +559,14 @@ func (s *Session) Steer(ctx context.Context, agentID, text, source string) error
 	return a.Steer(ctx, text, source)
 }
 
-// Post is the human's message in the session chat (docs/super-chat.md):
+// Post is the human's message in the channel chat (docs/super-chat.md):
 // the @names at its front say which agents it goes to, and what follows is
 // delivered to each as a steer, exactly as written (an @ inside it is the
 // author's own). A post with no leading name goes to the root. A leading
 // name that is no live agent refuses the whole post before anything is
-// delivered. It is logged once on the session as chat.posted, and returns
+// delivered. It is logged once on the channel as chat.posted, and returns
 // the names it went to.
-func (s *Session) Post(ctx context.Context, text, source string) ([]string, error) {
+func (s *Channel) Post(ctx context.Context, text, source string) ([]string, error) {
 	refs, message := protocol.Addressees(text)
 	if strings.TrimSpace(message) == "" {
 		return nil, errors.New("empty message")
@@ -576,7 +576,7 @@ func (s *Session) Post(ctx context.Context, text, source string) ([]string, erro
 	for _, ref := range refs {
 		a, ok := s.resolve(ref)
 		if !ok {
-			return nil, fmt.Errorf("no agent named @%s in this session", ref)
+			return nil, fmt.Errorf("no agent named @%s in this channel", ref)
 		}
 		if !a.Alive() {
 			return nil, fmt.Errorf("@%s is %s", ref, a.StateOf())
@@ -589,7 +589,7 @@ func (s *Session) Post(ctx context.Context, text, source string) ([]string, erro
 	if len(targets) == 0 {
 		root := s.Root()
 		if root == nil {
-			return nil, errors.New("the session has no agents")
+			return nil, errors.New("the channel has no agents")
 		}
 		targets = []*Agent{root}
 	}
@@ -598,7 +598,7 @@ func (s *Session) Post(ctx context.Context, text, source string) ([]string, erro
 	for i, a := range targets {
 		names[i] = a.LabelNow()
 	}
-	if _, err := s.host.Append(ctx, event.Event{Session: s.ID, Type: event.ChatPosted,
+	if _, err := s.host.Append(ctx, event.Event{Channel: s.ID, Type: event.ChatPosted,
 		Payload: event.MustPayload(event.ChatPayload{ID: id, Text: message, To: names})}); err != nil {
 		return nil, err
 	}
@@ -611,7 +611,7 @@ func (s *Session) Post(ctx context.Context, text, source string) ([]string, erro
 }
 
 // Cancel ends the current turn.
-func (s *Session) Cancel(agentID string) error {
+func (s *Channel) Cancel(agentID string) error {
 	a, ok := s.Agent(agentID)
 	if !ok {
 		return fmt.Errorf("agent %q not found", agentID)
@@ -621,7 +621,7 @@ func (s *Session) Cancel(agentID string) error {
 }
 
 // Kill tears down an agent and its subtree.
-func (s *Session) Kill(agentID string) error {
+func (s *Channel) Kill(agentID string) error {
 	a, ok := s.Agent(agentID)
 	if !ok {
 		return fmt.Errorf("agent %q not found", agentID)
@@ -630,7 +630,7 @@ func (s *Session) Kill(agentID string) error {
 	return nil
 }
 
-func (s *Session) killTree(a *Agent) {
+func (s *Channel) killTree(a *Agent) {
 	for _, cid := range a.Children() {
 		if c, ok := s.Agent(cid); ok {
 			s.killTree(c)
@@ -640,7 +640,7 @@ func (s *Session) killTree(a *Agent) {
 }
 
 // SpawnFromClient spawns on behalf of a human (PRD §9).
-func (s *Session) SpawnFromClient(ctx context.Context, parentID, archetype, label, task, modelArg string) (string, error) {
+func (s *Channel) SpawnFromClient(ctx context.Context, parentID, archetype, label, task, modelArg string) (string, error) {
 	p, ok := s.Agent(parentID)
 	if !ok {
 		return "", fmt.Errorf("agent %q not found", parentID)
@@ -655,7 +655,7 @@ func (s *Session) SpawnFromClient(ctx context.Context, parentID, archetype, labe
 	return a.ID, nil
 }
 
-func (s *Session) canSpawn(p *Agent) (bool, string) {
+func (s *Channel) canSpawn(p *Agent) (bool, string) {
 	cfg := s.Config()
 	if p.Depth+1 >= cfg.Limits.MaxDepth {
 		return false, fmt.Sprintf("max depth %d reached", cfg.Limits.MaxDepth)

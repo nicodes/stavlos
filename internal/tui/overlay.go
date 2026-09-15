@@ -44,8 +44,8 @@ const (
 	ovModels                       // pick a model
 	ovRoles                        // pick a role (preset) for the selected agent
 	ovVariants                     // pick a model variant (reasoning effort) for the selected agent
-	ovSessions                     // pick a session of this directory to resume
-	ovMode                         // pick the session's permission mode (ask | auto | yolo)
+	ovChannels                     // pick a channel of this directory to resume
+	ovMode                         // pick the channel's permission mode (ask | auto | yolo)
 )
 
 // loginState is what the login mode shows. Before url is set the login is
@@ -67,7 +67,7 @@ type overlay struct {
 	kind  overlayKind
 	mode  overlayMode
 	title string
-	empty string // shown in place of the list while it has no items ("no sessions here yet")
+	empty string // shown in place of the list while it has no items ("no channels here yet")
 	bad   bool   // empty is an error (red)
 
 	input  textinput.Model

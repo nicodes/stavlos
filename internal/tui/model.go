@@ -39,14 +39,14 @@ const (
 	selectDuration = 2 * time.Second // "→ label" flash when the sidebar is hidden
 )
 
-// Run drives the TUI for one session until the user quits. c is already
+// Run drives the TUI for one channel until the user quits. c is already
 // attached (tier interactive). Returns nil on a clean quit.
-func Run(ctx context.Context, c *client.Client, sessionID string) error {
+func Run(ctx context.Context, c *client.Client, channelID string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	m := newModel(ctx, c, sessionID)
-	m.superChat = true // the session chat is the default view
+	m := newModel(ctx, c, channelID)
+	m.superChat = true // the channel chat is the default view
 	m.input.Placeholder = m.placeholder()
 	p := tea.NewProgram(m, tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseAllMotion())
 	go forwardNotifications(ctx, c, p)
@@ -58,7 +58,7 @@ func Run(ctx context.Context, c *client.Client, sessionID string) error {
 	case <-c.Closed():
 	default:
 		uctx, ucancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_ = c.Unsubscribe(uctx, sessionID)
+		_ = c.Unsubscribe(uctx, channelID)
 		ucancel()
 	}
 
@@ -71,18 +71,18 @@ func Run(ctx context.Context, c *client.Client, sessionID string) error {
 	return nil
 }
 
-// Model is the Bubble Tea model for one session. Update only performs state
+// Model is the Bubble Tea model for one channel. Update only performs state
 // transitions; every daemon interaction is a tea.Cmd from commands.go.
 type Model struct {
 	ctx context.Context
 	c   *client.Client
 
-	sessionState // the bound session; replaced whole when switching
+	channelState // the bound channel; replaced whole when switching
 	uiPrefs      // display choices; they survive a switch
 	dialogs      // the open overlay and sign-in
 
-	navSessions     []protocol.SessionInfo // the sidebar's sessions section: other sessions of this directory, newest first
-	navSessionsOpen bool                   // the section is expanded
+	navChannels     []protocol.ChannelInfo // the sidebar's channels section: other channels of this directory, newest first
+	navChannelsOpen bool                   // the section is expanded
 
 	presets []protocol.PresetInfo
 
@@ -117,20 +117,20 @@ type Model struct {
 	fatal error
 }
 
-// sessionState is everything that belongs to the bound session. Switching
-// sessions replaces it whole (bindSession), so nothing of the previous
-// session (a half-answered question, an armed esc, a cursor) leaks into
+// channelState is everything that belongs to the bound channel. Switching
+// channels replaces it whole (bindChannel), so nothing of the previous
+// channel (a half-answered question, an armed esc, a cursor) leaks into
 // the next.
-type sessionState struct {
-	sessionID   string
-	session     protocol.SessionInfo
+type channelState struct {
+	channelID   string
+	channel     protocol.ChannelInfo
 	agents      []protocol.AgentInfo // pre-order, root first
 	selected    int
 	spawned     map[string]time.Time // agent id → spawn time, for the agents block
 	parentOf    map[string]string    // child agent id → parent id, for the parent's agent_create line
 	transcripts map[string]*transcript.Transcript
 	renders     map[string]*render.Cache // per agent: rendered rows of its transcript's items
-	superChat   bool                     // the session chat is shown instead of the selected agent's own (docs/super-chat.md)
+	superChat   bool                     // the channel chat is shown instead of the selected agent's own (docs/super-chat.md)
 	seq         int64
 	loading     bool  // replaying events up to replayTo
 	replayTo    int64 // seq from reconcile
@@ -158,11 +158,11 @@ type sessionState struct {
 	quitArmed   time.Time // when ctrl+c was last pressed; a second within cancelWindow quits
 }
 
-// newSessionState is the state of session id before anything is known
+// newChannelState is the state of channel id before anything is known
 // about it but info.
-func newSessionState(id string, info protocol.SessionInfo) sessionState {
-	return sessionState{
-		sessionID: id, session: info,
+func newChannelState(id string, info protocol.ChannelInfo) channelState {
+	return channelState{
+		channelID: id, channel: info,
 		spawned: map[string]time.Time{}, parentOf: map[string]string{},
 		transcripts: map[string]*transcript.Transcript{}, renders: map[string]*render.Cache{}, claimedByUs: map[string]bool{},
 	}
@@ -175,7 +175,7 @@ type uiPrefs struct {
 	details  bool // expanded tool output (/details)
 }
 
-// dialogs is the modal state not tied to a session.
+// dialogs is the modal state not tied to a channel.
 type dialogs struct {
 	ov         *overlay                // open modal, or nil
 	dialogFrom focus                   // what had focus when the open dialog (a tab's or an overlay) was opened; closing returns there
@@ -196,7 +196,7 @@ const (
 	focusDue                     // the due tab: who is waiting on the selected agent's reply
 	focusTodo                    // the todo tab: the selected agent's todo list
 	focusMCP                     // the mcp tab: the selected agent's MCP servers
-	focusDirs                    // the dirs tab: the session's working directories (every agent's)
+	focusDirs                    // the dirs tab: the channel's working directories (every agent's)
 	focusSidebar                 // the agent tree (↑/↓ enter)
 	focusTabs                    // the tab strip: ←/→ highlight a tab, enter opens its dialog
 	focusMeta                    // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
@@ -204,7 +204,7 @@ const (
 
 // tabFocuses are the tabs of the strip under the chat, left to right. They
 // are one stop in the tab cycle; ←/→ move between them.
-// tabRows is the strip's two rows: on top what belongs to the whole session
+// tabRows is the strip's two rows: on top what belongs to the whole channel
 // (the prompt queue every agent adds to, the working directories every agent
 // shares), below what belongs to the selected
 // agent.
@@ -304,7 +304,7 @@ func newInputArea() textarea.Model {
 	return ta
 }
 
-func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
+func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 	ti := newInputArea()
 	ti.Placeholder = placeholders[placeholderIndex(time.Now())]
 	ti.Focus()
@@ -324,12 +324,12 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 	pi.Placeholder = "answer"
 	di := textinput.New()
 	di.Prompt = "› "
-	di.Placeholder = "path (absolute, ~, or relative to the session directory)"
+	di.Placeholder = "path (absolute, ~, or relative to the channel directory)"
 
 	m := Model{
 		ctx:          ctx,
 		c:            c,
-		sessionState: newSessionState(sessionID, protocol.SessionInfo{}),
+		channelState: newChannelState(channelID, protocol.ChannelInfo{}),
 		uiPrefs:      uiPrefs{hideKeys: true}, // the key bar is off until /help
 		vp:           vp,
 		input:        ti,
@@ -345,7 +345,7 @@ func newModel(ctx context.Context, c *client.Client, sessionID string) Model {
 // Init starts the cursor blink, the spinner, the placeholder cycle and the
 // reconcile snapshot.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.sessionID))
+	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.channelID))
 }
 
 // Update is the single-threaded state machine.
@@ -378,7 +378,7 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		cmds = append(cmds, m.onTick(msg))
 	case reconcileMsg, subscribedMsg, eventMsg, streamMsg, promptMsg, disconnectedMsg, treeMsg, resultMsg, promptReplyMsg:
 		return m.onDaemon(msg)
-	case providersMsg, loginStartMsg, loginDoneMsg, rolesMsg, variantsMsg, sessionsMsg, switchedMsg, modelsMsg:
+	case providersMsg, loginStartMsg, loginDoneMsg, rolesMsg, variantsMsg, channelsMsg, switchedMsg, modelsMsg:
 		cmds = append(cmds, m.onListed(msg))
 	default:
 		// Cursor blink and other component-internal messages.
@@ -421,7 +421,7 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 		return compactTickCmd()
 	case treeTickMsg:
 		m.treeTimer = false
-		return treeCmd(m.ctx, m.c, m.sessionID)
+		return treeCmd(m.ctx, m.c, m.channelID)
 	case clearStatusMsg:
 		if msg.token == m.statusToken {
 			m.status = ""
@@ -440,7 +440,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 			m.fatal = fmt.Errorf("reconcile: %w", msg.err)
 			return nil, true
 		}
-		m.session = cleanSession(msg.res.Session)
+		m.channel = cleanChannel(msg.res.Channel)
 		m.reconciled = true
 		m.setAgents(msg.res.Agents)
 		for _, p := range msg.res.Prompts {
@@ -448,7 +448,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		}
 		m.replayTo = msg.res.Seq
 		m.loading = msg.res.Seq > 0
-		return []tea.Cmd{subscribeCmd(m.ctx, m.c, m.sessionID, 0), sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsHistory), rolesCmd(m.ctx, m.c, m.sessionID, true)}, false
+		return []tea.Cmd{subscribeCmd(m.ctx, m.c, m.channelID, 0), channelsCmd(m.ctx, m.c, m.channel.Dir, channelsHistory), rolesCmd(m.ctx, m.c, m.channelID, true)}, false
 	case subscribedMsg:
 		if msg.err != nil {
 			m.fatal = fmt.Errorf("subscribe: %w", msg.err)
@@ -457,7 +457,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case eventMsg:
 		return []tea.Cmd{m.applyEvent(msg.ev)}, false
 	case streamMsg:
-		if msg.n.Session == "" || msg.n.Session == m.sessionID {
+		if msg.n.Channel == "" || msg.n.Channel == m.channelID {
 			m.transcript(msg.n.Agent).ApplyStream(msg.n)
 			if msg.n.Agent == m.viewID() {
 				m.refreshViewport()
@@ -475,7 +475,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		}
 		m.setAgents(msg.agents)
 		if m.sidebarVisible() {
-			return []tea.Cmd{sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsNav)}, false
+			return []tea.Cmd{channelsCmd(m.ctx, m.c, m.channel.Dir, channelsNav)}, false
 		}
 	case resultMsg:
 		if msg.err != nil {
@@ -512,7 +512,7 @@ func (m *Model) onPromptReply(msg promptReplyMsg) tea.Cmd {
 }
 
 // onListed handles list and sign-in results: providers, logins, roles,
-// variants, sessions, a resumed session and models.
+// variants, channels, a resumed channel and models.
 func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case providersMsg:
@@ -530,33 +530,33 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 		}
 	case variantsMsg:
 		return m.onVariants(msg)
-	case sessionsMsg:
-		return m.onSessionsListed(msg)
+	case channelsMsg:
+		return m.onChannelsListed(msg)
 	case switchedMsg:
 		if msg.err != nil {
 			return m.setStatus("resume: "+msg.err.Error(), true)
 		}
-		return m.bindSession(cleanSession(msg.info))
+		return m.bindChannel(cleanChannel(msg.info))
 	case modelsMsg:
 		return m.onModels(msg)
 	}
 	return nil
 }
 
-// onSessionsListed routes a session list to what asked for it.
-func (m *Model) onSessionsListed(msg sessionsMsg) tea.Cmd {
-	msg.sessions = cleanSessions(msg.sessions)
+// onChannelsListed routes a channel list to what asked for it.
+func (m *Model) onChannelsListed(msg channelsMsg) tea.Cmd {
+	msg.channels = cleanChannels(msg.channels)
 	switch msg.purpose {
-	case sessionsNav:
+	case channelsNav:
 		if msg.err == nil {
-			m.navSessions = resumable(msg.sessions, m.sessionID)
+			m.navChannels = resumable(msg.channels, m.channelID)
 		}
-	case sessionsHistory:
+	case channelsHistory:
 		if msg.err == nil {
-			m.seedHistory(msg.sessions)
+			m.seedHistory(msg.channels)
 		}
-	case sessionsPicker:
-		return m.onSessions(msg)
+	case channelsPicker:
+		return m.onChannels(msg)
 	}
 	return nil
 }
@@ -582,7 +582,7 @@ func (m *Model) focusOrder() []focus {
 	return order
 }
 
-// stripShown reports whether the tab strip is drawn: in a session always,
+// stripShown reports whether the tab strip is drawn: in a channel always,
 // on the home (logo) screen never. A prompt that arrives on the home screen
 // (the project trust prompt) still opens its dialog on its own; the strip
 // appears with the first exchange.
@@ -590,28 +590,28 @@ func (m *Model) stripShown() bool {
 	return !m.isHome()
 }
 
-// sessionDirs returns the session's working directories, which every agent
+// channelDirs returns the channel's working directories, which every agent
 // shares.
-func (m *Model) sessionDirs() []protocol.DirInfo {
-	return m.session.Dirs
+func (m *Model) channelDirs() []protocol.DirInfo {
+	return m.channel.Dirs
 }
 
-// onDirChanged keeps the session's working directories in step with the log
+// onDirChanged keeps the channel's working directories in step with the log
 // (agent.dir_* are an older log's per-agent sets, replayed into the
-// session's like the daemon does). The attach snapshot may already hold a
+// channel's like the daemon does). The attach snapshot may already hold a
 // replayed add, so adds are idempotent.
 func (m *Model) onDirChanged(ev event.Event) {
 	switch ev.Type {
-	case event.SessionDirAdded, event.AgentDirAdded:
+	case event.ChannelDirAdded, event.AgentDirAdded:
 		var p event.DirAddedPayload
-		if ev.Decode(&p) != nil || p.Dir == m.session.Dir || slices.ContainsFunc(m.session.Dirs, func(d protocol.DirInfo) bool { return d.Path == p.Dir }) {
+		if ev.Decode(&p) != nil || p.Dir == m.channel.Dir || slices.ContainsFunc(m.channel.Dirs, func(d protocol.DirInfo) bool { return d.Path == p.Dir }) {
 			return
 		}
-		m.session.Dirs = append(m.session.Dirs, protocol.DirInfo{Path: textsafe.Clean(p.Dir), Source: p.Source})
+		m.channel.Dirs = append(m.channel.Dirs, protocol.DirInfo{Path: textsafe.Clean(p.Dir), Source: p.Source})
 	default:
 		var p event.DirRefPayload
 		if ev.Decode(&p) == nil {
-			m.session.Dirs = slices.DeleteFunc(m.session.Dirs, func(d protocol.DirInfo) bool { return d.Path == p.Dir })
+			m.channel.Dirs = slices.DeleteFunc(m.channel.Dirs, func(d protocol.DirInfo) bool { return d.Path == p.Dir })
 		}
 	}
 }
@@ -758,7 +758,7 @@ func (m *Model) closeOverlayToInput() tea.Cmd {
 // toggleMode is /auto or /yolo: no argument toggles between that mode and
 // ask, "on"/"off" set it.
 func (m *Model) toggleMode(mode, arg string) tea.Cmd {
-	on := m.session.Mode != mode
+	on := m.channel.Mode != mode
 	switch strings.ToLower(arg) {
 	case "on", "true", "1":
 		on = true
@@ -771,13 +771,13 @@ func (m *Model) toggleMode(mode, arg string) tea.Cmd {
 	if !on {
 		mode = protocol.ModeAsk
 	}
-	return setModeCmd(m.ctx, m.c, m.sessionID, mode)
+	return setModeCmd(m.ctx, m.c, m.channelID, mode)
 }
 
 // openMode is /mode: the three permission modes, the current one marked.
 func (m *Model) openMode() tea.Cmd {
 	o := newOverlay(ovMode, overlayList, "Permission mode")
-	cur := m.session.Mode
+	cur := m.channel.Mode
 	if cur == "" {
 		cur = protocol.ModeAsk
 	}
@@ -926,7 +926,7 @@ func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
 
 // dueKey handles keys while the due dialog is open: ↑/↓ (or j/k) move over
 // who is waiting on the selected agent's reply; space on "you" opens the
-// session chat and on an agent opens that agent's chat, closing the dialog.
+// channel chat and on an agent opens that agent's chat, closing the dialog.
 func (m *Model) dueKey(msg tea.KeyMsg) tea.Cmd {
 	human, agents := m.dueOf()
 	off := 0
@@ -961,9 +961,9 @@ func (m *Model) todoKey(msg tea.KeyMsg) tea.Cmd {
 // dirsKey handles keys in the dirs dialog: ↑/↓ move, a adds a directory,
 // enter edits the highlighted one (replacing it), ctrl+d removes it; while
 // the path field is open, enter submits and esc cancels the edit. The
-// session directory cannot be changed.
+// channel directory cannot be changed.
 func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
-	dirs := m.sessionDirs()
+	dirs := m.channelDirs()
 	if m.dirEdit != "" {
 		switch {
 		case key.Matches(msg, keys.OvClose):
@@ -979,9 +979,9 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 			m.dirEdit = ""
 			m.dirInput.Blur()
 			if edit == "add" {
-				return addDirCmd(m.ctx, m.c, m.sessionID, path)
+				return addDirCmd(m.ctx, m.c, m.channelID, path)
 			}
-			return replaceDirCmd(m.ctx, m.c, m.sessionID, edit, path)
+			return replaceDirCmd(m.ctx, m.c, m.channelID, edit, path)
 		}
 		var cmd tea.Cmd
 		m.dirInput, cmd = m.dirInput.Update(msg)
@@ -1001,15 +1001,15 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 	case msg.String() == "a":
 		m.dirEdit = "add"
 		m.dirInput.SetValue("")
-		m.dirInput.Placeholder = "path (absolute, ~, or relative to the session directory)"
+		m.dirInput.Placeholder = "path (absolute, ~, or relative to the channel directory)"
 		return m.dirInput.Focus()
 	case key.Matches(msg, keys.Select):
 		d := cur()
 		if d == nil {
 			return nil
 		}
-		if d.Source == "session" {
-			return m.setStatus("the session directory cannot be changed", true)
+		if d.Source == "channel" {
+			return m.setStatus("the channel directory cannot be changed", true)
 		}
 		m.dirEdit = d.Path
 		m.dirInput.SetValue(d.Path)
@@ -1020,10 +1020,10 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 		if d == nil {
 			return nil
 		}
-		if d.Source == "session" {
-			return m.setStatus("the session directory cannot be removed", true)
+		if d.Source == "channel" {
+			return m.setStatus("the channel directory cannot be removed", true)
 		}
-		return removeDirCmd(m.ctx, m.c, m.sessionID, d.Path)
+		return removeDirCmd(m.ctx, m.c, m.channelID, d.Path)
 	}
 	return nil
 }
@@ -1690,11 +1690,11 @@ func (m *Model) metaParts() []metaPart {
 	return []metaPart{metaYolo, metaRole, metaModel, metaVariant}
 }
 
-// modeTag is the meta row's tag for the session's permission mode: "ASK",
+// modeTag is the meta row's tag for the channel's permission mode: "ASK",
 // "AUTO" or "YOLO". It is always there, so turning auto or yolo off leaves
 // the tag in place rather than taking it away.
 func (m *Model) modeTag() string {
-	switch m.session.Mode {
+	switch m.channel.Mode {
 	case protocol.ModeAuto:
 		return "AUTO"
 	case protocol.ModeYolo:
@@ -1712,9 +1712,9 @@ func (m *Model) metaAction(part metaPart) tea.Cmd {
 		if m.modeTag() == "ASK" {
 			return m.openMode()
 		}
-		return setModeCmd(m.ctx, m.c, m.sessionID, protocol.ModeAsk)
+		return setModeCmd(m.ctx, m.c, m.channelID, protocol.ModeAsk)
 	case metaRole:
-		return rolesCmd(m.ctx, m.c, m.sessionID, false)
+		return rolesCmd(m.ctx, m.c, m.channelID, false)
 	case metaModel:
 		return modelsCmd(m.ctx, m.c)
 	case metaVariant:
@@ -1751,18 +1751,18 @@ func (m *Model) metaKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-// seedHistory gives a fresh session's ↑/↓ history the first prompts of
-// this directory's earlier sessions (newest first under ↑), so the start
+// seedHistory gives a fresh channel's ↑/↓ history the first prompts of
+// this directory's earlier channels (newest first under ↑), so the start
 // screen recalls what was asked last time. Only when nothing has been typed
-// here yet; the current and untitled sessions are skipped.
-func (m *Model) seedHistory(sessions []protocol.SessionInfo) {
+// here yet; the current and untitled channels are skipped.
+func (m *Model) seedHistory(channels []protocol.ChannelInfo) {
 	if len(m.history) > 0 || !m.isHome() {
 		return
 	}
 	seen := map[string]bool{}
 	var titles []string
-	for _, s := range sessions { // newest first
-		if s.Title == "" || s.ID == m.sessionID || seen[s.Title] {
+	for _, s := range channels { // newest first
+		if s.Title == "" || s.ID == m.channelID || seen[s.Title] {
 			continue
 		}
 		seen[s.Title] = true
@@ -1805,7 +1805,7 @@ func (m *Model) metaHit(x int) metaPart {
 	return metaNone
 }
 
-// rowLayout is where the session view's pieces sit, in screen rows: under
+// rowLayout is where the channel view's pieces sit, in screen rows: under
 // the rule come the palette (while open), the input, a blank line, the
 // strip and the meta row.
 type rowLayout struct {
@@ -1814,7 +1814,7 @@ type rowLayout struct {
 	meta  int // the meta row
 }
 
-// rows derives the row layout the same way sessionView stacks its parts.
+// rows derives the row layout the same way channelView stacks its parts.
 func (m *Model) rows() rowLayout {
 	y := m.vp.Height + 2 // the status line, then the rule
 	if pv := m.paletteViewFor(m.width); pv != "" {
@@ -2112,7 +2112,7 @@ func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
 	return cmd
 }
 
-// mentionKey handles the @name dropdown while it is open in the session
+// mentionKey handles the @name dropdown while it is open in the channel
 // chat: ↑/↓ pick a name, tab or enter completes it. It reports whether it
 // used the key.
 func (m *Model) mentionKey(msg tea.KeyMsg) bool {
@@ -2172,8 +2172,8 @@ type permOption struct {
 }
 
 // permOptions are the hard-coded answers a prompt offers, top to bottom.
-// A plain permission: once, this exact call for the session, the command's
-// prefix for the session (shell, when one can be derived), deny. A boundary
+// A plain permission: once, this exact call for the channel, the command's
+// prefix for the channel (shell, when one can be derived), deny. A boundary
 // prompt: once, add the offered directory, add another one, deny. Trust:
 // trust the project config, or not now.
 func permOptions(p *protocol.PromptInfo) []permOption {
@@ -2186,7 +2186,7 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 	case p.Dir != "":
 		return []permOption{
 			{"allow", "Allow once", ""},
-			{"add", "Allow and add " + format.ShortHome(p.Dir), "every agent in the session can use it"},
+			{"add", "Allow and add " + format.ShortHome(p.Dir), "every agent in the channel can use it"},
 			{"add_other", "Allow and add another directory…", "type the path"},
 			{"deny", "Deny", "with an optional reason"},
 		}
@@ -2200,14 +2200,14 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 	}
 	opts := []permOption{
 		{"allow", "Allow once", ""},
-		{"always", "Allow for this session", what},
+		{"always", "Allow for this channel", what},
 	}
 	if pre := p.Prefix; pre != "" {
 		desc := "every command starting with it"
 		if p.Tool == toolname.WebFetch {
 			desc = "every page on this host"
 		}
-		opts = append(opts, permOption{"prefix", "Allow " + pre + " for this session", desc})
+		opts = append(opts, permOption{"prefix", "Allow " + pre + " for this channel", desc})
 	}
 	return append(opts, permOption{"deny", "Deny", "with an optional reason"})
 }
@@ -2285,7 +2285,7 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 			return m.answerPrompt(p, "deny")
 		case "add_other":
 			m.permEdit = "dir"
-			m.dirInput.Placeholder = "path (absolute, ~, or relative to the session directory)"
+			m.dirInput.Placeholder = "path (absolute, ~, or relative to the channel directory)"
 			m.dirInput.SetValue(p.Dir)
 			m.dirInput.CursorEnd()
 			return m.dirInput.Focus()
@@ -2371,7 +2371,7 @@ func (m *Model) scrollToCursor() {
 
 // toggleItem flips the cursor item between expanded and collapsed (a
 // per-item override of /details): in an agent's own chat any item but the
-// human's input, in the session chat a long reply.
+// human's input, in the channel chat a long reply.
 func (m *Model) toggleItem() {
 	t := m.transcripts[m.viewID()]
 	if t == nil || m.superChat && !transcript.ItemFolds(t.All(), m.chatCursor) || !m.superChat && transcript.ItemIsInput(t.All(), m.chatCursor) {
@@ -2399,7 +2399,7 @@ func (m *Model) submit() tea.Cmd {
 		return m.command(text)
 	}
 	if m.superChat {
-		return postCmd(m.ctx, m.c, m.sessionID, text) // the daemon delivers it by @mention
+		return postCmd(m.ctx, m.c, m.channelID, text) // the daemon delivers it by @mention
 	}
 	agent := m.selectedID()
 	if agent == "" {
@@ -2443,11 +2443,11 @@ func (m *Model) command(text string) tea.Cmd {
 			return c
 		}
 		if rest == "" {
-			return rolesCmd(m.ctx, m.c, m.sessionID, false)
+			return rolesCmd(m.ctx, m.c, m.channelID, false)
 		}
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
-	case "/sessions", "/resume", "/session":
-		return sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsPicker)
+	case "/channels", "/resume", "/channel":
+		return channelsCmd(m.ctx, m.c, m.channel.Dir, channelsPicker)
 	case "/compact":
 		if c := needAgent(); c != nil {
 			return c
@@ -2471,7 +2471,7 @@ func (m *Model) command(text string) tea.Cmd {
 		}
 		return sendCmd(m.ctx, m.c, agent, protocol.KindPrompt, rest, "queued for after the current turn")
 	case "/models", "/model":
-		// The one model dialog: enter sets the selected agent's model, ctrl+s the session default.
+		// The one model dialog: enter sets the selected agent's model, ctrl+s the channel default.
 		return modelsCmd(m.ctx, m.c)
 	case "/providers", "/provider", "/connect", "/login":
 		// The one provider dialog: sign in, re-sign in, sign out. A name
@@ -2486,7 +2486,7 @@ func (m *Model) command(text string) tea.Cmd {
 // applyEvent routes one log event into the right transcript and schedules a
 // tree refresh for events that change agent state or cost.
 func (m *Model) applyEvent(ev event.Event) tea.Cmd {
-	if ev.Session != "" && ev.Session != m.sessionID {
+	if ev.Channel != "" && ev.Channel != m.channelID {
 		return nil
 	}
 	if ev.Seq > m.seq {
@@ -2526,8 +2526,8 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd) {
 	target = ev.Agent
 	switch ev.Type {
-	case event.SessionDirAdded, event.SessionDirRemoved, event.AgentDirAdded, event.AgentDirRemoved:
-		m.onDirChanged(ev) // the session's set; the chat of the agent whose prompt added one notes it
+	case event.ChannelDirAdded, event.ChannelDirRemoved, event.AgentDirAdded, event.AgentDirRemoved:
+		m.onDirChanged(ev) // the channel's set; the chat of the agent whose prompt added one notes it
 	case event.AgentSpawned:
 		if id := m.onAgentSpawned(ev); id != "" {
 			target = id
@@ -2541,12 +2541,12 @@ func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd)
 			m.compactTick = true
 			cmds = append(cmds, compactTickCmd())
 		}
-	case event.SessionModelChanged:
+	case event.ChannelModelChanged:
 		var p event.ModelChangedPayload
 		if ev.Decode(&p) == nil {
-			m.session.Model = p.Model
+			m.channel.Model = p.Model
 		}
-	case event.SessionYoloChanged, event.SessionModeChanged:
+	case event.ChannelYoloChanged, event.ChannelModeChanged:
 		m.onModeChanged(ev)
 	case event.TurnEnded:
 		var p event.TurnEndedPayload
@@ -2573,7 +2573,7 @@ func (m *Model) onAgentSpawned(ev event.Event) string {
 	if !m.loading && m.findAgent(p.ID) < 0 {
 		// Placeholder until the debounced tree refresh lands.
 		m.agents = append(m.agents, protocol.AgentInfo{
-			ID: p.ID, Session: ev.Session, Parent: p.Parent, Archetype: p.Archetype,
+			ID: p.ID, Channel: ev.Channel, Parent: p.Parent, Archetype: p.Archetype,
 			Label: p.Label, Model: p.Model, Depth: p.Depth, State: protocol.AgentIdle,
 		})
 	}
@@ -2618,22 +2618,22 @@ func (m *Model) rememberPrompt(ev event.Event) {
 	m.histIdx = len(m.history)
 }
 
-// onModeChanged records the session's permission mode and notes the switch
+// onModeChanged records the channel's permission mode and notes the switch
 // in every agent's chat, like model and role changes: the event has no
 // agent of its own.
 func (m *Model) onModeChanged(ev event.Event) {
-	if ev.Type == event.SessionYoloChanged { // legacy logs
+	if ev.Type == event.ChannelYoloChanged { // legacy logs
 		var p event.YoloPayload
 		if ev.Decode(&p) == nil {
-			m.session.Mode = protocol.ModeAsk
+			m.channel.Mode = protocol.ModeAsk
 			if p.On {
-				m.session.Mode = protocol.ModeYolo
+				m.channel.Mode = protocol.ModeYolo
 			}
 		}
 	} else {
 		var p event.ModePayload
 		if ev.Decode(&p) == nil {
-			m.session.Mode = p.Mode
+			m.channel.Mode = p.Mode
 		}
 	}
 	for _, a := range m.agents {
@@ -2665,7 +2665,7 @@ func changesTree(ev event.Event) bool {
 	switch ev.Type {
 	case event.AgentSpawned, event.AgentFinished, event.AgentKilled,
 		event.TurnStarted, event.TurnEnded, event.Usage,
-		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.SessionModelChanged,
+		event.AgentModelChanged, event.AgentRoleChanged, event.AgentVariantChanged, event.ChannelModelChanged,
 		event.MonitorStarted, event.MonitorFired, event.MonitorStopped,
 		event.TodoChanged,
 		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.ResponseReceived,
@@ -2707,7 +2707,7 @@ func (m *Model) markTreeDirty() tea.Cmd {
 // typed, no overlay) opens the permission tab so it can be answered at
 // once; a draft in progress is never interrupted.
 func (m *Model) applyPromptNotification(n protocol.PromptNotification) tea.Cmd {
-	if n.Prompt.Session != "" && n.Prompt.Session != m.sessionID {
+	if n.Prompt.Channel != "" && n.Prompt.Channel != m.channelID {
 		return nil
 	}
 	before := len(m.prompts)
@@ -2844,7 +2844,7 @@ func (m *Model) denyPrompt(p *protocol.PromptInfo, reason string) tea.Cmd {
 }
 
 // answerPromptPrefix allows the call and every command of the tool that
-// starts with prefix for the rest of the session.
+// starts with prefix for the channel.
 func (m *Model) answerPromptPrefix(p *protocol.PromptInfo) tea.Cmd {
 	if p.Prefix == "" {
 		return m.answerPrompt(p, "allow_always")
@@ -2930,7 +2930,7 @@ func (m *Model) toggleTree() tea.Cmd {
 	}
 	m.layout()
 	if m.showTree {
-		return tea.Batch(m.setFocus(focusSidebar), sessionsCmd(m.ctx, m.c, m.session.Dir, sessionsNav))
+		return tea.Batch(m.setFocus(focusSidebar), channelsCmd(m.ctx, m.c, m.channel.Dir, channelsNav))
 	}
 	return m.setFocus(focusInput)
 }
@@ -2982,20 +2982,20 @@ func (m *Model) nextNeedy(from int) int {
 }
 
 // sidebarItems is how many rows the sidebar cursor can rest on: the chat,
-// the agents, the sessions heading, and the sessions while the section is
+// the agents, the channels heading, and the channels while the section is
 // open. The cursor counts them in that order: 0 is the chat, agent i is
 // i+1, the heading len(agents)+1.
 func (m *Model) sidebarItems() int {
 	n := len(m.agents) + 2
-	if m.navSessionsOpen {
-		n += len(m.navSessions)
+	if m.navChannelsOpen {
+		n += len(m.navChannels)
 	}
 	return n
 }
 
 // sidebarSelect acts on the item under the cursor: the chat row shows the
-// session chat and an agent row that agent's own chat (both focus the
-// input), the sessions heading folds or unfolds, a session is resumed in
+// channel chat and an agent row that agent's own chat (both focus the
+// input), the channels heading folds or unfolds, a channel is resumed in
 // place of the current one.
 func (m *Model) sidebarSelect(i int) tea.Cmd {
 	na := len(m.agents)
@@ -3006,18 +3006,18 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 		m.openAgent(i - 1)
 		return m.setFocus(focusInput)
 	case i == na+1:
-		m.navSessionsOpen = !m.navSessionsOpen
+		m.navChannelsOpen = !m.navChannelsOpen
 		return nil
-	case i-na-2 < len(m.navSessions):
-		s := m.navSessions[i-na-2]
-		return tea.Batch(m.setStatus("resuming "+sessionTitle(s), false), switchSessionCmd(m.ctx, m.c, m.sessionID, s.ID))
+	case i-na-2 < len(m.navChannels):
+		s := m.navChannels[i-na-2]
+		return tea.Batch(m.setStatus("resuming "+channelTitle(s), false), switchChannelCmd(m.ctx, m.c, m.channelID, s.ID))
 	}
 	return nil
 }
 
 // sidebarClick focuses the sidebar and acts on the row under the pointer
 // like space: the chat row or an agent row opens that chat (the sidebar
-// keeps focus), the sessions heading toggles, a session row resumes it.
+// keeps focus), the channels heading toggles, a channel row resumes it.
 func (m *Model) sidebarClick(y int) tea.Cmd {
 	cmd := m.setFocus(focusSidebar)
 	_, items := m.sidebarBody(sidebarWidth - 1)
@@ -3089,11 +3089,11 @@ func (m *Model) transcript(id string) *transcript.Transcript {
 	return t
 }
 
-// chatView keys the session chat in transcripts, renders and expanded; it
+// chatView keys the channel chat in transcripts, renders and expanded; it
 // is never an agent id.
 const chatView = "#chat"
 
-// viewID is what the chat area shows: the session chat, or the selected
+// viewID is what the chat area shows: the channel chat, or the selected
 // agent's own transcript.
 func (m *Model) viewID() string {
 	if m.superChat {
@@ -3102,7 +3102,7 @@ func (m *Model) viewID() string {
 	return m.selectedID()
 }
 
-// openChat shows the session chat, where typing posts to the session.
+// openChat shows the channel chat, where typing posts to the channel.
 func (m *Model) openChat() tea.Cmd {
 	if !m.superChat {
 		m.superChat = true
@@ -3123,7 +3123,7 @@ func (m *Model) openAgent(i int) {
 	m.selectionChanged()
 }
 
-// followChatLink opens the agent the session chat's cursor item links to
+// followChatLink opens the agent the channel chat's cursor item links to
 // (its message, its prompt). It reports whether there was one.
 func (m *Model) followChatLink() bool {
 	t := m.transcripts[chatView]
@@ -3145,16 +3145,16 @@ func (m *Model) chatItemFolds() bool {
 	return t != nil && transcript.ItemFolds(t.All(), m.chatCursor)
 }
 
-// placeholder is the input's hint: how the session chat addresses agents,
+// placeholder is the input's hint: how the channel chat addresses agents,
 // or a cycling suggestion in an agent's own chat.
 func (m *Model) placeholder() string {
 	if m.superChat {
-		return "Message the session · @name addresses an agent, no mention goes to the root"
+		return "Message the channel · @name addresses an agent, no mention goes to the root"
 	}
 	return placeholders[placeholderIndex(time.Now())]
 }
 
-// totalTokens sums every agent's tokens for the session rollup.
+// totalTokens sums every agent's tokens for the channel rollup.
 func (m *Model) totalTokens() int {
 	n := 0
 	for _, a := range m.agents {
@@ -3242,7 +3242,7 @@ func (m *Model) refreshViewport() {
 			break
 		}
 	}
-	// The session chat's loader is the turn indicator at its bottom, naming
+	// The channel chat's loader is the turn indicator at its bottom, naming
 	// the agents a post is still waiting on.
 	if t != nil && m.superChat {
 		if names := t.Waiting(); len(names) > 0 {
@@ -3414,16 +3414,16 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 		if it == nil {
 			return nil
 		}
-		return tea.Batch(m.closeOverlay(), setModeCmd(m.ctx, m.c, m.sessionID, it.id))
-	case ovSessions:
+		return tea.Batch(m.closeOverlay(), setModeCmd(m.ctx, m.c, m.channelID, it.id))
+	case ovChannels:
 		it := o.selected()
 		if it == nil {
 			return nil
 		}
-		if it.id == m.sessionID {
-			return tea.Batch(m.closeOverlay(), m.setStatus("already in this session", false))
+		if it.id == m.channelID {
+			return tea.Batch(m.closeOverlay(), m.setStatus("already in this channel", false))
 		}
-		return tea.Batch(m.closeOverlay(), switchSessionCmd(m.ctx, m.c, m.sessionID, it.id))
+		return tea.Batch(m.closeOverlay(), switchChannelCmd(m.ctx, m.c, m.channelID, it.id))
 	case ovVariants:
 		it := o.selected()
 		if it == nil {
@@ -3440,11 +3440,11 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 			return nil
 		}
 		if alt {
-			return tea.Batch(m.closeOverlay(), pickSessionModelCmd(m.ctx, m.c, m.sessionID, it.id))
+			return tea.Batch(m.closeOverlay(), pickChannelModelCmd(m.ctx, m.c, m.channelID, it.id))
 		}
 		agent := m.selectedID()
 		if agent == "" {
-			return m.setStatus("no agent selected (ctrl+s sets the session default)", true)
+			return m.setStatus("no agent selected (ctrl+s sets the channel default)", true)
 		}
 		return tea.Batch(m.closeOverlay(), pickAgentModelCmd(m.ctx, m.c, agent, it.id))
 	}
@@ -3538,7 +3538,7 @@ func (m *Model) onLoginDone(msg loginDoneMsg) tea.Cmd {
 		cmds = append(cmds, m.closeOverlay())
 	}
 	cmds = append(cmds, m.setStatus("connected "+name+" ✓", false), providersCmd(m.ctx, m.c, providersMsg{refresh: true}))
-	if m.session.Model == "" && (len(m.agents) == 0 || m.agents[0].Model == "") {
+	if m.channel.Model == "" && (len(m.agents) == 0 || m.agents[0].Model == "") {
 		cmds = append(cmds, modelsCmd(m.ctx, m.c))
 	}
 	return tea.Batch(cmds...)
@@ -3725,34 +3725,34 @@ func roleAllowsModel(r *protocol.PresetInfo, id string) bool {
 	return r == nil || len(r.Models) == 0 || roleModelSpec(r, id) != nil
 }
 
-// onSessions opens the /sessions picker: this directory's sessions, newest
-// first, each titled by its first prompt. Sessions nobody has prompted are
+// onChannels opens the /channels picker: this directory's channels, newest
+// first, each titled by its first prompt. Channels nobody has prompted are
 // left out (except the current one): there is nothing to resume there.
-func (m *Model) onSessions(msg sessionsMsg) tea.Cmd {
+func (m *Model) onChannels(msg channelsMsg) tea.Cmd {
 	if msg.err != nil {
-		return m.setStatus("sessions: "+msg.err.Error(), true)
+		return m.setStatus("channels: "+msg.err.Error(), true)
 	}
-	o := newOverlay(ovSessions, overlayList, "Sessions in "+format.ShortHome(m.session.Dir))
-	items := make([]overlayItem, 0, len(msg.sessions))
-	for _, s := range msg.sessions {
-		if s.Title == "" && s.ID != m.sessionID {
+	o := newOverlay(ovChannels, overlayList, "Channels in "+format.ShortHome(m.channel.Dir))
+	items := make([]overlayItem, 0, len(msg.channels))
+	for _, s := range msg.channels {
+		if s.Title == "" && s.ID != m.channelID {
 			continue // never prompted: nothing to resume
 		}
-		items = append(items, sessionItem(s, s.ID == m.sessionID))
+		items = append(items, channelItem(s, s.ID == m.channelID))
 	}
 	if len(items) == 0 {
-		o.setEmpty("no sessions here yet", false)
+		o.setEmpty("no channels here yet", false)
 	}
 	o.setItems(items)
 	return m.openOverlay(o)
 }
 
-// sessionItem is one row of the /sessions picker: the first prompt (or
-// "(empty session)") with when it started, its model, cost and live agents.
-func sessionItem(s protocol.SessionInfo, current bool) overlayItem {
+// channelItem is one row of the /channels picker: the first prompt (or
+// "(empty channel)") with when it started, its model, cost and live agents.
+func channelItem(s protocol.ChannelInfo, current bool) overlayItem {
 	label := s.Title
 	if label == "" {
-		label = "(empty session)"
+		label = "(empty channel)"
 	}
 	var meta []string
 	if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
@@ -3773,17 +3773,17 @@ func sessionItem(s protocol.SessionInfo, current bool) overlayItem {
 	return overlayItem{id: s.ID, label: format.Trunc(label, 60), hint: strings.Join(meta, " · "), good: current}
 }
 
-// bindSession rebinds the TUI to another session: every per-session
+// bindChannel rebinds the TUI to another channel: every per-channel
 // piece of state starts over and a fresh reconcile replays its history.
-func (m *Model) bindSession(info protocol.SessionInfo) tea.Cmd {
-	m.sessionState = newSessionState(info.ID, info)
+func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
+	m.channelState = newChannelState(info.ID, info)
 	m.superChat = true
 	m.input.Placeholder = m.placeholder()
 	m.follow = true
 	m.input.Reset()
 	m.refreshViewport()
 	m.layout()
-	return tea.Batch(m.setFocus(focusInput), reconcileCmd(m.ctx, m.c, m.sessionID), m.setStatus("resumed "+format.ShortID(info.ID), false))
+	return tea.Batch(m.setFocus(focusInput), reconcileCmd(m.ctx, m.c, m.channelID), m.setStatus("resumed "+format.ShortID(info.ID), false))
 }
 
 // openVariants is /variants: with no argument it opens the picker for the
@@ -3794,7 +3794,7 @@ func (m *Model) openVariants(arg string) tea.Cmd {
 	if a == nil {
 		return m.setStatus("no agent selected", true)
 	}
-	modelID, current := m.session.Model, a.Variant
+	modelID, current := m.channel.Model, a.Variant
 	if a.Model != "" {
 		modelID = a.Model
 	}

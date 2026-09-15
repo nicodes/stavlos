@@ -120,7 +120,7 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 
 	resp, err := m.Complete(t.ctx, model.Request{Model: bareID(modelID), System: system, Messages: history, Tools: defs, Variant: a.Variant()},
 		func(d model.Delta) {
-			a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: t.turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName})
+			a.s.host.Stream(protocol.StreamNotification{Channel: a.s.ID, Agent: a.ID, Turn: t.turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName})
 		})
 	if resp.Usage != (model.Usage{}) {
 		cost := info.Cost(resp.Usage)

@@ -373,7 +373,7 @@ func writeRole(t *testing.T, body string) string {
 	return path
 }
 
-// TestRoleDirsRemoved: working directories belong to the session, so a
+// TestRoleDirsRemoved: working directories belong to the channel, so a
 // role's dirs: key is a load error that says where they went.
 func TestRoleDirsRemoved(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "lead.md")

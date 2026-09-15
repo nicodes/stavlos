@@ -2,7 +2,7 @@ package protocol
 
 import "strings"
 
-// Addressees splits a session chat post into the agents it is addressed to
+// Addressees splits a channel chat post into the agents it is addressed to
 // and its message. The names are the @name words at the very front, each
 // followed by a space (a trailing , : or ; is allowed); the message is
 // everything after them, left exactly as written, so an @ inside it means

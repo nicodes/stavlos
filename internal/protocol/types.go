@@ -20,16 +20,15 @@ const (
 	MDaemonShutdown = "daemon.shutdown" // graceful stop; used to replace a stale build
 	MAttach         = "attach"          // declare client name + escalation tier
 
-	MSessionList      = "session.list"
-	MSessionCreate    = "session.create"
-	MSessionResume    = "session.resume"
-	MSessionFork      = "session.fork"
-	MSessionArchive   = "session.archive"
-	MSessionSetModel  = "session.set_model"
-	MSessionSetMode   = "session.set_mode"   // permission mode: ask | auto | yolo
-	MSessionPost      = "session.post"       // the human\'s message in the session chat, delivered by @mention
-	MSessionAddDir    = "session.add_dir"    // put a directory in the session\'s working set (every agent\'s)
-	MSessionRemoveDir = "session.remove_dir" // take one out (never the session directory)
+	MChannelList      = "channel.list"
+	MChannelCreate    = "channel.create"
+	MChannelResume    = "channel.resume"
+	MChannelArchive   = "channel.archive"
+	MChannelSetModel  = "channel.set_model"
+	MChannelSetMode   = "channel.set_mode"   // permission mode: ask | auto | yolo
+	MChannelPost      = "channel.post"       // the human\'s message in the channel chat, delivered by @mention
+	MChannelAddDir    = "channel.add_dir"    // put a directory in the channel\'s working set (every agent\'s)
+	MChannelRemoveDir = "channel.remove_dir" // take one out (never the channel directory)
 
 	MAgentTree       = "agent.tree"
 	MAgentSend       = "agent.send" // Prompt / Steer / Cancel / Kill
@@ -56,7 +55,7 @@ const (
 	MSubscribe   = "subscribe"
 	MUnsubscribe = "unsubscribe"
 	MReconcile   = "reconcile"
-	MPresets     = "presets" // archetypes available to a session
+	MPresets     = "presets" // archetypes available to a channel
 
 	// Notifications (server → client, no id).
 	NEvent  = "event"
@@ -96,26 +95,26 @@ const (
 // Busy reports whether the agent is in a turn.
 func (s AgentState) Busy() bool { return s == AgentRunning || s == AgentBlocked }
 
-// SessionState rolls a session's agents up (SessionInfo.State): working
+// ChannelState rolls a channel's agents up (ChannelInfo.State): working
 // while any agent is in a turn, waiting while any expects an answer, idle
 // otherwise.
-type SessionState string
+type ChannelState string
 
 const (
-	SessionIdle    SessionState = "idle"
-	SessionWaiting SessionState = "waiting"
-	SessionWorking SessionState = "working"
+	ChannelIdle    ChannelState = "idle"
+	ChannelWaiting ChannelState = "waiting"
+	ChannelWorking ChannelState = "working"
 )
 
-// RollUp is the session state for a set of agent states.
-func RollUp(states []AgentState) SessionState {
-	out := SessionIdle
+// RollUp is the channel state for a set of agent states.
+func RollUp(states []AgentState) ChannelState {
+	out := ChannelIdle
 	for _, st := range states {
 		switch {
 		case st.Busy():
-			return SessionWorking
+			return ChannelWorking
 		case st == AgentWaiting:
-			out = SessionWaiting
+			out = ChannelWaiting
 		}
 	}
 	return out
@@ -147,8 +146,8 @@ const (
 const (
 	AnswerAllow       = "allow"
 	AnswerDeny        = "deny"
-	AnswerAllowAlways = "allow_always" // this exact call, for the session
-	AnswerAllowPrefix = "allow_prefix" // every call the prompt's prefix covers, for the session
+	AnswerAllowAlways = "allow_always" // this exact call, for the channel
+	AnswerAllowPrefix = "allow_prefix" // every call the prompt's prefix covers, for the channel
 	AnswerAnswered    = "answered"     // a question batch: the answers are in Answers
 )
 
@@ -229,74 +228,70 @@ type DaemonStatusResult struct {
 	Build     string   `json:"build"` // buildid.ID() of the daemon binary
 	PID       int      `json:"pid"`
 	DataDir   string   `json:"data_dir"`
-	Sessions  int      `json:"sessions"`
+	Channels  int      `json:"channels"`
 	Agents    int      `json:"agents"`
 	Providers []string `json:"providers"`
 }
 
-type SessionInfo struct {
+type ChannelInfo struct {
 	ID           string       `json:"id"`
 	Dir          string       `json:"dir"`
 	Model        string       `json:"model"`
 	RootAgent    string       `json:"root_agent"`
 	Created      string       `json:"created"`
 	Archived     bool         `json:"archived"`
-	Seq          int64        `json:"seq"` // latest per-session sequence
+	Seq          int64        `json:"seq"` // latest per-channel sequence
 	Live         int          `json:"live_agents"`
 	CostUSD      float64      `json:"cost_usd"`
 	TrustPending bool         `json:"trust_pending"`
 	Mode         string       `json:"mode"`            // permission mode: ask | auto | yolo
-	State        SessionState `json:"state,omitempty"` // working (an agent runs) | waiting (one expects an answer) | idle; "" for a session not in memory
+	State        ChannelState `json:"state,omitempty"` // working (an agent runs) | waiting (one expects an answer) | idle; "" for a channel not in memory
 	Title        string       `json:"title,omitempty"` // the first human prompt, for pickers
-	Dirs         []DirInfo    `json:"dirs,omitempty"`  // the working directories every agent shares, the session directory first
+	Dirs         []DirInfo    `json:"dirs,omitempty"`  // the working directories every agent shares, the channel directory first
 }
 
-type SessionListParams struct {
+type ChannelListParams struct {
 	Dir             string `json:"dir,omitempty"` // filter
 	IncludeArchived bool   `json:"include_archived,omitempty"`
 }
-type SessionListResult struct {
-	Sessions []SessionInfo `json:"sessions"`
+type ChannelListResult struct {
+	Channels []ChannelInfo `json:"channels"`
 }
 
-type SessionCreateParams struct {
+type ChannelCreateParams struct {
 	Dir       string `json:"dir"`
 	Model     string `json:"model,omitempty"`      // overrides config
 	RootAgent string `json:"root_agent,omitempty"` // archetype; overrides config
 }
-type SessionRef struct {
+type ChannelRef struct {
 	ID string `json:"id"`
 }
-type SessionForkParams struct {
-	ID  string `json:"id"`
-	Seq int64  `json:"seq"` // fork point (inclusive)
-}
-type SessionSetModelParams struct {
+type ChannelSetModelParams struct {
 	ID    string `json:"id"`
 	Model string `json:"model"`
 }
-type SessionSetModeParams struct {
+type ChannelSetModeParams struct {
 	ID   string `json:"id"`
 	Mode string `json:"mode"` // ask | auto | yolo
 }
 
-// SessionPostParams is a message to the session chat: it reaches every
+// ChannelPostParams is a message to the channel chat: it reaches every
 // agent it @mentions as a steer, or the root agent when it mentions none.
-type SessionPostParams struct {
+type ChannelPostParams struct {
 	ID   string `json:"id"`
 	Text string `json:"text"`
 }
 
-// SessionPostResult names the agents the message was delivered to.
-type SessionPostResult struct {
+// ChannelPostResult names the agents the message was delivered to.
+type ChannelPostResult struct {
 	To []string `json:"to"`
 }
 
-// SessionDirParams names a directory to add to or remove from the
-// session's working set.
-type SessionDirParams struct {
+// ChannelDirParams names a directory to add to or remove from the
+// channel's working set.
+type ChannelDirParams struct {
 	ID  string `json:"id"`
-	Dir string `json:"dir"` // absolute, ~ or relative to the session directory
+	Dir string `json:"dir"` // absolute, ~ or relative to the channel directory
 }
 
 // Permission modes.
@@ -311,7 +306,7 @@ const (
 func ModeSummary(mode string) string {
 	switch mode {
 	case ModeAuto:
-		return "allows inside the session's directories, denies outside them"
+		return "allows inside the channel's directories, denies outside them"
 	case ModeYolo:
 		return "every permission is approved, directories included"
 	}
@@ -320,7 +315,7 @@ func ModeSummary(mode string) string {
 
 type AgentInfo struct {
 	ID            string           `json:"id"`
-	Session       string           `json:"session"`
+	Channel       string           `json:"channel"`
 	Parent        string           `json:"parent,omitempty"`
 	Archetype     string           `json:"archetype"`
 	Label         string           `json:"label"`
@@ -344,7 +339,7 @@ type AgentInfo struct {
 	Due           []string         `json:"due,omitempty"`            // who this agent owes a reply: "user" or agent ids, until it messages them
 }
 type AgentTreeParams struct {
-	Session string `json:"session"`
+	Channel string `json:"channel"`
 }
 type AgentTreeResult struct {
 	Agents []AgentInfo `json:"agents"` // pre-order; root first
@@ -394,7 +389,7 @@ type VariantsResult struct {
 // PromptInfo is a pending permission/question/trust prompt.
 type PromptInfo struct {
 	ID        string          `json:"id"`
-	Session   string          `json:"session"`
+	Channel   string          `json:"channel"`
 	Agent     string          `json:"agent,omitempty"`
 	Kind      PromptKind      `json:"kind"` // permission | question | trust
 	Tool      string          `json:"tool,omitempty"`
@@ -404,7 +399,7 @@ type PromptInfo struct {
 	ClaimedBy string          `json:"claimed_by,omitempty"`
 	Escalated bool            `json:"escalated"` // visible to fallback tier
 	Created   string          `json:"created"`
-	Dir       string          `json:"dir,omitempty"`       // a boundary prompt: the call reaches outside the session's directories; "allow_always" adds this one
+	Dir       string          `json:"dir,omitempty"`       // a boundary prompt: the call reaches outside the channel's directories; "allow_always" adds this one
 	Prefix    string          `json:"prefix,omitempty"`    // what "allow_prefix" would remember for this call (a command prefix, a host); "" when the call has none
 	Questions []Question      `json:"questions,omitempty"` // kind question: the batch an ask_user call raised, answered together
 }
@@ -422,7 +417,7 @@ type QuestionOption struct {
 	Description string `json:"description,omitempty"`
 }
 type PromptListParams struct {
-	Session string `json:"session,omitempty"`
+	Channel string `json:"channel,omitempty"`
 }
 type PromptListResult struct {
 	Prompts []PromptInfo `json:"prompts"`
@@ -456,20 +451,20 @@ type TrustReplyParams struct {
 }
 
 type SubscribeParams struct {
-	Session string `json:"session"`
-	From    int64  `json:"from"` // first per-session seq to deliver (0 = from start)
+	Channel string `json:"channel"`
+	From    int64  `json:"from"` // first per-channel seq to deliver (0 = from start)
 }
 
 // ReconcileResult is the authoritative snapshot (PRD §9).
 type ReconcileResult struct {
-	Session SessionInfo  `json:"session"`
+	Channel ChannelInfo  `json:"channel"`
 	Agents  []AgentInfo  `json:"agents"`
 	Prompts []PromptInfo `json:"prompts"`
 	Seq     int64        `json:"seq"`
 }
 
 type PresetsParams struct {
-	Session string `json:"session"`
+	Channel string `json:"channel"`
 }
 type PresetInfo struct {
 	Name        string      `json:"name"`
@@ -566,7 +561,7 @@ type EventNotification struct {
 
 // StreamNotification is transient streaming output; not logged.
 type StreamNotification struct {
-	Session  string `json:"session"`
+	Channel  string `json:"channel"`
 	Agent    string `json:"agent"`
 	Turn     int    `json:"turn"`
 	Text     string `json:"text,omitempty"`
@@ -583,8 +578,8 @@ type PromptNotification struct {
 
 // MonitorInfo is a general monitor owned by an agent: a background command,
 // a file watch, or a timer. Children are not monitors; they are agents.
-// DirInfo is one of the session's working directories and where it came
-// from: session (the session directory) | human | grant (older logs).
+// DirInfo is one of the channel's working directories and where it came
+// from: channel (the channel directory) | human | grant (older logs).
 type DirInfo struct {
 	Path   string `json:"path"`
 	Source string `json:"source"`

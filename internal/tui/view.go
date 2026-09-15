@@ -48,7 +48,7 @@ func agentDot(a protocol.AgentInfo) string {
 }
 
 // stateDot is the marker for a working / waiting / idle state, shared by
-// agent rows and the sessions section: a full orange circle while
+// agent rows and the channels section: a full orange circle while
 // working, a half one while waiting, an empty dim one when idle.
 func stateDot(state string) string {
 	switch state {
@@ -168,11 +168,11 @@ func promptBoxWidth(width int) int {
 // metaLine is "main (coder) · claude-opus-5 · high" (or the
 // no-model nudge): the agent as "label (role)" like the tab rows, the
 // model and its variant ("default" when none is set), led by a
-// warning-coloured YOLO tag while the session auto-approves.
+// warning-coloured YOLO tag while the channel auto-approves.
 // sel is the part highlighted while the row has keyboard focus (metaNone
 // otherwise).
 // nameStyle tints the "label (role)" part (the role's colour, or plain).
-// modeTag is "ASK", "AUTO" or "YOLO" (the session's permission mode), "" for none.
+// modeTag is "ASK", "AUTO" or "YOLO" (the channel's permission mode), "" for none.
 func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) string {
 	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel, nameStyle)
 	return line
@@ -263,7 +263,7 @@ type footerInfo struct {
 // footerRight builds the right side of the meta row: a sign-in nudge,
 // nothing on the home view (the left side already names the role and
 // model), or how full the context is and the cost ("2% · 22k/1.1m · $0.00",
-// or the session's tokens when the window is unknown). The
+// or the channel's tokens when the window is unknown). The
 // repo sits on the tab strip; waiting permissions and /help are not
 // repeated here either (the strip shows the former, the "/" palette lists
 // every command).
@@ -275,7 +275,7 @@ func footerRight(f footerInfo) string {
 		return ""
 	}
 	if bar := contextBar(f.context, f.window); bar != "" {
-		return bar + " · $" + format.Cost(f.cost) // the session's total tokens are in the sidebar
+		return bar + " · $" + format.Cost(f.cost) // the channel's total tokens are in the sidebar
 	}
 	return format.Tokens(f.tokens) + " tokens · $" + format.Cost(f.cost)
 }
@@ -300,7 +300,7 @@ func contextBar(context, window int) string {
 
 // --- view ---
 
-// View composes the main area (home or session) and the footer.
+// View composes the main area (home or channel) and the footer.
 func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "starting…"
@@ -314,7 +314,7 @@ func (m Model) View() string {
 	if m.isHome() {
 		main = m.homeView(m.width, mainH)
 	} else {
-		main = m.sessionView(m.width, mainH)
+		main = m.channelView(m.width, mainH)
 	}
 	if m.ov != nil {
 		m.ov.hints = m.keyHints() // the dialog's own keys, shown whatever the key bar setting
@@ -366,7 +366,7 @@ func (m Model) inputBoxView(width int) string {
 // metaLeft is the meta row's left side for the selected agent and where
 // its parts were drawn (the mouse hit-tests the same spans).
 func (m Model) metaLeft() (string, []span[metaPart]) {
-	label, role, model, variant, queued := "agent", "", m.session.Model, "", 0
+	label, role, model, variant, queued := "agent", "", m.channel.Model, "", 0
 	if a := m.selectedAgent(); a != nil {
 		label, role, variant, queued = a.Label, a.Archetype, a.Variant, a.Queued
 		if a.Model != "" {
@@ -439,7 +439,7 @@ func (m Model) homeLines(width, height int) homeLayout {
 	lay.lines = append(lay.lines, "")
 	add(styleTagline.Render(tagline), lipgloss.Width(tagline))
 	lay.lines = append(lay.lines, "") // air between the tagline and the input
-	add(m.statusLine(boxW), boxW)     // status messages sit above the input, as in a session
+	add(m.statusLine(boxW), boxW)     // status messages sit above the input, as in a channel
 	if pv := m.paletteViewFor(boxW); pv != "" {
 		add(pv, boxW)
 	}
@@ -450,8 +450,8 @@ func (m Model) homeLines(width, height int) homeLayout {
 			add(sv, boxW)
 		}
 	}
-	// The directory the session will work in, dim, above the meta row.
-	add(theme.StyleDim.Render(format.ShortHome(m.session.Dir)), boxW)
+	// The directory the channel will work in, dim, above the meta row.
+	add(theme.StyleDim.Render(format.ShortHome(m.channel.Dir)), boxW)
 	add(m.metaRow(boxW), boxW)
 	lay.top = (height - len(lay.lines)) / 2
 	if lay.top < 0 {
@@ -474,8 +474,8 @@ func (m Model) homeView(width, height int) string {
 	return strings.Join(out[:height], "\n")
 }
 
-// sessionView is the transcript over the input box, plus the sidebar.
-func (m Model) sessionView(width, height int) string {
+// channelView is the transcript over the input box, plus the sidebar.
+func (m Model) channelView(width, height int) string {
 	cw := m.contentWidth()
 	// The chat (and the status line above the rule) share the top with the
 	// sidebar; everything from the rule down spans the whole window, so the
@@ -502,7 +502,7 @@ func (m Model) sessionView(width, height int) string {
 }
 
 // sidebarView is the left panel — the swarm nav: the header (app name,
-// session directory, cost and age, swarm state) then the agent tree with a
+// channel directory, cost and age, swarm state) then the agent tree with a
 // badge and cost per row. What the tree selects, the rest of the screen
 // shows and the footer controls.
 func (m Model) sidebarView(height int) string {
@@ -516,12 +516,12 @@ func (m Model) sidebarView(height int) string {
 }
 
 // sidebarHeader is what precedes the tree: the app name, a blank, the
-// session directory, the session's tokens and cost (the rollup of what
+// channel directory, the channel's tokens and cost (the rollup of what
 // the meta row shows per agent), the swarm state ("3 working · 1
 // waiting", or "idle"), a blank, and the "channels" heading. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
-	dir := format.ShortHome(m.session.Dir)
+	dir := format.ShortHome(m.channel.Dir)
 	if dir == "" {
 		dir = "—"
 	}
@@ -538,13 +538,13 @@ func (m Model) sidebarHeader(width int) []string {
 }
 
 // sidebarBody is everything under the header: the chat row, the agent tree, a blank,
-// the sessions heading ("sessions 3 ▸" folded, "sessions ▾" open) and,
-// open, one row per other session of this directory. items maps each row
+// the channels heading ("channels 3 ▸" folded, "channels ▾" open) and,
+// open, one row per other channel of this directory. items maps each row
 // to its cursor index (the chat, the agents, the heading, then the
-// sessions), -1 for rows the cursor skips.
+// channels), -1 for rows the cursor skips.
 func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	focused := m.focus == focusSidebar && m.sidebarVisible()
-	// The session chat comes first, a row like an agent's.
+	// The channel chat comes first, a row like an agent's.
 	chat := theme.StyleDim.Render("# chat")
 	if m.superChat {
 		chat = theme.StyleSelected.Render("# chat")
@@ -565,12 +565,12 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	}
 	na := len(m.agents)
 	rows, items = append(rows, ""), append(items, -1)
-	head := "sessions"
+	head := "channels"
 	switch {
-	case m.navSessionsOpen:
+	case m.navChannelsOpen:
 		head += " ▾"
-	case len(m.navSessions) > 0:
-		head += fmt.Sprintf(" %d ▸", len(m.navSessions))
+	case len(m.navChannels) > 0:
+		head += fmt.Sprintf(" %d ▸", len(m.navChannels))
 	default:
 		head += " ▸"
 	}
@@ -581,13 +581,13 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		headRow = render.Highlight(headRow, width)
 	}
 	rows, items = append(rows, headRow), append(items, na+1)
-	if !m.navSessionsOpen {
+	if !m.navChannelsOpen {
 		return rows, items
 	}
-	if len(m.navSessions) == 0 {
-		return append(rows, theme.StyleDim.Render("    (no other sessions here)")), append(items, -1)
+	if len(m.navChannels) == 0 {
+		return append(rows, theme.StyleDim.Render("    (no other channels here)")), append(items, -1)
 	}
-	for k, s := range m.navSessions {
+	for k, s := range m.navChannels {
 		age := ""
 		if t, err := time.Parse(time.RFC3339, s.Created); err == nil {
 			age = format.Elapsed(time.Since(t))
@@ -596,7 +596,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		if avail < 4 {
 			avail = 4
 		}
-		title := sessionTitle(s)
+		title := channelTitle(s)
 		if len([]rune(title)) > avail {
 			title = format.Trunc(title, avail-1)
 		}
@@ -614,11 +614,11 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	return rows, items
 }
 
-// sessionTitle is a session's first prompt, flattened to one line.
-func sessionTitle(s protocol.SessionInfo) string {
+// channelTitle is a channel's first prompt, flattened to one line.
+func channelTitle(s protocol.ChannelInfo) string {
 	t := strings.Join(strings.Fields(s.Title), " ")
 	if t == "" {
-		return "(empty session)"
+		return "(empty channel)"
 	}
 	return t
 }
@@ -830,7 +830,7 @@ func (m Model) tabTexts() []string {
 	byTab := map[focus]string{
 		focusPermission: permKind + " " + permCount,
 		focusQuestions:  "questions " + qCount,
-		focusDirs:       fmt.Sprintf("dirs %d", len(m.sessionDirs())),
+		focusDirs:       fmt.Sprintf("dirs %d", len(m.channelDirs())),
 		focusAsync:      fmt.Sprintf("async %d", len(m.awaitedAgents())+len(m.runningJobs())),
 		focusDue:        fmt.Sprintf("due %d", m.dueCount()),
 		focusTodo:       "todo " + todoCount(m.selectedTodos()),
@@ -887,7 +887,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		}
 		var rows []string
 		if human {
-			rows = append(rows, "  "+theme.StyleBold.Render("you")+"  "+theme.StyleDim.Render("the session chat"))
+			rows = append(rows, "  "+theme.StyleBold.Render("you")+"  "+theme.StyleDim.Render("the channel chat"))
 		}
 		rows = append(rows, agentRows(agents, m.spawned, m.lastLines(), m.roleTints(), time.Now(), width-2)...)
 		return rowsAt(m.cursorRows(rows), 0, len(rows))
@@ -906,7 +906,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		rows, _ := mcpRows(items, m.mcpOpen, time.Now(), width-2)
 		return rowsAt(m.cursorRows(rows), 0, len(rows))
 	case focusDirs:
-		items := m.sessionDirs()
+		items := m.channelDirs()
 		var rows []string
 		n := 0
 		if len(items) == 0 {
@@ -1026,13 +1026,13 @@ func (m Model) sectionTabs(p *protocol.PromptInfo, width int) string {
 	labels, _ := m.tabLabels(p)
 	rows := strings.Split(labels, "\n")
 	for i := range rows {
-		rows[i] = ansi.Truncate(rows[i], width, "…") // the session directory lives in the dirs tab
+		rows[i] = ansi.Truncate(rows[i], width, "…") // the channel directory lives in the dirs tab
 	}
 	return strings.Join(rows, "\n")
 }
 
 // tabLabels is the strip, a line per row of tabRows: "! 1/2 · ? 0 · dirs n" (the
-// session's) over "async n · due n · todo … · mcp …" (the selected agent's). The highlighted tab (while the strip has focus) or the open one
+// channel's) over "async n · due n · todo … · mcp …" (the selected agent's). The highlighted tab (while the strip has focus) or the open one
 // (while its dialog is up) is in accent, the rest dim; with where each label
 // was drawn, per row.
 func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
@@ -1103,7 +1103,7 @@ func (m Model) cursorRows(rows []string) []string {
 // whole argument (the command, path or files) wrapped onto indented
 // continuation lines, since it is what the user is approving and is never
 // cut; a boundary prompt adds the line saying it reaches outside the
-// session's directories; trust shows the project directory and its files —
+// channel's directories; trust shows the project directory and its files —
 // then the single-select list of answers, and the reason or path row
 // while one is open. Key hints live in the key bar. The options start at
 // line optStart.
@@ -1172,7 +1172,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 			}
 		}
 		if p.Dir != "" {
-			lines = append(lines, theme.StyleWarn.Render("outside the session's directories")+theme.StyleDim.Render(" · "+format.ShortHome(p.Dir)))
+			lines = append(lines, theme.StyleWarn.Render("outside the channel's directories")+theme.StyleDim.Render(" · "+format.ShortHome(p.Dir)))
 		}
 	}
 	lines = append(lines, "")
@@ -1269,7 +1269,7 @@ func (m Model) statusLine(width int) string {
 }
 
 func (m Model) footerRightView() string {
-	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.session.Model}
+	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.channel.Model}
 	if a := m.selectedAgent(); a != nil {
 		f.label, f.tokens, f.cost = a.Label, a.Tokens, a.CostUSD
 		f.context, f.window = a.Context, a.ContextWindow
@@ -1285,7 +1285,7 @@ func (m Model) connected() bool {
 	if !m.reconciled {
 		return true // unknown yet; avoid flashing the nudge
 	}
-	if m.session.Model == "" || (len(m.agents) > 0 && m.agents[0].Model == "") {
+	if m.channel.Model == "" || (len(m.agents) > 0 && m.agents[0].Model == "") {
 		return false
 	}
 	if len(m.providers) > 0 {
@@ -1478,8 +1478,8 @@ func todoRows(items []event.TodoItem, width int) []string {
 	return rows
 }
 
-// dirRows renders the session's working directories: the path (home
-// abbreviated) in bold, then where it came from (session, human) in dim.
+// dirRows renders the channel's working directories: the path (home
+// abbreviated) in bold, then where it came from (channel, human) in dim.
 func dirRows(items []protocol.DirInfo, width int) []string {
 	rows := make([]string, 0, len(items))
 	for _, d := range items {

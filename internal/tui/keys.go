@@ -30,7 +30,7 @@ type keyMap struct {
 	OvDown   key.Binding
 	OvSelect key.Binding
 	OvClose  key.Binding
-	OvAlt    key.Binding // secondary action (models: session default)
+	OvAlt    key.Binding // secondary action (models: channel default)
 	OvOpen   key.Binding // login: open the URL in the browser again
 	OvRemove key.Binding // providers: sign out of the selected provider
 }

@@ -20,7 +20,7 @@ import (
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
-// The harness drives a Session without the daemon: an in-memory log, a
+// The harness drives a Channel without the daemon: an in-memory log, a
 // scripted model and a scripted human. Every test that pins the turn loop,
 // permissions or recovery builds on it.
 
@@ -50,8 +50,8 @@ func (h *fakeHost) Append(_ context.Context, e event.Event) (event.Event, error)
 		h.failNext = nil
 		return e, err
 	}
-	h.seq[e.Session]++
-	e.Seq = h.seq[e.Session]
+	h.seq[e.Channel]++
+	e.Seq = h.seq[e.Channel]
 	e.Global = int64(len(h.events) + 1)
 	e.Time = time.Now().UTC()
 	h.events = append(h.events, e)
@@ -302,8 +302,8 @@ func loadTestConfig(t *testing.T, tc testConfig) (*config.Effective, string) {
 	return cfg, work
 }
 
-// newTestSession starts a session on a fake host; the root agent is idle.
-func newTestSession(t *testing.T, tc testConfig, fm *fakeModel) (*Session, *fakeHost) {
+// newTestChannel starts a channel on a fake host; the root agent is idle.
+func newTestChannel(t *testing.T, tc testConfig, fm *fakeModel) (*Channel, *fakeHost) {
 	t.Helper()
 	cfg, work := loadTestConfig(t, tc)
 	h := newFakeHost(fm)
@@ -316,7 +316,7 @@ func newTestSession(t *testing.T, tc testConfig, fm *fakeModel) (*Session, *fake
 }
 
 // runTurn prompts the root and waits for the turn to end.
-func runTurn(t *testing.T, s *Session, h *fakeHost, prompt string) event.TurnEndedPayload {
+func runTurn(t *testing.T, s *Channel, h *fakeHost, prompt string) event.TurnEndedPayload {
 	t.Helper()
 	root := s.Root()
 	if err := root.Prompt(context.Background(), prompt, "human:test"); err != nil {

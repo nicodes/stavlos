@@ -12,7 +12,7 @@ import (
 )
 
 func mk(seq int64, agent string, typ event.Type, payload any) event.Event {
-	return event.Event{Seq: seq, Session: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
+	return event.Event{Seq: seq, Channel: "s1", Agent: agent, Type: typ, Payload: event.MustPayload(payload)}
 }
 
 // showThinkingForTest turns the (off by default) thinking display on for
@@ -514,7 +514,7 @@ func TestDeniedCallShowsWhy(t *testing.T) {
 		"Permission denied by the user.":                                                  "Shell  rm x",
 		"Denied by policy: shell rm x":                                                    "Shell (by policy)  rm x",
 		"Permission denied: nobody answered the prompt and the headless default is deny.": "Shell (no answer)  rm x",
-		"Denied in auto mode: /etc is outside the session's working directories, and auto mode does not allow calls outside them.": "Shell (outside dirs, auto mode)  rm x",
+		"Denied in auto mode: /etc is outside the channel's working directories, and auto mode does not allow calls outside them.": "Shell (outside dirs, auto mode)  rm x",
 	} {
 		tr := NewTranscript()
 		tr.Apply(event.Event{Seq: 1, Type: event.ToolCallStarted, Time: time.Now(), Payload: event.MustPayload(event.ToolStartedPayload{CallID: "c1", Name: "shell", Input: json.RawMessage(`{"command":"rm x"}`)})})

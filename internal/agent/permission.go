@@ -13,7 +13,7 @@ import (
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// A tool call goes through three stages: decide (policy, the session's
+// A tool call goes through three stages: decide (policy, the channel's
 // remembered allows, the mode, the directory boundary), escalate (the
 // human, when the decision is ask), execute. Everything is logged as
 // tool.started and tool.finished.
@@ -91,7 +91,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 	if sub.Kind == policy.KindCommand && verb == policy.Allow && !shellcmd.Simple(arg) {
 		verb = policy.Ask
 	}
-	// What the human allowed for the session answers an ask, never a deny.
+	// What the human allowed for the channel answers an ask, never a deny.
 	if verb == policy.Ask && a.s.permits.covers(c.Name, sub) {
 		verb = policy.Allow
 	}
@@ -99,7 +99,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 	if verb == policy.Ask && mode != protocol.ModeAsk {
 		verb = policy.Allow // auto and yolo answer every policy ask with allow
 	}
-	// A call that reaches outside the session's working directories is judged
+	// A call that reaches outside the channel's working directories is judged
 	// by the mode even when policy allows the tool: ask mode asks (the prompt
 	// names the directory; "allow_always" adds it to the agent), auto denies
 	// it, yolo allows it.
@@ -122,23 +122,23 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView) decision {
 // autoOutside is what an agent is told when auto mode denies a call outside
 // its working directories.
 func autoOutside(dir string) string {
-	return "Denied in auto mode: " + dir + " is outside the session's working directories, and auto mode does not allow calls outside them."
+	return "Denied in auto mode: " + dir + " is outside the channel's working directories, and auto mode does not allow calls outside them."
 }
 
 // escalate asks the human about a call and records what they allowed for
-// the session. It returns the denial text when the answer was no,
+// the channel. It returns the denial text when the answer was no,
 // withdrawn when the turn ended first, and allowed when the call may run.
 func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv roleView) (denial string, withdrawn, allowed bool) {
 	a.setState(StateBlocked)
 	question := fmt.Sprintf("%s wants to run %s", rv.label, c.Name)
 	if d.boundary != "" {
-		question = fmt.Sprintf("%s wants to run %s outside the session's directories (%s)", rv.label, c.Name, d.boundary)
+		question = fmt.Sprintf("%s wants to run %s outside the channel's directories (%s)", rv.label, c.Name, d.boundary)
 	}
 	// The prefix a client may offer to allow is the daemon's to derive
 	// from the call itself; the prompt carries it for display.
 	prefix := prefixFor(d.sub.Kind, d.arg)
 	ans := a.s.host.Prompt(turnCtx, protocol.PromptInfo{
-		ID: NewID("p"), Session: a.s.ID, Agent: a.ID, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
+		ID: NewID("p"), Channel: a.s.ID, Agent: a.ID, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
 		Question: question, Dir: d.boundary, Prefix: prefix,
 	})
 	a.setState(StateRunning)
@@ -164,7 +164,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 			why = "Permission denied: nobody answered the prompt and the headless default is deny."
 		}
 		if ans.Client == protocol.ModeAuto && d.boundary != "" {
-			why = autoOutside(d.boundary) // waiting when the session switched to auto
+			why = autoOutside(d.boundary) // waiting when the channel switched to auto
 		}
 		return why, false, false
 	}
@@ -178,7 +178,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	return "", false, true
 }
 
-// grantPermit remembers an allow for the session and logs it, so recovery
+// grantPermit remembers an allow for the channel and logs it, so recovery
 // restores it.
 func (a *Agent) grantPermit(p event.PermitPayload) {
 	a.s.permits.apply(p)
@@ -191,7 +191,7 @@ func (a *Agent) toolEnv(turn int, c model.Block, rv roleView) *tools.Env {
 	return &tools.Env{Dir: a.s.Dir, Agent: a.ID, Skills: a.skills(cfg, rv), Orch: a.orch(), Mon: a.monitorsAPI(), Todo: a.todoAPIIfEnabled(), Ask: a.askAPI(), MaxOutput: cfg.Compaction.MaxToolOutput,
 		Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Partial: func(s string) {
-			a.s.host.Stream(protocol.StreamNotification{Session: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
+			a.s.host.Stream(protocol.StreamNotification{Channel: a.s.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: s})
 		}}
 }
 
@@ -204,7 +204,7 @@ func hasDef(defs []model.ToolDef, name string) bool {
 	return false
 }
 
-// policy returns the effective policy for this agent: the session's
+// policy returns the effective policy for this agent: the channel's
 // layered policy with the role's rules as one more tightening overlay.
 func (a *Agent) policy(rv roleView) *policy.Layered {
 	return a.s.Config().Policy.With(rv.preset.PresetPolicy())

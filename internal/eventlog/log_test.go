@@ -19,19 +19,19 @@ func open(t *testing.T, path string) *Log {
 	return l
 }
 
-func prompt(session, source, text string) event.Event {
-	return event.Event{Session: session, Type: event.PromptQueued, Payload: event.MustPayload(event.TextPayload{Text: text, Source: source})}
+func prompt(channel, source, text string) event.Event {
+	return event.Event{Channel: channel, Type: event.PromptQueued, Payload: event.MustPayload(event.TextPayload{Text: text, Source: source})}
 }
 
-func TestAppendSeqContiguousPerSession(t *testing.T) {
+func TestAppendSeqContiguousPerChannel(t *testing.T) {
 	l := open(t, filepath.Join(t.TempDir(), "e.db"))
 	defer l.Close()
 	ctx := context.Background()
 	for i := 0; i < 3; i++ {
-		if _, err := l.Append(ctx, event.Event{Session: "a", Type: event.PromptQueued, Payload: event.MustPayload(event.TextPayload{Text: "x"})}); err != nil {
+		if _, err := l.Append(ctx, event.Event{Channel: "a", Type: event.PromptQueued, Payload: event.MustPayload(event.TextPayload{Text: "x"})}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := l.Append(ctx, event.Event{Session: "b", Type: event.PromptQueued}); err != nil {
+		if _, err := l.Append(ctx, event.Event{Channel: "b", Type: event.PromptQueued}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -69,7 +69,7 @@ func TestLastSeqAfterReopen(t *testing.T) {
 	ctx := context.Background()
 	l := open(t, path)
 	for i := 0; i < 3; i++ {
-		if _, err := l.Append(ctx, event.Event{Session: "a", Type: event.PromptQueued}); err != nil {
+		if _, err := l.Append(ctx, event.Event{Channel: "a", Type: event.PromptQueued}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -79,21 +79,21 @@ func TestLastSeqAfterReopen(t *testing.T) {
 	if seq, _ := l.LastSeq(ctx, "a"); seq != 3 {
 		t.Fatalf("last seq after reopen %d", seq)
 	}
-	e, err := l.Append(ctx, event.Event{Session: "a", Type: event.PromptQueued})
+	e, err := l.Append(ctx, event.Event{Channel: "a", Type: event.PromptQueued})
 	if err != nil || e.Seq != 4 {
 		t.Fatalf("append after reopen: %+v %v", e, err)
 	}
 }
 
-// TestSessionIndex: the title is the first human prompt's first line, set
+// TestChannelIndex: the title is the first human prompt's first line, set
 // once; the listing carries it and the last seq; a batch with a new
-// session row is one transaction.
-func TestSessionIndex(t *testing.T) {
+// channel row is one transaction.
+func TestChannelIndex(t *testing.T) {
 	l := open(t, filepath.Join(t.TempDir(), "e.db"))
 	defer l.Close()
 	ctx := context.Background()
 	created := time.Now().UTC()
-	if err := l.PutSession(ctx, SessionRow{ID: "s1", Dir: "/w", Created: created}); err != nil {
+	if err := l.PutChannel(ctx, ChannelRow{ID: "s1", Dir: "/w", Created: created}); err != nil {
 		t.Fatal(err)
 	}
 	for _, e := range []event.Event{
@@ -107,26 +107,23 @@ func TestSessionIndex(t *testing.T) {
 		}
 	}
 	// Archiving keeps the title.
-	if err := l.PutSession(ctx, SessionRow{ID: "s1", Dir: "/w", Created: created, Archived: true}); err != nil {
+	if err := l.PutChannel(ctx, ChannelRow{ID: "s1", Dir: "/w", Created: created, Archived: true}); err != nil {
 		t.Fatal(err)
 	}
-	// A fork: the row and its copied events in one transaction.
+	// A batch: all of its events or none, numbered in order.
 	copied, err := l.AppendBatch(ctx, []event.Event{
-		prompt("s2", "human:tui", "forked title"),
-		{Session: "s2", Type: event.TurnStarted},
-	}, &SessionRow{ID: "s2", Dir: "/w", Created: created.Add(time.Second)})
+		prompt("s2", "human:tui", "second title"),
+		{Channel: "s2", Type: event.TurnStarted},
+	})
 	if err != nil || len(copied) != 2 || copied[0].Seq != 1 || copied[1].Seq != 2 {
 		t.Fatalf("batch: %+v %v", copied, err)
 	}
-	rows, err := l.Sessions(ctx)
-	if err != nil || len(rows) != 2 {
-		t.Fatalf("sessions %+v %v", rows, err)
+	rows, err := l.Channels(ctx)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("channels %+v %v", rows, err)
 	}
-	if r := rows[0]; r.ID != "s2" || r.Title != "forked title" || r.LastSeq != 2 || r.Archived {
-		t.Fatalf("newest %+v", r)
-	}
-	if r := rows[1]; r.ID != "s1" || r.Title != "fix the login bug" || r.LastSeq != 4 || !r.Archived || r.Dir != "/w" {
-		t.Fatalf("older %+v", r)
+	if r := rows[0]; r.ID != "s1" || r.Title != "fix the login bug" || r.LastSeq != 4 || !r.Archived || r.Dir != "/w" {
+		t.Fatalf("row %+v", r)
 	}
 	// kv round trip
 	if err := l.Put(ctx, "trust", map[string]string{"/w": "h"}); err != nil {
@@ -141,9 +138,10 @@ func TestSessionIndex(t *testing.T) {
 	}
 }
 
-// TestMigratesAnOldLog: a log written before schema version 2 gains the
-// title column (backfilled from its events) and loses the duplicate index.
-func TestMigratesAnOldLog(t *testing.T) {
+// TestWipesAnOldLog: a log written by another schema version (here the
+// session-era one) is wiped, not converted: it opens empty at the current
+// version and numbers from 1 again.
+func TestWipesAnOldLog(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "old.db")
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -151,12 +149,12 @@ func TestMigratesAnOldLog(t *testing.T) {
 	}
 	if _, err := db.Exec(`
 CREATE TABLE events (global INTEGER PRIMARY KEY AUTOINCREMENT, session TEXT NOT NULL, seq INTEGER NOT NULL, agent TEXT NOT NULL DEFAULT '', type TEXT NOT NULL, time TEXT NOT NULL, payload BLOB, UNIQUE(session, seq));
-CREATE INDEX events_session ON events(session, seq);
-CREATE TABLE sessions (id TEXT PRIMARY KEY, dir TEXT NOT NULL, created TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE sessions (id TEXT PRIMARY KEY, dir TEXT NOT NULL, created TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL DEFAULT '');
 CREATE TABLE kv (k TEXT PRIMARY KEY, v BLOB);
-INSERT INTO sessions VALUES ('s1', '/w', '2026-09-01T00:00:00Z', 0);
+INSERT INTO sessions VALUES ('s1', '/w', '2026-09-01T00:00:00Z', 0, 'old');
 INSERT INTO events(session, seq, type, time, payload) VALUES ('s1', 1, 'session.created', '2026-09-01T00:00:00Z', '{}');
-INSERT INTO events(session, seq, type, time, payload) VALUES ('s1', 2, 'prompt.queued', '2026-09-01T00:00:01Z', '{"text":"old session title\nmore","source":"human:tui"}');
+INSERT INTO kv VALUES ('trust', '{}');
+PRAGMA user_version = 2;
 `); err != nil {
 		t.Fatal(err)
 	}
@@ -165,19 +163,21 @@ INSERT INTO events(session, seq, type, time, payload) VALUES ('s1', 2, 'prompt.q
 	l := open(t, path)
 	defer l.Close()
 	ctx := context.Background()
-	rows, err := l.Sessions(ctx)
-	if err != nil || len(rows) != 1 || rows[0].Title != "old session title" || rows[0].LastSeq != 2 {
-		t.Fatalf("migrated sessions %+v %v", rows, err)
+	if rows, err := l.Channels(ctx); err != nil || len(rows) != 0 {
+		t.Fatalf("an old log should open empty: %+v %v", rows, err)
 	}
 	var n int
-	if err := l.r.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'events_session'`).Scan(&n); err != nil || n != 0 {
-		t.Fatalf("duplicate index still there: %d %v", n, err)
+	if err := l.r.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sessions'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("the old table is still there: %d %v", n, err)
+	}
+	if ok, _ := l.Get(ctx, "trust", &map[string]string{}); ok {
+		t.Fatal("kv should be wiped too")
 	}
 	var version int
 	if err := l.w.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil || version != schemaVersion {
 		t.Fatalf("user_version %d %v", version, err)
 	}
-	if e, err := l.Append(ctx, event.Event{Session: "s1", Type: event.TurnStarted}); err != nil || e.Seq != 3 {
-		t.Fatalf("append after migration %+v %v", e, err)
+	if e, err := l.Append(ctx, event.Event{Channel: "c1", Type: event.TurnStarted}); err != nil || e.Seq != 1 {
+		t.Fatalf("append after the wipe %+v %v", e, err)
 	}
 }

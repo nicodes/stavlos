@@ -1,4 +1,4 @@
-// Package daemon wires the log, registry, escalation, sessions, and the
+// Package daemon wires the log, registry, escalation, channels, and the
 // protocol server together (PRD §4.1).
 package daemon
 
@@ -43,7 +43,7 @@ type Daemon struct {
 	appendMu sync.Mutex // orders Append + broadcast across agents
 
 	mu           sync.RWMutex
-	sessions     map[string]*agent.Session
+	channels     map[string]*agent.Channel
 	clients      map[string]*client
 	trustPrompts map[string]string // dir → prompt id
 	trust        *trustStore
@@ -51,7 +51,7 @@ type Daemon struct {
 }
 
 // New locks the data directory, opens the log and registry and recovers
-// sessions. A second daemon on the same directory gets ErrAlreadyRunning.
+// channels. A second daemon on the same directory gets ErrAlreadyRunning.
 func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, error) {
 	lock, err := lockDataDir(dataDir)
 	if err != nil {
@@ -62,12 +62,12 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 		lock.Close()
 		return nil, err
 	}
-	d := &Daemon{Log: lg, Registry: reg, DataDir: dataDir, lock: lock, sessions: map[string]*agent.Session{}, clients: map[string]*client{}, trustPrompts: map[string]string{}, logins: map[string]*pendingLogin{}}
+	d := &Daemon{Log: lg, Registry: reg, DataDir: dataDir, lock: lock, channels: map[string]*agent.Channel{}, clients: map[string]*client{}, trustPrompts: map[string]string{}, logins: map[string]*pendingLogin{}}
 	d.trust = &trustStore{log: lg}
 	if err := d.trust.load(ctx); err != nil {
 		return nil, err
 	}
-	// Escalation timers come from global config; per-session overrides are
+	// Escalation timers come from global config; per-channel overrides are
 	// a roadmap item (PRD §7.4: single global settings in v1).
 	gcfg, err := config.LoadGlobal()
 	if err != nil {
@@ -83,10 +83,10 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 	return d, nil
 }
 
-// Close stops sessions and the log and releases the data directory.
+// Close stops channels and the log and releases the data directory.
 func (d *Daemon) Close() {
 	d.mu.Lock()
-	for _, s := range d.sessions {
+	for _, s := range d.channels {
 		s.Stop()
 	}
 	d.mu.Unlock()
@@ -97,7 +97,7 @@ func (d *Daemon) Close() {
 }
 
 func (d *Daemon) recover(ctx context.Context) error {
-	rows, err := d.Log.Sessions(ctx)
+	rows, err := d.Log.Channels(ctx)
 	if err != nil {
 		return err
 	}
@@ -111,7 +111,7 @@ func (d *Daemon) recover(ctx context.Context) error {
 		}
 		cfg, err := config.Load(r.Dir, d.trust)
 		if err != nil {
-			log.Printf("session %s: config: %v (using the global configuration)", r.ID, err)
+			log.Printf("channel %s: config: %v (using the global configuration)", r.ID, err)
 			if cfg, err = config.LoadGlobal(); err != nil {
 				return err
 			}
@@ -119,11 +119,11 @@ func (d *Daemon) recover(ctx context.Context) error {
 		}
 		s, err := agent.Recover(ctx, d, r.ID, r.Dir, r.Created, cfg, evs)
 		if err != nil {
-			log.Printf("session %s: recover: %v", r.ID, err)
+			log.Printf("channel %s: recover: %v", r.ID, err)
 			continue
 		}
-		d.sessions[r.ID] = s
-		log.Printf("recovered session %s (%s), %d agents", r.ID, r.Dir, len(s.Agents()))
+		d.channels[r.ID] = s
+		log.Printf("recovered channel %s (%s), %d agents", r.ID, r.Dir, len(s.Agents()))
 	}
 	return nil
 }
@@ -148,7 +148,7 @@ func (d *Daemon) Append(ctx context.Context, e event.Event) (event.Event, error)
 
 func (d *Daemon) Stream(n protocol.StreamNotification) {
 	b, _ := json.Marshal(n)
-	d.eachSubscribed(n.Session, func(c *client) { c.notify(protocol.NStream, b) })
+	d.eachSubscribed(n.Channel, func(c *client) { c.notify(protocol.NStream, b) })
 }
 
 func (d *Daemon) Resolve(id string) (model.Model, model.Info, error) { return d.Registry.Resolve(id) }
@@ -178,7 +178,7 @@ func (d *Daemon) notifyPrompt(n protocol.PromptNotification, tiers []protocol.Ti
 }
 
 func (d *Daemon) recordPrompt(action protocol.PromptAction, info protocol.PromptInfo, answer, clientID string) {
-	if info.Session == "" {
+	if info.Channel == "" {
 		return
 	}
 	var t event.Type
@@ -203,26 +203,26 @@ func (d *Daemon) recordPrompt(action protocol.PromptAction, info protocol.Prompt
 	default:
 		return
 	}
-	_, _ = d.Append(context.Background(), event.Event{Session: info.Session, Agent: info.Agent, Type: t, Payload: event.MustPayload(payload)})
+	_, _ = d.Append(context.Background(), event.Event{Channel: info.Channel, Agent: info.Agent, Type: t, Payload: event.MustPayload(payload)})
 }
 
-// --- sessions ---
+// --- channels ---
 
-func (d *Daemon) session(id string) (*agent.Session, error) {
+func (d *Daemon) channel(id string) (*agent.Channel, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	s, ok := d.sessions[id]
+	s, ok := d.channels[id]
 	if !ok {
-		return nil, fmt.Errorf("session %q %w", id, errNotFound)
+		return nil, fmt.Errorf("channel %q %w", id, errNotFound)
 	}
 	return s, nil
 }
 
-// agentSession finds the session owning an agent.
-func (d *Daemon) agentSession(agentID string) (*agent.Session, *agent.Agent, error) {
+// agentChannel finds the channel owning an agent.
+func (d *Daemon) agentChannel(agentID string) (*agent.Channel, *agent.Agent, error) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
-	for _, s := range d.sessions {
+	for _, s := range d.channels {
 		if a, ok := s.Agent(agentID); ok {
 			return s, a, nil
 		}
@@ -230,8 +230,8 @@ func (d *Daemon) agentSession(agentID string) (*agent.Session, *agent.Agent, err
 	return nil, nil, fmt.Errorf("agent %q %w", agentID, errNotFound)
 }
 
-// CreateSession creates and starts a session in dir.
-func (d *Daemon) CreateSession(ctx context.Context, dir, modelID, root string) (*agent.Session, error) {
+// CreateChannel creates and starts a channel in dir.
+func (d *Daemon) CreateChannel(ctx context.Context, dir, modelID, root string) (*agent.Channel, error) {
 	dir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, err
@@ -243,108 +243,40 @@ func (d *Daemon) CreateSession(ctx context.Context, dir, modelID, root string) (
 	if err != nil {
 		return nil, err
 	}
-	id := agent.NewID("s")
+	id := agent.NewID("c")
 	s := agent.New(d, id, dir, cfg, modelID, root)
 	if err := s.Start(ctx); err != nil {
 		return nil, err
 	}
-	if err := d.Log.PutSession(ctx, eventlog.SessionRow{ID: id, Dir: dir, Created: s.Created}); err != nil {
+	if err := d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Dir: dir, Created: s.Created}); err != nil {
 		return nil, err
 	}
 	d.mu.Lock()
-	d.sessions[id] = s
+	d.channels[id] = s
 	d.mu.Unlock()
 	d.maybeTrustPrompt(s)
 	return s, nil
 }
 
-// ForkSession copies events up to seq into a new session (PRD §5).
-func (d *Daemon) ForkSession(ctx context.Context, id string, seq int64) (*agent.Session, error) {
-	src, err := d.session(id)
-	if err != nil {
-		return nil, err
-	}
-	if seq <= 0 {
-		seq, _ = d.Log.LastSeq(ctx, id)
-	}
-	evs, err := d.Log.ReadRange(ctx, id, 1, seq)
-	if err != nil {
-		return nil, err
-	}
-	nid := agent.NewID("s")
-	idmap := map[string]string{}
-	remap := func(a string) string {
-		if a == "" {
-			return ""
-		}
-		if n, ok := idmap[a]; ok {
-			return n
-		}
-		n := agent.NewID("a")
-		idmap[a] = n
-		return n
-	}
-	copies := make([]event.Event, 0, len(evs))
-	for _, e := range evs {
-		ne := event.Event{Session: nid, Agent: remap(e.Agent), Type: e.Type, Time: e.Time, Payload: e.Payload}
-		switch e.Type {
-		case event.SessionCreated:
-			var p event.SessionCreatedPayload
-			_ = e.Decode(&p)
-			p.ForkedFrom, p.ForkSeq = id, seq
-			ne.Payload = event.MustPayload(p)
-		case event.AgentSpawned:
-			var p event.AgentSpawnedPayload
-			_ = e.Decode(&p)
-			p.ID, p.Parent = remap(p.ID), remap(p.Parent)
-			ne.Payload = event.MustPayload(p)
-		case event.AgentKilled:
-			var p event.AgentRefPayload
-			_ = e.Decode(&p)
-			p.ID = remap(p.ID)
-			ne.Payload = event.MustPayload(p)
-		}
-		copies = append(copies, ne)
-	}
-	// The new session's index row and its copied events in one transaction:
-	// a fork that fails leaves nothing behind.
-	copied, err := d.Log.AppendBatch(ctx, copies, &eventlog.SessionRow{ID: nid, Dir: src.Dir, Created: time.Now().UTC()})
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := config.Load(src.Dir, d.trust)
-	if err != nil {
-		return nil, err
-	}
-	s, err := agent.Recover(ctx, d, nid, src.Dir, time.Now().UTC(), cfg, copied)
-	if err != nil {
-		return nil, err
-	}
-	d.mu.Lock()
-	d.sessions[nid] = s
-	d.mu.Unlock()
-	return s, nil
-}
-
-// ArchiveSession archives a session.
-func (d *Daemon) ArchiveSession(ctx context.Context, id string) error {
-	s, err := d.session(id)
+// ArchiveChannel archives a channel.
+func (d *Daemon) ArchiveChannel(ctx context.Context, id string) error {
+	s, err := d.channel(id)
 	if err != nil {
 		return err
 	}
 	if err := s.Archive(ctx); err != nil {
 		return err
 	}
-	return d.Log.PutSession(ctx, eventlog.SessionRow{ID: id, Dir: s.Dir, Created: s.Created, Archived: true})
+	return d.Log.PutChannel(ctx, eventlog.ChannelRow{ID: id, Dir: s.Dir, Created: s.Created, Archived: true})
 }
 
-// SessionList returns infos.
-func (d *Daemon) SessionList(ctx context.Context, dir string, archived bool) ([]protocol.SessionInfo, error) {
-	rows, err := d.Log.Sessions(ctx)
+// ChannelList returns infos.
+func (d *Daemon) ChannelList(ctx context.Context, dir string, archived bool) ([]protocol.ChannelInfo, error) {
+	rows, err := d.Log.Channels(ctx)
 	if err != nil {
 		return nil, err
 	}
-	var out []protocol.SessionInfo
+	var out []protocol.ChannelInfo
 	for _, r := range rows {
 		if dir != "" && r.Dir != dir {
 			continue
@@ -353,13 +285,13 @@ func (d *Daemon) SessionList(ctx context.Context, dir string, archived bool) ([]
 			continue
 		}
 		d.mu.RLock()
-		s, ok := d.sessions[r.ID]
+		s, ok := d.channels[r.ID]
 		d.mu.RUnlock()
-		var info protocol.SessionInfo
+		var info protocol.ChannelInfo
 		if ok {
 			info = s.Info()
 		} else {
-			info = protocol.SessionInfo{ID: r.ID, Dir: r.Dir, Created: r.Created.Format(time.RFC3339), Archived: r.Archived}
+			info = protocol.ChannelInfo{ID: r.ID, Dir: r.Dir, Created: r.Created.Format(time.RFC3339), Archived: r.Archived}
 		}
 		info.Seq, info.Title = r.LastSeq, r.Title
 		out = append(out, info)
@@ -398,10 +330,10 @@ func (t *trustStore) set(ctx context.Context, dir, hash string) error {
 	return t.log.Put(ctx, "trust", m)
 }
 
-// maybeTrustPrompt raises a trust prompt for a session whose project layer
-// is pending. It is a session-scoped prompt with long timeouts; the
-// session keeps running on global config meanwhile.
-func (d *Daemon) maybeTrustPrompt(s *agent.Session) {
+// maybeTrustPrompt raises a trust prompt for a channel whose project layer
+// is pending. It is a channel-scoped prompt with long timeouts; the
+// channel keeps running on global config meanwhile.
+func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 	cfg := s.Config()
 	if !cfg.TrustPending {
 		return
@@ -417,7 +349,7 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Session) {
 	go func() {
 		input, _ := json.Marshal(map[string]any{"dir": s.Dir, "hash": cfg.TrustHash, "files": cfg.TrustFiles})
 		ans := d.esc.Request(context.Background(), protocol.PromptInfo{
-			ID: id, Session: s.ID, Kind: protocol.PromptTrust, Input: input,
+			ID: id, Channel: s.ID, Kind: protocol.PromptTrust, Input: input,
 			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, presets, skills and AGENTS.md.", s.Dir),
 			Options:  []string{"trust", "skip"},
 		})
@@ -430,7 +362,7 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Session) {
 	}()
 }
 
-// Trust records a decision and reloads config for sessions in dir. The
+// Trust records a decision and reloads config for channels in dir. The
 // directory is normalised and the hash recomputed from what is on disk:
 // a client says which directory it means and whether it trusts what it
 // was shown; the daemon decides what that content is.
@@ -469,8 +401,8 @@ func (d *Daemon) Trust(ctx context.Context, dir, hash string, trust bool) error 
 		return nil
 	}
 	d.mu.RLock()
-	var ss []*agent.Session
-	for _, s := range d.sessions {
+	var ss []*agent.Channel
+	for _, s := range d.channels {
 		if s.Dir == dir {
 			ss = append(ss, s)
 		}
@@ -569,7 +501,7 @@ type client struct {
 	send func(method string, params json.RawMessage)
 
 	mu   sync.Mutex
-	subs map[string]int64 // session id → last seq delivered
+	subs map[string]int64 // channel id → last seq delivered
 }
 
 func (c *client) notify(method string, params json.RawMessage) { c.send(method, params) }
@@ -578,11 +510,11 @@ func (c *client) notify(method string, params json.RawMessage) { c.send(method, 
 func (c *client) deliver(e event.Event) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	last, ok := c.subs[e.Session]
+	last, ok := c.subs[e.Channel]
 	if !ok || e.Seq <= last {
 		return
 	}
-	c.subs[e.Session] = e.Seq
+	c.subs[e.Channel] = e.Seq
 	c.sendEvent(e)
 }
 
@@ -591,20 +523,20 @@ func (c *client) sendEvent(e event.Event) {
 	c.send(protocol.NEvent, b)
 }
 
-// subscribe replays a session's events from seq from, then hands the
+// subscribe replays a channel's events from seq from, then hands the
 // client over to live delivery with nothing missed and nothing twice. The
 // bulk of the replay runs without the append lock; the tail written
 // meanwhile is read and sent under it, and the subscription is registered
 // before the lock is released, so the next live event is the next seq.
-func (d *Daemon) subscribe(ctx context.Context, cl *client, session string, from int64) (int64, error) {
+func (d *Daemon) subscribe(ctx context.Context, cl *client, channel string, from int64) (int64, error) {
 	if from <= 0 {
 		from = 1
 	}
 	cl.mu.Lock()
-	delete(cl.subs, session) // a re-subscription starts over: no live delivery during the replay
+	delete(cl.subs, channel) // a re-subscription starts over: no live delivery during the replay
 	cl.mu.Unlock()
 	last := from - 1
-	evs, err := d.Log.Read(ctx, session, from, 0)
+	evs, err := d.Log.Read(ctx, channel, from, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -614,7 +546,7 @@ func (d *Daemon) subscribe(ctx context.Context, cl *client, session string, from
 	}
 	d.appendMu.Lock()
 	defer d.appendMu.Unlock()
-	tail, err := d.Log.Read(ctx, session, last+1, 0)
+	tail, err := d.Log.Read(ctx, channel, last+1, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -623,7 +555,7 @@ func (d *Daemon) subscribe(ctx context.Context, cl *client, session string, from
 		last = e.Seq
 	}
 	cl.mu.Lock()
-	cl.subs[session] = last
+	cl.subs[channel] = last
 	cl.mu.Unlock()
 	return last, nil
 }
@@ -640,10 +572,10 @@ func (d *Daemon) clientList() []*client {
 	return out
 }
 
-func (d *Daemon) eachSubscribed(session string, fn func(*client)) {
+func (d *Daemon) eachSubscribed(channel string, fn func(*client)) {
 	for _, c := range d.clientList() {
 		c.mu.Lock()
-		_, ok := c.subs[session]
+		_, ok := c.subs[channel]
 		c.mu.Unlock()
 		if ok {
 			fn(c)
@@ -652,7 +584,7 @@ func (d *Daemon) eachSubscribed(session string, fn func(*client)) {
 }
 
 func (d *Daemon) broadcastEvent(e event.Event) {
-	d.eachSubscribed(e.Session, func(c *client) { c.deliver(e) })
+	d.eachSubscribed(e.Channel, func(c *client) { c.deliver(e) })
 }
 
 func (d *Daemon) addClient(c *client) {
@@ -672,12 +604,12 @@ func (d *Daemon) Status() protocol.DaemonStatusResult {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	n := 0
-	for _, s := range d.sessions {
+	for _, s := range d.channels {
 		n += len(s.Agents())
 	}
 	provs := d.Registry.Providers()
 	sort.Strings(provs)
-	return protocol.DaemonStatusResult{Version: protocol.Version, Build: buildid.ID(), PID: os.Getpid(), DataDir: d.DataDir, Sessions: len(d.sessions), Agents: n, Providers: provs}
+	return protocol.DaemonStatusResult{Version: protocol.Version, Build: buildid.ID(), PID: os.Getpid(), DataDir: d.DataDir, Channels: len(d.channels), Agents: n, Providers: provs}
 }
 
 // errTrustChanged: a trust reply carried a hash that no longer matches the

@@ -1,6 +1,6 @@
 // Package shellcmd classifies shell command lines for permission decisions:
 // whether a command is one simple command, which prefix of it a human may
-// allow for a session, and whether such a prefix covers a later command.
+// allow for a channel, and whether such a prefix covers a later command.
 //
 // This is a classifier, not a shell. It errs towards "not simple": anything
 // that could chain, redirect, substitute or hand control to an interpreter
@@ -21,7 +21,7 @@ var twoWordTools = map[string]bool{
 }
 
 // wrappers run whatever follows them: allowing "bash" or "env" for a
-// session would allow everything.
+// channel would allow everything.
 var wrappers = map[string]bool{
 	"bash": true, "sh": true, "zsh": true, "dash": true, "fish": true, "ksh": true,
 	"env": true, "xargs": true, "sudo": true, "doas": true, "su": true,
@@ -180,7 +180,7 @@ func Simple(cmd string) bool {
 }
 
 // Prefix is the part of a command a human may allow for the rest of a
-// session: its first word, or two words for tools like git and go ("go
+// channel: its first word, or two words for tools like git and go ("go
 // test") when the second is a subcommand rather than a flag. It is "" when
 // no prefix would mean what it says: a compound command, an environment
 // assignment, a wrapper or interpreter (bash, env, sudo, python…), or a

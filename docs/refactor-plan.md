@@ -1,7 +1,7 @@
 # Stavlos v1 hardening refactor — plan
 
 Status: **approved 2026-09-14** (decisions below recorded; execution in phase order). Source: six-area audit of commit 591f774 (reports in the
-session's audit directory; findings below cite `file:line` as of that commit).
+channel's audit directory; findings below cite `file:line` as of that commit).
 
 Ground rules for execution (unchanged from how we have been working):
 
@@ -20,19 +20,19 @@ Confirmed on the live tree with throwaway tests:
 
 | # | Finding | Where |
 |---|---------|-------|
-| S1 | Shell allow-globs are prefix matches over the raw command: `cat x; rm -rf ~`, `cat x \| sh`, `cat x > ~/.bashrc`, `cat <(rm -rf .)` are **allowed with no prompt** under the default read-only rules. `SimpleCommand` is only consulted on the session-prefix path, never the policy path, and it misses `>`, `<`, `<(`, `>(`. | policy.go:148-191, config.go:255-271, turn.go:212-231, prefix.go:90 |
+| S1 | Shell allow-globs are prefix matches over the raw command: `cat x; rm -rf ~`, `cat x \| sh`, `cat x > ~/.bashrc`, `cat <(rm -rf .)` are **allowed with no prompt** under the default read-only rules. `SimpleCommand` is only consulted on the channel-prefix path, never the policy path, and it misses `>`, `<`, `<(`, `>(`. | policy.go:148-191, config.go:255-271, turn.go:212-231, prefix.go:90 |
 | S2 | "Roles and projects can only tighten" is unsound: `Tighten`/`checkTightening` test one synthetic string per pattern, so an overlay `git*: allow` shadows a global `*--force*: deny`. | policy.go:81-99, config.go:447-463 |
-| S3 | Session-remembered allows (`allow_always`, `allow_prefix`) override explicit **Deny** rules, because they are applied after `Decide` and replace the verb unconditionally. | turn.go:213-233 |
+| S3 | Channel-remembered allows (`allow_always`, `allow_prefix`) override explicit **Deny** rules, because they are applied after `Decide` and replace the verb unconditionally. | turn.go:213-233 |
 | S4 | web_fetch policy matches the raw URL but the fetch normalises it, so `http://`, uppercase, userinfo, `:443`, and github blob→raw rewrites all bypass host deny rules. | web.go:52-58, 219-253 |
-| S5 | Daemon-wide defaults (escalation timeouts, answer default, fallback policy for recovered sessions) are loaded from `/tmp/.stavlos/stavlos.local.json`, a world-writable location, as a **trusted** layer. | daemon.go:65-72, 102-107 |
+| S5 | Daemon-wide defaults (escalation timeouts, answer default, fallback policy for recovered channels) are loaded from `/tmp/.stavlos/stavlos.local.json`, a world-writable location, as a **trusted** layer. | daemon.go:65-72, 102-107 |
 | S6 | Model/tool text reaches the terminal with escape sequences intact; a command can erase its destructive half on screen inside the permission dialog. | view.go:1512-1611, 405-512 |
 | S7 | Shell, background jobs and MCP servers inherit the daemon's full environment, including provider API keys read from env. | shell.go:161, monitor.go:227, mcp.go:133 |
 | P1 | One slow TUI client stalls every agent: event append and the socket `Flush` to every subscriber happen under one lock with no write deadline or per-client queue. | daemon.go:125-134, 574-601 |
 | P2 | `subscribe` replay→live handover can silently drop events (live seq advances the dedupe cursor past unreplayed events); the TUI has no gap detection. | server.go:549-577, daemon.go:574-584 |
 | P3 | Every stream token re-copies and re-renders the whole transcript; spinner and compaction ticks do the same at 12 fps. | model.go:373-379, 3004-3053, view.go:160-263 |
-| M1 | Live state mutation and crash recovery are two hand-written reducers that have already diverged (awaiting keys by prefix vs id, monitors re-armed on restart, prompt consumption reconstructed by text match). | recover.go, agent.go, session.go, orchestrator.go |
-| M2 | Data races: `preset`, `Label`, `Archetype`, `turn`, MCP session pointer read without `a.mu` while `SetRole` writes them. | turn.go:339-460, agent.go:461-468, mcp.go:345 |
-| M3 | Stringly-typed vocabularies (agent/session/monitor/MCP/todo states, prompt kinds, answer values, tool names, turn reasons) switched on in 5+ packages with no constants. Tool names appear as literals in 60+ sites. | everywhere |
+| M1 | Live state mutation and crash recovery are two hand-written reducers that have already diverged (awaiting keys by prefix vs id, monitors re-armed on restart, prompt consumption reconstructed by text match). | recover.go, agent.go, channel.go, orchestrator.go |
+| M2 | Data races: `preset`, `Label`, `Archetype`, `turn`, MCP channel pointer read without `a.mu` while `SetRole` writes them. | turn.go:339-460, agent.go:461-468, mcp.go:345 |
+| M3 | Stringly-typed vocabularies (agent/channel/monitor/MCP/todo states, prompt kinds, answer values, tool names, turn reasons) switched on in 5+ packages with no constants. Tool names appear as literals in 60+ sites. | everywhere |
 | D1 | Three copy-pasted streaming adapters (SSE reader, HTTP post, error mapping identical); dead API-key era: the whole `model/anthropic` package plus its SDK dependency, half of `auth`, half of `modelsdev`. | model/* |
 
 Mechanical checks: `go vet`, `gofmt`, `govulncheck`, `go mod tidy` all clean. `staticcheck` reports 15
@@ -53,9 +53,9 @@ The core is only tested through the daemon integration suite. Every later phase 
 tests that pin current behaviour first.
 
 1.1 ✅ `internal/agent`: a `fakeHost` (in-memory `Append`/`Read`/`Prompt`) and a fake `model.Provider`
-    so an `Agent`/`Session` can be driven without the daemon. Table tests for `runTool` verdicts
+    so an `Agent`/`Channel` can be driven without the daemon. Table tests for `runTool` verdicts
     (policy × mode × remembered allows × boundary), turn loop end reasons, mailbox semantics.
-1.2 ✅ Replay round-trip test: drive a session, capture events, `Recover` into a fresh session, compare
+1.2 ✅ Replay round-trip test: drive a channel, capture events, `Recover` into a fresh channel, compare
     `Info()` trees. This is the regression guard for M1.
 1.3 ✅ `project`: golden tests for `Project` (dangling tool_use repair, compaction cut, ordering).
 1.4 ✅ Snapshot test of every tool's `Def().Schema` (guards the schema-from-struct change in 4.4).
@@ -74,12 +74,12 @@ tests that pin current behaviour first.
 2.2 **`policy.Layered`** ✅: sound layering by construction — decision is the max rank across layers;
     delete `Tighten`, `samplePath`, `checkTightening`, `samplePattern`. Computed once per config
     change, not per tool call. Fixes S2.
-2.3 **`session.permits`** ✅ type owning `allowAlways`/`allowPrefix`: remembered allows only downgrade
+2.3 **`channel.permits`** ✅ type owning `allowAlways`/`allowPrefix`: remembered allows only downgrade
     `Ask`, never `Deny`. Server derives the canonical prefix from the prompt's own arg and puts it on
     `PromptInfo.Prefix`; the client displays it instead of recomputing (drop client-supplied
     `Prefix`). Fixes S3 and the trusted-verbatim prefix.
 2.4 **web_fetch canonical subject** ✅: `PolicyArg` returns the normalised URL (lower-cased host, https,
-    no userinfo, blob→raw applied) so policy, session allows, and the fetch see one string.
+    no userinfo, blob→raw applied) so policy, channel allows, and the fetch see one string.
     `CheckRedirect` requires https on same-host hops. `publicIP` via `netip` prefixes incl.
     0.0.0.0/8, 100.64/10, 198.18/15, 240/4, 64:ff9b::/96. Search calls use the same SSRF-safe
     client and refuse redirects. Fixes S4.
@@ -114,7 +114,7 @@ tests that pin current behaviour first.
 ### Phase 3 — Shared vocabulary  [M]  ✅ done 2026-09-14 (3.1–3.4)
 
 3.1 ✅ Typed constants in the leaf packages, replacing every literal switch:
-    `protocol.AgentState` (idle/running/blocked/waiting/killed) + `RollUp` → `SessionState`;
+    `protocol.AgentState` (idle/running/blocked/waiting/killed) + `RollUp` → `ChannelState`;
     `PromptKind`, `PromptAction`, `AnswerValue`; `MonitorState`, `MCPState`; `event.TodoStatus`,
     `TurnReason`, `MessageKind`, `Source{Kind,ID}` helpers. `agent.State` becomes an alias.
 3.2 ✅ `internal/toolname`: typed tool-name constants, `Canonical()` mapping every legacy spelling
@@ -143,7 +143,7 @@ tests that pin current behaviour first.
 
 ### Phase 5 — Agent core  [L]  ✅ done 2026-09-14 (5.1 as targeted replay fixes guarded by the round-trip test; 5.2 as roleView snapshots rather than a command channel; 5.3–5.7)
 
-5.1 ✅ **One reducer**: `(*Agent).apply(event)` / `(*Session).apply(event)`; live path = `Append` then
+5.1 ✅ **One reducer**: `(*Agent).apply(event)` / `(*Channel).apply(event)`; live path = `Append` then
     `apply`; `Recover` = replay + `abortOpenTurns` + `reportLostJobs`. Log resolved target ids
     (`AgentAsked`), log `MonitorDisarmed`, log which queued prompt a turn consumed. Fixes M1.
     Guarded by 1.2.
@@ -158,7 +158,7 @@ tests that pin current behaviour first.
     events before `Compacted.ToSeq` dropped from memory); one token estimate per step, preferring
     last real `Usage` and counting tool schemas and signatures.
 5.5 ✅ Log-write failures: sticky `a.logErr` checked at each step boundary → turn ends with `error`.
-5.6 ✅ Persist session allows across restart by replaying `PromptAnswered` into `permits`
+5.6 ✅ Persist channel allows across restart by replaying `PromptAnswered` into `permits`
     (paired with 2.3 so Deny still wins). See decision D4.
 5.7 ✅ Delete dead members: `yieldFlag`, child `armed`/`IsArmed`, `hasMonitor`, monitor
     `Kind watch|timer`/`Glob`/`Seconds`, `var _ =` import pins, `mode == ""` special case.
@@ -176,8 +176,8 @@ tests that pin current behaviour first.
     triple marshal go away.
 6.4 **Event log restructure** ✅ (done with a one-time migration instead of a wipe: PRAGMA user_version 2 adds the title column and backfills it): `internal/event` becomes pure types,
     `internal/eventlog` holds SQLite; reader and writer pools; in-memory `lastSeq`; `AppendBatch`
-    (fork in one tx); `sessions` gets `title`, `model`, `state`, `last_seq` columns so
-    `session.list` is one query; drop the duplicate index; `payload` stays JSON.
+    (fork in one tx); `channels` gets `title`, `model`, `state`, `last_seq` columns so
+    `channel.list` is one query; drop the duplicate index; `payload` stays JSON.
 6.5 ◐ (partial: pending-map cleanup on write error, a 4096 notification buffer and the envelope version are done; the Reconnector is deferred while the TUI still quits on disconnect) `pkg/client`: `Options{CallTimeout}`, non-blocking notifications with a `Lagged` signal,
     `Reconnector` (dial with backoff, re-attach, resubscribe from last seq), one `ReplyPrompt`
     taking the params struct, pending-map cleanup on write error, `Notification` type.
@@ -219,8 +219,8 @@ tests that pin current behaviour first.
     `keyBarView` computed once per Update. Makes permission/question option clicks work.
 8.4 ✅ (as one `stepCursor` shared by the tab dialogs, sidebar, permission and questions; todo uses the formerly dead `listKey`; empty notes come from `tabBodyRows`; overlays keep their clamped, filtered, paged movement) Generic `listDialog` component for the six tabs, sidebar and overlay: cursor/wrap/filter/empty
     text; the five `*Key` handlers and the dead `listKey` collapse into it.
-8.5 ✅ (per-session dialog state — question, permission and dirs rows, mcp folds — joined `sessionState`; commands share `rpcCmd`/`resultCmd`/`tick`) `Model` split into `sessionState` (zeroed wholesale on bind), `dialogs`, `uiPrefs`; `reply()`
-    and `claimThen()` helpers; msg/cmd near-duplicates merged (`sessionsMsg`, `rolesMsg`,
+8.5 ✅ (per-channel dialog state — question, permission and dirs rows, mcp folds — joined `channelState`; commands share `rpcCmd`/`resultCmd`/`tick`) `Model` split into `channelState` (zeroed wholesale on bind), `dialogs`, `uiPrefs`; `reply()`
+    and `claimThen()` helpers; msg/cmd near-duplicates merged (`channelsMsg`, `rolesMsg`,
     `providersMsg`, tick helper).
 8.6 ✅ (also gone: `helpKeyLines`, `monitorKindFromText`, `monitorKindWord`; `Transcript.Notice` joined the test-only helpers) `EventLines` as a renderer table; `handleKey` split (`inputKey`); dead code removed
     (`notice`, `helpLines`, `todoLabel`, `mcpLabel`, `monitorGlyph`, `prettyJSON`, stale hotkey
@@ -250,7 +250,7 @@ D1 delete both · D2 delete · D3 ask when unconfigured · D4 persist · D5 defe
 |---|----------|-------------------|
 | D1 | Delete `internal/model/anthropic` and the `anthropic-sdk-go` dependency? Nothing imports it; PRD §8.4 says no API keys. | **Delete.** Port its two neutral-block tests to codex/openai first. If Anthropic access is wanted later it needs a credential path that does not exist today. |
 | D2 | Delete `cmd/stavlosd`? README documents only `stavlos daemon`. | **Delete**, keep one `daemon.Main`. |
-| D3 | `web_search` with no `search` config currently ships every query to Exa's hosted MCP with `allow` by default. Keep, or default to `ask` (with allow-for-session) when unconfigured? | **Ask when unconfigured**, allow when the user configured a provider. One click per session; no silent third-party traffic. |
+| D3 | `web_search` with no `search` config currently ships every query to Exa's hosted MCP with `allow` by default. Keep, or default to `ask` (with allow-for-channel) when unconfigured? | **Ask when unconfigured**, allow when the user configured a provider. One click per channel; no silent third-party traffic. |
 | D4 | Should `allow_always`/`allow_prefix` survive a daemon restart? Today they vanish silently. | **Persist** by replaying `PromptAnswered` (5.6), only after Deny-precedence (2.3) lands. |
 | D5 | Move `event`, `protocol`, `pkg/client` under `pkg/` so a third-party Go client imports no `internal`? | **Defer**; do the `event`/`eventlog` split (6.4) now, which already removes SQLite from the client's dependency tree. |
 | D6 | Real shell sandbox (bubblewrap/landlock) keyed on the agent's dirs, instead of the path heuristic? | **Defer to post-v1**; 2.1 + 2.8 close the cheap holes. Flag in the PRD as the known gap. |
@@ -274,6 +274,6 @@ Log-as-source-of-truth with projection repair; the context tree (`s.ctx → a.ct
 steers at the model-call boundary); `hasDef` refusing tools not offered this step; dial-time SSRF
 check; `htmlToMarkdown` tag stripping; `apply_patch` staging and lenient matching; shell process
 group + WaitDelay + 15 s adopt design; PKCE/state/loopback OAuth mechanics and 0600 token store;
-the escalation state machine; newline JSON-RPC with per-session seq and reconcile; the Elm-style
+the escalation state machine; newline JSON-RPC with per-channel seq and reconcile; the Elm-style
 TUI discipline (`Update` never touches the client), `Command` registry, `focusOrder`/`setFocus`
 ownership, `textareaWrap`, fold/preview UX; the daemon end-to-end test harness.
