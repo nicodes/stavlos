@@ -128,7 +128,7 @@ stavlos --version              # version, commit and build of this binary
 
 ## Project configuration
 
-Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and policy tightening in `stavlos.json`; every agent follows `AGENTS.md` instructions: yours in `~/.config/stavlos/AGENTS.md`, then the repository's from its git root down to the channel directory (a directory's `CLAUDE.md` where it has no `AGENTS.md`), 32 KiB in all. The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
+Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and policy tightening in `stavlos.json`; every agent follows `AGENTS.md` instructions: yours in `~/.config/stavlos/AGENTS.md`, then the repository's from its git root down to the channel directory (a directory's `CLAUDE.md` where it has no `AGENTS.md`), 32 KiB in all, and a subdirectory's with an agent's first read, search or edit there. The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
 
 ## Status
 

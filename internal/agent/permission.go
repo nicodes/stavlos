@@ -72,6 +72,11 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		finish(res.Output, true, true, false)
 		return
 	}
+	if !res.IsError {
+		if note := a.instructionsFor(d.sub, cfg); note != "" {
+			res.Output += "\n\n" + note
+		}
+	}
 	finish(res.Output, res.IsError, false, false)
 }
 

@@ -35,6 +35,7 @@ type Agent struct {
 	ctxWindow   int
 	logErr      error // a failed log write: the turn ends at its next step
 	prefix      promptPrefix
+	instructed  map[string]bool // instructions files a tool result has carried since the last compaction
 
 	mcp mcpSet // under its own lock, never held while taking c.mu
 }
