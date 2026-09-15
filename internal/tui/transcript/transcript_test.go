@@ -426,6 +426,8 @@ func TestMessageArrows(t *testing.T) {
 		{Line{Kind: LineTool, Tool: "shell", Text: "Shell  ls"}, GlyphToolShell},
 		{Line{Kind: LineTool, Tool: "read", Text: "Read  a.go"}, GlyphToolRead},
 		{Line{Kind: LineTool, Tool: "apply_patch", Text: "Apply patch  a.go"}, GlyphToolPatch},
+		{Line{Kind: LineTool, Tool: "web_search", Text: "Search  go vt"}, GlyphToolSearch},
+		{Line{Kind: LineTool, Tool: "web_fetch", Text: "Fetch  go.dev"}, GlyphToolWeb},
 		{Line{Kind: LineTool, Tool: "skill", Text: "Skill  deploy"}, GlyphToolFiles},
 		{Line{Kind: LineTool, Tool: "agent_create", Text: "@scout look"}, GlyphToolCreate},
 		{Line{Kind: LineTool, Tool: "agent_status", Text: "Agent status"}, GlyphToolAgents},
