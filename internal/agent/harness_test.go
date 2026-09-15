@@ -25,6 +25,7 @@ import (
 
 // fakeHost is the daemon's side of agent.Host, in memory.
 type fakeHost struct {
+	changed  []string // dirs whose instructions changed (ProjectChanged)
 	mu       sync.Mutex
 	events   []event.Event
 	seq      map[string]int64
@@ -81,7 +82,13 @@ func (h *fakeHost) Resolve(modelID string) (model.Model, model.Info, error) {
 	return h.m, model.Info{ContextWindow: 200_000}, nil
 }
 
-func (h *fakeHost) CheckModel(string) error  { return h.badModel }
+func (h *fakeHost) CheckModel(string) error { return h.badModel }
+
+func (h *fakeHost) ProjectChanged(dir string) {
+	h.mu.Lock()
+	h.changed = append(h.changed, dir)
+	h.mu.Unlock()
+}
 func (h *fakeHost) Variants(string) []string { return []string{"low", "high"} }
 
 func (h *fakeHost) Prompt(ctx context.Context, p protocol.PromptInfo, opened func()) escalation.Answer {

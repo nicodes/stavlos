@@ -1,6 +1,10 @@
 package agent
 
 import (
+	"fmt"
+	"os"
+	"strings"
+
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/policy"
@@ -38,4 +42,33 @@ func (a *Agent) instructionsFor(sub policy.Subject, cfg *config.Effective) strin
 	}
 	a.c.mu.Unlock()
 	return instructions.Note(files, instructions.Budget)
+}
+
+// instructionsStamp is the size and modification time of each file, enough
+// to notice an edit without reading them.
+func instructionsStamp(files []string) string {
+	var b strings.Builder
+	for _, f := range files {
+		st, err := os.Stat(f)
+		if err != nil {
+			fmt.Fprintf(&b, "%s\x00gone\x00", f)
+			continue
+		}
+		fmt.Fprintf(&b, "%s\x00%d\x00%d\x00", f, st.Size(), st.ModTime().UnixNano())
+	}
+	return b.String()
+}
+
+// checkInstructions asks the host to load the project again when one of its
+// instructions files changed since the config was loaded: the trust hash no
+// longer matches, so the human is asked before any agent follows the new
+// text.
+func (c *Channel) checkInstructions() {
+	c.mu.Lock()
+	files, stamp := c.cfg.InstructionFiles, c.stamp
+	c.mu.Unlock()
+	if len(files) == 0 || instructionsStamp(files) == stamp {
+		return
+	}
+	c.host.ProjectChanged(c.Dir)
 }
