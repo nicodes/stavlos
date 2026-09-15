@@ -38,7 +38,7 @@ func (a *Agent) writePreamble(sb *strings.Builder, rv roleView, cfg *config.Effe
 	} else {
 		sb.WriteString("Reading, editing or running commands outside the working directory asks the human first.\n")
 	}
-	fmt.Fprintf(sb, "Your agent id is %s.\n", a.ID)
+	fmt.Fprintf(sb, "Your name is %s (agent id %s). Every agent in this session has a unique name; tools take a name wherever they take an id.\n", rv.label, a.ID)
 	if limit := rv.preset.MaxTurns; a.Parent != "" && limit > 0 {
 		fmt.Fprintf(sb, "This is turn %d of at most %d: answer with agent_response before the limit; after it your turns end at once and the agents waiting on you are told you ran out.\n", rv.turn, limit)
 	}

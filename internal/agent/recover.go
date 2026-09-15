@@ -135,6 +135,15 @@ func (r *recovery) spawned(e event.Event) {
 		preset = missingRolePreset(p.Archetype)
 	}
 	a := newAgent(s, p.ID, p.Parent, p.Archetype, p.Label, p.Model, p.Depth, preset)
+	// Logs from before unique names may repeat a label: names are claimed in
+	// creation order, so a replay always gives the same agent the same name.
+	s.mu.Lock()
+	name, err := s.claimNameLocked(p.Label, p.Archetype, a.ID)
+	if err != nil {
+		name, _ = s.claimNameLocked("", "agent", a.ID)
+	}
+	s.mu.Unlock()
+	a.Label = name
 	if !ok {
 		r.missingRole[a.ID] = missingRoleError(p.Archetype)
 	}
@@ -172,7 +181,11 @@ func (r *recovery) agentSetting(e event.Event) {
 		}
 		a.Archetype = p.Role
 		if p.Label != "" {
-			a.Label = p.Label
+			r.s.mu.Lock()
+			if name, err := r.s.claimNameLocked(p.Label, p.Role, a.ID); err == nil {
+				a.Label = name
+			}
+			r.s.mu.Unlock()
 		}
 	case event.AgentModelChanged:
 		var p event.ModelChangedPayload

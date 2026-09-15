@@ -487,9 +487,20 @@ func (a *Agent) SetRole(ctx context.Context, role string) error {
 	if err := a.setModelAndVariant(ctx, modelID, fitVariant(preset, modelID, a.Variant())); err != nil {
 		return err
 	}
+	// The name follows the role when it was just the old role's name; the
+	// new one is claimed like any name (the old stays reserved).
 	a.mu.Lock()
-	if a.Label == a.Archetype {
-		a.Label = role
+	rename := a.Label == a.Archetype
+	a.mu.Unlock()
+	newName := ""
+	if rename {
+		a.s.mu.Lock()
+		newName, _ = a.s.claimNameLocked(role, role, a.ID)
+		a.s.mu.Unlock()
+	}
+	a.mu.Lock()
+	if newName != "" {
+		a.Label = newName
 	}
 	a.Archetype = role
 	a.preset = preset

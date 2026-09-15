@@ -5,7 +5,7 @@
     "schema": {
       "properties": {
         "id": {
-          "description": "Child agent id",
+          "description": "Child agent: its name or id",
           "type": "string"
         }
       },
@@ -32,7 +32,7 @@
           "type": "array"
         },
         "label": {
-          "description": "Short human-facing name for this child, e.g. 'auth-explorer' (required)",
+          "description": "Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the session gets a suffix (auth-explorer-2); the result says the name it got",
           "type": "string"
         },
         "model": {
@@ -58,7 +58,7 @@
     "schema": {
       "properties": {
         "id": {
-          "description": "Target agent id (any agent in the session)",
+          "description": "Target agent: its name or id (any agent in the session)",
           "type": "string"
         },
         "text": {
@@ -83,7 +83,7 @@
           "type": "string"
         },
         "to": {
-          "description": "The asking agent's id (the message you are answering names it)",
+          "description": "The asking agent's name or id (the message you are answering names it)",
           "type": "string"
         }
       },
@@ -100,7 +100,7 @@
     "schema": {
       "properties": {
         "id": {
-          "description": "Agent id; omit for the whole session",
+          "description": "Agent name or id; omit for the whole session",
           "type": "string"
         }
       },

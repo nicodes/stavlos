@@ -82,9 +82,10 @@ type Tool interface {
 
 // Orchestrator is implemented by the agent runtime (PRD §6.4).
 type Orchestrator interface {
-	// Spawn creates a child; dirs are directories to grant it, each of which
-	// must be inside the parent's own working directories.
-	Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (string, error)
+	// Spawn creates a child and returns its id and the name it got (label,
+	// normalised and made unique in the session); dirs are directories to
+	// grant it, each of which must be inside the parent's own.
+	Spawn(ctx context.Context, parent, archetype, label, task, modelID string, dirs []string) (id, name string, err error)
 	// Message delivers text to any agent in the session at its next step:
 	// mid-turn if it is busy, as a new turn if it is idle.
 	Message(caller, id, text string) error
