@@ -244,8 +244,8 @@ func TestExampleCoderRoleParses(t *testing.T) {
 }
 
 // TestLoadGlobalReadsNoDirectory: the daemon's own configuration comes from
-// the defaults and the global layer alone. It used to be Load(os.TempDir()),
-// which applied /tmp/.stavlos/stavlos.local.json as a trusted layer.
+// the defaults and the global layer alone, and a directory's
+// stavlos.local.json is the repository's: trust-gated like the rest.
 func TestLoadGlobalReadsNoDirectory(t *testing.T) {
 	g := t.TempDir()
 	t.Setenv("STAVLOS_CONFIG_DIR", g)
@@ -261,13 +261,48 @@ func TestLoadGlobalReadsNoDirectory(t *testing.T) {
 	if e.Dir != "" || e.Model != "fake/m1" || e.Escalation.Default != policy.Deny || e.Escalation.AnswerTimeout != 7*time.Second || verb(e.Policy, "shell", "rm x") != policy.Ask {
 		t.Fatalf("%+v", e)
 	}
-	// Load on that directory does apply the local layer: the two are distinct.
 	l, err := Load(tmp, noTrust{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if l.Escalation.Default != policy.Allow || verb(l.Policy, "shell", "rm x") != policy.Allow {
-		t.Fatalf("%+v", l)
+	if !l.TrustPending || strings.Join(l.TrustFiles, ",") != ".stavlos/stavlos.local.json" || l.Escalation.Default != policy.Deny || verb(l.Policy, "shell", "rm x") != policy.Ask {
+		t.Fatalf("an untrusted local file applied: %+v", l)
+	}
+}
+
+// TestRepositoryLayersOnlyTighten: once trusted, stavlos.json and
+// stavlos.local.json tighten the global layer and cannot loosen it or set
+// what is global only.
+func TestRepositoryLayersOnlyTighten(t *testing.T) {
+	g := t.TempDir()
+	t.Setenv("STAVLOS_CONFIG_DIR", g)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"policy":{"shell":{"rm *":"deny","ls*":"allow"}}}`), 0o644)
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, ".stavlos"), 0o755)
+	local := filepath.Join(dir, ".stavlos", "stavlos.local.json")
+	os.WriteFile(local, []byte(`{"policy":{"shell":{"rm *":"allow","ls -la":"deny"}}}`), 0o644)
+	e, err := Load(dir, allTrust{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if verb(e.Policy, "shell", "rm x") != policy.Deny || verb(e.Policy, "shell", "ls -la") != policy.Deny || verb(e.Policy, "shell", "ls") != policy.Allow {
+		t.Fatal("the local layer loosened or failed to tighten")
+	}
+	for body, want := range map[string]string{
+		`{"env":{"pass":["GITHUB_TOKEN"]}}`:  "env: is global only",
+		`{"search":{"provider":"brave"}}`:    "search: is global only",
+		`{"plugins":["x"]}`:                  "plugins: is global only",
+		`{"escalation":{"default":"allow"}}`: "escalation.default",
+		`{"limits":{"maxAgents":99}}`:        "limits: a repository may only lower them",
+	} {
+		for _, f := range []string{local, filepath.Join(dir, ".stavlos", "stavlos.json")} {
+			os.Remove(local)
+			os.WriteFile(f, []byte(body), 0o644)
+			if _, err := Load(dir, allTrust{}); err == nil || !strings.Contains(err.Error(), want) {
+				t.Errorf("%s in %s: got %v, want %q", body, filepath.Base(f), err, want)
+			}
+			os.Remove(f)
+		}
 	}
 }
 
