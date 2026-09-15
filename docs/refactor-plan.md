@@ -1,279 +1,75 @@
-# Stavlos v1 hardening refactor — plan
+# Refactor plan: security, performance, maintainability, DRY (2026-09-15)
 
-Status: **approved 2026-09-14** (decisions below recorded; execution in phase order). Source: six-area audit of commit 591f774 (reports in the
-channel's audit directory; findings below cite `file:line` as of that commit).
+Five read-only audits (security; agent runtime and daemon; data and protocol; tools, config and models; TUI) over 27k lines of source. Findings marked **verified** were reproduced against the code. Stavlos is unreleased: the event log is wiped at every schema change, and nothing keeps backwards compatibility. Every step lands as its own commit behind `scripts/check.sh`.
 
-Ground rules for execution (unchanged from how we have been working):
+## Phase 0: critical security (do first)
 
-- One change per commit on `feat/v1-harness`, pushed after every change, `go install` after each.
-- Gate before every commit: `go vet ./...`, `gofmt -l`, `staticcheck`, and `go test ./...` three times.
-- Behaviour-preserving refactors land separately from behaviour changes, so every diff is one of
-  "same behaviour, new shape" or "new behaviour, minimal shape".
-- The event DB may be wiped, so schema changes ship without migrations (Phase 6).
-- Each phase ends with the docs (README, PRD) matching the code.
+| # | Problem | Fix |
+|---|---|---|
+| 0.1 | **verified** `.stavlos/stavlos.local.json` in a cloned repo loads with no trust prompt, is excluded from the trust hash, merges into the base policy (can loosen, even override a global deny), can replace MCP commands, pass env. An auto-mode agent can write it. | Personal overrides move out of the repo (decision D3). The project layer may only tighten: `env.pass`, `mcp`, `limits`, `search` rejected in the project layer. |
+| 0.2 | **verified** Default "read-only" shell allows run code: `find . -exec sh -c … \;`, `rg --pre sh`, `find -delete` are "simple" and match `find *`/`rg *`. | Decision D2: native read-only search tools and no default shell allows, or argv-parsed allows with a flag denylist. |
+| 0.3 | **verified** Policy globs: a middle `*` never crosses `/` (deny `git push * --force` misses `origin/main`); malformed patterns fail silently and never match. | Compile rules once at load into matchers chosen by subject kind (command/URL/text: `*` crosses `/`; path: path semantics). Invalid patterns are load errors. |
+| 0.4 | **verified** apply_patch writes `<file>.stavlos-tmp` with `os.WriteFile` (follows a planted symlink). Plus: two Update sections for one file lose the first; delete+add of one path fails; a missed `@@` anchor on an insertion appends at EOF; CRLF files get mixed endings. | A patch plan keyed by resolved path (virtual overlay): chained updates, delete+add as replace, anchor miss is an error, keep the file's line ending. Temp files via `os.CreateTemp` (O_EXCL, random) then rename. |
+| 0.5 | **verified** A remembered channel allow checks only the subject's first value. Prefix allows are offered for wrapper programs missing from the denylist (`find`, `sed`, `tar`, `make`, `docker run`…). | `covers` requires every value covered. Prefixes offered only for an explicit allowlist of safe programs. |
+| 0.6 | **verified** Shell directory boundary: `~user`, unexpanded `$VAR`, and in-repo symlinks bypass it (`cat ~root/.ssh/id_rsa` is simple). | `~name` and unexpanded variables count as outside; relative arguments resolve through `ResolvePath` (symlinks). (The real boundary is an OS sandbox: decision D1.) |
+| 0.7 | **verified** Terminal injection: the trust dialog (and `stavlos trust` CLI) prints repo file names raw; bidi overrides and zero-width characters are not neutralised; many protocol strings (roles, providers, models, login text, RPC errors) skip sanitising. | One typed sanitising boundary from protocol data to view data, `Visible()` shows bidi/zero-width as `<U+202E>`, and a fuzz test injecting ESC/OSC into every string field asserting `View()` holds only the TUI's own SGR. |
+| 0.8 | Any process with the user's uid (so any agent shell command or MCP server) can drive the daemon socket: set yolo, answer its own prompt, add `/` to the directories, trust a repo. | Capability-based socket: refuse control methods (`set_mode`, `prompt.reply`, `trust.reply`, dirs, providers) from peers descended from the daemon (SO_PEERCRED pid → ppid chain), and a per-client token for interactive clients. |
+| 0.9 | Auto mode allows web egress to any host and every MCP call without a prompt. | In auto, a host not yet allowed and an MCP tool with no rule still ask. |
+| 0.10 | Agents can edit control files. | `.stavlos/**`, `AGENTS.md`, `.git/config`, `.git/hooks/**` always ask, in every mode. |
+| 0.11 | Hygiene: `events.db*` are 0644; stale-daemon replacement kills the pid the daemon reports; the client never checks the server's uid; env scrub is a name denylist. | `umask(077)` for the daemon and chmod of the data dir; kill by SO_PEERCRED pid; client checks peer uid; env pass as an allowlist. |
 
----
+## Phase 1: concurrency correctness
 
-## 0. Headline findings
+- **verified** Deadlock: `takeInputs` holds `a.mu` while `senderLabel` takes the sender's `mu` (and `reminderText`); two agents with inputs from each other block forever. Fix: store the sender's name when the input is queued; never take another agent's lock while holding one's own.
+- Shutdown: `Close` cancels contexts and closes the log without waiting, so cancelled turns log (or lose) events in a race. Fix: per-channel WaitGroup and a shutdown cancel cause that suppresses logging; `Close` waits, then closes the log.
+- `rememberModel` does disk I/O under `d.mu.RLock`; `Agent.Info` unlock-relock trap; `Channel.Info` walks the tree three times; `escalation.Pending` returns map order.
 
-Confirmed on the live tree with throwaway tests:
+## Phase 2: event model and storage (schema wiped)
 
-| # | Finding | Where |
-|---|---------|-------|
-| S1 | Shell allow-globs are prefix matches over the raw command: `cat x; rm -rf ~`, `cat x \| sh`, `cat x > ~/.bashrc`, `cat <(rm -rf .)` are **allowed with no prompt** under the default read-only rules. `SimpleCommand` is only consulted on the channel-prefix path, never the policy path, and it misses `>`, `<`, `<(`, `>(`. | policy.go:148-191, config.go:255-271, turn.go:212-231, prefix.go:90 |
-| S2 | "Roles and projects can only tighten" is unsound: `Tighten`/`checkTightening` test one synthetic string per pattern, so an overlay `git*: allow` shadows a global `*--force*: deny`. | policy.go:81-99, config.go:447-463 |
-| S3 | Channel-remembered allows (`allow_always`, `allow_prefix`) override explicit **Deny** rules, because they are applied after `Decide` and replace the verb unconditionally. | turn.go:213-233 |
-| S4 | web_fetch policy matches the raw URL but the fetch normalises it, so `http://`, uppercase, userinfo, `:443`, and github blob→raw rewrites all bypass host deny rules. | web.go:52-58, 219-253 |
-| S5 | Daemon-wide defaults (escalation timeouts, answer default, fallback policy for recovered channels) are loaded from `/tmp/.stavlos/stavlos.local.json`, a world-writable location, as a **trusted** layer. | daemon.go:65-72, 102-107 |
-| S6 | Model/tool text reaches the terminal with escape sequences intact; a command can erase its destructive half on screen inside the permission dialog. | view.go:1512-1611, 405-512 |
-| S7 | Shell, background jobs and MCP servers inherit the daemon's full environment, including provider API keys read from env. | shell.go:161, monitor.go:227, mcp.go:133 |
-| P1 | One slow TUI client stalls every agent: event append and the socket `Flush` to every subscriber happen under one lock with no write deadline or per-client queue. | daemon.go:125-134, 574-601 |
-| P2 | `subscribe` replay→live handover can silently drop events (live seq advances the dedupe cursor past unreplayed events); the TUI has no gap detection. | server.go:549-577, daemon.go:574-584 |
-| P3 | Every stream token re-copies and re-renders the whole transcript; spinner and compaction ticks do the same at 12 fps. | model.go:373-379, 3004-3053, view.go:160-263 |
-| M1 | Live state mutation and crash recovery are two hand-written reducers that have already diverged (awaiting keys by prefix vs id, monitors re-armed on restart, prompt consumption reconstructed by text match). | recover.go, agent.go, channel.go, orchestrator.go |
-| M2 | Data races: `preset`, `Label`, `Archetype`, `turn`, MCP channel pointer read without `a.mu` while `SetRole` writes them. | turn.go:339-460, agent.go:461-468, mcp.go:345 |
-| M3 | Stringly-typed vocabularies (agent/channel/monitor/MCP/todo states, prompt kinds, answer values, tool names, turn reasons) switched on in 5+ packages with no constants. Tool names appear as literals in 60+ sites. | everywhere |
-| D1 | Three copy-pasted streaming adapters (SSE reader, HTTP post, error mapping identical); dead API-key era: the whole `model/anthropic` package plus its SDK dependency, half of `auth`, half of `modelsdev`. | model/* |
+- Inputs: `input.queued{id, kind, text, source, post}` and `turn.input{turn, ids}` replace prompt.queued / steer.received / note.queued / response.received and the text in user.message; recovery stops matching by text.
+- Fold `usage` into `assistant.message`; `tool.started` carries only call id and name (the input is in the assistant message).
+- Prompts: `ask.requested` and `ask.resolved{outcome, answer, by}`; claimed/escalated become live notifications only. Drop the never-emitted `monitor.disarmed`; `monitor.armed` becomes a flag on started.
+- One name per concept: **role** everywhere (not archetype/preset), **ask** for permission/question requests, **input** for the inbox, `compaction.{started,done,failed}`.
+- SQLite: `channels(id, name UNIQUE, dir, created, archived, title, last_seq)` maintained inside the append transaction (no separate `PutChannel`, no orphan channels); integer nanosecond time; no AUTOINCREMENT; a `trust(dir, hash)` table instead of one kv blob; on a schema mismatch delete the file (the current wipe leaves a 74MB file 99% free).
+- A log writer goroutine with group commit: callers wait for their seq; a step's events commit as one batch; each notification is encoded once and fanned out as bytes outside any global lock.
 
-Mechanical checks: `go vet`, `gofmt`, `govulncheck`, `go mod tidy` all clean. `staticcheck` reports 15
-dead symbols. `gocyclo`: `dispatch` 115, `Recover` 94, `EventLines` 91, `mdConverter.walk` 71.
-Coverage: `internal/agent` 3.2 % (only `dirs_test.go`), `pkg/client` 0 %, `cmd/*` 0 %. One test,
-`TestChildResponseWakesParent`, failed once in the auditor's run (timing).
+## Phase 3: runtime
 
----
+- One reducer: `agentState.apply(e)` and `channelState.apply(e)` used by the live path (build event → append → apply) and recovery (fold the log, then side effects). Most of `recover.go` goes, with its drift (turn-limit settle, dead `armed` loop, different `a.events`, context size not restored).
+- Incremental projector: model history and token estimate folded per event from typed payloads; `history()` is a snapshot, not an O(events) JSON decode per step. Compaction works on the message list; summaries keep their order; recovery trims at Compacted.
+- Stable prompt prefix: system prompt and tool definitions depend only on role, config and directories (cached per agent); turn budget, busy count and todos go in a trailing context block; `agent_create` is always offered and refuses when limits say so. Keeps provider prompt caches warm.
+- Decision D4: an actor loop per agent (one goroutine owns the state, others send typed commands; `Info` is a published snapshot) removes lock ordering by construction.
 
-## 1. Phase plan
+## Phase 4: protocol and client
 
-Phases are ordered so each one makes the next cheaper and safer. Sizes: S ≈ one commit,
-M ≈ 2–4 commits, L ≈ 5+ commits.
+- Methods declared once as typed descriptors (`Method[P, R]{"channel.post"}`) shared by client and daemon; generic `Call[P,R]`; handlers registered against descriptors with channel/agent resolution done once. About 40 client wrappers and the handler boilerplate go.
+- Consistent keys (`channel`, `agent`), typed results (no `map{"ok"}`), internal-error default code (today most failures report "invalid params"), one `CreateChannel(params)` and one `ReplyPrompt(params)`.
+- Replay: paged with backpressure, clients resume from their last seq (the TUI always replays from 0 and a long channel can overflow the queue and drop the client in a loop).
+- Live state vs history: events for history only; notifications for prompt changes, stream deltas coalesced (~50ms / 4KB) and agent state, so the TUI stops refetching the tree on nearly every event. Prompt changes reach clients once, not twice.
 
-### Phase 1 — Safety net (before touching the core)  [M]  ✅ done 2026-09-14
+## Phase 5: tools, config, models
 
-The core is only tested through the daemon integration suite. Every later phase needs unit-level
-tests that pin current behaviour first.
+- Typed tool framework: decode input once (strictly), `Subject` and `Run` share the parsed input (apply_patch and web_fetch stop parsing twice), cached tool definitions and schemas, one place for default clamping and output clipping (the 32KB cap is written four times; job results ignore the configured cap).
+- An OpenAI-wire kit shared by the codex and chatcompletions adapters (client shell, bearer header, `toTools`, argument normalisation, usage, tool-result rendering, error envelopes); fixes their drift ("ERROR:" vs "Error:", "(no output)").
+- Config as one schema with defaults and per-layer rules (Search defined three times, Escalation/Compaction twice, starter config duplicating defaults).
+- Correctness: retry once on a mid-stream failure before any tool call; web_fetch pages by runes; chatcompletions builds tool arguments with a builder (quadratic today); one shared HTTP transport with the dial check; web_search as a provider table and Exa through the MCP SDK; read tool limit logic; models.dev keeps only used providers and refreshes periodically; ChatGPT login redirect host; Grok poll 5xx.
 
-1.1 ✅ `internal/agent`: a `fakeHost` (in-memory `Append`/`Read`/`Prompt`) and a fake `model.Provider`
-    so an `Agent`/`Channel` can be driven without the daemon. Table tests for `runTool` verdicts
-    (policy × mode × remembered allows × boundary), turn loop end reasons, mailbox semantics.
-1.2 ✅ Replay round-trip test: drive a channel, capture events, `Recover` into a fresh channel, compare
-    `Info()` trees. This is the regression guard for M1.
-1.3 ✅ `project`: golden tests for `Project` (dangling tool_use repair, compaction cut, ordering).
-1.4 ✅ Snapshot test of every tool's `Def().Schema` (guards the schema-from-struct change in 4.4).
-1.5 ✅ De-flake `TestChildResponseWakesParent` (wait on the child's `TurnEnded`, not the tree read).
-1.6 ✅ Add `-race` to the gate for `internal/agent` and `internal/daemon`. (The detector passes today; gate = vet, gofmt, `go test -race` on those two, then `go test ./...` three times. staticcheck joins the gate once Phase 9 removes the 15 dead symbols.)
-    Found on the way: a recovered agent with a pending wake (response, lost job) was never signalled — fixed.
+## Phase 6: TUI
 
-### Phase 2 — Security fixes (small, behaviour-changing, each its own commit)  [M]  ✅ done 2026-09-14 (2.1–2.15, one commit each)
+- A `Frame` computed once per update: section rectangles, rendered parts, click spans and dialog geometry used by `View`, the mouse and the viewport height (layout is computed separately in about six places and has drifted).
+- One list component (cursor, scroll, keys, rows with actions, hit-testing) for the tab dialogs, overlays, palette, mention list and the sidebar (the sidebar's row arithmetic is written out in nine places and it cannot scroll).
+- Tab descriptors `{focus, glyph, title, count, warn}` instead of string surgery.
+- `model.go` (4k lines) split into sub-models: chat, input, sidebar, dialogs, prompts, sign-in; viewport refreshes from dirty flags at the end of `Update`.
+- Performance: the spinner ticks only while something animates (today 12 full redraws a second when idle); rendered rows kept as `[]string` with only the visible window assembled; replay folds events without layout; an index for untied calls (replay is quadratic).
+- A `tuitest` package for the duplicated test helpers.
 
-2.1 **`internal/shellcmd`** ✅ (replaces `protocol/prefix.go`): POSIX-ish tokenizer (`Words`), refuses
-    unquoted `; | & \n`, backticks, `$(`, `$((`, `<(`, `>(`, and all redirections; `Prefix` refuses
-    wrappers/interpreters (`bash sh env xargs sudo eval exec time nohup nice timeout watch python
-    node perl…`), env assignments, and flag-first two-word tools; token-based `Covers`.
-    Policy: for `shell`, an `Allow` from a *pattern* rule is downgraded to `Ask` when the command is
-    not simple. Deny always wins. Fixes S1.
-2.2 **`policy.Layered`** ✅: sound layering by construction — decision is the max rank across layers;
-    delete `Tighten`, `samplePath`, `checkTightening`, `samplePattern`. Computed once per config
-    change, not per tool call. Fixes S2.
-2.3 **`channel.permits`** ✅ type owning `allowAlways`/`allowPrefix`: remembered allows only downgrade
-    `Ask`, never `Deny`. Server derives the canonical prefix from the prompt's own arg and puts it on
-    `PromptInfo.Prefix`; the client displays it instead of recomputing (drop client-supplied
-    `Prefix`). Fixes S3 and the trusted-verbatim prefix.
-2.4 **web_fetch canonical subject** ✅: `PolicyArg` returns the normalised URL (lower-cased host, https,
-    no userinfo, blob→raw applied) so policy, channel allows, and the fetch see one string.
-    `CheckRedirect` requires https on same-host hops. `publicIP` via `netip` prefixes incl.
-    0.0.0.0/8, 100.64/10, 198.18/15, 240/4, 64:ff9b::/96. Search calls use the same SSRF-safe
-    client and refuse redirects. Fixes S4.
-2.5 **`config.LoadGlobal`** ✅: defaults + global layer only; used by daemon startup and the recovery
-    fallback. Delete the `os.TempDir()` trick. Fixes S5.
-2.6 **`internal/textsafe`** ✅: strip ESC/OSC/C0 (except `\n\t`) from every daemon string the TUI
-    draws; permission dialog renders hidden bytes visibly as `^[`. Fixes S6.
-2.7 **`internal/proc`** ✅: one process launcher (bash -c, Setpgid, SIGKILL pgid, WaitDelay, tail-capped
-    buffer, scrubbed env minus `STAVLOS_*`, provider key names, `*_API_KEY|TOKEN|SECRET|PASSWORD`).
-    Used by shell tool, monitors (`StartCommand` deleted; `background:true` = start + adopt at wait
-    0) and MCP. Fixes S7 and removes the duplicate runner.
-2.8 Boundary heuristic ✅: `..`-relative arguments and `$`-containing tokens count as candidates
-    (auto mode asks). One `tools.ResolvePath` (Clean + EvalSymlinks on the existing prefix) shared
-    by `read`, `apply_patch`, `outsideDir`; no `~`/`${env:}` expansion of model-supplied paths.
-2.9 Recovery never widens ✅: an agent whose role vanished gets a minimal read-only preset and a
-    visible label suffix, not the root preset.
-2.10 Trust reply goes through ✅ `prompt.reply(id)`; daemon derives dir/hash from the prompt it issued,
-    `Abs`+`Clean`s the dir and recomputes the hash.
-2.11 Daemon socket ✅: umask 0077 around `Listen`; flock on `<data>/stavlosd.lock` (second daemon
-    refuses instead of stealing the socket); `SO_PEERCRED` uid check; per-connection context so a
-    disconnected client's `login.wait` is cancelled; per-connection in-flight cap; 4 MB line max.
-2.12 `/compact` routed ✅ through the actor (`compactNext` + signal, maintenance step) so it cannot
-    race the turn loop; rejected on killed agents.
-2.13 Config validation ✅: `DisallowUnknownFields`, invalid policy verbs are errors (like role files
-    already are), `stavlos.json` written 0600, warning when `apiKey` is literal.
-2.14 OAuth loopback ✅: `Pending.Close()`, expiry armed at `Start`, daemon sweep closes; state checked
-    before `error`/`cancel` paths; `html.EscapeString` in the result page; issuer overrides behind
-    a dev build tag.
-2.15 Agent labels ✅ constrained to `[A-Za-z0-9_-]{1,32}`; agent-to-agent messages wrapped with an
-    explicit "another agent's output, not the human" marker.
+## Phase 7: cleanup
 
-### Phase 3 — Shared vocabulary  [M]  ✅ done 2026-09-14 (3.1–3.4)
+Dead code (listed in the audits), naming (`Channel` receiver `s`, `root`/`rootArch` vs main, `yolo` names for modes), stale comments, docs (PRD, README), memory.
 
-3.1 ✅ Typed constants in the leaf packages, replacing every literal switch:
-    `protocol.AgentState` (idle/running/blocked/waiting/killed) + `RollUp` → `ChannelState`;
-    `PromptKind`, `PromptAction`, `AnswerValue`; `MonitorState`, `MCPState`; `event.TodoStatus`,
-    `TurnReason`, `MessageKind`, `Source{Kind,ID}` helpers. `agent.State` becomes an alias.
-3.2 ✅ `internal/toolname`: typed tool-name constants, `Canonical()` mapping every legacy spelling
-    (`bash`, `bash_async`, `spawn`, `write`, `edit`, …) once at TUI ingress. `config`, `tools`,
-    `agent`, `protocol`, `tui` all use it; the four legacy shims in the TUI collapse to one.
-3.3 ✅ Decide the fate of the `escalated` action: add `event.PromptEscalated` or drop the record call.
-3.4 ✅ Enable the `exhaustive` linter on the new enums in the gate.
+## Decisions (settled 2026-09-15)
 
-### Phase 4 — Tools and policy structure  [M]  ✅ done 2026-09-14 (4.1–4.7; 4.3 covered by toolname)
-
-4.1 ✅ `policy.Subject{Kind: Command|Path|URL|ID|Text, Value}`: tools normalise before policy sees the
-    argument; `PolicyArg` becomes `Subject`.
-4.2 ✅ Break `tools → config`: move `config.Skill` to `tools`; `tools.ChildStatus`/`MonitorStatus`
-    become `protocol.AgentInfo`+`You` / `protocol.MonitorInfo`; `tools.Artifact = event.Artifact`.
-4.3 ✅ Tool registry: one entry per tool `{Name, Def, Subject, Group, ImpliedBy}`; `Builtin`,
-    `DefaultTools`, presets, `toolGroup`, the five `*Names` slices and the system-prompt tool list
-    all iterate it.
-4.4 ✅ Schema-from-struct: `tools.SchemaOf[T]()` from tagged input structs (guarded by 1.4); removes
-    the triple declaration and untagged case-insensitive decoding.
-4.5 ✅ Split `web.go` into `web/fetch.go`, `web/markdown.go` (byte-buffer converter, stop at cap,
-    O(n) flush), `web/search.go` (`Provider` interface; SSE parsed per event; output clipped).
-4.6 ✅ `apply_patch`: per-file atomic via temp+rename with rollback, preserve mode on move, refuse
-    overwriting move targets, honest description. `read` stops appending at the cap; `Limit` capped.
-    `partialWriter` stops streaming after adoption. Rune-safe truncation helper everywhere.
-4.7 ✅ web_search default: see decision D3.
-
-### Phase 5 — Agent core  [L]  ✅ done 2026-09-14 (5.1 as targeted replay fixes guarded by the round-trip test; 5.2 as roleView snapshots rather than a command channel; 5.3–5.7)
-
-5.1 ✅ **One reducer**: `(*Agent).apply(event)` / `(*Channel).apply(event)`; live path = `Append` then
-    `apply`; `Recover` = replay + `abortOpenTurns` + `reportLostJobs`. Log resolved target ids
-    (`AgentAsked`), log `MonitorDisarmed`, log which queued prompt a turn consumed. Fixes M1.
-    Guarded by 1.2.
-5.2 ✅ **Actor**: `run()` drains a `cmds chan func()` between steps; `Compact`, `SetRole`, `SetModel`,
-    `SetVariant`, `AddDir`, `RemoveDir`, `deliverResponse`, `fireMonitor` post closures; read-only
-    `atomic.Pointer[agentView]` snapshot for `Info()`/`Status`/`Busy`. `a.mu` shrinks to the inbox.
-    Fixes M2 and the lock-order hazards.
-5.3 ✅ Split `turn.go`: `turn.go` (loop + `step`), `permission.go` (`permits`, `decide`), `escalate.go`,
-    `prompt.go` (system prompt sections, `toolNames`, `toolDefs`; `ensureMCP` moved to step start),
-    `compact.go`. `runTurn`/`runTool`/`buildContext` each under 60 lines.
-5.4 ✅ Incremental `project.Projector` owned by the agent (cached history, invalidated in `record`,
-    events before `Compacted.ToSeq` dropped from memory); one token estimate per step, preferring
-    last real `Usage` and counting tool schemas and signatures.
-5.5 ✅ Log-write failures: sticky `a.logErr` checked at each step boundary → turn ends with `error`.
-5.6 ✅ Persist channel allows across restart by replaying `PromptAnswered` into `permits`
-    (paired with 2.3 so Deny still wins). See decision D4.
-5.7 ✅ Delete dead members: `yieldFlag`, child `armed`/`IsArmed`, `hasMonitor`, monitor
-    `Kind watch|timer`/`Glob`/`Seconds`, `var _ =` import pins, `mode == ""` special case.
-
-### Phase 6 — Daemon, protocol, event log  [L]
-
-6.1 **`daemon.hub`** ✅: per-client bounded outbound queue + writer goroutine with write deadline;
-    event JSON marshalled once; overflow → drop client (TUI reconnects and resubscribes from its
-    seq). `Append` holds `appendMu` only around the log write + publish enqueue. Fixes P1.
-6.2 Atomic replay→live handover ✅ inside `hub.Subscribe`; delete `Log.Subscribe`/`fanout`. Client
-    `deliver` never advances past a gap; TUI asserts seq continuity and resyncs. Fixes P2.
-6.3 Handler table replacing ✅ the 400-line `dispatch`: `typed[P]` decode helper, domain errors
-    (`ErrNotFound`, `ErrInvalid`, `ErrConflict`) wrapped with `%w`, one `toProtocolError`.
-    Protocol version moves into the request envelope; the 25 `V int` fields and `withVersion`'s
-    triple marshal go away.
-6.4 **Event log restructure** ✅ (done with a one-time migration instead of a wipe: PRAGMA user_version 2 adds the title column and backfills it): `internal/event` becomes pure types,
-    `internal/eventlog` holds SQLite; reader and writer pools; in-memory `lastSeq`; `AppendBatch`
-    (fork in one tx); `channels` gets `title`, `model`, `state`, `last_seq` columns so
-    `channel.list` is one query; drop the duplicate index; `payload` stays JSON.
-6.5 ◐ (partial: pending-map cleanup on write error, a 4096 notification buffer and the envelope version are done; the Reconnector is deferred while the TUI still quits on disconnect) `pkg/client`: `Options{CallTimeout}`, non-blocking notifications with a `Lagged` signal,
-    `Reconnector` (dial with backoff, re-attach, resubscribe from last seq), one `ReplyPrompt`
-    taking the params struct, pending-map cleanup on write error, `Notification` type.
-6.6 One `daemon.Main(ctx, Options)` ✅; delete `cmd/stavlosd` (see D2); `client.Connect` launcher
-    moved out of `cmd/stavlos` and unit-tested; `replaceStale` refuses when agents are live unless
-    `--restart-daemon`; `buildid` computed eagerly and passed to the child via env. (Not done: refusing the restart while agents are live; recovered idle agents would always block it.)
-6.7 Escalation: `Reply(id, client, Answer)` only ✅; trust prompt gets per-prompt timeouts (no
-    default-deny after 3 min); `Trust()` uses `AnswerWhere`.
-
-### Phase 7 — Model layer  [M]
-
-7.1 `internal/model/stream` ✅: one `ReadSSE`, one `Complete(ctx, client, endpoint, hdr, codec,
-    onDelta)` owning post/auth/error mapping/ctx-wins/partial-on-error; codex and chatcompletions
-    become `Codec`s. Fixes D1.
-7.2 In the shared layer ✅: "stream ended before completion" error when no terminal event; pre-first-
-    byte retry with `Retry-After` (≤3, jittered); idle watchdog (120 s default, configurable);
-    total-bytes cap; one `http.Client` constructor.
-7.3 ✅ Registry subscription table (id, display, flow, open, allow, variants) replacing the scattered
-    switches; providers built once; `Status.Models` memoised; `auth.Store` mtime-cached.
-7.4 ✅ (as `Info.Capabilities{IgnoresMaxTokens}` via `model.Capable`; ReplaysReasoning dropped as nothing
-    would read it; Variants stays its own interface) `model.Capabilities{SupportsMaxTokens, ReplaysReasoning, Variants}`; compaction prompt says
-    "at most N words" where max tokens is unsupported. `Block.ProviderID`/`Opaque` instead of
-    smuggling through `ID`/`Signature`.
-7.5 ✅ (Register/KindPlugin kept: the daemon test harness registers a fake provider) Delete dead API-key era: `model/anthropic` + SDK dep (see D1 decision), `auth.Resolve/Source*/
-    Credential.Key`, `modelsdev.ProviderInfo`, `openai.New`, `Registry.Register/KindPlugin`,
-    `ProviderInfo.Source/Via/Env/Hint`, `openCall.partial`. Rename `openai` → `chatcompletions`.
-7.6 ✅ models.dev: return stale cache immediately, refresh in background, swap pointer. The embedded
-    fallback now holds the gpt-5 and grok families.
-
-### Phase 8 — TUI  [L]
-
-8.1 ✅ Item-based `Transcript`: `items []item{lines, kind, running, tone}` with id→item maps; no index
-    shifting; `itemRange` O(1); fixes the `promptLine` misplacement bug.
-8.2 ✅ (the indicator stays in the viewport content; with rows cached, a tick only re-joins them) Per-item render cache keyed by (width, details, expanded, cursor); stream buffer rendered
-    separately; spinner/compaction indicator as a footer line so ticks never re-render the
-    transcript. Fixes P3.
-8.3 ✅ (meta row, tab strip and tab dialogs; overlays already hit-test drawn rows; `layout()`/`keyBarView` left as they are: they never render the chat, and caching them in the value-typed Model would go stale in View) Renderers return geometry (`span` lists); one `hit()` replaces `metaHit`, `tabAt`,
-    `tabDialogHit`, `itemAt`, `sidebarClick`'s re-render; `layout()` only on geometry changes;
-    `keyBarView` computed once per Update. Makes permission/question option clicks work.
-8.4 ✅ (as one `stepCursor` shared by the tab dialogs, sidebar, permission and questions; todo uses the formerly dead `listKey`; empty notes come from `tabBodyRows`; overlays keep their clamped, filtered, paged movement) Generic `listDialog` component for the six tabs, sidebar and overlay: cursor/wrap/filter/empty
-    text; the five `*Key` handlers and the dead `listKey` collapse into it.
-8.5 ✅ (per-channel dialog state — question, permission and dirs rows, mcp folds — joined `channelState`; commands share `rpcCmd`/`resultCmd`/`tick`) `Model` split into `channelState` (zeroed wholesale on bind), `dialogs`, `uiPrefs`; `reply()`
-    and `claimThen()` helpers; msg/cmd near-duplicates merged (`channelsMsg`, `rolesMsg`,
-    `providersMsg`, tick helper).
-8.6 ✅ (also gone: `helpKeyLines`, `monitorKindFromText`, `monitorKindWord`; `Transcript.Notice` joined the test-only helpers) `EventLines` as a renderer table; `handleKey` split (`inputKey`); dead code removed
-    (`notice`, `helpLines`, `todoLabel`, `mcpLabel`, `monitorGlyph`, `prettyJSON`, stale hotkey
-    text); test-only exports to `export_test.go`.
-8.7 ✅ Package split: `tui/transcript`, `tui/render`, `tui/dialog`, `tui` (plus `tui/theme` for the palette and `tui/format` for number, time and path formatting, which the others share; the overlay list component stays in `tui`, since the Model drives its fields directly).
-8.8 ✅ (done before 8.7; `findLine` + `inOrder`; exact-geometry tests of the strip, row ranges and wrapping keep their pins on purpose) Tests: `findLine` helpers and relative-order assertions replace row-index/line-count pins;
-    `TestSidebarNav` and `TestTabCyclesFocus` split into subtests.
-
-### Phase 9 — Cleanup and docs  [S]
-
-9.1 ✅ `stavlos init`: model default empty, create `roles/`, config via `config.File` marshal; fix
-    the `plugin` message.
-9.2 ✅ README: split the 4.7k-char paragraph into sections; add missing commands; drop the
-    "/providers to paste a key" line. PRD: remove `agent_finish`/`spawn`/`write`/`edit`, fix §6.4
-    table, §8.4 vs §10.7 contradiction, socket path, `agents/` → `roles/`, `$schema` claim, and
-    mark plugin/Discord/fork as post-v1 or implement fork in the TUI.
-9.3 ✅ (the binary was already gone, and `/stavlosd` is gitignored) Delete the stale 23 MB `./stavlosd` binary from the working tree.
-9.4 ✅ (`scripts/check.sh` runs every gate; staticcheck and gocyclo are module tools) Memory/notes updated; `gocyclo -over 30` and `staticcheck` clean added to the gate.
-
----
-
-## 2. Decisions (taken 2026-09-14)
-
-D1 delete both · D2 delete · D3 ask when unconfigured · D4 persist · D5 defer · D6 defer (PRD notes the gap) · D7 do it, last · D8 yes.
-
-| # | Question | Recommendation (adopted) |
-|---|----------|-------------------|
-| D1 | Delete `internal/model/anthropic` and the `anthropic-sdk-go` dependency? Nothing imports it; PRD §8.4 says no API keys. | **Delete.** Port its two neutral-block tests to codex/openai first. If Anthropic access is wanted later it needs a credential path that does not exist today. |
-| D2 | Delete `cmd/stavlosd`? README documents only `stavlos daemon`. | **Delete**, keep one `daemon.Main`. |
-| D3 | `web_search` with no `search` config currently ships every query to Exa's hosted MCP with `allow` by default. Keep, or default to `ask` (with allow-for-channel) when unconfigured? | **Ask when unconfigured**, allow when the user configured a provider. One click per channel; no silent third-party traffic. |
-| D4 | Should `allow_always`/`allow_prefix` survive a daemon restart? Today they vanish silently. | **Persist** by replaying `PromptAnswered` (5.6), only after Deny-precedence (2.3) lands. |
-| D5 | Move `event`, `protocol`, `pkg/client` under `pkg/` so a third-party Go client imports no `internal`? | **Defer**; do the `event`/`eventlog` split (6.4) now, which already removes SQLite from the client's dependency tree. |
-| D6 | Real shell sandbox (bubblewrap/landlock) keyed on the agent's dirs, instead of the path heuristic? | **Defer to post-v1**; 2.1 + 2.8 close the cheap holes. Flag in the PRD as the known gap. |
-| D7 | Phase 8.7 (TUI package split) is the highest-churn item with the least user-visible payoff. Do it, or stop at 8.6? | **Do it**, but last, once 8.1–8.6 have made the seams obvious. |
-| D8 | Protocol version moves into the request envelope (6.3) — wire-visible. Fine since both ends are in-tree? | **Yes.** |
-
----
-
-## 3. Order and estimate
-
-1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9. Phases 2, 3 and 7 are independent of 5/6/8 and could be
-reordered if you want visible security wins first (2) or the daemon stall fix first (6.1).
-
-Rough commit count: Phase 1 ~6, 2 ~15, 3 ~5, 4 ~8, 5 ~10, 6 ~12, 7 ~8, 8 ~14, 9 ~4 — about 80
-commits. Every phase leaves the tree shippable.
-
-## 4. What stays as it is
-
-Log-as-source-of-truth with projection repair; the context tree (`s.ctx → a.ctx → turnCtx`);
-`end()` flipping state before logging; mailbox semantics (responses never enter a running turn,
-steers at the model-call boundary); `hasDef` refusing tools not offered this step; dial-time SSRF
-check; `htmlToMarkdown` tag stripping; `apply_patch` staging and lenient matching; shell process
-group + WaitDelay + 15 s adopt design; PKCE/state/loopback OAuth mechanics and 0600 token store;
-the escalation state machine; newline JSON-RPC with per-channel seq and reconcile; the Elm-style
-TUI discipline (`Update` never touches the client), `Command` registry, `focusOrder`/`setFocus`
-ownership, `textareaWrap`, fold/preview UX; the daemon end-to-end test harness.
+- **D1** Include a Linux OS sandbox now for shell commands and MCP servers: writes limited to the channel's directories and a private tmp; the data dir, config dir, socket and credentials hidden.
+- **D2** Native read-only `grep` and `glob` tools that obey the directories; no default shell allows, so every shell command asks unless the mode or a rule answers it.
+- **D3** `.stavlos/stavlos.local.json` stays in the repo but is part of the trust hash and applies as a tighten-only overlay like the project layer.
+- **D4** Full redesign: an actor loop per agent, one reducer for live and recovery, the TUI split into sub-models with a Frame and a shared list component.
