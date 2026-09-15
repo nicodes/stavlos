@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
@@ -44,7 +45,17 @@ func (webSearchTool) Subject(in json.RawMessage) policy.Subject {
 	return policy.Text(strings.TrimSpace(a.Query))
 }
 
-// searchEndpoints are overridable for tests.
+type searchResult struct {
+	Title, URL, Snippet string
+}
+
+// searchBackend is one search API: how to ask it and how to read its answer.
+type searchBackend struct {
+	request func(ctx context.Context, endpoint string, cfg SearchConfig, query string, n int) (*http.Request, error)
+	parse   func(raw []byte) ([]searchResult, error)
+}
+
+// searchEndpoints are the backends' URLs, overridable for tests.
 var searchEndpoints = map[string]string{
 	"brave":  "https://api.search.brave.com/res/v1/web/search",
 	"tavily": "https://api.tavily.com/search",
@@ -52,8 +63,96 @@ var searchEndpoints = map[string]string{
 	exaMCP:   "https://mcp.exa.ai/mcp",
 }
 
-type searchResult struct {
-	Title, URL, Snippet string
+// searchBackends is every backend web_search can use.
+var searchBackends = map[string]searchBackend{
+	"brave": {
+		request: func(ctx context.Context, endpoint string, cfg SearchConfig, query string, n int) (*http.Request, error) {
+			q := url.Values{"q": {query}, "count": {fmt.Sprint(n)}}
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+q.Encode(), nil)
+			if err == nil {
+				req.Header.Set("Accept", "application/json")
+				req.Header.Set("X-Subscription-Token", cfg.APIKey)
+			}
+			return req, err
+		},
+		parse: resultsOf(func(r *struct {
+			Web struct {
+				Results []struct{ Title, URL, Description string } `json:"results"`
+			} `json:"web"`
+		}) (out []searchResult) {
+			for _, x := range r.Web.Results {
+				out = append(out, searchResult{x.Title, x.URL, x.Description})
+			}
+			return out
+		}),
+	},
+	"tavily": {
+		request: jsonSearch(func(cfg SearchConfig, query string, n int) (any, http.Header) {
+			return map[string]any{"query": query, "max_results": n}, http.Header{"Authorization": {"Bearer " + cfg.APIKey}}
+		}),
+		parse: resultsOf(func(r *struct {
+			Results []struct{ Title, URL, Content string } `json:"results"`
+		}) (out []searchResult) {
+			for _, x := range r.Results {
+				out = append(out, searchResult{x.Title, x.URL, x.Content})
+			}
+			return out
+		}),
+	},
+	"exa": {
+		request: jsonSearch(func(cfg SearchConfig, query string, n int) (any, http.Header) {
+			return map[string]any{"query": query, "numResults": n, "type": "auto", "contents": map[string]any{"text": map[string]any{"maxCharacters": 400}}},
+				http.Header{"X-Api-Key": {cfg.APIKey}}
+		}),
+		parse: resultsOf(func(r *struct {
+			Results []struct{ Title, URL, Text string } `json:"results"`
+		}) (out []searchResult) {
+			for _, x := range r.Results {
+				out = append(out, searchResult{x.Title, x.URL, x.Text})
+			}
+			return out
+		}),
+	},
+	exaMCP: {
+		// MCP over HTTP: one tools/call, answered as JSON or as an SSE stream.
+		request: jsonSearch(func(_ SearchConfig, query string, n int) (any, http.Header) {
+			return map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+				"name": "web_search_exa", "arguments": map[string]any{"query": query, "numResults": n, "objective": query}}}, http.Header{"Accept": {"application/json, text/event-stream"}}
+		}),
+		parse: parseExaMCP,
+	},
+}
+
+// jsonSearch is a backend request that POSTs a JSON body with extra headers.
+func jsonSearch(body func(cfg SearchConfig, query string, n int) (any, http.Header)) func(context.Context, string, SearchConfig, string, int) (*http.Request, error) {
+	return func(ctx context.Context, endpoint string, cfg SearchConfig, query string, n int) (*http.Request, error) {
+		v, header := body(cfg, query, n)
+		b, err := json.Marshal(v)
+		if err != nil {
+			return nil, err
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(b))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		for k, vs := range header {
+			req.Header[http.CanonicalHeaderKey(k)] = vs
+		}
+		return req, nil
+	}
+}
+
+// resultsOf is a backend parser that decodes a JSON answer into R and
+// lists its results.
+func resultsOf[R any](list func(*R) []searchResult) func([]byte) ([]searchResult, error) {
+	return func(raw []byte) ([]searchResult, error) {
+		var r R
+		if err := json.Unmarshal(raw, &r); err != nil {
+			return nil, fmt.Errorf("bad response: %v", err)
+		}
+		return list(&r), nil
+	}
 }
 
 func (webSearchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
@@ -65,12 +164,7 @@ func (webSearchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Resu
 	if a.Query == "" {
 		return errf("empty query")
 	}
-	if a.N <= 0 {
-		a.N = 5
-	}
-	if a.N > 10 {
-		a.N = 10
-	}
+	a.N = min(clampLimit(a.N, 5, 10), 10)
 	cfg := env.Search
 	if cfg.Provider == "" || cfg.APIKey == "" {
 		cfg = SearchConfig{Provider: exaMCP} // no backend configured: Exa's free endpoint
@@ -87,7 +181,7 @@ func (webSearchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Resu
 	for i, r := range results {
 		snippet := strings.Join(strings.Fields(r.Snippet), " ")
 		if len(snippet) > 300 {
-			snippet = cutRunes(snippet, 300) + "…"
+			snippet = clip.Head(snippet, 300) + "…"
 		}
 		fmt.Fprintf(&sb, "\n%d. %s\n   %s\n", i+1, strings.TrimSpace(r.Title), r.URL)
 		if snippet != "" {
@@ -97,47 +191,15 @@ func (webSearchTool) Run(ctx context.Context, in json.RawMessage, env *Env) Resu
 	return Result{Output: sb.String()}
 }
 
-// webSearch calls the configured backend.
+// webSearch asks the configured backend.
 func webSearch(ctx context.Context, cfg SearchConfig, query string, n int) ([]searchResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, webTimeout)
-	defer cancel()
-	endpoint := searchEndpoints[cfg.Provider]
-	var req *http.Request
-	var err error
-	switch cfg.Provider {
-	case "brave":
-		q := url.Values{"q": {query}, "count": {fmt.Sprint(n)}}
-		req, err = http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+q.Encode(), nil)
-		if err == nil {
-			req.Header.Set("Accept", "application/json")
-			req.Header.Set("X-Subscription-Token", cfg.APIKey)
-		}
-	case "tavily":
-		body, _ := json.Marshal(map[string]any{"query": query, "max_results": n})
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-		if err == nil {
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-		}
-	case "exa":
-		body, _ := json.Marshal(map[string]any{"query": query, "numResults": n, "type": "auto", "contents": map[string]any{"text": map[string]any{"maxCharacters": 400}}})
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-		if err == nil {
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("x-api-key", cfg.APIKey)
-		}
-	case exaMCP:
-		// MCP over HTTP: one tools/call, answered as JSON or as an SSE stream.
-		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
-			"name": "web_search_exa", "arguments": map[string]any{"query": query, "numResults": n, "objective": query}}})
-		req, err = http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-		if err == nil {
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Accept", "application/json, text/event-stream")
-		}
-	default:
+	backend, ok := searchBackends[cfg.Provider]
+	if !ok {
 		return nil, fmt.Errorf("unknown search provider %q (brave, tavily or exa)", cfg.Provider)
 	}
+	ctx, cancel := context.WithTimeout(ctx, webTimeout)
+	defer cancel()
+	req, err := backend.request(ctx, searchEndpoints[cfg.Provider], cfg, query, n)
 	if err != nil {
 		return nil, err
 	}
@@ -151,52 +213,15 @@ func webSearch(ctx context.Context, cfg SearchConfig, query string, n int) ([]se
 	if resp.StatusCode >= 400 {
 		msg := strings.TrimSpace(string(raw))
 		if len(msg) > 200 {
-			msg = cutRunes(msg, 200) + "…"
+			msg = clip.Head(msg, 200) + "…"
 		}
 		return nil, fmt.Errorf("%s search: HTTP %d: %s", cfg.Provider, resp.StatusCode, msg)
 	}
-	return parseSearch(cfg.Provider, raw)
-}
-
-func parseSearch(provider string, raw []byte) ([]searchResult, error) {
-	var out []searchResult
-	switch provider {
-	case "brave":
-		var r struct {
-			Web struct {
-				Results []struct{ Title, URL, Description string } `json:"results"`
-			} `json:"web"`
-		}
-		if err := json.Unmarshal(raw, &r); err != nil {
-			return nil, fmt.Errorf("brave search: bad response: %v", err)
-		}
-		for _, x := range r.Web.Results {
-			out = append(out, searchResult{x.Title, x.URL, x.Description})
-		}
-	case "tavily":
-		var r struct {
-			Results []struct{ Title, URL, Content string } `json:"results"`
-		}
-		if err := json.Unmarshal(raw, &r); err != nil {
-			return nil, fmt.Errorf("tavily search: bad response: %v", err)
-		}
-		for _, x := range r.Results {
-			out = append(out, searchResult{x.Title, x.URL, x.Content})
-		}
-	case "exa":
-		var r struct {
-			Results []struct{ Title, URL, Text string } `json:"results"`
-		}
-		if err := json.Unmarshal(raw, &r); err != nil {
-			return nil, fmt.Errorf("exa search: bad response: %v", err)
-		}
-		for _, x := range r.Results {
-			out = append(out, searchResult{x.Title, x.URL, x.Text})
-		}
-	case exaMCP:
-		return parseExaMCP(raw)
+	results, err := backend.parse(raw)
+	if err != nil && !strings.HasPrefix(err.Error(), "exa mcp:") {
+		err = fmt.Errorf("%s search: %v", cfg.Provider, err)
 	}
-	return out, nil
+	return results, err
 }
 
 // parseExaMCP reads the MCP reply (a JSON-RPC object, or SSE "data:" lines

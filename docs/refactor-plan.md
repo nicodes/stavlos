@@ -73,3 +73,27 @@ Dead code (listed in the audits), naming (`Channel` receiver `s`, `root`/`rootAr
 - **D2** Native read-only `grep` and `glob` tools that obey the directories; no default shell allows, so every shell command asks unless the mode or a rule answers it.
 - **D3** `.stavlos/stavlos.local.json` stays in the repo but is part of the trust hash and applies as a tighten-only overlay like the project layer.
 - **D4** Full redesign: an actor loop per agent, one reducer for live and recovery, the TUI split into sub-models with a Frame and a shared list component.
+
+## Phase 2–3 blueprint (vocabulary and runtime, schema 6)
+
+**One state machine per channel.** `Channel.mu` guards the whole channel: its settings and every agent's state. State changes only through `commit(evs...)`: append to the log, then `apply` each committed event to the in-memory state, both under the lock; the side effects `apply` reports (wake an agent, cancel a turn) run after it is released. Recovery folds the same `apply` over the log, then resumes. There is no per-agent mutex, so no lock ordering between agents exists to get wrong. Model calls and tool runs happen outside the lock on each agent's turn goroutine, which reads a snapshot and commits what it did.
+
+**Vocabulary.**
+- channel: `channel.created{name, dir, model, role}`, `channel.updated{name?, model?, mode?}`, `channel.archived`, `channel.dir_added{dir, source}`, `channel.dir_removed{dir}`, `chat.posted{id, text, to}`.
+- agent: `agent.spawned{id, parent, role, name, model, variant, depth}`, `agent.updated{role?, name?, model?, variant?}`, `agent.killed`, `chat.message{from, text, post}` (to the human).
+- inbox: `input.queued{id, kind, text, from, from_name, post, job, parties}` with kinds prompt (human, waits for the turn), steer (human, next step), request (agent, next step, owed), info (agent, next step, never wakes), response (agent, between turns, settles), job (a job's result, between turns), reminder (harness); `input.taken{turn, ids}`: which inputs a model call consumed. Recovery's inbox is queued minus taken, by id.
+- turn: `turn.started{turn}`, `assistant.message{turn, blocks, stop, model, usage, cost}` (usage folded in), `tool.started{turn, call_id, name}` (input stays in the assistant message), `tool.finished{…}`, `turn.ended{turn, reason, error}`, `turn.aborted{turn}`.
+- asks: `ask.requested{id, kind, call_id, question}`, `ask.resolved{id, outcome, answer, by}`; claims and escalations are live notifications only. `permit.granted{tool, call, prefix}`.
+- jobs: `job.started{id, command}`, `job.finished{id, exit_code, is_error, summary, output}`, `job.stopped{id, reason}` (no armed/disarmed: a running job always wakes its owner).
+- `todo.changed{items}`, `mcp.started/failed/stopped`, `compaction.started{before}`, `compaction.done{from_seq, to_seq, summary, before, after}`, `compaction.failed{before, error}`.
+
+**Projection.** Each agent's state holds an incremental history builder fed by `apply` (inputs taken, assistant messages, tool results, turn ends, compaction). `history()` is a copy of its messages: no event is decoded twice.
+
+**Prompt prefix.** The system prompt and tool list depend only on the role, config and directories and are cached per agent; the turn budget, busy count and todo list go in a trailing context block of the request, so provider prompt caches stay warm.
+
+## Progress
+
+- **Phase 0 (security): done.** Deadlock, compiled kind-aware policy (every command in a line judged), trust-gated tighten-only local config, native grep/glob with no default shell allows, patch overlay with random temp files, permits for every value and allowlisted prefixes, the shell boundary (~user, expanded variables, symlinks), bidi controls and an SGR-only TUI frame, egress asks in auto, control files ask in every mode, kernel-reported socket peers (processes the daemon runs are refused), a private non-dumpable daemon with an environment allowlist, and the Linux sandbox (Landlock plus a user and mount namespace) for shell commands and MCP servers.
+- **Phase 2 (storage): done.** A writer goroutine with group commit and barriers, the channels table as a projection maintained in the append transaction, a trust table, integer times, schema 5 (a file of another version is deleted).
+- **Phases 2–3 (vocabulary and runtime): in progress.** The schema 6 vocabulary, the per-channel state machine with one reducer for live and recovery, the incremental projector with compaction cuts, the stable prompt prefix with a per-request state note, and the TUI port are written; the agent, daemon and transcript tests are being ported.
+- **Phase 5 (tools, models): started.** One wire vocabulary for the two OpenAI-shaped adapters; web_fetch pages by characters; shared web transports; read limits as documented.

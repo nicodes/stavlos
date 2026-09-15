@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -271,14 +272,14 @@ func TestReadStopsAtTheBudget(t *testing.T) {
 	// Truncation never splits a character.
 	s := strings.Repeat("é", 100)
 	for _, n := range []int{1, 2, 3, 50, 51} {
-		if c := cutRunes(s, n); !utf8.ValidString(c) || len(c) > n {
-			t.Errorf("cutRunes(%d) = %q", n, c)
+		if c := clip.Head(s, n); !utf8.ValidString(c) || len(c) > n {
+			t.Errorf("clip.Head(%d) = %q", n, c)
 		}
-		if c := tailRunes(s, n); !utf8.ValidString(c) || len(c) > n {
-			t.Errorf("tailRunes(%d) = %q", n, c)
+		if c := clip.Tail(s, n); !utf8.ValidString(c) || len(c) > n {
+			t.Errorf("clip.Tail(%d) = %q", n, c)
 		}
 	}
-	if c := clip(strings.Repeat("é", 1000), 301); !utf8.ValidString(c) {
+	if c := clip.Middle(strings.Repeat("é", 1000), 301); !utf8.ValidString(c) {
 		t.Errorf("clip split a rune: %q", c[:10])
 	}
 }
