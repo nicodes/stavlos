@@ -12,6 +12,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/sandbox"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -34,6 +35,7 @@ type Env struct {
 	Ask       Asker            // raises a question batch to the human and waits; nil in tests without a runtime
 	Search    SearchConfig     // web_search backend; zero → the tool explains how to configure it
 	PassEnv   []string         // environment variables kept for child processes although their names look like secrets (config env.pass)
+	Sandbox   *sandbox.Spec    // the boundary commands run in; nil runs them unsandboxed
 }
 
 // Skill is a loadable skill: its front matter and its body.

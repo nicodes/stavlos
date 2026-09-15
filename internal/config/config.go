@@ -38,6 +38,16 @@ type File struct {
 	Policy     map[string]any `json:"policy,omitempty"` // tool → verb | {pattern: verb}
 	Plugins    []string       `json:"plugins,omitempty"`
 	Reminders  *bool          `json:"reminders,omitempty"` // remind an agent that ends a turn owing a reply (default true)
+	Sandbox    *SandboxConfig `json:"sandbox,omitempty"`   // the OS boundary shell commands and MCP servers run in
+}
+
+// SandboxConfig shapes the sandbox (global layer only). Paths may use ~
+// and ${env:NAME}.
+type SandboxConfig struct {
+	Enabled  *bool    `json:"enabled,omitempty"`  // default true
+	Network  *bool    `json:"network,omitempty"`  // TCP from commands; default true
+	Writable []string `json:"writable,omitempty"` // more directories commands may write (a cache, a toolchain's store)
+	Hide     []string `json:"hide,omitempty"`     // more paths commands may not see
 }
 
 type Limits struct {
@@ -86,6 +96,17 @@ func ExpandEnv(s string) string {
 }
 
 var envRef = regexp.MustCompile(`\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}`)
+
+// expandPath expands ${env:NAME} and a leading ~ and cleans the result.
+func expandPath(p string) string {
+	p = ExpandEnv(strings.TrimSpace(p))
+	if p == "~" || strings.HasPrefix(p, "~/") {
+		if h, err := os.UserHomeDir(); err == nil {
+			p = filepath.Join(h, p[1:])
+		}
+	}
+	return filepath.Clean(p)
+}
 
 // Preset is a role definition from roles/<name>.md (PRD §10.3). The word
 // "role" is what users see; "preset" and "archetype" are the same thing in
@@ -224,6 +245,10 @@ type Effective struct {
 	// Reminders gives an agent that ends a turn owing a reply one reminder
 	// turn (docs/super-chat.md).
 	Reminders bool
+	Sandbox   struct {
+		Enabled, Network bool
+		Writable, Hide   []string // expanded, absolute
+	}
 
 	// TrustPending is true when a project layer exists but has not been
 	// confirmed; in that case project content has NOT been merged.
@@ -298,6 +323,7 @@ func LoadGlobal() (*Effective, error) {
 	e.RootAgent = "general"
 	e.Limits = Limits{MaxDepth: 3, MaxAgents: 6}
 	e.Reminders = true
+	e.Sandbox.Enabled, e.Sandbox.Network = true, true
 	e.Escalation.ClaimTimeout = 30 * time.Second
 	e.Escalation.AnswerTimeout = 3 * time.Minute
 	e.Escalation.Default = policy.Deny
@@ -370,6 +396,20 @@ func (e *Effective) applyFile(f File, layer string) error {
 	if f.Reminders != nil {
 		e.Reminders = *f.Reminders
 	}
+	if s := f.Sandbox; s != nil {
+		if s.Enabled != nil {
+			e.Sandbox.Enabled = *s.Enabled
+		}
+		if s.Network != nil {
+			e.Sandbox.Network = *s.Network
+		}
+		for _, p := range s.Writable {
+			e.Sandbox.Writable = append(e.Sandbox.Writable, expandPath(p))
+		}
+		for _, p := range s.Hide {
+			e.Sandbox.Hide = append(e.Sandbox.Hide, expandPath(p))
+		}
+	}
 	if err := e.applyLimits(f.Limits); err != nil {
 		return err
 	}
@@ -416,6 +456,8 @@ func (e *Effective) checkRepositoryFile(f File) error {
 	switch {
 	case f.Env != nil:
 		return errors.New("env: is global only: a repository cannot pass secrets to the processes agents run")
+	case f.Sandbox != nil:
+		return errors.New("sandbox: is global only: a repository cannot widen the boundary its commands run in")
 	case f.Search != nil:
 		return errors.New("search: is global only: a repository cannot choose where queries and keys go")
 	case len(f.Plugins) > 0:

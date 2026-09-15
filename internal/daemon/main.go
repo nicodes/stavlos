@@ -13,6 +13,7 @@ import (
 	"github.com/nicodes/stavlos/internal/buildid"
 	"github.com/nicodes/stavlos/internal/model/registry"
 	"github.com/nicodes/stavlos/internal/paths"
+	"github.com/nicodes/stavlos/internal/sandbox"
 	"golang.org/x/sys/unix"
 )
 
@@ -67,6 +68,10 @@ func Main(ctx context.Context, o Options) error {
 	sctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	d.Shutdown = cancel
-	log.Printf("stavlosd %s listening on %s (%d providers)", buildid.ID(), o.Socket, len(reg.Providers()))
+	lvl, why := sandbox.Probe()
+	log.Printf("stavlosd %s listening on %s (%d providers, sandbox %s)", buildid.ID(), o.Socket, len(reg.Providers()), lvl)
+	if why != nil {
+		log.Printf("sandbox: %v", why)
+	}
 	return d.Serve(sctx, o.Socket)
 }

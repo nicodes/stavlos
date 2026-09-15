@@ -7,6 +7,7 @@ package proc
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
@@ -14,6 +15,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/nicodes/stavlos/internal/sandbox"
 )
 
 // OutputCap is how much of a long job's output is kept: the tail, once the
@@ -30,15 +33,21 @@ type Job struct {
 }
 
 // Start runs command with bash -c in dir, in its own process group so a
-// kill takes its children too, with env as the whole environment (see Env)
-// and sink receiving each chunk of output as it arrives (nil for none). It
+// kill takes its children too, with env as the whole environment (see Env),
+// inside sb (nil for no sandbox), and sink receiving each chunk of output as
+// it arrives (nil for none). It
 // is not bound to a context: a job adopted by the runtime outlives the tool
 // call that started it.
-func Start(command, dir string, env []string, sink func(string)) (*Job, error) {
+func Start(command, dir string, env []string, sink func(string), sb *sandbox.Spec) (*Job, error) {
 	cmd := exec.Command("bash", "-c", command)
 	cmd.Dir = dir
 	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if sb != nil {
+		if _, err := sandbox.Wrap(cmd, *sb); err != nil {
+			return nil, fmt.Errorf("sandbox: %w", err)
+		}
+	}
 	cmd.WaitDelay = 2 * time.Second // a child that exits but leaves the pipes open does not hang Wait
 	out := &tail{sink: sink}
 	cmd.Stdout, cmd.Stderr = out, out

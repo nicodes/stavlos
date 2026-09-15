@@ -20,6 +20,7 @@ import (
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/proc"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/sandbox"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -134,6 +135,12 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 	cmd.Env = proc.Env(cfg.PassEnv) // scrubbed like a shell command's; the definition's env: adds what the server needs
 	for k, v := range def.Env {
 		cmd.Env = append(cmd.Env, k+"="+config.ExpandEnv(v))
+	}
+	if spec := a.s.sandboxSpec(cfg); spec != nil {
+		if _, err := sandbox.Wrap(cmd, *spec); err != nil {
+			fail(fmt.Errorf("sandbox: %v", err))
+			return
+		}
 	}
 	var stderr strings.Builder
 	cmd.Stderr = &limitedWriter{sb: &stderr, max: 4096}
