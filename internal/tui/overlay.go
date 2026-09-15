@@ -173,15 +173,7 @@ func (o *overlay) move(delta int) {
 }
 
 func (o *overlay) clampOffset() {
-	if o.cursor < o.offset {
-		o.offset = o.cursor
-	}
-	if o.cursor >= o.offset+overlayMaxRows {
-		o.offset = o.cursor - overlayMaxRows + 1
-	}
-	if o.offset < 0 {
-		o.offset = 0
-	}
+	o.offset, _ = listWindow(o.cursor, o.offset, len(o.shown), overlayMaxRows)
 }
 
 // update handles a key that is not a navigation/submit key: it edits the
@@ -314,10 +306,7 @@ func (o *overlay) listLines(inner int) []string {
 		return []string{theme.StyleDim.Render("  no match")}
 	}
 	o.clampOffset()
-	end := o.offset + overlayMaxRows
-	if end > len(o.shown) {
-		end = len(o.shown)
-	}
+	_, end := listWindow(o.cursor, o.offset, len(o.shown), overlayMaxRows)
 	var out []string
 	if o.offset > 0 {
 		out = append(out, theme.StyleDim.Render(fmt.Sprintf("  ↑ %d more", o.offset)))
@@ -364,10 +353,7 @@ func (o *overlay) itemAt(x, y, bodyWidth, bodyHeight int, spinner string) (int, 
 	if row < 0 {
 		return 0, false
 	}
-	end := o.offset + overlayMaxRows
-	if end > len(o.shown) {
-		end = len(o.shown)
-	}
+	_, end := listWindow(o.cursor, o.offset, len(o.shown), overlayMaxRows)
 	idx := o.offset + row
 	if idx >= end {
 		return 0, false
@@ -378,10 +364,7 @@ func (o *overlay) itemAt(x, y, bodyWidth, bodyHeight int, spinner string) (int, 
 // renderItem lays out "▸ label  sub" on the left and the hint on the right,
 // truncating the left part when both do not fit.
 func renderItem(it overlayItem, cur bool, width int) string {
-	marker := "  "
-	if cur {
-		marker = theme.StyleOvMarker.Render("▸") + " "
-	}
+	marker := cursorMarker(cur)
 	avail := width - 2
 	label, sub, hint := it.label, it.sub, it.hint
 	if sub != "" {

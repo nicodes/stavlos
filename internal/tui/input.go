@@ -230,8 +230,7 @@ func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
 		m.follow = true
 		return nil
 	case key.Matches(msg, keys.SelUp):
-		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
-			m.palIdx = (m.palIdx - 1 + len(pm)) % len(pm)
+		if pm := paletteMatches(m.input.Value()); len(pm) > 0 && stepCursor(msg, &m.palIdx, len(pm), false) {
 			return nil
 		}
 		// ↑ moves the cursor up a row (a logical line, or a wrapped row of
@@ -242,8 +241,7 @@ func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
 		m.historyMove(-1)
 		return nil
 	case key.Matches(msg, keys.SelDown):
-		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
-			m.palIdx = (m.palIdx + 1) % len(pm)
+		if pm := paletteMatches(m.input.Value()); len(pm) > 0 && stepCursor(msg, &m.palIdx, len(pm), false) {
 			return nil
 		}
 		// ↓ moves down a row while there is one below; on the bottom row it
@@ -304,10 +302,7 @@ func (m *Model) mentionKey(msg tea.KeyMsg) bool {
 		return false
 	}
 	switch {
-	case key.Matches(msg, keys.SelUp):
-		m.palIdx = (m.palIdx - 1 + len(mm)) % len(mm)
-	case key.Matches(msg, keys.SelDown):
-		m.palIdx = (m.palIdx + 1) % len(mm)
+	case stepCursor(msg, &m.palIdx, len(mm), false):
 	case msg.Type == tea.KeyTab, key.Matches(msg, keys.Submit):
 		m.completeMention(mm[m.clampPal(len(mm))])
 	default:

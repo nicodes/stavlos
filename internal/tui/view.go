@@ -1051,10 +1051,7 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) (lines []string,
 	// The checklist: every option, then a last row for a typed answer.
 	optStart, n = len(lines), len(cur.Options)+1
 	for i, o := range cur.Options {
-		marker := "  "
-		if i == q.sel && !q.typing {
-			marker = theme.StyleOvMarker.Render("▸") + " "
-		}
+		marker := cursorMarker(i == q.sel && !q.typing)
 		mark := theme.StyleDim.Render("□")
 		if q.marks[i] {
 			mark = theme.StyleAccent.Render("■")
@@ -1065,10 +1062,7 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) (lines []string,
 		}
 		lines = append(lines, ansi.Truncate(row, width, "…"))
 	}
-	marker := "  "
-	if q.sel == len(cur.Options) && !q.typing {
-		marker = theme.StyleOvMarker.Render("▸") + " "
-	}
+	marker := cursorMarker(q.sel == len(cur.Options) && !q.typing)
 	switch {
 	case q.typing:
 		lines = append(lines, marker+theme.StyleAccent.Render("■")+" "+m.promptInput.View())
@@ -1170,11 +1164,7 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 // agCursor and indents the rest to match.
 func (m Model) cursorRows(rows []string) []string {
 	for i := range rows {
-		marker := "  "
-		if i == m.agCursor%len(rows) {
-			marker = theme.StyleOvMarker.Render("▸") + " "
-		}
-		rows[i] = marker + strings.TrimPrefix(rows[i], "  ")
+		rows[i] = cursorMarker(i == m.agCursor%len(rows)) + strings.TrimPrefix(rows[i], "  ")
 	}
 	return rows
 }
@@ -1262,10 +1252,7 @@ func (m Model) promptBox(p *protocol.PromptInfo, width int) (lines []string, opt
 	optStart = len(lines)
 	sel := m.permSelection(p)
 	for i, o := range permOptions(p) {
-		marker := "  "
-		if i == sel && m.permEdit == "" {
-			marker = theme.StyleOvMarker.Render("▸") + " "
-		}
+		marker := cursorMarker(i == sel && m.permEdit == "")
 		mark := theme.StyleDim.Render("○")
 		if i == sel {
 			mark = theme.StyleAccent.Render("●")
