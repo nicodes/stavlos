@@ -37,11 +37,11 @@ func TestToolLine(t *testing.T) {
 		{"shell_kill", `{"id":"m1"}`, "Shell kill  m1"},
 		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Apply patch  a.go, b.md (+1 more)"},
 		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look"}`, "Agent create  scout (explorer)"},
-		{"message", `{"to":"scout","text":"go"}`, "Prompt  to scout"},
-		{"message", `{"to":"user","text":"done"}`, "Response  to you"},
-		{"agent_message", `{"id":"ag_1","text":"go"}`, "Prompt  to ag_1"}, // logs from before message
+		{"message", `{"to":"scout","text":"go"}`, "@scout go"},
+		{"message", `{"to":"user","text":"done\nand more"}`, "@user done"},
+		{"agent_message", `{"id":"ag_1","text":"go"}`, "@ag_1 go"}, // logs from before message
 		{"agent_cancel", `{"id":"ag_1"}`, "Agent cancel  ag_1"},
-		{"agent_response", `{"to":"ag_2","text":"found it"}`, "Prompt  to ag_2"},
+		{"agent_response", `{"to":"ag_2","text":"found it"}`, "@ag_2 found it"},
 		{"skill", `{"name":"deploy"}`, "Skill  deploy"},
 		{"mystery", `{"a":1}`, `Mystery  {"a":1}`},
 		{"shell", ``, "Shell"},
@@ -308,7 +308,7 @@ func TestMessageLineWaitsForTheAnswer(t *testing.T) {
 	}
 	tone := func(to string) Tone {
 		for _, l := range tr.All() {
-			if l.Kind == LineTool && l.Tool == "message" && strings.HasSuffix(l.Text, "to "+to) {
+			if l.Kind == LineTool && l.Tool == "message" && strings.HasPrefix(l.Text, "@"+to+" ") {
 				return l.Tone
 			}
 		}
@@ -339,7 +339,7 @@ func TestMessageLineWaitsForTheAnswer(t *testing.T) {
 	send(11, "p5", "inspector", delivered("inspector"), false)
 	tr.Apply(mk(13, event.UserMessage, event.UserMessagePayload{Turn: 3, Kind: "agent_response", From: "inspector", Text: "here"}))
 	for _, l := range tr.All() {
-		if l.Kind == LineTool && l.Tool == "message" && strings.HasSuffix(l.Text, "to inspector") && l.Tone != ToneNone {
+		if l.Kind == LineTool && l.Tool == "message" && strings.HasPrefix(l.Text, "@inspector ") && l.Tone != ToneNone {
 			t.Fatalf("one answer should settle both messages to that agent: %q tone %v", l.Text, l.Tone)
 		}
 	}
@@ -347,7 +347,7 @@ func TestMessageLineWaitsForTheAnswer(t *testing.T) {
 	send(14, "p3", "ghost", `unknown agent "ghost"`, true)
 	send(16, "p6", "helper", "answer delivered to helper", false)
 	send(18, "p7", "user", "message delivered to the user", false)
-	for _, to := range []string{"ghost", "helper", "you"} {
+	for _, to := range []string{"ghost", "helper", "user"} {
 		if tone(to) == ToneWorking {
 			t.Fatalf("a message to %s has nothing to wait for", to)
 		}
@@ -387,7 +387,7 @@ func TestNotesAndReminders(t *testing.T) {
 }
 
 // TestOnlyHumanInputIsBlue: a prompt or steer from another agent reads like
-// a response ("⑂ Prompt from main" over its text), never as the blue user
+// a received message ("› @main look at the parser"), never as the blue user
 // block the human's own input gets.
 func TestOnlyHumanInputIsBlue(t *testing.T) {
 	mk := func(p event.UserMessagePayload) []Line {
@@ -404,7 +404,7 @@ func TestOnlyHumanInputIsBlue(t *testing.T) {
 				texts = append(texts, l.Text)
 			}
 		}
-		if strings.Join(texts, "|") != "**Prompt from main**|look at the parser" || lines[1].Glyph != GlyphAsk {
+		if strings.Join(texts, "|") != "**@main** look at the parser" || lines[1].Glyph != GlyphAsk {
 			t.Fatalf("%s from an agent: %+v", kind, lines)
 		}
 	}
@@ -414,16 +414,15 @@ func TestOnlyHumanInputIsBlue(t *testing.T) {
 	}
 }
 
-// TestMessageArrows: a message call reads as the arrow of what it is, ›
-// for a prompt and ‹ for a response; other tools keep their glyph.
+// TestMessageArrows: what an agent sends reads ‹ and what it receives ›;
+// other tools keep their glyph.
 func TestMessageArrows(t *testing.T) {
 	for _, c := range []struct {
 		line Line
 		want string
 	}{
-		{Line{Kind: LineTool, Tool: "message", Text: "Prompt  to scout"}, GlyphAsk},
-		{Line{Kind: LineTool, Tool: "message", Text: "Response  to main"}, GlyphReply},
-		{Line{Kind: LineTool, Tool: "message", Text: "Response  to you"}, GlyphReply},
+		{Line{Kind: LineTool, Tool: "message", Text: "@scout look"}, GlyphReply},
+		{Line{Kind: LineTool, Tool: "message", Text: "@user done"}, GlyphReply},
 		{Line{Kind: LineTool, Tool: "shell", Text: "Shell  ls"}, GlyphToolShell},
 		{Line{Kind: LineTool, Tool: "agent_create", Text: "Agent create  scout (general)"}, GlyphToolCreate},
 		{Line{Kind: LineTool, Tool: "agent_status", Text: "Agent status"}, GlyphToolAgents},
@@ -433,8 +432,8 @@ func TestMessageArrows(t *testing.T) {
 		}
 	}
 	resp := EventLines(event.Event{Type: event.UserMessage, Time: time.Now(), Payload: event.MustPayload(event.UserMessagePayload{Kind: event.MsgAgentResponse, Text: "done", From: "scout"})})
-	if resp[1].Glyph != GlyphReply {
-		t.Fatalf("a response from an agent reads ‹: %+v", resp)
+	if resp[1].Glyph != GlyphAsk || resp[1].Text != "**@scout** done" {
+		t.Fatalf("a response from an agent reads › @scout: %+v", resp)
 	}
 }
 

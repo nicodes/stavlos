@@ -743,11 +743,6 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	case p.Denied:
 		l.Suffix = "(denied)"
 	}
-	// A message delivered as the answer to an agent waiting on this one is
-	// its response, which only the result can tell.
-	if name, ok := strings.CutPrefix(p.Output, "answer delivered to "); ok && toolname.Canonical(p.Name) == toolname.Message && !p.IsError {
-		l.Text = "Response  to " + name
-	}
 	// A new message to an agent waits for its answer: yellow until the
 	// answer lands (see answered), like a shell call and its job.
 	if name, ok := messagedAgent(p); ok {
@@ -1011,14 +1006,11 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		switch p.Kind {
 		case event.MsgPrompt, "", event.MsgSteer: // a steer reads exactly like a prompt
 			if p.From != "" {
-				return incoming("Prompt from "+p.From, GlyphAsk, p.Text)
+				return received(p.From, p.Text)
 			}
 			return block(BlockUser, "", p.Text) // the human's own input: blue ›
 		case event.MsgAgentResponse:
-			if p.From != "" {
-				return incoming("Response from "+p.From, GlyphReply, p.Text)
-			}
-			return incoming("Response", GlyphReply, p.Text)
+			return received(p.From, p.Text)
 		case "child_finished": // legacy: finished children from old logs
 			return blockWith(BlockChild, "agent response", p.Text, GlyphChild)
 		case event.MsgMonitorFired:
@@ -1079,12 +1071,14 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	event.ToolCallStarted: decoded(func(p event.ToolStartedPayload) []Line {
 		p.Name = toolname.Canonical(p.Name) // logs from before a rename read as the current tool
 		if p.Name == toolname.Message {
-			// The message itself is the interesting part: show it under the
-			// call the way an incoming answer shows its text.
+			// "‹ @scout first line", then the rest of the message under it
 			var in struct{ Text string }
 			_ = json.Unmarshal(p.Input, &in)
 			lines := []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, Tool: p.Name}}
-			return append(lines, OutputLines(strings.TrimRight(in.Text, "\n"))...)
+			if _, rest, ok := strings.Cut(strings.TrimSpace(in.Text), "\n"); ok {
+				lines = append(lines, OutputLines(rest)...)
+			}
+			return lines
 		}
 		return []Line{{Kind: LineTool, Text: toolLine(p.Name, p.Input), Running: true, callID: p.CallID, Tool: p.Name}}
 	}),
@@ -1317,16 +1311,19 @@ func blockWith(kind BlockKind, label, text, glyph string) []Line {
 	return append(lines, Line{Kind: LineBlank})
 }
 
-// incoming is what another agent sent this one, a prompt or a response: a
-// tool-like head ("› Prompt from scout", "‹ Response from scout") over its
-// text. Only the human's
-// own input is drawn blue, and the agent's own message calls read
-// "Prompt  to name" or "Response  to name", so incoming and outgoing never
-// look alike.
-func incoming(head, glyph, text string) []Line {
-	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: "**" + head + "**", Block: BlockChild, Glyph: glyph}}
-	for _, l := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
-		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild})
+// received is what another agent sent this one, a prompt or a response:
+// "› @scout …" with the name bold and later lines aligned under the text.
+// What this agent sends reads "‹ @scout …" (its message calls), and only
+// the human's own input is drawn blue.
+func received(from, text string) []Line {
+	body := strings.Split(strings.TrimRight(text, "\n"), "\n")
+	first := body[0]
+	if from != "" {
+		first = strings.TrimSpace("**@" + from + "** " + first)
+	}
+	lines := []Line{{Kind: LineBlank}, {Kind: LineText, Text: first, Block: BlockChild, Glyph: GlyphAsk}}
+	for _, l := range body[1:] {
+		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild, Indent: 1})
 	}
 	return append(lines, Line{Kind: LineBlank})
 }
@@ -1417,11 +1414,15 @@ func truncLines(text string, n int, kind LineKind) []Line {
 // most relevant argument.
 func toolLine(name string, input json.RawMessage) string {
 	name = toolname.Canonical(name) // a direct caller (a prompt, a test) may hold an old name
+	if name == toolname.Message {
+		// what this agent sends: "@scout look at the parser" (its first line)
+		var in struct{ Text string }
+		_ = json.Unmarshal(input, &in)
+		first, _, _ := strings.Cut(strings.TrimSpace(in.Text), "\n")
+		return strings.TrimSpace(ToolArg(name, input) + " " + first)
+	}
 	title := ToolTitle(name)
 	arg := ToolArg(name, input)
-	if name == toolname.Message && arg == "to you" {
-		title = "Response" // what an agent sends the human is always its response
-	}
 	if arg == "" {
 		return title
 	}
@@ -1499,10 +1500,11 @@ func ToolArg(name string, raw json.RawMessage) string {
 		if to == "" {
 			to = str("id") // a log from before message replaced agent_message
 		}
-		if l := strings.ToLower(strings.TrimPrefix(to, "@")); l == "user" || l == "human" {
-			to = "you"
+		to = strings.TrimPrefix(to, "@")
+		if l := strings.ToLower(to); l == "user" || l == "human" {
+			to = "user"
 		}
-		return "to " + to
+		return "@" + to
 	}
 	return compactArgs(raw)
 }
@@ -1510,9 +1512,6 @@ func ToolArg(name string, raw json.RawMessage) string {
 // ToolTitle is the display name of a tool on its chat line: titleCase of
 // the name, with MCP tools read as "server · tool".
 func ToolTitle(name string) string {
-	if name == toolname.Message {
-		return "Prompt" // "Response" once it is delivered as an answer, or when it goes to the human
-	}
 	if strings.HasPrefix(name, toolname.MCPPrefix) {
 		// mcp__server__tool reads "server · tool"
 		if parts := strings.SplitN(strings.TrimPrefix(name, toolname.MCPPrefix), "__", 2); len(parts) == 2 {
@@ -1625,16 +1624,18 @@ const (
 )
 
 // CallGlyph is a tool line's glyph and the gap after it: ToolGlyph of its
-// tool, except that a message reads as the arrow of what it is, › for a
-// prompt and ‹ for a response.
+// tool, except that a message this agent sends reads ‹ (what it receives
+// reads ›).
 func CallGlyph(l Line) (string, string) {
-	if toolname.Canonical(l.Tool) == toolname.Message {
-		if strings.HasPrefix(l.Text, "Response") {
-			return GlyphReply, " "
-		}
-		return GlyphAsk, " "
+	if IsMessage(l) {
+		return GlyphReply, " "
 	}
 	return ToolGlyph(l.Tool)
+}
+
+// IsMessage reports whether l is a message call's line.
+func IsMessage(l Line) bool {
+	return l.Kind == LineTool && toolname.Canonical(l.Tool) == toolname.Message
 }
 
 // toolGlyph returns the glyph for a tool name and the gap after it.
