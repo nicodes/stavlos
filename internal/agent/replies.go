@@ -10,9 +10,11 @@ import (
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// Replies (docs/super-chat.md): every message an agent takes in, from the
-// human or from another agent, is owed a reply sent with the message tool;
-// the text a turn ends with reaches no one. Whenever a turn ends on its own
+// Replies (docs/super-chat.md): every request an agent takes from another
+// agent, and every post the human makes in the channel chat, is owed a reply
+// sent with the message tool (the text a turn ends with reaches no one
+// there). A message the human types in the agent's own chat is answered in
+// that chat, so it owes nothing. Whenever a turn ends on its own
 // with replies still owed, and the agent is not waiting on an agent or a
 // job (whose result wakes it anyway), a reminder turn is queued naming
 // everyone still owed. After maxNudges reminders in a row with no reply the
@@ -33,15 +35,16 @@ func senderID(source string) string {
 }
 
 // owedBy is the party a logged input is owed to: the sending agent, the
-// human for a prompt or steer with no sender, and nobody for answers, job
-// results and reminders (or a sender logged before ids were).
+// human for a channel chat post (a prompt or steer with no sender that
+// carries its post), and nobody for the human's message typed in the agent's
+// own chat, answers, job results and reminders.
 func owedBy(in event.UserMessagePayload) string {
 	switch in.Kind {
 	case event.MsgPrompt, event.MsgSteer:
 		if in.FromID != "" {
 			return in.FromID
 		}
-		if in.From == "" {
+		if in.From == "" && in.Post != "" {
 			return tools.User
 		}
 	case event.MsgAgentResponse, event.MsgMonitorFired, event.MsgReminder, event.MsgNote:
@@ -55,14 +58,17 @@ func owedBy(in event.UserMessagePayload) string {
 // chat.
 func (a *Agent) took(in event.UserMessagePayload) {
 	party := owedBy(in)
-	if party == "" {
+	human := in.From == "" && in.FromID == "" && (in.Kind == event.MsgPrompt || in.Kind == event.MsgSteer)
+	if party == "" && !human {
 		return
 	}
 	a.mu.Lock()
-	a.owed[party] = true
-	a.nudges = 0
-	if party == tools.User {
-		a.lastPost = in.Post
+	if party != "" {
+		a.owed[party] = true
+		a.nudges = 0
+	}
+	if human {
+		a.lastPost = in.Post // "" for a message typed in the agent's own chat
 	}
 	a.mu.Unlock()
 }
