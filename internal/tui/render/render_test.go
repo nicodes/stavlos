@@ -895,7 +895,7 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	tr.Apply(mk(12, "a", event.UserMessage, event.UserMessagePayload{Turn: 3, Kind: event.MsgReminder, Text: "[reminder from the harness] ..."}))
 	tr.Apply(mk(13, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 3, Blocks: []model.Block{{Type: model.BlockText, Text: "replying now"}}}))
 	nudged := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
-	if !strings.HasSuffix(nudged, "› @user thanks\n\n↻ Nudged owes a reply to you\n§ replying now") {
+	if !strings.HasSuffix(nudged, "› @user thanks\n\n↻ Nudge owes a reply to you\n§ replying now") {
 		t.Fatalf("nudge spacing:\n%s", nudged)
 	}
 	tr = transcript.NewTranscript()
