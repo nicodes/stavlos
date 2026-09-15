@@ -460,11 +460,11 @@ func TestTabCyclesFocus(t *testing.T) {
 			t.Fatalf("shift+tab: focus=%v follow=%v", m.focus, m.follow)
 		}
 		press(&m, tab, tab, tab) // chat → input → strip → meta row
-		if m.focus != focusMeta || m.metaSel != metaYolo || m.input.Focused() {
+		if m.focus != focusMeta || m.metaSel != metaRole || m.input.Focused() {
 			t.Fatalf("tab x3: focus=%v sel=%v", m.focus, m.metaSel)
 		}
-		press(&m, left) // leftmost already (the ASK tag): stays
-		press(&m, right, right)
+		press(&m, left) // leftmost already (the role): stays
+		press(&m, right)
 		if m.metaSel != metaModel {
 			t.Fatalf("→ should move to the model: %v", m.metaSel)
 		}
@@ -1052,7 +1052,7 @@ func TestChannelViewFillsHeight(t *testing.T) {
 				ri = i
 			}
 		}
-		if ri < 0 || si < 2 || si+2 >= len(lines) || !strings.HasPrefix(lines[ri+1], "›") || strings.TrimSpace(lines[si-1]) != "" || !strings.HasPrefix(lines[si+1], "async ") || !strings.HasPrefix(lines[si+2], "ASK · coder ·") {
+		if ri < 0 || si < 2 || si+2 >= len(lines) || !strings.HasPrefix(lines[ri+1], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" || !strings.HasPrefix(lines[si+1], "async ") || !strings.HasPrefix(lines[si+2], "coder ·") {
 			t.Fatalf("focus %v: under the rule come the input, a blank line, the strip, then the meta row:\n%s", f, stripANSI(v))
 		}
 	}
@@ -1094,7 +1094,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	meta, strip := -1, -1
 	for i, l := range lines {
 		switch {
-		case strings.HasPrefix(l, "ASK · coder · "):
+		case strings.HasPrefix(l, "coder · "):
 			meta = i
 		case strings.HasPrefix(l, "! "):
 			strip = i
@@ -1165,7 +1165,7 @@ func TestMetaRowAndStripRepo(t *testing.T) {
 	if nm.(Model).compactTick {
 		t.Fatal("the tick should stop when no chat is compacting")
 	}
-	if strip < 3 || meta != strip+2 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], "›") || !strings.HasPrefix(lines[strip-3], "─") {
+	if strip < 3 || meta != strip+2 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], " ASK › ") || !strings.HasPrefix(lines[strip-3], "─") {
 		t.Fatalf("under the rule come the input, a blank line, the strip's two rows, then the meta row:\n%s", strings.Join(lines, "\n"))
 	}
 	// the repo is not on the strip (the dirs tab shows it)
@@ -1365,7 +1365,7 @@ func TestFocusAlwaysLandsLeftmost(t *testing.T) {
 	if m.focus != focusTabs || m.tabSel != 1 {
 		t.Fatalf("setup: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, tab, right, right, right) // strip → meta row, then over to the variant
+	press(&m, tab, right, right) // strip → meta row, then over to the variant
 	if m.focus != focusMeta || m.metaSel != metaVariant {
 		t.Fatalf("setup: focus=%v sel=%v", m.focus, m.metaSel)
 	}
@@ -1375,14 +1375,8 @@ func TestFocusAlwaysLandsLeftmost(t *testing.T) {
 		t.Fatalf("strip should land on permission: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, tab)
-	if m.focus != focusMeta || m.metaSel != metaYolo {
-		t.Fatalf("meta row should land on the mode tag (ASK): focus=%v sel=%v", m.focus, m.metaSel)
-	}
-	// with YOLO on, the leftmost part of the meta row is the YOLO tag
-	m.channel.Mode = protocol.ModeYolo
-	press(&m, tab, tab, tab, tab) // meta row → chat → input → strip → meta row
-	if m.focus != focusMeta || m.metaSel != metaYolo {
-		t.Fatalf("meta row with YOLO should land on YOLO: focus=%v sel=%v", m.focus, m.metaSel)
+	if m.focus != focusMeta || m.metaSel != metaRole {
+		t.Fatalf("meta row should land on its leftmost part, the role: focus=%v sel=%v", m.focus, m.metaSel)
 	}
 }
 
@@ -1732,25 +1726,25 @@ func TestMetaRowHits(t *testing.T) {
 	m.agents = []protocol.AgentInfo{{ID: "a", Label: "main", Archetype: "coder", Model: "openai/gpt-5", Variant: "high"}}
 	m.selected = 0
 	m.channel.Mode = protocol.ModeYolo
-	// "YOLO · main (coder) · openai/gpt-5 · high"
-	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "YOLO", metaNone, lipgloss.NewStyle()))
+	// "main (coder) · openai/gpt-5 · high" (the mode tag leads the input)
+	row := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone, lipgloss.NewStyle()))
 	at := func(sub string) int { return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1 } // a column, not a byte offset
 	for _, c := range []struct {
 		x    int
 		want metaPart
 	}{
-		{at("YOLO"), metaYolo}, {at("main"), metaRole}, {at("(coder)"), metaRole},
+		{at("main"), metaRole}, {at("(coder)"), metaRole},
 		{at("gpt-5"), metaModel}, {at("high"), metaVariant}, {len(row) + 5, metaNone},
 	} {
 		if got := m.metaHit(c.x); got != c.want {
 			t.Fatalf("x=%d: got %v want %v", c.x, got, c.want)
 		}
 	}
-	// in ask mode the row starts with the ASK tag; a missing variant reads "default"
+	// whatever the mode, the row starts with the role; a missing variant reads "default"
 	m.channel.Mode = protocol.ModeAsk
 	m.agents[0].Variant = ""
-	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "ASK", metaNone, lipgloss.NewStyle()))
-	if !strings.HasPrefix(row, "ASK · main") || m.metaHit(0) != metaYolo || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "main")])) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
+	row = stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "", metaNone, lipgloss.NewStyle()))
+	if !strings.HasPrefix(row, "main (coder)") || m.metaHit(0) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "main")])) != metaRole || m.metaHit(ansi.StringWidth(row[:strings.Index(row, "default")])+2) != metaVariant {
 		t.Fatalf("ask row: %q", row)
 	}
 }
@@ -1957,7 +1951,7 @@ func TestInputShowsOneChevron(t *testing.T) {
 	m.input.SetValue("first line\nsecond line\nthird")
 	m.layout()
 	v := stripANSI(m.inputView())
-	if strings.Count(v, "›") != 1 || !strings.HasPrefix(v, "› first line") {
+	if strings.Count(v, "›") != 1 || !strings.HasPrefix(v, " ASK › first line") {
 		t.Fatalf("one chevron on the first line only:\n%s", v)
 	}
 	for i, l := range strings.Split(v, "\n")[1:] {
@@ -1977,7 +1971,7 @@ func TestPastedMessageKeepsItsFirstLineInView(t *testing.T) {
 	}
 	v := stripANSI(m.inputView())
 	lines := strings.Split(v, "\n")
-	if len(lines) != 3 || !strings.HasPrefix(lines[0], "› Use subagents") || !strings.HasPrefix(lines[2], "  give me the highlights.") {
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], " ASK › Use subagents") || !strings.HasPrefix(lines[2], "       give me the highlights.") {
 		t.Fatalf("the whole message should be visible from its first line:\n%s", v)
 	}
 }
@@ -2020,7 +2014,7 @@ func TestInputNeverHidesRows(t *testing.T) {
 		if len([]rune(head)) > 10 {
 			head = string([]rune(head)[:10])
 		}
-		if !strings.HasPrefix(rows[0], "› "+head) {
+		if !strings.HasPrefix(rows[0], " ASK › "+head) {
 			t.Fatalf("first row hidden for %q (height %d):\n%s", head, m.inputRows(), view)
 		}
 		if m.inputRows() > m.inputCap() {
@@ -2133,7 +2127,7 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 			break
 		}
 	}
-	if rule < 0 || ansi.StringWidth(lines[rule]) != m.width || !strings.HasPrefix(lines[rule+1], "›") {
+	if rule < 0 || ansi.StringWidth(lines[rule]) != m.width || !strings.HasPrefix(lines[rule+1], " ASK › ") {
 		t.Fatalf("the rule should start at the left edge and span the window:\n%s", strings.Join(lines, "\n"))
 	}
 	if strings.Contains(lines[rule], "│") || strings.Contains(lines[rule+1], "│") {
@@ -3083,10 +3077,10 @@ func TestChannelChatFooterIsTheChannels(t *testing.T) {
 		m.openChat()
 		m.layout()
 		left, spans := m.metaLeft()
-		if !m.superChat || stripANSI(left) != "ASK" || len(spans) != 1 || len(m.metaParts()) != 1 {
+		if !m.superChat || left != "" || len(spans) != 0 || len(m.metaParts()) != 0 || m.metaShown() {
 			t.Fatalf("channel chat meta: %q %v %v", stripANSI(left), spans, m.metaParts())
 		}
-		if right := stripANSI(m.footerRightView()); right != "31% · 2k tokens · $0.02" { // the main agent's context, then the channel's tokens and cost
+		if right := stripANSI(m.footerRightView()); right != "2k tokens · $0.02" { // the rollup of tokens and cost, no context percentage
 			t.Fatalf("channel chat right side: %q", right)
 		}
 		if sv := stripANSI(m.sectionsView(100)); strings.Contains(sv, "async") || slices.Contains(m.tabOrder(), focusAsync) || (tree == (sv != "")) {
@@ -3096,11 +3090,36 @@ func TestChannelChatFooterIsTheChannels(t *testing.T) {
 			t.Fatalf("channel chat view is %d lines, want %d (tree %v)", got, m.height, tree)
 		}
 		m.openAgent(0)
-		if sv := stripANSI(m.sectionsView(100)); !strings.Contains(sv, "async") || len(m.metaParts()) != 4 || !strings.Contains(stripANSI(m.footerRightView()), "31%") {
+		if sv := stripANSI(m.sectionsView(100)); !strings.Contains(sv, "async") || len(m.metaParts()) != 3 || !strings.Contains(stripANSI(m.footerRightView()), "31%") {
 			t.Fatalf("agent chat footer: %q %v %q", sv, m.metaParts(), stripANSI(m.footerRightView()))
 		}
 		if got := strings.Count(m.View(), "\n") + 1; got != m.height {
 			t.Fatalf("agent chat view is %d lines, want %d (tree %v)", got, m.height, tree)
 		}
+	}
+}
+
+// TestModeTagLeadsTheInput: the channel's mode tag sits before the input's ›,
+// right-aligned in its own columns whatever the mode, and not on the meta
+// row; a click on it acts like the old meta row tag (from yolo: back to ask).
+func TestModeTagLeadsTheInput(t *testing.T) {
+	m := channelModel()
+	m.width, m.height = 100, 30
+	m.transcript(m.agents[0].ID).Notice("hello")
+	m.layout()
+	for mode, lead := range map[string]string{protocol.ModeAsk: " ASK › ", protocol.ModeAuto: "AUTO › ", protocol.ModeYolo: "YOLO › "} {
+		m.channel.Mode = mode
+		if in := stripANSI(m.inputView()); !strings.HasPrefix(in, lead) {
+			t.Fatalf("%s: input %q", mode, in)
+		}
+		if left, _ := m.metaLeft(); strings.Contains(stripANSI(left), strings.TrimSpace(lead[:4])) {
+			t.Fatalf("%s: the meta row still carries the tag: %q", mode, stripANSI(left))
+		}
+	}
+	lay := m.rows()
+	nm, _ := m.Update(tea.MouseMsg{X: 1, Y: lay.input, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, cmd := nm.(Model).Update(tea.MouseMsg{X: 1, Y: lay.input, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	if cmd == nil || nm.(Model).focus != focusInput {
+		t.Fatalf("a click on the YOLO tag should set the mode back to ask: cmd=%v focus=%v", cmd != nil, nm.(Model).focus)
 	}
 }

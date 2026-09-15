@@ -623,7 +623,9 @@ func (m *Model) focusOrder() []focus {
 	if m.stripShown() {
 		order = append(order, focusTabs)
 	}
-	order = append(order, focusMeta)
+	if len(m.metaParts()) > 0 { // the channel chat's meta row has nothing to pick
+		order = append(order, focusMeta)
+	}
 	if m.sidebarVisible() {
 		order = append(order, focusSidebar)
 	}
@@ -947,7 +949,9 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	case focusAsync, focusDue, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0
 	case focusMeta:
-		m.metaSel = m.metaParts()[0] // always the leftmost part: the mode tag
+		if parts := m.metaParts(); len(parts) > 0 {
+			m.metaSel = parts[0] // always the leftmost part: the role
+		}
 	case focusTabs:
 		m.tabSel = 0 // always the leftmost tab: permission
 	}
@@ -1609,6 +1613,10 @@ func normalizePaste(msg tea.KeyMsg) tea.KeyMsg {
 	return msg
 }
 
+// modeTagCols is the columns the mode tag takes before the input's ›: the
+// widest tag ("AUTO", "YOLO") and a space.
+const modeTagCols = 5
+
 // inputRows is how many rows the message needs: the textarea's own wrap
 // of every logical line, at least one, at most inputMaxLines (past that the
 // textarea scrolls to keep the cursor in view). The textarea is always
@@ -1638,13 +1646,21 @@ func (m Model) inputView() string {
 		lines = lines[:n]
 	}
 	// The background spans the whole input width, not just the text: pad
-	// every row out to the box in the same colour.
+	// every row out to the box in the same colour. The mode tag leads the
+	// first row, right-aligned before the ›; later rows keep its columns.
 	bg := lipgloss.NewStyle().Background(theme.ColInputBg)
 	width := m.boxWidth()
+	tag := m.modeTag()
 	for i, l := range lines {
-		if pad := width - ansi.StringWidth(l); pad > 0 {
-			lines[i] = l + bg.Render(strings.Repeat(" ", pad))
+		lead := bg.Render(strings.Repeat(" ", modeTagCols))
+		if i == 0 {
+			lead = bg.Render(strings.Repeat(" ", modeTagCols-1-len(tag))) + modeTagStyle(tag).Background(theme.ColInputBg).Render(tag) + bg.Render(" ")
 		}
+		l = lead + l
+		if pad := width - ansi.StringWidth(l); pad > 0 {
+			l += bg.Render(strings.Repeat(" ", pad))
+		}
+		lines[i] = l
 	}
 	return strings.Join(lines, "\n")
 }
@@ -1720,11 +1736,14 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 			m.toggleItem()
 		}
 		return cmd
-	case y >= lay.strip && y < lay.meta: // a tab label opens that tab's dialog
+	case y >= lay.strip && y < lay.strip+m.stripRows(): // a tab label opens that tab's dialog
 		if f, ok := m.tabAt(x, y-lay.strip+len(m.tabLayout())-m.stripRows()); ok {
 			return m.openTab(f)
 		}
-	case y >= lay.input && y < lay.input+m.inputRows(): // the input lines
+	case y >= lay.input && y < lay.input+m.inputRows(): // the input lines; the mode tag before the › is a button
+		if y == lay.input && x < modeTagCols-1 {
+			return m.metaAction(metaYolo)
+		}
 		return m.setFocus(focusInput)
 	case y == lay.meta: // the meta row: its parts are buttons
 		if part := m.metaHit(x); part != metaNone {
@@ -1739,12 +1758,12 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 // the model and the variant.
 func (m *Model) metaParts() []metaPart {
 	if m.superChat {
-		return []metaPart{metaYolo} // the channel chat: only the channel's mode; role, model and variant are an agent's
+		return nil // the channel chat: role, model and variant are an agent's (the mode tag leads the input)
 	}
-	return []metaPart{metaYolo, metaRole, metaModel, metaVariant}
+	return []metaPart{metaRole, metaModel, metaVariant}
 }
 
-// modeTag is the meta row's tag for the channel's permission mode: "ASK",
+// modeTag leads the input, before its ›: the channel's permission mode, "ASK",
 // "AUTO" or "YOLO". It is always there, so turning auto or yolo off leaves
 // the tag in place rather than taking it away.
 func (m *Model) modeTag() string {
@@ -1875,9 +1894,15 @@ func (m *Model) rows() rowLayout {
 		y += strings.Count(pv, "\n") + 1
 	}
 	lay := rowLayout{input: y}
-	y += m.inputRows() + 1 // the input, then the blank line under it
+	y += m.inputRows()
+	if m.stripRows() > 0 || m.metaShown() {
+		y++ // the blank line under the input
+	}
 	lay.strip = y
 	lay.meta = y + m.stripRows()
+	if !m.metaShown() {
+		lay.meta = -1
+	}
 	return lay
 }
 
@@ -3372,15 +3397,22 @@ func (m *Model) layout() {
 		return
 	}
 	boxW := m.boxWidth()
-	m.input.SetWidth(boxW)
+	m.input.SetWidth(boxW - modeTagCols)                                                        // the mode tag sits before the ›
 	m.input.SetHeight(m.inputCap())                                                             // the textarea is always cap tall; the view trims to the rows used
 	m.promptInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.promptInput.Prompt)) - 1 // inside the tab dialog, under promptBox's indent
 	m.dirInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.dirInput.Prompt)) - 1
 
 	_, kb := m.keyBarView()
-	bodyH := m.height - kb - 2 - (m.inputRows() + 1) - 1 // key bar, status line + rule, input rows + meta row, the blank line under the input
-	if sv := m.sectionsView(m.width); sv != "" {
+	bodyH := m.height - kb - 2 - m.inputRows() // key bar, status line + rule, the input rows
+	sv := m.sectionsView(m.width)
+	if sv != "" {
 		bodyH -= strings.Count(sv, "\n") + 1 // the strip, which the channel chat may not have at all
+	}
+	if m.metaShown() {
+		bodyH-- // the meta row
+	}
+	if sv != "" || m.metaShown() {
+		bodyH-- // the blank line under the input
 	}
 	if pv := m.paletteViewFor(m.width); pv != "" {
 		bodyH -= strings.Count(pv, "\n") + 1

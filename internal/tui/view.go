@@ -278,7 +278,6 @@ type footerInfo struct {
 	window    int    // the model's context window; 0 hides the bar
 	tokens    int
 	cost      float64
-	channel   bool // the channel chat: the main agent\'s context percentage, then the channel\'s tokens
 }
 
 // footerRight builds the usage on the divider over the input (a sign-in
@@ -296,13 +295,6 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
-	if f.channel { // "2% · 69k tokens · $0.00"
-		usage := format.Tokens(f.tokens) + " tokens · $" + format.Cost(f.cost)
-		if pct := contextPct(f.context, f.window); pct != "" {
-			usage = pct + " · " + usage
-		}
-		return usage
-	}
 	if bar := contextBar(f.context, f.window); bar != "" {
 		return bar + " · $" + format.Cost(f.cost) // the channel's total tokens are in the sidebar
 	}
@@ -318,16 +310,6 @@ func contextBar(context, window int) string {
 		return ""
 	}
 	return st.Render(fmt.Sprintf("%d%% · %s/%s", pct, format.Tokens(context), format.Tokens(window)))
-}
-
-// contextPct is contextBar's percentage alone, "31%", as the channel chat
-// shows it before the channel's tokens.
-func contextPct(context, window int) string {
-	pct, st, ok := contextFill(context, window)
-	if !ok {
-		return ""
-	}
-	return st.Render(fmt.Sprintf("%d%%", pct))
 }
 
 // contextFill is how full the context is, in percent (at most 100), and its
@@ -426,19 +408,20 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 	if m.focus == focusMeta {
 		sel = m.metaSel
 	}
-	if m.superChat { // the channel chat: only what is the channel's, its permission mode
-		tag, st := m.modeTag(), modeTagStyle(m.modeTag())
-		if sel == metaYolo {
-			st = theme.StyleBoxTitleFocus
-		}
-		return st.Render(tag), []span[metaPart]{{0, ansi.StringWidth(tag), metaYolo}}
+	if m.superChat { // the channel chat: role, model and variant are an agent's, and the mode leads the input
+		return "", nil
 	}
 	nameStyle := lipgloss.NewStyle()
 	if r := m.roleInfo(role); r != nil {
 		nameStyle = roleStyle(r.Color)
 	}
-	return metaLineSpans(label, role, model, variant, queued, m.modeTag(), sel, nameStyle)
+	return metaLineSpans(label, role, model, variant, queued, "", sel, nameStyle) // the mode tag leads the input instead
 }
+
+// metaShown reports whether the meta row is drawn: an agent's chat names its
+// role, model and variant there, and the sign-in nudge sits there while
+// nothing is connected; the channel chat has nothing else for it.
+func (m Model) metaShown() bool { return !m.superChat || !m.connected() }
 
 // metaRow is the line under the divider: role and model on the left, tokens
 // and cost (or a transient status) on the right, dot separators within
@@ -552,11 +535,17 @@ func (m Model) channelView(width, height int) string {
 	if pv := m.paletteViewFor(width); pv != "" {
 		parts = append(parts, pv)
 	}
-	parts = append(parts, m.inputBoxView(width), "")
-	if sv := m.sectionsView(width); sv != "" {
+	parts = append(parts, m.inputBoxView(width))
+	sv := m.sectionsView(width)
+	if sv != "" || m.metaShown() {
+		parts = append(parts, "") // air between the input and what sits under it
+	}
+	if sv != "" {
 		parts = append(parts, sv)
 	}
-	parts = append(parts, m.metaRow(width))
+	if m.metaShown() {
+		parts = append(parts, m.metaRow(width))
+	}
 	return padLines(strings.Join(parts, "\n"), width)
 }
 
@@ -1334,11 +1323,8 @@ func (m Model) statusLine(width int) string {
 
 func (m Model) footerRightView() string {
 	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.channel.Model}
-	if m.superChat { // the channel chat: the channel's tokens and cost, after the main agent's context (what a post with no mention reaches)
-		f.tokens, f.cost, f.channel = m.totalTokens(), m.totalCost(), true
-		if len(m.agents) > 0 {
-			f.context, f.window = m.agents[0].Context, m.agents[0].ContextWindow
-		}
+	if m.superChat { // the channel chat: the rollup of every agent's tokens and cost, no one agent's context
+		f.tokens, f.cost = m.totalTokens(), m.totalCost()
 		return footerRight(f)
 	}
 	if a := m.selectedAgent(); a != nil {
