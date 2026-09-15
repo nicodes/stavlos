@@ -2216,7 +2216,8 @@ func (m *Model) chatKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.ChatBottom):
 		m.moveCursor(m.chatItems())
 	case key.Matches(msg, keys.Select):
-		if !m.followChatLink() {
+		// A long reply expands; a short message or a prompt opens its agent.
+		if m.chatItemFolds() || !m.followChatLink() {
 			m.toggleItem()
 		}
 	}
@@ -2265,11 +2266,12 @@ func (m *Model) scrollToCursor() {
 	}
 }
 
-// toggleItem flips the cursor item's tool output between expanded and
-// collapsed (a per-item override of /details). Other items are inert.
+// toggleItem flips the cursor item's tool output or long reply between
+// expanded and collapsed (a per-item override of /details). Other items are
+// inert.
 func (m *Model) toggleItem() {
 	t := m.transcripts[m.viewID()]
-	if t == nil || !transcript.ItemIsTool(t.All(), m.chatCursor) {
+	if t == nil || !transcript.ItemIsTool(t.All(), m.chatCursor) && !transcript.ItemFolds(t.All(), m.chatCursor) {
 		return
 	}
 	e := m.agentExpanded(m.viewID())
@@ -3028,6 +3030,13 @@ func (m *Model) followChatLink() bool {
 	}
 	m.openAgent(i)
 	return true
+}
+
+// chatItemFolds reports whether the item under the chat cursor expands and
+// collapses (tool output, a long reply).
+func (m *Model) chatItemFolds() bool {
+	t := m.transcripts[m.viewID()]
+	return t != nil && transcript.ItemFolds(t.All(), m.chatCursor)
 }
 
 // placeholder is the input's hint: how the session chat addresses agents,

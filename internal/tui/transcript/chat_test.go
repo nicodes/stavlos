@@ -141,3 +141,39 @@ func TestChatGroupsPostsToAWaitingAgent(t *testing.T) {
 		t.Fatalf("scout was not waiting, so no grouping: %q", got)
 	}
 }
+
+// TestChatFoldsLongReplies: a reply longer than MaxOutputCollapsed lines
+// shows its head and "… +N lines" until expanded; a short one never folds.
+func TestChatFoldsLongReplies(t *testing.T) {
+	c := NewChat()
+	seq := int64(0)
+	apply := func(agent string, typ event.Type, p any) {
+		seq++
+		c.Apply(event.Event{Seq: seq, Agent: agent, Type: typ, Time: time.Now(), Payload: event.MustPayload(p)})
+	}
+	apply("a1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "a1", Label: "main"})
+	apply("", event.ChatPosted, event.ChatPayload{ID: "p1", Text: "summarise", To: []string{"main"}})
+	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "one\ntwo\nthree\nfour\nfive\nsix", Post: "p1"})
+	apply("a1", event.MessageToUser, event.ChatPayload{From: "main", Text: "short"})
+
+	var always, expanded, collapsedOnly []string
+	for _, l := range c.All() {
+		if l.Item != 0 || l.Indent != 1 || l.Text == "" {
+			continue
+		}
+		switch l.Vis {
+		case VisAlways:
+			always = append(always, l.Text)
+		case VisExpanded:
+			expanded = append(expanded, l.Text)
+		case VisCollapsed:
+			collapsedOnly = append(collapsedOnly, l.Text)
+		}
+	}
+	if strings.Join(always, "|") != "@main one|two|three" || strings.Join(expanded, "|") != "four|five|six" || strings.Join(collapsedOnly, "|") != "… +3 lines" {
+		t.Fatalf("always %q expanded %q collapsed %q", always, expanded, collapsedOnly)
+	}
+	if !ItemFolds(c.All(), 0) || ItemFolds(c.All(), 1) {
+		t.Fatal("the long reply's thread folds, the short message does not")
+	}
+}
