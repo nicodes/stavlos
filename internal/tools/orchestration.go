@@ -92,13 +92,14 @@ func Recipient(to string) string {
 type messageTool struct{}
 
 func (messageTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Message, Description: "Send text to another agent in this session (a child, a sibling, or your parent) by name, or to the human as \"user\". To an agent that is waiting on you, because it gave you a task or asked you something, this is your answer: it wakes that agent between turns. To any other agent it is a new message: it reaches them at their next step, mid-turn if they are busy, and their answer wakes you. agent_status lists every agent.",
+	return model.ToolDef{Name: toolname.Message, Description: "Send text to another agent in this session (a child, a sibling, or your parent) by name, or to the human as \"user\". To an agent that is waiting on you, because it gave you a task or asked you something, this is your answer: it wakes that agent between turns. To any other agent it is a new message: it reaches them at their next step, mid-turn if they are busy, and their answer wakes you. Set no_reply for a message that needs no answer (thanks, an acknowledgement, a closing note): the recipient owes you nothing, you do not wait on it, and it does not wake an idle agent. agent_status lists every agent.",
 		Schema: schemaOf(messageInput{})}
 }
 
 type messageInput struct {
-	To   string `json:"to" desc:"An agent's name or id, or \"user\" for the human" req:"true"`
-	Text string `json:"text" desc:"The message. The recipient sees only what you put here: include exact paths and results" req:"true"`
+	To      string `json:"to" desc:"An agent's name or id, or \"user\" for the human" req:"true"`
+	Text    string `json:"text" desc:"The message. The recipient sees only what you put here: include exact paths and results" req:"true"`
+	NoReply bool   `json:"no_reply" desc:"True when the message needs no answer (thanks, acknowledgements, closing notes): nobody owes a reply or waits, and an idle recipient is not woken"`
 }
 
 func (messageTool) Subject(in json.RawMessage) policy.Subject {
@@ -117,7 +118,7 @@ func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 	if strings.TrimSpace(a.Text) == "" {
 		return errf("text is required")
 	}
-	out, err := env.Orch.Message(env.Agent, Recipient(a.To), a.Text)
+	out, err := env.Orch.Message(env.Agent, Recipient(a.To), a.Text, a.NoReply)
 	if err != nil {
 		return errf("%v", err)
 	}

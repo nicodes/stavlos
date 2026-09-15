@@ -89,8 +89,10 @@ type Orchestrator interface {
 	// Message sends text from the caller to an agent (name or id) or to
 	// User. To an agent waiting on the caller it is an answer, delivered
 	// between turns; to any other agent a new message, delivered at its next
-	// step, that the caller then waits on. It returns the tool result.
-	Message(caller, to, text string) (string, error)
+	// step, that the caller then waits on, or with noReply a note that
+	// nobody owes or waits on and that never wakes the recipient. It returns
+	// the tool result.
+	Message(caller, to, text string, noReply bool) (string, error)
 	Cancel(parent, id string) error
 	Status(parent, id string) ([]ChildStatus, error)
 	// CanSpawn reports whether depth/fan-out limits currently permit a spawn.

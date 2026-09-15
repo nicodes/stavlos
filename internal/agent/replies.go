@@ -44,7 +44,7 @@ func owedBy(in event.UserMessagePayload) string {
 		if in.From == "" {
 			return tools.User
 		}
-	case event.MsgAgentResponse, event.MsgMonitorFired, event.MsgReminder:
+	case event.MsgAgentResponse, event.MsgMonitorFired, event.MsgReminder, event.MsgNote:
 	}
 	return ""
 }

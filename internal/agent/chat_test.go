@@ -2,9 +2,12 @@ package agent
 
 import (
 	"context"
+	"errors"
+	"github.com/nicodes/stavlos/internal/model"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
 )
@@ -102,5 +105,71 @@ func TestMessageAnswersTheLatestPost(t *testing.T) {
 	}
 	if len(posts) != 2 || posts[0] == "" || !reflect.DeepEqual(answers, []string{posts[0], posts[1], ""}) {
 		t.Fatalf("posts %q answers %q", posts, answers)
+	}
+}
+
+// TestNoReplyNote: a message sent with no_reply leaves no debt and no wait,
+// does not wake an idle recipient, survives a restart, and reaches the
+// recipient with its next turn, marked as needing no reply.
+func TestNoReplyNote(t *testing.T) {
+	fm := &fakeModel{
+		steps: []step{
+			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(text("delegated")),
+			reply(call("c2", "message", `{"to":"scout","text":"thanks","no_reply":true}`)), // woken by scout's answer
+			reply(text("noted")),
+		},
+		childSteps: []step{
+			reply(call("k1", "message", `{"to":"main","text":"found it"}`)),
+			reply(text("done")),
+		},
+	}
+	s, h := newTestSession(t, testConfig{}, fm)
+	root := s.Root()
+	runTurn(t, s, h, "delegate")
+	waitUntil(t, h, func() bool { return len(s.Agents()) == 2 })
+	child := s.Agents()[1]
+	waitUntil(t, h, func() bool {
+		return len(h.ofType(event.NoteQueued, child.ID)) == 1 && root.StateOf() == StateIdle && child.StateOf() == StateIdle
+	})
+	time.Sleep(50 * time.Millisecond) // the note must not start a turn
+	if in := child.Info(); in.Turn != 1 || len(in.Due) != 0 || in.Queued != 1 || len(root.Info().Awaiting) != 0 {
+		t.Fatalf("child %+v root awaiting %v", in, root.Info().Awaiting)
+	}
+	fin := finished(h, root.ID)
+	if out := fin[len(fin)-1].Output; !strings.HasPrefix(out, "note delivered to scout") {
+		t.Fatalf("tool result %q", out)
+	}
+	s.Stop()
+
+	h2 := newFakeHost(&fakeModel{childSteps: []step{func(_ context.Context, req model.Request) (model.Response, error) {
+		for _, m := range req.Messages {
+			for _, b := range m.Blocks {
+				if strings.Contains(b.Text, "[message from agent main, no reply needed") && strings.Contains(b.Text, "thanks") {
+					return text("ok"), nil
+				}
+			}
+		}
+		return text(""), errors.New("the note should reach the next turn")
+	}}})
+	s2, err := Recover(context.Background(), h2, s.ID, s.Dir, s.Created, s.Config(), h.all())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s2.Stop)
+	c2, _ := s2.Agent(child.ID)
+	if c2.Info().Queued != 1 {
+		t.Fatalf("the note should survive a restart: %+v", c2.Info())
+	}
+	if err := c2.Prompt(context.Background(), "anything else?", "human:test"); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h2, func() bool { return c2.Info().Turn == 2 && c2.StateOf() == StateIdle })
+	var kinds []string
+	for _, m := range userMessages(h2, child.ID) {
+		kinds = append(kinds, string(m.Kind))
+	}
+	if strings.Join(kinds, ",") != "prompt,note" || c2.Info().Queued != 0 || c2.Info().LastError != "" {
+		t.Fatalf("turn inputs %v, info %+v", kinds, c2.Info())
 	}
 }

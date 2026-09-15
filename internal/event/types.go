@@ -47,6 +47,7 @@ const (
 
 	PromptQueued  Type = "prompt.queued"  // TextPayload
 	SteerReceived Type = "steer.received" // TextPayload
+	NoteQueued    Type = "note.queued"    // TextPayload: a message that needs no reply, for the recipient\'s next step; it never wakes the agent
 
 	TurnStarted      Type = "turn.started"      // TurnPayload
 	UserMessage      Type = "user.message"      // UserMessagePayload
@@ -269,6 +270,7 @@ const (
 	MsgAgentResponse MessageKind = "agent_response" // another agent's answer, from the mailbox
 	MsgMonitorFired  MessageKind = "monitor_fired"  // a background job's exit, from the mailbox
 	MsgReminder      MessageKind = "reminder"       // the harness's one reminder of replies still owed
+	MsgNote          MessageKind = "note"           // a message from another agent that needs no reply (message no_reply)
 )
 
 // UserMessagePayload is the model-visible input to a model call.

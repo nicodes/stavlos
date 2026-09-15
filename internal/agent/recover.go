@@ -26,7 +26,7 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 	r := &recovery{
 		s: s, cfg: cfg,
 		openTurns: map[string]int{}, openMonitors: map[string]event.MonitorStartedPayload{}, monitorOwner: map[string]string{},
-		prompts: map[string][]queued{}, steers: map[string][]queued{}, responses: map[string][]response{},
+		prompts: map[string][]queued{}, steers: map[string][]queued{}, notes: map[string][]queued{}, responses: map[string][]response{},
 		finished: map[string]bool{}, missingRole: map[string]string{},
 	}
 	for _, e := range events {
@@ -55,6 +55,7 @@ type recovery struct {
 	monitorOwner map[string]string
 	prompts      map[string][]queued
 	steers       map[string][]queued
+	notes        map[string][]queued
 	responses    map[string][]response
 	finished     map[string]bool
 	missingRole  map[string]string // agent id → why it runs read-only (set after replay: turns clear lastError)
@@ -69,7 +70,7 @@ func (r *recovery) apply(e event.Event) {
 		r.spawned(e)
 	case event.AgentRoleChanged, event.AgentModelChanged, event.AgentVariantChanged, event.AgentDirAdded, event.AgentDirRemoved, event.TodoChanged:
 		r.agentSetting(e)
-	case event.PromptQueued, event.SteerReceived, event.UserMessage, event.ResponseReceived:
+	case event.PromptQueued, event.SteerReceived, event.NoteQueued, event.UserMessage, event.ResponseReceived:
 		r.inbox(e)
 	case event.MessageToUser, event.ReminderQueued, event.ReplyMissing:
 		r.replies(e)
@@ -229,6 +230,10 @@ func (r *recovery) inbox(e event.Event) {
 				a.settle(e.Agent) // a message to the agent is a reply to it
 			}
 		}
+	case event.NoteQueued:
+		var p event.TextPayload
+		_ = e.Decode(&p)
+		r.notes[e.Agent] = append(r.notes[e.Agent], queued{text: p.Text, source: p.Source})
 	case event.UserMessage:
 		r.consumed(e)
 	case event.ResponseReceived:
@@ -270,6 +275,10 @@ func (r *recovery) consumed(e event.Event) {
 	case event.MsgAgentResponse:
 		if q := r.responses[e.Agent]; len(q) > 0 {
 			r.responses[e.Agent] = q[1:]
+		}
+	case event.MsgNote:
+		if q := r.notes[e.Agent]; len(q) > 0 {
+			r.notes[e.Agent] = q[1:]
 		}
 	case event.MsgMonitorFired:
 		// A job result the turn consumed; open jobs are found from the
@@ -412,7 +421,7 @@ func (r *recovery) resume(ctx context.Context, host Host) error {
 		if why, ok := r.missingRole[id]; ok {
 			a.lastError = why
 		}
-		a.prompts, a.steers, a.responses = r.prompts[id], r.steers[id], r.responses[id]
+		a.prompts, a.steers, a.notes, a.responses = r.prompts[id], r.steers[id], r.notes[id], r.responses[id]
 		for _, resp := range a.responses {
 			a.wakes["response:"+resp.from] = true
 		}
