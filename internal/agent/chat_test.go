@@ -61,9 +61,11 @@ func TestPostDeliversByMention(t *testing.T) {
 	for _, e := range h.ofType(event.ChatPosted, "") {
 		var p event.ChatPayload
 		_ = e.Decode(&p)
-		posts = append(posts, strings.Join(p.To, ",")+": "+p.Text)
+		// the posting client is logged with the post, so a client mirroring
+		// the chat elsewhere can skip the posts it made itself
+		posts = append(posts, p.From+" → "+strings.Join(p.To, ",")+": "+p.Text)
 	}
-	if strings.Join(posts, " | ") != "scout,lookout: check the tests, then ping @main | main: hi @scout, mail me@example.com" {
+	if strings.Join(posts, " | ") != "human:test → scout,lookout: check the tests, then ping @main | human:test → main: hi @scout, mail me@example.com" {
 		t.Fatalf("chat.posted log: %q", posts)
 	}
 }
