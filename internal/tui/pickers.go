@@ -84,6 +84,7 @@ func (m *Model) onChannelsListed(msg channelsMsg) tea.Cmd {
 	case channelsNav:
 		if msg.err == nil {
 			m.navChannels = resumable(msg.channels, m.channelID)
+			m.pruneTrees()
 		}
 	case channelsHistory:
 		if msg.err == nil {
@@ -609,6 +610,7 @@ func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
 	m.stash()
 	m.channelState = newChannelState(info.ID, info)
 	m.restore(info.ID)
+	delete(m.trees, info.ID) // its agents are live again
 	m.superChat = true
 	m.layout()
 	m.input.Placeholder = m.placeholder()

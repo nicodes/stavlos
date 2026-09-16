@@ -66,7 +66,13 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 		return compactTickCmd()
 	case treeTickMsg:
 		m.treeTimer = false
-		return treeCmd(m.ctx, m.c, m.channelID)
+		cmds := []tea.Cmd{treeCmd(m.ctx, m.c, m.channelID)}
+		for _, s := range m.navChannels { // the trees kept open beside it
+			if s.ID != m.channelID && m.treeOpen[s.ID] {
+				cmds = append(cmds, treeCmd(m.ctx, m.c, s.ID))
+			}
+		}
+		return tea.Batch(cmds...)
 	case clearStatusMsg:
 		if msg.token == m.statusToken {
 			m.status = ""
@@ -88,6 +94,12 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		m.channel = cleanChannel(msg.res.Channel)
 		m.reconciled = true
 		m.setAgents(msg.res.Agents)
+		if id := m.selectNext; id != "" { // an agent picked under another channel's row
+			m.selectNext = ""
+			if i := m.findAgent(id); i >= 0 {
+				m.openAgent(i)
+			}
+		}
 		for _, p := range msg.res.Prompts {
 			m.upsertPrompt(p)
 		}
@@ -118,6 +130,14 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		m.status, m.statusErr = "daemon disconnected", true
 		return nil, true
 	case treeMsg:
+		if msg.channel != "" && msg.channel != m.channelID {
+			// a tree kept open beside the bound channel; one the daemon no
+			// longer holds simply keeps the tree it last had
+			if msg.err == nil {
+				m.keepTree(msg.channel, cleanAgents(msg.agents))
+			}
+			return nil, false
+		}
 		if msg.err != nil {
 			return []tea.Cmd{m.setStatus("tree: "+msg.err.Error(), true)}, false
 		}
