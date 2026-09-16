@@ -579,13 +579,10 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 	room := max(0, height-len(header))
 	start, end := 0, min(len(body), room)
 	if len(body) > room && room > 0 {
-		cur := 0
-		for r, it := range bodyItems {
-			if it == m.sbCursor {
-				cur = r
-			}
-		}
-		start, end = listWindow(cur, 0, len(body), room)
+		// the window is wherever the nav is scrolled to; the cursor moving is
+		// what scrolls it (followSidebarCursor), not drawing it
+		start = min(max(m.sbTop, 0), len(body)-room)
+		end = start + room
 	}
 	rows = append(header, body[start:end]...)
 	items = make([]int, len(header), len(rows))
