@@ -2130,10 +2130,16 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 	if m.focus != focusChat || m.chatCursor != 0 {
 		t.Fatalf("hover over the chat with the sidebar open: focus=%v cursor=%d", m.focus, m.chatCursor)
 	}
-	// hovering over the sidebar hands focus back
-	ev(tea.MouseMsg{X: 2, Y: r.First - m.vp.YOffset, Action: tea.MouseActionMotion})
-	if m.focus != focusInput {
-		t.Fatalf("hover over the sidebar should release the chat: %v", m.focus)
+	// hovering a sidebar row takes the chat's hover and marks that row
+	// (the rows start below the header; the chat's own offsets land in it)
+	ev(tea.MouseMsg{X: 2, Y: len(m.sidebarHeader(sidebarWidth - 1)), Action: tea.MouseActionMotion})
+	if m.focus != focusSidebar || !m.hoverFocus {
+		t.Fatalf("hover over a sidebar row: focus=%v hover=%v", m.focus, m.hoverFocus)
+	}
+	// the header is not a row: hover releases back to the input
+	ev(tea.MouseMsg{X: 2, Y: 1, Action: tea.MouseActionMotion})
+	if m.focus != focusInput || m.hoverFocus {
+		t.Fatalf("hover over the sidebar header should release: focus=%v hover=%v", m.focus, m.hoverFocus)
 	}
 }
 
