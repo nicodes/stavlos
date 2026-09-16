@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tui/render"
 )
 
 // TestPromptOptionsTakeTheMouse: the rows of the permission and questions
@@ -85,5 +86,37 @@ func TestPromptOptionsTakeTheMouse(t *testing.T) {
 	click(at("something else"))
 	if !m.q.typing || m.q.sel != 2 {
 		t.Fatalf("clicking something else should open the field: typing=%v sel=%d", m.q.typing, m.q.sel)
+	}
+}
+
+// TestSidebarHoverMarksTheRow: the pointer over a sidebar row gives it the
+// cursor and its background, as it does a chat item, without selecting it.
+func TestSidebarHoverMarksTheRow(t *testing.T) {
+	prev := render.SwapHighlight(func(s string, _ int) string { return render.GutterMark + s })
+	t.Cleanup(func() { render.SwapHighlight(prev) })
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.setFocus(focusInput)
+	move := func(x, y int) {
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
+		m = nm.(Model)
+	}
+	header := len(m.sidebarHeader(sidebarWidth - 1))
+	move(3, header+4)
+	if m.focus != focusSidebar || !m.hoverFocus || m.sbCursor != 4 {
+		t.Fatalf("hover on a tree row: focus=%v hover=%v cursor=%d", m.focus, m.hoverFocus, m.sbCursor)
+	}
+	if id := m.selectedID(); id == "c" {
+		t.Fatal("hover must not select the agent under the pointer")
+	}
+	body, items := m.sidebarBody(sidebarWidth - 1)
+	for i, it := range items {
+		if it == m.sbCursor && !strings.Contains(body[i], render.GutterMark) {
+			t.Fatalf("the hovered row should carry the highlight: %q", stripANSI(body[i]))
+		}
+	}
+	move(3, 1) // the header: hover releases
+	if m.focus != focusInput || m.hoverFocus {
+		t.Fatalf("hover on the header should release: focus=%v hover=%v", m.focus, m.hoverFocus)
 	}
 }

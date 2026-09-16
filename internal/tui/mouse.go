@@ -62,7 +62,7 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			return nil
 		}
 		if !inMain {
-			return m.mouseHover(-1, msg.Y) // outside the chat: hover releases, nothing else
+			return m.sidebarHover(msg.Y) // the sidebar marks its own rows
 		}
 		return m.mouseHover(cx, msg.Y)
 	}
@@ -216,20 +216,7 @@ func (m *Model) mouseHover(x, y int) tea.Cmd {
 	}
 	inChat := x >= 0 && x < m.contentWidth() && y >= 0 && y < m.vp.Height
 	if !inChat {
-		if m.hoverFocus && m.focus == focusChat {
-			// Give focus back to wherever hover took it from, without
-			// scrolling the chat.
-			m.hoverFocus = false
-			m.focus = m.hoverFrom
-			m.collapseAll()
-			m.refreshViewport()
-			m.follow = m.vp.AtBottom()
-			if m.focus == focusInput {
-				return m.input.Focus()
-			}
-			return m.syncPromptInput()
-		}
-		return nil
+		return m.releaseHover()
 	}
 	item, ok := m.itemAtRow(m.vp.YOffset + y)
 	if !ok {
@@ -250,6 +237,60 @@ func (m *Model) mouseHover(x, y int) tea.Cmd {
 	}
 	m.chatCursor = item
 	m.refreshViewport()
+	return nil
+}
+
+// releaseHoverState gives focus back to wherever hover took it from,
+// undoing what hovering the chat did (the per-visit folds, the scroll
+// follow). It reports whether hover held focus at all; the caller decides
+// whether the restored section takes the keyboard back.
+func (m *Model) releaseHoverState() bool {
+	if !m.hoverFocus {
+		return false
+	}
+	fromChat := m.focus == focusChat
+	m.hoverFocus = false
+	m.focus = m.hoverFrom
+	if fromChat {
+		m.collapseAll()
+		m.refreshViewport()
+		m.follow = m.vp.AtBottom()
+	}
+	return true
+}
+
+// releaseHover is releaseHoverState with the restored section taking the
+// keyboard back, for a pointer that left without landing on anything.
+func (m *Model) releaseHover() tea.Cmd {
+	if !m.releaseHoverState() {
+		return nil
+	}
+	if m.focus == focusInput {
+		return m.input.Focus()
+	}
+	return m.syncPromptInput()
+}
+
+// sidebarHover is mouse movement over the sidebar: the row under the
+// pointer takes the cursor, and with it the background that marks it, the
+// way hovering a chat item does. Nothing is selected: that is the click.
+// The header, whose rows the cursor skips, releases hover instead.
+func (m *Model) sidebarHover(y int) tea.Cmd {
+	if m.isHome() || !m.sidebarVisible() {
+		return m.releaseHover()
+	}
+	_, items := m.sidebarLines(m.vp.Height)
+	if y < 0 || y >= len(items) || items[y] < 0 {
+		return m.releaseHover()
+	}
+	m.releaseHoverState() // coming from the chat: undo what hovering it did
+	if m.focus != focusSidebar {
+		m.hoverFocus, m.hoverFrom = true, m.focus
+		m.focus = focusSidebar
+		m.input.Blur()
+		m.promptInput.Blur()
+	}
+	m.sbCursor = items[y]
 	return nil
 }
 
