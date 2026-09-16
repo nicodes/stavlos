@@ -68,9 +68,12 @@ type Model struct {
 	dialogs      // the open overlay and sign-in
 	promptState  // what waits on the human, in every channel; survives a switch
 
-	navChannels []protocol.ChannelInfo // the sidebar's channels section: other channels of this directory, newest first
-	visited     map[string]replayed    // channels switched away from: what their replay built, so a return replays only what it missed
-	dirsNext    bool                   // another channel's gear was chosen: its dirs dialog opens once the switch lands
+	navChannels []protocol.ChannelInfo          // the sidebar's channels section: other channels of this directory, newest first
+	visited     map[string]replayed             // channels switched away from: what their replay built, so a return replays only what it missed
+	trees       map[string][]protocol.AgentInfo // other channels' agents, so leaving a channel does not fold its tree
+	treeOpen    map[string]bool                 // channels whose tree the sidebar draws; the bound channel's always is
+	selectNext  string                          // agent to select once a switch lands (an agent picked under another channel)
+	dirsNext    bool                            // another channel's gear was chosen: its dirs dialog opens once the switch lands
 
 	presets []protocol.PresetInfo
 
@@ -186,6 +189,36 @@ func (m *Model) stash() {
 		delete(m.visited, oldest)
 	}
 	m.visited[m.channelID] = replayed{m.spawned, m.parentOf, m.transcripts, m.seq, time.Now()}
+	m.keepTree(m.channelID, m.agents)
+}
+
+// keepTree keeps channel id's agents, so the sidebar goes on drawing its
+// tree once the TUI is bound to another channel: opening a channel folds
+// nothing that was already open. pruneTrees bounds what this holds.
+func (m *Model) keepTree(id string, agents []protocol.AgentInfo) {
+	if id == "" || len(agents) == 0 {
+		return
+	}
+	if m.trees == nil {
+		m.trees, m.treeOpen = map[string][]protocol.AgentInfo{}, map[string]bool{}
+	}
+	m.trees[id] = append([]protocol.AgentInfo(nil), agents...)
+	m.treeOpen[id] = true
+}
+
+// pruneTrees drops the trees of channels the directory no longer lists,
+// which bounds what is kept to the channels the sidebar draws.
+func (m *Model) pruneTrees() {
+	for id := range m.trees {
+		keep := id == m.channelID
+		for _, s := range m.navChannels {
+			keep = keep || s.ID == id
+		}
+		if !keep {
+			delete(m.trees, id)
+			delete(m.treeOpen, id)
+		}
+	}
 }
 
 // restore puts back what replaying id built before, if it was visited:

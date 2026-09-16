@@ -149,7 +149,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	case focusSidebar:
 		m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbHere})
 		if !m.superChat {
-			m.sbCursor = m.sidebarIndex(sidebarRow{sbAgent, m.selected})
+			m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbAgent, k: m.selected})
 		}
 	case focusAsync, focusTodo, focusMCP, focusDirs:
 		m.agCursor = 0

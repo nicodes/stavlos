@@ -54,7 +54,7 @@ The tabs, each always there with its count, are "permission" and "questions" (sh
 
 The sidebar (ctrl+b) is the swarm nav: the channel directory, its tokens and cost, then a "channels" heading over its "✚" at the right of the "channels" title (a popup names a new channel in this directory) and this channel's "#name" row and, one level in, the agent tree with an orange `!` or `?` in place of the dot of any agent or channel whose permission or question is pending, and each agent's cost at the right edge. ↑/↓ move, space selects, `n` jumps to the next agent waiting on you, and a click on a row selects it.
 
-Under the tree, a folded "channels" section lists this directory's other channels, each with a state dot (full orange while an agent works, half while one waits, empty when idle). Space unfolds it, and space on a channel resumes it in place.
+This directory's other channels are listed around this one, each with a state dot (full orange while an agent works, half while one waits, empty when idle). Space on a channel resumes it in place. A channel keeps its agent tree once you have opened it, so opening another folds nothing and you keep seeing both swarms; ← folds a tree you are done with and ← again brings it back. Space on an agent under another channel opens that channel on that agent.
 
 ### Permissions and modes
 
