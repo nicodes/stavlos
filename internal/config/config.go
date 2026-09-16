@@ -45,6 +45,7 @@ type File struct {
 	Sandbox    *SandboxConfig `json:"sandbox,omitempty"`   // the OS boundary shell commands and MCP servers run in
 	Dirs       []string       `json:"dirs,omitempty"`      // directories every channel works in besides its own (yours, and a trusted project\'s)
 	Hosts      []string       `json:"hosts,omitempty"`     // hosts web_fetch reaches without asking: github.com, *.example.com, or * (yours, and a trusted project\'s)
+	Discord    *Discord       `json:"discord,omitempty"`   // global-only bridge configuration; token remains an environment reference
 }
 
 // SandboxConfig shapes the sandbox (any layer; a trusted project's wins). Paths may use ~
@@ -253,6 +254,7 @@ type Effective struct {
 	}
 	MCP         map[string]MCP
 	Search      Search          // web_search backend, key expanded
+	Discord     *Discord        // global bridge configuration, never project-merged or token-expanded
 	PassEnv     []string        // environment variables child processes keep although their names look like secrets
 	searchRuled bool            // a layer's policy decided web_search, so a search backend does not allow it
 	Policy      *policy.Layered // every layer's rules merged in order (defaults, global, project, local); roles add overlays that only tighten
@@ -324,8 +326,8 @@ func Load(dir string, trust Trust) (*Effective, error) {
 		}
 		if trust != nil && trust.Trusted(dir, hash) {
 			// stavlos.json and stavlos.local.json are both the repository's,
-			// trust-gated and hashed; they set anything the global file can,
-			// the local file over the project's over the global one.
+			// trust-gated and hashed; they override channel settings, except
+			// global-only bridge configuration. Local wins over project.
 			for _, l := range []struct{ file, layer string }{{"stavlos.json", "project"}, {"stavlos.local.json", "local"}} {
 				f, err := readFile(filepath.Join(pdir, l.file))
 				if err != nil {
@@ -434,6 +436,12 @@ func LoadGlobal() (*Effective, error) {
 // that cannot be applied is an error, never a silent fallback to the
 // default (an unreadable deny rule is the worst kind of failure).
 func (e *Effective) applyFile(f File, layer string) error {
+	if f.Discord != nil {
+		if layer != "global" {
+			return errors.New("discord is global-only")
+		}
+		e.Discord = f.Discord
+	}
 	if _, ok := f.Policy[toolname.WebSearch]; ok && layer != "defaults" {
 		e.searchRuled = true // a layer decided web_search itself: a search backend does not allow it
 	}
