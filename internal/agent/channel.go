@@ -598,8 +598,11 @@ func (c *Channel) Steer(ctx context.Context, agentID, text, source string) error
 // @names at its front say which agents it goes to, and what follows reaches
 // each as a steer that is owed a reply. A post with no leading name goes to
 // the main agent; a leading name that is no live agent refuses the whole
-// post. The post and its deliveries are one transaction.
-func (c *Channel) Post(ctx context.Context, text, _ string) ([]string, error) {
+// post. The post and its deliveries are one transaction. from names the
+// client that sent it and is logged on the post, so a client mirroring the
+// chat somewhere else can tell its own posts from another client's and
+// echo none of them back.
+func (c *Channel) Post(ctx context.Context, text, from string) ([]string, error) {
 	refs, message := protocol.Addressees(text)
 	if strings.TrimSpace(message) == "" {
 		return nil, errors.New("empty message")
@@ -633,7 +636,7 @@ func (c *Channel) Post(ctx context.Context, text, _ string) ([]string, error) {
 		names[i] = a.name
 		evs = append(evs, c.event(a.id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputSteer, Text: message, Post: post}))
 	}
-	evs[0] = c.event("", event.ChatPosted, event.ChatPayload{ID: post, Text: message, To: names})
+	evs[0] = c.event("", event.ChatPosted, event.ChatPayload{ID: post, From: from, Text: message, To: names})
 	wake, err := c.commitLocked(ctx, evs...)
 	c.mu.Unlock()
 	signal(wake)

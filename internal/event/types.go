@@ -110,10 +110,14 @@ type DirPayload struct {
 }
 
 // ChatPayload is a message in the channel chat: the human's post (ID, the
-// names it went To) or an agent's message to the human (From, and the Post
-// it answers, "" for none).
+// names it went To, and From, the client that posted it) or an agent's
+// message to the human (From, the agent's name, and the Post it answers,
+// "" for none).
 type ChatPayload struct {
-	ID   string   `json:"id,omitempty"`
+	ID string `json:"id,omitempty"`
+	// From is the agent's name on a message, and on a post the client that
+	// sent it ("human:tui:1234", "human:discord"). A client mirroring the
+	// chat elsewhere reads it to tell its own posts from everyone else's.
 	From string   `json:"from,omitempty"`
 	Text string   `json:"text"`
 	To   []string `json:"to,omitempty"`
