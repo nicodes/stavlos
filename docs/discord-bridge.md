@@ -243,6 +243,10 @@ is never logged.
 
 ## Discord setup
 
+The step-by-step is `docs/discord-setup.md`: which keys are needed, how to
+create the application and invite it, and what each permission buys. What
+follows is only the part that shapes the design.
+
 - An application with a bot, invited with **Send Messages, Manage Webhooks,
   Manage Channels, Read Message History** and `applications.commands`.
 - **Message Content is a privileged intent.** Under 10,000 users it is a toggle
