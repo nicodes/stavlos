@@ -92,14 +92,13 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.OvClose):
 		return m.setFocus(focusInput)
 	case stepCursor(msg, &m.sbCursor, n, true):
+		m.followSidebarCursor()
 		return nil
 	case key.Matches(msg, keys.PageUp):
-		m.vp.PageUp()
-		m.follow = m.vp.AtBottom()
+		m.scrollSidebar(-m.sidebarRoom())
 		return nil
 	case key.Matches(msg, keys.PageDown):
-		m.vp.PageDown()
-		m.follow = m.vp.AtBottom()
+		m.scrollSidebar(m.sidebarRoom())
 		return nil
 	case key.Matches(msg, keys.Select):
 		return m.sidebarSelect(m.sbCursor)
@@ -117,6 +116,7 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		if i := m.nextNeedy(from); i >= 0 {
 			m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbAgent, k: i})
+			m.followSidebarCursor()
 			m.openAgent(i)
 		} else {
 			return m.setStatus("no agent is waiting on you", false)
@@ -124,6 +124,51 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	return nil
+}
+
+// sidebarRoom is how many body rows the sidebar draws under its header.
+func (m Model) sidebarRoom() int {
+	return max(0, m.vp.Height-len(m.sidebarHeader(sidebarWidth-1)))
+}
+
+// scrollSidebar moves the nav's window by delta rows, kept within its body.
+func (m *Model) scrollSidebar(delta int) {
+	body, _ := m.sidebarBody(sidebarWidth - 1)
+	m.sbTop = min(max(m.sbTop+delta, 0), max(0, len(body)-m.sidebarRoom()))
+}
+
+// sidebarWheel scrolls the nav for a wheel notch over it; a shifted wheel
+// asks for sideways scrolling, which the nav does not do.
+func (m *Model) sidebarWheel(msg tea.MouseMsg) {
+	if msg.Action != tea.MouseActionPress || msg.Shift {
+		return
+	}
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		m.scrollSidebar(-wheelRows)
+	case tea.MouseButtonWheelDown:
+		m.scrollSidebar(wheelRows)
+	default: // only the wheel scrolls
+	}
+}
+
+// followSidebarCursor scrolls the nav just far enough to keep the row its
+// cursor is on in view; it is what a cursor move calls, so scrolling by
+// hand is never undone by a redraw.
+func (m *Model) followSidebarCursor() {
+	body, items := m.sidebarBody(sidebarWidth - 1)
+	room := m.sidebarRoom()
+	if room <= 0 || len(body) <= room {
+		m.sbTop = 0
+		return
+	}
+	cur := 0
+	for r, it := range items {
+		if it == m.sbCursor {
+			cur = r
+		}
+	}
+	m.sbTop, _ = listWindow(cur, m.sbTop, len(body), room)
 }
 
 // nextNeedy is the index of the next agent after from (wrapping) with a
@@ -278,6 +323,7 @@ func (m *Model) toggleChannelTree(i int) tea.Cmd {
 	}
 	m.treeOpen[s.ID] = !m.treeOpen[s.ID]
 	m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbOther, k: r.k})
+	m.followSidebarCursor()
 	return nil
 }
 

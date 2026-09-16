@@ -102,6 +102,7 @@ type Model struct {
 	promptInput textinput.Model // answer field of a question prompt
 	dirInput    textinput.Model // path field of the dirs dialog while adding or editing
 	sbCursor    int
+	sbTop       int      // first sidebar body row drawn: the nav scrolls on its own
 	palIdx      int      // highlighted row in the "/" command palette
 	history     []string // prompts sent from this client (and replayed human prompts)
 	histIdx     int      // == len(history) when editing a new line
@@ -325,9 +326,13 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case tea.KeyMsg:
 		cmds = append(cmds, m.handleKey(msg))
 	case tea.MouseMsg:
-		m.vp.Wheel(msg)
-		if m.focus != focusChat {
-			m.follow = m.vp.AtBottom()
+		if _, inMain := m.mainX(msg.X, msg.Y); !inMain {
+			m.sidebarWheel(msg) // over the sidebar: it scrolls, and the chat stays where it was
+		} else {
+			m.vp.Wheel(msg)
+			if m.focus != focusChat {
+				m.follow = m.vp.AtBottom()
+			}
 		}
 		cmds = append(cmds, m.mouse(msg))
 	case spinner.TickMsg, placeholderTickMsg, compactTickMsg, treeTickMsg, clearStatusMsg:

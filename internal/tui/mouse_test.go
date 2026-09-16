@@ -120,3 +120,59 @@ func TestSidebarHoverMarksTheRow(t *testing.T) {
 		t.Fatalf("hover on the header should release: focus=%v hover=%v", m.focus, m.hoverFocus)
 	}
 }
+
+// TestSidebarScrolls: the nav scrolls on its own — the wheel over it and
+// pgup/pgdn move its window while the chat stays put, and the cursor
+// moving brings its row into view.
+func TestSidebarScrolls(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	many := make([]protocol.AgentInfo, 40)
+	for i := range many {
+		id := string(rune('a'+i%26)) + strings.Repeat("-", i/26+1)
+		many[i] = protocol.AgentInfo{ID: id, Name: "agent" + id, Role: "general", State: "idle"}
+	}
+	m.agents, m.selected = many, 0
+	m.height = 18 // a short window: the tree is taller than the room for it
+	m.layout()
+	first := func() string {
+		rows, items := m.sidebarLines(m.vp.Height)
+		for i, it := range items {
+			if it >= 0 {
+				return stripANSI(rows[i])
+			}
+		}
+		return ""
+	}
+	top, chatAt := first(), m.vp.YOffset
+	nm, _ := m.Update(tea.MouseMsg{X: 2, Y: 8, Action: tea.MouseActionPress, Button: tea.MouseButtonWheelDown})
+	m = nm.(Model)
+	if m.sbTop == 0 || first() == top {
+		t.Fatalf("the wheel over the nav should scroll it: top=%d first=%q", m.sbTop, first())
+	}
+	if m.vp.YOffset != chatAt {
+		t.Fatalf("the wheel over the nav must leave the chat alone: %d → %d", chatAt, m.vp.YOffset)
+	}
+	m.setFocus(focusSidebar)
+	m.sbTop = 0
+	press(&m, tea.KeyMsg{Type: tea.KeyPgDown})
+	if m.sbTop == 0 {
+		t.Fatal("pgdn should scroll the nav")
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyPgUp})
+	if m.sbTop != 0 {
+		t.Fatalf("pgup should scroll it back: %d", m.sbTop)
+	}
+	// walking the cursor down keeps it in view
+	for range many {
+		press(&m, tea.KeyMsg{Type: tea.KeyDown})
+	}
+	_, items := m.sidebarLines(m.vp.Height)
+	seen := false
+	for _, it := range items {
+		seen = seen || it == m.sbCursor
+	}
+	if !seen {
+		t.Fatalf("the cursor should stay in view: cursor=%d top=%d items=%v", m.sbCursor, m.sbTop, items)
+	}
+}
