@@ -17,9 +17,9 @@ import (
 
 // Client is a connection to stavlosd.
 type Client struct {
-	conn net.Conn
-	w    *bufio.Writer
-	wmu  sync.Mutex
+	conn  net.Conn
+	w     *bufio.Writer
+	write chan struct{} // serializes writes without making cancellation wait for a mutex
 
 	nextID  atomic.Int64
 	pending map[int64]chan protocol.Response
@@ -32,11 +32,17 @@ type Client struct {
 
 	closed chan struct{}
 	err    error
+	once   sync.Once
 }
 
 // Dial connects to the daemon socket.
 func Dial(socket string) (*Client, error) {
-	conn, err := net.Dial("unix", socket)
+	return DialContext(context.Background(), socket)
+}
+
+// DialContext connects with a cancellable dial.
+func DialContext(ctx context.Context, socket string) (*Client, error) {
+	conn, err := (&net.Dialer{}).DialContext(ctx, "unix", socket)
 	if err != nil {
 		return nil, err
 	}
@@ -48,15 +54,20 @@ func Dial(socket string) (*Client, error) {
 			return nil, fmt.Errorf("%s: %w", socket, err)
 		}
 	}
+	return newClient(conn), nil
+}
+
+func newClient(conn net.Conn) *Client {
 	c := &Client{
 		conn:          conn,
 		w:             bufio.NewWriter(conn),
 		pending:       map[int64]chan protocol.Response{},
 		Notifications: make(chan protocol.Response, 4096),
 		closed:        make(chan struct{}),
+		write:         make(chan struct{}, 1),
 	}
 	go c.readLoop()
-	return c, nil
+	return c
 }
 
 func (c *Client) readLoop() {
@@ -85,24 +96,25 @@ func (c *Client) readLoop() {
 			ch <- r
 		}
 	}
-	c.err = sc.Err()
-	if c.err == nil {
-		c.err = errors.New("connection closed")
-	}
-	close(c.closed)
-	c.pmu.Lock()
-	for id, ch := range c.pending {
-		close(ch)
-		delete(c.pending, id)
-	}
-	c.pmu.Unlock()
+	c.shutdown(sc.Err())
+}
+
+func (c *Client) shutdown(err error) {
+	c.once.Do(func() {
+		if err == nil {
+			err = errors.New("connection closed")
+		}
+		c.err = err
+		close(c.closed)
+		_ = c.conn.Close()
+	})
 }
 
 // Closed is closed when the connection drops.
 func (c *Client) Closed() <-chan struct{} { return c.closed }
 
 // Close closes the connection.
-func (c *Client) Close() error { return c.conn.Close() }
+func (c *Client) Close() error { c.shutdown(nil); return nil }
 
 // Call performs one JSON-RPC request; params is the method's params struct
 // (nil for none). The protocol version travels in the envelope.
@@ -134,14 +146,8 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 		c.pmu.Unlock()
 	}()
 
-	c.wmu.Lock()
-	_, werr := c.w.Write(append(b, '\n'))
-	if werr == nil {
-		werr = c.w.Flush()
-	}
-	c.wmu.Unlock()
-	if werr != nil {
-		return werr
+	if err := c.send(ctx, append(b, '\n')); err != nil {
+		return err
 	}
 	select {
 	case r, ok := <-ch:
@@ -160,6 +166,36 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 	case <-c.closed:
 		return c.err
 	}
+}
+
+// send closes a connection interrupted mid-write: a partial JSON frame cannot
+// safely be followed by another request. Cancellation while waiting to write
+// leaves the connection alone.
+func (c *Client) send(ctx context.Context, b []byte) error {
+	select {
+	case c.write <- struct{}{}:
+		defer func() { <-c.write }()
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.closed:
+		return c.err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	stop := context.AfterFunc(ctx, func() { c.shutdown(ctx.Err()) })
+	defer stop()
+	_, err := c.w.Write(b)
+	if err == nil {
+		err = c.w.Flush()
+	}
+	if err != nil {
+		c.shutdown(err)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+	return err
 }
 
 // Do calls method m with params p and returns its result: the method's

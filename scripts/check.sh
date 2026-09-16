@@ -34,7 +34,7 @@ go test -race -count=1 \
 	./internal/agent/ ./internal/daemon/ ./internal/proc/ ./internal/tools/ ./internal/shellcmd/ \
 	./internal/textsafe/ ./internal/oauth/ ./internal/eventlog/ ./internal/escalation/ \
 	./internal/model/... ./internal/modelsdev/ ./internal/auth/ ./internal/config/ ./internal/policy/ \
-	./internal/tui/... | grep -v '^ok '
+	./internal/tui/... ./internal/discord/ ./pkg/client/ | grep -v '^ok '
 [ "${PIPESTATUS[0]}" -eq 0 ] || failed+=(race)
 
 for i in 1 2 3; do

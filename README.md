@@ -128,13 +128,23 @@ stavlos --version              # version, commit and build of this binary
 
 ## Project configuration
 
-Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and a `stavlos.json` (plus a gitignored `stavlos.local.json`) that can set anything your global one can and takes precedence over it once trusted; every agent follows `AGENTS.md` instructions: yours in `~/.config/stavlos/AGENTS.md`, then the repository's from its git root down to the channel directory (a directory's `CLAUDE.md` where it has no `AGENTS.md`), 32 KiB in all, and a subdirectory's with an agent's first read, search or edit there. Editing any of them asks in every mode, and an edit made outside the harness brings the trust prompt back when an agent next starts a turn. The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
+Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and a `stavlos.json` (plus a gitignored `stavlos.local.json`) that takes precedence over the global config once trusted. The `discord` block is global-only; other settings can be overridden by the project. Every agent follows `AGENTS.md` instructions: yours in `~/.config/stavlos/AGENTS.md`, then the repository's from its git root down to the channel directory (a directory's `CLAUDE.md` where it has no `AGENTS.md`), 32 KiB in all, and a subdirectory's with an agent's first read, search or edit there. Editing any of them asks in every mode, and an edit made outside the harness brings the trust prompt back when an agent next starts a turn. The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
+
+## Discord
+
+`go run ./cmd/stavlos-discord` connects a Discord bot to the local daemon. Each
+allowed Stavlos channel gets a Discord text channel: send tasks, reply to named
+agents, answer permission and question prompts, and use `/status` or `/cancel`.
+Prompts appear as fallback after the terminal's claim timeout. The bridge uses
+outbound connections and a global-only `discord` config block with an explicit
+operator list and working-directory list. See [the setup guide](docs/discord-setup.md)
+for the bot, configuration, launch instructions and user service.
 
 ## Status
 
 Implemented: daemon with SQLite event log, one state machine per channel with a goroutine per agent, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend) and Grok subscription adapters with browser and device-code sign-in, models.dev metadata, native search tools, and a Linux sandbox for commands and MCP servers.
 
-Not yet: Discord service, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
+Not yet: go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
 
 ## Development
 
