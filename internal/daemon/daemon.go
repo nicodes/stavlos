@@ -606,10 +606,11 @@ func (d *Daemon) LoginWait(ctx context.Context, id string) (registry.Status, err
 // --- clients ---
 
 type client struct {
-	id   string
-	name string
-	tier protocol.Tier
-	send func(line []byte, droppable bool) // queues one encoded line; droppable for stream deltas
+	id     string
+	name   string
+	tier   protocol.Tier
+	send   func(line []byte, droppable bool)   // queues one encoded line; droppable for stream deltas
+	replay func(context.Context, []byte) error // waits for queue space during history replay
 
 	mu   sync.Mutex
 	subs map[string]int64 // channel id → last seq delivered
@@ -647,9 +648,8 @@ func (c *client) deliver(e event.Event, line []byte) {
 
 // subscribe replays a channel's events from seq from, then hands the
 // client over to live delivery with nothing missed and nothing twice. The
-// bulk of the replay runs alongside appends; the tail committed meanwhile
-// is read and sent inside a log barrier, where nothing commits, and the
-// subscription is registered there, so the next live event is the next seq.
+// replay waits for the reader outside the log barrier. Once caught up, a
+// barrier checks for a final tail and registers live delivery only if empty.
 func (d *Daemon) subscribe(ctx context.Context, cl *client, channel string, from int64) (int64, error) {
 	if from <= 0 {
 		from = 1
@@ -658,32 +658,34 @@ func (d *Daemon) subscribe(ctx context.Context, cl *client, channel string, from
 	delete(cl.subs, channel) // a re-subscription starts over: no live delivery during the replay
 	cl.mu.Unlock()
 	last := from - 1
-	evs, err := d.Log.Read(ctx, channel, from, 0)
-	if err != nil {
-		return 0, err
-	}
-	for _, e := range evs {
-		cl.send(eventLine(e), false)
-		last = e.Seq
-	}
-	var tailErr error
-	if err := d.Log.Barrier(func() {
-		tail, err := d.Log.Read(ctx, channel, last+1, 0)
+	for {
+		evs, err := d.Log.Read(ctx, channel, last+1, 512)
 		if err != nil {
-			tailErr = err
-			return
+			return 0, err
 		}
-		for _, e := range tail {
-			cl.send(eventLine(e), false)
+		if len(evs) == 0 {
+			var readErr error
+			if err := d.Log.Barrier(func() {
+				evs, readErr = d.Log.Read(ctx, channel, last+1, 512)
+				if readErr == nil && len(evs) == 0 {
+					cl.mu.Lock()
+					cl.subs[channel] = last
+					cl.mu.Unlock()
+				}
+			}); err != nil {
+				return 0, err
+			}
+			if readErr != nil || len(evs) == 0 {
+				return last, readErr
+			}
+		}
+		for _, e := range evs {
+			if err := cl.replay(ctx, eventLine(e)); err != nil {
+				return 0, err
+			}
 			last = e.Seq
 		}
-		cl.mu.Lock()
-		cl.subs[channel] = last
-		cl.mu.Unlock()
-	}); err != nil {
-		return 0, err
 	}
-	return last, tailErr
 }
 
 // clientList snapshots the attached clients, so nothing is sent while the

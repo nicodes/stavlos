@@ -112,7 +112,7 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), done: make(chan struct{}), ran: ran}
-	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.enqueue}
+	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.enqueue, replay: c.enqueueReplay}
 	d.addClient(c.cl)
 	go c.writer()
 	defer func() {
@@ -160,6 +160,21 @@ func (c *conn) enqueue(line []byte, droppable bool) {
 	default:
 		log.Printf("client %s is not reading; dropping it", c.cl.id)
 		c.close()
+	}
+}
+
+// enqueueReplay applies backpressure to history, whose producer can be much
+// faster than a healthy reader. Unlike live broadcasts, replay may wait, but
+// never while holding the event log barrier. The writer still times out peers
+// that stop reading entirely.
+func (c *conn) enqueueReplay(ctx context.Context, line []byte) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-c.done:
+		return net.ErrClosed
+	case c.out <- outMsg{b: line}:
+		return nil
 	}
 }
 
