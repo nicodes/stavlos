@@ -577,7 +577,7 @@ func (m Model) channelView(f frame, width int) string {
 	}
 	// Under the divider: the palette (while open) and the input, then a blank
 	// line and the tab strip when there is one.
-	parts := []string{top, m.ruleLine(width)}
+	parts := []string{top, m.ruleLine(width), ""} // air between the divider and the input (dividerGap)
 	if f.palette != "" {
 		parts = append(parts, f.palette)
 	}

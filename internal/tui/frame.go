@@ -20,8 +20,9 @@ type frame struct {
 }
 
 // computeFrame lays the screen out from top to bottom: the chat, the
-// divider (the agent, its tabs and the usage sit on it), the palette, the
-// input, a blank line and the tab strip when there is one, then the key bar.
+// divider (the agent, its tabs and the usage sit on it), a blank line, the
+// palette, the input, a blank line and the tab strip when there is one,
+// then the key bar.
 func (m Model) computeFrame() frame {
 	f := frame{palette: m.paletteViewFor(m.width), sections: m.sectionsView(m.width)}
 	f.keybar, f.keybarRows = m.keyBarView()
@@ -30,12 +31,16 @@ func (m Model) computeFrame() frame {
 	if f.stripRows > 0 {
 		under = 1
 	}
-	f.bodyH = max(m.height-f.keybarRows-1-lineCount(f.palette)-m.inputRows()-under-f.stripRows, 1)
+	f.bodyH = max(m.height-f.keybarRows-1-dividerGap-lineCount(f.palette)-m.inputRows()-under-f.stripRows, 1)
 	f.rule = f.bodyH
-	f.input = f.bodyH + 1 + lineCount(f.palette)
+	f.input = f.bodyH + 1 + dividerGap + lineCount(f.palette)
 	f.strip = f.input + m.inputRows() + under
 	return f
 }
+
+// dividerGap is the blank rows between the divider and what sits under it
+// (the palette, else the input).
+const dividerGap = 1
 
 // lineCount is how many screen lines s takes (0 for none).
 func lineCount(s string) int {
