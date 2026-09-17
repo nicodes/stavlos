@@ -393,6 +393,20 @@ var handlers = routes(
 	route(protocol.PlanUsage, func(_ context.Context, c *conn, _ protocol.None) (protocol.PlanUsageResult, error) {
 		return c.d.planUsage(), nil
 	}),
+	route(protocol.PlanSeries, func(_ context.Context, c *conn, p protocol.PlanSeriesParams) (protocol.PlanSeriesResult, error) {
+		if p.Buckets < 1 || p.Buckets > 1000 {
+			return protocol.PlanSeriesResult{}, fmt.Errorf("buckets must be 1–1000, not %d", p.Buckets)
+		}
+		to := cmp.Or(p.To, time.Now())
+		from := p.From
+		if from.IsZero() {
+			from = c.d.planUsageFirst(p.Provider, to)
+		}
+		if !from.Before(to) {
+			return protocol.PlanSeriesResult{}, errors.New("from must be before to")
+		}
+		return protocol.PlanSeriesResult{From: from.UTC(), To: to.UTC(), Percent: c.d.planUsageSeries(p.Provider, from, to, p.Buckets)}, nil
+	}),
 	route(protocol.CacheUsage, func(ctx context.Context, c *conn, p protocol.CacheUsageParams) (protocol.CacheUsageResult, error) {
 		minutes := cmp.Or(p.Minutes, 60)
 		if minutes < 1 || minutes > 7*24*60 {

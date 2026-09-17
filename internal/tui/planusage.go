@@ -103,6 +103,31 @@ func (m Model) planUsageRows(width int, now time.Time) []string {
 	return rows
 }
 
+// planCommand is /plan [provider]: the chart of that subscription's plan
+// usage, or of the first plan with a reading.
+func (m *Model) planCommand(rest string) tea.Cmd {
+	if len(m.plans) == 0 {
+		return m.setStatus("no plan usage yet: it comes with the next model call", false)
+	}
+	p := m.plans[0]
+	for _, q := range m.plans {
+		if strings.EqualFold(q.Provider, rest) || strings.EqualFold(q.Name, rest) {
+			p = q
+		}
+	}
+	return m.openPlanUsage(p.Provider, p.Name)
+}
+
+// planAt is the plan whose row the nav draws at header row y (the block
+// starts at row 2), and whether y is one of those rows.
+func (m Model) planAt(y int) (protocol.PlanUsageInfo, bool) {
+	i := y - 2
+	if i < 0 || i >= len(m.plans) {
+		return protocol.PlanUsageInfo{}, false
+	}
+	return m.plans[i], true
+}
+
 // windowUsed is a window's percent used, clamped; a window whose reset has
 // passed since the reading has started over, so it reads 0.
 func windowUsed(w protocol.UsageWindowInfo, now time.Time) float64 {

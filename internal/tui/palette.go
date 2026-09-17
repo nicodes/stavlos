@@ -40,6 +40,7 @@ var commands = []Command{
 	{Name: "/chat", Desc: "the channel chat: talk to every agent, @name addresses one (the sidebar opens an agent's own chat)", Direct: true},
 	{Name: "/tokens", Args: "[system]", Desc: "chart tokens over time: the selected chat's (the channel's, or the agent's), or the system's", Direct: true},
 	{Name: "/cost", Args: "[system]", Desc: "chart cost over time: the selected chat's (the channel's, or the agent's), or the system's", Direct: true},
+	{Name: "/plan", Args: "[provider]", Desc: "chart a subscription's plan usage over time, as its own model calls reported it", Direct: true},
 	{Name: "/compact", Desc: "summarise the selected agent's completed turns now to free context (automatic at 80% of the window)", Direct: true},
 	{Name: "/help", Desc: "show or hide the key bar at the bottom (off by default)", Aliases: []string{"/h", "/?"}, Direct: true},
 	{Name: "/settings", Args: "[project|system]", Desc: "edit project or system config files", Aliases: []string{"/config"}, Direct: true},

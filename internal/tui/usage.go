@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -26,10 +27,23 @@ type usageKind int
 const (
 	usageTokens usageKind = iota
 	usageCost
+	usagePlan // a subscription's plan usage, from the readings its calls carried
 )
 
 // usageCommands are the slash commands that open a usage dialog.
 var usageCommands = map[string]usageKind{"/tokens": usageTokens, "/cost": usageCost}
+
+// usageCommand runs /tokens, /cost [system] and /plan [provider]; ok is
+// false for any other command.
+func (m *Model) usageCommand(name, rest string) (tea.Cmd, bool) {
+	if kind, is := usageCommands[name]; is {
+		return m.openUsage(kind, strings.EqualFold(rest, "system")), true
+	}
+	if name == "/plan" {
+		return m.planCommand(rest), true
+	}
+	return nil, false
+}
 
 // usageRanges are the spans a usage dialog charts, ←/→ between them; "all"
 // runs from the first model call.
@@ -54,19 +68,22 @@ const usageAxisW = 8
 // range, and the last series the daemon returned.
 type usageDialog struct {
 	kind           usageKind
-	label          string // "System", "#proj" or "@main"
+	label          string // "System", "#proj", "@main" or a plan's provider name
 	channel, agent string // "" for every channel; agent "" for the whole channel
+	provider       string // usagePlan: whose plan ("openai")
 	rng            int    // index into usageRanges
 	series         *protocol.UsageSeriesResult
+	percent        []float64 // usagePlan: the share used per bucket
 	err            string
 	epoch          uint64 // a reply for an older request is dropped
 }
 
 // usageMsg is a usage.series reply.
 type usageMsg struct {
-	epoch uint64
-	res   protocol.UsageSeriesResult
-	err   error
+	epoch   uint64
+	res     protocol.UsageSeriesResult
+	percent []float64 // usagePlan's series
+	err     error
 }
 
 // openUsage opens the kind dialog on the system (system true), or else on
@@ -103,16 +120,37 @@ func (m Model) usageOnSelectedChat() bool {
 func (m *Model) usageFetch() tea.Cmd {
 	m.usage.epoch++
 	epoch, d := m.usage.epoch, m.usage
-	p := protocol.UsageSeriesParams{Channel: d.channel, Agent: d.agent, Buckets: usageChartWidth(m.width)}
+	buckets := usageChartWidth(m.width)
+	var from, to time.Time
 	if r := usageRanges[d.rng]; r.d > 0 {
-		now := time.Now()
-		p.From, p.To = now.Add(-r.d), now
+		to = time.Now()
+		from = to.Add(-r.d)
 	}
 	ctx, c := m.ctx, m.c
+	if d.kind == usagePlan {
+		p := protocol.PlanSeriesParams{Provider: d.provider, From: from, To: to, Buckets: buckets}
+		return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
+			res, err := client.Do(ctx, c, protocol.PlanSeries, p)
+			return usageMsg{epoch: epoch, res: protocol.UsageSeriesResult{From: res.From, To: res.To}, percent: res.Percent, err: err}
+		})
+	}
+	p := protocol.UsageSeriesParams{Channel: d.channel, Agent: d.agent, From: from, To: to, Buckets: buckets}
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		res, err := client.Do(ctx, c, protocol.UsageSeries, p)
-		return usageMsg{epoch, res, err}
+		return usageMsg{epoch: epoch, res: res, err: err}
 	})
+}
+
+// openPlanUsage opens the chart of a subscription's plan usage over time,
+// as the readings its own calls carried (docs/plan-usage.md).
+func (m *Model) openPlanUsage(provider, name string) tea.Cmd {
+	d := usageDialog{kind: usagePlan, label: name, provider: provider, rng: m.usage.rng, epoch: m.usage.epoch}
+	var closed tea.Cmd
+	if m.ov != nil {
+		closed = m.closeOverlay() // one dialog at a time
+	}
+	m.usage = d
+	return tea.Batch(closed, m.setFocus(focusUsage), m.usageFetch())
 }
 
 // onUsage keeps a reply for the open dialog's latest request.
@@ -124,7 +162,7 @@ func (m *Model) onUsage(msg usageMsg) {
 		m.usage.err = msg.err.Error()
 		return
 	}
-	m.usage.err, m.usage.series = "", &msg.res
+	m.usage.err, m.usage.series, m.usage.percent = "", &msg.res, msg.percent
 }
 
 // usageKey handles keys while a usage dialog is open: ←/→ change the range,
@@ -136,27 +174,30 @@ func (m *Model) usageKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.TabLeft):
 		if m.usage.rng > 0 {
 			m.usage.rng--
-			m.usage.series = nil
+			m.usage.series, m.usage.percent = nil, nil
 			return m.usageFetch()
 		}
 	case key.Matches(msg, keys.TabRight):
 		if m.usage.rng < len(usageRanges)-1 {
 			m.usage.rng++
-			m.usage.series = nil
+			m.usage.series, m.usage.percent = nil, nil
 			return m.usageFetch()
 		}
-	case msg.String() == "t":
+	case msg.String() == "t" && m.usage.kind != usagePlan:
 		m.usage.kind = usageTokens
-	case msg.String() == "c":
+	case msg.String() == "c" && m.usage.kind != usagePlan:
 		m.usage.kind = usageCost
 	}
 	return nil
 }
 
-// usageTitle is the dialog's title: "Tokens · #proj".
+// usageTitle is the dialog's title: "Tokens · #proj", "Plan · ChatGPT".
 func (m Model) usageTitle() string {
-	if m.usage.kind == usageCost {
+	switch m.usage.kind {
+	case usageCost:
 		return "Cost · " + m.usage.label
+	case usagePlan:
+		return "Plan · " + m.usage.label
 	}
 	return "Tokens · " + m.usage.label
 }
@@ -189,21 +230,39 @@ func (m Model) usageBody(width int) []string {
 		return append(lines, theme.StyleDim.Render("loading…"))
 	}
 	s := d.series
-	values := make([]float64, len(s.Tokens))
+	n := len(s.Tokens)
+	if d.kind == usagePlan {
+		n = len(d.percent)
+	}
+	values := make([]float64, n)
 	var total, peak float64
 	for i := range values {
-		values[i] = float64(s.Tokens[i])
-		if d.kind == usageCost && i < len(s.Cost) {
+		switch {
+		case d.kind == usagePlan:
+			values[i] = d.percent[i]
+		case d.kind == usageCost && i < len(s.Cost):
 			values[i] = s.Cost[i]
+		default:
+			values[i] = float64(s.Tokens[i])
 		}
 		total += values[i]
 		peak = max(peak, values[i])
 	}
-	if t := theme.StyleDim.Render("total " + usageValue(d.kind, total)); ansi.StringWidth(head)+2+ansi.StringWidth(t) <= width {
+	summary := "total " + usageValue(d.kind, total)
+	if d.kind == usagePlan { // a plan's readings are a level, never a sum
+		summary = "now " + usageValue(d.kind, values[len(values)-1])
+	}
+	if t := theme.StyleDim.Render(summary); ansi.StringWidth(head)+2+ansi.StringWidth(t) <= width {
 		lines[0] = head + strings.Repeat(" ", width-ansi.StringWidth(head)-ansi.StringWidth(t)) + t
 	}
-	if total == 0 {
+	if total == 0 || len(values) == 0 {
+		if d.kind == usagePlan {
+			return append(lines, theme.StyleDim.Render("no plan readings in this range"))
+		}
 		return append(lines, theme.StyleDim.Render("no model calls in this range"))
+	}
+	if d.kind == usagePlan {
+		peak = 100 // a share of the allowance: always drawn against the whole
 	}
 	for _, row := range usageBars(values, peak, usageChartRows) {
 		label := ""
@@ -222,10 +281,13 @@ func (m Model) usageBody(width int) []string {
 	return append(lines, strings.Repeat(" ", usageAxisW+1)+theme.StyleDim.Render(start+strings.Repeat(" ", gap)+end))
 }
 
-// usageValue is a tokens or cost figure as the dialog prints it.
+// usageValue is a tokens, cost or percentage figure as the dialog prints it.
 func usageValue(kind usageKind, v float64) string {
-	if kind == usageCost {
+	switch kind {
+	case usageCost:
 		return "$" + format.Cost(v)
+	case usagePlan:
+		return fmt.Sprintf("%.0f%%", v)
 	}
 	return format.Tokens(int(v))
 }

@@ -506,6 +506,9 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 		return m.openConfigEditor(true)
 	}
 	cmd := m.setFocus(focusSidebar)
+	if p, ok := m.planAt(y); ok { // a plan's row: its usage over time
+		return tea.Batch(cmd, m.openPlanUsage(p.Provider, p.Name))
+	}
 	if y == m.sidebarDiscordRow() {
 		return tea.Batch(cmd, m.openDiscord("status"))
 	}
