@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
@@ -19,6 +20,7 @@ import (
 	"github.com/nicodes/stavlos/internal/tui/dialog"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/render"
+	"github.com/nicodes/stavlos/internal/tui/theme"
 	"github.com/nicodes/stavlos/internal/tui/transcript"
 )
 
@@ -107,19 +109,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, "", metaNone, lipgloss.NewStyle())); got != "main (coder) · claude-opus-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, "", metaNone)); got != "main (coder) · claude-opus-5 · default" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "", "", 0, "", metaNone, lipgloss.NewStyle())); got != "main (coder) · no model — /models" {
+	if got := stripANSI(metaLine("main", "coder", "", "", 0, "", metaNone)); got != "main (coder) · no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, "", metaNone, lipgloss.NewStyle())); got != "scout (explorer) · llama3 · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, "", metaNone)); got != "scout (explorer) · llama3 · default · 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone, lipgloss.NewStyle())); got != "main (coder) · gpt-5 · high" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone)); got != "main (coder) · gpt-5 · high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "YOLO", metaNone, lipgloss.NewStyle())); got != "YOLO · main (coder) · gpt-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "YOLO", metaNone)); got != "YOLO · main (coder) · gpt-5 · default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
@@ -3155,8 +3157,8 @@ func tabsView(m Model, _ int) string {
 }
 
 // metaLine is the meta row's text without its click spans.
-func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) string {
-	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel, nameStyle)
+func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart) string {
+	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel)
 	return line
 }
 
@@ -3374,4 +3376,66 @@ func TestChannelTreeOpenCloseRules(t *testing.T) {
 	if m.treeClosed[old] || otherAgents() == 0 {
 		t.Fatal("a click on an unselected open channel should leave its tree open")
 	}
+}
+
+// TestDividerDialogsGreyUntilOpen: the divider's buttons (role, model,
+// variant and the agent's tabs) are grey, and the one whose dialog is open
+// is in accent; one dialog is open at a time, and a click on another button
+// swaps the open dialog for its own.
+func TestDividerDialogsGreyUntilOpen(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	m := channelModel()
+	m.superChat = false
+	m.agents[0].Role, m.agents[0].Model = "coder", "openai/gpt-5"
+	m.layout()
+	parts := []string{"coder (coder)", "gpt-5", "default", "async 0", "todo 0", "mcp 0"}
+	check := func(name, open string) {
+		t.Helper()
+		line := m.ruleLine(m.width)
+		for _, p := range parts {
+			want := theme.StyleDim.Render(p)
+			if p == open {
+				want = theme.StyleBoxTitleFocus.Render(p)
+			}
+			if !strings.Contains(line, want) {
+				t.Fatalf("%s: %q should be drawn %s:\n%q", name, p, map[bool]string{true: "in accent", false: "grey"}[p == open], line)
+			}
+		}
+	}
+	click := func(label string) {
+		t.Helper()
+		row := stripANSI(m.ruleLine(m.width))
+		i := strings.Index(row, label)
+		if i < 0 {
+			t.Fatalf("no %q on the divider: %q", label, row)
+		}
+		x, y := ansi.StringWidth(row[:i])+1, m.rows().rule
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+	}
+	check("nothing open", "")
+	click("todo 0")
+	if m.focus != focusTodo {
+		t.Fatalf("todo should open: %v", m.focus)
+	}
+	check("todo open", "todo 0")
+	click("mcp 0") // a tab dialog swaps for another
+	if m.focus != focusMCP {
+		t.Fatalf("mcp should replace todo: %v", m.focus)
+	}
+	check("mcp open", "mcp 0")
+	click("gpt-5") // the tab dialog gives way to the model picker
+	if isTab(m.focus) {
+		t.Fatalf("the mcp dialog should close for the model picker: %v", m.focus)
+	}
+	m.openOverlay(newOverlay(ovModels, overlayList, "Select a model")) // what the picker's reply opens
+	check("models open", "gpt-5")
+	click("async 0") // the overlay gives way to the async dialog
+	if m.ov != nil || m.focus != focusAsync {
+		t.Fatalf("async should replace the model picker: overlay=%v focus=%v", m.ov != nil, m.focus)
+	}
+	check("async open", "async 0")
 }

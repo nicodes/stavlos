@@ -194,10 +194,9 @@ func modeTagStyle(tag string) lipgloss.Style {
 // the no-model nudge), with where each clickable part was drawn: the agent
 // as "label (role)" like the tab rows, the model and its variant ("default"
 // when none is set), led by the mode tag ("ASK", "AUTO" or "YOLO"; "" for
-// none). sel is the part highlighted while the row has keyboard focus
-// (metaNone otherwise); nameStyle tints "label (role)" (the role's colour,
-// or plain).
-func metaLineSpans(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) (string, []span[metaPart]) {
+// none). Every part is grey but sel, in accent: the part whose dialog is
+// open, or the one the row's keyboard focus is on (metaNone for neither).
+func metaLineSpans(label, role, model, variant string, queued int, modeTag string, sel metaPart) (string, []span[metaPart]) {
 	var b strings.Builder
 	var spans []span[metaPart]
 	x := 0
@@ -211,7 +210,7 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 		x += w
 	}
 	sep := func() {
-		b.WriteString(" · ")
+		b.WriteString(theme.StyleDim.Render(" · "))
 		x += 3
 	}
 	if modeTag != "" {
@@ -222,19 +221,19 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 	if role != "" {
 		name = fmt.Sprintf("%s (%s)", label, role)
 	}
-	part(metaRole, name, nameStyle)
+	part(metaRole, name, theme.StyleDim)
 	sep()
 	if model == "" {
 		part(metaModel, "no model — /models", theme.StyleWarn)
 		return b.String(), spans
 	}
 	short, _ := transcript.SplitModel(model) // just the model id; the provider is in /models
-	part(metaModel, short, lipgloss.NewStyle())
+	part(metaModel, short, theme.StyleDim)
 	if variant == "" {
 		variant = "default"
 	}
 	sep()
-	part(metaVariant, variant, lipgloss.NewStyle())
+	part(metaVariant, variant, theme.StyleDim)
 	if queued > 0 {
 		b.WriteString(theme.StyleDim.Render(fmt.Sprintf(" · %d queued", queued)))
 	}
@@ -407,7 +406,14 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 		}
 	}
 	sel := metaNone
-	if m.focus == focusMeta {
+	switch {
+	case m.ov != nil && m.ov.kind == ovRoles:
+		sel = metaRole
+	case m.ov != nil && m.ov.kind == ovModels:
+		sel = metaModel
+	case m.ov != nil && m.ov.kind == ovVariants:
+		sel = metaVariant
+	case m.ov == nil && m.focus == focusMeta:
 		sel = m.metaSel
 	}
 	if m.superChat { // the channel chat: role, model and variant are an agent's, and the mode leads the input
@@ -420,11 +426,7 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 		}
 		return theme.StyleDim.Render(label), nil
 	}
-	nameStyle := lipgloss.NewStyle()
-	if r := m.roleInfo(role); r != nil {
-		nameStyle = roleStyle(r.Color)
-	}
-	return metaLineSpans(label, role, model, variant, queued, "", sel, nameStyle) // the mode tag leads the input instead
+	return metaLineSpans(label, role, model, variant, queued, "", sel) // the mode tag leads the input instead
 }
 
 // metaRow is the home screen's line under the input: role and model on the
