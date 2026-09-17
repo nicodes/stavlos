@@ -276,15 +276,18 @@ type dialogs struct {
 	providers  []protocol.ProviderInfo // last provider.list result
 	login      loginFlow               // device-code sign-in in progress
 	usage      usageDialog             // the usage dialog, while focus is focusUsage (its range is kept between openings)
-	hover      dividerHover            // the divider button under the pointer, drawn in the lighter text colour
+	hover      buttonHover             // the divider or nav usage button under the pointer, drawn in the lighter text colour
 }
 
-// dividerHover is the divider button under the pointer: at most one of a
-// meta part or an agent tab (tabOK).
-type dividerHover struct {
-	meta  metaPart
-	tab   focus
-	tabOK bool
+// buttonHover is the button under the pointer: at most one of a divider
+// meta part, a divider agent tab (tabOK), or a figure of the nav's usage
+// row navRow (navUsage 1 tokens, 2 cost).
+type buttonHover struct {
+	meta     metaPart
+	tab      focus
+	tabOK    bool
+	navRow   int
+	navUsage int
 }
 
 // chatPage is how many items pgup/pgdn move the chat cursor.

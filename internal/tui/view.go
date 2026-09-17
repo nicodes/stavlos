@@ -611,8 +611,8 @@ func (m Model) sidebarHeader(width int) []string {
 	return []string{
 		theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" "),
 		"",
-		usageRow("System", m.systemTokens(), m.systemCost(), width),
-		m.selectedUsageRow(width),
+		m.navUsageRow(sidebarSystemRow, width),
+		m.navUsageRow(sidebarSelectedRow, width),
 		"",
 		m.discordIndicator(width),
 		"",
@@ -621,22 +621,63 @@ func (m Model) sidebarHeader(width int) []string {
 
 // usageRow is "label        12k · $0.25", grey: the label at the left, the
 // tokens and cost flush with the right edge (like the tree's costs); a
-// label too long for width is cut, never the figures.
-func usageRow(label string, tokens int, cost float64, width int) string {
-	figures := format.Tokens(tokens) + " · $" + format.Cost(cost)
-	fw := ansi.StringWidth(figures)
+// label too long for width is cut, never the figures. The figures are
+// buttons, like the divider's: open (1 tokens, 2 cost, 0 neither) is the
+// one whose chart is open, in accent; hover the one under the pointer, in
+// the lighter text colour.
+func usageRow(label string, tokens int, cost float64, width, open, hover int) string {
+	t, c := format.Tokens(tokens), "$"+format.Cost(cost)
+	fw := ansi.StringWidth(t) + 3 + ansi.StringWidth(c)
 	label = ansi.Truncate(label, max(1, width-fw-1), "…")
 	gap := max(1, width-ansi.StringWidth(label)-fw)
-	return theme.StyleDim.Render(ansi.Truncate(label+strings.Repeat(" ", gap)+figures, width, "…"))
+	figure := func(n int, text string) string {
+		switch n {
+		case open:
+			return theme.StyleBoxTitleFocus.Render(text)
+		case hover:
+			return theme.StyleLit.Render(text)
+		}
+		return theme.StyleDim.Render(text)
+	}
+	return theme.StyleDim.Render(label+strings.Repeat(" ", gap)) + figure(1, t) + theme.StyleDim.Render(" · ") + figure(2, c)
 }
 
-// selectedUsageRow is the selected chat's usage: the channel's in its chat
-// ("#name"), the agent's in its own ("@name").
-func (m Model) selectedUsageRow(width int) string {
-	if a := m.selectedAgent(); a != nil && !m.superChat {
-		return usageRow("@"+a.Name, a.Tokens, a.CostUSD, width)
+// usageFigureAt is the figure of a usage row width wide at column x: the
+// tokens or the cost.
+func usageFigureAt(tokens int, cost float64, width, x int) (usageKind, bool) {
+	tw, cw := ansi.StringWidth(format.Tokens(tokens)), ansi.StringWidth("$"+format.Cost(cost))
+	start := width - tw - 3 - cw
+	return hitSpan([]span[usageKind]{{start, start + tw, usageTokens}, {start + tw + 3, width, usageCost}}, x)
+}
+
+// usageRowFigures is what the nav's usage row at header row y shows: whose
+// usage (system) and its tokens and cost; ok is false for other rows.
+func (m Model) usageRowFigures(y int) (label string, system bool, tokens int, cost float64, ok bool) {
+	switch y {
+	case sidebarSystemRow:
+		return "System", true, m.systemTokens(), m.systemCost(), true
+	case sidebarSelectedRow:
+		if a := m.selectedAgent(); a != nil && !m.superChat {
+			return "@" + a.Name, false, a.Tokens, a.CostUSD, true
+		}
+		return channelLabel(m.channel), false, m.totalTokens(), m.totalCost(), true
 	}
-	return usageRow(channelLabel(m.channel), m.totalTokens(), m.totalCost(), width)
+	return "", false, 0, 0, false
+}
+
+// navUsageRow draws the nav's usage row at header row y, its figure in
+// accent while its chart is open and lighter under the pointer.
+func (m Model) navUsageRow(y, width int) string {
+	label, system, tokens, cost, _ := m.usageRowFigures(y)
+	open := 0
+	if m.focus == focusUsage && (system && m.usage.channel == "" || !system && m.usageOnSelectedChat()) {
+		open = int(m.usage.kind) + 1
+	}
+	hover := 0
+	if m.hover.navRow == y {
+		hover = m.hover.navUsage
+	}
+	return usageRow(label, tokens, cost, width, open, hover)
 }
 
 // newChannelMark sits at the right of the channels title, in the gears'

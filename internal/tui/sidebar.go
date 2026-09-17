@@ -2,11 +2,9 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -487,13 +485,11 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 	if y == sidebarDiscordRow {
 		return tea.Batch(cmd, m.openDiscord("status"))
 	}
-	if y == sidebarSystemRow || y == sidebarSelectedRow { // the usage rows: tokens or cost over time
-		kind := usageTokens
-		row := ansi.Strip(m.sidebarHeader(sidebarWidth - 1)[y])
-		if i := strings.LastIndex(row, " · $"); i >= 0 && x >= ansi.StringWidth(row[:i])+3 {
-			kind = usageCost
+	if _, system, tokens, cost, ok := m.usageRowFigures(y); ok { // the usage rows: their figures chart tokens or cost over time
+		if kind, on := usageFigureAt(tokens, cost, sidebarWidth-1, x); on {
+			return tea.Batch(cmd, m.openUsage(kind, system))
 		}
-		return tea.Batch(cmd, m.openUsage(kind, y == sidebarSystemRow))
+		return cmd
 	}
 	_, items := m.sidebarLines(m.vp.Height)
 	if y < 0 || y >= len(items) || items[y] < 0 {

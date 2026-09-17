@@ -3487,9 +3487,9 @@ func TestUsageDialogs(t *testing.T) {
 	m.prompts = nil
 	clickRow := func(y int, onCost bool) tea.Cmd {
 		row := stripANSI(m.sidebarHeader(sidebarWidth - 1)[y])
-		x := 1
-		if onCost {
-			x = ansi.StringWidth(row[:strings.LastIndex(row, "$")])
+		x := ansi.StringWidth(row[:strings.LastIndex(row, "$")]) // on the cost
+		if !onCost {
+			x = ansi.StringWidth(row[:strings.LastIndex(row, " · $")]) - 1 // on the tokens figure
 		}
 		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 		nm, cmd := nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
@@ -3500,6 +3500,11 @@ func TestUsageDialogs(t *testing.T) {
 		t.Fatalf("the selected row's tokens: focus=%v %+v", m.focus, m.usage)
 	}
 	m.closeDialog()
+	nm, _ := m.Update(tea.MouseMsg{X: 1, Y: sidebarSelectedRow, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}) // the label is no button
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 1, Y: sidebarSelectedRow, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	if m = nm.(Model); m.focus == focusUsage {
+		t.Fatal("a click on the row's label should open nothing")
+	}
 	clickRow(sidebarSystemRow, true)
 	if m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" || m.usageTitle() != "Cost · System" {
 		t.Fatalf("the system row's cost: %+v", m.usage)
@@ -3641,4 +3646,45 @@ func TestNavKeepsHoverAcrossChannelSwitch(t *testing.T) {
 	if m.focus != focusInput {
 		t.Fatalf("moving off the nav should give the input its focus back: %v", m.focus)
 	}
+}
+
+// TestNavUsageFiguresHighlight: the nav's usage figures are buttons like the
+// divider's: grey, lighter under the pointer, and in accent while their
+// chart is open, the system's on the System row and the selected chat's on
+// its row.
+func TestNavUsageFiguresHighlight(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	m := sidebarNavModel()
+	m.prompts = nil
+	w := sidebarWidth - 1
+	check := func(name string, y int, tokens, cost lipgloss.Style) {
+		t.Helper()
+		row := m.sidebarHeader(w)[y]
+		fields := strings.Fields(stripANSI(row))
+		tk, c := fields[len(fields)-3], fields[len(fields)-1]
+		if !strings.Contains(row, tokens.Render(tk)) || !strings.Contains(row, cost.Render(c)) {
+			t.Fatalf("%s: %q", name, row)
+		}
+	}
+	move := func(y int, figure string) {
+		row := stripANSI(m.sidebarHeader(w)[y])
+		x := ansi.StringWidth(row[:strings.LastIndex(row, figure)])
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
+		m = nm.(Model)
+	}
+	check("grey", sidebarSystemRow, theme.StyleDim, theme.StyleDim)
+	move(sidebarSystemRow, "$")
+	check("hover cost", sidebarSystemRow, theme.StyleDim, theme.StyleLit)
+	check("the other row stays grey", sidebarSelectedRow, theme.StyleDim, theme.StyleDim)
+	move(sidebarSelectedRow, "1k")
+	check("hover tokens", sidebarSelectedRow, theme.StyleLit, theme.StyleDim)
+	check("hover moved off", sidebarSystemRow, theme.StyleDim, theme.StyleDim)
+	m.openUsage(usageTokens, false)
+	check("selected tokens open, hovered", sidebarSelectedRow, theme.StyleBoxTitleFocus, theme.StyleDim)
+	check("system closed", sidebarSystemRow, theme.StyleDim, theme.StyleDim)
+	m.openUsage(usageCost, true)
+	check("system cost open", sidebarSystemRow, theme.StyleDim, theme.StyleBoxTitleFocus)
+	check("selected closed", sidebarSelectedRow, theme.StyleLit, theme.StyleDim)
 }

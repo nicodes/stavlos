@@ -409,10 +409,16 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 	return nil
 }
 
-// hoverDivider notes the divider button under the pointer at screen
-// position (x, y), none when it is off the divider's buttons.
+// hoverDivider notes the button under the pointer at screen position
+// (x, y): a divider button, or a figure of the nav's usage rows; none when
+// it is off them.
 func (m *Model) hoverDivider(x, y int) {
-	var h dividerHover
+	var h buttonHover
+	if _, _, tokens, cost, ok := m.usageRowFigures(y); ok && m.sidebarVisible() && !m.isHome() && x < sidebarWidth {
+		if kind, on := usageFigureAt(tokens, cost, sidebarWidth-1, x); on {
+			h.navRow, h.navUsage = y, int(kind)+1
+		}
+	}
 	if !m.isHome() && y == m.rows().rule {
 		if f, ok := m.metaTabAt(x, m.width); ok {
 			h.tab, h.tabOK = f, true
