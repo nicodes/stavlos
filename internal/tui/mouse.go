@@ -393,9 +393,12 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 			return m.metaAction(metaMode)
 		}
 		return m.setFocus(focusInput)
-	case y == lay.rule: // the divider: the agent's role, model and variant are buttons, and so are its tabs
+	case y == lay.rule: // the divider: the agent's role, model and variant are buttons, and so are its tabs and usage
 		if f, ok := m.metaTabAt(x, m.width); ok {
 			return m.openTab(f)
+		}
+		if kind, ok := m.usageAt(x, m.width); ok { // the selected chat's tokens or cost over time
+			return m.openUsage(kind, false)
 		}
 		if part := m.metaHit(x); part != metaNone {
 			var closed tea.Cmd
@@ -409,13 +412,14 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 }
 
 // dividerButtonAt reports whether screen position (x, y) is on one of the
-// divider's buttons: an agent tab, or the role, model or variant.
+// divider's buttons: an agent tab, the usage, or the role, model or variant.
 func (m *Model) dividerButtonAt(x, y int) bool {
 	if m.isHome() || y != m.rows().rule {
 		return false
 	}
 	_, onTab := m.metaTabAt(x, m.width)
-	return onTab || m.metaHit(x) != metaNone
+	_, onUsage := m.usageAt(x, m.width)
+	return onTab || onUsage || m.metaHit(x) != metaNone
 }
 
 // metaHit maps a column of the divider to the role, model or variant drawn

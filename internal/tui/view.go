@@ -268,6 +268,7 @@ type footerInfo struct {
 	window    int    // the model's context window; 0 hides the bar
 	tokens    int
 	cost      float64
+	open      int // the usage dialog open on this chat: 1 tokens, 2 cost, 0 neither (its figure is in accent)
 }
 
 // footerRight builds the usage on the divider over the input (a sign-in
@@ -285,21 +286,46 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
-	// dim like the rule it sits on: only the context bar's warning colour stands out
-	cost := theme.StyleDim.Render(" · $" + format.Cost(f.cost))
-	if bar := contextBar(f.context, f.window); bar != "" {
+	// dim like the rule it sits on: only the context bar's warning colour
+	// stands out, and the figure whose usage dialog is open (accent)
+	costStyle := theme.StyleDim
+	if f.open == 2 {
+		costStyle = theme.StyleBoxTitleFocus
+	}
+	cost := theme.StyleDim.Render(" · ") + costStyle.Render("$"+format.Cost(f.cost))
+	if bar := contextBar(f.context, f.window, f.open == 1); bar != "" {
 		return bar + cost // the channel's total tokens are in the sidebar
 	}
-	return theme.StyleDim.Render(format.Tokens(f.tokens)+" tokens") + cost
+	tokensStyle := theme.StyleDim
+	if f.open == 1 {
+		tokensStyle = theme.StyleBoxTitleFocus
+	}
+	return tokensStyle.Render(format.Tokens(f.tokens)+" tokens") + cost
+}
+
+// usageSpans are where footerRight's usage figures sit in its text: the
+// tokens (or the context bar) and the cost, which open their usage dialogs.
+func usageSpans(usage string) []span[usageKind] {
+	plain := ansi.Strip(usage)
+	i := strings.LastIndex(plain, " · $")
+	if i < 0 {
+		return nil
+	}
+	w := ansi.StringWidth(plain[:i])
+	return []span[usageKind]{{0, w, usageTokens}, {w + 3, ansi.StringWidth(plain), usageCost}}
 }
 
 // contextBar reads how full the model's context is — "31% · 62k/200k tokens" — which
 // is what auto-compaction watches (it summarises at 80%). Dim until 70%,
-// warning-coloured from there. "" when the window is unknown.
-func contextBar(context, window int) string {
+// warning-coloured from there, in accent while its tokens dialog is open
+// (open). "" when the window is unknown.
+func contextBar(context, window int, open bool) string {
 	pct, st, ok := contextFill(context, window)
 	if !ok {
 		return ""
+	}
+	if open {
+		st = theme.StyleBoxTitleFocus
 	}
 	return st.Render(fmt.Sprintf("%d%% · %s/%s tokens", pct, format.Tokens(context), format.Tokens(window)))
 }
@@ -678,6 +704,16 @@ func (m Model) agentTabs() string {
 	labels, _ := m.tabLabels(m.currentPrompt())
 	lines := strings.Split(labels, "\n")
 	return lines[len(lines)-1]
+}
+
+// usageAt maps a column of the divider, drawn width wide, to the usage
+// figure drawn there: the tokens or the cost.
+func (m Model) usageAt(x, width int) (usageKind, bool) {
+	d := m.divider(width)
+	if d.usageX < 0 {
+		return 0, false
+	}
+	return hitSpan(d.usageSpan, x-d.usageX)
 }
 
 // metaTabAt maps a column of the divider, drawn width wide, to the agent tab
@@ -1460,6 +1496,9 @@ func (m Model) statusText() string {
 
 func (m Model) footerRightView() string {
 	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.channel.Model}
+	if m.focus == focusUsage && m.usageOnSelectedChat() {
+		f.open = int(m.usage.kind) + 1
+	}
 	if m.superChat { // the channel chat: the rollup of every agent's tokens and cost, no one agent's context
 		f.tokens, f.cost = m.totalTokens(), m.totalCost()
 		return footerRight(f)
@@ -1487,11 +1526,13 @@ type divider struct {
 	metaSpans []span[metaPart]
 	tabsX     int // column where the agent's tabs start, -1 when not drawn
 	tabSpans  []span[focus]
+	usageX    int // column where the usage starts, -1 when not drawn
+	usageSpan []span[usageKind]
 }
 
 func (m Model) divider(width int) divider {
 	dash := theme.StyleRule.Render
-	d := divider{tabsX: -1}
+	d := divider{tabsX: -1, usageX: -1}
 	tabs, usage := m.agentTabs(), m.footerRightView()
 	right, rightW := "", 0
 	fit := func(parts ...string) bool {
@@ -1507,7 +1548,14 @@ func (m Model) divider(width int) divider {
 		d.tabsX = width - rightW + 1
 		_, spans := m.tabLabels(m.currentPrompt())
 		d.tabSpans = spans[len(spans)-1]
+		if usage != "" {
+			d.usageX = d.tabsX + lipgloss.Width(tabs) + 3
+		}
 	case fit(usage):
+		d.usageX = width - rightW + 1
+	}
+	if d.usageX >= 0 {
+		d.usageSpan = usageSpans(usage)
 	}
 	left, leftW := "", 0
 	if meta, spans := m.metaLeft(); meta != "" {

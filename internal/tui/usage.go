@@ -86,6 +86,15 @@ func (m *Model) openUsage(kind usageKind, system bool) tea.Cmd {
 	return tea.Batch(closed, m.setFocus(focusUsage), m.usageFetch())
 }
 
+// usageOnSelectedChat reports whether the open usage dialog charts the
+// selected chat: the agent whose chat is open, or the channel in its chat.
+func (m Model) usageOnSelectedChat() bool {
+	if m.superChat {
+		return m.usage.channel == m.channelID && m.usage.agent == ""
+	}
+	return m.usage.agent != "" && m.usage.agent == m.selectedID()
+}
+
 // usageFetch asks the daemon for the open dialog's series, one bucket per
 // column of its chart.
 func (m *Model) usageFetch() tea.Cmd {
