@@ -373,7 +373,7 @@ func TestHistoryNavigation(t *testing.T) {
 func TestSidebarFocusAndSelect(t *testing.T) {
 	m := newModel(context.Background(), nil, "s")
 	m.width, m.height = 120, 40
-	m.agents = []protocol.AgentInfo{{ID: "a", Name: "coder"}, {ID: "b", Name: "scout", Depth: 1}, {ID: "c", Name: "tester", Depth: 1}}
+	m.agents = []protocol.AgentInfo{{ID: "a", Name: "coder", State: "running"}, {ID: "b", Name: "scout", Depth: 1, State: "running"}, {ID: "c", Name: "tester", Depth: 1, State: "running"}}
 	m.toggleTree()
 	if !m.showTree || m.focus != focusSidebar || m.input.Focused() {
 		t.Fatalf("open should focus the sidebar: show=%v focus=%v inputFocused=%v", m.showTree, m.focus, m.input.Focused())
@@ -3242,5 +3242,72 @@ func TestDividerTabsOpenWithTheSidebar(t *testing.T) {
 		if got := nm.(Model).focus; got != c.want {
 			t.Errorf("clicking %s on the divider opened %v, want %v", c.label, got, c.want)
 		}
+	}
+}
+
+// TestSidebarHidesQuietAgents: a channel's tree draws only agents that are
+// busy, waiting, failed or waiting on the human (and the selected one);
+// the row under it shows the idle ones too, and hides them again. A click
+// on the channel whose chat is already open folds its tree.
+func TestSidebarHidesQuietAgents(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.agents = []protocol.AgentInfo{
+		{ID: "a", Name: "main", Role: "general", State: "running"},
+		{ID: "b", Parent: "a", Depth: 1, Name: "napper", Role: "general", State: "idle"},
+		{ID: "c", Parent: "a", Depth: 1, Name: "sleeper", Role: "general", State: "idle"},
+		{ID: "d", Parent: "a", Depth: 1, Name: "waiter", Role: "general", State: "waiting"},
+	}
+	m.superChat = true
+	m.layout()
+	nav := func() string {
+		body, _ := m.sidebarBody(sidebarWidth - 1)
+		return stripANSI(strings.Join(body, "\n"))
+	}
+	if v := nav(); !strings.Contains(v, "@main") || !strings.Contains(v, "@waiter") || strings.Contains(v, "@napper") || strings.Contains(v, "@sleeper") || !strings.Contains(v, "▸ show all · 2 idle") {
+		t.Fatalf("quiet agents should hide behind show all:\n%s", v)
+	}
+	m.setFocus(focusSidebar)
+	m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbHereAll})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
+	if v := nav(); !strings.Contains(v, "@napper") || !strings.Contains(v, "@sleeper") || !strings.Contains(v, "▾ hide idle") {
+		t.Fatalf("show all should draw every agent:\n%s", v)
+	}
+	if r, _ := m.sidebarAt(m.sbCursor); r.kind != sbHereAll {
+		t.Fatalf("the cursor should stay on the toggle row: %+v", r)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
+	if v := nav(); strings.Contains(v, "@napper") {
+		t.Fatalf("hide idle should hide them again:\n%s", v)
+	}
+	// the channel's chat is open: a click on its row folds the tree, another unfolds it
+	click := func() {
+		y := sidebarY(m, hereRow(m))
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+	}
+	click()
+	if v := nav(); strings.Contains(v, "@main") || strings.Contains(v, "show all") || !m.superChat {
+		t.Fatalf("a click on the open channel should fold its tree:\n%s", v)
+	}
+	click()
+	if v := nav(); !strings.Contains(v, "@main") || !strings.Contains(v, "show all") {
+		t.Fatalf("a second click should unfold it:\n%s", v)
+	}
+	// from an agent's chat, the click opens the channel's chat and folds nothing
+	m.superChat = false
+	click()
+	if v := nav(); !m.superChat || !strings.Contains(v, "@main") {
+		t.Fatalf("from an agent's chat the click opens the channel chat: super=%v\n%s", m.superChat, v)
+	}
+	// an idle agent stays in the tree while its own chat is open, not in the channel chat
+	m.agents[1].State, m.selected = "idle", 1
+	if v := nav(); strings.Contains(v, "@napper") {
+		t.Fatalf("in the channel chat an idle agent hides:\n%s", v)
+	}
+	m.superChat = false
+	if v := nav(); !strings.Contains(v, "@napper") || !strings.Contains(v, "show all · 1 idle") {
+		t.Fatalf("the open agent stays shown:\n%s", v)
 	}
 }

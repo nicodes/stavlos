@@ -79,7 +79,9 @@ type Model struct {
 	navChannels    []protocol.ChannelInfo          // all other active channels, across directories
 	visited        map[string]replayed             // channels switched away from: what their replay built, so a return replays only what it missed
 	trees          map[string][]protocol.AgentInfo // other channels' agents, so leaving a channel does not fold its tree
-	treeOpen       map[string]bool                 // channels whose tree the sidebar draws; the bound channel's always is
+	treeOpen       map[string]bool                 // channels whose tree the sidebar draws; the bound channel's unless treeFolded
+	treeFolded     map[string]bool                 // bound channels whose tree the human folded (a click on the open channel's row)
+	treeAll        map[string]bool                 // channels whose tree shows its idle agents too (the tree's show all row)
 	selectNext     string                          // agent to select once a switch lands (an agent picked under another channel)
 	dirsNext       bool                            // another channel's gear was chosen: its dirs dialog opens once the switch lands
 	generation     uint64

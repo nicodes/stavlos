@@ -752,11 +752,18 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 				dot = mark
 			}
 			channel(dot, channelLabel(m.channel), m.channel.Dir, m.channel.DirError != "", style, i)
-			if len(m.agents) == 0 {
+			if len(m.agents) == 0 && !m.treeFolded[m.channelID] {
 				rows, items = append(rows, tree[0]), append(items, -1) // the "(no agents)" row
 			}
 		case sbAgent:
 			line(tree[r.k], i)
+		case sbHereAll:
+			_, quiet := m.shownAgents(m.channelID, m.agents, m.openAgentID())
+			line(showAllLabel(m.treeAll[m.channelID], quiet, width), i)
+		case sbOtherAll:
+			id := m.navChannels[r.k].ID
+			_, quiet := m.shownAgents(id, m.trees[id], "")
+			line(showAllLabel(m.treeAll[id], quiet, width), i)
 		case sbOtherAgent:
 			if rs := others[m.navChannels[r.k].ID]; r.j < len(rs) {
 				line(rs[r.j], i)
@@ -766,6 +773,16 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	// a blank row at the end, so the nav scrolled to its bottom never ends
 	// on the frame's edge
 	return append(rows, ""), append(items, -1)
+}
+
+// showAllLabel is the row under a channel's tree that shows its quiet
+// agents ("  ▸ show all · 3 idle") or hides them again ("  ▾ hide idle").
+func showAllLabel(all bool, quiet, width int) string {
+	text := fmt.Sprintf("▸ show all · %d idle", quiet)
+	if all {
+		text = "▾ hide idle"
+	}
+	return theme.StyleDim.Render(ansi.Truncate("  "+text, width, "…"))
 }
 
 // channelLabel is a channel's label in the sidebar and the picker: "#name".
@@ -802,11 +819,7 @@ func (m Model) needsHuman(agent string) string {
 // reads bold; the sidebar cursor is a background across the row, as in
 // the chat.
 func (m Model) treeRows(width int) []string {
-	sel := ""
-	if !m.superChat {
-		sel = m.selectedID()
-	}
-	return m.agentRows(m.agents, sel, width)
+	return m.agentRows(m.agents, m.openAgentID(), width)
 }
 
 // agentRows renders one channel's agent tree. selected names the agent
