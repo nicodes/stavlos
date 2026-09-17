@@ -136,7 +136,7 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 		return
 	}
 	cmd := exec.CommandContext(a.ctx, config.ExpandEnv(def.Command), expandAll(def.Args)...)
-	cmd.Dir = a.c.Dir
+	cmd.Dir = a.c.Dir()
 	cmd.Env = proc.Env(cfg.PassEnv) // scrubbed like a shell command's; the definition's env: adds what the server needs
 	for k, v := range def.Env {
 		cmd.Env = append(cmd.Env, k+"="+config.ExpandEnv(v))

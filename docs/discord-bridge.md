@@ -1,6 +1,6 @@
 # The Discord bridge
 
-The design implemented by `cmd/stavlos-discord` and `internal/discord`. One
+The design implemented by the daemon-managed `internal/discord` service. One
 Discord channel per Stavlos channel, where you talk to agents by name and
 approve what they run with a button. See `discord-setup.md` to run it.
 
@@ -8,17 +8,20 @@ approve what they run with a button. See `discord-setup.md` to run it.
 
 Settled before this was written, so the rest follows from them:
 
-- **A separate binary in this repository**, `cmd/stavlos-discord`, speaking the
-  protocol over the same Unix socket the TUI uses. It is a client like any
-  other: if Discord stalls, rate-limits or the bridge panics, the daemon and
-  the agents it runs are untouched.
+- **A daemon-managed background service**, controlled by `/discord` in the TUI
+  or `stavlos discord` in a shell. It still speaks the local protocol, but its
+  lifetime belongs to the daemon, not to whichever terminal connected it.
+  Network and configuration failures become service status rather than daemon
+  startup failures. The SDK reconnect loop is replaced by context-owned retries
+  so disconnect and shutdown cannot leave an orphan gateway connection.
 - **One Discord channel per stavlos channel**, created by the bridge under a
   category, mirroring the sidebar.
 - **The first version does everything**: mirror, post, permission buttons,
   question and trust prompts, `/status` and `/cancel`. The build stages below
   are implementation milestones toward that version. The needed post-author
   field, global-only config support and client lifecycle fixes are implemented.
-  No bridge-specific RPC was needed.
+  Lifecycle control uses `discord.status`, `discord.connect` and
+  `discord.disconnect`; channel operations use the existing RPCs.
 - **The existing prompt choices, with no mode changes.** Allow once, allow for
   this channel, allow this prefix, deny with a reason, and the boundary,
   question and trust choices below. A phone cannot switch permission mode.
@@ -34,18 +37,26 @@ exists on its own terms rather than a subset invented for it.
 ## Shape
 
 ```
-Discord  ──websocket──▶  stavlos-discord  ──unix socket──▶  stavlosd
-  (gateway)                (one process)      (JSON-RPC)      (unchanged)
+stavlos TUI ── JSON-RPC ──▶ Stavlos daemon
+                            ├── channels and agents
+                            └── Discord service ◀── Gateway/REST ──▶ Discord
 ```
 
-Both connections are dialled **outbound**. Nothing listens, so there is no
-public host, no port to open, no tunnel and no domain. It runs on the machine
-the daemon runs on.
+Discord connections are **outbound**. There is no public HTTP listener, tunnel
+or domain. The service runs in the daemon process and uses its local Unix
+socket for channel operations.
 
-`internal/discord` holds the logic and `cmd/stavlos-discord` is a thin main, as
-`cmd/stavlos` is to `internal/tui`. The Discord API is reached through one
-interface the package defines, so the routing, parsing and rendering are
-testable without a network or a server.
+`internal/discord` holds the service and routing logic. The executable wires it
+into `daemon.DiscordService`, keeping the core independent of its client
+implementation. The Discord API sits behind an interface for tests. The legacy
+`cmd/stavlos-discord` entry point shares the same lock and prompt index.
+
+`discord.enabled` defaults to false. Connect validates global settings, saves
+true and starts asynchronously; disconnect saves false and cancels only this
+service. Shutdown cancels it without changing the saved preference. Startup
+waits for the local socket to listen before honoring autoconnect. Status
+contains connection state, bot/server names, mapped channel count and errors,
+never credentials. Configuration writes preserve JSONC comments and other keys.
 
 ### Attaching
 
@@ -56,10 +67,10 @@ res, err := client.Do(ctx, c, protocol.Attach, protocol.AttachParams{
 })
 ```
 
-**The tier is the point.** As `fallback`, the bridge is notified of a new prompt
-when `claimTimeout` (30s by default) expires while it is unclaimed. Your phone
-stays quiet while the terminal handles it. The daemon owns escalation; the
-bridge asks for the right tier rather than running a competing timeout.
+**Questions and tool permissions go to both tiers immediately**, so either the
+terminal or Discord can answer as soon as the agent asks. Project-trust prompts
+still reach `fallback` after `claimTimeout` (30s by default) while unclaimed. The daemon owns
+delivery timing; the bridge does not run a competing timeout.
 
 `AttachResult.ClientID` is worth keeping: it is what `PromptInfo.ClaimedBy`
 carries, so the bridge can tell its own claims from the TUI's without inventing
@@ -68,9 +79,11 @@ any state.
 Snapshots are different: `Reconcile.Prompts` currently includes **every
 channel's** pending prompts, without tier filtering. Both snapshots and live
 notifications must be filtered to mapped, directory-allowed channels; only
-prompts with `Escalated: true` may first appear in Discord. `ClaimedBy` controls
-whether their buttons are available. Reconcile must not bypass the fallback
-delay. Displaying a prompt never claims it.
+prompts with `Escalated: true` may first appear in Discord. This flag means
+"visible to fallback clients": questions and tool permissions have it from
+creation; project trust gains it after the fallback delay. `ClaimedBy` controls whether their
+buttons are available. Reconcile preserves that visibility. Displaying a prompt
+never claims it.
 
 ### Following channels
 
@@ -115,14 +128,19 @@ same resume/reconcile/subscribe sequence as startup.
 
 On a daemon disconnect, mark the bridge offline, disable prompt actions and
 reconnect with bounded exponential backoff. Attach again, rediscover mappings,
-resume and reconcile, then subscribe from each fresh snapshot's `Seq + 1`.
+resume and reconcile, then subscribe from each fresh snapshot's `Seq + 1`, or
+the earliest outstanding question checkpoint when its result needs recovery.
+Historical question outcomes update their existing cards; ordinary historical
+chat remains suppressed at the fresh snapshot cutoff.
 Do not queue new human commands while offline or automatically retry a post
 whose outcome is unknown: report the uncertainty so the user can check it.
-Discord gateway reconnect/resume is handled by `discordgo`; a bridge process
-restart uses the no-backfill policy above.
+Gateway loss ends that bridge run; the service reconnects with bounded backoff
+and a fresh snapshot. This uses the same no-backfill policy as a restart.
 
-Persist only the small prompt-message index needed to edit outstanding bot
-messages after restart: prompt ID → Discord channel/message IDs. Reconcile
+Persist only the small prompt-message index needed to edit outstanding
+messages after restart: prompt ID → Discord channel/message IDs and, for
+questions, the owning webhook ID, question/options and event checkpoint needed
+to recover the answer. Webhook tokens are never stored there. Reconcile
 those against current pending prompts, retire stale buttons and reuse existing
 messages. This is UI bookkeeping, not a persisted chat replay cursor. Buffer
 prompt notifications during reconciliation and serialize them with snapshot
@@ -137,7 +155,7 @@ Five event types, exactly the set the TUI's own channel chat is built from:
 | --- | --- |
 | `chat.posted` | a message in Discord — unless this bridge is the client that sent it |
 | `chat.message` | a message in Discord, under the agent's name |
-| `agent.spawned` | a small system line, "coder joined" |
+| `agent.spawned` | "coder joined (role)" authored by the creating agent's webhook; a root with no parent uses the bot |
 | `agent.updated` | a system line only when the name or role changed |
 | `agent.killed` | a system line, "scout finished" |
 
@@ -148,6 +166,26 @@ Discord and it reaches the TUI. Without that field the bridge cannot tell your
 terminal's post from the echo of the one it just sent, so it would either
 double-post everything it relays or show you nothing you typed elsewhere. This
 field is already present in the daemon.
+
+Mirrored terminal posts start with their resolved recipients from `ChatPayload.To`:
+`@coder fix the tests`, or `@coder @scout compare notes`. The daemon strips
+addresses from `Text`, so the bridge restores them for display, including
+`@main` for the default recipient. These are plain agent names, not Discord
+user pings. Agent replies keep their original text.
+
+With one configured `approvers` user, terminal posts use that user's Discord
+display name and avatar. The guild nickname and guild avatar take precedence,
+then the global display name/username and user avatar. Profiles are cached for
+five minutes. These are webhook messages, so Discord still shows its APP/BOT
+badge; direct Discord posts remain normal user messages. If profile lookup
+fails, or multiple operators are configured, the bridge uses its ordinary
+"You (terminal)" bot message rather than guessing an identity.
+
+Human terminal posts use a separate, bot-owned `stavlos-terminal` webhook.
+Replies to those messages fall back to the root agent, even if the human's
+display name happens to match an agent name. Only the `stavlos` agent webhook
+is used for reply-as-addressing. Both webhook types are filtered from inbound
+task messages.
 
 Everything else in the log — tool calls, output, todos, MCP, compaction — is
 deliberately not mirrored. The channel is the conversation; the terminal and the
@@ -185,7 +223,15 @@ its webhook username, verifies that the message came from this bridge's webhook
 in this mapped channel, and prepends `@name ` to your text. An explicit leading
 agent address in the user's text takes precedence. No typing on a phone,
 and the intent is explicit rather than inferred. A reply to a system line or a
-prompt falls back to the root agent.
+permission/trust prompt falls back to the root agent. Replies to an agent's
+question card also address that agent; custom answers use the card's checkbox
+and popup, not chat replies.
+
+Agent messages that include the human and other recipients show those other
+`@names` before the body. The human recipient is implicit in the Discord channel,
+and the sending agent is already identified by the webhook author.
+Mirrored terminal posts addressed only to `main` show the message body without
+an automatically added `@main` prefix.
 
 ## What agents say back
 
@@ -222,9 +268,9 @@ A prompt arrives as a `PromptNotification`. Its `From` and `ChannelName` exist
 expressly so a client that does not hold the agent tree can render it — this
 bridge is a shape the protocol already anticipated.
 
-It is posted as an ordinary **bot message**, so the bridge owns its components
-and can edit it after the interaction token expires. Webhooks are for agent
-speech. A plain permission uses up to four buttons, which map exactly
+Tool permissions and questions use the asking agent's application-owned webhook,
+with interactive controls on the original message. Trust prompts remain bot
+messages. A permission uses a single row of up to five buttons, which map exactly
 onto the answers the protocol already defines:
 
 | Button | `PromptReply` |
@@ -232,20 +278,99 @@ onto the answers the protocol already defines:
 | Allow once | `Answer: "allow"` |
 | Allow in this channel | `Answer: "allow_always"` |
 | Always allow `<prefix>` | `Answer: "allow_prefix"` — only when `Prefix` is set |
-| Deny | `Answer: "deny"`, with `Reason` from a modal |
+| Deny | `Answer: "deny"` immediately, without a reason |
+| Deny with reason | `Answer: "deny"`, with required `Reason` from a modal |
 
 A boundary prompt (a path outside the channel's directories) uses its own
-choices: allow once, **Allow and add `<dir>`** (`allow_always` with `Dir`),
-**Allow and add another directory…** (a modal for `Dir`), and deny. Do not offer
-ordinary remembered-call or prefix buttons for a boundary prompt.
+choices: allow once, **Allow and add directory** (`allow_always` with the
+displayed `Dir`), **Deny**, and **Deny with reason**. There is no alternate-directory
+button in Discord. Do not offer ordinary remembered-call or prefix buttons for
+a boundary prompt. The heading is the bold tool name followed by the directory
+in regular text, separated by a space: `❗ **Shell** /outside`. Tool labels use
+sentence case and spaces, such as `Web search` and `Apply patch`. It has no
+`Permission:` or `Directory:` label and no separator dot. Shell requests display the
+decoded command in a shell code block below it rather than its JSON argument
+object. Recorded decisions and errors appear outside the command's code block.
+Permission results are appended to the heading itself, after the tool and any
+directory: `❗ **Shell** /outside ✔️ **Allowed once**` or
+`❗ **Shell** /outside ❌ **Denied**` (with any reason). The command stays below;
+there is no separate outcome row. The plain check mark is distinct from the `✅`
+checkbox used for question selections.
 
-A question batch (`ask_user`) supports multiple selected options **and typed
-text** per question, as the TUI does. Show one question at a time with a
-multi-select, an optional custom-answer modal, and next/back/submit buttons;
-keep draft answers by prompt and operator. Submit the whole batch once with
-`Answer: "answered"` and `Answers[]` in question order, joining selected labels
-and custom text with `", "`. Paginate options or use text entry when Discord's
-menu limits would be exceeded; do not silently truncate choices.
+Other permission subjects use the same heading and code-block layout:
+
+- `apply_patch`: the full patch in a `diff` block, including file operations.
+- `web_fetch`: the URL and any requested continuation offset.
+- `web_search`: the query and requested result count.
+- `read`: the path, starting line and line limit.
+- `grep` / `glob`: the pattern, path and supplied filters/limits.
+- Skills and cancellation tools: the skill name or target ID.
+- MCP and other tools: indented JSON, preserving every argument and numeric ID.
+
+Known-tool formatting retains unexpected extra fields in a separate JSON block.
+Project-trust prompts use a clear trust heading with the directory beside it,
+an explanation of what configuration can define, and a code-block file list.
+
+Permission choices and popup submissions use deferred message updates. The
+original request and recorded decision stay together, including denial reasons
+and the directory/prefix approved. A decision made in the TUI updates that same
+Discord card. Pending message mappings retain permission details and an event
+checkpoint so results can be recovered after reconnecting, just like questions.
+
+All questions requested by `ask_user` appear immediately, each as **its own
+editable message from the asking agent**, with inline toggle buttons and a
+submit button. Review the full set and answer in any order. Tap an
+option to switch between ⬜ and ✅; several options can be selected. Each option
+has its own row, with up to four options visible per page. The webhook username
+identifies the agent, so the question body
+does not repeat its name. Creation and edits opt into `with_components=true`;
+only this application's webhooks may carry the interactive card. Edits,
+resolution and disconnect cleanup use the owning webhook's token, obtained
+through bot authentication after a restart.
+Choose an answer and use **Submit answer**. That answer is accepted and logged
+immediately; its card becomes its result while the other questions keep waiting.
+Each has its own prompt ID. `QuestionNumber` and `QuestionTotal` preserve
+the original position for the TUI and protocol. In Discord, both the open
+question and its submitted result start with `❓ **the question text**`.
+Earlier result cards stay in the conversation. The model's tool call receives
+answers in original question order after all are complete. Cancellation withdraws
+every remaining question, retaining accepted answers in the log and in the
+partial tool output with unanswered positions left blank rather than shifted.
+There is no separate summary message or "Answer questions" step. Selections,
+custom text and errors update the current card. After submission, its controls
+are replaced by an answer summary: the bold question and every option are
+listed, with ✅ for selected options and ⬜ for unselected options. A
+custom-answer line appears only when text was provided, formatted as `✅ windy`
+like the selected options, without a `Custom answer:` label. Long
+summaries abbreviate individual lines to fit Discord's limit while preserving
+each question and choice marker.
+Submitted checkbox rows use four non-breaking spaces for indentation, including
+custom answers, while the question heading stays flush left. This preserves
+text indentation without introducing a Markdown code block or a container.
+Question buttons are vertically stacked, one per row: the options, Custom
+answer, then Submit answer, without a surrounding Container. The gateway uses Discord Components V2 with a
+Text Display for the heading and preview, allowing four options plus custom
+and Submit without the legacy five-row limit. Edits migrate existing cards in
+place, clearing legacy content/embeds; results and disconnect notices keep the
+V2 format with text only. Older batches with larger option lists retain paging.
+
+For a custom answer, click **⬜ Custom answer**, below the option buttons.
+It opens a text popup with an empty field. Saving checks the custom button and
+replaces its label with your text: **✅ your answer**. This only updates the
+draft; **Submit answer** on the card sends the selected options and custom text
+together. Clicking the checked custom button clears its value and unchecks it;
+clicking it again opens a fresh, empty popup. Dismissing the popup leaves the
+draft unchanged. Long values are abbreviated on the button and preview, but
+the full saved text is submitted. Chat replies remain ordinary agent messages.
+
+The unchecked custom button opens its popup as the immediate interaction
+response. Saving the popup and all other question controls use deferred message
+updates rather than creating ephemeral response messages. Authorized operators share the card's draft, keyed by
+prompt, with edits and submission serialized by the channel worker.
+Submit each prompt with
+`Answer: "answered"` and a single entry in `Answers[]`, joining selected labels
+and custom text with `", "`. Longer option lists are paged within Discord's
+five-row component limit.
 
 A trust prompt shows the directory and files from `Input`, with **Trust this
 project's config** (`allow`) and **Not now** (`deny`). Claim and reply by prompt
@@ -278,9 +403,15 @@ and report that outcome. Cancelling a modal leaves the prompt waiting.
 resolved at the terminal, or one that timed out, collapses in Discord too
 without anyone tapping. Also handle `claimed` and subsequent `requested`
 notifications when a claim expires. A resolution notification does not include
-the answer value: say "resolved at another client", "defaulted", or "withdrawn"
-unless this bridge knows the confirmed answer. Do not invent an allow/deny
-result from the notification alone.
+the answer value. For questions, remove the controls but retain the message
+mapping until `ask.resolved` supplies the recorded selections and custom text.
+Render that result on the original card exactly as a Discord-submitted answer,
+including when it was accepted in the TUI or while the bridge was disconnected.
+Older answers without structured selections display their recorded text rather
+than guessing checkboxes from comma-separated labels. Withdrawals retain the
+question with a withdrawn notice. Permissions can still say "resolved at another
+client", "defaulted", or "withdrawn" when the confirmed decision is unavailable;
+do not invent an allow/deny result from the notification alone.
 
 **Who may control it** is enforced by the bridge, not the daemon: `approvers`
 applies to posts, question drafts, modal submissions, prompt buttons, `/status`
@@ -291,24 +422,34 @@ and a second check in the daemon would buy nothing.
 
 ## `/status`
 
-A slash command rendering `AgentTree{Channel}` as one **ephemeral** message —
+A slash command rendering this channel's agents as one **ephemeral** message —
 only you see it, because in this design the channel is the whole interface and a
 status dump you asked for should not push the conversation up.
 
 ```
-#proj · 4 agents · $1.81 · 2 need you
+#proj · Status
+3 non-idle · 4 total · $1.81 spent
+🙋 Needs you: 1 permission · 1 question
 
-@main       waiting    turn 6    $0.41
-├─ @coder   running    turn 12   $1.20
-│    ▸ running the tui tests
-├─ @scout   idle       turn 3    $0.18
-└─ @docs    blocked    turn 1    $0.02
-     ▸ needs you — permission
+⏳ @main · Waiting · general
+  ↳ Waiting for 1 agent
+
+⚙️ @coder · Working · coder
+  ↳ Running the TUI tests
+
+🙋 @docs · Needs input · writer
 ```
 
-Indentation is each agent's `Depth`, the in-progress line is its `Todos`, and
-"needs you" comes from a pending prompt. Everything shown is in one call's
-result. `/cancel <agent>` is `AgentSend` with `KindCancel`.
+Use **`/status active`** to omit idle agents, or **`/status all`** to include
+everyone. These are native Discord subcommands.
+States use ⚙️ working, 🙋 needs input, ⏳ waiting, 💤 idle and ⛔ stopped.
+Each row may show the current task, a last error or its wait count. The summary
+shows the channel's total spend and freshly fetched pending-request counts.
+An all-idle channel gets a clear empty-state message rather than a blank list.
+
+Long lists have Previous/Next buttons that update the same ephemeral response,
+with the filter preserved and data refreshed on each page. `/cancel agent:<name>`
+is `AgentSend` with `KindCancel`.
 
 ## Configuration
 
@@ -317,7 +458,8 @@ A `discord` block in the **global** `stavlos.json` only:
 ```json
 {
   "discord": {
-    "token": "${env:DISCORD_TOKEN}",
+    "enabled": false,
+    "token": "PASTE_YOUR_BOT_TOKEN_HERE",
     "guild": "1234567890",
     "category": "stavlos",
     "approvers": ["9876543210"],
@@ -335,10 +477,11 @@ control surface, and a cloned repository that could add one would be handing its
 author a channel into your agents. `dirs` limits which directories get bridged,
 so cloning a repository does not put it on Discord.
 
-The token must be a `${env:NAME}` reference, resolved in the bridge process,
-and is never logged. Keep the reference unexpanded in shared config loading so
-the daemon does not need the bot token in its environment. Validate a nonempty
-token, guild, category, approver list and directory list at bridge startup.
+The token can be saved directly in the global JSON or supplied as a
+`${env:NAME}` reference. References stay unexpanded in shared config loading
+and are resolved by the service in the daemon's environment; neither form is logged. A saved token
+needs no environment variable or separate environment file. Validate a
+nonempty token, guild, category, approver list and directory list at bridge startup.
 Discover the application ID from the authenticated Discord application; no
 extra config field is needed to register guild-scoped slash commands.
 
@@ -361,8 +504,9 @@ follows is only the part that shapes the design.
 - **Leave the Interactions Endpoint URL blank.** Setting it switches interaction
   delivery to HTTP posts and is the one way to accidentally need a public host;
   gateway delivery and an endpoint URL are mutually exclusive.
-- Prompt components belong to ordinary bot messages; webhook execution is only
-  used for mirrored agent speech, so it does not need `with_components`.
+- Question components belong to application-owned agent webhooks and use
+  `with_components=true` on execute/edit. Permission and trust controls remain
+  ordinary bot messages. Human terminal posts use their separate webhook.
 - Plain action rows of up to five buttons are right here. Components V2 is
   opt-in and disables the `content` field, so it buys nothing for this.
 
@@ -458,7 +602,9 @@ close and a non-reading peer during a context-cancelled RPC write.
   is what mirroring needs. It does not record which human: the name comes from
   the client's own `attach`, and everyone in Discord shares one bridge. Closing
   that means an author on `ChannelPost` that the bridge fills in from the Discord
-  user. **The trigger is the second human in the channel.**
+  user. A sole configured operator supplies terminal display identity only;
+  multiple operators retain the generic terminal label. **The trigger for
+  per-message author tracking is the second human in the channel.**
 - **Backfilling** what was missed while the bridge was down.
 - **Mode changes from Discord**, including yolo.
 - **Threads, agent chats, and mirroring tool calls.**

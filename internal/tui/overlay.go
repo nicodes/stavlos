@@ -41,14 +41,16 @@ const (
 type overlayKind int
 
 const (
-	ovProviders  overlayKind = iota // pick a provider
-	ovMethods                       // pick a login method (providers with more than one)
-	ovModels                        // pick a model
-	ovRoles                         // pick a role (preset) for the selected agent
-	ovVariants                      // pick a model variant (reasoning effort) for the selected agent
-	ovChannels                      // pick a channel of this directory to resume
-	ovMode                          // pick the channel's permission mode (ask | auto | yolo)
-	ovNewChannel                    // name a new channel of this directory
+	ovProviders     overlayKind = iota // pick a provider
+	ovMethods                          // pick a login method (providers with more than one)
+	ovModels                           // pick a model
+	ovRoles                            // pick a role (preset) for the selected agent
+	ovVariants                         // pick a model variant (reasoning effort) for the selected agent
+	ovChannels                         // pick a channel of this directory to resume
+	ovMode                             // pick the channel's permission mode (ask | auto | yolo)
+	ovNewChannel                       // name a new channel of this directory
+	ovNewChannelDir                    // choose its default directory
+	ovDiscord                          // daemon-wide Discord status and controls
 )
 
 // loginState is what the login mode shows. Before url is set the login is
@@ -73,12 +75,13 @@ type overlay struct {
 	empty string // shown in place of the list while it has no items ("no channels here yet")
 	bad   bool   // empty is an error (red)
 
-	input  textinput.Model
-	items  []overlayItem
-	query  string        // last filter applied
-	shown  []overlayItem // items matching query
-	cursor int           // index into shown
-	offset int           // first visible row
+	input   textinput.Model
+	newName string // new-channel directory step
+	items   []overlayItem
+	query   string        // last filter applied
+	shown   []overlayItem // items matching query
+	cursor  int           // index into shown
+	offset  int           // first visible row
 
 	login loginState // login mode only
 
@@ -133,7 +136,7 @@ func (o *overlay) setLogin(url, code, instructions string) {
 // setLoginError replaces the waiting line with err.
 func (o *overlay) setLoginError(err string) { o.login.err = textsafe.Clean(err) }
 
-// filterItems keeps items whose id or label contains query (case-insensitive),
+// filterItems keeps items whose id, label or metadata contains query (case-insensitive),
 // preserving the given order. An empty query keeps everything.
 func filterItems(items []overlayItem, query string) []overlayItem {
 	q := strings.ToLower(strings.TrimSpace(query))
@@ -142,7 +145,7 @@ func filterItems(items []overlayItem, query string) []overlayItem {
 	}
 	var out []overlayItem
 	for _, it := range items {
-		if strings.Contains(strings.ToLower(it.id), q) || strings.Contains(strings.ToLower(it.label), q) {
+		if strings.Contains(strings.ToLower(it.id), q) || strings.Contains(strings.ToLower(it.label), q) || strings.Contains(strings.ToLower(it.hint), q) {
 			out = append(out, it)
 		}
 	}

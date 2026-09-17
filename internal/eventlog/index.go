@@ -24,11 +24,20 @@ func index(ctx context.Context, tx *sql.Tx, e event.Event) error {
 		return err
 	case event.ChannelUpdated:
 		var p event.ChannelUpdatedPayload
-		if err := e.Decode(&p); err != nil || p.Name == nil {
+		if err := e.Decode(&p); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `UPDATE channels SET name = ? WHERE id = ?`, *p.Name, e.Channel)
-		return err
+		if p.Name != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE channels SET name = ? WHERE id = ?`, *p.Name, e.Channel); err != nil {
+				return err
+			}
+		}
+		if p.Dir != nil {
+			if _, err := tx.ExecContext(ctx, `UPDATE channels SET dir = ? WHERE id = ?`, *p.Dir, e.Channel); err != nil {
+				return err
+			}
+		}
+		return nil
 	case event.ChannelArchived:
 		_, err := tx.ExecContext(ctx, `UPDATE channels SET archived = 1 WHERE id = ?`, e.Channel)
 		return err

@@ -18,7 +18,7 @@ func TestChannelStartsInTheConfiguredMode(t *testing.T) {
 	h.mu.Lock()
 	evs := append(h.events[:0:0], h.events...)
 	h.mu.Unlock()
-	s2, err := Recover(context.Background(), h, s.ID, s.Dir, s.Created, &cfg, evs)
+	s2, err := Recover(context.Background(), h, s.ID, s.Dir(), s.Created, &cfg, evs)
 	if err != nil {
 		t.Fatal(err)
 	}

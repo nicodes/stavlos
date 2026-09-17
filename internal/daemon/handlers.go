@@ -85,17 +85,38 @@ func promptErr(err error) error {
 var none = protocol.None{}
 
 var handlers = routes(
+	route(protocol.DiscordStatusMethod, func(_ context.Context, c *conn, _ protocol.None) (protocol.DiscordStatus, error) {
+		if c.d.Discord == nil {
+			return protocol.DiscordStatus{State: "disconnected", Error: "Discord service is unavailable in this daemon"}, nil
+		}
+		return c.d.Discord.Status(), nil
+	}),
+	route(protocol.DiscordConnect, func(_ context.Context, c *conn, _ protocol.None) (protocol.DiscordStatus, error) {
+		if c.d.Discord == nil {
+			return protocol.DiscordStatus{}, errors.New("discord service is unavailable in this daemon")
+		}
+		return c.d.Discord.Connect()
+	}),
+	route(protocol.DiscordDisconnect, func(_ context.Context, c *conn, _ protocol.None) (protocol.DiscordStatus, error) {
+		if c.d.Discord == nil {
+			return protocol.DiscordStatus{}, errors.New("discord service is unavailable in this daemon")
+		}
+		return c.d.Discord.Disconnect()
+	}),
 	route(protocol.DaemonStatus, func(_ context.Context, c *conn, _ protocol.None) (protocol.DaemonStatusResult, error) {
 		return c.d.Status(), nil
 	}),
 	route(protocol.DaemonShutdown, func(_ context.Context, c *conn, _ protocol.None) (protocol.None, error) {
-		log.Printf("shutdown requested by client %s (%s)", c.cl.name, c.cl.id)
+		name, _ := c.cl.identity()
+		log.Printf("shutdown requested by client %s (%s)", name, c.cl.id)
 		if c.d.Shutdown != nil {
 			go c.d.Shutdown()
 		}
 		return none, nil
 	}),
 	route(protocol.Attach, func(_ context.Context, c *conn, p protocol.AttachParams) (protocol.AttachResult, error) {
+		c.cl.mu.Lock()
+		defer c.cl.mu.Unlock()
 		if p.Tier == protocol.TierFallback {
 			c.cl.tier = protocol.TierFallback
 		}
@@ -149,7 +170,8 @@ var handlers = routes(
 		if err != nil {
 			return protocol.ChannelPostResult{}, err
 		}
-		to, err := s.Post(ctx, p.Text, "human:"+c.cl.name)
+		name, _ := c.cl.identity()
+		to, err := s.Post(ctx, p.Text, "human:"+name)
 		return protocol.ChannelPostResult{To: to}, err
 	}),
 	route(protocol.ChannelSetMode, func(ctx context.Context, c *conn, p protocol.ChannelSetModeParams) (protocol.None, error) {
@@ -179,6 +201,9 @@ var handlers = routes(
 		}
 		return none, s.AddDir(ctx, p.Dir)
 	}),
+	route(protocol.ChannelSetDir, func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (protocol.ChannelInfo, error) {
+		return c.d.SetChannelDir(ctx, p.Channel, p.Dir)
+	}),
 	route(protocol.ChannelRemoveDir, func(ctx context.Context, c *conn, p protocol.ChannelDirParams) (protocol.None, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
@@ -199,7 +224,8 @@ var handlers = routes(
 		if err != nil {
 			return none, err
 		}
-		src := "human:" + c.cl.name
+		name, _ := c.cl.identity()
+		src := "human:" + name
 		switch p.Kind {
 		case protocol.KindPrompt:
 			return none, s.Send(ctx, p.Agent, p.Text, src)
@@ -271,7 +297,7 @@ var handlers = routes(
 		return none, nil
 	}),
 	route(protocol.PromptReply, func(_ context.Context, c *conn, p protocol.PromptReplyParams) (protocol.None, error) {
-		if err := c.d.esc.Reply(p.ID, c.cl.id, escalation.Answer{Value: p.Answer, Dir: p.Dir, Reason: p.Reason, Answers: p.Answers}); err != nil {
+		if err := c.d.esc.Reply(p.ID, c.cl.id, escalation.Answer{Value: p.Answer, Dir: p.Dir, Reason: p.Reason, Answers: p.Answers, Details: p.Details}); err != nil {
 			return none, promptErr(err)
 		}
 		return none, nil
@@ -345,6 +371,22 @@ var handlers = routes(
 			return protocol.PresetsResult{}, err
 		}
 		return protocol.PresetsResult{Presets: s.Presets()}, nil
+	}),
+	route(protocol.CommandList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.CommandListResult, error) {
+		return c.d.listCommands(p.Channel)
+	}),
+	route(protocol.ConfigList, func(_ context.Context, c *conn, p protocol.ConfigScope) (protocol.ConfigTree, error) {
+		return c.d.configList(p)
+	}),
+	route(protocol.ConfigRead, func(_ context.Context, c *conn, p protocol.ConfigFileParams) (protocol.ConfigDocument, error) {
+		return c.d.configRead(p)
+	}),
+	route(protocol.ConfigEdit, func(ctx context.Context, c *conn, p protocol.ConfigEditParams) (protocol.ConfigEditResult, error) {
+		return c.d.configEdit(ctx, p)
+	}),
+	route(protocol.CommandRun, func(ctx context.Context, c *conn, p protocol.CommandRunParams) (protocol.None, error) {
+		name, _ := c.cl.identity()
+		return none, c.d.runCommand(ctx, p, "human:"+name)
 	}),
 )
 

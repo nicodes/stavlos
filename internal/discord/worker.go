@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -111,6 +110,9 @@ func (w *worker) execute(t work) error {
 		return w.post(ctx, t.message)
 	case t.interaction != nil:
 		text, components, err := w.interact(ctx, t.interaction)
+		if id, question := questionInteraction(t.interaction); question {
+			return w.updateQuestionCard(id, err)
+		}
 		if err != nil {
 			text = "Could not complete action: " + err.Error()
 			components = nil
@@ -121,6 +123,45 @@ func (w *worker) execute(t work) error {
 	default:
 		return w.refresh(ctx)
 	}
+}
+
+// updateQuestionCard keeps edits and validation errors on the original card.
+// A resolved prompt was already collapsed by answer/syncPrompts; a late click
+// must not overwrite its resolution or recreate its controls.
+func (w *worker) updateQuestionCard(id string, problem error) error {
+	p, ok := w.prompts[id]
+	if !ok {
+		return nil
+	}
+	m := w.b.store.snapshot()[id]
+	if m.Message == "" {
+		return nil
+	}
+	text, components := w.promptView(p)
+	if problem == nil && p.Kind != protocol.PromptQuestion {
+		// Large permission subjects were posted as continuation messages with
+		// controls on the last part. Keep edits on that same, bounded part.
+		parts := splitText(text)
+		if len(parts) > 0 {
+			text = parts[len(parts)-1]
+		}
+	}
+	if problem != nil {
+		note := "\n\n" + clip(problem.Error(), 400)
+		text = clipMarkdown(text, 2000-units(note)) + note
+	}
+	ctx, cancel := context.WithTimeout(w.ctx, 5*time.Second)
+	defer cancel()
+	// Use the canonical bot message, including for clicks on an old private
+	// form created by an earlier bridge version.
+	if err := w.b.editPrompt(ctx, m, text, components); err != nil {
+		if !errors.Is(err, errMissing) {
+			return err
+		}
+		delete(w.shown, id)
+		return w.b.store.set(id, promptMessage{})
+	}
+	return nil
 }
 
 func (w *worker) abandoned(t work) {
@@ -160,7 +201,30 @@ func (w *worker) say(ctx context.Context, user, text string) error {
 	return nil
 }
 
+func (w *worker) terminalPost(ctx context.Context, text string) error {
+	// The protocol identifies the terminal client, not its human operator.
+	// With multiple operators there is no unambiguous Discord identity to use.
+	if len(w.b.cfg.Approvers) != 1 {
+		return w.say(ctx, "", "**You (terminal)**\n"+text)
+	}
+	for _, part := range splitText(text) {
+		if _, err := w.b.api.SendUser(ctx, w.discord, w.b.cfg.Guild, w.b.cfg.Approvers[0], part); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (w *worker) mirror(ctx context.Context, e event.Event) error {
+	if e.Channel != "" && e.Channel != w.id {
+		return nil
+	}
+	// Reconnect replays outcomes for stored question cards, even before the
+	// ordinary chat cutoff. Other historical events remain suppressed.
+	if e.Type == event.AskRequested || e.Type == event.AskResolved {
+		w.seq = max(w.seq, e.Seq)
+		return w.questionEvent(ctx, e)
+	}
 	if e.Seq <= w.seq {
 		return nil
 	}
@@ -174,6 +238,10 @@ func (w *worker) mirror(ctx context.Context, e event.Event) error {
 		if p.Name != nil {
 			w.info.Name = *p.Name
 		}
+		if p.Dir != nil {
+			w.info.Dir = *p.Dir
+			return w.say(ctx, "", "Default directory changed to "+*p.Dir+". Mode is ask; remembered approvals cleared.")
+		}
 		return nil
 	case event.ChatPosted, event.ChatMessage:
 		var p event.ChatPayload
@@ -184,15 +252,21 @@ func (w *worker) mirror(ctx context.Context, e event.Event) error {
 			if p.From == "human:discord" {
 				return nil
 			}
-			return w.say(ctx, "", "**You (terminal)**\n"+p.Text)
+			// The default main recipient is implicit in Discord. Other targets
+			// and multi-recipient messages retain their addressing context.
+			if len(p.To) > 0 && (len(p.To) != 1 || p.To[0] != "main") {
+				p.Text = "@" + strings.Join(p.To, " @") + " " + p.Text
+			}
+			return w.terminalPost(ctx, p.Text)
 		}
-		return w.say(ctx, p.From, p.Text)
+		return w.say(ctx, p.From, channelMessageText(p.To, p.Text))
 	case event.AgentSpawned:
 		var p event.AgentSpawnedPayload
 		if err := e.Decode(&p); err != nil {
 			return err
 		}
-		return w.say(ctx, "", p.Name+" joined ("+p.Role+").")
+		w.rememberAgent(p.ID, p.Name, p.Role, p.Parent)
+		return w.say(ctx, w.agentName(p.Parent), p.Name+" joined ("+p.Role+").")
 	case event.AgentUpdated:
 		var p event.AgentUpdatedPayload
 		if err := e.Decode(&p); err != nil {
@@ -208,12 +282,35 @@ func (w *worker) mirror(ctx context.Context, e event.Event) error {
 		if p.Role != nil {
 			text += " · role: " + *p.Role
 		}
+		for n := range w.agents {
+			if w.agents[n].ID != e.Agent {
+				continue
+			}
+			if p.Name != nil {
+				w.agents[n].Name = *p.Name
+			}
+			if p.Role != nil {
+				w.agents[n].Role = *p.Role
+			}
+		}
 		return w.say(ctx, "", text)
 	case event.AgentKilled:
 		return w.say(ctx, "", w.agentName(e.Agent)+" stopped.")
 	default:
 		return nil
 	}
+}
+
+// Keep identities current between tree polls: a newly created agent can spawn
+// another child immediately, and renamed parents should author as their new name.
+func (w *worker) rememberAgent(id, name, role, parent string) {
+	for i := range w.agents {
+		if w.agents[i].ID == id {
+			w.agents[i].Name, w.agents[i].Role, w.agents[i].Parent = name, role, parent
+			return
+		}
+	}
+	w.agents = append(w.agents, protocol.AgentInfo{ID: id, Channel: w.id, Name: name, Role: role, Parent: parent})
 }
 
 func (w *worker) agentName(id string) string {
@@ -236,6 +333,9 @@ func (w *worker) post(ctx context.Context, m *dg.Message) error {
 		if len(w.seenMessages) > 1024 {
 			w.seenMessages = w.seenMessages[1:]
 		}
+	}
+	if r := m.MessageReference; r != nil && (r.ChannelID != "" && r.ChannelID != w.discord || r.GuildID != "" && r.GuildID != w.b.cfg.Guild) {
+		return w.say(ctx, "", "Reply targets must be in this channel.")
 	}
 	text := stripBot(m.Content, w.b.bot)
 	if text == "" {
@@ -291,33 +391,22 @@ func (w *worker) syncPrompts(ctx context.Context, notification *protocol.PromptN
 			delete(w.drafts, key)
 		}
 	}
-	for id, m := range w.b.store.snapshot() {
-		if m.Channel != w.discord {
+	if err := w.settleMissingPrompts(ctx, current, notification); err != nil {
+		return err
+	}
+	for _, p := range r.Prompts {
+		if _, ok := current[p.ID]; !ok {
 			continue
 		}
-		if _, ok := current[id]; !ok {
-			text := "Resolved or withdrawn at another client (or during restart)."
-			if notification != nil && notification.Prompt.ID == id {
-				switch notification.Action {
-				case protocol.ActionDefaulted:
-					text = "Defaulted by the daemon."
-				case protocol.ActionWithdrawn:
-					text = "Withdrawn."
-				default:
-				}
-			}
-			if err := w.finishPrompt(ctx, id, text); err != nil {
-				return err
-			}
-		}
-	}
-	for _, p := range current {
 		encoded, _ := json.Marshal(p)
 		if w.shown[p.ID] == string(encoded) {
 			continue
 		}
-		text, components := promptView(p, w.link.id)
-		parts := splitText(text)
+		text, components := w.promptView(p)
+		parts := []string{text} // questions stay one form, even near the message size limit
+		if p.Kind != protocol.PromptQuestion {
+			parts = splitText(text)
+		}
 		m := w.b.store.snapshot()[p.ID]
 		if m.Message == "" {
 			for _, part := range parts[:len(parts)-1] {
@@ -325,15 +414,36 @@ func (w *worker) syncPrompts(ctx context.Context, notification *protocol.PromptN
 					return err
 				}
 			}
-			id, err := w.b.api.Send(ctx, w.discord, "", parts[len(parts)-1], components)
+			var id, webhook string
+			var err error
+			if p.Kind == protocol.PromptQuestion || p.Kind == protocol.PromptPermission {
+				name := p.From
+				if name == "" {
+					name = w.agentName(p.Agent)
+				}
+				if name == "" {
+					name = "agent"
+				}
+				id, webhook, err = w.b.api.SendQuestion(ctx, w.discord, name, parts[len(parts)-1], components)
+			} else {
+				id, err = w.b.api.Send(ctx, w.discord, "", parts[len(parts)-1], components)
+			}
 			if err != nil {
 				return err
 			}
-			if err := w.b.store.set(p.ID, promptMessage{Channel: w.discord, Message: id}); err != nil {
+			m = promptMessage{Channel: w.discord, Message: id, Webhook: webhook}
+			m = m.withPrompt(p, w.seq)
+			if err := w.b.store.set(p.ID, m); err != nil {
 				return err
 			}
 		} else {
-			if err := w.b.api.Edit(ctx, w.discord, m.Message, parts[len(parts)-1], components); err != nil {
+			if m.missingPrompt(p) {
+				m = m.withPrompt(p, m.Seq)
+				if err := w.b.store.set(p.ID, m); err != nil {
+					return err
+				}
+			}
+			if err := w.b.editPrompt(ctx, m, parts[len(parts)-1], components); err != nil {
 				if !errors.Is(err, errMissing) {
 					return err
 				}
@@ -352,7 +462,7 @@ func (w *worker) syncPrompts(ctx context.Context, notification *protocol.PromptN
 func (w *worker) finishPrompt(ctx context.Context, id, text string) error {
 	m := w.b.store.snapshot()[id]
 	if m.Message != "" {
-		if err := w.b.api.Edit(ctx, m.Channel, m.Message, clip(text, 2000), nil); err != nil && !errors.Is(err, errMissing) {
+		if err := w.b.editPrompt(ctx, m, clip(text, 2000), nil); err != nil && !errors.Is(err, errMissing) {
 			return err
 		}
 		if err := w.b.store.set(id, promptMessage{}); err != nil {
@@ -361,28 +471,6 @@ func (w *worker) finishPrompt(ctx context.Context, id, text string) error {
 	}
 	delete(w.shown, id)
 	delete(w.prompts, id)
+	delete(w.drafts, id)
 	return nil
-}
-
-func (w *worker) status(ctx context.Context) (string, error) {
-	r, err := call(ctx, w.link.rpc, protocol.AgentTree, protocol.AgentTreeParams{Channel: w.id})
-	if err != nil {
-		return "", err
-	}
-	w.agents = r.Agents
-	var text strings.Builder
-	cost := 0.0
-	for _, a := range r.Agents {
-		cost += a.CostUSD
-	}
-	fmt.Fprintf(&text, "#%s · %d agents · $%.2f · %d prompts waiting here\n", w.info.Name, len(r.Agents), cost, len(w.prompts))
-	for _, a := range r.Agents {
-		fmt.Fprintf(&text, "%s@%s · %s · turn %d · $%.2f\n", strings.Repeat("  ", min(a.Depth, 10)), a.Name, a.State, a.Turn, a.CostUSD)
-		for _, todo := range a.Todos {
-			if todo.Status == "in_progress" {
-				fmt.Fprintf(&text, "  ▸ %s\n", todo.Text)
-			}
-		}
-	}
-	return text.String(), nil
 }

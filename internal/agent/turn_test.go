@@ -71,7 +71,7 @@ func TestToolVerdicts(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			_ = os.WriteFile(filepath.Join(s.Dir, "f.txt"), []byte("hello\n"), 0o644)
+			_ = os.WriteFile(filepath.Join(s.Dir(), "f.txt"), []byte("hello\n"), 0o644)
 			h.answerWith(tc.answer)
 
 			end := runTurn(t, s, h, "go")
@@ -222,13 +222,13 @@ func TestBoundaryPrompt(t *testing.T) {
 	for _, d := range s.Info().Dirs {
 		dirs = append(dirs, d.Path+":"+d.Source)
 	}
-	if strings.Join(dirs, " ") != s.Dir+":channel "+other+":human" {
+	if strings.Join(dirs, " ") != s.Dir()+":channel "+other+":human" {
 		t.Fatalf("dirs %v", dirs)
 	}
 	t.Run("a symlink is judged by where it points", func(t *testing.T) {
 		fm := &fakeModel{steps: []step{reply(call("c1", "read", `{"path":"link/note.txt"}`)), reply(text("ok"))}}
 		s, h := newTestChannel(t, testConfig{}, fm)
-		if err := os.Symlink(other, filepath.Join(s.Dir, "link")); err != nil {
+		if err := os.Symlink(other, filepath.Join(s.Dir(), "link")); err != nil {
 			t.Fatal(err)
 		}
 		h.answerWith(escalation.Answer{Value: "deny"})
@@ -681,7 +681,7 @@ func TestRoleSwitchDuringTurn(t *testing.T) {
 		"other": "---\ndescription: Other\ntype: primary\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are other.\n",
 	}
 	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","rootAgent":"lead"}`, roles: roles}, fm)
-	_ = os.WriteFile(filepath.Join(s.Dir, "f.txt"), []byte("x\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(s.Dir(), "f.txt"), []byte("x\n"), 0o644)
 	root := s.Root()
 	_ = root.Prompt(context.Background(), "go", "human:test")
 	waitUntil(t, h, func() bool { return len(fm.requests()) == 1 })
@@ -711,7 +711,7 @@ func TestLogWriteFailureEndsTheTurn(t *testing.T) {
 		reply(text("should not be reached")),
 	}}
 	s, h := newTestChannel(t, testConfig{}, fm)
-	_ = os.WriteFile(filepath.Join(s.Dir, "f.txt"), []byte("x\n"), 0o644)
+	_ = os.WriteFile(filepath.Join(s.Dir(), "f.txt"), []byte("x\n"), 0o644)
 	root := s.Root()
 	// The failure lands on the tool's finished event.
 	fm.steps[0] = func(context.Context, model.Request) (model.Response, error) {

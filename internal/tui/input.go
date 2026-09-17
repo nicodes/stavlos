@@ -181,29 +181,6 @@ func (m Model) inputView() string {
 	return strings.Join(lines, "\n")
 }
 
-// seedHistory gives a fresh channel's ↑/↓ history the first prompts of
-// this directory's earlier channels (newest first under ↑), so the start
-// screen recalls what was asked last time. Only when nothing has been typed
-// here yet; the current and untitled channels are skipped.
-func (m *Model) seedHistory(channels []protocol.ChannelInfo) {
-	if len(m.history) > 0 || !m.isHome() {
-		return
-	}
-	seen := map[string]bool{}
-	var titles []string
-	for _, s := range channels { // newest first
-		if s.Title == "" || s.ID == m.channelID || seen[s.Title] {
-			continue
-		}
-		seen[s.Title] = true
-		titles = append(titles, s.Title)
-	}
-	for i := len(titles) - 1; i >= 0; i-- { // history is oldest → newest
-		m.history = append(m.history, titles[i])
-	}
-	m.histIdx = len(m.history)
-}
-
 // inputKey handles keys while the input has focus: paging the chat, ↑/↓
 // through the "/" palette or the prompt history, esc to clear (or cancel a
 // busy turn), tab to complete a command, enter to run or send; anything
@@ -255,12 +232,12 @@ func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
 		return m.escCancel()
 	case msg.Type == tea.KeyTab:
 		// only reached when the palette is open (tab otherwise cycles focus)
-		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
+		if pm := m.paletteMatches(m.input.Value()); len(pm) > 0 {
 			m.completeCommand(pm[m.clampPal(len(pm))])
 		}
 		return nil
 	case key.Matches(msg, keys.Submit):
-		if pm := paletteMatches(m.input.Value()); len(pm) > 0 {
+		if pm := m.paletteMatches(m.input.Value()); len(pm) > 0 {
 			c := pm[m.clampPal(len(pm))]
 			typed := strings.ToLower(m.input.Value())
 			if c.Direct && (typed == c.Name || typed != c.Name && c.Args == "" || isAlias(c, typed)) {
@@ -278,11 +255,15 @@ func (m *Model) inputKey(msg tea.KeyMsg) tea.Cmd {
 	}
 
 	var cmd tea.Cmd
+	wasCommand := strings.HasPrefix(m.input.Value(), "/")
 	m.input, cmd = m.input.Update(normalizePaste(msg))
 	if !paletteActive(m.input.Value()) {
 		m.palIdx = 0
-	} else if pm := paletteMatches(m.input.Value()); m.palIdx >= len(pm) {
+	} else if pm := m.paletteMatches(m.input.Value()); m.palIdx >= len(pm) {
 		m.palIdx = 0
+	}
+	if !wasCommand && strings.HasPrefix(m.input.Value(), "/") {
+		return tea.Batch(cmd, customCommandsCmd(m.ctx, m.c, m.requestScope()))
 	}
 	return cmd
 }

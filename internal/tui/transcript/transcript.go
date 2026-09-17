@@ -161,11 +161,15 @@ func (r lineRef) after(o lineRef) bool {
 // into items, one per rendered event group (a user block, an assistant
 // message, a tool call with its output, …); the chat cursor walks items.
 type Transcript struct {
-	items   [][]Line // committed lines by item; items[i][j].Item == i
-	revs    []uint64 // revs[i] changes whenever items[i] does (render cache key)
-	version uint64   // source of revisions
-	flat    []Line   // items flattened; nil when stale
-	start   []int    // start[i]: index of items[i]'s first line in flat
+	explicitAsks map[string]*explicitWait
+	chatRequests map[string]*chatRequest
+	permissions  map[string]permissionItem
+	questions    map[string]questionItem
+	items        [][]Line // committed lines by item; items[i][j].Item == i
+	revs         []uint64 // revs[i] changes whenever items[i] does (render cache key)
+	version      uint64   // source of revisions
+	flat         []Line   // items flattened; nil when stale
+	start        []int    // start[i]: index of items[i]'s first line in flat
 
 	calls       map[string]lineRef   // tool call id → its LineTool line
 	prompts     map[string]int       // prompt id → item of the tool call it gates
@@ -239,6 +243,12 @@ func NewTranscript() *Transcript {
 // a turn) replaces the in-progress streaming buffer; tool.call.finished
 // updates the matching tool line and nests the output under it.
 func (t *Transcript) Apply(ev event.Event) {
+	if t.applyPermission(ev) {
+		return
+	}
+	if t.applyQuestion(ev) {
+		return
+	}
 	if t.chat {
 		t.applyChat(ev)
 		return
@@ -327,31 +337,39 @@ func (t *Transcript) applyTaken(ev event.Event) {
 		}
 		t.appendItem(CleanLines(lines))
 		if in.Kind == event.InputResponse {
-			t.answered(in.FromName)
+			if len(in.ReplyTo) > 0 {
+				t.answeredRequests(in.From, in.ReplyTo)
+			} else {
+				t.answered(in.FromName)
+			}
 		}
 	}
 }
 
-// InputLines draws an input to agent to as the chat shows it, from its
-// sender to it: the human's own words after "@user → @to", another agent's
-// after "@scout → @to" (just the sender while to is unknown). A job's result
+// InputLines draws "@sender: @recipients message" in the receiving agent's
+// chat, preserving the full shared recipient list. A job's result
 // nests under its call and a reminder showed when it was queued, so neither
 // draws again.
 func InputLines(in event.Input, to string) []Line {
+	recipients := in.To
+	if len(recipients) == 0 && to != "" {
+		recipients = []string{to}
+	}
 	switch in.Kind {
 	case event.InputPrompt, event.InputSteer:
-		lines := block(BlockUser, "", fromTo(toolname.User, to)+" "+in.Text)
+		address, names := messageAddress(toolname.User, recipients, to)
+		lines := block(BlockUser, "", strings.TrimSpace(address+" "+in.Text))
 		for i := range lines {
 			if lines[i].Lead {
-				lines[i].Who, lines[i].Names = toolname.User, names(toolname.User, to)
+				lines[i].Who, lines[i].Names = toolname.User, names
 				break
 			}
 		}
 		return lines
 	case event.InputRequest, event.InputResponse:
-		return received(in.FromName, to, in.Text, GlyphAsk)
+		return received(in.FromName, recipients, to, in.Text, GlyphAsk)
 	case event.InputInfo:
-		return received(in.FromName, to, in.Text, GlyphInfo) // needs no reply
+		return received(in.FromName, recipients, to, in.Text, GlyphInfo) // needs no reply
 	default:
 	}
 	return nil
@@ -410,9 +428,14 @@ func (t *Transcript) holdSpawn(ev event.Event) bool {
 // (general) · model" over the task.
 func (t *Transcript) spawnLines(in event.Input) []Line {
 	head := Line{Kind: LineText, Text: titled("@"+in.FromName, "as "+t.spawnAs), Block: BlockChild, Glyph: GlyphSpawn, Who: in.FromName}
-	if t.self != "" { // "» @main → @scout (general) · model"
-		head.Text = fromTo(in.FromName, t.self) + " " + strings.TrimPrefix(t.spawnAs, t.self+" ")
-		head.Names = names(in.FromName, t.self)
+	if t.self != "" {
+		to := in.To
+		if len(to) == 0 {
+			to = []string{t.self}
+		}
+		address, names := messageAddress(in.FromName, to, t.self)
+		head.Text = address + " " + strings.TrimPrefix(t.spawnAs, t.self+" ")
+		head.Names = names
 	}
 	lines := []Line{{Kind: LineBlank}, head}
 	for _, l := range strings.Split(strings.TrimRight(in.Text, "\n"), "\n") {
@@ -473,8 +496,11 @@ func (t *Transcript) applyToolCall(ev event.Event) bool {
 		input := t.callInputs[p.CallID]
 		delete(t.callInputs, p.CallID)
 		lines := toolStartedLines(p.Name, p.CallID, input)
-		if lines[0].Who != "" && t.self != "" { // a message or a task: "‹ @main → @scout …"
-			lines[0].Text, lines[0].Names = "@"+t.self+" → "+lines[0].Text, names(t.self, lines[0].Who)
+		if lines[0].Who != "" {
+			lines[0].Names = []string{lines[0].Who}
+			if p.Name == toolname.Message {
+				lines[0].Names = messageRecipients(input)
+			}
 		}
 		if r, ok := t.find(t.appendItem(CleanLines(lines)), isToolLine); ok {
 			t.calls[p.CallID] = r
@@ -904,9 +930,7 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 		if rest, ok := strings.CutPrefix(p.Output, "created "); ok {
 			if name, _, ok := strings.Cut(rest, " ("); ok && name != l.Who {
 				at := -1 // the recipient's @name: after the arrow, or leading the line
-				if i := strings.Index(l.Text, "→ @"+l.Who); i >= 0 {
-					at = i + len("→ ")
-				} else if strings.HasPrefix(l.Text, "@"+l.Who) {
+				if strings.HasPrefix(l.Text, "@"+l.Who) {
 					at = 0
 				}
 				if at >= 0 {
@@ -923,9 +947,26 @@ func (t *Transcript) finishCall(p event.ToolFinishedPayload) {
 	}
 	// A new message to an agent waits for its answer: yellow until the
 	// answer lands (see answered), like a shell call and its job.
-	if name, ok := messagedAgent(p); ok {
-		l.Tone = ToneWorking
-		t.asks[name] = append(t.asks[name], r)
+	if recipients := deliveredRecipients(p); len(recipients) > 0 {
+		prefix := addressed(l.Names, "")
+		if prefix != "" && strings.HasPrefix(l.Text, prefix) {
+			l.Text = addressed(recipients, "") + strings.TrimPrefix(l.Text, prefix)
+		}
+		l.Names, l.Who = recipients, recipients[0]
+		if strings.HasPrefix(p.Output, messageDelivered) {
+			if id := messageRequestID(p.Output); id != "" {
+				t.trackExplicit(id, r, recipients)
+				delete(t.calls, p.CallID)
+				return
+			}
+			for _, name := range recipients {
+				if name == toolname.User {
+					continue
+				}
+				l.Tone = ToneWorking
+				t.asks[name] = append(t.asks[name], r)
+			}
+		}
 	}
 	delete(t.calls, p.CallID)
 }
@@ -949,26 +990,44 @@ const messageDelivered = "request delivered to "
 // messagedAgent is the name of the agent a finished message call is waiting
 // on: set only for a new message delivered to an agent, not for an answer,
 // a message to the user, or a call that failed.
-func messagedAgent(p event.ToolFinishedPayload) (string, bool) {
+func deliveredRecipients(p event.ToolFinishedPayload) []string {
 	if p.Name != toolname.Message || p.IsError || p.Cancelled || p.Denied {
-		return "", false
+		return nil
 	}
-	rest, ok := strings.CutPrefix(p.Output, messageDelivered)
-	if !ok {
-		return "", false
+	if p.Output == "message delivered to the user" {
+		return []string{toolname.User}
 	}
-	name, _, _ := strings.Cut(rest, ";")
-	if name == "" || name == "the user" {
-		return "", false
+	for _, prefix := range []string{messageDelivered, "response delivered to ", "info delivered to "} {
+		if rest, ok := strings.CutPrefix(p.Output, prefix); ok {
+			list, _, _ := strings.Cut(rest, ";")
+			if list == "" {
+				return nil
+			}
+			return strings.Split(list, ", ")
+		}
 	}
-	return name, true
+	return nil
 }
 
 // answered settles every outstanding message to the agent named in an
 // answer's From: one answer covers all the questions asked of it so far.
 func (t *Transcript) answered(from string) {
-	t.setTone(t.asks[from], ToneNone)
+	refs := t.asks[from]
 	delete(t.asks, from)
+	for _, r := range refs {
+		waiting := false
+		for _, others := range t.asks {
+			if slices.Contains(others, r) {
+				waiting = true
+				break
+			}
+		}
+		if !waiting {
+			if l := t.line(r); l != nil && l.Tone != ToneError {
+				l.Tone = ToneNone
+			}
+		}
+	}
 }
 
 // AskerGone marks every outstanding message to a killed agent (by name)
@@ -976,6 +1035,13 @@ func (t *Transcript) answered(from string) {
 func (t *Transcript) AskerGone(name string) {
 	t.setTone(t.asks[name], ToneError)
 	delete(t.asks, name)
+	for _, wait := range t.explicitAsks {
+		if slices.Contains(wait.names, name) {
+			if l := t.line(wait.ref); l != nil {
+				l.Tone = ToneError
+			}
+		}
+	}
 }
 
 func (t *Transcript) setTone(refs []lineRef, tone Tone) {
@@ -1163,6 +1229,13 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 		if in.Kind != event.InputReminder {
 			return nil // an input draws when the agent takes it (Transcript.applyTaken)
 		}
+		if len(in.Requests) > 0 {
+			lines := []Line{{Kind: LineDim, Glyph: GlyphNudge, Text: titled("Nudge", fmt.Sprintf("%d requests need responses", len(in.Requests)))}}
+			for _, r := range in.Requests {
+				lines = append(lines, Line{Kind: LineDim, Text: r.ID + " @" + r.FromName + ": " + r.Text, Indent: 1})
+			}
+			return lines
+		}
 		return []Line{{Kind: LineDim, Glyph: GlyphNudge, Text: titled("Nudge", "owes a reply to "+partyList(in.Names))}}
 	}),
 
@@ -1272,6 +1345,9 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.ChannelUpdated: decoded(func(p event.ChannelUpdatedPayload) []Line {
+		if p.Dir != nil {
+			return []Line{{Kind: LineDim, Glyph: GlyphModel, Text: titled("Directory", "→ "+*p.Dir+" · mode ask · remembered approvals cleared")}}
+		}
 		if p.Mode == nil {
 			return nil
 		}
@@ -1468,38 +1544,18 @@ func blockWith(kind BlockKind, label, text, glyph string) []Line {
 	return append(lines, Line{Kind: LineBlank})
 }
 
-// received is what another agent sent agent to, a prompt or a response:
-// "› @scout → @main …" with each name in its colour and later lines aligned
-// under the text. What this agent sends reads "‹ @main → @scout …" (its
-// message calls). An info message reads » instead.
-func received(from, to, text, glyph string) []Line {
+// received is an incoming agent message: "› @scout: @main …", with later
+// lines indented. Outgoing calls omit the current agent's sender prefix.
+func received(from string, to []string, viewer, text, glyph string) []Line {
 	body := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	head := Line{Kind: LineText, Text: body[0], Block: BlockChild, Glyph: glyph, Who: from}
-	if from != "" {
-		head.Text, head.Names = strings.TrimSpace(fromTo(from, to)+" "+body[0]), names(from, to)
-	}
+	address, names := messageAddress(from, to, viewer)
+	head.Text, head.Names = strings.TrimSpace(address+" "+body[0]), names
 	lines := []Line{{Kind: LineBlank}, head}
 	for _, l := range body[1:] {
 		lines = append(lines, Line{Kind: LineText, Text: l, Block: BlockChild, Indent: 1})
 	}
 	return append(lines, Line{Kind: LineBlank})
-}
-
-// fromTo is how a message names its two sides, "@main → @scout"; just
-// "@main" while the other side is unknown.
-func fromTo(from, to string) string {
-	if to == "" {
-		return "@" + from
-	}
-	return "@" + from + " → @" + to
-}
-
-// names are the sides fromTo names, each painted in its own colour.
-func names(from, to string) []string {
-	if to == "" {
-		return []string{from}
-	}
-	return []string{from, to}
 }
 
 func errorBlock(text string) []Line { return errorBlockWith(text, GlyphError) }
@@ -1592,6 +1648,9 @@ func toolLine(name string, input json.RawMessage) string {
 		// line), for a message and for the task that creates an agent
 		to, text := promptOf(name, input)
 		first, _, _ := strings.Cut(text, "\n")
+		if name == toolname.Message {
+			return strings.TrimSpace(addressed(messageRecipients(input), first))
+		}
 		return strings.TrimSpace("@" + to + " " + first)
 	}
 	title := ToolTitle(name)
@@ -1665,12 +1724,7 @@ func ToolArg(name string, raw json.RawMessage) string {
 	case toolname.Todo:
 		return todoArg(raw)
 	case toolname.Message:
-		to := str("to")
-		to = strings.TrimPrefix(to, "@")
-		if l := strings.ToLower(to); l == "user" || l == "human" {
-			to = "user"
-		}
-		return "@" + to
+		return addressed(messageRecipients(raw), "")
 	}
 	return compactArgs(raw)
 }
@@ -1880,7 +1934,7 @@ const (
 	GlyphJob        = "$" // async jobs are shell commands
 	GlyphToolAgents = "⑂"
 	GlyphToolCreate = "⋙" // agent_create: the triple of a prompt\'s ›, since it makes the agent it prompts
-	GlyphToolTodo   = "□" // todo
+	GlyphToolTodo   = "☐" // todo
 	GlyphToolMCP    = "≡" // mcp__<server>__<tool> and MCP server notices
 	GlyphToolWeb    = "↓" // web_fetch: pulling a page in
 )
@@ -1913,12 +1967,24 @@ func IsPromptCall(l Line) bool {
 // recipient ("user" for the human) and text, or a new agent's label and
 // task.
 func promptOf(name string, input json.RawMessage) (who, text string) {
-	var in struct{ To, ID, Text, Label, Task string }
+	var in struct{ Text, Label, Task string }
 	_ = json.Unmarshal(input, &in)
 	if name == toolname.AgentCreate {
 		return in.Label, strings.TrimSpace(in.Task)
 	}
-	return strings.TrimPrefix(ToolArg(name, input), "@"), strings.TrimSpace(in.Text)
+	recipients := messageRecipients(input)
+	if len(recipients) > 0 {
+		who = recipients[0]
+	}
+	return who, strings.TrimSpace(in.Text)
+}
+
+func messageRecipients(input json.RawMessage) []string {
+	var in struct {
+		To protocol.Recipients `json:"to"`
+	}
+	_ = json.Unmarshal(input, &in)
+	return in.To.Normalized()
 }
 
 // ToolGlyph returns the glyph for a tool name and the gap after it.

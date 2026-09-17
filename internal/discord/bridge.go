@@ -39,15 +39,51 @@ func call[P, R any](ctx context.Context, c rpc, m protocol.Method[P, R], p P) (R
 // Bridge owns routing; each channel worker exclusively owns its UI state.
 // mu protects routing only, never a Discord request or a daemon call.
 type Bridge struct {
-	cfg       config.Discord
-	api       API
-	bot       string
-	store     *promptStore
-	mu        sync.RWMutex
-	live      *link
-	workers   map[string]*worker // Stavlos ID
-	byDiscord map[string]*worker
-	wg        sync.WaitGroup
+	cfg                                 config.Discord
+	api                                 API
+	bot                                 string
+	store                               *promptStore
+	mu                                  sync.RWMutex
+	live                                *link
+	workers                             map[string]*worker // Stavlos ID
+	byDiscord                           map[string]*worker
+	wg                                  sync.WaitGroup
+	gatewayConnected                    bool
+	botName, guildName, connectionError string
+	gatewayLost                         chan struct{}
+	gatewayOnce                         sync.Once
+}
+
+// BridgeStatus is the live connection view used by the daemon's controller.
+type BridgeStatus struct {
+	Gateway, Daemon       bool
+	Bot, GuildName, Error string
+	Channels              int
+}
+
+// Status snapshots metadata only; it never exposes configuration credentials.
+func (b *Bridge) Status() BridgeStatus {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	s := BridgeStatus{Gateway: b.gatewayConnected, Bot: b.botName, GuildName: b.guildName, Error: b.connectionError}
+	s.Daemon = b.live != nil && b.live.ctx.Err() == nil
+	if s.Daemon {
+		for _, w := range b.workers {
+			if w.ready == b.live {
+				s.Channels++
+			}
+		}
+	}
+	return s
+}
+
+func (b *Bridge) gatewayState(connected bool) {
+	b.mu.Lock()
+	b.gatewayConnected = connected
+	b.mu.Unlock()
+	if !connected && b.gatewayLost != nil {
+		b.gatewayOnce.Do(func() { close(b.gatewayLost) })
+	}
 }
 
 // New prepares a bridge using already resolved configuration.
@@ -56,7 +92,7 @@ func New(cfg config.Discord, api API, bot, statePath string) (*Bridge, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Bridge{cfg: cfg, api: api, bot: bot, store: s, workers: map[string]*worker{}, byDiscord: map[string]*worker{}}, nil
+	return &Bridge{cfg: cfg, api: api, bot: bot, store: s, workers: map[string]*worker{}, byDiscord: map[string]*worker{}, gatewayLost: make(chan struct{})}, nil
 }
 
 // Run maintains the daemon connection until ctx ends. A connection loss starts
@@ -84,6 +120,9 @@ func (b *Bridge) Run(ctx context.Context, socket string) error {
 		if ctx.Err() != nil {
 			break
 		}
+		b.mu.Lock()
+		b.connectionError = err.Error()
+		b.mu.Unlock()
 		log.Printf("discord: daemon connection interrupted: %v; retry in %s", err, delay)
 		select {
 		case <-ctx.Done():
@@ -103,6 +142,7 @@ func (b *Bridge) connected(ctx context.Context, c *client.Client) error {
 	l := &link{rpc: c, id: a.ClientID, ctx: lctx, cancel: cancel}
 	b.mu.Lock()
 	b.live = l
+	b.connectionError = ""
 	b.mu.Unlock()
 	pumpDone := make(chan struct{})
 	go func() {
@@ -325,7 +365,7 @@ func (b *Bridge) bind(ctx context.Context, l *link, info protocol.ChannelInfo, c
 	if err != nil {
 		return err
 	}
-	if _, err := call(l.ctx, l.rpc, protocol.Subscribe, protocol.SubscribeParams{Channel: info.ID, From: r.Seq + 1}); err != nil {
+	if _, err := call(l.ctx, l.rpc, protocol.Subscribe, protocol.SubscribeParams{Channel: info.ID, From: b.questionReplayFrom(ch.ID, r.Seq)}); err != nil {
 		return err
 	}
 	b.mu.Lock()
@@ -338,7 +378,7 @@ func (b *Bridge) disablePrompts(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	for _, p := range b.store.snapshot() {
-		_ = b.api.Edit(ctx, p.Channel, p.Message, "Stavlos disconnected — waiting to reconcile this prompt.", nil)
+		_ = b.editPrompt(ctx, p, "Stavlos disconnected — waiting to reconcile this prompt.", nil)
 	}
 }
 func (b *Bridge) retireUnmapped(ctx context.Context) error {
@@ -347,7 +387,7 @@ func (b *Bridge) retireUnmapped(ctx context.Context) error {
 		w := b.byDiscord[p.Channel]
 		b.mu.RUnlock()
 		if w == nil {
-			if err := b.api.Edit(ctx, p.Channel, p.Message, "This channel is no longer bridged.", nil); err != nil && !errors.Is(err, errMissing) {
+			if err := b.editPrompt(ctx, p, "This channel is no longer bridged.", nil); err != nil && !errors.Is(err, errMissing) {
 				return err
 			}
 			if err := b.store.set(id, promptMessage{}); err != nil {
@@ -411,7 +451,14 @@ func (b *Bridge) Interaction(ic *dg.InteractionCreate) {
 		_ = b.api.Respond(ctx, i, r)
 		return
 	}
-	if err := b.api.Respond(ctx, i, &dg.InteractionResponse{Type: dg.InteractionResponseDeferredChannelMessageWithSource, Data: &dg.InteractionResponseData{Flags: dg.MessageFlagsEphemeral}}); err != nil {
+	response := &dg.InteractionResponse{Type: dg.InteractionResponseDeferredChannelMessageWithSource, Data: &dg.InteractionResponseData{Flags: dg.MessageFlagsEphemeral}}
+	if _, question := questionInteraction(i); question {
+		response = &dg.InteractionResponse{Type: dg.InteractionResponseDeferredMessageUpdate}
+	}
+	if _, _, ok := statusPage(i); ok {
+		response = &dg.InteractionResponse{Type: dg.InteractionResponseDeferredMessageUpdate}
+	}
+	if err := b.api.Respond(ctx, i, response); err != nil {
 		return
 	}
 	if !w.enqueue(work{link: l, interaction: i}) {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/nicodes/stavlos/internal/config"
+
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -37,7 +39,7 @@ func (a *Agent) beginTurn() (int, context.Context, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	st := a.state()
-	if st.killed || st.inTurn || !st.startsTurn() {
+	if s.reconfiguring || st.killed || st.inTurn || !st.startsTurn() {
 		return 0, nil, false
 	}
 	turn := st.turn + 1
@@ -108,6 +110,9 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 	if t.ctx.Err() != nil {
 		return event.ReasonCancelled, "", true
 	}
+	if msg := config.DirectoryError(s.Dir()); msg != "" {
+		return event.ReasonError, msg, true
+	}
 	if err := t.takeMidTurn(); err != nil {
 		return event.ReasonError, err.Error(), true
 	}
@@ -117,6 +122,9 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 	s.mu.Unlock()
 	if modelID == "" {
 		return event.ReasonError, ErrNoModel, true
+	}
+	if !rv.preset.AllowsModel(modelID) || !rv.preset.AllowsVariant(modelID, variant) {
+		return event.ReasonError, "the current model or variant is not allowed by this project's role; use /models or /variants to select one", true
 	}
 	m, info, err := s.host.Resolve(modelID)
 	if err != nil {

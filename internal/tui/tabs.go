@@ -17,7 +17,7 @@ import (
 // shares), below what belongs to the selected
 // agent.
 var tabRows = [][]focus{
-	{focusPermission, focusQuestions, focusDirs},
+	{focusPermission, focusDirs},
 	{focusAsync, focusTodo, focusMCP},
 }
 
@@ -27,13 +27,13 @@ var tabRows = [][]focus{
 var tabFocuses = slices.Concat(tabRows...)
 
 // tabLayout is the tab rows as they are drawn: tabRows while the sidebar is
-// hidden; with it showing, ! and ? on top (in the sidebar, above the
+// hidden; with it showing, ! on top (in the sidebar, above the
 // channels) and dirs out of the tabs, behind each channel's gear instead,
 // since the directories are that channel's.
 func (m Model) tabLayout() [][]focus {
 	top := tabRows[0]
 	if m.sidebarVisible() {
-		top = []focus{focusPermission, focusQuestions}
+		top = []focus{focusPermission}
 	}
 	rows := [][]focus{top}
 	if !m.superChat { // async · due · todo · mcp are an agent's: its own chat has them, the channel chat does not
@@ -153,6 +153,10 @@ func (m *Model) dueOf() (human bool, agents []protocol.AgentInfo) {
 // asyncCount is the async tab's count: the agents and jobs the selected
 // agent waits on, and the replies it owes (you, and agents).
 func (m *Model) asyncCount() int {
+	if m.hasReplyDetails() {
+		a := m.selectedAgent()
+		return len(a.PendingReplies) + len(a.AwaitingReplies) + len(m.runningJobs())
+	}
 	human, owed := m.dueOf()
 	n := len(m.awaitedAgents()) + len(m.runningJobs()) + len(owed)
 	if human {
@@ -198,6 +202,9 @@ func (m *Model) tabsKey(msg tea.KeyMsg) tea.Cmd {
 // on its reply (you, then agents); space on an agent opens that agent's chat
 // and on "you" the channel chat, closing the dialog. A job row opens nothing.
 func (m *Model) asyncKey(msg tea.KeyMsg) tea.Cmd {
+	if m.hasReplyDetails() {
+		return m.replyKey(msg)
+	}
 	waiting, jobs := m.awaitedAgents(), m.runningJobs()
 	human, owed := m.dueOf()
 	you := 0
@@ -237,7 +244,7 @@ func (m *Model) todoKey(msg tea.KeyMsg) tea.Cmd {
 // dirsKey handles keys in the dirs dialog: ↑/↓ move, a adds a directory,
 // enter edits the highlighted one (replacing it), ctrl+d removes it; while
 // the path field is open, enter submits and esc cancels the edit. The
-// channel directory cannot be changed.
+// default directory is editable while idle; config-derived rows stay read-only.
 func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 	dirs := m.channelDirs()
 	if m.dirEdit != "" {
@@ -256,6 +263,9 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 			m.dirInput.Blur()
 			if edit == "add" {
 				return addDirCmd(m.ctx, m.c, m.channelID, path)
+			}
+			if edit == "default" {
+				return setDirCmd(m.ctx, m.c, m.requestScope(), path)
 			}
 			return replaceDirCmd(m.ctx, m.c, m.channelID, edit, path)
 		}
@@ -284,13 +294,13 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 		if d == nil {
 			return nil
 		}
-		if d.Source == "channel" {
-			return m.setStatus("the channel directory cannot be changed", true)
-		}
 		if d.Source == "config" {
 			return m.setStatus("set by dirs in stavlos.json: change it there", true)
 		}
 		m.dirEdit = d.Path
+		if d.Source == "channel" {
+			m.dirEdit = "default"
+		}
 		m.dirInput.SetValue(d.Path)
 		m.dirInput.CursorEnd()
 		return m.dirInput.Focus()
@@ -366,19 +376,6 @@ func (m *Model) pickTabRow(row int, choose bool) tea.Cmd {
 		if choose {
 			return m.permissionKey(space)
 		}
-	case focusQuestions:
-		p := m.currentQuestion()
-		if p == nil {
-			return nil
-		}
-		m.q.bind(p)
-		if m.q.typing {
-			return nil
-		}
-		m.q.sel = row
-		if choose {
-			return m.questionsKey(space)
-		}
 	default:
 		m.agCursor = row
 		if choose && m.focus == focusAsync {
@@ -422,18 +419,33 @@ func (m *Model) tabAt(x, row int) (focus, bool) {
 	return hitSpan(spans[row], x)
 }
 
-// openTab opens tab f's dialog from the tabs (the strip or the sidebar): a
-// permission or questions dialog opened this way shows every channel's.
+// openTab opens a tab dialog. Permissions span channels; question navigation
+// goes directly to the inline card in the current chat.
 func (m *Model) openTab(f focus) tea.Cmd {
+	if f == focusPermission {
+		if p := m.inlinePermission(); p != nil {
+			return m.openPermission(p)
+		}
+		for i := range m.prompts {
+			p := &m.prompts[i]
+			if p.Kind == protocol.PromptPermission && (p.Channel == "" || p.Channel == m.channelID) && p.Agent != "" {
+				m.openChat()
+				return m.openPermission(p)
+			}
+		}
+		if p := m.currentPrompt(); p != nil && p.Kind == protocol.PromptPermission {
+			return m.setStatus("no permissions waiting in this channel", false)
+		}
+	}
+	if f == focusQuestions {
+		return m.openQuestion(m.currentQuestion())
+	}
 	m.scope = promptScope{}
 	cmd := m.setFocus(f)
-	if f == focusQuestions {
-		m.q.bind(m.currentQuestion())
-	}
 	return cmd
 }
 
-// openWaiting opens the permission dialog, else the questions dialog, on
+// openWaiting opens the permission dialog, else the inline question card, on
 // what waits in channel (only agent's when agent is set) when anything does,
 // and reports whether it opened one: opening a channel or an agent that waits
 // on the human goes straight to its prompts.
@@ -443,16 +455,30 @@ func (m *Model) openWaiting(channel, agent string) (tea.Cmd, bool) {
 	f := focusPermission
 	switch {
 	case perms > 0:
+		if channel == m.channelID {
+			for i := range m.prompts {
+				p := &m.prompts[i]
+				if m.permissionVisible(*p) && scope.holds(*p) {
+					return m.openPermission(p), true
+				}
+			}
+		}
 	case questions > 0:
-		f = focusQuestions
+		if channel != m.channelID {
+			return nil, false
+		}
+		for i := range m.prompts {
+			p := &m.prompts[i]
+			if p.Kind == protocol.PromptQuestion && scope.holds(*p) && m.questionVisible(*p) {
+				return m.openQuestion(p), true
+			}
+		}
+		return nil, false
 	default:
 		return nil, false
 	}
 	m.scope = scope
 	cmd := m.setFocus(f)
-	if f == focusQuestions {
-		m.q.bind(m.currentQuestion())
-	}
 	return cmd, true
 }
 

@@ -32,12 +32,15 @@ var commands = []Command{
 	{Name: "/mode", Desc: "permission mode for the channel: ask, auto (free inside the channel's directories) or yolo", Direct: true},
 	{Name: "/auto", Args: "[on|off]", Desc: "auto mode: approve permissions inside the channel's directories, deny outside (no arg toggles)", Direct: true},
 	{Name: "/yolo", Args: "[on|off]", Desc: "yolo mode: approve every permission, directories included (no arg toggles)", Direct: true},
-	{Name: "/channels", Desc: "pick a channel of this directory to resume where it left off", Aliases: []string{"/resume", "/channel"}, Direct: true},
+	{Name: "/channels", Desc: "pick any channel across your working directories", Aliases: []string{"/resume", "/channel"}, Direct: true},
+	{Name: "/dir", Desc: "set this channel's default directory (or open its directories)", Direct: true},
+	{Name: "/discord", Desc: "Discord status and connect/disconnect controls", Direct: true},
 	{Name: "/rename", Args: "<name>", Desc: "rename this channel (#name, unique across the daemon)", Direct: true},
 	{Name: "/tree", Desc: "toggle the agent sidebar (also ctrl+b)", Direct: true},
 	{Name: "/chat", Desc: "the channel chat: talk to every agent, @name addresses one (the sidebar opens an agent's own chat)", Direct: true},
 	{Name: "/compact", Desc: "summarise the selected agent's completed turns now to free context (automatic at 80% of the window)", Direct: true},
 	{Name: "/help", Desc: "show or hide the key bar at the bottom (off by default)", Aliases: []string{"/h", "/?"}, Direct: true},
+	{Name: "/settings", Args: "[project|system]", Desc: "edit project or system config files", Aliases: []string{"/config"}, Direct: true},
 }
 
 // paletteMax is how many rows the palette shows at once.
@@ -52,12 +55,16 @@ func paletteActive(input string) bool {
 // paletteMatches filters the registry by the typed prefix (after "/"),
 // matching names first, then aliases, preserving registry order.
 func paletteMatches(input string) []Command {
+	return matchCommands(input, commands)
+}
+
+func matchCommands(input string, registry []Command) []Command {
 	if !paletteActive(input) {
 		return nil
 	}
 	q := strings.ToLower(strings.TrimPrefix(input, "/"))
 	var out []Command
-	for _, c := range commands {
+	for _, c := range registry {
 		if strings.HasPrefix(strings.TrimPrefix(c.Name, "/"), q) {
 			out = append(out, c)
 			continue
@@ -123,7 +130,7 @@ func paletteView(matches []Command, idx, width int) string {
 // paletteStep moves the palette's cursor on ↑/↓ while the palette is open;
 // it reports whether it used the key.
 func (m *Model) paletteStep(msg tea.KeyMsg) bool {
-	pm := paletteMatches(m.input.Value())
+	pm := m.paletteMatches(m.input.Value())
 	return len(pm) > 0 && stepCursor(msg, &m.palIdx, len(pm), false)
 }
 

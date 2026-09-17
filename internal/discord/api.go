@@ -19,7 +19,10 @@ type API interface {
 	Create(context.Context, string, dg.GuildChannelCreateData) (*dg.Channel, error)
 	Rename(context.Context, string, string) error
 	Send(context.Context, string, string, string, []dg.MessageComponent) (string, error)
+	SendQuestion(context.Context, string, string, string, []dg.MessageComponent) (string, string, error) // message ID, webhook ID
+	SendUser(context.Context, string, string, string, string) (string, error)
 	Edit(context.Context, string, string, string, []dg.MessageComponent) error
+	EditWebhook(context.Context, string, string, string, []dg.MessageComponent) error
 	Message(context.Context, string, string) (*dg.Message, error)
 	OwnWebhook(context.Context, string, string) bool
 	Typing(context.Context, string) error
@@ -28,10 +31,12 @@ type API interface {
 }
 
 type gateway struct {
-	s     *dg.Session
-	mu    sync.Mutex
-	hooks map[string]*dg.Webhook
-	bot   string
+	s        *dg.Session
+	mu       sync.Mutex
+	hooks    map[string]*dg.Webhook
+	bot      string
+	app      string
+	profiles map[string]cachedProfile // mu; cached per guild/user
 }
 
 var errMissing = errors.New("discord message no longer exists")
@@ -50,31 +55,39 @@ func Open(ctx context.Context, token, guild string, makeBridge func(API, string)
 	if err != nil {
 		return nil, nil, apiError(err)
 	}
+	guildInfo, err := s.Guild(guild, dg.WithContext(ctx))
+	if err != nil {
+		if errors.Is(apiError(err), errMissing) {
+			return nil, nil, errors.New("discord server not found; check the guild ID and invite the bot")
+		}
+		return nil, nil, apiError(err)
+	}
 	g := &gateway{s: s, hooks: map[string]*dg.Webhook{}, bot: u.ID}
 	b, err := makeBridge(g, u.ID)
 	if err != nil {
 		return nil, nil, err
 	}
+	b.mu.Lock()
+	b.botName, b.guildName = u.Username, guildInfo.Name
+	b.mu.Unlock()
+	s.AddHandler(func(_ *dg.Session, _ *dg.Connect) { b.gatewayState(true) })
+	s.AddHandler(func(_ *dg.Session, _ *dg.Disconnect) { b.gatewayState(false) })
 	s.AddHandler(func(_ *dg.Session, m *dg.MessageCreate) { b.Message(m) })
 	s.AddHandler(func(_ *dg.Session, i *dg.InteractionCreate) { b.Interaction(i) })
 	app, err := s.Application("@me")
 	if err != nil {
 		return nil, nil, apiError(err)
 	}
-	_, err = s.ApplicationCommandBulkOverwrite(app.ID, guild, []*dg.ApplicationCommand{
-		{Name: "status", Description: "Show this channel's Stavlos agents"},
-		{Name: "cancel", Description: "Cancel an agent's current turn", Options: []*dg.ApplicationCommandOption{
-			{Type: dg.ApplicationCommandOptionString, Name: "agent", Description: "Agent name (default main)"},
-		}},
-	}, dg.WithContext(ctx))
+	g.app = app.ID
+	_, err = s.ApplicationCommandBulkOverwrite(app.ID, guild, applicationCommands(), dg.WithContext(ctx))
 	if err != nil {
 		return nil, nil, apiError(err)
 	}
-	if err := s.Open(); err != nil {
-		_ = s.Close()
-		return nil, nil, apiError(err)
+	closeGateway, err := openGateway(ctx, s)
+	if err != nil {
+		return nil, nil, err
 	}
-	return b, func() { _ = s.Close() }, nil
+	return b, closeGateway, nil
 }
 
 // apiError intentionally excludes request URLs and bodies, which can include
@@ -85,6 +98,12 @@ func apiError(err error) error {
 	}
 	var re *dg.RESTError
 	if errors.As(err, &re) && re.Response != nil {
+		if re.Response.StatusCode == http.StatusUnauthorized {
+			return errors.New("discord rejected the bot token (HTTP 401)")
+		}
+		if re.Response.StatusCode == http.StatusForbidden {
+			return errors.New("discord denied access; check server and bot permissions (HTTP 403)")
+		}
 		if re.Response.StatusCode == http.StatusNotFound {
 			return errMissing
 		}
@@ -105,10 +124,11 @@ func (g *gateway) Rename(ctx context.Context, id, name string) error {
 	_, err := g.s.ChannelEdit(id, &dg.ChannelEdit{Name: name}, dg.WithContext(ctx))
 	return apiError(err)
 }
-func (g *gateway) hook(ctx context.Context, channel string) (*dg.Webhook, error) {
+func (g *gateway) hook(ctx context.Context, channel, name string) (*dg.Webhook, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	if h := g.hooks[channel]; h != nil {
+	key := channel + ":" + name
+	if h := g.hooks[key]; h != nil {
 		return h, nil
 	}
 	hooks, err := g.s.ChannelWebhooks(channel, dg.WithContext(ctx))
@@ -116,40 +136,56 @@ func (g *gateway) hook(ctx context.Context, channel string) (*dg.Webhook, error)
 		return nil, apiError(err)
 	}
 	for _, h := range hooks {
-		if h.Name == "stavlos" && h.User != nil && h.User.ID == g.bot {
-			g.hooks[channel] = h
+		if h.Name == name && h.User != nil && h.User.ID == g.bot {
+			g.hooks[key] = h
 			return h, nil
 		}
 	}
-	h, err := g.s.WebhookCreate(channel, "stavlos", "", dg.WithContext(ctx))
+	h, err := g.s.WebhookCreate(channel, name, "", dg.WithContext(ctx))
 	if err == nil {
-		g.hooks[channel] = h
+		g.hooks[key] = h
 	}
 	return h, apiError(err)
 }
 func (g *gateway) OwnWebhook(ctx context.Context, channel, id string) bool {
-	h, err := g.hook(ctx, channel)
+	// Only agent speech is addressable by replying. Human terminal posts use
+	// a separate webhook, even if the operator's display name is an agent name.
+	h, err := g.hook(ctx, channel, "stavlos")
 	return err == nil && h.ID == id
 }
 func (g *gateway) Send(ctx context.Context, channel, user, text string, components []dg.MessageComponent) (string, error) {
-	var m *dg.Message
-	var err error
-	mentions := &dg.MessageAllowedMentions{Parse: []dg.AllowedMentionType{}}
 	if user != "" {
-		h, e := g.hook(ctx, channel)
-		if e != nil {
-			return "", e
-		}
-		m, err = g.s.WebhookExecute(h.ID, h.Token, true, &dg.WebhookParams{
-			Username: clip(user, 80), Content: text, AllowedMentions: mentions,
-		}, dg.WithContext(ctx))
-	} else {
-		m, err = g.s.ChannelMessageSendComplex(channel, &dg.MessageSend{Content: text, Components: components, AllowedMentions: mentions}, dg.WithContext(ctx))
+		return g.sendWebhook(ctx, channel, "stavlos", user, "", text, components)
 	}
+	m, err := g.s.ChannelMessageSendComplex(channel, &dg.MessageSend{Content: text, Components: components,
+		AllowedMentions: &dg.MessageAllowedMentions{Parse: []dg.AllowedMentionType{}}}, dg.WithContext(ctx))
 	if err != nil {
-		if user != "" && errors.Is(apiError(err), errMissing) {
+		return "", apiError(err)
+	}
+	return m.ID, nil
+}
+
+func (g *gateway) sendWebhook(ctx context.Context, channel, hook, name, avatar, text string, components []dg.MessageComponent) (string, error) {
+	return g.executeWebhook(ctx, channel, hook, &dg.WebhookParams{
+		Username: clip(name, 80), AvatarURL: avatar, Content: text, Components: components,
+		AllowedMentions: &dg.MessageAllowedMentions{Parse: []dg.AllowedMentionType{}},
+	})
+}
+
+func (g *gateway) executeWebhook(ctx context.Context, channel, hook string, payload *dg.WebhookParams) (string, error) {
+	h, err := g.hook(ctx, channel, hook)
+	if err != nil {
+		return "", err
+	}
+	opts := []dg.RequestOption{dg.WithContext(ctx)}
+	if payload.Components != nil {
+		opts = append(opts, withComponents)
+	}
+	m, err := g.s.WebhookExecute(h.ID, h.Token, true, payload, opts...)
+	if err != nil {
+		if errors.Is(apiError(err), errMissing) {
 			g.mu.Lock()
-			delete(g.hooks, channel)
+			delete(g.hooks, channel+":"+hook)
 			g.mu.Unlock()
 		}
 		return "", apiError(err)
@@ -157,12 +193,9 @@ func (g *gateway) Send(ctx context.Context, channel, user, text string, componen
 	return m.ID, nil
 }
 func (g *gateway) Edit(ctx context.Context, channel, id, text string, components []dg.MessageComponent) error {
-	if components == nil {
-		components = []dg.MessageComponent{}
-	}
-	_, err := g.s.ChannelMessageEditComplex(&dg.MessageEdit{ID: id, Channel: channel, Content: &text, Components: &components,
-		AllowedMentions: &dg.MessageAllowedMentions{Parse: []dg.AllowedMentionType{}}}, dg.WithContext(ctx))
-	return apiError(err)
+	// Bot-owned prompt cards from older versions can also acquire the taller
+	// layout. All subsequent edits (including resolution) stay in V2 format.
+	return g.editCard(ctx, dg.EndpointChannelMessage(channel, id), dg.EndpointChannelMessage(channel, ""), text, components)
 }
 func (g *gateway) Message(ctx context.Context, channel, id string) (*dg.Message, error) {
 	m, err := g.s.ChannelMessage(channel, id, dg.WithContext(ctx))
@@ -175,6 +208,9 @@ func (g *gateway) Respond(ctx context.Context, i *dg.Interaction, r *dg.Interact
 	return apiError(g.s.InteractionRespond(i, r, dg.WithContext(ctx)))
 }
 func (g *gateway) ResponseEdit(ctx context.Context, i *dg.Interaction, text string, components []dg.MessageComponent) error {
+	if _, question := questionInteraction(i); question || i.Message != nil && i.Message.Flags&dg.MessageFlagsIsComponentsV2 != 0 {
+		return g.editCard(ctx, dg.EndpointWebhookMessage(i.AppID, i.Token, "@original"), dg.EndpointWebhookToken("", ""), text, components)
+	}
 	if components == nil {
 		components = []dg.MessageComponent{}
 	}

@@ -1,11 +1,15 @@
 // Package escalation routes permission and question prompts to clients
-// (PRD §7.4): broadcast to interactive clients, claim on human engagement,
-// escalate to fallback clients after N, apply the headless default after M.
+// (PRD §7.4): questions and permissions go to all clients immediately. Trust
+// starts with interactive clients, escalating to fallback after N; permissions
+// take the headless default after M. Claims happen on human engagement.
 package escalation
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -14,6 +18,7 @@ import (
 
 // Answer is the outcome of a prompt.
 type Answer struct {
+	Details   []protocol.QuestionAnswer
 	Value     string   // allow | deny | allow_always | free text
 	Dir       string   // boundary prompts: the directory to add with allow_always, when the human edited it
 	Reason    string   // deny: the human's optional note, passed to the agent
@@ -62,6 +67,20 @@ func New(cfg Config, sink Sink) *Manager {
 	return &Manager{cfg: cfg, sink: sink, pend: map[string]*pending{}}
 }
 
+// SetConfig applies timer/default edits to new requests; existing prompts keep
+// the timers they were opened with.
+func (m *Manager) SetConfig(cfg Config) {
+	if cfg.Default == "" {
+		cfg.Default = "deny"
+	}
+	if cfg.ClaimExpiry == 0 {
+		cfg.ClaimExpiry = 2 * time.Minute
+	}
+	m.mu.Lock()
+	m.cfg = cfg
+	m.mu.Unlock()
+}
+
 // Errors.
 var (
 	ErrNotFound = errors.New("prompt not found or already answered")
@@ -74,12 +93,20 @@ var (
 // set, runs once the prompt can be listed and answered, before any answer
 // is taken.
 func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo, opened func()) Answer {
-	info.Created = time.Now().UTC().Format(time.RFC3339)
+	m.mu.Lock()
+	cfg := m.cfg
+	m.mu.Unlock()
+	info.Created = time.Now().UTC().Format(time.RFC3339Nano)
+	// Chat cards are immediately actionable from either client, including
+	// clients reconnecting via Pending. Trust retains its escalation delay.
+	if info.Kind == protocol.PromptQuestion || info.Kind == protocol.PromptPermission {
+		info.Escalated = true
+	}
 	p := &pending{info: info, answer: make(chan Answer, 1)}
 	m.mu.Lock()
 	m.pend[info.ID] = p
 	m.mu.Unlock()
-	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionRequested, Prompt: info}, []protocol.Tier{protocol.TierInteractive})
+	m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionRequested, Prompt: info}, m.tiersFor(info))
 	// The prompt can be listed and answered from here on: opened runs now
 	// (the caller logs the request), and no answer is taken before it
 	// returns, so what it logs always precedes the answer.
@@ -87,8 +114,11 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo, opened 
 		opened()
 	}
 
-	claimT := time.NewTimer(m.cfg.ClaimTimeout)
-	answerT := time.NewTimer(m.cfg.AnswerTimeout)
+	claimT := time.NewTimer(cfg.ClaimTimeout)
+	if info.Escalated {
+		claimT.Stop()
+	}
+	answerT := time.NewTimer(cfg.AnswerTimeout)
 	if info.Kind == protocol.PromptQuestion || info.Kind == protocol.PromptTrust {
 		// No sensible default for either: a question waits until answered
 		// or withdrawn, and trusting a project is never decided by a timer
@@ -118,7 +148,7 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo, opened 
 		case <-expiry.C:
 			// expire stale claims so the prompt can be re-claimed
 			m.mu.Lock()
-			if p.info.ClaimedBy != "" && time.Since(p.claimedAt) > m.cfg.ClaimExpiry {
+			if p.info.ClaimedBy != "" && time.Since(p.claimedAt) > cfg.ClaimExpiry {
 				p.info.ClaimedBy = ""
 				info := p.info
 				m.mu.Unlock()
@@ -127,15 +157,19 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo, opened 
 			}
 			m.mu.Unlock()
 		case <-answerT.C:
-			a := Answer{Value: m.cfg.Default, Defaulted: true}
+			a := Answer{Value: cfg.Default, Defaulted: true}
 			if m.finish(info.ID, a) {
 				m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionDefaulted, Prompt: m.snapshot(info.ID, p)}, m.tiersFor(p.info))
+			} else {
+				return <-p.answer
 			}
 			return a
 		case <-ctx.Done():
 			a := Answer{Withdrawn: true}
 			if m.finish(info.ID, a) {
 				m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionWithdrawn, Prompt: m.snapshot(info.ID, p)}, m.tiersFor(p.info))
+			} else {
+				return <-p.answer // an accepted answer wins a simultaneous cancellation
 			}
 			return a
 		}
@@ -207,10 +241,21 @@ func (m *Manager) Reply(id, client string, a Answer) error {
 		m.mu.Unlock()
 		return ErrClaimed
 	}
+	if p.info.Kind == protocol.PromptQuestion && p.info.QuestionNumber > 0 && !singleQuestionAnswer(a) {
+		m.mu.Unlock()
+		return errors.New("provide exactly one nonempty answer for this question")
+	}
 	p.info.ClaimedBy = client
 	info := p.info
 	m.mu.Unlock()
 	return m.answer(id, info, client, a)
+}
+
+func singleQuestionAnswer(a Answer) bool {
+	if len(a.Answers) == 1 {
+		return strings.TrimSpace(a.Answers[0]) != ""
+	}
+	return len(a.Answers) == 0 && a.Value != protocol.AnswerAnswered && strings.TrimSpace(a.Value) != ""
 }
 
 // Resolve answers a prompt whatever claims it: the daemon settling a prompt
@@ -284,5 +329,13 @@ func (m *Manager) Pending(channel string) []protocol.PromptInfo {
 			out = append(out, p.info)
 		}
 	}
+	slices.SortFunc(out, func(a, b protocol.PromptInfo) int {
+		ta, _ := time.Parse(time.RFC3339Nano, a.Created)
+		tb, _ := time.Parse(time.RFC3339Nano, b.Created)
+		if n := ta.Compare(tb); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.ID, b.ID)
+	})
 	return out
 }

@@ -20,13 +20,13 @@ import (
 
 // channelState is what the log says about a channel.
 type channelState struct {
-	name, model, role, mode string
-	archived                bool
-	dirs                    []dirEntry // the working set beyond the channel directory
-	permits                 permits
-	agents                  map[string]*agentState
-	order                   []string          // spawn order
-	names                   map[string]string // agent name → id; a name is never released
+	name, model, role, mode, dir string
+	archived                     bool
+	dirs                         []dirEntry // the working set beyond the channel directory
+	permits                      permits
+	agents                       map[string]*agentState
+	order                        []string          // spawn order
+	names                        map[string]string // agent name → id; a name is never released
 }
 
 // agentState is what the log says about one agent.
@@ -40,13 +40,15 @@ type agentState struct {
 	inTurn    bool
 	lastError string // the error that ended the latest turn
 
-	inbox    []event.Input                      // queued, not yet taken, in order
-	awaiting map[string]int                     // agent id → requests to it still unanswered
-	owed     map[string]bool                    // parties owed a reply: "user" or agent ids
-	nudges   int                                // reminders in a row that got no reply
-	lastPost string                             // the chat post the human's latest input delivered
-	jobs     map[string]event.JobStartedPayload // running background jobs
-	asks     map[string]bool                    // prompts put to the human, not yet resolved
+	inbox     []event.Input        // queued, not yet taken, in order
+	awaiting  map[string]int       // agent id → requests to it still unanswered
+	owed      map[string]replyDebt // request id → one response obligation
+	owedOrder []string
+	waits     map[string]*replyWait              // request id → outstanding recipients
+	nudges    int                                // reminders in a row that got no reply
+	lastPost  string                             // the chat post the human's latest input delivered
+	jobs      map[string]event.JobStartedPayload // running background jobs
+	asks      map[string]bool                    // prompts put to the human, not yet resolved
 
 	todos      []event.TodoItem
 	todoSeq    int
@@ -86,7 +88,14 @@ func (cs *channelState) apply(e event.Event, fx *effects) {
 		}
 	case event.ChatMessage:
 		if a != nil {
-			a.settle(tools.User)
+			var p event.ChatPayload
+			if e.Decode(&p) == nil {
+				if p.Kind == "" {
+					cs.settleLegacy(a, tools.User)
+				} else if p.Kind == tools.KindResponse {
+					cs.settleReplies(a, tools.User, p.ReplyTo)
+				}
+			}
 		}
 	default:
 		if a != nil {
@@ -104,6 +113,7 @@ func (cs *channelState) applyChannel(e event.Event) {
 		var p event.ChannelCreatedPayload
 		if e.Decode(&p) == nil {
 			cs.name, cs.model, cs.role = p.Name, p.Model, p.Role
+			cs.dir = p.Dir
 			if p.Mode != "" {
 				cs.mode = p.Mode // the mode the config started it in
 			}
@@ -121,6 +131,9 @@ func (cs *channelState) applyChannel(e event.Event) {
 		}
 		if p.Mode != nil {
 			cs.mode = *p.Mode
+		}
+		if p.Dir != nil {
+			cs.dir, cs.mode, cs.permits = *p.Dir, protocol.ModeAsk, permits{}
 		}
 	case event.ChannelArchived:
 		cs.archived = true
@@ -149,7 +162,7 @@ func (cs *channelState) spawned(e event.Event) {
 	}
 	cs.agents[p.ID] = &agentState{
 		id: p.ID, parent: p.Parent, role: p.Role, name: p.Name, model: p.Model, variant: p.Variant, depth: p.Depth,
-		awaiting: map[string]int{}, owed: map[string]bool{}, jobs: map[string]event.JobStartedPayload{}, asks: map[string]bool{},
+		awaiting: map[string]int{}, owed: map[string]replyDebt{}, waits: map[string]*replyWait{}, jobs: map[string]event.JobStartedPayload{}, asks: map[string]bool{},
 		hist: project.NewBuilder(),
 	}
 	cs.order = append(cs.order, p.ID)
@@ -188,10 +201,19 @@ func (cs *channelState) killed(id string) {
 	}
 	a.killed, a.inTurn = true, false
 	a.jobs, a.asks = map[string]event.JobStartedPayload{}, map[string]bool{}
+	a.owed, a.owedOrder, a.waits, a.awaiting = map[string]replyDebt{}, nil, map[string]*replyWait{}, map[string]int{}
 	for _, o := range cs.agents {
 		delete(o.awaiting, id)
-		if o.owed[id] {
-			o.settle(id)
+		for request, debt := range o.owed {
+			if debt.From == id {
+				o.settleRequest(request)
+			}
+		}
+		for request, wait := range o.waits {
+			delete(wait.targets, id)
+			if len(wait.targets) == 0 {
+				delete(o.waits, request)
+			}
 		}
 	}
 }
@@ -209,11 +231,15 @@ func (cs *channelState) queued(a *agentState, e event.Event, fx *effects) {
 	case event.InputRequest:
 		if from := cs.agents[in.From]; from != nil {
 			from.awaiting[a.id]++
+			from.trackRequest(in, a.id)
 		}
 	case event.InputResponse:
-		delete(a.awaiting, in.From) // one answer settles everything asked of that agent
 		if from := cs.agents[in.From]; from != nil {
-			from.settle(a.id)
+			if len(in.ReplyTo) == 0 {
+				cs.settleLegacy(from, a.id)
+			} else {
+				cs.settleReplies(from, a.id, in.ReplyTo)
+			}
 		}
 	case event.InputReminder:
 		a.nudges++
@@ -348,9 +374,11 @@ func (a *agentState) status() protocol.AgentState {
 
 // due lists the parties the agent owes a reply, sorted.
 func (a *agentState) due() []string {
-	out := make([]string, 0, len(a.owed))
-	for p := range a.owed {
-		out = append(out, p)
+	var out []string
+	for _, request := range a.owed {
+		if !slices.Contains(out, request.From) {
+			out = append(out, request.From)
+		}
 	}
 	sort.Strings(out)
 	return out

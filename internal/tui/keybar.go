@@ -50,10 +50,13 @@ func (m Model) keyHints() []dialog.Hint {
 		return []dialog.Hint{hint("↑/↓", "item"), hint("space/enter", "expand/collapse"), hint("pgup/pgdn", "page"), hint("tab", "next section"), hint("ctrl+space", "input"), hint("esc", "input"), hint("ctrl+c", "quit")}
 	case focusQuestions:
 		if m.q.typing {
-			return []dialog.Hint{hint("enter", "answer"), hint("esc", "back to the options"), hint("ctrl+c", "quit")}
+			return []dialog.Hint{hint("enter", "save custom answer"), hint("esc", "back to the options"), hint("ctrl+c", "quit")}
+		}
+		if p := m.currentQuestion(); p != nil && p.QuestionNumber > 0 {
+			return []dialog.Hint{hint("↑/↓", "option"), hint("space", "toggle"), hint("enter", "submit answer"), hint("type", "something else"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 		}
 		return []dialog.Hint{hint("↑/↓", "option"), hint("space", "toggle"), hint("enter", "confirm · next"), hint("←/→", "question"), hint("type", "something else"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
-	case focusPermission:
+	case focusPermission, focusInlinePermission:
 		if p := m.currentPrompt(); p != nil {
 			switch m.permEdit {
 			case "deny":

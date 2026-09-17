@@ -242,6 +242,19 @@ func (fakeAsker) Ask(ctx context.Context, qs []protocol.Question) ([]string, err
 	return []string{"a, b, typed"}, nil
 }
 
+type interruptedAsker struct{}
+
+func (interruptedAsker) Ask(context.Context, []protocol.Question) ([]string, error) {
+	return []string{"", "accepted"}, context.Canceled
+}
+
+func TestInterruptedQuestionsKeepAcceptedAnswers(t *testing.T) {
+	r := Builtin()["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"question":"First?","options":[{"label":"accepted"}]},{"question":"Second?","options":[{"label":"later"}]}]}`), &Env{Ask: interruptedAsker{}})
+	if !r.IsError || !strings.Contains(r.Output, "First? → (no answer)") || !strings.Contains(r.Output, "canceled") || !strings.Contains(r.Output, "Second? → accepted") {
+		t.Fatalf("partial answers: %+v", r)
+	}
+}
+
 // TestResolvePath: relative paths hang off the root, .. escapes, symlinks
 // resolve on the existing part, and nothing is expanded.
 func TestResolvePath(t *testing.T) {

@@ -46,6 +46,9 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 	case loginDoneMsg:
 		return m.onLoginDone(msg)
 	case rolesMsg:
+		if !m.accepts(msg.scope) {
+			return nil
+		}
 		if msg.err == nil {
 			m.presets = msg.roles
 		}
@@ -53,10 +56,14 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 			return m.onRoles(msg)
 		}
 	case variantsMsg:
+		if !m.accepts(msg.scope) {
+			return nil
+		}
 		return m.onVariants(msg)
 	case channelsMsg:
 		return m.onChannelsListed(msg)
 	case switchedMsg:
+		m.switching = false
 		if msg.err != nil {
 			m.dirsNext = false
 			return m.setStatus("channel: "+msg.err.Error(), true)
@@ -65,13 +72,16 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 		m.opened = true // switched to from inside the TUI: the channel's chat, not the splash
 		if m.dirsNext { // reached through its gear: its dirs dialog
 			m.dirsNext = false
-			return tea.Batch(cmd, m.openTab(focusDirs))
+			return tea.Batch(cmd, m.openConfigEditor(false))
 		}
 		if open, ok := m.openWaiting(m.channelID, ""); ok {
 			return tea.Batch(cmd, open)
 		}
 		return cmd
 	case modelsMsg:
+		if !m.accepts(msg.scope) {
+			return nil
+		}
 		return m.onModels(msg)
 	}
 	return nil
@@ -79,16 +89,42 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 
 // onChannelsListed routes a channel list to what asked for it.
 func (m *Model) onChannelsListed(msg channelsMsg) tea.Cmd {
+	if msg.purpose != channelsNav && !m.accepts(msg.scope) {
+		return nil
+	}
 	msg.channels = cleanChannels(msg.channels)
 	switch msg.purpose {
 	case channelsNav:
 		if msg.err == nil {
+			row, ok := m.sidebarAt(m.sbCursor)
+			selectedChannel := ""
+			if ok && (row.kind == sbOther || row.kind == sbOtherAgent) {
+				selectedChannel = m.navChannels[row.k].ID
+			}
+			for _, s := range msg.channels {
+				if s.ID == m.channelID && s.Dir == m.channel.Dir {
+					m.channel.DirError = s.DirError
+				}
+			}
 			m.navChannels = resumable(msg.channels, m.channelID)
 			m.pruneTrees()
-		}
-	case channelsHistory:
-		if msg.err == nil {
-			m.seedHistory(msg.channels)
+			if selectedChannel != "" {
+				found := false
+				for k, s := range m.navChannels {
+					if s.ID == selectedChannel {
+						row.k = k
+						found = true
+						break
+					}
+				}
+				if !found {
+					row = sidebarRow{kind: sbHere}
+				}
+			}
+			if ok {
+				m.sbCursor = m.sidebarIndex(row)
+				m.followSidebarCursor()
+			}
 		}
 	case channelsPicker:
 		return m.onChannels(msg)
@@ -191,6 +227,8 @@ func (m *Model) cancelLogin() tea.Cmd {
 func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 	o := m.ov
 	switch o.kind {
+	case ovDiscord:
+		return m.submitDiscord()
 	case ovProviders:
 		it := o.selected()
 		if it == nil {
@@ -234,12 +272,8 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 			return nil
 		}
 		return tea.Batch(m.closeOverlay(), setModeCmd(m.ctx, m.c, m.channelID, it.id))
-	case ovNewChannel:
-		name := strings.TrimSpace(o.input.Value())
-		if name == "" {
-			return nil
-		}
-		return tea.Batch(m.closeOverlay(), m.setStatus("creating a channel", false), newChannelCmd(m.ctx, m.c, m.channelID, m.channel.Dir, name))
+	case ovNewChannel, ovNewChannelDir:
+		return m.submitNewChannel()
 	case ovChannels:
 		it := o.selected()
 		if it == nil {
@@ -248,7 +282,7 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 		if it.id == m.channelID {
 			return tea.Batch(m.closeOverlay(), m.setStatus("already in this channel", false))
 		}
-		return tea.Batch(m.closeOverlay(), switchChannelCmd(m.ctx, m.c, m.channelID, it.id))
+		return tea.Batch(m.closeOverlay(), m.switchTo(it.id))
 	case ovVariants:
 		it := o.selected()
 		if it == nil {
@@ -274,6 +308,26 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 		return tea.Batch(m.closeOverlay(), pickAgentModelCmd(m.ctx, m.c, agent, it.id))
 	}
 	return nil
+}
+
+func (m *Model) submitNewChannel() tea.Cmd {
+	o := m.ov
+	value := strings.TrimSpace(o.input.Value())
+	if value == "" {
+		return nil
+	}
+	if o.kind == ovNewChannel {
+		next := newOverlay(ovNewChannelDir, overlayInput, "Default directory for #"+value)
+		next.newName = value
+		next.input.SetValue(m.channel.Dir)
+		next.input.CursorEnd()
+		return m.openOverlay(next)
+	}
+	if m.switching {
+		return nil
+	}
+	m.switching = true
+	return tea.Batch(m.closeOverlay(), m.setStatus("creating a channel", false), createChannelCmd(m.ctx, m.c, m.channelID, m.channel.Dir, value, o.newName))
 }
 
 // openMethodMenu shows the provider's sign-in methods (opencode's "Login
@@ -364,7 +418,7 @@ func (m *Model) onLoginDone(msg loginDoneMsg) tea.Cmd {
 	}
 	cmds = append(cmds, m.setStatus("connected "+name+" ✓", false), providersCmd(m.ctx, m.c, providersMsg{refresh: true}))
 	if m.channel.Model == "" && (len(m.agents) == 0 || m.agents[0].Model == "") {
-		cmds = append(cmds, modelsCmd(m.ctx, m.c))
+		cmds = append(cmds, modelsCmd(m.ctx, m.c, m.requestScope()))
 	}
 	return tea.Batch(cmds...)
 }
@@ -550,14 +604,12 @@ func roleAllowsModel(r *protocol.PresetInfo, id string) bool {
 	return r == nil || len(r.Models) == 0 || roleModelSpec(r, id) != nil
 }
 
-// onChannels opens the /channels picker: this directory's channels, newest
-// first, each titled by its first prompt. Channels nobody has prompted are
-// left out (except the current one): there is nothing to resume there.
+// onChannels opens the global /channels picker with paths and first prompts.
 func (m *Model) onChannels(msg channelsMsg) tea.Cmd {
 	if msg.err != nil {
 		return m.setStatus("channels: "+msg.err.Error(), true)
 	}
-	o := newOverlay(ovChannels, overlayList, "Channels in "+format.ShortHome(m.channel.Dir))
+	o := newOverlay(ovChannels, overlayList, "All channels")
 	sortChannels(msg.channels)
 	items := make([]overlayItem, 0, len(msg.channels))
 	for _, s := range msg.channels {
@@ -574,6 +626,12 @@ func (m *Model) onChannels(msg channelsMsg) tea.Cmd {
 // prompt, when it started, its model, cost and live agents.
 func channelItem(s protocol.ChannelInfo, current bool) overlayItem {
 	var meta []string
+	if s.Dir != "" {
+		meta = append(meta, format.ShortHome(s.Dir))
+	}
+	if s.DirError != "" {
+		meta = append(meta, "directory unavailable")
+	}
 	if title := strings.Join(strings.Fields(s.Title), " "); title != "" {
 		meta = append(meta, format.Trunc(title, 40))
 	}
@@ -607,8 +665,30 @@ func channelRef(info protocol.ChannelInfo) string {
 // bindChannel rebinds the TUI to another channel: every per-channel
 // piece of state starts over and a fresh reconcile replays its history.
 func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
+	m.cfgEditor = nil
+	m.configEpoch++
+	for i := range m.prompts {
+		if m.prompts[i].Channel == "" {
+			m.prompts[i].Channel = m.channelID
+		}
+	}
+	m.savePermissionDraft()
+	m.permFor, m.permEdit = "", ""
+	m.dirInput.Blur()
+	m.saveQuestionDraft()
+	m.q = questionState{}
+	m.promptInput.Blur()
+	if m.editors == nil {
+		m.editors = map[string]editorState{}
+	}
+	m.draft = m.input.Value()
+	m.editors[m.channelID] = m.editorState
 	m.stash()
+	m.generation++
 	m.channelState = newChannelState(info.ID, info)
+	m.editorState = m.editors[info.ID]
+	m.presets = nil
+	m.ov = nil
 	m.restore(info.ID)
 	delete(m.trees, info.ID) // its agents are live again
 	m.superChat = true
@@ -616,9 +696,10 @@ func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
 	m.input.Placeholder = m.placeholder()
 	m.follow = true
 	m.input.Reset()
+	m.input.SetValue(m.draft)
 	m.refreshViewport()
 	m.layout()
-	return tea.Batch(m.setFocus(focusInput), reconcileCmd(m.ctx, m.c, m.channelID), m.setStatus("opened "+channelRef(info), false))
+	return tea.Batch(m.setFocus(focusInput), reconcileCmd(m.ctx, m.c, m.requestScope()), m.setStatus("opened "+channelRef(info), false))
 }
 
 // openVariants is /variants: with no argument it opens the picker for the
@@ -637,7 +718,7 @@ func (m *Model) openVariants(arg string) tea.Cmd {
 		return m.setStatus("no model selected — /models first", true)
 	}
 	if arg == "" {
-		return variantsCmd(m.ctx, m.c, modelID, current)
+		return variantsCmd(m.ctx, m.c, m.requestScope(), modelID, current)
 	}
 	v := strings.ToLower(arg)
 	if v == "default" || v == "none" || v == "off" {
