@@ -135,18 +135,18 @@ func (o Options) stamp(lines []transcript.Line) string {
 	return "(" + format.Ago(lines[0].At, now.Local()) + ")"
 }
 
-// stampRows right-aligns stamp, grey, on the last row (ending where wrapped
-// text does, one column short of width), or on a row of its own when the
-// last row has no room for it.
+// stampRows right-aligns stamp, grey, on the last row (ending at the right
+// edge, as wrapped text may), or on a row of its own when the last row has
+// no room for it.
 func stampRows(rows []string, stamp string, width int) []string {
 	if stamp == "" || len(rows) == 0 {
 		return rows
 	}
 	sw := ansi.StringWidth(stamp)
 	last := len(rows) - 1
-	pad := width - 1 - ansi.StringWidth(rows[last]) - sw
+	pad := width - ansi.StringWidth(rows[last]) - sw
 	if pad < 1 {
-		rows, last, pad = append(rows, ""), last+1, width-1-sw
+		rows, last, pad = append(rows, ""), last+1, width-sw
 	}
 	if pad < 0 {
 		return rows
@@ -242,7 +242,7 @@ func oneRow(l transcript.Line, o Options, stamp string) transcript.Line {
 	if l.Glyph != "" {
 		glyph = l.Glyph + " "
 	}
-	avail := o.Width - 1 - ansi.StringWidth(leader) - ansi.StringWidth(glyph) - 2*l.Indent
+	avail := o.Width - ansi.StringWidth(leader) - ansi.StringWidth(glyph) - 2*l.Indent
 	if l.Suffix != "" {
 		avail -= ansi.StringWidth(l.Suffix) + 1
 	}
@@ -552,7 +552,7 @@ func renderLine(l transcript.Line, o Options, lit bool) string {
 	glyph, text, name, nameStyle := whoColours(l, o, glyph, text)
 
 	glyphW := ansi.StringWidth(glyph)
-	avail := o.Width - 1 - ansi.StringWidth(leader) - glyphW
+	avail := o.Width - ansi.StringWidth(leader) - glyphW
 	parts := []string{text}
 	if o.Width > 0 && avail >= 10 {
 		parts = strings.Split(ansi.Wrap(text, avail, ""), "\n")
