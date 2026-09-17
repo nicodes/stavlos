@@ -876,8 +876,8 @@ func TestStampEndsTheLastShownRow(t *testing.T) {
 			t.Fatalf("%s: want %d rows, got:\n%s", name, n, strings.Join(rows, "\n"))
 		}
 		for i, r := range rows {
-			if last := i == len(rows)-1; strings.HasSuffix(r, " (5m)") != last || ansi.StringWidth(r) > 59 {
-				t.Fatalf("%s: the stamp should end only the last row, within the width:\n%s", name, strings.Join(rows, "\n"))
+			if last := i == len(rows)-1; strings.HasSuffix(r, " (5m)") != last || ansi.StringWidth(r) > 60 || last && ansi.StringWidth(r) != 60 {
+				t.Fatalf("%s: the stamp should end only the last row, at the right edge:\n%s", name, strings.Join(rows, "\n"))
 			}
 		}
 	}
