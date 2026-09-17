@@ -63,7 +63,9 @@ func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all
 	if err != nil {
 		return err
 	}
-	resp, err := m.Complete(ctx, summaryRequest(bareID(modelID), clip.Tail(project.Transcript(cut.Old), summaryInputMax), info), nil)
+	req := summaryRequest(bareID(modelID), clip.Tail(project.Transcript(cut.Old), summaryInputMax), info)
+	req.CacheKey = a.ID + ":compact" // a summary shares no prefix with the agent's turns
+	resp, err := m.Complete(ctx, req, nil)
 	var sb strings.Builder
 	for _, b := range resp.Blocks {
 		if b.Type == model.BlockText {

@@ -207,3 +207,52 @@ func TestCompleteCancel(t *testing.T) {
 func token(access string) model.TokenSource {
 	return func(context.Context) (model.Token, error) { return model.Token{Access: access}, nil }
 }
+
+// TestGrokCacheRouting: for xAI a request naming its conversation sends
+// x-grok-conv-id, and earlier reasoning is replayed as reasoning_content
+// (leaving it out is xAI's top cause of cache misses); another provider
+// gets neither, and reasoning with an opaque payload (another API's) is
+// never replayed.
+func TestGrokCacheRouting(t *testing.T) {
+	var gotConv string
+	var gotReq map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotConv = r.Header.Get("x-grok-conv-id")
+		body, _ := io.ReadAll(r.Body)
+		gotReq = nil
+		_ = json.Unmarshal(body, &gotReq)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, cannedStream)
+	}))
+	defer srv.Close()
+	history := []model.Message{
+		{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "hi"}}},
+		{Role: model.RoleAssistant, Blocks: []model.Block{
+			{Type: model.BlockThinking, Text: "let me think"},
+			{Type: model.BlockThinking, Text: "summary", ProviderID: "rs_1", Opaque: "enc"},
+			{Type: model.BlockText, Text: "hello"},
+		}},
+		{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "again"}}},
+	}
+	assistant := func() map[string]any {
+		for _, m := range gotReq["messages"].([]any) {
+			if msg := m.(map[string]any); msg["role"] == "assistant" {
+				return msg
+			}
+		}
+		return nil
+	}
+	for _, c := range []struct {
+		provider      string
+		wantConv      string
+		wantReasoning any
+	}{{"xai", "agent-1", "let me think"}, {"deepseek", "", nil}} {
+		m, _ := NewWithToken(c.provider, srv.URL, token("tok")).Open("grok-4")
+		if _, err := m.Complete(context.Background(), model.Request{Model: "grok-4", Messages: history, CacheKey: "agent-1"}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if gotConv != c.wantConv || assistant()["reasoning_content"] != c.wantReasoning {
+			t.Fatalf("%s: conv id %q, reasoning %v", c.provider, gotConv, assistant()["reasoning_content"])
+		}
+	}
+}
