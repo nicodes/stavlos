@@ -47,7 +47,7 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 		m.viewDirty = true // the chat's stamps ("5 min") age; unchanged items redraw from the render cache
 		cmds := []tea.Cmd{channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), tick(3*time.Second, catalogTickMsg{})}
 		for _, s := range m.navChannels {
-			if m.treeOpen[s.ID] {
+			if m.otherTreeShown(s.ID) {
 				cmds = append(cmds, treeCmd(m.ctx, m.c, s.ID))
 			}
 		}
@@ -77,7 +77,7 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 		m.treeTimer = false
 		cmds := []tea.Cmd{treeCmd(m.ctx, m.c, m.channelID)}
 		for _, s := range m.navChannels { // the trees kept open beside it
-			if s.ID != m.channelID && m.treeOpen[s.ID] {
+			if s.ID != m.channelID && m.otherTreeShown(s.ID) {
 				cmds = append(cmds, treeCmd(m.ctx, m.c, s.ID))
 			}
 		}
