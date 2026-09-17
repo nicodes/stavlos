@@ -6,6 +6,9 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
+	"github.com/nicodes/stavlos/internal/tui/render"
 
 	"github.com/nicodes/stavlos/internal/event"
 )
@@ -174,4 +177,35 @@ func tabTexts(m Model) []string {
 		out = append(out, t.text())
 	}
 	return out
+}
+
+// TestChannelChatHighlightKeepsTextColor: in the channel chat, the item
+// under the cursor gets the row background and nothing else: its text
+// keeps the colours it has unhighlighted.
+func TestChannelChatHighlightKeepsTextColor(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	markCursorForTest(t)
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.superChat = true
+	m.applyEvent(chatEvent(1, "b", event.AgentSpawned, event.AgentSpawnedPayload{ID: "b", Parent: "a", Name: "world-politics"}))
+	m.applyEvent(chatEvent(2, "b", event.ChatMessage, event.ChatPayload{From: "world-politics", Text: "three headlines"}))
+	rows := func() []string {
+		m.refreshViewport()
+		var out []string
+		for _, r := range m.vp.rows {
+			if strings.Contains(stripANSI(r), "three headlines") {
+				out = append(out, strings.TrimPrefix(r, render.GutterMark))
+			}
+		}
+		return out
+	}
+	plain := rows()
+	m.setFocus(focusChat) // the cursor parks on the message
+	lit := rows()
+	if len(plain) != 1 || len(lit) != 1 || plain[0] != lit[0] {
+		t.Fatalf("the highlight changed the text colours:\nplain %q\nlit   %q", plain, lit)
+	}
 }

@@ -280,7 +280,7 @@ func (m *Model) refreshViewport() {
 		WhoKey:        m.whoKey(),
 		Cursor:        m.chatCursor,
 		Focused:       m.focus == focusChat,
-		KeepTextColor: !m.superChat,
+		KeepTextColor: true, // focus, hover and expansion change the background, never the text colour
 
 		CompactFrame: render.CompactFrame(time.Now()),
 	}
