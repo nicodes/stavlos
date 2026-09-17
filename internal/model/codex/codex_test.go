@@ -351,3 +351,34 @@ func TestCompleteReportsUsage(t *testing.T) {
 		t.Fatalf("requests %d, usage %+v", requests, got)
 	}
 }
+
+// TestCacheKeyRouting: a request naming its conversation sends the key as
+// prompt_cache_key and the session-id header, as the Codex CLI does, so
+// ChatGPT routes it to the server holding the conversation's cached
+// prefix; one without a key sends neither.
+func TestCacheKeyRouting(t *testing.T) {
+	var gotHdr http.Header
+	var gotBody map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHdr = r.Header.Clone()
+		raw, _ := io.ReadAll(r.Body)
+		gotBody = nil
+		_ = json.Unmarshal(raw, &gotBody)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, cannedStream)
+	}))
+	defer srv.Close()
+	m, _ := NewWithEndpoint(staticSource("tok", "acct"), srv.URL).Open("gpt-5.4")
+	if _, err := m.Complete(context.Background(), model.Request{Model: "gpt-5.4", CacheKey: "agent-1"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if gotBody["prompt_cache_key"] != "agent-1" || gotHdr.Get("session-id") != "agent-1" || gotHdr.Get("Authorization") != "Bearer tok" {
+		t.Fatalf("key: body %v, session-id %q, auth %q", gotBody["prompt_cache_key"], gotHdr.Get("session-id"), gotHdr.Get("Authorization"))
+	}
+	if _, err := m.Complete(context.Background(), model.Request{Model: "gpt-5.4"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := gotBody["prompt_cache_key"]; ok || gotHdr.Get("session-id") != "" {
+		t.Fatalf("no key: body %v, session-id %q", gotBody["prompt_cache_key"], gotHdr.Get("session-id"))
+	}
+}
