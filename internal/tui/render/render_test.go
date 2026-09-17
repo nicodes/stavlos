@@ -176,7 +176,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	tr := transcript.NewTranscript()
 	evtest.Apply(tr, evtest.Call("a", "c1", "read", `{"path":"a.go"}`))
 	got := renderLines(tr.All())
-	if !contains(got, "☰ Read  a.go") {
+	if !contains(got, "▤ Read  a.go") {
 		t.Fatalf("running tool shows its glyph (yellow):\n%s", strings.Join(got, "\n"))
 	}
 	if !tr.Running() {
@@ -192,7 +192,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"☰ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "✗ Read  b.go"})
+	assertSubsequence(t, got, []string{"▤ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "✗ Read  b.go"})
 	if n := count(got, "  line"); n != transcript.MaxOutputCollapsed {
 		t.Fatalf("collapsed: want %d output lines, got %d", transcript.MaxOutputCollapsed, n)
 	}
