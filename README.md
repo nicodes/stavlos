@@ -95,11 +95,15 @@ JSON arguments. Project-trust prompts show the directory and configuration files
 ### The sidebar
 
 The sidebar (ctrl+b, shown by default when the terminal is wide enough) lists
-all active channels alphabetically, with each channel's own directory beneath
-its name. Its `✚` creates a channel: choose a name and accept or change the
+all active channels alphabetically, with each channel's own directory on its
+name row. Its `✚` creates a channel: choose a name and accept or change the
 inherited default directory. Each channel's ⚙ opens its directories. Agent
 trees sit under their channels, with `!` or `?` badges for pending prompts and
-per-agent cost. ↑/↓ move, space selects, and `n` jumps to the next agent in the
+per-agent cost. A tree draws its main agent, the agent whose chat is open, and
+every agent that is working, waiting, failed or waiting on you; an idle one
+stays when a drawn agent hangs under it, so the tree keeps its shape. The rest
+sit behind a row that toggles `▸ show all · 3 idle` and `▾ hide idle`, per
+channel. ↑/↓ move, space selects, and `n` jumps to the next agent in the
 current channel waiting on you. The sidebar scrolls independently of the chat.
 
 Every channel has a state dot (full orange while an agent works, half while one
