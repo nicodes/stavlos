@@ -140,7 +140,7 @@ These follow from how the daemon already works and are not negotiable:
 
 - **Never under the channel lock.** The state machine (`agent/state.go`)
   commits under `Channel.mu`. Hooks run after the commit, outside the lock,
-  from the list of agents and events the commit returns. The `tool.requested`
+  from the list of agents and events the commit returns. The permission
   hook runs in the permission path (`agent/permission.go`), which already
   blocks on escalation outside the lock.
 - **Results are events.** Recovery folds the log and must never re-run a
