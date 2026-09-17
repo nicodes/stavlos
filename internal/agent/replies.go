@@ -19,6 +19,15 @@ import (
 // model cannot loop.
 const maxNudges = 3
 
+// nudgeLimit is how many reminders in a row an agent gets before the
+// harness leaves it alone; 0 when reminders are off.
+func nudgeLimit(reminders bool) int {
+	if !reminders {
+		return 0
+	}
+	return maxNudges
+}
+
 // owedBy is the party an input is owed to once taken: the sending agent for
 // a request, the human for a channel chat post, nobody otherwise.
 func owedBy(in event.Input) string {

@@ -13,6 +13,23 @@ import (
 func hint(key, desc string) dialog.Hint { return dialog.Hint{Key: key, Desc: desc} }
 
 // keyHints returns the legend for the current state, most useful first.
+// listDialogHints are the tab dialogs whose keys are a list's: the same
+// hints but for what space does, so keyHints keeps one case each for the
+// dialogs that differ.
+var listDialogHints = map[focus]func() []dialog.Hint{
+	focusAsync:  func() []dialog.Hint { return listHints(hint("space/enter", "open chat")) },
+	focusNudges: func() []dialog.Hint { return listHints(hint("space/enter", "open chat")) },
+	focusMCP:    func() []dialog.Hint { return listHints(hint("space/enter", "show/hide tools")) },
+	focusTodo:   func() []dialog.Hint { return listHints() },
+}
+
+// listHints is ↑/↓ over a list, whatever select does there, and the keys
+// out of the dialog.
+func listHints(sel ...dialog.Hint) []dialog.Hint {
+	h := append([]dialog.Hint{hint("↑/↓", "move")}, sel...)
+	return append(h, hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit"))
+}
+
 func (m Model) keyHints() []dialog.Hint {
 	switch {
 	case m.ov != nil && m.ov.mode == overlayLogin:
@@ -28,20 +45,17 @@ func (m Model) keyHints() []dialog.Hint {
 	case m.ov != nil:
 		return []dialog.Hint{hint("space/enter", "select"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("ctrl+space", "input"), hint("esc", "close")}
 	}
+	if h, ok := listDialogHints[m.focus]; ok {
+		return h()
+	}
 	switch m.focus {
-	case focusAsync:
-		return []dialog.Hint{hint("↑/↓", "move"), hint("space/enter", "open chat"), hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusUsage:
 		return usageDialogHints()
-	case focusTodo:
-		return []dialog.Hint{hint("↑/↓", "move"), hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusDirs:
 		if m.dirEdit != "" {
 			return []dialog.Hint{hint("enter", "save"), hint("esc", "cancel"), hint("ctrl+c", "quit")}
 		}
 		return []dialog.Hint{hint("↑/↓", "move"), hint("a", "add directory"), hint("space/enter", "edit"), hint("ctrl+d", "remove"), hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
-	case focusMCP:
-		return []dialog.Hint{hint("↑/↓", "move"), hint("space/enter", "show/hide tools"), hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
 	case focusSidebar:
 		return []dialog.Hint{hint("↑/↓", "move"), hint("space/enter", "open"), hint("n", "next agent needing you"), hint("←", "fold tree"), hint("→", "channel dirs"), hint("ctrl+space", "input"), hint("tab", "next section"), hint("esc", "back to input"), hint("ctrl+b", "close sidebar"), hint("pgup/pgdn", "scroll"), hint("ctrl+c", "quit")}
 	case focusMeta:
