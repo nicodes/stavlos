@@ -1047,15 +1047,16 @@ func TestChannelViewFillsHeight(t *testing.T) {
 			}
 		}
 		// the divider leads with the agent and carries its tabs; under it come
-		// the input, a blank line and the strip (! ? dirs), the last row
+		// a blank line, the input, a blank line and the strip (! ? dirs), the
+		// last row
 		ri := -1
 		for i := 0; i < si; i++ {
 			if strings.HasPrefix(lines[i], "─") {
 				ri = i
 			}
 		}
-		if ri < 0 || si < 2 || si != len(lines)-1 || !strings.HasPrefix(lines[ri], "─ coder ·") || !strings.Contains(lines[ri], "async ") || !strings.HasPrefix(lines[ri+1], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" {
-			t.Fatalf("focus %v: the divider carries the agent and its tabs, then come the input, a blank line and the strip:\n%s", f, stripANSI(v))
+		if ri < 0 || si < 2 || si != len(lines)-1 || !strings.HasPrefix(lines[ri], "─ coder ·") || !strings.Contains(lines[ri], "async ") || strings.TrimSpace(lines[ri+1]) != "" || !strings.HasPrefix(lines[ri+2], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" {
+			t.Fatalf("focus %v: the divider carries the agent and its tabs, then come a blank line, the input, a blank line and the strip:\n%s", f, stripANSI(v))
 		}
 	}
 }
@@ -1102,7 +1103,7 @@ func TestDividerAndStripRepo(t *testing.T) {
 			strip = i
 		}
 	}
-	if rule < 0 || strip != rule+3 {
+	if rule < 0 || strip != rule+4 { // a blank line, the input, a blank line, the strip
 		t.Fatalf("no divider or strip under it:\n%s", strings.Join(lines, "\n"))
 	}
 	// the agent on the left, its tabs then tokens and cost on the right; no
@@ -1165,8 +1166,8 @@ func TestDividerAndStripRepo(t *testing.T) {
 	if nm.(Model).compactTick {
 		t.Fatal("the tick should stop when no chat is compacting")
 	}
-	if strip < 3 || rule != strip-3 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], " ASK › ") {
-		t.Fatalf("under the divider come the input, a blank line and the strip:\n%s", strings.Join(lines, "\n"))
+	if strip < 4 || rule != strip-4 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], " ASK › ") || strings.TrimSpace(lines[strip-3]) != "" {
+		t.Fatalf("under the divider come a blank line, the input, a blank line and the strip:\n%s", strings.Join(lines, "\n"))
 	}
 	// the repo is not on the strip (the dirs tab shows it)
 	if strings.Contains(strings.Join(lines, "\n"), "/repo/project") {
@@ -2090,7 +2091,7 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 			break
 		}
 	}
-	if rule < 0 || ansi.StringWidth(lines[rule]) != m.width || !strings.HasPrefix(lines[rule+1], " ASK › ") {
+	if rule < 0 || ansi.StringWidth(lines[rule]) != m.width || strings.TrimSpace(lines[rule+1]) != "" || !strings.HasPrefix(lines[rule+2], " ASK › ") {
 		t.Fatalf("the rule should start at the left edge and span the window:\n%s", strings.Join(lines, "\n"))
 	}
 	if strings.Contains(lines[rule], "│") || strings.Contains(lines[rule+1], "│") {
@@ -3139,7 +3140,7 @@ func TestStatusSitsOverTheDivider(t *testing.T) {
 	if above := lines[rule-1]; !strings.HasSuffix(above, "copied 3 lines") || ansi.StringWidth(above) != m.width || len(lines) != m.height {
 		t.Fatalf("the status sits at the right of the row above the divider:\n%s", strings.Join(lines, "\n"))
 	}
-	if r := m.rows(); r.input != rule+1 {
+	if r := m.rows(); r.input != rule+2 { // a blank line between the divider and the input
 		t.Fatalf("rows: input at %d, divider at %d", r.input, rule)
 	}
 	m.setStatus(strings.Repeat("a long status ", 10), true)
