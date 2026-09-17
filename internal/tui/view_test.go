@@ -3807,3 +3807,46 @@ func TestNudgesTab(t *testing.T) {
 		t.Fatalf("space should open @scout's chat: super=%v selected=%s focus=%v", m.superChat, m.selectedID(), m.focus)
 	}
 }
+
+// TestSidebarKeepsIdleAncestors: an idle agent whose descendant is drawn
+// stays in the tree, so the drawn one still hangs under its parent; an idle
+// branch with nothing busy under it still hides.
+func TestSidebarKeepsIdleAncestors(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.superChat = true
+	m.agents = []protocol.AgentInfo{
+		{ID: "a", Name: "main", Role: "general", State: "idle"},
+		{ID: "b", Parent: "a", Depth: 1, Name: "middle", Role: "general", State: "idle"},
+		{ID: "c", Parent: "b", Depth: 2, Name: "worker", Role: "general", State: "running"},
+		{ID: "d", Parent: "a", Depth: 1, Name: "napper", Role: "general", State: "idle"},
+		{ID: "e", Parent: "d", Depth: 2, Name: "sleeper", Role: "general", State: "idle"},
+	}
+	m.layout()
+	shown, quiet := m.shownAgents(m.channelID, m.agents, "")
+	names := func(idx []int) []string {
+		var out []string
+		for _, i := range idx {
+			out = append(out, m.agents[i].Name)
+		}
+		return out
+	}
+	if got := names(shown); len(got) != 3 || got[0] != "main" || got[1] != "middle" || got[2] != "worker" {
+		t.Fatalf("an idle parent of a running agent stays: %v", got)
+	}
+	if quiet != 2 { // napper and sleeper, with nothing busy under them
+		t.Fatalf("quiet: %d", quiet)
+	}
+	nav := func() string {
+		body, _ := m.sidebarBody(sidebarWidth - 1)
+		return stripANSI(strings.Join(body, "\n"))
+	}
+	if v := nav(); !strings.Contains(v, "@middle") || !strings.Contains(v, "@worker") || strings.Contains(v, "@napper") || !strings.Contains(v, "▸ show all · 2 idle") {
+		t.Fatalf("tree:\n%s", v)
+	}
+	// with the branch's worker idle too, the whole branch hides
+	m.agents[2].State = "idle"
+	if _, quiet := m.shownAgents(m.channelID, m.agents, ""); quiet != 4 {
+		t.Fatalf("nothing busy anywhere: quiet %d", quiet)
+	}
+}

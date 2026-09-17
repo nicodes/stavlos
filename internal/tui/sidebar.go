@@ -342,10 +342,33 @@ func (m Model) otherTreeRows(k int) []sidebarRow {
 // drawn) nor the selected agent. Quiet agents are left out
 // unless the tree's show all row is on; with none, there is no such row.
 func (m Model) shownAgents(channel string, agents []protocol.AgentInfo, selected string) (shown []int, quiet int) {
-	all := m.treeAll[channel]
+	at := make(map[string]int, len(agents))
+	for i, a := range agents {
+		at[a.ID] = i
+	}
+	keep := make([]bool, len(agents))
 	for i, a := range agents {
 		o := agentOutcome(a)
-		if (o == "idle" || o == "complete") && m.needsHuman(a.ID) == "" && a.ID != selected && a.Parent != "" {
+		keep[i] = !((o == "idle" || o == "complete") && m.needsHuman(a.ID) == "" && a.ID != selected && a.Parent != "")
+	}
+	// a quiet agent with a drawn descendant is drawn too: its children hang
+	// under it, and hiding it would detach them from the tree
+	for i, a := range agents {
+		if !keep[i] {
+			continue
+		}
+		for p := a.Parent; p != ""; {
+			j, ok := at[p]
+			if !ok || keep[j] {
+				break
+			}
+			keep[j] = true
+			p = agents[j].Parent
+		}
+	}
+	all := m.treeAll[channel]
+	for i := range agents {
+		if !keep[i] {
 			quiet++
 			if !all {
 				continue
