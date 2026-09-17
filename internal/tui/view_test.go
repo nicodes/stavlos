@@ -109,19 +109,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, "", metaNone)); got != "main (coder) · claude-opus-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, "", metaNone, metaNone)); got != "main (coder) · claude-opus-5 · default" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "", "", 0, "", metaNone)); got != "main (coder) · no model — /models" {
+	if got := stripANSI(metaLine("main", "coder", "", "", 0, "", metaNone, metaNone)); got != "main (coder) · no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, "", metaNone)); got != "scout (explorer) · llama3 · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, "", metaNone, metaNone)); got != "scout (explorer) · llama3 · default · 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone)); got != "main (coder) · gpt-5 · high" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone, metaNone)); got != "main (coder) · gpt-5 · high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "YOLO", metaNone)); got != "YOLO · main (coder) · gpt-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "YOLO", metaNone, metaNone)); got != "YOLO · main (coder) · gpt-5 · default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
@@ -1116,10 +1116,10 @@ func TestDividerAndStripRepo(t *testing.T) {
 	if right := stripANSI(m.footerRightView()); right != "31% · 62k/200k tokens · $0.02" {
 		t.Fatalf("usage: %q", right)
 	}
-	if got := stripANSI(contextBar(250_000, 200_000, false)); got != "100% · 250k/200k tokens" {
+	if got := stripANSI(contextBar(250_000, 200_000, nil)); got != "100% · 250k/200k tokens" {
 		t.Fatalf("context %q", got)
 	}
-	if contextBar(5, 0, false) != "" {
+	if contextBar(5, 0, nil) != "" {
 		t.Fatal("no context figure without a window")
 	}
 	// a running compaction is a chat item: a rule with a sweeping bar, which
@@ -3157,8 +3157,8 @@ func tabsView(m Model, _ int) string {
 }
 
 // metaLine is the meta row's text without its click spans.
-func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart) string {
-	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel)
+func metaLine(label, role, model, variant string, queued int, modeTag string, sel, hover metaPart) string {
+	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel, hover)
 	return line
 }
 
@@ -3588,4 +3588,60 @@ func TestDividerUsageOpensCharts(t *testing.T) {
 	if m.focus != focusUsage || m.usage.channel != m.channelID || m.usage.agent != "" || m.usageTitle() != "Tokens · #channel" {
 		t.Fatalf("the channel chat's tokens chart: %+v", m.usage)
 	}
+}
+
+// TestDividerHoverLightens: the divider button under the pointer (a meta
+// part, an agent tab or a usage figure) draws in the lighter text colour;
+// moving off the buttons puts it back to grey, and an open dialog's button
+// stays in accent.
+func TestDividerHoverLightens(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	m := channelModel()
+	m.superChat = false
+	m.agents[0].Role, m.agents[0].Model, m.agents[1].Model, m.channel.Model = "coder", "openai/gpt-5", "openai/gpt-5", "openai/gpt-5"
+	m.agents[0].CostUSD = 0.02
+	m.layout()
+	move := func(label string) {
+		t.Helper()
+		row := stripANSI(m.ruleLine(m.width))
+		i := strings.LastIndex(row, label)
+		if i < 0 {
+			t.Fatalf("no %q on the divider: %q", label, row)
+		}
+		nm, _ := m.Update(tea.MouseMsg{X: ansi.StringWidth(row[:i]) + 1, Y: m.rows().rule, Action: tea.MouseActionMotion})
+		m = nm.(Model)
+	}
+	parts := []string{"coder (coder)", "gpt-5", "default", "async 0", "todo 0", "mcp 0", "0 tokens", "$0.02"}
+	check := func(lit, accent string) {
+		t.Helper()
+		line := m.ruleLine(m.width)
+		for _, p := range parts {
+			want := theme.StyleDim.Render(p)
+			switch p {
+			case accent:
+				want = theme.StyleBoxTitleFocus.Render(p)
+			case lit:
+				want = theme.StyleLit.Render(p)
+			}
+			if !strings.Contains(line, want) {
+				t.Fatalf("hover %q, open %q: %q is not drawn as expected:\n%q", lit, accent, p, line)
+			}
+		}
+	}
+	for _, p := range parts {
+		move(p)
+		check(p, "")
+	}
+	// off the buttons: grey again
+	nm, _ := m.Update(tea.MouseMsg{X: 1, Y: 1, Action: tea.MouseActionMotion})
+	m = nm.(Model)
+	check("", "")
+	// an open dialog's button stays in accent under the pointer
+	m.openTab(focusTodo)
+	move("todo 0")
+	check("", "todo 0")
+	move("mcp 0")
+	check("mcp 0", "todo 0")
 }

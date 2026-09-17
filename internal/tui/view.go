@@ -195,14 +195,18 @@ func modeTagStyle(tag string) lipgloss.Style {
 // as "label (role)" like the tab rows, the model and its variant ("default"
 // when none is set), led by the mode tag ("ASK", "AUTO" or "YOLO"; "" for
 // none). Every part is grey but sel, in accent: the part whose dialog is
-// open, or the one the row's keyboard focus is on (metaNone for neither).
-func metaLineSpans(label, role, model, variant string, queued int, modeTag string, sel metaPart) (string, []span[metaPart]) {
+// open, or the one the row's keyboard focus is on (metaNone for neither);
+// hover, the part under the pointer, is in the lighter text colour.
+func metaLineSpans(label, role, model, variant string, queued int, modeTag string, sel, hover metaPart) (string, []span[metaPart]) {
 	var b strings.Builder
 	var spans []span[metaPart]
 	x := 0
 	part := func(p metaPart, text string, st lipgloss.Style) {
-		if p == sel {
+		switch p {
+		case sel:
 			st = theme.StyleBoxTitleFocus
+		case hover:
+			st = theme.StyleLit
 		}
 		w := ansi.StringWidth(text)
 		spans = append(spans, span[metaPart]{x, x + w, p})
@@ -269,6 +273,7 @@ type footerInfo struct {
 	tokens    int
 	cost      float64
 	open      int // the usage dialog open on this chat: 1 tokens, 2 cost, 0 neither (its figure is in accent)
+	hover     int // the figure under the pointer, likewise (the lighter text colour)
 }
 
 // footerRight builds the usage on the divider over the input (a sign-in
@@ -288,18 +293,20 @@ func footerRight(f footerInfo) string {
 	}
 	// dim like the rule it sits on: only the context bar's warning colour
 	// stands out, and the figure whose usage dialog is open (accent)
-	costStyle := theme.StyleDim
-	if f.open == 2 {
-		costStyle = theme.StyleBoxTitleFocus
+	figure := func(n int, st lipgloss.Style) lipgloss.Style {
+		switch n {
+		case f.open:
+			return theme.StyleBoxTitleFocus
+		case f.hover:
+			return theme.StyleLit
+		}
+		return st
 	}
-	cost := theme.StyleDim.Render(" · ") + costStyle.Render("$"+format.Cost(f.cost))
-	if bar := contextBar(f.context, f.window, f.open == 1); bar != "" {
+	cost := theme.StyleDim.Render(" · ") + figure(2, theme.StyleDim).Render("$"+format.Cost(f.cost))
+	if bar := contextBar(f.context, f.window, func(st lipgloss.Style) lipgloss.Style { return figure(1, st) }); bar != "" {
 		return bar + cost // the channel's total tokens are in the sidebar
 	}
-	tokensStyle := theme.StyleDim
-	if f.open == 1 {
-		tokensStyle = theme.StyleBoxTitleFocus
-	}
+	tokensStyle := figure(1, theme.StyleDim)
 	return tokensStyle.Render(format.Tokens(f.tokens)+" tokens") + cost
 }
 
@@ -317,15 +324,15 @@ func usageSpans(usage string) []span[usageKind] {
 
 // contextBar reads how full the model's context is — "31% · 62k/200k tokens" — which
 // is what auto-compaction watches (it summarises at 80%). Dim until 70%,
-// warning-coloured from there, in accent while its tokens dialog is open
-// (open). "" when the window is unknown.
-func contextBar(context, window int, open bool) string {
+// warning-coloured from there; restyle (nil for none) may change that
+// colour (an open or hovered button). "" when the window is unknown.
+func contextBar(context, window int, restyle func(lipgloss.Style) lipgloss.Style) string {
 	pct, st, ok := contextFill(context, window)
 	if !ok {
 		return ""
 	}
-	if open {
-		st = theme.StyleBoxTitleFocus
+	if restyle != nil {
+		st = restyle(st)
 	}
 	return st.Render(fmt.Sprintf("%d%% · %s/%s tokens", pct, format.Tokens(context), format.Tokens(window)))
 }
@@ -452,7 +459,7 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 		}
 		return theme.StyleDim.Render(label), nil
 	}
-	return metaLineSpans(label, role, model, variant, queued, "", sel) // the mode tag leads the input instead
+	return metaLineSpans(label, role, model, variant, queued, "", sel, m.hover.meta) // the mode tag leads the input instead
 }
 
 // metaRow is the home screen's line under the input: role and model on the
@@ -1269,6 +1276,8 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 		switch {
 		case on(f):
 			tabs[i] = theme.StyleBoxTitleFocus.Render(label)
+		case m.hover.tabOK && m.hover.tab == f: // under the pointer
+			tabs[i] = theme.StyleLit.Render(label)
 		// An unfocused tab with something waiting on the human is
 		// warning-coloured so it stands out until someone opens it.
 		case t.warn:
@@ -1499,6 +1508,7 @@ func (m Model) footerRightView() string {
 	if m.focus == focusUsage && m.usageOnSelectedChat() {
 		f.open = int(m.usage.kind) + 1
 	}
+	f.hover = m.hover.usage
 	if m.superChat { // the channel chat: the rollup of every agent's tokens and cost, no one agent's context
 		f.tokens, f.cost = m.totalTokens(), m.totalCost()
 		return footerRight(f)

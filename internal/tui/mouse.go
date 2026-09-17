@@ -67,6 +67,7 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		}
 		return tea.Batch(copyCmd(text), m.setStatus(fmt.Sprintf("copied %d characters", len([]rune(text))), false))
 	case msg.Action == tea.MouseActionMotion:
+		m.hoverDivider(msg.X, msg.Y)
 		if m.ov != nil || isTab(m.focus) {
 			m.dialogHover(msg.X, msg.Y) // a dialog owns hover; the chat behind it is left alone
 			return nil
@@ -409,6 +410,22 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// hoverDivider notes the divider button under the pointer at screen
+// position (x, y), none when it is off the divider's buttons.
+func (m *Model) hoverDivider(x, y int) {
+	var h dividerHover
+	if !m.isHome() && y == m.rows().rule {
+		if f, ok := m.metaTabAt(x, m.width); ok {
+			h.tab, h.tabOK = f, true
+		} else if kind, ok := m.usageAt(x, m.width); ok {
+			h.usage = int(kind) + 1
+		} else {
+			h.meta = m.metaHit(x)
+		}
+	}
+	m.hover = h
 }
 
 // dividerButtonAt reports whether screen position (x, y) is on one of the
