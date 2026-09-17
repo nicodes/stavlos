@@ -53,7 +53,7 @@ func (t *Transcript) EnsureQuestion(p protocol.PromptInfo) {
 	}
 	q = questionItem{item: len(t.items), p: p}
 	t.questions[p.ID] = q
-	t.appendItem(t.questionLines(p, nil))
+	t.appendItem(stamped(t.questionLines(p, nil), p.Created))
 }
 
 func (t *Transcript) applyQuestion(ev event.Event) bool {
