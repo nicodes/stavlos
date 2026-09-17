@@ -211,6 +211,24 @@ func (m Model) highlightSelection(frame string) string {
 // the chat area gives focus back to the input, without scrolling. Focus the
 // keyboard took is left alone.
 func (m *Model) mouseHover(x, y int) tea.Cmd {
+	if m.focus == focusInlinePermission {
+		if !m.hoverFocus || m.permEdit != "" {
+			return nil
+		}
+		m.savePermissionDraft()
+		m.dirInput.Blur()
+		m.focus = focusChat
+		m.viewDirty = true
+	}
+	if m.focus == focusQuestions {
+		if !m.hoverFocus || m.q.typing {
+			return nil
+		}
+		m.saveQuestionDraft()
+		m.promptInput.Blur()
+		m.focus = focusChat
+		m.viewDirty = true
+	} // typing owns the keyboard; a saved mouse-entered reply resumes normal hover
 	if m.isHome() {
 		return nil
 	}
@@ -248,7 +266,17 @@ func (m *Model) releaseHoverState() bool {
 	if !m.hoverFocus {
 		return false
 	}
-	fromChat := m.focus == focusChat
+	fromChat := m.focus == focusChat || m.focus == focusQuestions || m.focus == focusInlinePermission
+	if m.focus == focusInlinePermission {
+		m.savePermissionDraft()
+		m.permEdit = ""
+		m.dirInput.Blur()
+	}
+	if m.focus == focusQuestions {
+		m.saveQuestionDraft()
+		m.q.typing = false
+		m.promptInput.Blur()
+	}
 	m.hoverFocus = false
 	m.focus = m.hoverFrom
 	if fromChat {
@@ -276,6 +304,12 @@ func (m *Model) releaseHover() tea.Cmd {
 // way hovering a chat item does. Nothing is selected: that is the click.
 // The header, whose rows the cursor skips, releases hover instead.
 func (m *Model) sidebarHover(y int) tea.Cmd {
+	if m.focus == focusInlinePermission && (!m.hoverFocus || m.permEdit != "") {
+		return nil
+	}
+	if m.focus == focusQuestions && (!m.hoverFocus || m.q.typing) {
+		return nil
+	}
 	if m.isHome() || !m.sidebarVisible() {
 		return m.releaseHover()
 	}
@@ -311,6 +345,28 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 	case y < m.vp.Height: // the chat: select, and toggle like enter
 		item, ok := m.itemAtRow(m.vp.YOffset + y)
 		if !ok {
+			return nil
+		}
+		if cmd, handled := m.clickQuestion(item, m.vp.YOffset+y); handled {
+			return cmd
+		}
+		if cmd, handled := m.clickPermission(item, m.vp.YOffset+y); handled {
+			return cmd
+		}
+		if m.focus == focusInlinePermission {
+			m.savePermissionDraft()
+			m.permEdit = ""
+			m.dirInput.Blur()
+			m.focus, m.chatCursor, m.hoverFocus = focusChat, item, false
+			m.refreshViewport()
+			return nil
+		}
+		if m.focus == focusQuestions {
+			m.saveQuestionDraft()
+			m.q.typing = false
+			m.promptInput.Blur()
+			m.focus, m.chatCursor, m.hoverFocus = focusChat, item, false
+			m.refreshViewport()
 			return nil
 		}
 		cmd := m.mouseHover(x, y)

@@ -22,6 +22,7 @@ type snapshot struct {
 	CostUSD                                             float64
 	LastError                                           string
 	Awaiting, Due                                       []string
+	PendingReplies, AwaitingReplies                     []event.ReplyRequest
 	Todos                                               []event.TodoItem
 	Dirs                                                []protocol.DirInfo
 	Children                                            []string
@@ -44,6 +45,7 @@ func snap(s *Channel) []snapshot {
 			ID: in.ID, Parent: in.Parent, Archetype: in.Role, Label: in.Name, Model: in.Model, Variant: in.Variant, State: string(in.State),
 			Depth: in.Depth, Turn: in.Turn, Queued: in.Queued, Tokens: in.Tokens, CostUSD: in.CostUSD, LastError: in.LastError,
 			Awaiting: in.Awaiting, Due: in.Due, Todos: in.Todos, Dirs: s.dirInfosLocked(), Children: append([]string(nil), st.children...),
+			PendingReplies: in.PendingReplies, AwaitingReplies: in.AwaitingReplies,
 			Inbox: inbox, LastPost: st.lastPost, Nudges: st.nudges,
 		})
 		s.mu.Unlock()
@@ -119,7 +121,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 	mode, modelID := s.Mode(), s.Model()
 
 	h2 := newFakeHost(fm)
-	s2, err := Recover(ctx, h2, s.ID, s.Dir, s.Created, s.Config(), h.all())
+	s2, err := Recover(ctx, h2, s.ID, s.Dir(), s.Created, s.Config(), h.all())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +173,7 @@ func TestRecoverAbortsOpenTurns(t *testing.T) {
 		return text("ok"), nil
 	}}
 	h2 := newFakeHost(fm)
-	s2, err := Recover(context.Background(), h2, s.ID, s.Dir, s.Created, s.Config(), evs)
+	s2, err := Recover(context.Background(), h2, s.ID, s.Dir(), s.Created, s.Config(), evs)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +219,7 @@ func TestRecoverArchivedAndKilled(t *testing.T) {
 
 	fm.steps = []step{reply(text("resumed"))}
 	h2 := newFakeHost(fm)
-	s2, err := Recover(context.Background(), h2, s.ID, s.Dir, s.Created, s.Config(), h.all())
+	s2, err := Recover(context.Background(), h2, s.ID, s.Dir(), s.Created, s.Config(), h.all())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +238,7 @@ func TestRecoverArchivedAndKilled(t *testing.T) {
 		t.Fatal(err)
 	}
 	all := append(h.all(), h2.all()...)
-	s3, err := Recover(context.Background(), newFakeHost(fm), s.ID, s.Dir, s.Created, s.Config(), all)
+	s3, err := Recover(context.Background(), newFakeHost(fm), s.ID, s.Dir(), s.Created, s.Config(), all)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +256,7 @@ func TestRecoverMissingRoleIsReadOnly(t *testing.T) {
 	runTurn(t, s, h, "go")
 	s.Stop()
 	cfg, _ := loadTestConfig(t, testConfig{}) // the lead role is gone
-	s2, err := Recover(context.Background(), newFakeHost(&fakeModel{}), s.ID, s.Dir, s.Created, cfg, h.all())
+	s2, err := Recover(context.Background(), newFakeHost(&fakeModel{}), s.ID, s.Dir(), s.Created, cfg, h.all())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +303,7 @@ func TestRecoverKeepsChannelAllows(t *testing.T) {
 	}
 	h2 := newFakeHost(fm)
 	h2.answerWith(escalation.Answer{Value: "deny"})
-	s2, err := Recover(context.Background(), h2, s.ID, s.Dir, s.Created, s.Config(), h.all())
+	s2, err := Recover(context.Background(), h2, s.ID, s.Dir(), s.Created, s.Config(), h.all())
 	if err != nil {
 		t.Fatal(err)
 	}

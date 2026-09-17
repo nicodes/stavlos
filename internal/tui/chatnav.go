@@ -16,6 +16,9 @@ import (
 // new transcript, or, while the chat has focus, park the cursor on its
 // last item.
 func (m *Model) selectionChanged() {
+	if m.focus == focusQuestions || m.focus == focusInlinePermission {
+		m.setFocus(focusInput)
+	}
 	m.collapseAll()
 	if m.focus == focusChat {
 		m.follow = false
@@ -69,6 +72,12 @@ func (m *Model) chatKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.ChatBottom):
 		m.moveCursor(m.chatItems())
 	case key.Matches(msg, keys.Select):
+		if p := m.permissionAtItem(m.chatCursor); p != nil {
+			return m.openPermission(p)
+		}
+		if p := m.questionAtItem(m.chatCursor); p != nil {
+			return m.openQuestion(p)
+		}
 		// A long reply expands; a short one opens its agent's own chat.
 		if m.chatItemFolds() || !m.followChatLink() {
 			m.toggleItem()
@@ -211,6 +220,8 @@ func (m *Model) chatItemFolds() bool {
 // marking the cursor item while the chat has focus.
 func (m *Model) refreshViewport() {
 	m.viewDirty = false
+	cards := m.questionCards()
+	m.permissionCards(cards)
 	t := m.transcripts[m.viewID()]
 	n := 0
 	if t != nil {
@@ -250,20 +261,22 @@ func (m *Model) refreshViewport() {
 		}
 	}
 	opts := render.Options{
-		Width:    m.vp.Width,
-		Details:  m.details,
-		Spinner:  m.sp.View(),
-		Working:  working,
-		Waiting:  waiting,
-		Verb:     verb,
-		Active:   active,
-		Stats:    stats,
-		Expanded: m.expanded[m.viewID()],
-		TurnGaps: !m.superChat,
-		WhoStyle: m.whoStyle,
-		WhoKey:   m.whoKey(),
-		Cursor:   m.chatCursor,
-		Focused:  m.focus == focusChat,
+		Cards:         cards,
+		Width:         m.vp.Width,
+		Details:       m.details,
+		Spinner:       m.sp.View(),
+		Working:       working,
+		Waiting:       waiting,
+		Verb:          verb,
+		Active:        active,
+		Stats:         stats,
+		Expanded:      m.expanded[m.viewID()],
+		TurnGaps:      !m.superChat,
+		WhoStyle:      m.whoStyle,
+		WhoKey:        m.whoKey(),
+		Cursor:        m.chatCursor,
+		Focused:       m.focus == focusChat,
+		KeepTextColor: !m.superChat,
 
 		CompactFrame: render.CompactFrame(time.Now()),
 	}

@@ -64,8 +64,8 @@ func (c *Channel) dirPathsLocked() []string {
 // the channel directory, then config (stavlos.json's dirs), then
 // what the human added, each directory once.
 func (c *Channel) dirInfosLocked() []protocol.DirInfo {
-	out := []protocol.DirInfo{{Path: c.Dir, Source: "channel"}}
-	seen := map[string]bool{filepath.Clean(c.Dir): true}
+	out := []protocol.DirInfo{{Path: c.st.dir, Source: "channel"}}
+	seen := map[string]bool{filepath.Clean(c.st.dir): true}
 	add := func(path, source string) {
 		if !seen[path] {
 			seen[path] = true
@@ -89,7 +89,7 @@ func (c *Channel) configDirsLocked() []string {
 	}
 	out := make([]string, 0, len(c.cfg.Dirs))
 	for _, d := range c.cfg.Dirs {
-		out = append(out, resolveDir(c.Dir, d))
+		out = append(out, resolveDir(c.st.dir, d))
 	}
 	return out
 }
@@ -128,18 +128,18 @@ func (c *Channel) AddDir(ctx context.Context, dir string) error {
 	if strings.TrimSpace(dir) == "" {
 		return fmt.Errorf("a directory is required")
 	}
-	return c.addDir(ctx, "", resolveDir(c.Dir, dir), "human")
+	return c.addDir(ctx, "", resolveDir(c.Dir(), dir), "human")
 }
 
 // RemoveDir takes a directory out of the working set. The channel
 // directory and stavlos.json's dirs stay.
 func (c *Channel) RemoveDir(ctx context.Context, dir string) error {
-	dir = resolveDir(c.Dir, dir)
-	if dir == filepath.Clean(c.Dir) {
-		return fmt.Errorf("the channel directory cannot be removed")
-	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	dir = resolveDir(c.st.dir, dir)
+	if dir == filepath.Clean(c.st.dir) {
+		return fmt.Errorf("the channel directory cannot be removed")
+	}
 	if slices.Contains(c.configDirsLocked(), dir) {
 		return fmt.Errorf("%s comes from stavlos.json's dirs: change it there", dir)
 	}

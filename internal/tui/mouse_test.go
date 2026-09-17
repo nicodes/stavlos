@@ -68,12 +68,13 @@ func TestPromptOptionsTakeTheMouse(t *testing.T) {
 	m.setFocus(focusInput) // a new question opens its dialog when the input is idle
 	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user",
 		Questions: []protocol.Question{{Question: "Which backend?", Options: []protocol.QuestionOption{{Label: "Postgres"}, {Label: "SQLite"}}}}}})
-	if m.focus != focusQuestions {
-		t.Fatalf("the question should open its dialog: %v", m.focus)
+	m.refreshViewport()
+	if m.focus != focusInput || strings.Contains(stripANSI(m.View()), "╭") {
+		t.Fatalf("the question should appear inline: %v", m.focus)
 	}
-	move(at("SQLite"))
-	if m.q.sel != 1 {
-		t.Fatalf("hover: sel=%d", m.q.sel)
+	move(at("Which backend?")) // hover exposes all controls without an expansion click
+	if m.q.marks[0] || m.q.marks[1] {
+		t.Fatal("expanding a question selected an option")
 	}
 	click(at("SQLite"))
 	if !m.q.marks[1] || m.q.marks[0] {
@@ -83,7 +84,7 @@ func TestPromptOptionsTakeTheMouse(t *testing.T) {
 	if m.q.sel != 1 || !m.q.marks[1] {
 		t.Fatalf("the question is not an option: sel=%d marks=%v", m.q.sel, m.q.marks)
 	}
-	click(at("something else"))
+	click(at("Reply with a custom"))
 	if !m.q.typing || m.q.sel != 2 {
 		t.Fatalf("clicking something else should open the field: typing=%v sel=%d", m.q.typing, m.q.sel)
 	}
@@ -101,8 +102,7 @@ func TestSidebarHoverMarksTheRow(t *testing.T) {
 		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
 		m = nm.(Model)
 	}
-	header := len(m.sidebarHeader(sidebarWidth - 1))
-	move(3, header+4)
+	move(3, sidebarY(m, 4))
 	if m.focus != focusSidebar || !m.hoverFocus || m.sbCursor != 4 {
 		t.Fatalf("hover on a tree row: focus=%v hover=%v cursor=%d", m.focus, m.hoverFocus, m.sbCursor)
 	}

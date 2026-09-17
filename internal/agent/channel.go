@@ -57,18 +57,18 @@ var errStopped = errors.New("channel is stopped")
 // Channel is a main agent plus its subtree, bound to a directory (PRD §5).
 type Channel struct {
 	ID      string
-	Dir     string
 	Created time.Time
 
 	host  Host
 	tools tools.Set
 
-	mu      sync.Mutex
-	cfg     *config.Effective
-	stamp   string // the instructions files' sizes and times when cfg was set: a change asks the host to look again
-	st      *channelState
-	agents  map[string]*Agent // the runtime handle of every agent in st
-	stopped bool
+	mu            sync.Mutex
+	cfg           *config.Effective
+	stamp         string // the instructions files' sizes and times when cfg was set: a change asks the host to look again
+	st            *channelState
+	agents        map[string]*Agent // the runtime handle of every agent in st
+	stopped       bool
+	reconfiguring bool // a directory transition has gated new turns
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -85,10 +85,12 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, role string)
 	if modelID == "" {
 		modelID = cfg.Model
 	}
+	st := newChannelState(modelID, role)
+	st.dir = dir
 	return &Channel{
-		ID: id, Dir: dir, Created: time.Now().UTC(),
+		ID: id, Created: time.Now().UTC(),
 		host: host, tools: tools.Builtin(), cfg: cfg, stamp: instructionsStamp(cfg.InstructionFiles),
-		st: newChannelState(modelID, role), agents: map[string]*Agent{},
+		st: st, agents: map[string]*Agent{},
 		ctx: ctx, cancel: cancel,
 	}
 }
@@ -153,7 +155,7 @@ func (c *Channel) Start(ctx context.Context, name string) error {
 		c.mu.Unlock()
 		return fmt.Errorf("root preset %q not found", role)
 	}
-	_, err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.Dir, Model: modelID, Role: role, Mode: c.cfg.Mode}))
+	_, err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.st.dir, Model: modelID, Role: role, Mode: c.cfg.Mode}))
 	c.mu.Unlock()
 	if err != nil {
 		return err
@@ -205,6 +207,10 @@ func (c *Channel) Config() *config.Effective {
 func (c *Channel) SetConfig(cfg *config.Effective) {
 	stamp := instructionsStamp(cfg.InstructionFiles)
 	c.mu.Lock()
+	if c.reconfiguring || cfg.Dir != "" && cfg.Dir != c.st.dir {
+		c.mu.Unlock()
+		return
+	}
 	c.cfg, c.stamp = cfg, stamp
 	c.mu.Unlock()
 }
@@ -383,7 +389,7 @@ func (c *Channel) Info() protocol.ChannelInfo {
 		}
 	}
 	return protocol.ChannelInfo{
-		ID: c.ID, Name: c.st.name, Dir: c.Dir, Model: c.st.model, RootAgent: c.st.role,
+		ID: c.ID, Name: c.st.name, Dir: c.st.dir, DirError: config.DirectoryError(c.st.dir), Model: c.st.model, RootAgent: c.st.role,
 		Created: c.Created.Format(time.RFC3339), Archived: c.st.archived,
 		Live: live, CostUSD: cost, TrustPending: c.cfg.TrustPending, Mode: c.st.mode,
 		State: protocol.RollUp(states), Dirs: c.dirInfosLocked(),
@@ -470,6 +476,9 @@ func (c *Channel) spawn(ctx context.Context, parentID, role, label, task, modelA
 }
 
 func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, []*Agent, error) {
+	if c.reconfiguring {
+		return nil, nil, errors.New("a directory change is in progress")
+	}
 	preset, ok := c.cfg.Presets[role]
 	if !ok {
 		return nil, nil, fmt.Errorf("unknown archetype %q", role)
@@ -524,6 +533,7 @@ func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 	evs := []event.Event{c.event(id, event.AgentSpawned, event.AgentSpawnedPayload{ID: id, Parent: parentID, Role: role, Name: name, Model: modelID, Variant: variant, Depth: depth})}
 	if task != "" {
 		in := event.Input{ID: NewID("i"), Kind: event.InputPrompt, Text: task}
+		in.RequestID = in.ID
 		if parent != nil {
 			in.Kind, in.From, in.FromName = event.InputRequest, parentID, parent.name
 		}
@@ -631,12 +641,14 @@ func (c *Channel) Post(ctx context.Context, text, from string) ([]string, error)
 	}
 	post := NewID("post")
 	names := make([]string, len(targets))
-	evs := []event.Event{{}}
 	for i, a := range targets {
 		names[i] = a.name
-		evs = append(evs, c.event(a.id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputSteer, Text: message, Post: post}))
 	}
-	evs[0] = c.event("", event.ChatPosted, event.ChatPayload{ID: post, From: from, Text: message, To: names})
+	evs := []event.Event{{}}
+	for _, a := range targets {
+		evs = append(evs, c.event(a.id, event.InputQueued, event.Input{ID: NewID("i"), RequestID: post, Kind: event.InputSteer, Text: message, Post: post, To: names}))
+	}
+	evs[0] = c.event("", event.ChatPosted, event.ChatPayload{ID: post, RequestID: post, Kind: tools.KindRequest, From: from, Text: message, To: names})
 	wake, err := c.commitLocked(ctx, evs...)
 	c.mu.Unlock()
 	signal(wake)

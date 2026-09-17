@@ -32,6 +32,7 @@ type Daemon struct {
 	Log      *eventlog.Log
 	Registry *registry.Registry
 	DataDir  string
+	Discord  DiscordService // configured before Serve, owned until Close
 
 	esc *escalation.Manager
 
@@ -41,7 +42,8 @@ type Daemon struct {
 	loginMu sync.Mutex
 	logins  map[string]*pendingLogin
 
-	nameMu sync.Mutex // serialises choosing and checking channel names
+	nameMu   sync.Mutex // serialises choosing and checking channel names
+	editorMu sync.Mutex // serialises config edits through validation and reload
 
 	mu           sync.RWMutex
 	channels     map[string]*agent.Channel
@@ -89,6 +91,9 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 
 // Close stops channels and the log and releases the data directory.
 func (d *Daemon) Close() {
+	if d.Discord != nil {
+		d.Discord.Close()
+	}
 	for _, s := range d.channelList() {
 		s.Stop()
 	}
@@ -175,7 +180,7 @@ func (d *Daemon) CheckModel(id string) error                         { return d.
 // no longer matches.
 func (d *Daemon) ProjectChanged(dir string) {
 	for _, s := range d.channelList() {
-		if s.Dir != dir {
+		if s.Dir() != dir {
 			continue
 		}
 		cfg, err := config.Load(dir, d.trust)
@@ -203,8 +208,9 @@ func (d *Daemon) notifyPrompt(n protocol.PromptNotification, tiers []protocol.Ti
 	b, _ := json.Marshal(n)
 	line := notification(protocol.NPrompt, b)
 	for _, c := range d.clientList() {
+		_, tier := c.identity()
 		for _, t := range tiers {
-			if c.tier == t {
+			if tier == t {
 				c.send(line, false)
 				break
 			}
@@ -250,12 +256,9 @@ func (d *Daemon) agentChannel(agentID string) (*agent.Channel, *agent.Agent, err
 
 // CreateChannel creates and starts a channel in dir.
 func (d *Daemon) CreateChannel(ctx context.Context, dir, modelID, root, want string) (*agent.Channel, error) {
-	dir, err := filepath.Abs(dir)
+	dir, err := config.WorkingDirectory("", dir)
 	if err != nil {
 		return nil, err
-	}
-	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
-		return nil, fmt.Errorf("%s is not a directory", dir)
 	}
 	cfg, err := config.Load(dir, d.trust)
 	if err != nil {
@@ -283,6 +286,28 @@ func (d *Daemon) CreateChannel(ctx context.Context, dir, modelID, root, want str
 	d.mu.Unlock()
 	d.maybeTrustPrompt(s)
 	return s, nil
+}
+
+// SetChannelDir changes an idle channel's default directory and rebinds its
+// project configuration. Old trust prompts are dismissed, never transferred.
+func (d *Daemon) SetChannelDir(ctx context.Context, id, dir string) (protocol.ChannelInfo, error) {
+	s, err := d.channel(id)
+	if err != nil {
+		return protocol.ChannelInfo{}, err
+	}
+	old := s.Dir()
+	if err := s.SetDir(ctx, dir, func(dir string) (*config.Effective, error) { return config.Load(dir, d.trust) }); err != nil {
+		return protocol.ChannelInfo{}, err
+	}
+	if old != s.Dir() {
+		for _, p := range d.esc.Pending(id) {
+			if p.Kind == protocol.PromptTrust {
+				_ = d.esc.Resolve(p.ID, "directory-change", escalation.Answer{Value: protocol.AnswerDeny})
+			}
+		}
+	}
+	d.maybeTrustPrompt(s)
+	return s.Info(), nil
 }
 
 // ArchiveChannel archives a channel.
@@ -367,6 +392,7 @@ func (d *Daemon) ChannelList(ctx context.Context, dir string, archived bool) ([]
 			info = protocol.ChannelInfo{ID: r.ID, Name: r.Name, Dir: r.Dir, Created: r.Created.Format(time.RFC3339), Archived: r.Archived}
 		}
 		info.Seq, info.Title = r.LastSeq, r.Title
+		info.DirError = config.DirectoryError(info.Dir)
 		for _, p := range d.esc.Pending(r.ID) { // what the channel waits on the human for
 			if p.Kind == "question" {
 				info.Questions++
@@ -414,31 +440,37 @@ func (t *trustStore) set(ctx context.Context, dir, hash string) error {
 // channel keeps running on global config meanwhile.
 func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 	cfg := s.Config()
+	dir := cfg.Dir
+	if dir == "" {
+		dir = s.Dir()
+	}
 	if !cfg.TrustPending {
 		return
 	}
 	d.mu.Lock()
-	if _, busy := d.trustPrompts[s.Dir]; busy {
+	if _, busy := d.trustPrompts[dir]; busy {
 		d.mu.Unlock()
 		return
 	}
 	id := agent.NewID("t")
-	d.trustPrompts[s.Dir] = id
+	d.trustPrompts[dir] = id
 	d.mu.Unlock()
+	opened := make(chan struct{})
 	go func() {
-		input, _ := json.Marshal(map[string]any{"dir": s.Dir, "hash": cfg.TrustHash, "files": cfg.TrustFiles})
+		input, _ := json.Marshal(map[string]any{"dir": dir, "hash": cfg.TrustHash, "files": cfg.TrustFiles})
 		ans := d.esc.Request(context.Background(), protocol.PromptInfo{
 			ID: id, Channel: s.ID, ChannelName: s.Name(), Kind: protocol.PromptTrust, Input: input,
-			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, presets, skills and AGENTS.md.", s.Dir),
+			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, presets, skills and AGENTS.md.", dir),
 			Options:  []string{"trust", "skip"},
-		}, nil) // the daemon's own prompt: no agent logs it
+		}, func() { close(opened) }) // published before a caller can change the channel directory
 		d.mu.Lock()
-		delete(d.trustPrompts, s.Dir)
+		delete(d.trustPrompts, dir)
 		d.mu.Unlock()
 		if ans.Value == protocol.AnswerAllow || ans.Value == protocol.AnswerAllowAlways {
-			_ = d.Trust(context.Background(), s.Dir, cfg.TrustHash, true)
+			_ = d.Trust(context.Background(), dir, cfg.TrustHash, true)
 		}
 	}()
+	<-opened
 }
 
 // Trust records a decision and reloads config for channels in dir. The
@@ -482,7 +514,7 @@ func (d *Daemon) Trust(ctx context.Context, dir, hash string, trust bool) error 
 	d.mu.RLock()
 	var ss []*agent.Channel
 	for _, s := range d.channels {
-		if s.Dir == dir {
+		if s.Dir() == dir {
 			ss = append(ss, s)
 		}
 	}
@@ -581,6 +613,12 @@ type client struct {
 
 	mu   sync.Mutex
 	subs map[string]int64 // channel id → last seq delivered
+}
+
+func (c *client) identity() (string, protocol.Tier) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.name, c.tier
 }
 
 // notification encodes a notification line once, for any number of clients.

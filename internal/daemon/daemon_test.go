@@ -23,6 +23,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model/registry"
 	"github.com/nicodes/stavlos/internal/modelsdev"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/testutil"
 	rpc "github.com/nicodes/stavlos/pkg/client"
 )
 
@@ -77,7 +78,7 @@ func (f *fakeModel) Complete(ctx context.Context, req model.Request, onDelta fun
 	select {
 	case r := <-done:
 		r.Usage = model.Usage{InputTokens: 10, OutputTokens: 5}
-		return r, nil
+		return testutil.BindReplies(req, r), nil
 	case <-ctx.Done():
 		return model.Response{}, ctx.Err()
 	}
@@ -1266,28 +1267,37 @@ func parentIDFromSystem(system string) string {
 	return ""
 }
 
-// TestOneAnswerSettlesRepeatedPrompts: a parent that prompts a child twice
-// and gets one answer is not left "waiting" for a second.
-func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
+// Repeated prompts remain independent, including a request that arrives while
+// the recipient is already generating an answer to an earlier one.
+func TestRepeatedPromptsNeedExplicitReferences(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	release := make(chan struct{})
+	releaseSecond := make(chan struct{})
+	firstStarted := make(chan struct{})
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
 			return call("c1", "agent_create", `{"archetype":"general","label":"kid","task":"look"}`)
 		},
 		func(model.Request) model.Response {
 			// impatient: message the same child again before it answered
+			<-firstStarted
 			return call("c2", "message", `{"to":"kid","text":"send it now"}`)
 		},
 		func(model.Request) model.Response { return text("waiting") },
 		func(model.Request) model.Response { return text("got it") },
+		func(model.Request) model.Response { return text("got the second answer") },
 	}
 	fm.childSteps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
+			close(firstStarted)
 			<-release
-			return call("k", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"one answer for both","kind":"response"}`)
+			return call("k", "message", `{"to":"`+parentIDFromSystem(req.System)+`","text":"answer to the request I have seen","kind":"response"}`)
+		},
+		func(req model.Request) model.Response {
+			<-releaseSecond
+			return call("k2", "message", `{"to":"main","text":"answer to the second request","kind":"response"}`)
 		},
 	}
 	h := newHarness(t, t.TempDir(), fm)
@@ -1313,8 +1323,17 @@ func TestOneAnswerSettlesRepeatedPrompts(t *testing.T) {
 		_ = e.Decode(&te)
 	}
 	agents, _ = tree(ctx, h.c, s.ID)
+	if agents[0].State != "waiting" || len(agents[0].AwaitingReplies) != 1 {
+		t.Fatal("first response cleared an unseen second request")
+	}
+	close(releaseSecond)
+	for te.Turn != 3 {
+		e := h.waitFor(event.TurnEnded, root)
+		_ = e.Decode(&te)
+	}
+	agents, _ = tree(ctx, h.c, s.ID)
 	if agents[0].State != "idle" {
-		t.Fatalf("one answer should settle both prompts; parent still %s", agents[0].State)
+		t.Fatalf("explicit answers should settle both requests; parent still %s", agents[0].State)
 	}
 }
 
@@ -1419,7 +1438,7 @@ func TestFullAgentIDs(t *testing.T) {
 			parent = parentIDFromSystem(req.System)
 			last := req.Messages[len(req.Messages)-1].Blocks[0].Text
 			// the task names its sender by its name, which addresses it
-			if !strings.Contains(last, "[message from agent main — ") {
+			if !strings.Contains(last, "[message from agent main, request_id: ") {
 				t.Errorf("task should name the parent: %q", last)
 			}
 			// a unique id prefix still resolves, for models that use ids
@@ -2201,8 +2220,8 @@ func TestManualCompact(t *testing.T) {
 	h.waitFor(event.TurnEnded, root)
 }
 
-// TestAskUser: ask_user raises one question prompt for the batch, the
-// answers come back as "header: answer" lines, and a cancel withdraws it.
+// TestAskUser: each question is independently answered and logged, then the
+// tool returns its ordered answers. All questions are available together.
 func TestAskUser(t *testing.T) {
 	setupConfig(t)
 	work := t.TempDir()
@@ -2253,15 +2272,52 @@ func TestAskUser(t *testing.T) {
 	if agents[0].State != "blocked" {
 		t.Fatalf("an asking agent is blocked: %+v", agents[0].State)
 	}
-	p := h.pending(s.ID)[0]
-	if len(p.Questions) != 2 || p.Questions[0].Options[0].Label != "Postgres" {
+	h.waitFor(event.AskRequested, root) // both questions open before either is answered
+	pending := h.pending(s.ID)
+	if len(pending) != 2 {
+		t.Fatalf("all questions should be pending: %+v", pending)
+	}
+	p, second := pending[0], pending[1]
+	if len(p.Questions) != 1 || p.Questions[0].Options[0].Label != "Postgres" || p.QuestionNumber != 1 || p.QuestionTotal != 2 {
 		t.Fatalf("pending %+v", p)
 	}
-	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
-	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerAnswered, Answers: []string{"Postgres", "stavlos"}})); err != nil {
+	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: second.ID}))
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: second.ID, Answer: protocol.AnswerAnswered, Answers: []string{"stavlos"}})); err != nil {
 		t.Fatal(err)
 	}
-	// the second question is cancelled instead of answered
+	h.waitFor(event.AskResolved, root)
+	if second.ID == p.ID || len(second.Questions) != 1 || second.QuestionNumber != 2 || second.QuestionTotal != 2 || second.Questions[0].Question != "Call it?" {
+		t.Fatalf("second question: %+v", second)
+	}
+	if fm.callCount() != 1 {
+		t.Fatal("model resumed before all requested answers arrived")
+	}
+	if remaining := h.pending(s.ID); len(remaining) != 1 || remaining[0].ID != p.ID {
+		t.Fatalf("answering question two changed question one: %+v", remaining)
+	}
+	agents, _ = tree(ctx, h.c, s.ID)
+	if agents[0].State != "blocked" {
+		t.Fatal("agent must stay blocked on the unanswered question")
+	}
+	evs, err := h.d.Log.Read(ctx, s.ID, 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondSaved := false
+	for _, e := range evs {
+		if e.Type == event.AskResolved {
+			var r event.AskResolvedPayload
+			_ = e.Decode(&r)
+			secondSaved = secondSaved || r.ID == second.ID && r.Answer == "stavlos"
+		}
+	}
+	if !secondSaved {
+		t.Fatal("second answer was not recorded while the first question waited")
+	}
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerAnswered, Answers: []string{"Postgres"}})); err != nil {
+		t.Fatal(err)
+	}
+	// The next tool call's question is cancelled instead of answered.
 	h.waitFor(event.AskRequested, root)
 	_ = errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindCancel, Text: ""}))
 	for {

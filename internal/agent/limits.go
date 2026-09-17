@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	"github.com/nicodes/stavlos/internal/event"
 )
@@ -17,8 +18,28 @@ func (a *Agent) reportTurnLimit(limit int) {
 	var evs []event.Event
 	for _, id := range s.st.order {
 		if o := s.st.agents[id]; id != a.ID && !o.killed && o.awaiting[a.ID] > 0 {
-			evs = append(evs, s.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputResponse, Text: text, From: a.ID, FromName: st.name}))
+			var refs []string
+			for request, wait := range o.waits {
+				if wait.targets[a.ID] {
+					refs = append(refs, request)
+				}
+			}
+			sort.Strings(refs)
+			evs = append(evs, s.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputResponse, Text: text, From: a.ID, FromName: st.name, ReplyTo: refs}))
 		}
+	}
+	var human []string
+	var posts []string
+	for _, request := range st.pendingReplies() {
+		if request.From == "user" {
+			human = append(human, request.ID)
+			if request.Post != "" {
+				posts = append(posts, request.Post)
+			}
+		}
+	}
+	if len(human) > 0 {
+		evs = append(evs, s.event(a.ID, event.ChatMessage, event.ChatPayload{From: st.name, Text: text, Kind: "response", ReplyTo: human, Posts: posts}))
 	}
 	wake, _ := s.commitLocked(context.Background(), evs...)
 	s.mu.Unlock()

@@ -341,7 +341,9 @@ func (m Model) View() string {
 	} else {
 		main = m.channelView(f, m.width)
 	}
-	if m.ov != nil {
+	if m.cfgEditor != nil {
+		main = dialog.Composite(main, m.width, mainH, m.cfgEditor.view(m.width, mainH))
+	} else if m.ov != nil {
 		m.ov.hints = m.keyHints() // the dialog's own keys, shown whatever the key bar setting
 		main = dialog.Composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
 	} else if isTab(m.focus) {
@@ -409,7 +411,14 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 		sel = m.metaSel
 	}
 	if m.superChat { // the channel chat: role, model and variant are an agent's, and the mode leads the input
-		return "", nil
+		if m.channel.Dir == "" {
+			return "", nil
+		}
+		label := channelLabel(m.channel) + " · " + format.ShortHome(m.channel.Dir)
+		if m.channel.DirError != "" {
+			label += " · directory unavailable"
+		}
+		return theme.StyleDim.Render(label), nil
 	}
 	nameStyle := lipgloss.NewStyle()
 	if r := m.roleInfo(role); r != nil {
@@ -597,25 +606,21 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 }
 
 // sidebarHeader is what precedes the tree: the app name, a blank, the
-// channel directory, the channel's tokens and cost (the rollup of what
-// the meta row shows per agent), a blank, the ! and ? tabs (sidebarTabsRow; every
+// global catalog label, the channel's tokens and cost (the rollup of what
+// the meta row shows per agent), Discord status, the ! and ? tabs (sidebarTabsRow; every
 // channel's prompts, so above the channels; the footer strip keeps only the
 // agent's row while the sidebar shows, and dirs sits behind each channel's
 // gear), and a blank; the "channels" title is the body's first row. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
-	dir := format.ShortHome(m.channel.Dir)
-	if dir == "" {
-		dir = "—"
-	}
-	usage := format.Tokens(m.totalTokens()) + " tokens · $" + format.Cost(m.totalCost())
+	usage := channelLabel(m.channel) + " · " + format.Tokens(m.totalTokens()) + " tokens · $" + format.Cost(m.totalCost())
 	labels, _ := m.tabLabels(m.currentPrompt())
 	return []string{
-		theme.StyleAccent.Bold(true).Render("Stavlos"),
+		theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" "),
 		"",
-		theme.StyleDim.Render(format.Trunc(dir, width)),
+		theme.StyleDim.Render("All channels"),
 		theme.StyleDim.Render(format.Trunc(usage, width)),
-		"",
+		m.discordIndicator(width),
 		ansi.Truncate(strings.Split(labels, "\n")[0], width, "…"),
 		"",
 	}
@@ -626,11 +631,14 @@ func (m Model) sidebarHeader(width int) []string {
 const newChannelMark = "✚"
 
 // channelGear ends every channel row: → on the row or a click on it opens the
-// channel's dirs.
+// channel's project configuration.
 const channelGear = "⚙"
 
 // sidebarTabsRow is the sidebar header row that holds the ! and ? tabs.
 const sidebarTabsRow = 5
+
+// sidebarDiscordRow opens the Discord status/control panel when clicked.
+const sidebarDiscordRow = 4
 
 // stripRows is how many tab rows the footer strip draws: the ! ? dirs row
 // while the sidebar is hidden, none while it shows (! and ? sit in the
@@ -682,16 +690,24 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	// "● #name         ⚙ ", flush with the "channels" title: the channel's
 	// state dot, its name, and its gear a space in from the right edge (→ on
 	// the row or a click on it: the channel's dirs)
-	channel := func(dot, name string, style lipgloss.Style, idx int) {
+	channel := func(dot, name, dir string, unavailable bool, style lipgloss.Style, idx int) {
 		name = format.Trunc(name, width-6)
 		line(dot+" "+style.Render(name)+strings.Repeat(" ", max(1, width-4-ansi.StringWidth(name)))+theme.StyleDim.Render(channelGear)+" ", idx)
+		if dir == "" {
+			return
+		}
+		path := format.ShortHome(dir)
+		if unavailable {
+			path = "! unavailable: " + path
+		}
+		line(theme.StyleDim.Render(format.Trunc("  "+path, width)), -1)
 	}
 	other := func(s protocol.ChannelInfo, idx int) {
 		dot := stateDot(string(s.State))
 		if mark := promptMark(m.promptCountsIn(promptScope{channel: s.ID})); mark != "" {
 			dot = mark
 		}
-		channel(dot, channelLabel(s), theme.StyleDim, idx)
+		channel(dot, channelLabel(s), s.Dir, s.DirError != "", theme.StyleDim, idx)
 	}
 	tree := m.treeRows(width)
 	// another channel's kept tree, rendered once and indexed by its row
@@ -722,7 +738,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 			if mark := promptMark(m.promptCountsIn(promptScope{channel: m.channelID})); mark != "" {
 				dot = mark
 			}
-			channel(dot, channelLabel(m.channel), style, i)
+			channel(dot, channelLabel(m.channel), m.channel.Dir, m.channel.DirError != "", style, i)
 			if len(m.agents) == 0 {
 				rows, items = append(rows, tree[0]), append(items, -1) // the "(no agents)" row
 			}
@@ -914,7 +930,7 @@ func (t tab) text() string { return t.label + " " + t.count }
 // counts. A prompt tab is named after the kind of prompt at the head of
 // the queue ("trust").
 func (m Model) tabs() []tab {
-	perms, questions := m.promptCountsIn(m.scope) // an open, scoped dialog counts what it shows
+	perms, _ := m.promptCountsIn(m.scope) // an open, scoped dialog counts what it shows
 	permKind := string(protocol.PromptPermission)
 	if p := m.currentPrompt(); p != nil && p.Kind != "" && p.Kind != protocol.PromptPermission {
 		permKind = string(p.Kind) // "trust"
@@ -923,20 +939,9 @@ func (m Model) tabs() []tab {
 	if perms > 0 {
 		permCount = fmt.Sprintf("1/%d", perms)
 	}
-	qCount := "0"
-	if p := m.currentQuestion(); p != nil && len(p.Questions) > 0 {
-		at := 1
-		if m.q.id == p.ID {
-			at = m.q.idx + 1
-		}
-		qCount = fmt.Sprintf("%d/%d", at, len(p.Questions))
-	} else if questions > 0 {
-		qCount = fmt.Sprintf("1/%d", questions)
-	}
-	waitingPerms, waitingQuestions := m.promptCounts()
+	waitingPerms, _ := m.promptCounts()
 	byTab := map[focus]tab{
 		focusPermission: {label: permKind, glyph: transcript.GlyphPermission, count: permCount, warn: waitingPerms > 0},
-		focusQuestions:  {label: "questions", glyph: transcript.GlyphPrompt, count: qCount, warn: waitingQuestions > 0},
 		focusDirs:       {label: "dirs", count: strconv.Itoa(len(m.channelDirs()))},
 		focusAsync:      {label: "async", count: strconv.Itoa(m.asyncCount())},
 		focusTodo:       {label: "todo", count: todoCount(m.selectedTodos())},
@@ -971,6 +976,9 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 	note := func(text string) ([]string, []int) { return rowsAt([]string{theme.StyleDim.Render(text)}, -1, 0) }
 	switch m.focus {
 	case focusAsync:
+		if m.hasReplyDetails() {
+			return m.replyBodyRows(width)
+		}
 		// what the selected agent waits on (the agents whose answer it
 		// expects, then its running jobs), then who waits on its reply (you,
 		// then agents), each under a dim label the cursor skips
@@ -1040,6 +1048,9 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 			if m.dirEdit != "add" {
 				label = "replace " + format.ShortHome(m.dirEdit)
 			}
+			if m.dirEdit == "default" {
+				label = "default directory (idle only; resets approvals)"
+			}
 			rows = append(rows, "", theme.StyleDim.Render(label), m.dirInput.View())
 		}
 		return rowsAt(rows, 0, n)
@@ -1050,21 +1061,13 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		}
 		lines, start := m.promptBox(p, width)
 		return rowsAt(lines, start, len(permOptions(p)))
-	case focusQuestions:
-		p := m.currentQuestion()
-		if p == nil {
-			return note("  no questions waiting")
-		}
-		lines, start, n := m.questionLines(p, width)
-		return rowsAt(lines, start, n)
 	}
 	return nil, nil
 }
 
-// questionLines renders the current question of a batch: who asks, "n/m ·
-// Header", the question, the options with the cursor and the picks, then
-// the free-text field. The n selectable rows (the options and "something
-// else") start at line optStart (-1 when there are none).
+// questionLines renders the checklist and free-text field. The question,
+// asking agent and position belong to the message line. The n selectable
+// rows (options, custom answer and Submit) start at optStart.
 func (m Model) questionLines(p *protocol.PromptInfo, width int) (lines []string, optStart, n int) {
 	q := m.q
 	if q.id != p.ID || len(p.Questions) == 0 {
@@ -1074,33 +1077,16 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) (lines []string,
 		q.idx = len(p.Questions) - 1
 	}
 	if len(p.Questions) == 0 {
-		return append(lines, strings.Split(p.Question, "\n")...), -1, 0
+		return nil, -1, 0
 	}
 	cur := p.Questions[q.idx]
-	// The question (bold) with who is asking after it on the same line, dim;
-	// the checklist below. Position in the batch is in the dialog title.
-	head := cur.Question
-	if p.Agent != "" {
-		head += "  " + m.promptWho(p)
-	}
-	qlines := strings.Split(ansi.Wrap(head, width, ""), "\n")
-	for i, l := range qlines {
-		if i == len(qlines)-1 && p.Agent != "" {
-			if k := strings.LastIndex(l, "  "+m.promptWho(p)); k >= 0 {
-				lines = append(lines, theme.StyleBold.Render(l[:k])+"  "+theme.StyleDim.Render(m.promptWho(p)))
-				continue
-			}
-		}
-		lines = append(lines, theme.StyleBold.Render(l))
-	}
-	lines = append(lines, "")
 	// The checklist: every option, then a last row for a typed answer.
 	optStart, n = len(lines), len(cur.Options)+1
 	for i, o := range cur.Options {
-		marker := cursorMarker(i == q.sel && !q.typing)
-		mark := theme.StyleDim.Render("□")
+		marker := cursorMarker(m.focus == focusQuestions && i == q.sel && !q.typing)
+		mark := theme.StyleDim.Render(transcript.QuestionUnchecked)
 		if q.marks[i] {
-			mark = theme.StyleAccent.Render("■")
+			mark = theme.StyleAccent.Render(transcript.QuestionChecked)
 		}
 		row := marker + mark + " " + o.Label
 		if o.Description != "" {
@@ -1108,15 +1094,28 @@ func (m Model) questionLines(p *protocol.PromptInfo, width int) (lines []string,
 		}
 		lines = append(lines, ansi.Truncate(row, width, "…"))
 	}
-	marker := cursorMarker(q.sel == len(cur.Options) && !q.typing)
+	marker := cursorMarker(m.focus == focusQuestions && q.sel == len(cur.Options) && !q.typing)
+	customMark := theme.StyleDim.Render(transcript.QuestionUnchecked)
+	custom := q.custom
+	if q.typing {
+		custom = m.promptInput.Value()
+	}
+	if strings.TrimSpace(custom) != "" {
+		customMark = theme.StyleAccent.Render(transcript.QuestionChecked)
+	}
+	customLead := marker + customMark + " "
 	switch {
 	case q.typing:
-		lines = append(lines, marker+theme.StyleAccent.Render("■")+" "+m.promptInput.View())
+		field := m.promptInput
+		field.Prompt = "" // the checkbox is the field's inline leader
+		lines = append(lines, ansi.Truncate(customLead+field.View(), width, "…"))
 	case strings.TrimSpace(q.custom) != "":
-		lines = append(lines, ansi.Truncate(marker+theme.StyleAccent.Render("■")+" "+q.custom, width, "…"))
+		lines = append(lines, ansi.Truncate(customLead+q.custom, width, "…"))
 	default:
-		lines = append(lines, marker+theme.StyleDim.Render("□ something else…"))
+		lines = append(lines, ansi.Truncate(customLead+theme.StyleDim.Render("Reply with a custom answer…"), width, "…"))
 	}
+	lines = append(lines, ansi.Truncate(cursorMarker(m.focus == focusQuestions && q.sel == len(cur.Options)+1)+"[Submit answer]", width, "…"))
+	n++
 	if done := answered(q.answers); done > 0 && done < len(p.Questions) {
 		lines = append(lines, "", theme.StyleDim.Render(fmt.Sprintf("%d of %d answered · ←/→ to review", done, len(p.Questions))))
 	}
@@ -1341,7 +1340,11 @@ func (m Model) promptWho(p *protocol.PromptInfo) string {
 	if who := m.agentWhoLabel(p.Agent); m.findAgent(p.Agent) >= 0 {
 		parts = append(parts, who)
 	} else if p.From != "" {
-		parts = append(parts, "@"+p.From)
+		if p.Role != "" {
+			parts = append(parts, p.From+" ("+p.Role+")")
+		} else {
+			parts = append(parts, "@"+p.From)
+		}
 	} else if who != "" {
 		parts = append(parts, who)
 	}
@@ -1663,7 +1666,11 @@ func todoRows(items []event.TodoItem, width int) []string {
 func dirRows(items []protocol.DirInfo, width int) []string {
 	rows := make([]string, 0, len(items))
 	for _, d := range items {
-		row := "  " + theme.StyleBold.Render(format.ShortHome(d.Path)) + "  " + theme.StyleDim.Render(d.Source)
+		source := d.Source
+		if source == "channel" {
+			source = "default"
+		}
+		row := "  " + theme.StyleBold.Render(format.ShortHome(d.Path)) + "  " + theme.StyleDim.Render(source)
 		rows = append(rows, ansi.Truncate(row, width, "…"))
 	}
 	return rows
@@ -1743,7 +1750,7 @@ func (m Model) paletteViewFor(width int) string {
 	if mm := m.mentionMatches(); len(mm) > 0 {
 		return mentionView(mm, m.palIdx, width)
 	}
-	pm := paletteMatches(m.input.Value())
+	pm := m.paletteMatches(m.input.Value())
 	if len(pm) == 0 {
 		return ""
 	}

@@ -27,18 +27,21 @@ const CompactTick = 120 * time.Millisecond
 // global Details toggle per item (the chat cursor's enter). With Focused
 // set, the lines of item Cursor carry the accent gutter marker.
 type Options struct {
-	Width    int
-	Details  bool
-	Spinner  string
-	Working  bool   // a turn is in progress: append the ephemeral indicator line
-	Waiting  bool   // …and it is blocked on a permission: "! permission requested" instead
-	Verb     string // the indicator's label ("Galloping"); "working" when empty
-	Active   string // the in-progress todo item, shown after the verb, or ""
-	Stats    string // "(12s · 1.2k tokens)" shown after the indicator, or ""
-	Expanded map[int]bool
-	Cursor   int
-	Focused  bool
-	NoFold   bool // render every item in full (exports, line-level tests)
+	// Cards replaces live interactive items, preserving their transcript position.
+	Cards         map[int][]string
+	Width         int
+	Details       bool
+	Spinner       string
+	Working       bool   // a turn is in progress: append the ephemeral indicator line
+	Waiting       bool   // …and it is blocked on a permission: "! permission requested" instead
+	Verb          string // the indicator's label ("Galloping"); "working" when empty
+	Active        string // the in-progress todo item, shown after the verb, or ""
+	Stats         string // "(12s · 1.2k tokens)" shown after the indicator, or ""
+	Expanded      map[int]bool
+	Cursor        int
+	Focused       bool
+	KeepTextColor bool // focus/expansion changes the background, not the text color
+	NoFold        bool // render every item in full (exports, line-level tests)
 	// TurnGaps is an agent's chat: no spacing inside a turn, one blank row
 	// before each item that starts a new turn (or follows one).
 	TurnGaps bool
@@ -89,7 +92,7 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 	r := itemRows{item: lines[0].Item, spaced: isSpaced(lines), turn: lines[0].TurnStart}
 	f, folded := o.folds(lines)[r.item]
 	cur := o.Focused && r.item == o.Cursor
-	lit := cur || o.Expanded[r.item] // the item being read: its text reads lighter
+	lit := !o.KeepTextColor && (cur || o.Expanded[r.item])
 	for i, l := range lines {
 		if !o.showLine(l) || l.Kind == transcript.LineBlank || folded && !f.show[i] {
 			continue
@@ -194,6 +197,7 @@ func indicator(o Options) string {
 // oneRow cuts a folded item's one shown line to a single row, so its +N
 // marker ends that row instead of landing inside a wrapped second one.
 func oneRow(l transcript.Line, o Options) transcript.Line {
+	l.Text = strings.ReplaceAll(l.Text, "\n", " ")
 	leader, glyph, _ := kindStyle(l)
 	if l.Glyph != "" {
 		glyph = l.Glyph + " "
@@ -234,6 +238,7 @@ type renderKey struct {
 	rev                     uint64
 	width                   int
 	details, noFold, cursor bool
+	keepTextColor           bool
 	expanded                int8   // per-item override: 0 none, 1 collapsed, 2 expanded
 	who                     string // Options.WhoKey
 	frame                   int
@@ -259,6 +264,16 @@ func Transcript(t *transcript.Transcript, c *Cache, o Options) ([]string, map[in
 		if len(lines) == 0 {
 			continue
 		}
+		if card, ok := o.Cards[i]; ok {
+			card = slices.Clone(card)
+			if o.Focused && o.Cursor == i {
+				for j := range card {
+					card[j] = highlight(card[j], o.Width)
+				}
+			}
+			parts = append(parts, itemRows{item: i, rows: card, spaced: true, turn: lines[0].TurnStart})
+			continue
+		}
 		if i == extended {
 			k := 0
 			for k < len(tail) && tail[k].Item == i {
@@ -268,7 +283,7 @@ func Transcript(t *transcript.Transcript, c *Cache, o Options) ([]string, map[in
 			tail = tail[k:]
 			continue
 		}
-		key := renderKey{epoch: epoch, rev: t.Rev(i), width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i, who: o.WhoKey}
+		key := renderKey{epoch: epoch, rev: t.Rev(i), width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i, who: o.WhoKey, keepTextColor: o.KeepTextColor}
 		if v, ok := o.Expanded[i]; ok {
 			key.expanded = 1
 			if v {
@@ -509,7 +524,7 @@ func renderLine(l transcript.Line, o Options, lit bool) string {
 			b.WriteString(glyph)
 		}
 		switch {
-		case len(l.Names) > 0 && o.WhoStyle != nil:
+		case len(l.Names) > 0:
 			b.WriteString(paintNames(p, l.Names, style, o.WhoStyle))
 		case i == 0 && name != "" && strings.HasPrefix(p, name):
 			b.WriteString(nameStyle.Render(name) + style(p[len(name):]))
@@ -520,14 +535,13 @@ func renderLine(l transcript.Line, o Options, lit bool) string {
 	return b.String()
 }
 
-// paintNames draws a message's leading @names, each bold in that one's
-// colour, and the rest of the text in style: the sender, a dim → and the
-// recipients ("@user → @main @scout …"); an @ after them belongs to the
-// message.
+// paintNames draws a grey @sender: prefix and role-colored recipients. The
+// recorded name count bounds the address, so body mentions are left alone.
 func paintNames(text string, names []string, style func(...string) string, who func(string) lipgloss.Style) string {
 	var b strings.Builder
 	i := 0
-	for i < len(text) && text[i] == '@' {
+	remaining := len(names)
+	for remaining > 0 && i < len(text) && text[i] == '@' {
 		j := i + 1
 		for j < len(text) && nameByte(text[j]) {
 			j++
@@ -542,16 +556,25 @@ func paintNames(text string, names []string, style func(...string) string, who f
 		if name == "" {
 			break
 		}
+		sender := j < len(text) && text[j] == ':'
+		if sender {
+			j++
+		}
 		k := j
 		for k < len(text) && text[k] == ' ' {
 			k++
 		}
-		b.WriteString(who(name).Bold(true).Render(text[i:j]) + text[j:k])
-		i = k
-		if arrow, ok := strings.CutPrefix(text[i:], "→ "); ok {
-			b.WriteString(theme.StyleDim.Render("→") + " ")
-			i = len(text) - len(strings.TrimLeft(arrow, " "))
+		switch {
+		case sender:
+			b.WriteString(theme.StyleDim.Render(text[i:j]))
+		case who != nil:
+			b.WriteString(who(name).Bold(true).Render(text[i:j]))
+		default:
+			b.WriteString(style(text[i:j]))
 		}
+		b.WriteString(text[j:k])
+		i = k
+		remaining--
 	}
 	if i < len(text) {
 		b.WriteString(style(text[i:]))

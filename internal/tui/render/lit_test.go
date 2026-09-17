@@ -42,3 +42,48 @@ func TestLitItemReadsLighter(t *testing.T) {
 		t.Errorf("an item neither under the cursor nor expanded keeps its grey: %q", got)
 	}
 }
+
+func TestStableTextColorKeepsCursorBackground(t *testing.T) {
+	previous := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(previous) })
+	old := SwapHighlight(func(s string, _ int) string { return GutterMark + s })
+	t.Cleanup(func() { SwapHighlight(old) })
+	for _, line := range []transcript.Line{
+		{Kind: transcript.LineText, Text: "agent reply", Note: true},
+		{Kind: transcript.LineToolOut, Text: "tool output"},
+		{Kind: transcript.LineHeading, Text: "heading", Note: true},
+	} {
+		base := Options{Width: 80, NoFold: true, KeepTextColor: true}
+		plain := firstOf(linesText([]transcript.Line{line}, base))
+		base.Focused = true
+		focused := firstOf(linesText([]transcript.Line{line}, base))
+		if focused != GutterMark+plain {
+			t.Fatalf("focus changed text styling: %q -> %q", plain, focused)
+		}
+		base.Focused, base.Expanded = false, map[int]bool{0: true}
+		if expanded := firstOf(linesText([]transcript.Line{line}, base)); expanded != plain {
+			t.Fatalf("expansion changed text styling: %q -> %q", plain, expanded)
+		}
+	}
+}
+
+func TestSenderPrefixIsGreyAndRecipientsKeepTheirColors(t *testing.T) {
+	previous := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(previous) })
+	color := lipgloss.NewStyle().Foreground(lipgloss.Color("#ff0000"))
+	line := transcript.Line{Kind: transcript.LineText, Text: "@scout: @main @reader @scout is literal message text", Who: "scout", Names: []string{"scout", "main", "reader"}}
+	got := renderLine(line, Options{Width: 100, WhoStyle: func(string) lipgloss.Style { return color }}, false)
+	if !strings.Contains(got, theme.StyleDim.Render("@scout:")) || strings.Contains(got, color.Bold(true).Render("@scout:")) {
+		t.Fatalf("sender prefix is not grey: %q", got)
+	}
+	for _, name := range []string{"@main", "@reader"} {
+		if !strings.Contains(got, color.Bold(true).Render(name)) {
+			t.Fatalf("recipient color lost: %q", got)
+		}
+	}
+	if strings.Contains(got, color.Bold(true).Render("@scout")) {
+		t.Fatal("message-body mention was mistaken for another recipient")
+	}
+}

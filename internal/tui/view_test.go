@@ -486,11 +486,11 @@ func TestTabCyclesFocus(t *testing.T) {
 		}
 		press(&m, right, right, right, right, right)
 		press(&m, right) // already rightmost (mcp): stays
-		if m.focus != focusTabs || m.tabSel != 5 {
+		if m.focus != focusTabs || m.tabSel != 4 {
 			t.Fatalf("right x6: focus=%v sel=%d", m.focus, m.tabSel)
 		}
 		press(&m, left, left)
-		if m.tabSel != 3 {
+		if m.tabSel != 2 {
 			t.Fatalf("left x2: sel=%d", m.tabSel)
 		}
 		// enter opens the highlighted tab's own dialog; ←/→ do not switch inside it
@@ -505,7 +505,7 @@ func TestTabCyclesFocus(t *testing.T) {
 		// esc returns to where the dialog was opened from: the strip, with the
 		// closed tab still highlighted
 		press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-		if m.focus != focusTabs || m.tabSel != 3 {
+		if m.focus != focusTabs || m.tabSel != 2 {
 			t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 		}
 		press(&m, left, left, left)               // past dirs and questions to permission
@@ -584,14 +584,14 @@ func TestTabCyclesFocus(t *testing.T) {
 		m.agents[0].Jobs = nil
 		m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Agent: "a", Tool: "shell"}}
 		press(&m, tab, tea.KeyMsg{Type: tea.KeySpace}) // input → strip → the permission dialog
-		if m.focus != focusPermission {
+		if m.focus != focusInlinePermission {
 			t.Fatalf("tab enter from input: %v", m.focus)
 		}
 		// Answering the prompt elsewhere closes the dialog back onto the strip
 		// it was opened from.
 		m.removePrompt("p")
 		m.ensureFocus()
-		if m.focus != focusTabs || m.tabSel != 0 {
+		if m.focus != focusInput {
 			t.Fatalf("prompt gone: focus=%v sel=%d", m.focus, m.tabSel)
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // strip → input
@@ -641,7 +641,7 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 		t.Fatalf("focus %v sel %d", m.focus, m.tabSel)
 	}
 	press(&m, space)
-	if m.focus != focusPermission {
+	if m.focus != focusInlinePermission {
 		t.Fatalf("focus %v", m.focus)
 	}
 	if cmd := press(&m, y); cmd != nil || m.promptBusy != "" || m.input.Value() != "" {
@@ -694,13 +694,14 @@ func TestPromptHotkeysNeedPermissionFocus(t *testing.T) {
 	if m.promptInput.Value() != "red" || m.input.Value() != "" {
 		t.Fatalf("typing: field=%q input=%q", m.promptInput.Value(), m.input.Value())
 	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter}) // stage text before Submit
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q" || m.promptInput.Value() != "" {
 		t.Fatalf("enter: busy=%q field=%q", m.promptBusy, m.promptInput.Value())
 	}
 	// Enter in the input focus sends a prompt, it never answers a question.
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // the dialog closes back onto the strip it was opened from
-	if m.focus != focusTabs {
-		t.Fatalf("esc should return to the strip: %v", m.focus)
+	if m.focus != focusInput {
+		t.Fatalf("esc should return to the input: %v", m.focus)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc}) // strip → input
 	m.promptBusy = ""
@@ -807,7 +808,7 @@ func TestChatCursorMovesAndRenders(t *testing.T) {
 	if m.chatCursor != items-2 {
 		t.Fatalf("up: cursor %d", m.chatCursor)
 	}
-	if got := marked(); got != "› @user msg H" {
+	if got := marked(); got != "› @user: msg H" {
 		t.Fatalf("cursor item not marked: %q\n%s", got, stripANSI(m.vp.View()))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")}, tea.KeyMsg{Type: tea.KeyPgUp})
@@ -908,6 +909,7 @@ func TestAgentOutcomeColours(t *testing.T) {
 
 func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	m := newModel(context.Background(), nil, "s")
+	m.loading = false
 	m.width, m.height = 120, 40
 	m.reconciled = true
 	m.transcript("root").Notice("hello") // a channel, not the home screen (which has no strip)
@@ -935,27 +937,19 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 		t.Fatalf("the strip should highlight permission without a dialog: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
-	if sv := stripANSI(tabsView(m, 100)); m.focus != focusPermission || strings.Count(sv, "\n") != 1 || strings.Contains(sv, "make test") {
+	if sv := stripANSI(tabsView(m, 100)); m.focus != focusInlinePermission || strings.Count(sv, "\n") != 1 || strings.Contains(sv, "make test") {
 		t.Fatalf("the strip should stay one line with the permission open: focus=%v\n%s", m.focus, sv)
 	}
-	// the dialog: the subject row "$ command  name (role)", then the options
-	if body := stripANSI(strings.Join(m.tabBodyLines(60), "\n")); !strings.HasPrefix(body, "$ make test  coder (coder)\n\n▸ ● Allow once\n") {
-		t.Fatalf("permission should open as a command row over its options:\n%s", body)
-	}
-	dv := stripANSI(m.tabDialog(100))
-	if !strings.HasPrefix(dv, "╭") || !strings.Contains(dv, "Permission 1/1") || !strings.Contains(dv, "esc: close") || !strings.Contains(dv, "make test") || strings.Contains(dv, "agents (") {
-		t.Fatalf("permission dialog:\n%s", dv)
-	}
-	// the dialog is composited into the full view (here over the home screen)
-	if full := stripANSI(m.View()); !strings.Contains(full, "make test") || !strings.Contains(full, "╭") {
-		t.Fatalf("the dialog should render in the view:\n%s", full)
+	if full := stripANSI(m.View()); !strings.Contains(full, "! @user Permission: Shell") || !strings.Contains(full, "$ make test") || !strings.Contains(full, "Allow once") || strings.Contains(full, "╭") {
+		t.Fatalf("permission should render inline:\n%s", full)
 	}
 	// esc returns to the strip (permission still highlighted); →→→ space opens async
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 0 {
+	if m.focus != focusInput {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // past questions and dirs to async
+	press(&m, tea.KeyMsg{Type: tea.KeyTab})
+	press(&m, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // past dirs to async
 	if m.focus != focusAsync {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -994,7 +988,7 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: the channel's tabs over the agent's, counts only
 	v := stripANSI(tabsView(m, 100))
-	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · ? 0 · dirs 0\nasync 2 · todo") ||
+	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · dirs 0\nasync 2 · todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
@@ -1198,15 +1192,15 @@ func TestTurnIndicatorFollowsPrompts(t *testing.T) {
 	}
 }
 
-func TestFirstPermissionOpensItsTabWhenIdle(t *testing.T) {
+func TestPermissionArrivalDoesNotStealFocus(t *testing.T) {
 	req := func(id string) protocol.PromptNotification {
 		return protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: id, Kind: "permission", Agent: "a", Tool: "shell"}}
 	}
 	// idle input: the first prompt opens the permission tab
 	m := channelModel()
 	m.applyPromptNotification(req("p1"))
-	if m.focus != focusPermission {
-		t.Fatalf("idle input should jump to the permission tab: focus=%v", m.focus)
+	if m.focus != focusInput {
+		t.Fatalf("idle input should retain focus: focus=%v", m.focus)
 	}
 	// a second prompt behind a pending one changes nothing
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
@@ -1276,7 +1270,7 @@ func TestLastSnippet(t *testing.T) {
 		t.Fatal("empty")
 	}
 	feed(tr.Apply, userMsg(1, "a", "look around"))
-	if got := lastSnippet(tr); got != "@user look around" {
+	if got := lastSnippet(tr); got != "@user: look around" {
 		t.Fatalf("prompt: %q", got)
 	}
 	feed(tr.Apply, toolCall(2, "a", "c1", "shell", `{"command":"ls -la"}`))
@@ -1409,7 +1403,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	// tab → strip, → x4 lands on todo, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusTodo {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -1428,7 +1422,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 		t.Fatalf("↓ should move the cursor: %d", m.agCursor)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 4 {
+	if m.focus != focusTabs || m.tabSel != 3 {
 		t.Fatalf("esc should return to the strip on todo: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// clicking the todo label on the strip opens the dialog
@@ -1593,7 +1587,7 @@ func TestMouseHoverMovesChatCursor(t *testing.T) {
 	// the row is highlighted like an arrow-key visit
 	markCursorForTest(t)
 	m.refreshViewport()
-	if !strings.Contains(stripANSI(m.vp.View()), render.GutterMark+"› @user prompt 0") {
+	if !strings.Contains(stripANSI(m.vp.View()), render.GutterMark+"› @user: prompt 0") {
 		t.Fatalf("hovered item should carry the cursor:\n%s", stripANSI(m.vp.View()))
 	}
 	// hovering another item moves the cursor
@@ -2037,13 +2031,13 @@ func TestInputNeverHidesRows(t *testing.T) {
 	}
 }
 
-func TestStartScreenHistoryComesFromEarlierChannels(t *testing.T) {
+func TestCatalogDoesNotPopulateInputHistory(t *testing.T) {
 	m := newModel(context.Background(), nil, "cur")
 	m.width, m.height = 100, 40
 	m.reconciled = true
 	m.layout()
 	now := time.Now()
-	nm, _ := m.Update(channelsMsg{purpose: channelsHistory, channels: []protocol.ChannelInfo{
+	nm, _ := m.Update(channelsMsg{purpose: channelsNav, channels: []protocol.ChannelInfo{
 		{ID: "cur", Title: "the one we are in", Created: now.Format(time.RFC3339)},
 		{ID: "empty", Created: now.Format(time.RFC3339)},
 		{ID: "s1", Title: "fix the login bug", Created: now.Add(-2 * time.Hour).Format(time.RFC3339)},
@@ -2055,27 +2049,15 @@ func TestStartScreenHistoryComesFromEarlierChannels(t *testing.T) {
 		t.Fatal("no picker and no list: the history lives in ↑/↓")
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
-	if m.input.Value() != "fix the login bug" {
-		t.Fatalf("↑ should recall the most recent earlier channel's first prompt: %q", m.input.Value())
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyUp})
-	if m.input.Value() != "add a README section" {
-		t.Fatalf("↑↑ should recall the one before: %q", m.input.Value())
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyUp}) // oldest was a duplicate title: nothing older
-	if m.input.Value() != "add a README section" {
-		t.Fatalf("duplicates are collapsed: %q", m.input.Value())
-	}
-	press(&m, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown})
 	if m.input.Value() != "" {
-		t.Fatalf("↓ past the newest restores the empty draft: %q", m.input.Value())
+		t.Fatalf("another channel's prompt leaked into history: %q", m.input.Value())
 	}
 	// a channel that already has its own history is left alone
 	m.history = []string{"typed here"}
 	m.histIdx = 1
-	m.seedHistory([]protocol.ChannelInfo{{ID: "x", Title: "elsewhere"}})
-	if len(m.history) != 1 {
-		t.Fatal("seeding must not touch an existing history")
+	press(&m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.input.Value() != "typed here" {
+		t.Fatal("this channel's own history was not recalled")
 	}
 }
 
@@ -2166,15 +2148,15 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "/home/x/Work/proj") || !strings.HasPrefix(sb[3], "2k tokens · $0.25") || strings.TrimSpace(sb[4]) != "" ||
-			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1 · ? 1/1") || strings.Contains(sb[sidebarTabsRow], "dirs") || strings.TrimSpace(sb[6]) != "" || !strings.HasPrefix(sb[7], "channels ") || !strings.Contains(sb[7], " "+newChannelMark+" ") || strings.Contains(sb[7], "↑/↓") ||
+		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "All channels") || !strings.Contains(sb[3], "2k tokens · $0.25") || !strings.Contains(sb[sidebarDiscordRow], "Discord checking") ||
+			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1") || strings.Contains(sb[sidebarTabsRow], "?") || strings.Contains(sb[sidebarTabsRow], "dirs") || strings.TrimSpace(sb[6]) != "" || !strings.HasPrefix(sb[7], "channels ") || !strings.Contains(sb[7], " "+newChannelMark+" ") || strings.Contains(sb[7], "↑/↓") ||
 			strings.Contains(strings.Join(sb, "\n"), "waiting") || strings.Contains(strings.Join(sb, "\n"), "need you") {
 			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:8], "\n"))
 		}
 		// dirs is the open channel's: out of the tabs the strip walks, behind
 		// the gear at the right edge of the channel's row; → on the row, or a
 		// click on the gear, opens the dirs dialog
-		if body, _ := m.sidebarBody(sidebarWidth - 1); !strings.HasSuffix(stripANSI(body[1]), " "+channelGear+" ") || !strings.Contains(stripANSI(body[2]), "@main") || ansi.StringWidth(stripANSI(body[1])) != sidebarWidth-1 {
+		if body, _ := m.sidebarBody(sidebarWidth - 1); !strings.HasSuffix(stripANSI(body[1]), " "+channelGear+" ") || !strings.Contains(stripANSI(body[2]), "/home/x/Work/proj") || !strings.Contains(stripANSI(body[3]), "@main") || ansi.StringWidth(stripANSI(body[1])) != sidebarWidth-1 {
 			t.Fatalf("channel row:\n%s", stripANSI(strings.Join(body, "\n")))
 		}
 		if slices.Contains(m.tabOrder(), focusDirs) {
@@ -2183,20 +2165,20 @@ func TestSidebarNav(t *testing.T) {
 		m.setFocus(focusSidebar)
 		m.sbCursor = hereRow(m)
 		press(&m, tea.KeyMsg{Type: tea.KeyRight})
-		if m.focus != focusDirs {
-			t.Fatalf("→ on the channel row opens its dirs: %v", m.focus)
+		if m.cfgEditor == nil || m.cfgEditor.scope.Scope != "project" {
+			t.Fatal("→ on the channel row should open project configuration")
 		}
-		m.closeDialog()
+		m.closeConfigEditor()
 		gear := func(y int) {
 			nm, _ := m.Update(tea.MouseMsg{X: sidebarWidth - 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 			nm, _ = nm.(Model).Update(tea.MouseMsg{X: sidebarWidth - 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 			m = nm.(Model)
 		}
 		gear(header + hereRow(m))
-		if m.focus != focusDirs {
-			t.Fatalf("a click on the gear opens its dirs: %v", m.focus)
+		if m.cfgEditor == nil || m.cfgEditor.scope.Channel != m.channelID {
+			t.Fatal("a click on the gear should open this channel's configuration")
 		}
-		m.closeDialog()
+		m.closeConfigEditor()
 		// with the sidebar showing, the footer strip keeps only the agent's row
 		if sv := stripANSI(m.sectionsView(120)); sv != "" || !strings.Contains(stripANSI(m.ruleLine(120)), "async") { // no footer strip: the agent's tabs sit on the divider
 			t.Fatalf("strip with the sidebar:\n%s", sv)
@@ -2256,9 +2238,9 @@ func TestSidebarNav(t *testing.T) {
 		m.prompts = nil
 		// a click on a tree row selects that agent (rows start after the header)
 		m.setFocus(focusInput)
-		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + 4, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + 4, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		y := sidebarY(m, 4)
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
 		if m.selectedID() != "c" || m.focus != focusSidebar || m.sbCursor != 4 {
 			t.Fatalf("click on a row: selected=%s focus=%v cursor=%d", m.selectedID(), m.focus, m.sbCursor)
@@ -2283,12 +2265,12 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if f := strings.Fields(plain[2]); len(body) != na+4 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
-			len(f) != 3 || f[1] != "#proj" || f[2] != channelGear || strings.Join(strings.Fields(plain[na+3]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
-			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || hereRow(m) != 2 {
+		if f := strings.Fields(plain[2]); len(body) != na+5 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
+			len(f) != 3 || f[1] != "#proj" || f[2] != channelGear || strings.Join(strings.Fields(plain[na+4]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
+			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != -1 || items[na+4] != na+3 || hereRow(m) != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}
-		for _, i := range []int{1, 2, na + 3} {
+		for _, i := range []int{1, 2, na + 4} {
 			if w := ansi.StringWidth(plain[i]); w != sidebarWidth-1 {
 				t.Fatalf("channel rows fill the width: %d %q", w, plain[i])
 			}
@@ -2307,14 +2289,16 @@ func TestSidebarNav(t *testing.T) {
 			t.Fatalf("wrap: %d", m.sbCursor)
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")}) // from + channel, n still finds an agent
-		header := len(m.sidebarHeader(sidebarWidth - 1))
-		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: header + na + 3, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: header + na + 3, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m.switching = false                                           // the previous asynchronous selection completed
+		y := sidebarY(m, na+3)
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 		m = nm.(Model)
 		if !strings.Contains(m.status, "opening #proj-2") {
 			t.Fatalf("a click on a channel should open it: %q", m.status)
 		}
 		// → on another channel's row: that channel opens on its dirs dialog
+		m.switching = false
 		m.setFocus(focusSidebar)
 		m.sbCursor = 1
 		if cmd := press(&m, tea.KeyMsg{Type: tea.KeyRight}); cmd == nil || !m.dirsNext || !strings.Contains(m.status, "opening #docs") {
@@ -2322,7 +2306,7 @@ func TestSidebarNav(t *testing.T) {
 		}
 		nm, _ = m.Update(switchedMsg{info: protocol.ChannelInfo{ID: "s-older", Name: "docs", Dir: "/x"}})
 		m = nm.(Model)
-		if m.channelID != "s-older" || m.focus != focusDirs || m.dirsNext {
+		if m.channelID != "s-older" || m.cfgEditor == nil || m.cfgEditor.scope.Channel != "s-older" || m.dirsNext {
 			t.Fatalf("the switch lands on the dirs dialog: id=%s focus=%v next=%v", m.channelID, m.focus, m.dirsNext)
 		}
 	})
@@ -2357,7 +2341,7 @@ func TestSidebarNav(t *testing.T) {
 		}
 		m.setFocus(focusSidebar)
 		m.sbCursor = 0
-		if dv := stripANSI(m.ov.view(100, "")); !strings.Contains(dv, "New channel in") || strings.Contains(dv, "search") || strings.Contains(dv, "nothing to list") {
+		if dv := stripANSI(m.ov.view(100, "")); !strings.Contains(dv, "New channel") || strings.Contains(dv, "search") || strings.Contains(dv, "nothing to list") {
 			t.Fatalf("popup:\n%s", dv)
 		}
 		press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("site")}, tea.KeyMsg{Type: tea.KeySpace, Runes: []rune(" ")}, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ops")})
@@ -2366,6 +2350,10 @@ func TestSidebarNav(t *testing.T) {
 		}
 		if hs := m.keyHints(); len(hs) != 2 || hs[0].Key != "enter" || hs[1].Key != "esc" {
 			t.Fatalf("hints %+v", hs)
+		}
+		press(&m, tea.KeyMsg{Type: tea.KeyEnter})
+		if m.ov == nil || m.ov.kind != ovNewChannelDir || m.ov.input.Value() != m.channel.Dir || m.ov.newName != "site ops" {
+			t.Fatalf("directory step: %+v", m.ov)
 		}
 		if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.ov != nil || !strings.Contains(m.status, "creating a channel") {
 			t.Fatalf("enter should create: cmd=%v ov=%v status=%q", cmd != nil, m.ov != nil, m.status)
@@ -2390,14 +2378,14 @@ func TestSidebarNav(t *testing.T) {
 			{ID: "pd", Kind: "permission", Agent: "d", Tool: "read"},
 		}
 		m.selected = 0 // main has none: the oldest of each kind
-		if m.currentPrompt().ID != "pb" || m.currentQuestion().ID != "qd" {
-			t.Fatalf("no own prompt: %s %s", m.currentPrompt().ID, m.currentQuestion().ID)
+		if m.currentPrompt().ID != "pb" || m.currentQuestion() != nil {
+			t.Fatalf("questions are scoped to the viewed chat: %s %+v", m.currentPrompt().ID, m.currentQuestion())
 		}
 		m.selected = 3 // asker: its own permission jumps ahead of b's
 		if m.currentPrompt().ID != "pd" || m.currentQuestion().ID != "qd" {
 			t.Fatalf("own prompt first: %s %s", m.currentPrompt().ID, m.currentQuestion().ID)
 		}
-		if perms, qs := m.promptCounts(); perms != 2 || qs != 1 {
+		if perms, qs := m.promptCounts(); perms != 2 || qs != 0 {
 			t.Fatalf("the strip still counts everything: %d %d", perms, qs)
 		}
 	})
@@ -2501,7 +2489,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 
 func TestMCPTabAndDialog(t *testing.T) {
 	m := channelModel()
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 0 · mcp 0") || !strings.Contains(sv, "? 0 · dirs 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 0 · mcp 0") || !strings.Contains(sv, "! 0 · dirs 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	started := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
@@ -2540,7 +2528,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 5 {
+	if m.focus != focusTabs || m.tabSel != 4 {
 		t.Fatalf("esc should return to the strip on mcp: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// chat: tool names and server events
@@ -2571,7 +2559,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	}
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusDirs {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -2580,7 +2568,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	if !strings.Contains(dv, "a add directory · space/enter edit · ctrl+d remove") || strings.Contains(dv, "esc close") {
 		t.Fatalf("dirs dialog should carry its own hints (without esc):\n%s", dv)
 	}
-	if repo := findLine(lines, "▸ /repo  channel"); repo < 0 || strings.Contains(lines[repo], "◆") || !inOrder(dv, "Dirs 3", "▸ /repo  channel", "/srv/shared  human", "/tmp/build  human") {
+	if repo := findLine(lines, "▸ /repo  default"); repo < 0 || strings.Contains(lines[repo], "◆") || !inOrder(dv, "Dirs 3", "▸ /repo  default", "/srv/shared  human", "/tmp/build  human") {
 		t.Fatalf("dirs dialog:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})
@@ -2614,11 +2602,12 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyUp})
 	press(&m, tea.KeyMsg{Type: tea.KeySpace})
-	if m.dirEdit != "" || !strings.Contains(m.status, "cannot be changed") {
-		t.Fatalf("the channel row must not be editable: %q %q", m.dirEdit, m.status)
+	if m.dirEdit != "default" || m.dirInput.Value() != "/repo" {
+		t.Fatalf("the default directory should be editable: %q %q", m.dirEdit, m.dirInput.Value())
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 2 {
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.focus != focusTabs || m.tabSel != 1 {
 		t.Fatalf("esc: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// a boundary prompt says so and offers the directory
@@ -2766,8 +2755,9 @@ func TestEnterSelectsAndCtrlSpaceReturnsToInput(t *testing.T) {
 	if m.promptInput.Value() != "a b" {
 		t.Fatalf("space should type into the answer field: %q", m.promptInput.Value())
 	}
-	if cmd := press(&m, enter); cmd == nil || m.focus != focusQuestions {
-		t.Fatalf("enter should submit the answer: cmd=%v focus=%v", cmd != nil, m.focus)
+	press(&m, enter)
+	if m.q.typing || m.q.custom != "a b" || m.promptBusy != "" {
+		t.Fatal("enter should stage custom text for Submit")
 	}
 	// and ctrl+space gets out of that text field
 	m.setFocus(focusQuestions)
@@ -2860,36 +2850,37 @@ func TestDenyTakesAnOptionalReason(t *testing.T) {
 	}
 }
 
-func TestQuestionsTabAndDialog(t *testing.T) {
+func TestQuestionsInlineLegacyBatch(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Role = "general"
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "! 0 · ? 0 · dirs 0\nasync") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "! 0 · dirs 0\nasync") {
 		t.Fatalf("strip:\n%s", sv)
 	}
-	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user", Questions: []protocol.Question{
+	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", From: "coder", Role: "general", Tool: "ask_user", Questions: []protocol.Question{
 		{Question: "Which backend?", Options: []protocol.QuestionOption{{Label: "Postgres", Description: "what the repo uses"}, {Label: "SQLite"}}},
 		{Question: "Which extras?", Options: []protocol.QuestionOption{{Label: "Cache"}, {Label: "Queue"}, {Label: "Search"}}},
 		{Question: "What should the service be called?", Options: []protocol.QuestionOption{{Label: "stavlos-api"}}},
 	}}
 	// a new question opens its dialog when the input is idle
 	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: batch})
-	if m.focus != focusQuestions || m.currentPrompt() != nil {
-		t.Fatalf("a question should open the questions dialog: focus=%v", m.focus)
+	if m.focus != focusInput || m.currentPrompt() != nil {
+		t.Fatalf("a question should arrive without taking focus: focus=%v", m.focus)
 	}
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "? 1/3") || !strings.Contains(sv, "! 0") {
+	if sv := stripANSI(tabsView(m, 120)); strings.Contains(sv, "? 1/3") || !strings.Contains(sv, "! 0") {
 		t.Fatalf("strip with a question:\n%s", sv)
 	}
-	dv := stripANSI(m.tabDialog(120))
-	for _, want := range []string{"Questions 1/3", "coder (general)", "Which backend?", "▸ □ Postgres  what the repo uses", "□ SQLite", "□ something else…"} {
+	m.openQuestion(m.currentQuestion())
+	cardView := func() string { rows, _, _ := m.questionCard(&batch); return stripANSI(strings.Join(rows, "\n")) }
+	dv := cardView()
+	for _, want := range []string{"? @user Which backend?", "  ▸ □ Postgres  what the repo uses", "    □ SQLite", "    □ Reply with a custom answer…", "[Submit answer]"} {
 		if !strings.Contains(dv, want) {
 			t.Fatalf("dialog lacks %q:\n%s", want, dv)
 		}
 	}
-	// the question comes first with who asks after it on the same line (no
-	// heading, no "asks" word), then the list
+	// The asking agent belongs to the header, leaving the question text alone.
 	lines := strings.Split(dv, "\n")
-	if !strings.Contains(lines[3], "Which backend?  coder (general)") || strings.Contains(dv, " asks") || strings.Contains(dv, "· Backend") {
-		t.Fatalf("the question line should carry the agent:\n%s", dv)
+	if lines[0] != "? @user Which backend?" || strings.Contains(lines[1], "Which backend?") || strings.Contains(dv, " asks") {
+		t.Fatalf("question/agent placement:\n%s", dv)
 	}
 	// a checklist: enter with nothing picked does nothing; ↓ space toggles
 	// SQLite; enter confirms and moves on
@@ -2903,7 +2894,7 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 	}
 	// several options plus something typed, joined in order
 	press(&m, tea.KeyMsg{Type: tea.KeySpace}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeyDown}, tea.KeyMsg{Type: tea.KeySpace})
-	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "■ Cache") || !strings.Contains(dv, "□ Queue") || !strings.Contains(dv, "■ Search") {
+	if dv := cardView(); !strings.Contains(dv, "■ Cache") || !strings.Contains(dv, "□ Queue") || !strings.Contains(dv, "■ Search") {
 		t.Fatalf("marks:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyDown})  // onto "something else"
@@ -2916,7 +2907,7 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 	if m.q.typing || m.q.custom != "metrics" {
 		t.Fatalf("esc should keep the typed answer: typing=%v custom=%q", m.q.typing, m.q.custom)
 	}
-	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "■ metrics") {
+	if dv := cardView(); !strings.Contains(dv, "■ metrics") || strings.Contains(dv, "Custom answer:") {
 		t.Fatalf("the typed answer should show as picked:\n%s", dv)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -2935,6 +2926,7 @@ func TestQuestionsTabAndDialog(t *testing.T) {
 	if !m.q.typing || m.promptInput.Value() != "stavlos" {
 		t.Fatalf("typing: %v %q", m.q.typing, m.promptInput.Value())
 	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEnter}) // stage the custom answer
 	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil || m.promptBusy != "q1" || !m.claimedByUs["q1"] {
 		t.Fatalf("the last answer should submit the batch: cmd=%v busy=%q", cmd != nil, m.promptBusy)
 	}
@@ -2991,11 +2983,10 @@ func TestTabRowsMoveVertically(t *testing.T) {
 		down bool
 		want int
 	}{
-		{0, true, 3},  // ! → async
-		{1, true, 4},  // ? → due
-		{2, true, 5},  // dirs → todo
-		{3, false, 0}, // async → !
-		{5, false, 2}, // mcp → dirs
+		{0, true, 2},  // ! → async
+		{1, true, 3},  // dirs → todo
+		{2, false, 0}, // async → !
+		{4, false, 1}, // mcp → dirs
 		{0, false, 0}, // top row stays
 		{4, true, 4},  // bottom row stays
 	} {
@@ -3018,7 +3009,7 @@ func TestPromptsAcrossChannels(t *testing.T) {
 		{ID: "q-here", Channel: here, Kind: "question", Agent: "d", Questions: which},
 	}
 	m.applyPromptNotification(protocol.PromptNotification{Action: protocol.ActionRequested, Prompt: protocol.PromptInfo{ID: "q-away", Channel: "elsewhere", Kind: "question", Agent: "x9", Questions: which}})
-	if perms, questions := m.promptCounts(); len(m.prompts) != 4 || perms != 2 || questions != 2 || m.focus != focusInput {
+	if perms, questions := m.promptCounts(); len(m.prompts) != 4 || perms != 2 || questions != 1 || m.focus != focusInput {
 		t.Fatalf("another channel's prompt is kept and does not pop a dialog: %d prompts, %d %d, focus %v", len(m.prompts), perms, questions, m.focus)
 	}
 	if who := m.promptWho(&m.prompts[1]); who != "@writer · #docs" {
@@ -3027,11 +3018,11 @@ func TestPromptsAcrossChannels(t *testing.T) {
 	// opening @world-politics (b) from the sidebar opens the permission dialog on its own prompt
 	m.setFocus(focusSidebar)
 	m.sidebarSelect(hereRow(m) + 2)
-	if perms, _ := m.promptCountsIn(m.scope); m.focus != focusPermission || m.currentPrompt().ID != "p-here" || m.scope.agent != "b" || perms != 1 {
-		t.Fatalf("agent open: focus=%v prompt=%s scope=%+v perms=%d", m.focus, m.currentPrompt().ID, m.scope, perms)
+	if m.focus != focusInlinePermission || m.currentPrompt().ID != "p-here" || m.permissionVisible(m.prompts[1]) {
+		t.Fatalf("agent open: focus=%v prompt=%s", m.focus, m.currentPrompt().ID)
 	}
-	if !strings.Contains(stripANSI(m.tabDialogTitle()), "1/1") {
-		t.Fatalf("the scoped dialog counts what it shows: %q", m.tabDialogTitle())
+	if strings.Contains(m.View(), "╭") {
+		t.Fatal("permission navigation should focus the inline card")
 	}
 	// closing drops the scope; the tab then opens on every channel's
 	m.closeDialog()
@@ -3053,8 +3044,8 @@ func TestPromptsAcrossChannels(t *testing.T) {
 	// opening this channel goes to its permission, not the other channel's
 	m.setFocus(focusSidebar)
 	m.sidebarSelect(hereRow(m))
-	if perms, _ := m.promptCountsIn(m.scope); m.focus != focusPermission || m.scope.channel != here || perms != 1 {
-		t.Fatalf("channel open: focus=%v scope=%+v perms=%d", m.focus, m.scope, perms)
+	if m.focus != focusInlinePermission || m.currentPrompt().ID != "p-here" {
+		t.Fatalf("channel open: focus=%v", m.focus)
 	}
 	// a switch keeps every channel's prompts
 	m.bindChannel(protocol.ChannelInfo{ID: "elsewhere", Dir: "/x"})

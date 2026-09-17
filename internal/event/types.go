@@ -98,6 +98,7 @@ type ChannelCreatedPayload struct {
 
 // ChannelUpdatedPayload carries only what changed.
 type ChannelUpdatedPayload struct {
+	Dir   *string `json:"dir,omitempty"` // new default directory; clears remembered permits and resets mode to ask
 	Name  *string `json:"name,omitempty"`
 	Model *string `json:"model,omitempty"`
 	Mode  *string `json:"mode,omitempty"` // ask | auto | yolo
@@ -114,13 +115,17 @@ type DirPayload struct {
 // message to the human (From, the agent's name, and the Post it answers,
 // "" for none).
 type ChatPayload struct {
-	ID string `json:"id,omitempty"`
+	Kind      string   `json:"kind,omitempty"` // request/response/info; empty identifies legacy events
+	RequestID string   `json:"request_id,omitempty"`
+	ReplyTo   []string `json:"reply_to,omitempty"`
+	Posts     []string `json:"posts,omitempty"` // human posts explicitly answered together
+	ID        string   `json:"id,omitempty"`
 	// From is the agent's name on a message, and on a post the client that
 	// sent it ("human:tui:1234", "human:discord"). A client mirroring the
 	// chat elsewhere reads it to tell its own posts from everyone else's.
 	From string   `json:"from,omitempty"`
 	Text string   `json:"text"`
-	To   []string `json:"to,omitempty"`
+	To   []string `json:"to,omitempty"` // complete recipient names on posts and agent messages
 	Post string   `json:"post,omitempty"`
 }
 
@@ -162,15 +167,30 @@ const (
 
 // Input is one entry of an agent's inbox.
 type Input struct {
-	ID       string    `json:"id"`
-	Kind     InputKind `json:"kind"`
-	Text     string    `json:"text,omitempty"`
-	From     string    `json:"from,omitempty"`      // the sending agent's id
-	FromName string    `json:"from_name,omitempty"` // its name when it sent
-	Post     string    `json:"post,omitempty"`      // the channel chat post a steer delivers
-	Job      string    `json:"job,omitempty"`       // kind job: the job whose result this is
-	Parties  []string  `json:"parties,omitempty"`   // kind reminder: who is owed ("user" or agent ids)
-	Names    []string  `json:"names,omitempty"`     // …and their names
+	RequestID string         `json:"request_id,omitempty"`
+	ReplyTo   []string       `json:"reply_to,omitempty"`
+	Requests  []ReplyRequest `json:"requests,omitempty"` // per-request reminder entries
+	To        []string       `json:"to,omitempty"`       // all recipient names, shared by every delivery
+	ID        string         `json:"id"`
+	Kind      InputKind      `json:"kind"`
+	Text      string         `json:"text,omitempty"`
+	From      string         `json:"from,omitempty"`      // the sending agent's id
+	FromName  string         `json:"from_name,omitempty"` // its name when it sent
+	Post      string         `json:"post,omitempty"`      // the channel chat post a steer delivers
+	Job       string         `json:"job,omitempty"`       // kind job: the job whose result this is
+	Parties   []string       `json:"parties,omitempty"`   // kind reminder: who is owed ("user" or agent ids)
+	Names     []string       `json:"names,omitempty"`     // …and their names
+}
+
+// ReplyRequest identifies one response obligation. A broadcast shares an ID,
+// but every receiving agent independently owes its own response.
+type ReplyRequest struct {
+	ID       string   `json:"id"`
+	From     string   `json:"from"`
+	FromName string   `json:"from_name"`
+	To       []string `json:"to,omitempty"`
+	Text     string   `json:"text"` // short excerpt for status and reminders
+	Post     string   `json:"post,omitempty"`
 }
 
 // InputTakenPayload lists the inputs a model call consumed.
@@ -232,11 +252,19 @@ type TurnEndedPayload struct {
 // AskRequestedPayload records a prompt to the human. Kind is permission,
 // question or trust; CallID ties a permission or question to its tool call.
 type AskRequestedPayload struct {
-	ID       string `json:"id"`
-	Kind     string `json:"kind"`
-	CallID   string `json:"call_id,omitempty"`
-	Tool     string `json:"tool,omitempty"`
-	Question string `json:"question,omitempty"`
+	Input          json.RawMessage `json:"input,omitempty"`
+	Dir            string          `json:"dir,omitempty"`
+	Prefix         string          `json:"prefix,omitempty"`
+	From           string          `json:"from,omitempty"`
+	Role           string          `json:"role,omitempty"`
+	Questions      []Question      `json:"questions,omitempty"`
+	QuestionNumber int             `json:"question_number,omitempty"`
+	QuestionTotal  int             `json:"question_total,omitempty"`
+	ID             string          `json:"id"`
+	Kind           string          `json:"kind"`
+	CallID         string          `json:"call_id,omitempty"`
+	Tool           string          `json:"tool,omitempty"`
+	Question       string          `json:"question,omitempty"`
 }
 
 // AskOutcome is how a prompt ended.
@@ -249,10 +277,31 @@ const (
 )
 
 type AskResolvedPayload struct {
-	ID      string     `json:"id"`
-	Outcome AskOutcome `json:"outcome"`
-	Answer  string     `json:"answer,omitempty"`
-	By      string     `json:"by,omitempty"` // the answering client
+	Reason  string           `json:"reason,omitempty"`
+	Dir     string           `json:"dir,omitempty"`
+	Answers []string         `json:"answers,omitempty"`
+	Details []QuestionAnswer `json:"details,omitempty"`
+	ID      string           `json:"id"`
+	Outcome AskOutcome       `json:"outcome"`
+	Answer  string           `json:"answer,omitempty"`
+	By      string           `json:"by,omitempty"` // the answering client
+}
+
+// Question and QuestionAnswer preserve a question card, including the distinction
+// between checked options and custom text, across clients and history replay.
+type Question struct {
+	Question string           `json:"question"`
+	Options  []QuestionOption `json:"options"`
+}
+
+type QuestionOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+type QuestionAnswer struct {
+	Selected []int  `json:"selected,omitempty"`
+	Custom   string `json:"custom,omitempty"`
 }
 
 // PermitPayload is an allow the human granted for the channel: an exact

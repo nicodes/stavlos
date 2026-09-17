@@ -9,17 +9,18 @@ import (
 type focus int
 
 const (
-	focusInput      focus = iota // the text input (typing, enter sends)
-	focusChat                    // the transcript: a cursor walks its items
-	focusPermission              // the permission tab: pending permission/trust prompts (y/n/a)
-	focusQuestions               // the questions tab: an ask_user batch, answered one question at a time
-	focusAsync                   // the async tab: running shell jobs
-	focusTodo                    // the todo tab: the selected agent's todo list
-	focusMCP                     // the mcp tab: the selected agent's MCP servers
-	focusDirs                    // the dirs tab: the channel's working directories (every agent's)
-	focusSidebar                 // the agent tree (↑/↓ enter)
-	focusTabs                    // the tab strip: ←/→ highlight a tab, enter opens its dialog
-	focusMeta                    // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
+	focusInput            focus = iota // the text input (typing, enter sends)
+	focusChat                          // the transcript: a cursor walks its items
+	focusPermission                    // the permission tab: pending permission/trust prompts (y/n/a)
+	focusQuestions                     // controls inside a question message in the chat
+	focusAsync                         // the async tab: running shell jobs
+	focusTodo                          // the todo tab: the selected agent's todo list
+	focusMCP                           // the mcp tab: the selected agent's MCP servers
+	focusDirs                          // the dirs tab: the channel's working directories (every agent's)
+	focusSidebar                       // the agent tree (↑/↓ enter)
+	focusTabs                          // the tab strip: ←/→ highlight a tab, enter opens its dialog
+	focusMeta                          // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
+	focusInlinePermission              // permission choices embedded in the chat
 )
 
 // focusOrder lists the sections tab cycles through, top to bottom: the chat
@@ -48,6 +49,9 @@ func (m *Model) focusOrder() []focus {
 func (m *Model) cycleFocus(delta int) tea.Cmd {
 	order := m.focusOrder()
 	cur := m.focus
+	if cur == focusQuestions || cur == focusInlinePermission {
+		cur = focusChat
+	}
 	if isTab(cur) {
 		cur = focusTabs
 	}
@@ -75,6 +79,9 @@ func (m *Model) closeOverlayToInput() tea.Cmd {
 // opened (the strip, the input, the chat…), or the input when that is no
 // longer a stop. Back on the strip, the closed tab stays highlighted.
 func (m *Model) closeDialog() tea.Cmd {
+	if m.focus == focusInlinePermission {
+		return m.setFocus(focusInput)
+	}
 	closed := m.focus
 	from := m.dialogFrom
 	if isTab(from) || !m.focusAvailable(from) {
@@ -110,6 +117,12 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	}
 	prev := m.focus
 	m.focus = f
+	if prev == focusInlinePermission {
+		m.savePermissionDraft()
+		m.permEdit = ""
+		m.dirInput.Blur()
+		m.viewDirty = true
+	}
 	if prev == focusDirs && f != focusDirs {
 		m.dirEdit = "" // leaving the dirs dialog drops a half-typed edit
 		m.dirInput.Blur()
@@ -119,8 +132,10 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		m.dirInput.Blur()
 	}
 	if prev == focusQuestions && f != focusQuestions {
+		m.saveQuestionDraft()
 		m.q.typing = false
 		m.promptInput.Blur()
+		m.viewDirty = true
 	}
 	if (prev == focusPermission || prev == focusQuestions) && f != focusPermission && f != focusQuestions {
 		m.scope = promptScope{} // the dialog closed: one opened from a tab next shows every channel's
@@ -138,6 +153,9 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 	}
 	switch f {
 	case focusInput:
+		if prev == focusQuestions || prev == focusInlinePermission {
+			m.follow = true
+		}
 		return m.input.Focus()
 	case focusChat:
 		m.follow = false
@@ -145,7 +163,16 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 		m.refreshViewport()
 		m.scrollToCursor()
 	case focusQuestions:
-		m.q.bind(m.currentQuestion())
+		m.bindQuestion(m.currentQuestion())
+		m.follow = false
+		m.viewDirty = true
+	case focusInlinePermission:
+		m.bindPermission(m.inlinePermission())
+		m.follow = false
+		m.viewDirty = true
+		if m.permEdit != "" {
+			return m.dirInput.Focus()
+		}
 	case focusSidebar:
 		m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbHere})
 		if !m.superChat {
@@ -167,6 +194,18 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 // ensureFocus falls back to the input when the focused section is gone
 // (prompt answered, sidebar hidden, transcript empty).
 func (m *Model) ensureFocus() tea.Cmd {
+	if m.cfgEditor != nil {
+		return nil
+	}
+	if m.focus == focusInlinePermission && m.inlinePermission() != nil {
+		if m.permEdit != "" && !m.dirInput.Focused() {
+			return m.dirInput.Focus()
+		}
+		return nil
+	}
+	if m.focus == focusQuestions && m.currentQuestion() != nil {
+		return m.syncPromptInput()
+	}
 	if isTab(m.focus) {
 		return m.syncPromptInput() // the strip is always in the order
 	}

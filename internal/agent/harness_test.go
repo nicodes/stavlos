@@ -17,6 +17,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/testutil"
 )
 
 // The harness drives a Channel without the daemon: an in-memory log, a
@@ -237,7 +238,7 @@ func (f *fakeModel) Complete(ctx context.Context, req model.Request, onDelta fun
 	if r.Usage == (model.Usage{}) {
 		r.Usage = model.Usage{InputTokens: 10, OutputTokens: 5}
 	}
-	return r, nil
+	return testutil.BindReplies(req, r), nil
 }
 
 func (f *fakeModel) requests() []model.Request {
