@@ -3689,10 +3689,9 @@ func TestNavUsageFiguresHighlight(t *testing.T) {
 	check("selected closed", m.sidebarSelectedRow(), theme.StyleLit, theme.StyleDim)
 }
 
-// TestPlanUsageBars: each signed-in plan's windows are bars at the top of
-// the nav, under the plan's name and the reading's age; a window whose
-// reset has passed reads 0%, and the usage rows under the block keep their
-// clicks.
+// TestPlanUsageBars: each signed-in plan is one row at the top of the nav,
+// its name, bar and percent, for its most used window (one whose reset has
+// passed reads 0%); the usage rows under the block keep their clicks.
 func TestPlanUsageBars(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
@@ -3702,27 +3701,21 @@ func TestPlanUsageBars(t *testing.T) {
 		t.Fatalf("no reading, no block: %q", rows)
 	}
 	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-5 * time.Minute), Windows: []protocol.UsageWindowInfo{
-		{UsedPercent: 50, Minutes: 300, ResetsAt: now.Add(2*time.Hour + time.Minute)},
-		{UsedPercent: 100, Minutes: 10080, ResetsAt: now.Add(6*24*time.Hour + time.Hour)},
-		{UsedPercent: 80, Minutes: 60, ResetsAt: now.Add(-time.Minute)}, // reset since the reading
+		{UsedPercent: 50, Minutes: 300, ResetsAt: now.Add(2 * time.Hour)},
+		{UsedPercent: 100, Minutes: 60, ResetsAt: now.Add(-time.Minute)}, // reset since the reading: 0%
 	}}}
 	rows := m.planUsageRows(w, now)
-	plain := make([]string, len(rows))
-	for i, r := range rows {
-		plain[i] = stripANSI(r)
-		if i > 0 && i < len(rows)-1 && ansi.StringWidth(plain[i]) != w {
-			t.Fatalf("row %d is %d wide, want %d: %q", i, ansi.StringWidth(plain[i]), w, plain[i])
-		}
+	bar := w - len("ChatGPT") - 1 - 1 - 4
+	want := "ChatGPT " + strings.Repeat("━", bar/2) + strings.Repeat("─", bar-bar/2) + "  50%"
+	if len(rows) != 2 || stripANSI(rows[0]) != want || ansi.StringWidth(stripANSI(rows[0])) != w || rows[1] != "" {
+		t.Fatalf("plan rows: %q, want %q", rows, want)
 	}
-	bar := w - 13
-	if len(rows) != 5 || strings.Join(strings.Fields(plain[0]), " ") != "ChatGPT 5m" ||
-		plain[1] != "5h  "+strings.Repeat("━", bar/2)+strings.Repeat("─", bar-bar/2)+"  50%  2h" ||
-		plain[2] != "7d  "+strings.Repeat("━", bar)+" 100%  6d" ||
-		plain[3] != "1h  "+strings.Repeat("─", bar)+"   0%    " || plain[4] != "" {
-		t.Fatalf("plan rows:\n%s", strings.Join(plain, "\n"))
+	m.plans[0].Windows = append(m.plans[0].Windows, protocol.UsageWindowInfo{UsedPercent: 100, Minutes: 10080, ResetsAt: now.Add(24 * time.Hour)})
+	if got := stripANSI(m.planUsageRows(w, now)[0]); got != "ChatGPT "+strings.Repeat("━", bar)+" 100%" {
+		t.Fatalf("the most used window: %q", got)
 	}
 	header := m.sidebarHeader(w)
-	if m.sidebarSystemRow() != 7 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
+	if m.sidebarSystemRow() != 4 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
 		t.Fatalf("the rows under the block move down:\n%s", stripANSI(strings.Join(header, "\n")))
 	}
 	row := stripANSI(header[m.sidebarSystemRow()])
@@ -3731,8 +3724,5 @@ func TestPlanUsageBars(t *testing.T) {
 	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: m.sidebarSystemRow(), Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	if m = nm.(Model); m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" {
 		t.Fatalf("a click on the moved System cost opens its chart: focus=%v %+v", m.focus, m.usage)
-	}
-	if windowLabel(10080) != "7d" || windowLabel(90) != "90m" || windowLabel(0) != "" || untilText(30*time.Second) != "now" || untilText(59*time.Minute) != "59m" {
-		t.Fatal("labels")
 	}
 }
