@@ -338,13 +338,14 @@ func (m Model) otherTreeRows(k int) []sidebarRow {
 
 // shownAgents is which of channel's agents its tree draws, as indexes into
 // agents, and how many are quiet: idle (or finished) with nothing waiting
-// on the human, and not the selected agent. Quiet agents are left out
+// on the human, and neither the channel's main agent (the root, always
+// drawn) nor the selected agent. Quiet agents are left out
 // unless the tree's show all row is on; with none, there is no such row.
 func (m Model) shownAgents(channel string, agents []protocol.AgentInfo, selected string) (shown []int, quiet int) {
 	all := m.treeAll[channel]
 	for i, a := range agents {
 		o := agentOutcome(a)
-		if (o == "idle" || o == "complete") && m.needsHuman(a.ID) == "" && a.ID != selected {
+		if (o == "idle" || o == "complete") && m.needsHuman(a.ID) == "" && a.ID != selected && a.Parent != "" {
 			quiet++
 			if !all {
 				continue
