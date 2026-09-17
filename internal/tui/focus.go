@@ -22,6 +22,7 @@ const (
 	focusMeta                          // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
 	focusInlinePermission              // permission choices embedded in the chat
 	focusUsage                         // a usage dialog: tokens or cost over time (usage.go)
+	focusNudges                        // the nudges tab: replies the selected agent owes (nudges.go)
 )
 
 // focusOrder lists the sections tab cycles through, top to bottom: the chat

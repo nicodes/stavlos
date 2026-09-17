@@ -206,6 +206,7 @@ func (a *Agent) infoLocked() protocol.AgentInfo {
 		Context: a.ctxTokens, ContextWindow: a.ctxWindow, LastError: st.lastError,
 		Awaiting: st.awaitingIDs(), Due: st.due(), Todos: append([]event.TodoItem(nil), st.todos...),
 		PendingReplies: st.pendingReplies(), AwaitingReplies: a.c.st.awaitingReplies(st),
+		Nudges: st.nudges, NudgeLimit: nudgeLimit(a.c.cfg.Reminders),
 		MCP: a.mcpInfo(rv.preset.MCP), Jobs: a.jobInfosLocked(),
 	}
 	if rv.missing && info.LastError == "" {

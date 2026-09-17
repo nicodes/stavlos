@@ -63,6 +63,8 @@ var (
 
 	UsageSeries = Method[UsageSeriesParams, UsageSeriesResult]{MUsageSeries}
 	PlanUsage   = Method[None, PlanUsageResult]{MPlanUsage}
+	CacheUsage  = Method[CacheUsageParams, CacheUsageResult]{MCacheUsage}
+	PlanSeries  = Method[PlanSeriesParams, PlanSeriesResult]{MPlanSeries}
 
 	Subscribe   = Method[SubscribeParams, SubscribeResult]{MSubscribe}
 	Unsubscribe = Method[SubscribeParams, None]{MUnsubscribe}
@@ -111,4 +113,40 @@ type UsageWindowInfo struct {
 	UsedPercent float64   `json:"used_percent"`
 	Minutes     int       `json:"minutes,omitempty"`
 	ResetsAt    time.Time `json:"resets_at,omitzero"`
+}
+
+// CacheUsageParams asks how much of the model calls of the last Minutes
+// (60 when zero) the providers served from their prompt caches.
+type CacheUsageParams struct {
+	Minutes int `json:"minutes,omitempty"`
+}
+
+// CacheUsageResult is what those calls carried: tokens charged as new
+// input, and tokens served from the cache.
+type CacheUsageResult struct {
+	Fresh  int64 `json:"fresh"`
+	Cached int64 `json:"cached"`
+}
+
+// PlanUsagePoint is a plan's most used window as one reading saw it.
+type PlanUsagePoint struct {
+	At          time.Time `json:"at"`
+	UsedPercent float64   `json:"used_percent"`
+}
+
+// PlanSeriesParams asks for a provider's plan usage over [From, To) in
+// Buckets equal spans (1–1000); From zero starts at the first reading.
+type PlanSeriesParams struct {
+	Provider string    `json:"provider"`
+	From     time.Time `json:"from,omitzero"`
+	To       time.Time `json:"to,omitzero"`
+	Buckets  int       `json:"buckets"`
+}
+
+// PlanSeriesResult is the percent used per bucket: the highest reading in
+// each, an empty bucket carrying the last known one forward.
+type PlanSeriesResult struct {
+	From    time.Time `json:"from"`
+	To      time.Time `json:"to"`
+	Percent []float64 `json:"used_percent"`
 }

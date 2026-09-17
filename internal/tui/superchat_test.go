@@ -146,7 +146,7 @@ func TestAsyncTabHoldsWhatIsDue(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
 	m.agents[0].Due = []string{"b", "user"}
-	if labels := strings.Join(tabTexts(m), " · "); !strings.Contains(labels, "async 4 · todo") || strings.Contains(labels, "due") {
+	if labels := strings.Join(tabTexts(m), " · "); !strings.Contains(labels, "async 4 · nudges") || strings.Contains(labels, "due") {
 		t.Fatalf("strip: %s", labels)
 	}
 	m.setFocus(focusAsync)

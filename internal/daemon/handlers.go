@@ -1,11 +1,13 @@
 package daemon
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/escalation"
 	"github.com/nicodes/stavlos/internal/eventlog"
@@ -390,6 +392,31 @@ var handlers = routes(
 	}),
 	route(protocol.PlanUsage, func(_ context.Context, c *conn, _ protocol.None) (protocol.PlanUsageResult, error) {
 		return c.d.planUsage(), nil
+	}),
+	route(protocol.PlanSeries, func(_ context.Context, c *conn, p protocol.PlanSeriesParams) (protocol.PlanSeriesResult, error) {
+		if p.Buckets < 1 || p.Buckets > 1000 {
+			return protocol.PlanSeriesResult{}, fmt.Errorf("buckets must be 1–1000, not %d", p.Buckets)
+		}
+		to := cmp.Or(p.To, time.Now())
+		from := p.From
+		if from.IsZero() {
+			from = c.d.planUsageFirst(p.Provider, to)
+		}
+		if !from.Before(to) {
+			return protocol.PlanSeriesResult{}, errors.New("from must be before to")
+		}
+		return protocol.PlanSeriesResult{From: from.UTC(), To: to.UTC(), Percent: c.d.planUsageSeries(p.Provider, from, to, p.Buckets)}, nil
+	}),
+	route(protocol.CacheUsage, func(ctx context.Context, c *conn, p protocol.CacheUsageParams) (protocol.CacheUsageResult, error) {
+		minutes := cmp.Or(p.Minutes, 60)
+		if minutes < 1 || minutes > 7*24*60 {
+			return protocol.CacheUsageResult{}, fmt.Errorf("minutes must be 1–%d, not %d", 7*24*60, minutes)
+		}
+		fresh, cached, err := c.d.Log.CacheUsage(ctx, time.Now().Add(-time.Duration(minutes)*time.Minute))
+		if err != nil {
+			return protocol.CacheUsageResult{}, internal(err)
+		}
+		return protocol.CacheUsageResult{Fresh: fresh, Cached: cached}, nil
 	}),
 	route(protocol.CommandList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.CommandListResult, error) {
 		return c.d.listCommands(p.Channel)

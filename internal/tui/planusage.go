@@ -19,6 +19,49 @@ import (
 // response reported it (docs/plan-usage.md). The daemon only listens; the
 // TUI asks it on the catalog tick.
 
+// cacheUsageMsg is a usage.cache reply: how much of the last hour's model
+// calls the providers served from their prompt caches.
+type cacheUsageMsg struct {
+	res protocol.CacheUsageResult
+	err error
+}
+
+func cacheUsageCmd(ctx context.Context, c *client.Client) tea.Cmd {
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
+		res, err := client.Do(ctx, c, protocol.CacheUsage, protocol.CacheUsageParams{})
+		return cacheUsageMsg{res, err}
+	})
+}
+
+// onCacheUsage keeps the reply; a failed call keeps the last one.
+func (m *Model) onCacheUsage(msg cacheUsageMsg) {
+	if msg.err == nil {
+		m.cache = msg.res
+	}
+}
+
+// cacheRow is the nav's cache monitor: what share of the last hour's model
+// calls came from the providers' prompt caches ("cache 94%"), grey, orange
+// under 70% and red under 40% — a low share means calls are re-sending
+// conversations at full price (docs/prompt-caching.md). "" before any call.
+func (m Model) cacheRow(width int) string {
+	total := m.cache.Fresh + m.cache.Cached
+	if total <= 0 {
+		return ""
+	}
+	pct := int(m.cache.Cached * 100 / total)
+	st := theme.StyleDim
+	switch {
+	case pct < 40:
+		st = theme.StyleError
+	case pct < 70:
+		st = theme.StyleWarn
+	}
+	label, figure := "cache", fmt.Sprintf("%d%%", pct)
+	gap := max(1, width-ansi.StringWidth(label)-ansi.StringWidth(figure))
+	return theme.StyleDim.Render(label+strings.Repeat(" ", gap)) + st.Render(figure)
+}
+
 // planUsageMsg is a plan.usage reply.
 type planUsageMsg struct {
 	res protocol.PlanUsageResult
@@ -58,6 +101,31 @@ func (m Model) planUsageRows(width int, now time.Time) []string {
 		rows = append(rows, "")
 	}
 	return rows
+}
+
+// planCommand is /plan [provider]: the chart of that subscription's plan
+// usage, or of the first plan with a reading.
+func (m *Model) planCommand(rest string) tea.Cmd {
+	if len(m.plans) == 0 {
+		return m.setStatus("no plan usage yet: it comes with the next model call", false)
+	}
+	p := m.plans[0]
+	for _, q := range m.plans {
+		if strings.EqualFold(q.Provider, rest) || strings.EqualFold(q.Name, rest) {
+			p = q
+		}
+	}
+	return m.openPlanUsage(p.Provider, p.Name)
+}
+
+// planAt is the plan whose row the nav draws at header row y (the block
+// starts at row 2), and whether y is one of those rows.
+func (m Model) planAt(y int) (protocol.PlanUsageInfo, bool) {
+	i := y - 2
+	if i < 0 || i >= len(m.plans) {
+		return protocol.PlanUsageInfo{}, false
+	}
+	return m.plans[i], true
 }
 
 // windowUsed is a window's percent used, clamped; a window whose reset has

@@ -490,12 +490,12 @@ func TestTabCyclesFocus(t *testing.T) {
 		if m.tabSel != 0 {
 			t.Fatalf("left at the edge: sel=%d", m.tabSel)
 		}
-		press(&m, right, right, right, right, right)
+		press(&m, right, right, right, right, right, right)
 		press(&m, right) // already rightmost (mcp): stays
-		if m.focus != focusTabs || m.tabSel != 4 {
-			t.Fatalf("right x6: focus=%v sel=%d", m.focus, m.tabSel)
+		if m.focus != focusTabs || m.tabSel != 5 {
+			t.Fatalf("right x7: focus=%v sel=%d", m.focus, m.tabSel)
 		}
-		press(&m, left, left)
+		press(&m, left, left, left)
 		if m.tabSel != 2 {
 			t.Fatalf("left x2: sel=%d", m.tabSel)
 		}
@@ -962,11 +962,11 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "Async 2") || !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
 		t.Fatalf("async dialog:\n%s", dv)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // strip (async) → todo
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // strip (async) → nudges → todo
 	if m.focus != focusTodo {
 		t.Fatalf("todo: focus=%v", m.focus)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeySpace}) // strip (todo) → async for the selection test
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeySpace}) // strip (todo) → async for the selection test
 	if m.focus != focusAsync {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -994,7 +994,7 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: the channel's tabs over the agent's, counts only
 	v := stripANSI(tabsView(m, 100))
-	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · dirs 0\nasync 2 ─ todo") ||
+	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · dirs 0\nasync 2 ─ nudges 0 ─ todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
@@ -1112,7 +1112,7 @@ func TestDividerAndStripRepo(t *testing.T) {
 	}
 	// the agent on the left, its tabs then tokens and cost on the right; no
 	// context figure while the window is unknown; tokens and cost are the nav's
-	if row := lines[rule]; !strings.HasPrefix(row, "─ coder ─ gpt-5 ─ default ─") || strings.Contains(row, "·") || !strings.HasSuffix(row, "─ async 0 ─ todo 0 ─ mcp 0 ─") || strings.Contains(row, "tokens") || strings.Contains(row, "$") ||
+	if row := lines[rule]; !strings.HasPrefix(row, "─ coder ─ gpt-5 ─ default ─") || strings.Contains(row, "·") || !strings.HasSuffix(row, "─ async 0 ─ nudges 0 ─ todo 0 ─ mcp 0 ─") || strings.Contains(row, "tokens") || strings.Contains(row, "$") ||
 		strings.Contains(row, "%") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) != 100 {
 		t.Fatalf("divider %q", row)
 	}
@@ -1389,7 +1389,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Role = "general"
 	// empty: the tab reads (0) and its dialog says so
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 ─ todo 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 ─ nudges 0 ─ todo 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	m.focus = focusTodo
@@ -1410,7 +1410,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	// tab → strip, → x4 lands on todo, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusTodo {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -1429,7 +1429,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 		t.Fatalf("↓ should move the cursor: %d", m.agCursor)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 3 {
+	if m.focus != focusTabs || m.tabSel != 4 {
 		t.Fatalf("esc should return to the strip on todo: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// clicking the todo label on the strip opens the dialog
@@ -2536,7 +2536,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 4 {
+	if m.focus != focusTabs || m.tabSel != 5 {
 		t.Fatalf("esc should return to the strip on mcp: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// chat: tool names and server events
@@ -3725,5 +3725,166 @@ func TestPlanUsageBars(t *testing.T) {
 	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: m.sidebarSystemRow(), Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	if m = nm.(Model); m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" {
 		t.Fatalf("a click on the moved System cost opens its chart: focus=%v %+v", m.focus, m.usage)
+	}
+}
+
+// TestNavCacheMonitor: the nav shows what share of the last hour's calls
+// came from the providers' prompt caches, above the Discord row, orange
+// under 70% and red under 40%, and nothing before any call.
+func TestNavCacheMonitor(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	m := sidebarNavModel()
+	m.prompts = nil
+	w := sidebarWidth - 1
+	if row := m.cacheRow(w); row != "" {
+		t.Fatalf("no calls, no row: %q", row)
+	}
+	discord := m.sidebarDiscordRow()
+	for _, c := range []struct {
+		fresh, cached int64
+		want          string
+		style         lipgloss.Style
+	}{
+		{100, 1900, "95%", theme.StyleDim},
+		{100, 150, "60%", theme.StyleWarn},
+		{900, 100, "10%", theme.StyleError},
+	} {
+		m.cache = protocol.CacheUsageResult{Fresh: c.fresh, Cached: c.cached}
+		row := m.cacheRow(w)
+		if !strings.Contains(row, c.style.Render(c.want)) || !strings.HasPrefix(stripANSI(row), "cache ") || ansi.StringWidth(stripANSI(row)) != w {
+			t.Fatalf("%d/%d: %q", c.cached, c.fresh, row)
+		}
+		header := m.sidebarHeader(w)
+		if m.sidebarDiscordRow() != discord+1 || stripANSI(header[m.sidebarDiscordRow()-1]) != stripANSI(row) || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
+			t.Fatalf("the monitor sits above Discord:\n%s", stripANSI(strings.Join(header, "\n")))
+		}
+	}
+}
+
+// TestNudgesTab: the tab counts the replies the selected agent owes, its
+// dialog lists them with what the harness will do, and space on one opens
+// that party's chat.
+func TestNudgesTab(t *testing.T) {
+	m := channelModel()
+	m.agents[0].Role = "general"
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "nudges 0") {
+		t.Fatalf("strip:\n%s", sv)
+	}
+	m.focus = focusNudges
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "Nudges 0") || !strings.Contains(dv, "nothing owed") {
+		t.Fatalf("empty dialog:\n%s", dv)
+	}
+	m.agents[0].PendingReplies = []event.ReplyRequest{
+		{ID: "r1", From: "user", FromName: "user", Text: "fix the failing test"},
+		{ID: "r2", From: "b", FromName: "scout", Text: "what did you find?"},
+	}
+	m.agents[0].Nudges, m.agents[0].NudgeLimit = 1, 3
+	dv := stripANSI(m.tabDialog(120))
+	if !strings.Contains(dv, "Nudges 2") || !strings.Contains(dv, "@user: fix the failing test") || !strings.Contains(dv, "@scout: what did you find?") ||
+		!strings.Contains(dv, "a reminder follows a turn that ends owing these (1 of 3 used)") {
+		t.Fatalf("dialog:\n%s", dv)
+	}
+	m.agents[0].Nudges = 3
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "3 reminders went unanswered") {
+		t.Fatalf("spent:\n%s", dv)
+	}
+	m.agents[0].NudgeLimit = 0
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "reminders are off") {
+		t.Fatalf("off:\n%s", dv)
+	}
+	m.agents[0].Awaiting = []string{"b"}
+	m.agents[0].Nudges, m.agents[0].NudgeLimit = 1, 3
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "no reminder until that lands") {
+		t.Fatalf("waiting:\n%s", dv)
+	}
+	// space on the second row opens that agent's chat
+	m.superChat = true
+	m.agCursor = 1
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
+	if m.superChat || m.selectedID() != "b" || m.focus != focusInput {
+		t.Fatalf("space should open @scout's chat: super=%v selected=%s focus=%v", m.superChat, m.selectedID(), m.focus)
+	}
+}
+
+// TestSidebarKeepsIdleAncestors: an idle agent whose descendant is drawn
+// stays in the tree, so the drawn one still hangs under its parent; an idle
+// branch with nothing busy under it still hides.
+func TestSidebarKeepsIdleAncestors(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.superChat = true
+	m.agents = []protocol.AgentInfo{
+		{ID: "a", Name: "main", Role: "general", State: "idle"},
+		{ID: "b", Parent: "a", Depth: 1, Name: "middle", Role: "general", State: "idle"},
+		{ID: "c", Parent: "b", Depth: 2, Name: "worker", Role: "general", State: "running"},
+		{ID: "d", Parent: "a", Depth: 1, Name: "napper", Role: "general", State: "idle"},
+		{ID: "e", Parent: "d", Depth: 2, Name: "sleeper", Role: "general", State: "idle"},
+	}
+	m.layout()
+	shown, quiet := m.shownAgents(m.channelID, m.agents, "")
+	names := func(idx []int) []string {
+		var out []string
+		for _, i := range idx {
+			out = append(out, m.agents[i].Name)
+		}
+		return out
+	}
+	if got := names(shown); len(got) != 3 || got[0] != "main" || got[1] != "middle" || got[2] != "worker" {
+		t.Fatalf("an idle parent of a running agent stays: %v", got)
+	}
+	if quiet != 2 { // napper and sleeper, with nothing busy under them
+		t.Fatalf("quiet: %d", quiet)
+	}
+	nav := func() string {
+		body, _ := m.sidebarBody(sidebarWidth - 1)
+		return stripANSI(strings.Join(body, "\n"))
+	}
+	if v := nav(); !strings.Contains(v, "@middle") || !strings.Contains(v, "@worker") || strings.Contains(v, "@napper") || !strings.Contains(v, "▸ show all · 2 idle") {
+		t.Fatalf("tree:\n%s", v)
+	}
+	// with the branch's worker idle too, the whole branch hides
+	m.agents[2].State = "idle"
+	if _, quiet := m.shownAgents(m.channelID, m.agents, ""); quiet != 4 {
+		t.Fatalf("nothing busy anywhere: quiet %d", quiet)
+	}
+}
+
+// TestPlanUsageChart: a click on a plan's row in the nav opens its chart,
+// which draws every reading against the whole allowance and reads "now
+// N%"; /plan opens the same.
+func TestPlanUsageChart(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	now := time.Now()
+	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-time.Minute),
+		Windows: []protocol.UsageWindowInfo{{UsedPercent: 40, Minutes: 10080, ResetsAt: now.Add(24 * time.Hour)}}}}
+	m.layout()
+	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	m = nm.(Model)
+	if m.focus != focusUsage || m.usage.kind != usagePlan || m.usage.provider != "openai" || m.usageTitle() != "Plan · ChatGPT" {
+		t.Fatalf("a click on the plan row opens its chart: focus=%v %+v", m.focus, m.usage)
+	}
+	n := usageChartWidth(m.width)
+	percent := make([]float64, n)
+	for i := range percent {
+		percent[i] = 20
+	}
+	percent[n-1] = 50
+	m.onUsage(usageMsg{epoch: m.usage.epoch, res: protocol.UsageSeriesResult{From: now.Add(-3 * time.Hour), To: now}, percent: percent})
+	body := stripANSI(strings.Join(m.usageBody(dialog.Width(m.width)-4), "\n"))
+	lines := strings.Split(body, "\n")
+	if !strings.Contains(lines[0], "now 50%") || !strings.Contains(lines[2], "100%") {
+		t.Fatalf("a plan is drawn against the whole allowance:\n%s", body)
+	}
+	bottom, middle := lines[1+usageChartRows], lines[2+usageChartRows/2]
+	if strings.Count(bottom, "█") != n || strings.Count(middle, "█") != 1 {
+		t.Fatalf("every reading fills the bottom row, only the 50%% one reaches the middle:\n%s", body)
+	}
+	m.closeDialog()
+	if cmd := m.command("/plan"); cmd == nil || m.usage.kind != usagePlan {
+		t.Fatalf("/plan: %+v", m.usage)
 	}
 }
