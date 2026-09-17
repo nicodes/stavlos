@@ -91,6 +91,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.todoKey(msg)
 	case focusMCP:
 		return m.mcpKey(msg)
+	case focusUsage:
+		return m.usageKey(msg)
 	case focusDirs:
 		return m.dirsKey(msg)
 	case focusSidebar:
@@ -121,6 +123,9 @@ func (m *Model) command(text string) tea.Cmd {
 			return m.setStatus("no agent selected", true)
 		}
 		return nil
+	}
+	if kind, ok := usageCommands[name]; ok { // /tokens and /cost [system]
+		return m.openUsage(kind, strings.EqualFold(rest, "system"))
 	}
 
 	switch name {

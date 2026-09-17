@@ -77,9 +77,11 @@ type Model struct {
 	promptState  // what waits on the human, in every channel; survives a switch
 
 	navChannels    []protocol.ChannelInfo          // all other active channels, across directories
+	plans          []protocol.PlanUsageInfo        // the signed-in subscriptions' plan usage, as last observed (planusage.go)
 	visited        map[string]replayed             // channels switched away from: what their replay built, so a return replays only what it missed
 	trees          map[string][]protocol.AgentInfo // other channels' agents, so leaving a channel does not fold its tree
-	treeOpen       map[string]bool                 // channels whose tree the sidebar draws; the bound channel's always is
+	treeClosed     map[string]bool                 // channels whose tree the human closed in the nav; switching channels never changes it
+	treeAll        map[string]bool                 // channels whose tree shows its idle agents too (the tree's show all row)
 	selectNext     string                          // agent to select once a switch lands (an agent picked under another channel)
 	dirsNext       bool                            // another channel's gear was chosen: its dirs dialog opens once the switch lands
 	generation     uint64
@@ -218,17 +220,16 @@ func (m *Model) stash() {
 }
 
 // keepTree keeps channel id's agents, so the sidebar goes on drawing its
-// tree once the TUI is bound to another channel: opening a channel folds
-// nothing that was already open. pruneTrees bounds what this holds.
+// tree (unless closed) once the TUI is bound to another channel. pruneTrees
+// bounds what this holds.
 func (m *Model) keepTree(id string, agents []protocol.AgentInfo) {
 	if id == "" || len(agents) == 0 {
 		return
 	}
 	if m.trees == nil {
-		m.trees, m.treeOpen = map[string][]protocol.AgentInfo{}, map[string]bool{}
+		m.trees = map[string][]protocol.AgentInfo{}
 	}
 	m.trees[id] = append([]protocol.AgentInfo(nil), agents...)
-	m.treeOpen[id] = true
 }
 
 // pruneTrees drops the trees of channels the directory no longer lists,
@@ -241,7 +242,8 @@ func (m *Model) pruneTrees() {
 		}
 		if !keep {
 			delete(m.trees, id)
-			delete(m.treeOpen, id)
+			delete(m.treeClosed, id)
+			delete(m.treeAll, id)
 		}
 	}
 }
@@ -274,6 +276,19 @@ type dialogs struct {
 	dialogFrom focus                   // what had focus when the open dialog (a tab's or an overlay) was opened; closing returns there
 	providers  []protocol.ProviderInfo // last provider.list result
 	login      loginFlow               // device-code sign-in in progress
+	usage      usageDialog             // the usage dialog, while focus is focusUsage (its range is kept between openings)
+	hover      buttonHover             // the divider or nav usage button under the pointer, drawn in the lighter text colour
+}
+
+// buttonHover is the button under the pointer: at most one of a divider
+// meta part, a divider agent tab (tabOK), or a figure of the nav's usage
+// row navRow (navUsage 1 tokens, 2 cost).
+type buttonHover struct {
+	meta     metaPart
+	tab      focus
+	tabOK    bool
+	navRow   int
+	navUsage int
 }
 
 // chatPage is how many items pgup/pgdn move the chat cursor.
@@ -324,7 +339,7 @@ func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 // Init starts the cursor blink, the spinner, the placeholder cycle and the
 // reconcile snapshot.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.requestScope()), tick(3*time.Second, catalogTickMsg{}), discordCmd(m.ctx, m.c, "status", m.discordEpoch))
+	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.requestScope()), tick(3*time.Second, catalogTickMsg{}), planUsageCmd(m.ctx, m.c), discordCmd(m.ctx, m.c, "status", m.discordEpoch))
 }
 
 // Update is the single-threaded state machine.
@@ -381,6 +396,11 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		cmds = append(cmds, m.onListed(msg))
 	case discordMsg:
 		cmds = append(cmds, m.onDiscord(msg))
+	case usageMsg:
+		m.onUsage(msg)
+		m.viewDirty = true
+	case planUsageMsg:
+		m.onPlanUsage(msg)
 	case configEditorMsg:
 		cmds = append(cmds, m.onConfigEditor(msg))
 	case discordTickMsg:
@@ -450,6 +470,25 @@ func (m *Model) totalTokens() int {
 		n += a.Tokens
 	}
 	return n
+}
+
+// systemTokens is every channel's tokens: this channel's from its live
+// agents, the others' from the catalog.
+func (m *Model) systemTokens() int {
+	n := m.totalTokens()
+	for _, s := range m.navChannels {
+		n += s.Tokens
+	}
+	return n
+}
+
+// systemCost is every channel's cost, like systemTokens.
+func (m *Model) systemCost() float64 {
+	c := m.totalCost()
+	for _, s := range m.navChannels {
+		c += s.CostUSD
+	}
+	return c
 }
 
 func (m *Model) totalCost() float64 {

@@ -220,3 +220,27 @@ func TestProvidersBuiltOnce(t *testing.T) {
 		t.Fatalf("model count not recomputed for the new catalog: %d", st.Models)
 	}
 }
+
+// TestPlanUsageTracking: the newest observed usage per provider is kept
+// and handed to the hook; an older reading (a slower call finishing last,
+// or a stale one restored from disk) never replaces a newer one.
+func TestPlanUsageTracking(t *testing.T) {
+	r := New(nil)
+	t0 := time.Unix(1_700_000_000, 0)
+	var hooked []model.PlanUsage
+	r.OnPlanUsage(func(provider string, u model.PlanUsage) {
+		if provider == "openai" {
+			hooked = append(hooked, u)
+		}
+	})
+	r.SeedPlanUsage("openai", model.PlanUsage{Observed: t0, Windows: []model.UsageWindow{{UsedPercent: 10}}})
+	r.observeUsage("openai", model.PlanUsage{Observed: t0.Add(time.Minute), Windows: []model.UsageWindow{{UsedPercent: 20}}})
+	r.observeUsage("openai", model.PlanUsage{Observed: t0.Add(30 * time.Second), Windows: []model.UsageWindow{{UsedPercent: 15}}})
+	r.SeedPlanUsage("openai", model.PlanUsage{Observed: t0, Windows: []model.UsageWindow{{UsedPercent: 5}}})
+	if got := r.PlanUsage()["openai"]; got.Windows[0].UsedPercent != 20 || len(hooked) != 1 {
+		t.Fatalf("kept %+v, hooked %d", got, len(hooked))
+	}
+	if SubscriptionName("openai") != "ChatGPT" {
+		t.Fatal(SubscriptionName("openai"))
+	}
+}

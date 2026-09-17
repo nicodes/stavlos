@@ -29,10 +29,11 @@ import (
 
 // Daemon is the stavlosd process state.
 type Daemon struct {
-	Log      *eventlog.Log
-	Registry *registry.Registry
-	DataDir  string
-	Discord  DiscordService // configured before Serve, owned until Close
+	planUsageMu sync.Mutex // serialises writes of plan-usage.json
+	Log         *eventlog.Log
+	Registry    *registry.Registry
+	DataDir     string
+	Discord     DiscordService // configured before Serve, owned until Close
 
 	esc *escalation.Manager
 
@@ -64,6 +65,7 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 	}
 	d := &Daemon{Registry: reg, DataDir: dataDir, lock: lock, channels: map[string]*agent.Channel{}, clients: map[string]*client{}, trustPrompts: map[string]string{}, logins: map[string]*pendingLogin{}}
 	d.streams = newStreams(d.sendStream)
+	d.loadPlanUsage()
 	lg, err := eventlog.Open(filepath.Join(dataDir, "events.db"), d.committed)
 	if err != nil {
 		lock.Close()

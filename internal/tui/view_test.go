@@ -12,6 +12,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
@@ -19,6 +20,7 @@ import (
 	"github.com/nicodes/stavlos/internal/tui/dialog"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/render"
+	"github.com/nicodes/stavlos/internal/tui/theme"
 	"github.com/nicodes/stavlos/internal/tui/transcript"
 )
 
@@ -91,9 +93,13 @@ func TestFooterRight(t *testing.T) {
 	if got != "" {
 		t.Fatalf("connected home: %q", got)
 	}
-	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5", tokens: 12_345, cost: 0.0123}))
-	if got != "12k tokens · $0.0123" {
-		t.Fatalf("channel: %q", got)
+	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5"}))
+	if got != "" {
+		t.Fatalf("no context window: %q", got)
+	}
+	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5", context: 22_000, window: 1_100_000}))
+	if got != "2% · 22k/1.1m tokens" {
+		t.Fatalf("context: %q", got)
 	}
 }
 
@@ -107,19 +113,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, "", metaNone, lipgloss.NewStyle())); got != "main (coder) · claude-opus-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, "", metaNone, metaNone)); got != "main (coder) ─ claude-opus-5 ─ default" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "", "", 0, "", metaNone, lipgloss.NewStyle())); got != "main (coder) · no model — /models" {
+	if got := stripANSI(metaLine("main", "coder", "", "", 0, "", metaNone, metaNone)); got != "main (coder) ─ no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, "", metaNone, lipgloss.NewStyle())); got != "scout (explorer) · llama3 · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, "", metaNone, metaNone)); got != "scout (explorer) ─ llama3 ─ default ─ 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone, lipgloss.NewStyle())); got != "main (coder) · gpt-5 · high" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone, metaNone)); got != "main (coder) ─ gpt-5 ─ high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "YOLO", metaNone, lipgloss.NewStyle())); got != "YOLO · main (coder) · gpt-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "YOLO", metaNone, metaNone)); got != "YOLO ─ main (coder) ─ gpt-5 ─ default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
@@ -199,7 +205,7 @@ func TestHomeAndChannelViews(t *testing.T) {
 	m.showTree = true
 	m.layout()
 	sess := stripANSI(m.View())
-	if !strings.Contains(sess, "hello") || !strings.Contains(sess, "Stavlos") || strings.Contains(sess, "\nidle ") || !strings.Contains(sess, "\nchannels ") || !strings.Contains(sess, "$0.00") {
+	if !strings.Contains(sess, "hello") || !strings.Contains(sess, "Stavlos") || strings.Contains(sess, "\nidle ") || !strings.Contains(sess, "\nChannels ") || !strings.Contains(sess, "$0.00") {
 		t.Fatalf("channel view:\n%s", sess)
 	}
 	m.width = 90 // too narrow: sidebar auto-hides
@@ -373,7 +379,7 @@ func TestHistoryNavigation(t *testing.T) {
 func TestSidebarFocusAndSelect(t *testing.T) {
 	m := newModel(context.Background(), nil, "s")
 	m.width, m.height = 120, 40
-	m.agents = []protocol.AgentInfo{{ID: "a", Name: "coder"}, {ID: "b", Name: "scout", Depth: 1}, {ID: "c", Name: "tester", Depth: 1}}
+	m.agents = []protocol.AgentInfo{{ID: "a", Name: "coder", State: "running"}, {ID: "b", Name: "scout", Depth: 1, State: "running"}, {ID: "c", Name: "tester", Depth: 1, State: "running"}}
 	m.toggleTree()
 	if !m.showTree || m.focus != focusSidebar || m.input.Focused() {
 		t.Fatalf("open should focus the sidebar: show=%v focus=%v inputFocused=%v", m.showTree, m.focus, m.input.Focused())
@@ -988,7 +994,7 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: the channel's tabs over the agent's, counts only
 	v := stripANSI(tabsView(m, 100))
-	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · dirs 0\nasync 2 · todo") ||
+	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · dirs 0\nasync 2 ─ todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
@@ -1045,15 +1051,16 @@ func TestChannelViewFillsHeight(t *testing.T) {
 			}
 		}
 		// the divider leads with the agent and carries its tabs; under it come
-		// the input, a blank line and the strip (! ? dirs), the last row
+		// a blank line, the input, a blank line and the strip (! ? dirs), the
+		// last row
 		ri := -1
 		for i := 0; i < si; i++ {
 			if strings.HasPrefix(lines[i], "─") {
 				ri = i
 			}
 		}
-		if ri < 0 || si < 2 || si != len(lines)-1 || !strings.HasPrefix(lines[ri], "─ coder ·") || !strings.Contains(lines[ri], "async ") || !strings.HasPrefix(lines[ri+1], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" {
-			t.Fatalf("focus %v: the divider carries the agent and its tabs, then come the input, a blank line and the strip:\n%s", f, stripANSI(v))
+		if ri < 0 || si < 2 || si != len(lines)-1 || !strings.HasPrefix(lines[ri], "─ coder ─ ") || !strings.Contains(lines[ri], "async ") || strings.TrimSpace(lines[ri+1]) != "" || !strings.HasPrefix(lines[ri+2], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" {
+			t.Fatalf("focus %v: the divider carries the agent and its tabs, then come a blank line, the input, a blank line and the strip:\n%s", f, stripANSI(v))
 		}
 	}
 }
@@ -1094,24 +1101,24 @@ func TestDividerAndStripRepo(t *testing.T) {
 	rule, strip := -1, -1
 	for i, l := range lines {
 		switch {
-		case strings.HasPrefix(l, "─ coder · "):
+		case strings.HasPrefix(l, "─ coder ─ "):
 			rule = i
 		case strings.HasPrefix(l, "! "):
 			strip = i
 		}
 	}
-	if rule < 0 || strip != rule+3 {
+	if rule < 0 || strip != rule+4 { // a blank line, the input, a blank line, the strip
 		t.Fatalf("no divider or strip under it:\n%s", strings.Join(lines, "\n"))
 	}
 	// the agent on the left, its tabs then tokens and cost on the right; no
-	// context figure while the window is unknown
-	if row := lines[rule]; !strings.HasPrefix(row, "─ coder · gpt-5 · default ─") || !strings.Contains(row, "─ async 0 · todo 0 · mcp 0 · 2k tokens · $0.02 ─") ||
+	// context figure while the window is unknown; tokens and cost are the nav's
+	if row := lines[rule]; !strings.HasPrefix(row, "─ coder ─ gpt-5 ─ default ─") || strings.Contains(row, "·") || !strings.HasSuffix(row, "─ async 0 ─ todo 0 ─ mcp 0 ─") || strings.Contains(row, "tokens") || strings.Contains(row, "$") ||
 		strings.Contains(row, "%") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) != 100 {
 		t.Fatalf("divider %q", row)
 	}
-	// with a window: "used% · used/window tokens" and the cost; the channel's tokens are in the sidebar
+	// with a window: "used% · used/window tokens"
 	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
-	if right := stripANSI(m.footerRightView()); right != "31% · 62k/200k tokens · $0.02" {
+	if right := stripANSI(m.footerRightView()); right != "31% · 62k/200k tokens" {
 		t.Fatalf("usage: %q", right)
 	}
 	if got := stripANSI(contextBar(250_000, 200_000)); got != "100% · 250k/200k tokens" {
@@ -1163,8 +1170,8 @@ func TestDividerAndStripRepo(t *testing.T) {
 	if nm.(Model).compactTick {
 		t.Fatal("the tick should stop when no chat is compacting")
 	}
-	if strip < 3 || rule != strip-3 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], " ASK › ") {
-		t.Fatalf("under the divider come the input, a blank line and the strip:\n%s", strings.Join(lines, "\n"))
+	if strip < 4 || rule != strip-4 || strings.TrimSpace(lines[strip-1]) != "" || !strings.HasPrefix(lines[strip-2], " ASK › ") || strings.TrimSpace(lines[strip-3]) != "" {
+		t.Fatalf("under the divider come a blank line, the input, a blank line and the strip:\n%s", strings.Join(lines, "\n"))
 	}
 	// the repo is not on the strip (the dirs tab shows it)
 	if strings.Contains(strings.Join(lines, "\n"), "/repo/project") {
@@ -1382,7 +1389,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Role = "general"
 	// empty: the tab reads (0) and its dialog says so
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 · todo 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 ─ todo 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	m.focus = focusTodo
@@ -1729,7 +1736,7 @@ func TestMetaRowHits(t *testing.T) {
 	m.agents = []protocol.AgentInfo{{ID: "a", Name: "main", Role: "coder", Model: "openai/gpt-5", Variant: "high"}}
 	m.selected = 0
 	m.channel.Mode = protocol.ModeYolo
-	// "─ main (coder) · gpt-5 · high ───" leads the divider (the mode tag leads the input)
+	// "─ main (coder) ─ gpt-5 ─ high ───" leads the divider (the mode tag leads the input)
 	row := stripANSI(m.ruleLine(m.width))
 	at := func(sub string) int { return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1 } // a column, not a byte offset
 	for _, c := range []struct {
@@ -2088,7 +2095,7 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 			break
 		}
 	}
-	if rule < 0 || ansi.StringWidth(lines[rule]) != m.width || !strings.HasPrefix(lines[rule+1], " ASK › ") {
+	if rule < 0 || ansi.StringWidth(lines[rule]) != m.width || strings.TrimSpace(lines[rule+1]) != "" || !strings.HasPrefix(lines[rule+2], " ASK › ") {
 		t.Fatalf("the rule should start at the left edge and span the window:\n%s", strings.Join(lines, "\n"))
 	}
 	if strings.Contains(lines[rule], "│") || strings.Contains(lines[rule+1], "│") {
@@ -2100,8 +2107,8 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 		return cmd
 	}
 	// a click in the sidebar focuses it
-	ev(tea.MouseMsg{X: 2, Y: 3, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	ev(tea.MouseMsg{X: 2, Y: 3, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	ev(tea.MouseMsg{X: 2, Y: 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	ev(tea.MouseMsg{X: 2, Y: 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	if m.focus != focusSidebar {
 		t.Fatalf("click in the sidebar: focus=%v", m.focus)
 	}
@@ -2148,15 +2155,16 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "All channels") || !strings.Contains(sb[3], "2k tokens · $0.25") || !strings.Contains(sb[sidebarDiscordRow], "Discord checking") ||
-			!strings.HasPrefix(sb[sidebarTabsRow], "! 1/1") || strings.Contains(sb[sidebarTabsRow], "?") || strings.Contains(sb[sidebarTabsRow], "dirs") || strings.TrimSpace(sb[6]) != "" || !strings.HasPrefix(sb[7], "channels ") || !strings.Contains(sb[7], " "+newChannelMark+" ") || strings.Contains(sb[7], "↑/↓") ||
+		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || strings.Join(strings.Fields(sb[2]), " ") != "System 2k · $0.25" || strings.Join(strings.Fields(sb[3]), " ") != "@main 1k · $0.20" ||
+			strings.TrimSpace(sb[4]) != "" || m.sidebarDiscordRow() != 5 || !strings.Contains(sb[m.sidebarDiscordRow()], "Discord checking") ||
+			strings.Contains(strings.Join(sb[:7], "\n"), "! 1/1") || strings.TrimSpace(sb[6]) != "" || !strings.HasPrefix(sb[7], "Channels ") || !strings.Contains(sb[7], " "+newChannelMark+" ") || strings.Contains(sb[7], "↑/↓") ||
 			strings.Contains(strings.Join(sb, "\n"), "waiting") || strings.Contains(strings.Join(sb, "\n"), "need you") {
 			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:8], "\n"))
 		}
 		// dirs is the open channel's: out of the tabs the strip walks, behind
 		// the gear at the right edge of the channel's row; → on the row, or a
 		// click on the gear, opens the dirs dialog
-		if body, _ := m.sidebarBody(sidebarWidth - 1); !strings.HasSuffix(stripANSI(body[1]), " "+channelGear+" ") || !strings.Contains(stripANSI(body[2]), "/home/x/Work/proj") || !strings.Contains(stripANSI(body[3]), "@main") || ansi.StringWidth(stripANSI(body[1])) != sidebarWidth-1 {
+		if body, _ := m.sidebarBody(sidebarWidth - 1); !strings.HasSuffix(stripANSI(body[1]), " "+channelGear+" ") || !strings.Contains(stripANSI(body[1]), "#channel · …/x/Work/proj") || !strings.Contains(stripANSI(body[2]), "@main") || ansi.StringWidth(stripANSI(body[1])) != sidebarWidth-1 {
 			t.Fatalf("channel row:\n%s", stripANSI(strings.Join(body, "\n")))
 		}
 		if slices.Contains(m.tabOrder(), focusDirs) {
@@ -2265,12 +2273,12 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if f := strings.Fields(plain[2]); len(body) != na+5 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
-			len(f) != 3 || f[1] != "#proj" || f[2] != channelGear || strings.Join(strings.Fields(plain[na+4]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
-			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != -1 || items[na+4] != na+3 || hereRow(m) != 2 {
+		if f := strings.Fields(plain[2]); len(body) != na+5 || plain[na+4] != "" || items[na+4] != -1 || (!strings.HasPrefix(plain[0], "Channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
+			strings.Join(f, " ") != "● #proj · /home/x/Work/proj "+channelGear || strings.Join(strings.Fields(plain[na+3]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
+			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || hereRow(m) != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}
-		for _, i := range []int{1, 2, na + 4} {
+		for _, i := range []int{1, 2, na + 3} {
 			if w := ansi.StringWidth(plain[i]); w != sidebarWidth-1 {
 				t.Fatalf("channel rows fill the width: %d %q", w, plain[i])
 			}
@@ -2489,7 +2497,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 
 func TestMCPTabAndDialog(t *testing.T) {
 	m := channelModel()
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 0 · mcp 0") || !strings.Contains(sv, "! 0 · dirs 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 0 ─ mcp 0") || !strings.Contains(sv, "! 0 · dirs 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	started := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
@@ -2614,7 +2622,7 @@ func TestDirsTabAndBoundaryPrompt(t *testing.T) {
 	m.prompts = []protocol.PromptInfo{{ID: "p", Kind: "permission", Tool: "read", Agent: "a", Input: []byte(`{"path":"/etc/hosts"}`), Dir: "/etc"}}
 	m.setFocus(focusPermission)
 	body := stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
-	for _, w := range []string{"☰ /etc/hosts  coder", "outside the channel's directories · /etc", "▸ ● Allow once", "  ○ Allow and add /etc  every agent in the channel can use it", "  ○ Allow and add another directory…  type the path", "  ○ Deny"} {
+	for _, w := range []string{"▤ /etc/hosts  coder", "outside the channel's directories · /etc", "▸ ● Allow once", "  ○ Allow and add /etc  every agent in the channel can use it", "  ○ Allow and add another directory…  type the path", "  ○ Deny"} {
 		if !strings.Contains(body, w) {
 			t.Fatalf("boundary prompt body missing %q:\n%s", w, body)
 		}
@@ -3073,7 +3081,7 @@ func TestChannelChatFooterIsTheChannels(t *testing.T) {
 		if !m.superChat || left != "" || len(spans) != 0 || len(m.metaParts()) != 0 {
 			t.Fatalf("channel chat meta: %q %v %v", stripANSI(left), spans, m.metaParts())
 		}
-		if right := stripANSI(m.footerRightView()); right != "2k tokens · $0.02" { // the rollup of tokens and cost, no context percentage
+		if right := stripANSI(m.footerRightView()); right != "" { // no one agent's context; tokens and cost are the nav's
 			t.Fatalf("channel chat right side: %q", right)
 		}
 		if sv := stripANSI(m.sectionsView(100)); strings.Contains(sv, "async") || slices.Contains(m.tabOrder(), focusAsync) || (tree == (sv != "")) {
@@ -3131,13 +3139,13 @@ func TestStatusSitsOverTheDivider(t *testing.T) {
 	m.setStatus("copied 3 lines", false)
 	lines := strings.Split(stripANSI(m.View()), "\n")
 	rule := m.rows().rule
-	if !strings.HasPrefix(lines[rule], "───") || strings.Contains(lines[rule], "copied") || !strings.HasSuffix(lines[rule], "─ 2k tokens · $0.02 ─") || ansi.StringWidth(lines[rule]) != m.width {
+	if !strings.HasPrefix(lines[rule], "───") || strings.Contains(lines[rule], "copied") || strings.Contains(lines[rule], "tokens") || ansi.StringWidth(lines[rule]) != m.width {
 		t.Fatalf("divider: %q", lines[rule])
 	}
 	if above := lines[rule-1]; !strings.HasSuffix(above, "copied 3 lines") || ansi.StringWidth(above) != m.width || len(lines) != m.height {
 		t.Fatalf("the status sits at the right of the row above the divider:\n%s", strings.Join(lines, "\n"))
 	}
-	if r := m.rows(); r.input != rule+1 {
+	if r := m.rows(); r.input != rule+2 { // a blank line between the divider and the input
 		t.Fatalf("rows: input at %d, divider at %d", r.input, rule)
 	}
 	m.setStatus(strings.Repeat("a long status ", 10), true)
@@ -3155,8 +3163,8 @@ func tabsView(m Model, _ int) string {
 }
 
 // metaLine is the meta row's text without its click spans.
-func metaLine(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) string {
-	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel, nameStyle)
+func metaLine(label, role, model, variant string, queued int, modeTag string, sel, hover metaPart) string {
+	line, _ := metaLineSpans(label, role, model, variant, queued, modeTag, sel, hover)
 	return line
 }
 
@@ -3173,8 +3181,8 @@ func TestOtherChannelTreesStayOpen(t *testing.T) {
 	m.prompts = nil
 	old := m.channelID
 	m.stash() // leaving a channel keeps its agents
-	if len(m.trees[old]) != 4 || !m.treeOpen[old] {
-		t.Fatalf("leaving a channel should keep its tree: %d rows open=%v", len(m.trees[old]), m.treeOpen[old])
+	if len(m.trees[old]) != 4 || m.treeClosed[old] {
+		t.Fatalf("leaving a channel should keep its tree: %d rows closed=%v", len(m.trees[old]), m.treeClosed[old])
 	}
 	// bound to another channel of the directory now, the old one beside it
 	dir := m.channel.Dir
@@ -3206,11 +3214,516 @@ func TestOtherChannelTreesStayOpen(t *testing.T) {
 	m.setFocus(focusSidebar)
 	m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbOther, k: 0})
 	press(&m, tea.KeyMsg{Type: tea.KeyLeft})
-	if kept() != 0 || m.treeOpen[old] {
-		t.Fatalf("← should fold the tree: %d rows open=%v", kept(), m.treeOpen[old])
+	if kept() != 0 || !m.treeClosed[old] {
+		t.Fatalf("← should fold the tree: %d rows closed=%v", kept(), m.treeClosed[old])
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyLeft})
 	if kept() != 4 {
 		t.Fatalf("← again should unfold it: %d rows", kept())
+	}
+}
+
+// TestDividerTabsOpenWithTheSidebar: with the sidebar showing, the divider
+// still spans the whole window, so a click on each agent tab there opens
+// that tab's own dialog.
+func TestDividerTabsOpenWithTheSidebar(t *testing.T) {
+	for _, c := range []struct {
+		label string
+		want  focus
+	}{{"async", focusAsync}, {"todo", focusTodo}, {"mcp", focusMCP}} {
+		m := sidebarNavModel()
+		m.prompts = nil
+		m.superChat = false
+		m.layout()
+		if !m.sidebarVisible() {
+			t.Fatal("the sidebar should show")
+		}
+		lay := m.rows()
+		row := stripANSI(m.ruleLine(m.width))
+		i := strings.Index(row, c.label+" ")
+		if i < 0 {
+			t.Fatalf("no %s tab on the divider: %q", c.label, row)
+		}
+		x := ansi.StringWidth(row[:i]) + 1
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.rule, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.rule, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		if got := nm.(Model).focus; got != c.want {
+			t.Errorf("clicking %s on the divider opened %v, want %v", c.label, got, c.want)
+		}
+	}
+}
+
+// TestSidebarHidesQuietAgents: a channel's tree draws its main agent, and
+// otherwise only agents that are busy, waiting, failed or waiting on the
+// human (and the selected one);
+// the row under it shows the idle ones too, and hides them again. A click
+// on the channel whose chat is already open folds its tree.
+func TestSidebarHidesQuietAgents(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.agents = []protocol.AgentInfo{
+		{ID: "a", Name: "main", Role: "general", State: "idle"}, // the root: drawn even idle
+		{ID: "b", Parent: "a", Depth: 1, Name: "napper", Role: "general", State: "idle"},
+		{ID: "c", Parent: "a", Depth: 1, Name: "sleeper", Role: "general", State: "idle"},
+		{ID: "d", Parent: "a", Depth: 1, Name: "waiter", Role: "general", State: "waiting"},
+	}
+	m.superChat = true
+	m.layout()
+	nav := func() string {
+		body, _ := m.sidebarBody(sidebarWidth - 1)
+		return stripANSI(strings.Join(body, "\n"))
+	}
+	if v := nav(); !strings.Contains(v, "@main") || !strings.Contains(v, "@waiter") || strings.Contains(v, "@napper") || strings.Contains(v, "@sleeper") || !strings.Contains(v, "▸ show all · 2 idle") {
+		t.Fatalf("quiet agents should hide behind show all:\n%s", v)
+	}
+	m.setFocus(focusSidebar)
+	m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbHereAll})
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
+	if v := nav(); !strings.Contains(v, "@napper") || !strings.Contains(v, "@sleeper") || !strings.Contains(v, "▾ hide idle") {
+		t.Fatalf("show all should draw every agent:\n%s", v)
+	}
+	if r, _ := m.sidebarAt(m.sbCursor); r.kind != sbHereAll {
+		t.Fatalf("the cursor should stay on the toggle row: %+v", r)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeySpace})
+	if v := nav(); strings.Contains(v, "@napper") {
+		t.Fatalf("hide idle should hide them again:\n%s", v)
+	}
+	// the channel's chat is open: a click on its row folds the tree, another unfolds it
+	click := func() {
+		y := sidebarY(m, hereRow(m))
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+	}
+	click()
+	if v := nav(); strings.Contains(v, "@main") || strings.Contains(v, "show all") || !m.superChat {
+		t.Fatalf("a click on the open channel should fold its tree:\n%s", v)
+	}
+	click()
+	if v := nav(); !strings.Contains(v, "@main") || !strings.Contains(v, "show all") {
+		t.Fatalf("a second click should unfold it:\n%s", v)
+	}
+	// from an agent's chat, the click opens the channel's chat and folds nothing
+	m.superChat = false
+	click()
+	if v := nav(); !m.superChat || !strings.Contains(v, "@main") {
+		t.Fatalf("from an agent's chat the click opens the channel chat: super=%v\n%s", m.superChat, v)
+	}
+	// an idle agent stays in the tree while its own chat is open, not in the channel chat
+	m.agents[1].State, m.selected = "idle", 1
+	if v := nav(); strings.Contains(v, "@napper") {
+		t.Fatalf("in the channel chat an idle agent hides:\n%s", v)
+	}
+	m.superChat = false
+	if v := nav(); !strings.Contains(v, "@napper") || !strings.Contains(v, "show all · 1 idle") {
+		t.Fatalf("the open agent stays shown:\n%s", v)
+	}
+}
+
+// TestChannelTreeOpenCloseRules: a click on the selected channel toggles
+// its tree; a click on an unselected channel opens its tree if closed and
+// leaves an open one alone; switching channels never reopens or closes a
+// tree, and no channel's toggle touches another's.
+func TestChannelTreeOpenCloseRules(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.superChat = true
+	old, dir := m.channelID, m.channel.Dir
+	click := func(index int) tea.Cmd {
+		y := sidebarY(m, index)
+		if y < 0 {
+			t.Fatalf("row %d is not drawn", index)
+		}
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, cmd := nm.(Model).Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+		return cmd
+	}
+	// the selected channel: a click closes its tree
+	click(hereRow(m))
+	if !m.treeClosed[old] {
+		t.Fatal("a click on the selected channel should close its tree")
+	}
+	// switch to another channel: the old one's tree stays closed
+	m.stash()
+	m.channelState = newChannelState("s2", protocol.ChannelInfo{ID: "s2", Name: "other", Dir: dir})
+	m.reconciled, m.superChat = true, true
+	m.agents = []protocol.AgentInfo{{ID: "z", Name: "solo", Role: "general", State: "running"}}
+	m.navChannels = []protocol.ChannelInfo{{ID: old, Name: "proj", Dir: dir}}
+	m.layout()
+	otherAgents := func() int {
+		n := 0
+		for _, r := range m.sidebarRows() {
+			if r.kind == sbOtherAgent {
+				n++
+			}
+		}
+		return n
+	}
+	if otherAgents() != 0 || !m.treeClosed[old] {
+		t.Fatalf("switching away must not reopen a closed tree: %d rows", otherAgents())
+	}
+	// closing the selected channel's tree leaves the other alone
+	click(hereRow(m))
+	if !m.treeClosed["s2"] || !m.treeClosed[old] {
+		t.Fatalf("toggles are per channel: s2=%v old=%v", m.treeClosed["s2"], m.treeClosed[old])
+	}
+	click(hereRow(m))
+	if m.treeClosed["s2"] {
+		t.Fatal("a second click on the selected channel should open its tree")
+	}
+	// an unselected, closed channel: a click opens its tree (and opens the channel)
+	if cmd := click(m.sidebarIndex(sidebarRow{kind: sbOther, k: 0})); cmd == nil || m.treeClosed[old] || otherAgents() == 0 || m.treeClosed["s2"] {
+		t.Fatalf("a click on an unselected closed channel should open its tree: closed=%v rows=%d", m.treeClosed[old], otherAgents())
+	}
+	// an unselected, open channel: a click leaves its tree open
+	m.switching = false
+	click(m.sidebarIndex(sidebarRow{kind: sbOther, k: 0}))
+	if m.treeClosed[old] || otherAgents() == 0 {
+		t.Fatal("a click on an unselected open channel should leave its tree open")
+	}
+}
+
+// TestDividerDialogsGreyUntilOpen: the divider's buttons (role, model,
+// variant and the agent's tabs) are grey, and the one whose dialog is open
+// is in accent; one dialog is open at a time, and a click on another button
+// swaps the open dialog for its own.
+func TestDividerDialogsGreyUntilOpen(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	m := channelModel()
+	m.superChat = false
+	m.agents[0].Role, m.agents[0].Model = "coder", "openai/gpt-5"
+	m.layout()
+	parts := []string{"coder (coder)", "gpt-5", "default", "async 0", "todo 0", "mcp 0"}
+	check := func(name, open string) {
+		t.Helper()
+		line := m.ruleLine(m.width)
+		for _, p := range parts {
+			want := theme.StyleDim.Render(p)
+			if p == open {
+				want = theme.StyleBoxTitleFocus.Render(p)
+			}
+			if !strings.Contains(line, want) {
+				t.Fatalf("%s: %q should be drawn %s:\n%q", name, p, map[bool]string{true: "in accent", false: "grey"}[p == open], line)
+			}
+		}
+	}
+	click := func(label string) {
+		t.Helper()
+		row := stripANSI(m.ruleLine(m.width))
+		i := strings.Index(row, label)
+		if i < 0 {
+			t.Fatalf("no %q on the divider: %q", label, row)
+		}
+		x, y := ansi.StringWidth(row[:i])+1, m.rows().rule
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+	}
+	check("nothing open", "")
+	click("todo 0")
+	if m.focus != focusTodo {
+		t.Fatalf("todo should open: %v", m.focus)
+	}
+	check("todo open", "todo 0")
+	click("mcp 0") // a tab dialog swaps for another
+	if m.focus != focusMCP {
+		t.Fatalf("mcp should replace todo: %v", m.focus)
+	}
+	check("mcp open", "mcp 0")
+	click("gpt-5") // the tab dialog gives way to the model picker
+	if isTab(m.focus) {
+		t.Fatalf("the mcp dialog should close for the model picker: %v", m.focus)
+	}
+	m.openOverlay(newOverlay(ovModels, overlayList, "Select a model")) // what the picker's reply opens
+	check("models open", "gpt-5")
+	click("async 0") // the overlay gives way to the async dialog
+	if m.ov != nil || m.focus != focusAsync {
+		t.Fatalf("async should replace the model picker: overlay=%v focus=%v", m.ov != nil, m.focus)
+	}
+	check("async open", "async 0")
+}
+
+// TestSidebarUsageRows: the nav's top shows the system's tokens and cost
+// (every channel) and the selected chat's: the channel's in its chat, the
+// agent's in the agent's own chat.
+func TestSidebarUsageRows(t *testing.T) {
+	m := sidebarNavModel()
+	m.navChannels = []protocol.ChannelInfo{{ID: "s-2", Name: "other", Tokens: 10_000, CostUSD: 1.5}}
+	w := sidebarWidth - 1
+	rows := func() []string {
+		h := m.sidebarHeader(w)
+		return []string{stripANSI(h[2]), stripANSI(h[3])}
+	}
+	row := func(label, figures string) string { // the label left, the figures flush right
+		return label + strings.Repeat(" ", w-len([]rune(label))-len([]rune(figures))) + figures
+	}
+	if r := rows(); r[0] != row("System", "12k · $1.75") || r[1] != row("@main", "1k · $0.20") {
+		t.Fatalf("agent chat: %q", r)
+	}
+	m.superChat = true
+	if r := rows(); r[0] != row("System", "12k · $1.75") || r[1] != row("#channel", "2k · $0.25") {
+		t.Fatalf("channel chat: %q", r)
+	}
+	m.channel.Name = strings.Repeat("long", 10)
+	if r := rows(); !strings.HasSuffix(r[1], "… 2k · $0.25") || ansi.StringWidth(r[1]) != w {
+		t.Fatalf("a long label is cut, never the figures: %q", r[1])
+	}
+	// with the sidebar, the channel chat has no tabs: tab skips the strip
+	if slices.Contains(m.focusOrder(), focusTabs) {
+		t.Fatalf("no tab stop without tabs: %v", m.focusOrder())
+	}
+}
+
+// TestUsageDialogs: the nav's usage rows open the tokens dialog from the
+// tokens figure and the cost dialog from the cost, on the system or the
+// selected chat (the agent's in its chat, the channel's in the channel
+// chat); ←/→ change the range and refetch, t and c switch the chart, and
+// the reply draws bars under the peak with the span below.
+func TestUsageDialogs(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	clickRow := func(y int, onCost bool) tea.Cmd {
+		row := stripANSI(m.sidebarHeader(sidebarWidth - 1)[y])
+		x := ansi.StringWidth(row[:strings.LastIndex(row, "$")]) // on the cost
+		if !onCost {
+			x = ansi.StringWidth(row[:strings.LastIndex(row, " · $")]) - 1 // on the tokens figure
+		}
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, cmd := nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+		return cmd
+	}
+	if clickRow(m.sidebarSelectedRow(), false) == nil || m.focus != focusUsage || m.usage.kind != usageTokens || m.usage.agent != "a" || m.usageTitle() != "Tokens · @main" {
+		t.Fatalf("the selected row's tokens: focus=%v %+v", m.focus, m.usage)
+	}
+	m.closeDialog()
+	nm, _ := m.Update(tea.MouseMsg{X: 1, Y: m.sidebarSelectedRow(), Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}) // the label is no button
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 1, Y: m.sidebarSelectedRow(), Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	if m = nm.(Model); m.focus == focusUsage {
+		t.Fatal("a click on the row's label should open nothing")
+	}
+	clickRow(m.sidebarSystemRow(), true)
+	if m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" || m.usageTitle() != "Cost · System" {
+		t.Fatalf("the system row's cost: %+v", m.usage)
+	}
+	m.closeDialog()
+	m.superChat = true
+	clickRow(m.sidebarSelectedRow(), true)
+	if m.usage.channel != m.channelID || m.usage.agent != "" || m.usageTitle() != "Cost · #channel" {
+		t.Fatalf("the channel chat's cost: %+v", m.usage)
+	}
+	// a reply for an older request is dropped; the current one draws
+	epoch := m.usage.epoch
+	m.onUsage(usageMsg{epoch: epoch - 1, res: protocol.UsageSeriesResult{Tokens: []int{1}}})
+	if m.usage.series != nil {
+		t.Fatal("a stale reply should be dropped")
+	}
+	n := usageChartWidth(m.width)
+	tokens, cost := make([]int, n), make([]float64, n)
+	tokens[0], tokens[n-1], cost[n-1] = 500, 2000, 1.25
+	now := time.Now()
+	m.onUsage(usageMsg{epoch: epoch, res: protocol.UsageSeriesResult{From: now.Add(-3 * time.Hour), To: now, Tokens: tokens, Cost: cost}})
+	body := stripANSI(strings.Join(m.usageBody(dialog.Width(m.width)-4), "\n"))
+	if !strings.Contains(body, "total $1.25") || !strings.Contains(body, "$1.25 ") || !strings.Contains(body, "3h ago") || !strings.Contains(body, "now") || !strings.Contains(body, "█") {
+		t.Fatalf("cost chart:\n%s", body)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	body = stripANSI(strings.Join(m.usageBody(dialog.Width(m.width)-4), "\n"))
+	lines := strings.Split(body, "\n")
+	if !strings.Contains(lines[0], "total 3k") || !strings.HasSuffix(lines[2], "█") || !strings.Contains(lines[2], "2k") || !strings.Contains(lines[1+usageChartRows], "0 █") || []rune(lines[usageChartRows-1])[usageAxisW+1] != ' ' || []rune(lines[usageChartRows])[usageAxisW+1] != '█' {
+		t.Fatalf("tokens chart:\n%s", body)
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyRight}); cmd == nil || m.usage.rng != 1 || m.usage.series != nil || m.usage.epoch == epoch {
+		t.Fatalf("→ should pick the next range and refetch: rng=%d", m.usage.rng)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.focus == focusUsage {
+		t.Fatal("esc should close the dialog")
+	}
+}
+
+func TestUsageBars(t *testing.T) {
+	got := usageBars([]float64{0, 0.1, 1, 4, 8}, 8, 2)
+	if got[0] != "    █" || got[1] != " ▁▂██" {
+		t.Fatalf("bars: %q", got)
+	}
+}
+
+// TestDividerHoverLightens: the divider button under the pointer (a meta
+// part, an agent tab or a usage figure) draws in the lighter text colour;
+// moving off the buttons puts it back to grey, and an open dialog's button
+// stays in accent.
+func TestDividerHoverLightens(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	m := channelModel()
+	m.superChat = false
+	m.agents[0].Role, m.agents[0].Model, m.agents[1].Model, m.channel.Model = "coder", "openai/gpt-5", "openai/gpt-5", "openai/gpt-5"
+	m.agents[0].CostUSD = 0.02
+	m.layout()
+	move := func(label string) {
+		t.Helper()
+		row := stripANSI(m.ruleLine(m.width))
+		i := strings.LastIndex(row, label)
+		if i < 0 {
+			t.Fatalf("no %q on the divider: %q", label, row)
+		}
+		nm, _ := m.Update(tea.MouseMsg{X: ansi.StringWidth(row[:i]) + 1, Y: m.rows().rule, Action: tea.MouseActionMotion})
+		m = nm.(Model)
+	}
+	parts := []string{"coder (coder)", "gpt-5", "default", "async 0", "todo 0", "mcp 0"}
+	check := func(lit, accent string) {
+		t.Helper()
+		line := m.ruleLine(m.width)
+		for _, p := range parts {
+			want := theme.StyleDim.Render(p)
+			switch p {
+			case accent:
+				want = theme.StyleBoxTitleFocus.Render(p)
+			case lit:
+				want = theme.StyleLit.Render(p)
+			}
+			if !strings.Contains(line, want) {
+				t.Fatalf("hover %q, open %q: %q is not drawn as expected:\n%q", lit, accent, p, line)
+			}
+		}
+	}
+	for _, p := range parts {
+		move(p)
+		check(p, "")
+	}
+	// off the buttons: grey again
+	nm, _ := m.Update(tea.MouseMsg{X: 1, Y: 1, Action: tea.MouseActionMotion})
+	m = nm.(Model)
+	check("", "")
+	// an open dialog's button stays in accent under the pointer
+	m.openTab(focusTodo)
+	move("todo 0")
+	check("", "todo 0")
+	move("mcp 0")
+	check("mcp 0", "todo 0")
+}
+
+// TestNavKeepsHoverAcrossChannelSwitch: a channel picked in the nav while
+// the pointer is on it keeps the nav's focus once the switch lands, with
+// the cursor (and its background) on the opened channel's row, still the
+// row under the pointer; moving off the nav gives the input its focus back.
+func TestNavKeepsHoverAcrossChannelSwitch(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.channel.Name = "proj"
+	m.navChannels = []protocol.ChannelInfo{{ID: "s-docs", Name: "docs", Dir: "/home/x/Work/docs"}, {ID: "s-web", Name: "web", Dir: "/home/x/Work/web"}}
+	old := m.channelID
+	m.setFocus(focusInput)
+	up := func(msg tea.Msg) {
+		nm, _ := m.Update(msg)
+		m = nm.(Model)
+	}
+	idx := m.sidebarIndex(sidebarRow{kind: sbOther, k: 1}) // #web, below this channel
+	y := sidebarY(m, idx)
+	up(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionMotion})
+	up(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	up(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	if !m.switching {
+		t.Fatal("the click should switch to #web")
+	}
+	up(switchedMsg{info: protocol.ChannelInfo{ID: "s-web", Name: "web", Dir: "/home/x/Work/web"}})
+	if len(m.navChannels) != 2 || m.navChannels[1].ID != old {
+		t.Fatalf("the nav should list the channel left behind at once: %+v", m.navChannels)
+	}
+	_, items := m.sidebarLines(m.vp.Height)
+	if y >= len(items) {
+		t.Fatalf("row %d is gone after the switch: %d rows", y, len(items))
+	}
+	if m.focus != focusSidebar || m.sbCursor != hereRow(m) || items[y] != m.sbCursor {
+		t.Fatalf("after the switch the nav should keep its cursor under the pointer: focus=%v cursor=%d here=%d under pointer=%d", m.focus, m.sbCursor, hereRow(m), items[y])
+	}
+	up(tea.MouseMsg{X: 60, Y: m.rows().input, Action: tea.MouseActionMotion}) // onto the input, off the nav
+	if m.focus != focusInput {
+		t.Fatalf("moving off the nav should give the input its focus back: %v", m.focus)
+	}
+}
+
+// TestNavUsageFiguresHighlight: the nav's usage figures are buttons like the
+// divider's: grey, lighter under the pointer, and in accent while their
+// chart is open, the system's on the System row and the selected chat's on
+// its row.
+func TestNavUsageFiguresHighlight(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	m := sidebarNavModel()
+	m.prompts = nil
+	w := sidebarWidth - 1
+	check := func(name string, y int, tokens, cost lipgloss.Style) {
+		t.Helper()
+		row := m.sidebarHeader(w)[y]
+		fields := strings.Fields(stripANSI(row))
+		tk, c := fields[len(fields)-3], fields[len(fields)-1]
+		if !strings.Contains(row, tokens.Render(tk)) || !strings.Contains(row, cost.Render(c)) {
+			t.Fatalf("%s: %q", name, row)
+		}
+	}
+	move := func(y int, figure string) {
+		row := stripANSI(m.sidebarHeader(w)[y])
+		x := ansi.StringWidth(row[:strings.LastIndex(row, figure)])
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
+		m = nm.(Model)
+	}
+	check("grey", m.sidebarSystemRow(), theme.StyleDim, theme.StyleDim)
+	move(m.sidebarSystemRow(), "$")
+	check("hover cost", m.sidebarSystemRow(), theme.StyleDim, theme.StyleLit)
+	check("the other row stays grey", m.sidebarSelectedRow(), theme.StyleDim, theme.StyleDim)
+	move(m.sidebarSelectedRow(), "1k")
+	check("hover tokens", m.sidebarSelectedRow(), theme.StyleLit, theme.StyleDim)
+	check("hover moved off", m.sidebarSystemRow(), theme.StyleDim, theme.StyleDim)
+	m.openUsage(usageTokens, false)
+	check("selected tokens open, hovered", m.sidebarSelectedRow(), theme.StyleBoxTitleFocus, theme.StyleDim)
+	check("system closed", m.sidebarSystemRow(), theme.StyleDim, theme.StyleDim)
+	m.openUsage(usageCost, true)
+	check("system cost open", m.sidebarSystemRow(), theme.StyleDim, theme.StyleBoxTitleFocus)
+	check("selected closed", m.sidebarSelectedRow(), theme.StyleLit, theme.StyleDim)
+}
+
+// TestPlanUsageBars: each signed-in plan is one row at the top of the nav,
+// its name, bar and percent, for its most used window (one whose reset has
+// passed reads 0%); the usage rows under the block keep their clicks.
+func TestPlanUsageBars(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	now := time.Now()
+	w := sidebarWidth - 1
+	if rows := m.planUsageRows(w, now); len(rows) != 0 || m.sidebarSystemRow() != 2 {
+		t.Fatalf("no reading, no block: %q", rows)
+	}
+	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-5 * time.Minute), Windows: []protocol.UsageWindowInfo{
+		{UsedPercent: 50, Minutes: 300, ResetsAt: now.Add(2 * time.Hour)},
+		{UsedPercent: 100, Minutes: 60, ResetsAt: now.Add(-time.Minute)}, // reset since the reading: 0%
+	}}}
+	rows := m.planUsageRows(w, now)
+	bar := w - len("ChatGPT") - 1 - 1 - 4
+	want := "ChatGPT " + strings.Repeat("━", bar/2) + strings.Repeat("─", bar-bar/2) + "  50%"
+	if len(rows) != 2 || stripANSI(rows[0]) != want || ansi.StringWidth(stripANSI(rows[0])) != w || rows[1] != "" {
+		t.Fatalf("plan rows: %q, want %q", rows, want)
+	}
+	m.plans[0].Windows = append(m.plans[0].Windows, protocol.UsageWindowInfo{UsedPercent: 100, Minutes: 10080, ResetsAt: now.Add(24 * time.Hour)})
+	if got := stripANSI(m.planUsageRows(w, now)[0]); got != "ChatGPT "+strings.Repeat("━", bar)+" 100%" {
+		t.Fatalf("the most used window: %q", got)
+	}
+	header := m.sidebarHeader(w)
+	if m.sidebarSystemRow() != 4 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
+		t.Fatalf("the rows under the block move down:\n%s", stripANSI(strings.Join(header, "\n")))
+	}
+	row := stripANSI(header[m.sidebarSystemRow()])
+	x := ansi.StringWidth(row[:strings.LastIndex(row, "$")])
+	nm, _ := m.Update(tea.MouseMsg{X: x, Y: m.sidebarSystemRow(), Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: m.sidebarSystemRow(), Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	if m = nm.(Model); m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" {
+		t.Fatalf("a click on the moved System cost opens its chart: focus=%v %+v", m.focus, m.usage)
 	}
 }

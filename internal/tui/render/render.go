@@ -51,6 +51,10 @@ type Options struct {
 	WhoKey   string
 	// CompactFrame animates a running compaction's rule (the sweeping bar).
 	CompactFrame int
+	// Stamps draws how long ago each item happened, grey, at the right end
+	// of its last shown row, as of Now (the current time when zero).
+	Stamps bool
+	Now    time.Time
 }
 
 // GutterMark is the chat cursor marker tests swap in for the highlight (the
@@ -93,6 +97,7 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 	f, folded := o.folds(lines)[r.item]
 	cur := o.Focused && r.item == o.Cursor
 	lit := !o.KeepTextColor && (cur || o.Expanded[r.item])
+	stamp := o.stamp(lines)
 	for i, l := range lines {
 		if !o.showLine(l) || l.Kind == transcript.LineBlank || folded && !f.show[i] {
 			continue
@@ -103,16 +108,50 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 			l.Suffix = strings.TrimSpace(l.Suffix + fmt.Sprintf(" +%d", f.hidden))
 		}
 		if folded && len(f.show) == 1 {
-			l = oneRow(l, o)
+			l = oneRow(l, o, stamp)
 		}
-		for _, part := range strings.Split(renderLine(l, o, lit), "\n") {
-			if cur {
-				part = highlight(part, o.Width)
-			}
-			r.rows = append(r.rows, part)
+		r.rows = append(r.rows, strings.Split(renderLine(l, o, lit), "\n")...)
+	}
+	r.rows = stampRows(r.rows, stamp, o.Width)
+	if cur {
+		for i := range r.rows {
+			r.rows[i] = highlight(r.rows[i], o.Width)
 		}
 	}
 	return r
+}
+
+// stamp is how long ago an item happened, as drawn at the end of its last
+// row: "5m" (format.Ago); "" when stamps are off or the item has no time.
+func (o Options) stamp(lines []transcript.Line) string {
+	if !o.Stamps || len(lines) == 0 || lines[0].At.IsZero() {
+		return ""
+	}
+	now := o.Now
+	if now.IsZero() {
+		now = time.Now()
+	}
+	return format.Ago(lines[0].At, now.Local())
+}
+
+// stampRows right-aligns stamp, grey, on the last row (ending at the right
+// edge, as wrapped text may), or on a row of its own when the last row has
+// no room for it.
+func stampRows(rows []string, stamp string, width int) []string {
+	if stamp == "" || len(rows) == 0 {
+		return rows
+	}
+	sw := ansi.StringWidth(stamp)
+	last := len(rows) - 1
+	pad := width - ansi.StringWidth(rows[last]) - sw
+	if pad < 1 {
+		rows, last, pad = append(rows, ""), last+1, width-sw
+	}
+	if pad < 0 {
+		return rows
+	}
+	rows[last] += strings.Repeat(" ", pad) + theme.StyleDim.Render(stamp)
+	return rows
 }
 
 // assemble joins rendered items: a blank row above and below spaced items
@@ -196,15 +235,18 @@ func indicator(o Options) string {
 
 // oneRow cuts a folded item's one shown line to a single row, so its +N
 // marker ends that row instead of landing inside a wrapped second one.
-func oneRow(l transcript.Line, o Options) transcript.Line {
+func oneRow(l transcript.Line, o Options, stamp string) transcript.Line {
 	l.Text = strings.ReplaceAll(l.Text, "\n", " ")
 	leader, glyph, _ := kindStyle(l)
 	if l.Glyph != "" {
 		glyph = l.Glyph + " "
 	}
-	avail := o.Width - 1 - ansi.StringWidth(leader) - ansi.StringWidth(glyph) - 2*l.Indent
+	avail := o.Width - ansi.StringWidth(leader) - ansi.StringWidth(glyph) - 2*l.Indent
 	if l.Suffix != "" {
 		avail -= ansi.StringWidth(l.Suffix) + 1
+	}
+	if stamp != "" {
+		avail -= ansi.StringWidth(stamp) + 1
 	}
 	if avail < 10 || ansi.StringWidth(l.Text) <= avail {
 		return l
@@ -239,6 +281,7 @@ type renderKey struct {
 	width                   int
 	details, noFold, cursor bool
 	keepTextColor           bool
+	stamp                   string // the item's stamp: an entry goes stale as time passes
 	expanded                int8   // per-item override: 0 none, 1 collapsed, 2 expanded
 	who                     string // Options.WhoKey
 	frame                   int
@@ -265,7 +308,7 @@ func Transcript(t *transcript.Transcript, c *Cache, o Options) ([]string, map[in
 			continue
 		}
 		if card, ok := o.Cards[i]; ok {
-			card = slices.Clone(card)
+			card = stampRows(slices.Clone(card), o.stamp(lines), o.Width)
 			if o.Focused && o.Cursor == i {
 				for j := range card {
 					card[j] = highlight(card[j], o.Width)
@@ -283,7 +326,7 @@ func Transcript(t *transcript.Transcript, c *Cache, o Options) ([]string, map[in
 			tail = tail[k:]
 			continue
 		}
-		key := renderKey{epoch: epoch, rev: t.Rev(i), width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i, who: o.WhoKey, keepTextColor: o.KeepTextColor}
+		key := renderKey{epoch: epoch, rev: t.Rev(i), width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i, who: o.WhoKey, keepTextColor: o.KeepTextColor, stamp: o.stamp(lines)}
 		if v, ok := o.Expanded[i]; ok {
 			key.expanded = 1
 			if v {
@@ -508,7 +551,7 @@ func renderLine(l transcript.Line, o Options, lit bool) string {
 	glyph, text, name, nameStyle := whoColours(l, o, glyph, text)
 
 	glyphW := ansi.StringWidth(glyph)
-	avail := o.Width - 1 - ansi.StringWidth(leader) - glyphW
+	avail := o.Width - ansi.StringWidth(leader) - glyphW
 	parts := []string{text}
 	if o.Width > 0 && avail >= 10 {
 		parts = strings.Split(ansi.Wrap(text, avail, ""), "\n")

@@ -176,7 +176,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	tr := transcript.NewTranscript()
 	evtest.Apply(tr, evtest.Call("a", "c1", "read", `{"path":"a.go"}`))
 	got := renderLines(tr.All())
-	if !contains(got, "☰ Read  a.go") {
+	if !contains(got, "▤ Read  a.go") {
 		t.Fatalf("running tool shows its glyph (yellow):\n%s", strings.Join(got, "\n"))
 	}
 	if !tr.Running() {
@@ -192,7 +192,7 @@ func TestToolStatesAndCollapsedOutput(t *testing.T) {
 	}
 
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"☰ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "✗ Read  b.go"})
+	assertSubsequence(t, got, []string{"▤ Read  a.go", "  line", "  line", "  line", "  … +17 lines", "✗ Read  b.go"})
 	if n := count(got, "  line"); n != transcript.MaxOutputCollapsed {
 		t.Fatalf("collapsed: want %d output lines, got %d", transcript.MaxOutputCollapsed, n)
 	}
@@ -845,6 +845,49 @@ func TestFoldedToolCallIsOneRow(t *testing.T) {
 	}
 	if len(rows) != 1 || !strings.Contains(rows[0], "Shell") || strings.Contains(rows[0], "+4") || ansi.StringWidth(rows[0]) > 60 {
 		t.Fatalf("folded call should be one row, with no +N:\n%s", strings.Join(rows, "\n"))
+	}
+}
+
+// TestStampEndsTheLastShownRow: an item's time sits at the right end of
+// its last shown row: the one folded row, the third preview row under the
+// cursor, and the last row when expanded.
+func TestStampEndsTheLastShownRow(t *testing.T) {
+	now := time.Now()
+	at := now.Add(-5 * time.Minute)
+	tr := transcript.NewTranscript()
+	for _, ev := range append(evtest.Call("a", "c1", "shell", `{"command":"ls"}`),
+		mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a\nb\nc\nd\ne"})) {
+		ev.Time = at
+		tr.Apply(ev)
+	}
+	rowsOf := func(o Options) []string {
+		o.Width, o.Stamps, o.Now = 60, true, now
+		var rows []string
+		for _, r := range renderWith(tr.All(), o) {
+			if strings.TrimSpace(r) != "" {
+				rows = append(rows, r)
+			}
+		}
+		return rows
+	}
+	check := func(name string, rows []string, n int) {
+		t.Helper()
+		if n > 0 && len(rows) != n {
+			t.Fatalf("%s: want %d rows, got:\n%s", name, n, strings.Join(rows, "\n"))
+		}
+		for i, r := range rows {
+			if last := i == len(rows)-1; strings.HasSuffix(r, " 5m") != last || ansi.StringWidth(r) > 60 || last && ansi.StringWidth(r) != 60 {
+				t.Fatalf("%s: the stamp should end only the last row, at the right edge:\n%s", name, strings.Join(rows, "\n"))
+			}
+		}
+	}
+	check("folded", rowsOf(Options{}), 1)
+	item := tr.All()[len(tr.All())-1].Item
+	check("preview", rowsOf(Options{Focused: true, Cursor: item}), 3)
+	expanded := rowsOf(Options{Expanded: map[int]bool{item: true}})
+	check("expanded", expanded, 0)
+	if len(expanded) < 6 {
+		t.Fatalf("expanded should show every output line:\n%s", strings.Join(expanded, "\n"))
 	}
 }
 

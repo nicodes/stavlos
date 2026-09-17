@@ -79,14 +79,15 @@ type Line struct {
 	Glyph     string // leader glyph for this line (Render styles it by Tone)
 	Tone      Tone   // in progress / error; zero means "as is"
 	callID    string
-	Tool      string   // raw tool name on a LineTool line
-	Note      bool     // drawn grey: the agent\'s aside, or an agent\'s reply in the channel chat (only the human\'s posts keep the text colour)
-	Agent     string   // in the channel chat: the agent this line links to
-	Who       string   // the @name this line leads with, whose colour its glyph and name take: an agent\'s name, or "user"
-	Names     []string // @names coloured wherever this line mentions them (a channel chat post\'s recipients)
-	Diff      byte     // a patch diff line: '+' added, '-' removed, '@' a hunk's anchor, 'f' a file header, 0 otherwise
-	Indent    int      // extra indent, two columns each (a chat reply's later lines, past its glyph)
-	TurnStart bool     // first line of the first item after a turn starts or ends: an agent\'s chat spaces turns apart there
+	Tool      string    // raw tool name on a LineTool line
+	Note      bool      // drawn grey: the agent\'s aside, or an agent\'s reply in the channel chat (only the human\'s posts keep the text colour)
+	Agent     string    // in the channel chat: the agent this line links to
+	Who       string    // the @name this line leads with, whose colour its glyph and name take: an agent\'s name, or "user"
+	Names     []string  // @names coloured wherever this line mentions them (a channel chat post\'s recipients)
+	Diff      byte      // a patch diff line: '+' added, '-' removed, '@' a hunk's anchor, 'f' a file header, 0 otherwise
+	Indent    int       // extra indent, two columns each (a chat reply's later lines, past its glyph)
+	TurnStart bool      // first line of the first item after a turn starts or ends: an agent\'s chat spaces turns apart there
+	At        time.Time // when the item happened (the event that started it); zero when unknown or still streaming
 }
 
 // Tone colours a line's glyph by lifecycle: yellow while in progress, red
@@ -196,6 +197,8 @@ type Transcript struct {
 	callInputs  map[string]json.RawMessage // a tool call's arguments, until its tool.started
 	spawnAs     string                     // …and what it was spawned as: "scout (general) · model"
 
+	at time.Time // the time of the event being applied: what appendItem stamps new items with
+
 	self string // this agent's name, from its spawn: the other side of every message it sends or receives
 
 	chat  bool              // the channel chat (chat.go), not one agent's transcript
@@ -243,6 +246,9 @@ func NewTranscript() *Transcript {
 // a turn) replaces the in-progress streaming buffer; tool.call.finished
 // updates the matching tool line and nests the output under it.
 func (t *Transcript) Apply(ev event.Event) {
+	if !ev.Time.IsZero() {
+		t.at = ev.Time
+	}
 	if t.applyPermission(ev) {
 		return
 	}
@@ -691,8 +697,12 @@ func (t *Transcript) appendItem(lines []Line) []lineRef {
 		if t.turnGap {
 			run[0].TurnStart, t.turnGap = true, false
 		}
+		at := run[0].At
+		if at.IsZero() {
+			at = t.at
+		}
 		for j := range run {
-			run[j].Item = i
+			run[j].Item, run[j].At = i, at
 			refs = append(refs, lineRef{i, j})
 			t.indexTool(lineRef{i, j}, run[j])
 		}
@@ -715,7 +725,7 @@ func (t *Transcript) insertIntoItem(item int, lines []Line) []lineRef {
 	}
 	refs := make([]lineRef, 0, len(lines))
 	for j := range lines {
-		lines[j].Item = item
+		lines[j].Item, lines[j].At = item, t.items[item][0].At
 		refs = append(refs, lineRef{item, len(t.items[item]) + j})
 		t.indexTool(refs[j], lines[j])
 	}
@@ -732,7 +742,7 @@ func (t *Transcript) replaceItem(item int, lines []Line) {
 	}
 	lines = slices.Clone(lines)
 	for j := range lines {
-		lines[j].Item = item
+		lines[j].Item, lines[j].At = item, t.items[item][0].At
 	}
 	t.items[item] = lines
 	t.touch(item)
@@ -1927,7 +1937,7 @@ func CleanLines(lines []Line) []Line {
 // shell's, since every job is a shell command.
 const (
 	GlyphToolFiles  = "◆" // file tools (skill)
-	GlyphToolRead   = "☰" // read: the lines of a file
+	GlyphToolRead   = "▤" // read: the lines of a file
 	GlyphToolSearch = "⌕" // web_search: a magnifying glass
 	GlyphToolPatch  = "±" // apply_patch: a diff
 	GlyphToolShell  = "$" // shell, shell_kill (and the old bash names): the shell prompt
@@ -2034,7 +2044,7 @@ func Build(evs []event.Event) []Line {
 func (t *Transcript) Notice(lines ...string) {
 	ls := make([]Line, 0, len(lines))
 	for i, l := range lines {
-		ln := Line{Kind: LineNotice, Text: l}
+		ln := Line{Kind: LineNotice, Text: l, At: time.Now()}
 		if i == 0 {
 			ln.Glyph = GlyphNotice
 		}

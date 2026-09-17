@@ -194,24 +194,27 @@ func modeTagStyle(tag string) lipgloss.Style {
 // the no-model nudge), with where each clickable part was drawn: the agent
 // as "label (role)" like the tab rows, the model and its variant ("default"
 // when none is set), led by the mode tag ("ASK", "AUTO" or "YOLO"; "" for
-// none). sel is the part highlighted while the row has keyboard focus
-// (metaNone otherwise); nameStyle tints "label (role)" (the role's colour,
-// or plain).
-func metaLineSpans(label, role, model, variant string, queued int, modeTag string, sel metaPart, nameStyle lipgloss.Style) (string, []span[metaPart]) {
+// none). Every part is grey but sel, in accent: the part whose dialog is
+// open, or the one the row's keyboard focus is on (metaNone for neither);
+// hover, the part under the pointer, is in the lighter text colour.
+func metaLineSpans(label, role, model, variant string, queued int, modeTag string, sel, hover metaPart) (string, []span[metaPart]) {
 	var b strings.Builder
 	var spans []span[metaPart]
 	x := 0
 	part := func(p metaPart, text string, st lipgloss.Style) {
-		if p == sel {
+		switch p {
+		case sel:
 			st = theme.StyleBoxTitleFocus
+		case hover:
+			st = theme.StyleLit
 		}
 		w := ansi.StringWidth(text)
 		spans = append(spans, span[metaPart]{x, x + w, p})
 		b.WriteString(st.Render(text))
 		x += w
 	}
-	sep := func() {
-		b.WriteString(" · ")
+	sep := func() { // the divider's own rule separates its parts, as it does the tabs
+		b.WriteString(theme.StyleRule.Render(" ─ "))
 		x += 3
 	}
 	if modeTag != "" {
@@ -222,21 +225,21 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 	if role != "" {
 		name = fmt.Sprintf("%s (%s)", label, role)
 	}
-	part(metaRole, name, nameStyle)
+	part(metaRole, name, theme.StyleDim)
 	sep()
 	if model == "" {
 		part(metaModel, "no model — /models", theme.StyleWarn)
 		return b.String(), spans
 	}
 	short, _ := transcript.SplitModel(model) // just the model id; the provider is in /models
-	part(metaModel, short, lipgloss.NewStyle())
+	part(metaModel, short, theme.StyleDim)
 	if variant == "" {
 		variant = "default"
 	}
 	sep()
-	part(metaVariant, variant, lipgloss.NewStyle())
+	part(metaVariant, variant, theme.StyleDim)
 	if queued > 0 {
-		b.WriteString(theme.StyleDim.Render(fmt.Sprintf(" · %d queued", queued)))
+		b.WriteString(theme.StyleRule.Render(" ─ ") + theme.StyleDim.Render(fmt.Sprintf("%d queued", queued)))
 	}
 	return b.String(), spans
 }
@@ -267,18 +270,13 @@ type footerInfo struct {
 	model     string // selected agent model (provider/id)
 	context   int    // estimated tokens the next model call carries
 	window    int    // the model's context window; 0 hides the bar
-	tokens    int
-	cost      float64
 }
 
-// footerRight builds the usage on the divider over the input (a sign-in
-// nudge on the meta row instead while nothing is connected),
-// nothing on the home view (the left side already names the role and
-// model), or how full the context is and the cost ("2% · 22k/1.1m · $0.00",
-// or the channel's tokens when the window is unknown). The
-// repo sits on the tab strip; waiting permissions and /help are not
-// repeated here either (the strip shows the former, the "/" palette lists
-// every command).
+// footerRight is the right end of the divider over the input: the sign-in
+// nudge while nothing is connected, nothing on the home view, else how full
+// the agent's context is ("31% · 62k/200k tokens"; nothing while the
+// window is unknown, and in the channel chat, which has no one agent's
+// context). Tokens and cost are the nav's (its usage rows), not repeated.
 func footerRight(f footerInfo) string {
 	switch {
 	case !f.connected:
@@ -286,12 +284,7 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
-	// dim like the rule it sits on: only the context bar's warning colour stands out
-	cost := theme.StyleDim.Render(" · $" + format.Cost(f.cost))
-	if bar := contextBar(f.context, f.window); bar != "" {
-		return bar + cost // the channel's total tokens are in the sidebar
-	}
-	return theme.StyleDim.Render(format.Tokens(f.tokens)+" tokens") + cost
+	return contextBar(f.context, f.window)
 }
 
 // contextBar reads how full the model's context is — "31% · 62k/200k tokens" — which
@@ -407,24 +400,28 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 		}
 	}
 	sel := metaNone
-	if m.focus == focusMeta {
+	switch {
+	case m.ov != nil && m.ov.kind == ovRoles:
+		sel = metaRole
+	case m.ov != nil && m.ov.kind == ovModels:
+		sel = metaModel
+	case m.ov != nil && m.ov.kind == ovVariants:
+		sel = metaVariant
+	case m.ov == nil && m.focus == focusMeta:
 		sel = m.metaSel
 	}
 	if m.superChat { // the channel chat: role, model and variant are an agent's, and the mode leads the input
 		if m.channel.Dir == "" {
 			return "", nil
 		}
-		label := channelLabel(m.channel) + " · " + format.ShortHome(m.channel.Dir)
+		sep := theme.StyleRule.Render(" ─ ")
+		label := theme.StyleDim.Render(channelLabel(m.channel)) + sep + theme.StyleDim.Render(format.ShortHome(m.channel.Dir))
 		if m.channel.DirError != "" {
-			label += " · directory unavailable"
+			label += sep + theme.StyleDim.Render("directory unavailable")
 		}
-		return theme.StyleDim.Render(label), nil
+		return label, nil
 	}
-	nameStyle := lipgloss.NewStyle()
-	if r := m.roleInfo(role); r != nil {
-		nameStyle = roleStyle(r.Color)
-	}
-	return metaLineSpans(label, role, model, variant, queued, "", sel, nameStyle) // the mode tag leads the input instead
+	return metaLineSpans(label, role, model, variant, queued, "", sel, m.hover.meta) // the mode tag leads the input instead
 }
 
 // metaRow is the home screen's line under the input: role and model on the
@@ -542,7 +539,7 @@ func (m Model) channelView(f frame, width int) string {
 	}
 	// Under the divider: the palette (while open) and the input, then a blank
 	// line and the tab strip when there is one.
-	parts := []string{top, m.ruleLine(width)}
+	parts := []string{top, m.ruleLine(width), ""} // air between the divider and the input (dividerGap)
 	if f.palette != "" {
 		parts = append(parts, f.palette)
 	}
@@ -606,24 +603,84 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 }
 
 // sidebarHeader is what precedes the tree: the app name, a blank, the
-// global catalog label, the channel's tokens and cost (the rollup of what
-// the meta row shows per agent), Discord status, the ! and ? tabs (sidebarTabsRow; every
-// channel's prompts, so above the channels; the footer strip keeps only the
-// agent's row while the sidebar shows, and dirs sits behind each channel's
-// gear), and a blank; the "channels" title is the body's first row. The tree's
+// system's tokens and cost (every channel), the selected chat's (the
+// channel's in its chat, the agent's in an agent's chat), a blank, Discord
+// status, and a blank; the "channels" title is the body's first row. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
-	usage := channelLabel(m.channel) + " · " + format.Tokens(m.totalTokens()) + " tokens · $" + format.Cost(m.totalCost())
-	labels, _ := m.tabLabels(m.currentPrompt())
-	return []string{
+	rows := []string{
 		theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" "),
 		"",
-		theme.StyleDim.Render("All channels"),
-		theme.StyleDim.Render(format.Trunc(usage, width)),
-		m.discordIndicator(width),
-		ansi.Truncate(strings.Split(labels, "\n")[0], width, "…"),
-		"",
 	}
+	rows = append(rows, m.planUsageRows(width, time.Now())...)
+	return append(rows,
+		m.navUsageRow(m.sidebarSystemRow(), width),
+		m.navUsageRow(m.sidebarSelectedRow(), width),
+		"",
+		m.discordIndicator(width),
+		"",
+	)
+}
+
+// usageRow is "label        12k · $0.25", grey: the label at the left, the
+// tokens and cost flush with the right edge (like the tree's costs); a
+// label too long for width is cut, never the figures. The figures are
+// buttons, like the divider's: open (1 tokens, 2 cost, 0 neither) is the
+// one whose chart is open, in accent; hover the one under the pointer, in
+// the lighter text colour.
+func usageRow(label string, tokens int, cost float64, width, open, hover int) string {
+	t, c := format.Tokens(tokens), "$"+format.Cost(cost)
+	fw := ansi.StringWidth(t) + 3 + ansi.StringWidth(c)
+	label = ansi.Truncate(label, max(1, width-fw-1), "…")
+	gap := max(1, width-ansi.StringWidth(label)-fw)
+	figure := func(n int, text string) string {
+		switch n {
+		case open:
+			return theme.StyleBoxTitleFocus.Render(text)
+		case hover:
+			return theme.StyleLit.Render(text)
+		}
+		return theme.StyleDim.Render(text)
+	}
+	return theme.StyleDim.Render(label+strings.Repeat(" ", gap)) + figure(1, t) + theme.StyleDim.Render(" · ") + figure(2, c)
+}
+
+// usageFigureAt is the figure of a usage row width wide at column x: the
+// tokens or the cost.
+func usageFigureAt(tokens int, cost float64, width, x int) (usageKind, bool) {
+	tw, cw := ansi.StringWidth(format.Tokens(tokens)), ansi.StringWidth("$"+format.Cost(cost))
+	start := width - tw - 3 - cw
+	return hitSpan([]span[usageKind]{{start, start + tw, usageTokens}, {start + tw + 3, width, usageCost}}, x)
+}
+
+// usageRowFigures is what the nav's usage row at header row y shows: whose
+// usage (system) and its tokens and cost; ok is false for other rows.
+func (m Model) usageRowFigures(y int) (label string, system bool, tokens int, cost float64, ok bool) {
+	switch y {
+	case m.sidebarSystemRow():
+		return "System", true, m.systemTokens(), m.systemCost(), true
+	case m.sidebarSelectedRow():
+		if a := m.selectedAgent(); a != nil && !m.superChat {
+			return "@" + a.Name, false, a.Tokens, a.CostUSD, true
+		}
+		return channelLabel(m.channel), false, m.totalTokens(), m.totalCost(), true
+	}
+	return "", false, 0, 0, false
+}
+
+// navUsageRow draws the nav's usage row at header row y, its figure in
+// accent while its chart is open and lighter under the pointer.
+func (m Model) navUsageRow(y, width int) string {
+	label, system, tokens, cost, _ := m.usageRowFigures(y)
+	open := 0
+	if m.focus == focusUsage && (system && m.usage.channel == "" || !system && m.usageOnSelectedChat()) {
+		open = int(m.usage.kind) + 1
+	}
+	hover := 0
+	if m.hover.navRow == y {
+		hover = m.hover.navUsage
+	}
+	return usageRow(label, tokens, cost, width, open, hover)
 }
 
 // newChannelMark sits at the right of the channels title, in the gears'
@@ -634,11 +691,14 @@ const newChannelMark = "✚"
 // channel's project configuration.
 const channelGear = "⚙"
 
-// sidebarTabsRow is the sidebar header row that holds the ! and ? tabs.
-const sidebarTabsRow = 5
+// sidebarSystemRow and sidebarSelectedRow are the header's usage rows,
+// under the plan usage block: a click on the tokens figure opens the tokens
+// dialog, on the cost the cost dialog.
+func (m Model) sidebarSystemRow() int   { return 2 + len(m.planUsageRows(sidebarWidth-1, time.Now())) }
+func (m Model) sidebarSelectedRow() int { return m.sidebarSystemRow() + 1 }
 
 // sidebarDiscordRow opens the Discord status/control panel when clicked.
-const sidebarDiscordRow = 4
+func (m Model) sidebarDiscordRow() int { return m.sidebarSystemRow() + 3 }
 
 // stripRows is how many tab rows the footer strip draws: the ! ? dirs row
 // while the sidebar is hidden, none while it shows (! and ? sit in the
@@ -687,20 +747,33 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		rows, items = append(rows, text), append(items, idx)
 	}
-	// "● #name         ⚙ ", flush with the "channels" title: the channel's
-	// state dot, its name, and its gear a space in from the right edge (→ on
+	// "● #name · ~/dir    ⚙ ", flush with the "channels" title: the
+	// channel's state dot, its name, its directory (cut from the left, so
+	// the project's own folder stays; "! ~/dir" in warning colour when it
+	// is unavailable), and its gear a space in from the right edge (→ on
 	// the row or a click on it: the channel's dirs)
 	channel := func(dot, name, dir string, unavailable bool, style lipgloss.Style, idx int) {
-		name = format.Trunc(name, width-6)
-		line(dot+" "+style.Render(name)+strings.Repeat(" ", max(1, width-4-ansi.StringWidth(name)))+theme.StyleDim.Render(channelGear)+" ", idx)
-		if dir == "" {
-			return
+		room := width - 6
+		name = ansi.Truncate(name, room, "…")
+		text, w := style.Render(name), ansi.StringWidth(name)
+		if dir != "" {
+			path, pathStyle := format.ShortHome(dir), theme.StyleDim
+			if unavailable {
+				path, pathStyle = "! "+path, theme.StyleWarn
+			}
+			if rest := room - w - 3; rest >= 4 {
+				if pw := ansi.StringWidth(path); pw > rest {
+					path = ansi.TruncateLeft(path, pw-rest+1, "")
+					if i := strings.Index(path, "/"); i > 0 {
+						path = path[i:] // start at a folder boundary
+					}
+					path = "…" + path
+				}
+				text += theme.StyleDim.Render(" · ") + pathStyle.Render(path)
+				w += 3 + ansi.StringWidth(path)
+			}
 		}
-		path := format.ShortHome(dir)
-		if unavailable {
-			path = "! unavailable: " + path
-		}
-		line(theme.StyleDim.Render(format.Trunc("  "+path, width)), -1)
+		line(dot+" "+text+strings.Repeat(" ", max(1, width-4-w))+theme.StyleDim.Render(channelGear)+" ", idx)
 	}
 	other := func(s protocol.ChannelInfo, idx int) {
 		dot := stateDot(string(s.State))
@@ -713,7 +786,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	// another channel's kept tree, rendered once and indexed by its row
 	others := map[string][]string{}
 	for _, s := range m.navChannels {
-		if m.treeOpen[s.ID] && len(m.trees[s.ID]) > 0 {
+		if m.otherTreeShown(s.ID) {
 			others[s.ID] = m.agentRows(m.trees[s.ID], "", width)
 		}
 	}
@@ -722,7 +795,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		case sbNewChannel:
 			// the "channels" title, with its + (a new channel) a space in from
 			// the right edge, in the gears' column
-			line(theme.StyleBold.Render("channels")+strings.Repeat(" ", max(1, width-10))+theme.StyleDim.Render(newChannelMark)+" ", i)
+			line(theme.StyleAccent.Bold(true).Render("Channels")+strings.Repeat(" ", max(1, width-10))+theme.StyleDim.Render(newChannelMark)+" ", i)
 		case sbOther:
 			other(m.navChannels[r.k], i)
 		case sbHere:
@@ -739,18 +812,37 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 				dot = mark
 			}
 			channel(dot, channelLabel(m.channel), m.channel.Dir, m.channel.DirError != "", style, i)
-			if len(m.agents) == 0 {
+			if len(m.agents) == 0 && !m.treeClosed[m.channelID] {
 				rows, items = append(rows, tree[0]), append(items, -1) // the "(no agents)" row
 			}
 		case sbAgent:
 			line(tree[r.k], i)
+		case sbHereAll:
+			_, quiet := m.shownAgents(m.channelID, m.agents, m.openAgentID())
+			line(showAllLabel(m.treeAll[m.channelID], quiet, width), i)
+		case sbOtherAll:
+			id := m.navChannels[r.k].ID
+			_, quiet := m.shownAgents(id, m.trees[id], "")
+			line(showAllLabel(m.treeAll[id], quiet, width), i)
 		case sbOtherAgent:
 			if rs := others[m.navChannels[r.k].ID]; r.j < len(rs) {
 				line(rs[r.j], i)
 			}
 		}
 	}
-	return rows, items
+	// a blank row at the end, so the nav scrolled to its bottom never ends
+	// on the frame's edge
+	return append(rows, ""), append(items, -1)
+}
+
+// showAllLabel is the row under a channel's tree that shows its quiet
+// agents ("  ▸ show all · 3 idle") or hides them again ("  ▾ hide idle").
+func showAllLabel(all bool, quiet, width int) string {
+	text := fmt.Sprintf("▸ show all · %d idle", quiet)
+	if all {
+		text = "▾ hide idle"
+	}
+	return theme.StyleDim.Render(ansi.Truncate("  "+text, width, "…"))
 }
 
 // channelLabel is a channel's label in the sidebar and the picker: "#name".
@@ -787,11 +879,7 @@ func (m Model) needsHuman(agent string) string {
 // reads bold; the sidebar cursor is a background across the row, as in
 // the chat.
 func (m Model) treeRows(width int) []string {
-	sel := ""
-	if !m.superChat {
-		sel = m.selectedID()
-	}
-	return m.agentRows(m.agents, sel, width)
+	return m.agentRows(m.agents, m.openAgentID(), width)
 }
 
 // agentRows renders one channel's agent tree. selected names the agent
@@ -902,6 +990,9 @@ func (m Model) tabDialogBox(bodyWidth int) (string, []int) {
 // tabDialogTitle is the open tab's title with its count; a prompt dialog
 // is named after the kind of prompt at the head of the queue.
 func (m Model) tabDialogTitle() string {
+	if m.focus == focusUsage {
+		return m.usageTitle()
+	}
 	for _, t := range m.tabs() {
 		if t.focus == m.focus {
 			return t.name + " " + t.count
@@ -975,6 +1066,8 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 	}
 	note := func(text string) ([]string, []int) { return rowsAt([]string{theme.StyleDim.Render(text)}, -1, 0) }
 	switch m.focus {
+	case focusUsage:
+		return rowsAt(m.usageBody(width), -1, 0)
 	case focusAsync:
 		if m.hasReplyDetails() {
 			return m.replyBodyRows(width)
@@ -1181,6 +1274,8 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 		switch {
 		case on(f):
 			tabs[i] = theme.StyleBoxTitleFocus.Render(label)
+		case m.hover.tabOK && m.hover.tab == f: // under the pointer
+			tabs[i] = theme.StyleLit.Render(label)
 		// An unfocused tab with something waiting on the human is
 		// warning-coloured so it stands out until someone opens it.
 		case t.warn:
@@ -1192,7 +1287,11 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 	lines := make([]string, len(layout))
 	first = 0
 	for r, tr := range layout {
-		lines[r] = strings.Join(tabs[first:first+len(tr)], theme.StyleDim.Render(" · "))
+		sep := theme.StyleDim.Render(" · ")
+		if slices.Equal(tr, tabRows[1]) {
+			sep = theme.StyleRule.Render(" ─ ") // the agent's row sits on the divider: its own rule separates the tabs
+		}
+		lines[r] = strings.Join(tabs[first:first+len(tr)], sep)
 		first += len(tr)
 	}
 	return strings.Join(lines, "\n"), spans
@@ -1404,12 +1503,11 @@ func (m Model) statusText() string {
 
 func (m Model) footerRightView() string {
 	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.channel.Model}
-	if m.superChat { // the channel chat: the rollup of every agent's tokens and cost, no one agent's context
-		f.tokens, f.cost = m.totalTokens(), m.totalCost()
+	if m.superChat { // the channel chat: no one agent's context
 		return footerRight(f)
 	}
 	if a := m.selectedAgent(); a != nil {
-		f.label, f.tokens, f.cost = a.Name, a.Tokens, a.CostUSD
+		f.label = a.Name
 		f.context, f.window = a.Context, a.ContextWindow
 		if a.Model != "" {
 			f.model = a.Model
@@ -1439,7 +1537,7 @@ func (m Model) divider(width int) divider {
 	tabs, usage := m.agentTabs(), m.footerRightView()
 	right, rightW := "", 0
 	fit := func(parts ...string) bool {
-		text := strings.Join(slices.DeleteFunc(parts, func(p string) bool { return p == "" }), theme.StyleDim.Render(" · "))
+		text := strings.Join(slices.DeleteFunc(parts, func(p string) bool { return p == "" }), dash(" ─ "))
 		if text == "" || lipgloss.Width(text)+4 > width {
 			return false
 		}

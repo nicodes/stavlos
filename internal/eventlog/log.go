@@ -143,6 +143,7 @@ CREATE TABLE IF NOT EXISTS channels (
   title    TEXT    NOT NULL DEFAULT '',
   last_seq INTEGER NOT NULL DEFAULT 0
 );
+CREATE INDEX IF NOT EXISTS events_type_time ON events(type, time);
 CREATE TABLE IF NOT EXISTS trust (
   dir  TEXT PRIMARY KEY,
   hash TEXT NOT NULL

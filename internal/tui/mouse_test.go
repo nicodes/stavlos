@@ -130,7 +130,7 @@ func TestSidebarScrolls(t *testing.T) {
 	many := make([]protocol.AgentInfo, 40)
 	for i := range many {
 		id := string(rune('a'+i%26)) + strings.Repeat("-", i/26+1)
-		many[i] = protocol.AgentInfo{ID: id, Name: "agent" + id, Role: "general", State: "idle"}
+		many[i] = protocol.AgentInfo{ID: id, Name: "agent" + id, Role: "general", State: "running"}
 	}
 	m.agents, m.selected = many, 0
 	m.height = 18 // a short window: the tree is taller than the room for it

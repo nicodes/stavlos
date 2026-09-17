@@ -42,8 +42,18 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			// A dialog (an overlay or the tab dialog) is hit-tested in
 			// screen coordinates first; the tab dialog lets a miss fall
 			// through to whatever is under the pointer, an overlay does not.
-			if cmd, hit := m.dialogClick(msg.X, msg.Y); hit || m.ov != nil {
+			cmd, hit := m.dialogClick(msg.X, msg.Y)
+			if hit {
 				return cmd
+			}
+			if m.ov != nil {
+				if !m.dividerButtonAt(msg.X, msg.Y) {
+					return cmd
+				}
+				// one dialog at a time: a button on the divider swaps the open
+				// overlay for its own dialog
+				cmd = m.closeOverlay()
+				return tea.Batch(cmd, m.mouseClick(msg.X, msg.Y))
 			}
 			if !inMain {
 				return m.sidebarClick(msg.X, msg.Y)
@@ -57,6 +67,7 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		}
 		return tea.Batch(copyCmd(text), m.setStatus(fmt.Sprintf("copied %d characters", len([]rune(text))), false))
 	case msg.Action == tea.MouseActionMotion:
+		m.hoverDivider(msg.X, msg.Y)
 		if m.ov != nil || isTab(m.focus) {
 			m.dialogHover(msg.X, msg.Y) // a dialog owns hover; the chat behind it is left alone
 			return nil
@@ -108,7 +119,7 @@ func (m *Model) dialogHover(x, y int) {
 // starts after it and its separator. inMain is false over the sidebar.
 // Lower rows span the window and are returned as they are.
 func (m *Model) mainX(x, y int) (int, bool) {
-	if !m.sidebarVisible() || y > m.vp.Height {
+	if !m.sidebarVisible() || y >= m.vp.Height { // the divider (row vp.Height) spans the window too
 		return x, true
 	}
 	off := sidebarWidth + 2 // separator + gap
@@ -388,10 +399,44 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 			return m.openTab(f)
 		}
 		if part := m.metaHit(x); part != metaNone {
-			return m.metaAction(part)
+			var closed tea.Cmd
+			if isTab(m.focus) { // one dialog at a time: the open tab dialog gives way
+				closed = m.closeDialog()
+			}
+			return tea.Batch(closed, m.metaAction(part))
 		}
 	}
 	return nil
+}
+
+// hoverDivider notes the button under the pointer at screen position
+// (x, y): a divider button, or a figure of the nav's usage rows; none when
+// it is off them.
+func (m *Model) hoverDivider(x, y int) {
+	var h buttonHover
+	if _, _, tokens, cost, ok := m.usageRowFigures(y); ok && m.sidebarVisible() && !m.isHome() && x < sidebarWidth {
+		if kind, on := usageFigureAt(tokens, cost, sidebarWidth-1, x); on {
+			h.navRow, h.navUsage = y, int(kind)+1
+		}
+	}
+	if !m.isHome() && y == m.rows().rule {
+		if f, ok := m.metaTabAt(x, m.width); ok {
+			h.tab, h.tabOK = f, true
+		} else {
+			h.meta = m.metaHit(x)
+		}
+	}
+	m.hover = h
+}
+
+// dividerButtonAt reports whether screen position (x, y) is on one of the
+// divider's buttons: an agent tab, or the role, model or variant.
+func (m *Model) dividerButtonAt(x, y int) bool {
+	if m.isHome() || y != m.rows().rule {
+		return false
+	}
+	_, onTab := m.metaTabAt(x, m.width)
+	return onTab || m.metaHit(x) != metaNone
 }
 
 // metaHit maps a column of the divider to the role, model or variant drawn
