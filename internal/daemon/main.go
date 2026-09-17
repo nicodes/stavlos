@@ -72,6 +72,7 @@ func Main(ctx context.Context, o Options) error {
 	if o.Discord != nil {
 		d.Discord = o.Discord(sctx, o.Socket, o.DataDir)
 	}
+	go d.recapLoop(sctx)
 	lvl, why := sandbox.Probe()
 	log.Printf("stavlosd %s listening on %s (%d providers, sandbox %s)", buildid.ID(), o.Socket, len(reg.Providers()), lvl)
 	if why != nil {

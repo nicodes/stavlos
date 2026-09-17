@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -317,6 +318,18 @@ func replaceDirCmd(ctx context.Context, c *client.Client, channel, oldDir, newDi
 func renameChannelCmd(ctx context.Context, c *client.Client, channel, name string) tea.Cmd {
 	return resultCmd(ctx, "channel renamed", func(ctx context.Context) error {
 		return call(ctx, c, protocol.ChannelRename, protocol.ChannelRenameParams{Channel: channel, Name: name})
+	})
+}
+
+// setRecapCmd is /recap: minutes of silence before the main agent is asked
+// for a status report, 0 to turn it off.
+func setRecapCmd(ctx context.Context, c *client.Client, channel string, minutes int) tea.Cmd {
+	ok := fmt.Sprintf("recap every %d min of quiet", minutes)
+	if minutes == 0 {
+		ok = "recap off"
+	}
+	return resultCmd(ctx, ok, func(ctx context.Context) error {
+		return call(ctx, c, protocol.ChannelSetRecap, protocol.ChannelSetRecapParams{Channel: channel, Minutes: minutes})
 	})
 }
 

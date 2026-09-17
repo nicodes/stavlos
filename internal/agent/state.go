@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/project"
@@ -22,6 +23,11 @@ import (
 type channelState struct {
 	name, model, role, mode, dir string
 	archived                     bool
+	recap                        int        // minutes of silence before a recap is asked for; 0 is off
+	lastHeard                    time.Time  // when an agent last messaged the human
+	lastWork                     time.Time  // when an agent last ran a model call or a tool
+	lastRecap                    time.Time  // when a recap was last asked for
+	recapOpen                    bool       // …and it is still unanswered: the nudges chase it, no second ask
 	dirs                         []dirEntry // the working set beyond the channel directory
 	permits                      permits
 	agents                       map[string]*agentState
@@ -72,6 +78,9 @@ func newChannelState(model, role string) *channelState {
 // apply folds one committed event into the state.
 func (cs *channelState) apply(e event.Event, fx *effects) {
 	a := cs.agents[e.Agent]
+	if e.Type == event.AssistantMessage || e.Type == event.ToolFinished {
+		cs.lastWork = e.Time // something happened worth recapping
+	}
 	switch e.Type {
 	case event.ChannelCreated, event.ChannelUpdated, event.ChannelArchived, event.ChannelDirAdded, event.ChannelDirRemoved, event.PermitGranted:
 		cs.applyChannel(e)
@@ -88,6 +97,7 @@ func (cs *channelState) apply(e event.Event, fx *effects) {
 			cs.queued(a, e, fx)
 		}
 	case event.ChatMessage:
+		cs.lastHeard, cs.recapOpen = e.Time, false // the human heard from this channel
 		if a != nil {
 			var p event.ChatPayload
 			if e.Decode(&p) == nil {
@@ -135,6 +145,9 @@ func (cs *channelState) applyChannel(e event.Event) {
 		}
 		if p.Dir != nil {
 			cs.dir, cs.mode, cs.permits = *p.Dir, protocol.ModeAsk, permits{}
+		}
+		if p.Recap != nil {
+			cs.recap = *p.Recap
 		}
 	case event.ChannelArchived:
 		cs.archived = true
