@@ -93,9 +93,13 @@ func TestFooterRight(t *testing.T) {
 	if got != "" {
 		t.Fatalf("connected home: %q", got)
 	}
-	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5", tokens: 12_345, cost: 0.0123}))
-	if got != "12k tokens · $0.0123" {
-		t.Fatalf("channel: %q", got)
+	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5"}))
+	if got != "" {
+		t.Fatalf("no context window: %q", got)
+	}
+	got = stripANSI(footerRight(footerInfo{connected: true, label: "coder", model: "anthropic/claude-opus-5", context: 22_000, window: 1_100_000}))
+	if got != "2% · 22k/1.1m tokens" {
+		t.Fatalf("context: %q", got)
 	}
 }
 
@@ -1107,20 +1111,20 @@ func TestDividerAndStripRepo(t *testing.T) {
 		t.Fatalf("no divider or strip under it:\n%s", strings.Join(lines, "\n"))
 	}
 	// the agent on the left, its tabs then tokens and cost on the right; no
-	// context figure while the window is unknown
-	if row := lines[rule]; !strings.HasPrefix(row, "─ coder · gpt-5 · default ─") || !strings.Contains(row, "─ async 0 ─ todo 0 ─ mcp 0 ─ 2k tokens · $0.02 ─") ||
+	// context figure while the window is unknown; tokens and cost are the nav's
+	if row := lines[rule]; !strings.HasPrefix(row, "─ coder · gpt-5 · default ─") || !strings.HasSuffix(row, "─ async 0 ─ todo 0 ─ mcp 0 ─") || strings.Contains(row, "tokens") || strings.Contains(row, "$") ||
 		strings.Contains(row, "%") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) != 100 {
 		t.Fatalf("divider %q", row)
 	}
-	// with a window: "used% · used/window tokens" and the cost; the channel's tokens are in the sidebar
+	// with a window: "used% · used/window tokens"
 	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
-	if right := stripANSI(m.footerRightView()); right != "31% · 62k/200k tokens · $0.02" {
+	if right := stripANSI(m.footerRightView()); right != "31% · 62k/200k tokens" {
 		t.Fatalf("usage: %q", right)
 	}
-	if got := stripANSI(contextBar(250_000, 200_000, nil)); got != "100% · 250k/200k tokens" {
+	if got := stripANSI(contextBar(250_000, 200_000)); got != "100% · 250k/200k tokens" {
 		t.Fatalf("context %q", got)
 	}
-	if contextBar(5, 0, nil) != "" {
+	if contextBar(5, 0) != "" {
 		t.Fatal("no context figure without a window")
 	}
 	// a running compaction is a chat item: a rule with a sweeping bar, which
@@ -3076,7 +3080,7 @@ func TestChannelChatFooterIsTheChannels(t *testing.T) {
 		if !m.superChat || left != "" || len(spans) != 0 || len(m.metaParts()) != 0 {
 			t.Fatalf("channel chat meta: %q %v %v", stripANSI(left), spans, m.metaParts())
 		}
-		if right := stripANSI(m.footerRightView()); right != "2k tokens · $0.02" { // the rollup of tokens and cost, no context percentage
+		if right := stripANSI(m.footerRightView()); right != "" { // no one agent's context; tokens and cost are the nav's
 			t.Fatalf("channel chat right side: %q", right)
 		}
 		if sv := stripANSI(m.sectionsView(100)); strings.Contains(sv, "async") || slices.Contains(m.tabOrder(), focusAsync) || (tree == (sv != "")) {
@@ -3134,7 +3138,7 @@ func TestStatusSitsOverTheDivider(t *testing.T) {
 	m.setStatus("copied 3 lines", false)
 	lines := strings.Split(stripANSI(m.View()), "\n")
 	rule := m.rows().rule
-	if !strings.HasPrefix(lines[rule], "───") || strings.Contains(lines[rule], "copied") || !strings.HasSuffix(lines[rule], "─ 2k tokens · $0.02 ─") || ansi.StringWidth(lines[rule]) != m.width {
+	if !strings.HasPrefix(lines[rule], "───") || strings.Contains(lines[rule], "copied") || strings.Contains(lines[rule], "tokens") || ansi.StringWidth(lines[rule]) != m.width {
 		t.Fatalf("divider: %q", lines[rule])
 	}
 	if above := lines[rule-1]; !strings.HasSuffix(above, "copied 3 lines") || ansi.StringWidth(above) != m.width || len(lines) != m.height {
@@ -3538,59 +3542,6 @@ func TestUsageBars(t *testing.T) {
 	}
 }
 
-// TestDividerUsageOpensCharts: the divider's usage figures are buttons: the
-// tokens (or the context bar) open the selected chat's tokens chart and the
-// cost its cost chart, drawn in accent while that chart is open.
-func TestDividerUsageOpensCharts(t *testing.T) {
-	prev := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(termenv.TrueColor)
-	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
-	m := channelModel()
-	m.superChat = false
-	m.agents[0].Role, m.agents[0].Model, m.agents[0].Tokens, m.agents[0].CostUSD = "coder", "openai/gpt-5", 62_000, 0.02
-	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
-	m.agents[1].Model, m.channel.Model = "openai/gpt-5", "openai/gpt-5"
-	m.layout()
-	click := func(label string) {
-		t.Helper()
-		row := stripANSI(m.ruleLine(m.width))
-		i := strings.LastIndex(row, label)
-		if i < 0 {
-			t.Fatalf("no %q on the divider: %q", label, row)
-		}
-		x, y := ansi.StringWidth(row[:i])+1, m.rows().rule
-		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-		nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
-		m = nm.(Model)
-	}
-	click("62k/200k")
-	if m.focus != focusUsage || m.usage.kind != usageTokens || m.usage.agent != "a" {
-		t.Fatalf("the context bar should open the agent's tokens chart: focus=%v %+v", m.focus, m.usage)
-	}
-	if line := m.ruleLine(m.width); !strings.Contains(line, theme.StyleBoxTitleFocus.Render("31% · 62k/200k tokens")) || !strings.Contains(line, theme.StyleDim.Render("$0.02")) {
-		t.Fatalf("the open tokens chart's figure should be in accent:\n%q", line)
-	}
-	click("$0.02") // swaps for the cost chart
-	if m.focus != focusUsage || m.usage.kind != usageCost {
-		t.Fatalf("the cost should open the cost chart: %+v", m.usage)
-	}
-	if line := m.ruleLine(m.width); !strings.Contains(line, theme.StyleBoxTitleFocus.Render("$0.02")) {
-		t.Fatalf("the open cost chart's figure should be in accent:\n%q", line)
-	}
-	click("todo 0") // another divider button swaps the chart out
-	if m.focus != focusTodo {
-		t.Fatalf("todo should replace the chart: %v", m.focus)
-	}
-	// the channel chat: its rollup
-	m.closeDialog()
-	m.superChat = true
-	m.layout()
-	click("tokens")
-	if m.focus != focusUsage || m.usage.channel != m.channelID || m.usage.agent != "" || m.usageTitle() != "Tokens · #channel" {
-		t.Fatalf("the channel chat's tokens chart: %+v", m.usage)
-	}
-}
-
 // TestDividerHoverLightens: the divider button under the pointer (a meta
 // part, an agent tab or a usage figure) draws in the lighter text colour;
 // moving off the buttons puts it back to grey, and an open dialog's button
@@ -3614,7 +3565,7 @@ func TestDividerHoverLightens(t *testing.T) {
 		nm, _ := m.Update(tea.MouseMsg{X: ansi.StringWidth(row[:i]) + 1, Y: m.rows().rule, Action: tea.MouseActionMotion})
 		m = nm.(Model)
 	}
-	parts := []string{"coder (coder)", "gpt-5", "default", "async 0", "todo 0", "mcp 0", "0 tokens", "$0.02"}
+	parts := []string{"coder (coder)", "gpt-5", "default", "async 0", "todo 0", "mcp 0"}
 	check := func(lit, accent string) {
 		t.Helper()
 		line := m.ruleLine(m.width)
