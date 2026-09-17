@@ -126,7 +126,7 @@ func (m *Model) command(text string) tea.Cmd {
 		}
 		return nil
 	}
-	if cmd, ok := m.usageCommand(name, rest); ok { // /tokens, /cost and /plan
+	if cmd, ok := m.usageCommand(name, rest); ok { // /tokens, /cost, /plan and /recap
 		return cmd
 	}
 
