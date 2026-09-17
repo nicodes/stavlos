@@ -687,20 +687,33 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		}
 		rows, items = append(rows, text), append(items, idx)
 	}
-	// "● #name         ⚙ ", flush with the "channels" title: the channel's
-	// state dot, its name, and its gear a space in from the right edge (→ on
+	// "● #name · ~/dir    ⚙ ", flush with the "channels" title: the
+	// channel's state dot, its name, its directory (cut from the left, so
+	// the project's own folder stays; "! ~/dir" in warning colour when it
+	// is unavailable), and its gear a space in from the right edge (→ on
 	// the row or a click on it: the channel's dirs)
 	channel := func(dot, name, dir string, unavailable bool, style lipgloss.Style, idx int) {
-		name = format.Trunc(name, width-6)
-		line(dot+" "+style.Render(name)+strings.Repeat(" ", max(1, width-4-ansi.StringWidth(name)))+theme.StyleDim.Render(channelGear)+" ", idx)
-		if dir == "" {
-			return
+		room := width - 6
+		name = ansi.Truncate(name, room, "…")
+		text, w := style.Render(name), ansi.StringWidth(name)
+		if dir != "" {
+			path, pathStyle := format.ShortHome(dir), theme.StyleDim
+			if unavailable {
+				path, pathStyle = "! "+path, theme.StyleWarn
+			}
+			if rest := room - w - 3; rest >= 4 {
+				if pw := ansi.StringWidth(path); pw > rest {
+					path = ansi.TruncateLeft(path, pw-rest+1, "")
+					if i := strings.Index(path, "/"); i > 0 {
+						path = path[i:] // start at a folder boundary
+					}
+					path = "…" + path
+				}
+				text += theme.StyleDim.Render(" · ") + pathStyle.Render(path)
+				w += 3 + ansi.StringWidth(path)
+			}
 		}
-		path := format.ShortHome(dir)
-		if unavailable {
-			path = "! unavailable: " + path
-		}
-		line(theme.StyleDim.Render(format.Trunc("  "+path, width)), -1)
+		line(dot+" "+text+strings.Repeat(" ", max(1, width-4-w))+theme.StyleDim.Render(channelGear)+" ", idx)
 	}
 	other := func(s protocol.ChannelInfo, idx int) {
 		dot := stateDot(string(s.State))
