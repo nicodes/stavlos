@@ -485,12 +485,6 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 	if y == sidebarDiscordRow {
 		return tea.Batch(cmd, m.openDiscord("status"))
 	}
-	if y == sidebarTabsRow { // the ! ? dirs tabs: a click opens that tab
-		if f, ok := m.tabAt(x, 0); ok && m.sidebarVisible() {
-			return tea.Batch(cmd, m.openTab(f))
-		}
-		return cmd
-	}
 	_, items := m.sidebarLines(m.vp.Height)
 	if y < 0 || y >= len(items) || items[y] < 0 {
 		return cmd

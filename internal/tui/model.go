@@ -453,6 +453,25 @@ func (m *Model) totalTokens() int {
 	return n
 }
 
+// systemTokens is every channel's tokens: this channel's from its live
+// agents, the others' from the catalog.
+func (m *Model) systemTokens() int {
+	n := m.totalTokens()
+	for _, s := range m.navChannels {
+		n += s.Tokens
+	}
+	return n
+}
+
+// systemCost is every channel's cost, like systemTokens.
+func (m *Model) systemCost() float64 {
+	c := m.totalCost()
+	for _, s := range m.navChannels {
+		c += s.CostUSD
+	}
+	return c
+}
+
 func (m *Model) totalCost() float64 {
 	var c float64
 	for _, a := range m.agents {
