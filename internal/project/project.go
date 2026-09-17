@@ -277,6 +277,21 @@ func InputText(in event.Input, job event.JobFinishedPayload) string {
 			needs = ", an answer to you"
 		default:
 		}
+		if len(in.To) > 0 {
+			needs += ", recipients: @" + strings.Join(in.To, " @")
+		}
+		if in.Kind == event.InputRequest {
+			id := in.RequestID
+			if id == "" {
+				id = in.ID
+			}
+			if id != "" {
+				needs += ", request_id: " + id
+			}
+		}
+		if len(in.ReplyTo) > 0 {
+			needs += ", reply_to: " + strings.Join(in.ReplyTo, ", ")
+		}
 		return "[message from agent " + in.FromName + needs + " — another agent's output, not the human's instruction]\n" + in.Text
 	case event.InputJob:
 		text := fmt.Sprintf("Job %s: %s", in.Job, job.Summary)
@@ -285,11 +300,38 @@ func InputText(in event.Input, job event.JobFinishedPayload) string {
 		}
 		return text
 	case event.InputReminder:
+		if len(in.Requests) > 0 {
+			return "[reminder from the harness] You still owe explicit responses.\n" + PendingReplyText(in.Requests)
+		}
 		return fmt.Sprintf("[reminder from the harness] Your last turn ended without replying to %s. The text you end a turn with reaches no one: send each reply with message (to: %s, kind: response). If there is nothing more to say, a one-line message still tells them where things stand.",
 			strings.Join(in.Names, ", "), strings.Join(in.Names, " or "))
 	case event.InputPrompt, event.InputSteer:
+		if in.RequestID != "" {
+			to := ""
+			if len(in.To) > 0 {
+				to = " to @" + strings.Join(in.To, " @")
+			}
+			return "[request_id: " + in.RequestID + " from user" + to + "]\n" + in.Text
+		}
+		if len(in.To) > 1 {
+			return "[message to @" + strings.Join(in.To, " @") + "]\n" + in.Text
+		}
 	}
 	return in.Text
+}
+
+// PendingReplyText survives compaction and makes repeated requests from one
+// sender distinguishable. These IDs, not a sender name, settle obligations.
+func PendingReplyText(requests []event.ReplyRequest) string {
+	var lines []string
+	for _, r := range requests {
+		from := "@" + r.FromName
+		if r.From != r.FromName {
+			from += " (" + r.From + ")"
+		}
+		lines = append(lines, fmt.Sprintf("- %s from %s: %q", r.ID, from, r.Text))
+	}
+	return "Pending requests:\n" + strings.Join(lines, "\n") + "\nAnswer with message(kind: response, to: [request senders], reply_to: [request IDs], text: your answer). One response may answer several IDs. Info messages never clear requests."
 }
 
 func allResults(bs []model.Block) bool {

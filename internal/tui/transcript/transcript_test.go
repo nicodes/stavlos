@@ -76,7 +76,7 @@ func TestTranscriptItemsGroupEventLines(t *testing.T) {
 		}
 		return out
 	}
-	if k := kinds(0); k[LineText] != 2 || k[LineDim] != 0 || k[LineLabel] != 0 || !strings.HasPrefix(lines[1].Text, "@main → @scout (explorer) · m") {
+	if k := kinds(0); k[LineText] != 2 || k[LineDim] != 0 || k[LineLabel] != 0 || !strings.HasPrefix(lines[1].Text, "@main: @scout (explorer) · m") {
 		t.Fatalf("spawn item (the spawn over its task): %v %+v", k, lines[1])
 	}
 	if k := kinds(1); k[LineText] != 2 || k[LineBlank] != 2 {
@@ -388,7 +388,7 @@ func TestOnlyHumanInputIsBlue(t *testing.T) {
 				texts = append(texts, l.Text)
 			}
 		}
-		if strings.Join(texts, "|") != "@main look at the parser" || lines[1].Glyph != glyph {
+		if strings.Join(texts, "|") != "@main: look at the parser" || lines[1].Glyph != glyph {
 			t.Fatalf("%s from an agent: %+v", kind, lines)
 		}
 	}
@@ -423,7 +423,7 @@ func TestMessageArrows(t *testing.T) {
 		}
 	}
 	resp := InputLines(event.Input{Kind: event.InputResponse, Text: "done", From: "a2", FromName: "scout"}, "")
-	if resp[1].Glyph != GlyphAsk || resp[1].Text != "@scout done" {
+	if resp[1].Glyph != GlyphAsk || resp[1].Text != "@scout: done" {
 		t.Fatalf("a response from an agent reads › @scout: %+v", resp)
 	}
 }
@@ -452,7 +452,7 @@ func TestTurnStartMarksItems(t *testing.T) {
 			}
 		}
 	}
-	if strings.Join(marked, "|") != "@user one|@user two" {
+	if strings.Join(marked, "|") != "@user: one|@user: two" {
 		t.Fatalf("turn starts: %q", marked)
 	}
 }

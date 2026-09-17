@@ -3,6 +3,7 @@ package discord
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,8 @@ import (
 type sentMessage struct {
 	ID, Channel, User, Text string
 	Components              []dg.MessageComponent
+	Guild, UserID, Avatar   string
+	Webhook                 string
 }
 type fakeAPI struct {
 	mu        sync.Mutex
@@ -61,7 +64,18 @@ func (f *fakeAPI) Send(_ context.Context, channel, user, text string, components
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.next++
-	m := sentMessage{fmt.Sprint(f.next), channel, user, text, components}
+	m := sentMessage{ID: fmt.Sprint(f.next), Channel: channel, User: user, Text: text, Components: components}
+	f.messages[m.ID] = m
+	f.sends = append(f.sends, m)
+	return m.ID, nil
+}
+
+func (f *fakeAPI) SendUser(_ context.Context, channel, guild, user, text string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.next++
+	m := sentMessage{ID: fmt.Sprint(f.next), Channel: channel, User: "Operator", Text: text,
+		Guild: guild, UserID: user, Avatar: "https://example.com/avatar.png"}
 	f.messages[m.ID] = m
 	f.sends = append(f.sends, m)
 	return m.ID, nil
@@ -70,7 +84,32 @@ func (f *fakeAPI) Edit(_ context.Context, channel, id, text string, components [
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	m := f.messages[id]
+	if m.Webhook != "" {
+		return errors.New("webhook message edited through the bot endpoint")
+	}
 	m.ID, m.Channel, m.Text, m.Components = id, channel, text, components
+	f.messages[id] = m
+	return nil
+}
+
+func (f *fakeAPI) SendQuestion(_ context.Context, channel, agent, text string, components []dg.MessageComponent) (string, string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.next++
+	m := sentMessage{ID: fmt.Sprint(f.next), Channel: channel, User: agent, Text: text, Components: components, Webhook: "agent-hook"}
+	f.messages[m.ID] = m
+	f.sends = append(f.sends, m)
+	return m.ID, m.Webhook, nil
+}
+
+func (f *fakeAPI) EditWebhook(_ context.Context, webhook, id, text string, components []dg.MessageComponent) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	m, ok := f.messages[id]
+	if !ok || m.Webhook != webhook {
+		return errors.New("wrong webhook for question message")
+	}
+	m.Text, m.Components = text, components
 	f.messages[id] = m
 	return nil
 }
@@ -167,8 +206,14 @@ func TestPromptFilteringAndRestart(t *testing.T) {
 			t.Fatalf("stale or invented answer: %+v", m)
 		}
 	}
+	if len(b.store.snapshot()) != 1 {
+		t.Fatal("permission destination lost before its result arrived")
+	}
+	if err := w.mirror(ctx, event.Event{Seq: 1, Channel: "channel", Type: event.AskResolved, Payload: event.MustPayload(event.AskResolvedPayload{ID: "visible", Outcome: event.AskAnswered, Answer: protocol.AnswerDeny})}); err != nil {
+		t.Fatal(err)
+	}
 	if len(b.store.snapshot()) != 0 {
-		t.Fatal("resolved prompt retained in index")
+		t.Fatal("recorded permission result retained in index")
 	}
 }
 
@@ -222,13 +267,67 @@ func TestReplyAddressingAndSourceSuppression(t *testing.T) {
 		t.Fatalf("%v", posts)
 	}
 	for seq, from := range []string{"human:discord", "human:tui:1"} {
-		e := event.Event{Seq: int64(seq + 1), Type: event.ChatPosted, Payload: event.MustPayload(event.ChatPayload{From: from, Text: "hello"})}
+		e := event.Event{Seq: int64(seq + 1), Type: event.ChatPosted, Payload: event.MustPayload(event.ChatPayload{From: from, To: []string{"scout", "coder"}, Text: "hello"})}
 		if err := w.mirror(ctx, e); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if len(api.snapshot()) != 1 {
 		t.Fatal("echoed own post or missed terminal post")
+	}
+	m := api.snapshot()[0]
+	if m.UserID != "operator" || m.Guild != "guild" || m.Text != "@scout @coder hello" {
+		t.Fatalf("terminal post did not use the operator identity: %+v", m)
+	}
+}
+
+func TestReplyToMirroredHumanDoesNotAddressAgent(t *testing.T) {
+	var posted string
+	_, w, api := fixture(t, func(_ context.Context, _ string, p, r any) error {
+		posted = p.(protocol.ChannelPostParams).Text
+		return result(r, protocol.ChannelPostResult{})
+	})
+	api.target = &dg.Message{WebhookID: "terminal", Author: &dg.User{Username: "scout"}}
+	err := w.post(context.Background(), &dg.Message{Content: "follow up", MessageReference: &dg.MessageReference{MessageID: "human-post", ChannelID: w.discord}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if posted != "follow up" {
+		t.Fatalf("human display name became an agent address: %q", posted)
+	}
+}
+
+func TestTerminalIdentityOnLongMessagesAndMultipleOperators(t *testing.T) {
+	b, w, api := fixture(t, nil)
+	text := strings.Repeat("hello 😀\n", 700)
+	if err := w.terminalPost(context.Background(), text); err != nil {
+		t.Fatal(err)
+	}
+	api.mu.Lock()
+	parts := append([]sentMessage(nil), api.sends...)
+	api.mu.Unlock()
+	var joined strings.Builder
+	if len(parts) < 2 {
+		t.Fatal("long post was not split")
+	}
+	for _, m := range parts {
+		if m.UserID != "operator" || m.Avatar == "" || units(m.Text) > 2000 {
+			t.Fatalf("incorrect chunk: %+v", m)
+		}
+		joined.WriteString(m.Text)
+	}
+	if joined.String() != text {
+		t.Fatal("terminal text changed")
+	}
+	b.cfg.Approvers = []string{"one", "two"}
+	if err := w.terminalPost(context.Background(), "ambiguous author"); err != nil {
+		t.Fatal(err)
+	}
+	api.mu.Lock()
+	last := api.sends[len(api.sends)-1]
+	api.mu.Unlock()
+	if last.UserID != "" || last.User != "" || !strings.Contains(last.Text, "You (terminal)") {
+		t.Fatal("guessed a human identity with multiple operators")
 	}
 }
 
@@ -272,7 +371,7 @@ func TestQuestionsCombineSelectionsAndText(t *testing.T) {
 	d := newDraft(p)
 	d.selected[0][0], d.selected[0][1] = true, true
 	d.text[0], d.text[1] = "Three", "Stavlos"
-	w.drafts["q:operator"] = d
+	w.drafts["q"] = d
 	_, _, err := w.interact(context.Background(), interaction("q", "submit"))
 	if err != nil {
 		t.Fatal(err)
@@ -352,12 +451,12 @@ func TestCommandsStayWithinChannel(t *testing.T) {
 	i := interaction("", "")
 	i.Type = dg.InteractionApplicationCommand
 	i.Data = dg.ApplicationCommandInteractionData{Name: "status"}
-	text, err := w.command(context.Background(), i)
+	text, _, err := w.command(context.Background(), i)
 	if err != nil || !strings.Contains(text, "@main") {
 		t.Fatalf("%q %v", text, err)
 	}
 	i.Data = dg.ApplicationCommandInteractionData{Name: "cancel"}
-	if _, err := w.command(context.Background(), i); err != nil {
+	if _, _, err := w.command(context.Background(), i); err != nil {
 		t.Fatal(err)
 	}
 	if sent.Agent != "agent" || sent.Kind != protocol.KindCancel {
@@ -365,7 +464,7 @@ func TestCommandsStayWithinChannel(t *testing.T) {
 	}
 	sent = protocol.AgentSendParams{}
 	i.Data = dg.ApplicationCommandInteractionData{Name: "cancel", Options: []*dg.ApplicationCommandInteractionDataOption{{Name: "agent", Type: dg.ApplicationCommandOptionString, Value: "some-other-channel-id"}}}
-	if _, err := w.command(context.Background(), i); err == nil || sent.Agent != "" {
+	if _, _, err := w.command(context.Background(), i); err == nil || sent.Agent != "" {
 		t.Fatal("cancel escaped the mapped channel")
 	}
 }
@@ -376,28 +475,39 @@ func TestQuestionPaginationKeepsSelections(t *testing.T) {
 		p.Questions[0].Options = append(p.Questions[0].Options, protocol.QuestionOption{Label: fmt.Sprint(i)})
 	}
 	d := newDraft(p)
-	i := interaction("q", "pick")
-	i.Data = dg.MessageComponentInteractionData{CustomID: componentID("q", "pick", "0.0"), Values: []string{"3"}}
-	if err := updateDraft(d, p, i, "pick", "0.0", ""); err != nil {
+	i := interaction("q", "toggle")
+	if err := updateDraft(d, p, i, "toggle", "0.3", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := updateDraft(d, p, i, "page-next", "0", ""); err != nil {
-		t.Fatal(err)
+	for d.page < 6 {
+		if err := updateDraft(d, p, i, "page-next", "0", ""); err != nil {
+			t.Fatal(err)
+		}
 	}
-	i.Data = dg.MessageComponentInteractionData{CustomID: componentID("q", "pick", "0.1"), Values: []string{"27"}}
-	if err := updateDraft(d, p, i, "pick", "0.1", ""); err != nil {
+	if err := updateDraft(d, p, i, "toggle", "0.27", ""); err != nil {
 		t.Fatal(err)
 	}
 	if !d.selected[0][3] || !d.selected[0][27] {
 		t.Fatal("changing pages lost earlier selections")
 	}
-	if err := updateDraft(d, p, i, "pick", "0.0", ""); err == nil {
+	if err := updateDraft(d, p, i, "toggle", "0.3", ""); err == nil {
 		t.Fatal("stale view accepted")
 	}
 	_, components := questionView(p, d)
-	menu := components[0].(dg.ActionsRow).Components[0].(dg.SelectMenu)
-	if len(menu.Options) != 5 {
-		t.Fatal("last option page is incorrect")
+	if 1+2*len(components) > 40 {
+		t.Fatal("too many Discord V2 components")
+	}
+	for _, c := range components {
+		if len(c.(dg.ActionsRow).Components) != 1 {
+			t.Fatal("buttons must be vertically stacked")
+		}
+	}
+	if err := updateDraft(d, p, i, "page-next", "0", ""); err != nil {
+		t.Fatal(err)
+	}
+	_, components = questionView(p, d)
+	if len(components) != 6 || !hasQuestionAction(components, "text") {
+		t.Fatal("last page should stack two options, custom answer, Submit and two navigation buttons")
 	}
 }
 

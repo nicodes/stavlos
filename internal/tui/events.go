@@ -43,6 +43,14 @@ func (m *Model) ensureSpin() tea.Cmd {
 // compaction bar, the debounced tree refresh and the status line expiry.
 func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
+	case catalogTickMsg:
+		cmds := []tea.Cmd{channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), tick(3*time.Second, catalogTickMsg{})}
+		for _, s := range m.navChannels {
+			if m.treeOpen[s.ID] {
+				cmds = append(cmds, treeCmd(m.ctx, m.c, s.ID))
+			}
+		}
+		return tea.Batch(cmds...)
 	case spinner.TickMsg:
 		if !m.animating() {
 			m.spinning = false // the tick lapses; ensureSpin starts it again
@@ -86,30 +94,27 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 // connection or a failed attach.
 func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	switch msg := msg.(type) {
-	case reconcileMsg:
+	case customCommandsMsg:
+		return []tea.Cmd{m.onCustomCommands(msg)}, false
+	case customCommandRunMsg:
+		if m.accepts(msg.scope) && msg.err != nil {
+			return []tea.Cmd{m.setStatus(msg.err.Error(), true)}, false
+		}
+	case directoryMsg:
+		if !m.accepts(msg.scope) {
+			return nil, false
+		}
 		if msg.err != nil {
-			m.fatal = fmt.Errorf("reconcile: %w", msg.err)
-			return nil, true
+			return []tea.Cmd{m.setStatus(msg.err.Error(), true)}, false
 		}
-		m.channel = cleanChannel(msg.res.Channel)
-		m.reconciled = true
-		m.setAgents(msg.res.Agents)
-		if id := m.selectNext; id != "" { // an agent picked under another channel's row
-			m.selectNext = ""
-			if i := m.findAgent(id); i >= 0 {
-				m.openAgent(i)
-			}
-		}
-		for _, p := range msg.res.Prompts {
-			m.upsertPrompt(p)
-		}
-		m.replayTo = msg.res.Seq
-		cmds := []tea.Cmd{subscribeCmd(m.ctx, m.c, m.channelID, m.seq+1), channelsCmd(m.ctx, m.c, m.channel.Dir, channelsHistory), rolesCmd(m.ctx, m.c, m.channelID, true)}
-		if m.loading = msg.res.Seq > m.seq; !m.loading {
-			cmds = append(cmds, m.caughtUp()...) // a return with nothing missed replays nothing
-		}
-		return cmds, false
+		m.generation++
+		return []tea.Cmd{reconcileCmd(m.ctx, m.c, m.requestScope()), m.setStatus("default directory updated", false)}, false
+	case reconcileMsg:
+		return m.onReconcile(msg)
 	case subscribedMsg:
+		if !m.accepts(msg.scope) {
+			return nil, false
+		}
 		if msg.err != nil {
 			m.fatal = fmt.Errorf("subscribe: %w", msg.err)
 			return nil, true
@@ -143,7 +148,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		}
 		m.setAgents(msg.agents)
 		if m.sidebarVisible() {
-			return []tea.Cmd{channelsCmd(m.ctx, m.c, m.channel.Dir, channelsNav)}, false
+			return []tea.Cmd{channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav)}, false
 		}
 	case resultMsg:
 		if msg.err != nil {
@@ -158,14 +163,51 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	return nil, false
 }
 
+func (m *Model) onReconcile(msg reconcileMsg) ([]tea.Cmd, bool) {
+	if !m.accepts(msg.scope) || msg.res.Channel.ID != "" && msg.res.Channel.ID != m.channelID {
+		return nil, false
+	}
+	if msg.err != nil {
+		m.fatal = fmt.Errorf("reconcile: %w", msg.err)
+		return nil, true
+	}
+	if m.reconciled && msg.res.Seq < m.seq {
+		return []tea.Cmd{reconcileCmd(m.ctx, m.c, m.requestScope())}, false
+	}
+	m.channel = cleanChannel(msg.res.Channel)
+	m.customCommands = nil
+	m.reconciled = true
+	m.setAgents(msg.res.Agents)
+	if id := m.selectNext; id != "" {
+		m.selectNext = ""
+		if i := m.findAgent(id); i >= 0 {
+			m.openAgent(i)
+		}
+	}
+	for _, p := range msg.res.Prompts {
+		m.upsertPrompt(p)
+	}
+	m.replayTo = msg.res.Seq
+	cmds := []tea.Cmd{subscribeCmd(m.ctx, m.c, m.requestScope(), m.seq+1), channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), rolesCmd(m.ctx, m.c, m.requestScope(), true), customCommandsCmd(m.ctx, m.c, m.requestScope())}
+	if m.rememberViews && m.lastRemembered != m.channelID {
+		m.lastRemembered = m.channelID
+		cmds = append(cmds, rememberChannelCmd(m.channelID))
+	}
+	if m.loading = msg.res.Seq > m.seq; !m.loading {
+		cmds = append(cmds, m.caughtUp()...)
+	}
+	return cmds, false
+}
+
 // onPromptReply settles an answer the daemon accepted or refused.
 func (m *Model) onPromptReply(msg promptReplyMsg) tea.Cmd {
+	m.viewDirty = true
 	if m.promptBusy == msg.id {
 		m.promptBusy = ""
 	}
 	switch {
 	case msg.err == nil:
-		m.removePrompt(msg.id)
+		m.resolvePrompt(msg.id, true)
 	case isConflict(msg.err):
 		delete(m.claimedByUs, msg.id)
 		if i := m.findPrompt(msg.id); i >= 0 && m.prompts[i].ClaimedBy == "" {
@@ -257,7 +299,7 @@ func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd)
 		}
 	case event.AgentKilled:
 		m.onAgentKilled(ev.Agent)
-	case event.InputQueued:
+	case event.InputQueued, event.ChatPosted:
 		m.rememberPrompt(ev)
 	case event.CompactionStarted: // the chat item's bar animates until the result lands
 		if !m.loading && !m.compactTick {
@@ -266,6 +308,11 @@ func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd)
 		}
 	case event.ChannelUpdated:
 		m.onChannelUpdated(ev)
+		var p event.ChannelUpdatedPayload
+		if ev.Decode(&p) == nil && p.Dir != nil && !m.loading {
+			m.generation++
+			cmds = append(cmds, reconcileCmd(m.ctx, m.c, m.requestScope()), m.setStatus("default directory changed to "+*p.Dir, false))
+		}
 	case event.TurnEnded:
 		var p event.TurnEndedPayload
 		if !m.loading && ev.Decode(&p) == nil && p.Reason == "error" &&
@@ -327,6 +374,27 @@ func (m *Model) onAgentKilled(id string) {
 // rememberPrompt replays the human's message typed into an agent's chat
 // into the input history.
 func (m *Model) rememberPrompt(ev event.Event) {
+	if ev.Seq > 0 && ev.Seq <= m.historySeq {
+		return
+	}
+	if ev.Seq > m.historySeq {
+		m.historySeq = ev.Seq
+	}
+	if ev.Type == event.ChatPosted {
+		var p event.ChatPayload
+		if !m.loading || ev.Decode(&p) != nil || p.Text == "" {
+			return
+		}
+		text := p.Text
+		if len(p.To) > 0 && (len(p.To) != 1 || p.To[0] != "main") {
+			text = "@" + strings.Join(p.To, " @") + " " + text
+		}
+		if n := len(m.history); n == 0 || m.history[n-1] != text {
+			m.history = append(m.history, text)
+		}
+		m.histIdx = len(m.history)
+		return
+	}
 	var in event.Input
 	if !m.loading || ev.Decode(&in) != nil || in.From != "" || in.Post != "" || in.Text == "" || in.Kind != event.InputPrompt && in.Kind != event.InputSteer {
 		return
@@ -351,10 +419,15 @@ func (m *Model) onChannelUpdated(ev event.Event) {
 	if p.Model != nil {
 		m.channel.Model = *p.Model
 	}
-	if p.Mode == nil {
+	if p.Dir != nil && !m.loading {
+		m.channel.Dir, m.channel.DirError, m.channel.Mode = textsafe.Clean(*p.Dir), "", protocol.ModeAsk
+	}
+	if p.Mode == nil && p.Dir == nil {
 		return
 	}
-	m.channel.Mode = *p.Mode
+	if p.Mode != nil {
+		m.channel.Mode = *p.Mode
+	}
 	for _, a := range m.agents {
 		m.transcript(a.ID).Apply(ev)
 	}

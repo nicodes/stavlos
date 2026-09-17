@@ -16,9 +16,12 @@ const Version = 1
 
 // Method names.
 const (
-	MDaemonStatus   = "daemon.status"
-	MDaemonShutdown = "daemon.shutdown" // graceful stop; used to replace a stale build
-	MAttach         = "attach"          // declare client name + escalation tier
+	MDaemonStatus      = "daemon.status"
+	MDaemonShutdown    = "daemon.shutdown" // graceful stop; used to replace a stale build
+	MDiscordStatus     = "discord.status"
+	MDiscordConnect    = "discord.connect"
+	MDiscordDisconnect = "discord.disconnect"
+	MAttach            = "attach" // declare client name + escalation tier
 
 	MChannelList      = "channel.list"
 	MChannelCreate    = "channel.create"
@@ -30,6 +33,7 @@ const (
 	MChannelPost      = "channel.post"       // the human\'s message in the channel chat, delivered by @mention
 	MChannelAddDir    = "channel.add_dir"    // put a directory in the channel\'s working set (every agent\'s)
 	MChannelRemoveDir = "channel.remove_dir" // take one out (never the channel directory)
+	MChannelSetDir    = "channel.set_dir"    // change an idle channel's default working directory
 
 	MAgentTree       = "agent.tree"
 	MAgentSend       = "agent.send" // Prompt / Steer / Cancel / Kill
@@ -225,10 +229,24 @@ type DaemonStatusResult struct {
 	Providers []string `json:"providers"`
 }
 
+// DiscordStatus describes the daemon-managed integration, without credentials.
+type DiscordStatus struct {
+	Configured bool   `json:"configured"`
+	Enabled    bool   `json:"enabled"` // reconnect on daemon startup
+	State      string `json:"state"`   // disconnected, connecting, connected, reconnecting, stopping, error
+	Bot        string `json:"bot,omitempty"`
+	Guild      string `json:"guild,omitempty"`
+	GuildName  string `json:"guild_name,omitempty"`
+	Channels   int    `json:"channels"`
+	Error      string `json:"error,omitempty"`
+	ConfigPath string `json:"config_path"`
+}
+
 type ChannelInfo struct {
 	ID           string       `json:"id"`
 	Name         string       `json:"name"` // unique across the daemon, shown as #name
 	Dir          string       `json:"dir"`
+	DirError     string       `json:"dir_error,omitempty"` // directory unavailable; history remains accessible
 	Model        string       `json:"model"`
 	RootAgent    string       `json:"root_agent"`
 	Created      string       `json:"created"`
@@ -317,27 +335,29 @@ func ModeSummary(mode string) string {
 }
 
 type AgentInfo struct {
-	ID            string           `json:"id"`
-	Channel       string           `json:"channel"`
-	Parent        string           `json:"parent,omitempty"`
-	Role          string           `json:"role"`
-	Name          string           `json:"name"`
-	Model         string           `json:"model"`
-	Variant       string           `json:"variant,omitempty"` // model variant (reasoning effort); "" = default
-	Depth         int              `json:"depth"`
-	State         AgentState       `json:"state"` // idle | running | waiting | blocked | finished | killed
-	Turn          int              `json:"turn"`
-	Queued        int              `json:"queued"` // prompts waiting
-	CostUSD       float64          `json:"cost_usd"`
-	Tokens        int              `json:"tokens"`                   // input+output total
-	Context       int              `json:"context,omitempty"`        // estimated tokens the next model call carries (what compaction measures)
-	ContextWindow int              `json:"context_window,omitempty"` // the model\'s window; 0 when unknown
-	LastError     string           `json:"last_error,omitempty"`     // error that ended the most recent turn, if any
-	Jobs          []JobInfo        `json:"jobs,omitempty"`           // its background jobs still running (not children)
-	Todos         []event.TodoItem `json:"todos,omitempty"`          // this agent\'s todo list, in creation order
-	MCP           []MCPInfo        `json:"mcp,omitempty"`            // this agent\'s MCP servers (the ones its role lists), with state
-	Awaiting      []string         `json:"awaiting,omitempty"`       // ids of the agents whose answer this one is waiting for (a child's task, a message)
-	Due           []string         `json:"due,omitempty"`            // who this agent owes a reply: "user" or agent ids, until it messages them
+	PendingReplies  []event.ReplyRequest `json:"pending_replies,omitempty"`
+	AwaitingReplies []event.ReplyRequest `json:"awaiting_replies,omitempty"`
+	ID              string               `json:"id"`
+	Channel         string               `json:"channel"`
+	Parent          string               `json:"parent,omitempty"`
+	Role            string               `json:"role"`
+	Name            string               `json:"name"`
+	Model           string               `json:"model"`
+	Variant         string               `json:"variant,omitempty"` // model variant (reasoning effort); "" = default
+	Depth           int                  `json:"depth"`
+	State           AgentState           `json:"state"` // idle | running | waiting | blocked | finished | killed
+	Turn            int                  `json:"turn"`
+	Queued          int                  `json:"queued"` // prompts waiting
+	CostUSD         float64              `json:"cost_usd"`
+	Tokens          int                  `json:"tokens"`                   // input+output total
+	Context         int                  `json:"context,omitempty"`        // estimated tokens the next model call carries (what compaction measures)
+	ContextWindow   int                  `json:"context_window,omitempty"` // the model\'s window; 0 when unknown
+	LastError       string               `json:"last_error,omitempty"`     // error that ended the most recent turn, if any
+	Jobs            []JobInfo            `json:"jobs,omitempty"`           // its background jobs still running (not children)
+	Todos           []event.TodoItem     `json:"todos,omitempty"`          // this agent\'s todo list, in creation order
+	MCP             []MCPInfo            `json:"mcp,omitempty"`            // this agent\'s MCP servers (the ones its role lists), with state
+	Awaiting        []string             `json:"awaiting,omitempty"`       // ids of the agents whose answer this one is waiting for (a child's task, a message)
+	Due             []string             `json:"due,omitempty"`            // unique request senders; PendingReplies lists each individual obligation
 }
 type AgentTreeParams struct {
 	Channel string `json:"channel"`
@@ -389,36 +409,42 @@ type VariantsResult struct {
 
 // PromptInfo is a pending permission/question/trust prompt.
 type PromptInfo struct {
-	ID          string          `json:"id"`
-	Channel     string          `json:"channel"`
-	Agent       string          `json:"agent,omitempty"`
-	From        string          `json:"from,omitempty"`         // the asking agent\'s name, for a client that does not hold its channel\'s tree
-	ChannelName string          `json:"channel_name,omitempty"` // the channel\'s name, likewise
-	Kind        PromptKind      `json:"kind"`                   // permission | question | trust
-	Tool        string          `json:"tool,omitempty"`
-	Input       json.RawMessage `json:"input,omitempty"`
-	Question    string          `json:"question,omitempty"`
-	Options     []string        `json:"options,omitempty"`
-	ClaimedBy   string          `json:"claimed_by,omitempty"`
-	Escalated   bool            `json:"escalated"` // visible to fallback tier
-	Created     string          `json:"created"`
-	Dir         string          `json:"dir,omitempty"`       // a boundary prompt: the call reaches outside the channel's directories; "allow_always" adds this one
-	Prefix      string          `json:"prefix,omitempty"`    // what "allow_prefix" would remember for this call (a command prefix, a host); "" when the call has none
-	Questions   []Question      `json:"questions,omitempty"` // kind question: the batch an ask_user call raised, answered together
+	ID             string          `json:"id"`
+	Channel        string          `json:"channel"`
+	Agent          string          `json:"agent,omitempty"`
+	From           string          `json:"from,omitempty"`         // the asking agent\'s name, for a client that does not hold its channel\'s tree
+	Role           string          `json:"role,omitempty"`         // the asking agent's role, including prompts from other channels
+	ChannelName    string          `json:"channel_name,omitempty"` // the channel\'s name, likewise
+	Kind           PromptKind      `json:"kind"`                   // permission | question | trust
+	Tool           string          `json:"tool,omitempty"`
+	Input          json.RawMessage `json:"input,omitempty"`
+	Question       string          `json:"question,omitempty"`
+	Options        []string        `json:"options,omitempty"`
+	ClaimedBy      string          `json:"claimed_by,omitempty"`
+	Escalated      bool            `json:"escalated"` // visible to fallback tier; questions are visible immediately
+	Created        string          `json:"created"`
+	Dir            string          `json:"dir,omitempty"`             // a boundary prompt: the call reaches outside the channel's directories; "allow_always" adds this one
+	Prefix         string          `json:"prefix,omitempty"`          // what "allow_prefix" would remember for this call (a command prefix, a host); "" when the call has none
+	Questions      []Question      `json:"questions,omitempty"`       // one question per prompt; legacy servers may send batches
+	QuestionNumber int             `json:"question_number,omitempty"` // one-based position in the tool call's sequence
+	QuestionTotal  int             `json:"question_total,omitempty"`
 }
 
-// Question is one entry of an ask_user batch: a checklist. Options are
+// QuestionPosition is the display position of a question. Older multi-question
+// prompts keep their local numbering; new prompts each contain one question.
+func (p PromptInfo) QuestionPosition(index int) (int, int) {
+	if len(p.Questions) == 1 && p.QuestionNumber > 0 && p.QuestionTotal >= p.QuestionNumber {
+		return p.QuestionNumber, p.QuestionTotal
+	}
+	return index + 1, len(p.Questions)
+}
+
+// Question is an ask_user question: a checklist. Options are
 // always present; the human may pick any number of them and add a typed
 // answer of their own, all joined with ", " in the answer.
-type Question struct {
-	Question string           `json:"question"`
-	Options  []QuestionOption `json:"options"`
-}
-
-type QuestionOption struct {
-	Label       string `json:"label"`
-	Description string `json:"description,omitempty"`
-}
+type Question = event.Question
+type QuestionOption = event.QuestionOption
+type QuestionAnswer = event.QuestionAnswer
 type PromptListParams struct {
 	Channel string `json:"channel,omitempty"`
 }
@@ -433,9 +459,10 @@ type PromptReplyParams struct {
 	Answer string `json:"answer"`           // allow | deny | allow_always | text
 	Dir    string `json:"dir,omitempty"`    // boundary prompt + allow_always: add this directory instead of the offered one
 	Reason string `json:"reason,omitempty"` // deny: an optional note the agent sees in its tool result
-	// Answers answers a question batch, one entry per question in order
+	// Answers contains the current question's answer (legacy batches have one entry per question)
 	// (a picked label, several joined with ", ", or typed text).
-	Answers []string `json:"answers,omitempty"`
+	Answers []string         `json:"answers,omitempty"`
+	Details []QuestionAnswer `json:"details,omitempty"`
 }
 
 type TrustStatusParams struct {

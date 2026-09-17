@@ -34,6 +34,7 @@ type Agent struct {
 	ctxTokens   int  // estimated size of the last model call
 	ctxWindow   int
 	logErr      error // a failed log write: the turn ends at its next step
+	maintenance int   // manual compaction, including its preparation and cleanup
 	prefix      promptPrefix
 	instructed  map[string]bool // instructions files a tool result has carried since the last compaction
 
@@ -105,6 +106,7 @@ func (a *Agent) queue(ctx context.Context, kind event.InputKind, text, source st
 		return fmt.Errorf("agent %s is killed", a.ID)
 	}
 	in := event.Input{ID: NewID("i"), Kind: kind, Text: text}
+	in.RequestID = in.ID
 	if from, ok := strings.CutPrefix(source, "agent:"); ok {
 		if f := s.st.agents[from]; f != nil {
 			in.Kind, in.From, in.FromName = event.InputRequest, from, f.name
@@ -203,6 +205,7 @@ func (a *Agent) infoLocked() protocol.AgentInfo {
 		Queued: len(st.inbox), CostUSD: st.cost, Tokens: st.tokens,
 		Context: a.ctxTokens, ContextWindow: a.ctxWindow, LastError: st.lastError,
 		Awaiting: st.awaitingIDs(), Due: st.due(), Todos: append([]event.TodoItem(nil), st.todos...),
+		PendingReplies: st.pendingReplies(), AwaitingReplies: a.c.st.awaitingReplies(st),
 		MCP: a.mcpInfo(rv.preset.MCP), Jobs: a.jobInfosLocked(),
 	}
 	if rv.missing && info.LastError == "" {
@@ -314,6 +317,9 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 	s.mu.Lock()
 	st := a.state()
 	switch {
+	case s.reconfiguring:
+		s.mu.Unlock()
+		return "", errors.New("a directory change is in progress")
 	case st.killed:
 		s.mu.Unlock()
 		return "", fmt.Errorf("agent %s is killed", a.ID)
@@ -326,7 +332,9 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 		return "", errors.New("a compaction is already running")
 	}
 	modelID := st.model
+	a.maintenance++
 	s.mu.Unlock()
+	defer func() { s.mu.Lock(); a.maintenance--; s.mu.Unlock() }()
 	if modelID == "" {
 		return "", errors.New(ErrNoModel)
 	}

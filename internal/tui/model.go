@@ -32,12 +32,18 @@ func Run(ctx context.Context, c *client.Client, channelID string) error {
 	defer cancel()
 
 	m := newModel(ctx, c, channelID)
+	m.rememberViews = true
+	m.showTree = true // the global channel catalog is the default navigation
+	m.opened = true
 	m.superChat = true // the channel chat is the default view
 	m.input.Placeholder = m.placeholder()
 	p := tea.NewProgram(m, tea.WithContext(ctx), tea.WithAltScreen(), tea.WithMouseAllMotion())
 	go forwardNotifications(ctx, c, p)
 
 	final, err := p.Run()
+	if fm, ok := final.(Model); ok {
+		channelID = fm.channelID
+	}
 
 	// Best-effort unsubscribe; the daemon drops it on disconnect anyway.
 	select {
@@ -60,20 +66,30 @@ func Run(ctx context.Context, c *client.Client, channelID string) error {
 // Model is the Bubble Tea model for one channel. Update only performs state
 // transitions; every daemon interaction is a tea.Cmd from commands.go.
 type Model struct {
-	ctx context.Context
-	c   *client.Client
+	cfgEditor   *configEditor
+	configEpoch uint64
+	ctx         context.Context
+	c           *client.Client
 
 	channelState // the bound channel; replaced whole when switching
 	uiPrefs      // display choices; they survive a switch
 	dialogs      // the open overlay and sign-in
 	promptState  // what waits on the human, in every channel; survives a switch
 
-	navChannels []protocol.ChannelInfo          // the sidebar's channels section: other channels of this directory, newest first
-	visited     map[string]replayed             // channels switched away from: what their replay built, so a return replays only what it missed
-	trees       map[string][]protocol.AgentInfo // other channels' agents, so leaving a channel does not fold its tree
-	treeOpen    map[string]bool                 // channels whose tree the sidebar draws; the bound channel's always is
-	selectNext  string                          // agent to select once a switch lands (an agent picked under another channel)
-	dirsNext    bool                            // another channel's gear was chosen: its dirs dialog opens once the switch lands
+	navChannels    []protocol.ChannelInfo          // all other active channels, across directories
+	visited        map[string]replayed             // channels switched away from: what their replay built, so a return replays only what it missed
+	trees          map[string][]protocol.AgentInfo // other channels' agents, so leaving a channel does not fold its tree
+	treeOpen       map[string]bool                 // channels whose tree the sidebar draws; the bound channel's always is
+	selectNext     string                          // agent to select once a switch lands (an agent picked under another channel)
+	dirsNext       bool                            // another channel's gear was chosen: its dirs dialog opens once the switch lands
+	generation     uint64
+	switching      bool
+	rememberViews  bool
+	lastRemembered string
+	discordEpoch   uint64
+	discordStatus  protocol.DiscordStatus // daemon-wide; retained across channel switches
+	discordKnown   bool
+	editors        map[string]editorState
 
 	presets []protocol.PresetInfo
 
@@ -102,11 +118,8 @@ type Model struct {
 	promptInput textinput.Model // answer field of a question prompt
 	dirInput    textinput.Model // path field of the dirs dialog while adding or editing
 	sbCursor    int
-	sbTop       int      // first sidebar body row drawn: the nav scrolls on its own
-	palIdx      int      // highlighted row in the "/" command palette
-	history     []string // prompts sent from this client (and replayed human prompts)
-	histIdx     int      // == len(history) when editing a new line
-	histDraft   string   // unsent text saved while browsing history
+	sbTop       int // first sidebar body row drawn: the nav scrolls on its own
+	palIdx      int // highlighted row in the "/" command palette
 
 	fatal error
 }
@@ -116,6 +129,8 @@ type Model struct {
 // channel (a half-answered question, an armed esc, a cursor) leaks into
 // the next.
 type channelState struct {
+	customCommands []Command
+	editorState
 	channelID   string
 	channel     protocol.ChannelInfo
 	agents      []protocol.AgentInfo // pre-order, root first
@@ -146,11 +161,20 @@ type channelState struct {
 	quitArmed   time.Time // when ctrl+c was last pressed; a second within cancelWindow quits
 }
 
+// editorState belongs to one channel even when its transcript cache is evicted.
+type editorState struct {
+	draft      string
+	history    []string
+	histIdx    int
+	histDraft  string
+	historySeq int64
+}
+
 // newChannelState is the state of channel id before anything is known
 // about it but info.
 func newChannelState(id string, info protocol.ChannelInfo) channelState {
 	return channelState{
-		channelID: id, channel: info,
+		channelID: id, channel: info, loading: true,
 		spawned: map[string]time.Time{}, parentOf: map[string]string{},
 		transcripts: map[string]*transcript.Transcript{}, renders: map[string]*render.Cache{},
 	}
@@ -300,7 +324,7 @@ func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 // Init starts the cursor blink, the spinner, the placeholder cycle and the
 // reconcile snapshot.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.channelID))
+	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.requestScope()), tick(3*time.Second, catalogTickMsg{}), discordCmd(m.ctx, m.c, "status", m.discordEpoch))
 }
 
 // Update is the single-threaded state machine.
@@ -310,7 +334,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 	cmds = append(cmds, m.ensureFocus(), m.ensureSpin())
-	if m.viewDirty {
+	if m.viewDirty || m.focus == focusQuestions || m.focus == focusInlinePermission {
 		m.refreshViewport()
 	}
 	m.layout()
@@ -326,6 +350,12 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case tea.KeyMsg:
 		cmds = append(cmds, m.handleKey(msg))
 	case tea.MouseMsg:
+		if m.cfgEditor != nil {
+			if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+				cmds = append(cmds, m.configEditorMouse(msg.X, msg.Y))
+			}
+			return cmds, false
+		}
 		if _, inMain := m.mainX(msg.X, msg.Y); !inMain {
 			m.sidebarWheel(msg) // over the sidebar: it scrolls, and the chat stays where it was
 		} else {
@@ -335,14 +365,30 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 			}
 		}
 		cmds = append(cmds, m.mouse(msg))
-	case spinner.TickMsg, placeholderTickMsg, compactTickMsg, treeTickMsg, clearStatusMsg:
+	case spinner.TickMsg, placeholderTickMsg, compactTickMsg, treeTickMsg, catalogTickMsg, clearStatusMsg:
 		cmds = append(cmds, m.onTick(msg))
-	case reconcileMsg, subscribedMsg, eventMsg, streamMsg, promptMsg, disconnectedMsg, treeMsg, resultMsg, promptReplyMsg:
+	case reconcileMsg, subscribedMsg, eventMsg, streamMsg, promptMsg, disconnectedMsg, treeMsg, resultMsg, promptReplyMsg, directoryMsg, customCommandsMsg, customCommandRunMsg:
 		return m.onDaemon(msg)
 	case providersMsg, loginStartMsg, loginDoneMsg, rolesMsg, variantsMsg, channelsMsg, switchedMsg, modelsMsg:
 		cmds = append(cmds, m.onListed(msg))
+	case discordMsg:
+		cmds = append(cmds, m.onDiscord(msg))
+	case configEditorMsg:
+		cmds = append(cmds, m.onConfigEditor(msg))
+	case discordTickMsg:
+		if msg.epoch == m.discordEpoch {
+			cmds = append(cmds, discordCmd(m.ctx, m.c, "status", msg.epoch))
+		}
 	default:
 		// Cursor blink and other component-internal messages.
+		if e := m.cfgEditor; e != nil {
+			var cmd tea.Cmd
+			e.area, cmd = e.area.Update(msg)
+			cmds = append(cmds, cmd)
+			e.input, cmd = e.input.Update(msg)
+			cmds = append(cmds, cmd)
+			return cmds, false
+		}
 		var cmd tea.Cmd
 		m.input, cmd = m.input.Update(msg)
 		cmds = append(cmds, cmd)
@@ -425,10 +471,13 @@ func (m *Model) layout() {
 		return
 	}
 	boxW := m.boxWidth()
-	m.input.SetWidth(boxW - modeTagCols)                                                        // the mode tag sits before the ›
-	m.input.SetHeight(m.inputCap())                                                             // the textarea is always cap tall; the view trims to the rows used
-	m.promptInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.promptInput.Prompt)) - 1 // inside the tab dialog, under promptBox's indent
+	m.input.SetWidth(boxW - modeTagCols)             // the mode tag sits before the ›
+	m.input.SetHeight(m.inputCap())                  // the textarea is always cap tall; the view trims to the rows used
+	m.promptInput.Width = max(1, m.contentWidth()-7) // indent, row marker, checkbox and cursor
 	m.dirInput.Width = dialog.Width(m.width) - 4 - 2 - len([]rune(m.dirInput.Prompt)) - 1
+	if m.focus == focusInlinePermission {
+		m.dirInput.Width = max(1, m.contentWidth()-5)
+	}
 
 	vw := m.contentWidth()
 	widthChanged := vw != m.vp.Width

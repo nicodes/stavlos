@@ -3,18 +3,15 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/discord"
 	"github.com/nicodes/stavlos/internal/paths"
-	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -38,26 +35,6 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
-		return err
-	}
-	key := fmt.Sprintf("%x", sha256.Sum256([]byte(cfg.Guild+"/"+cfg.Category)))[:16]
-	state := filepath.Join(paths.DataDir(), "discord-"+key+"-prompts.json")
-	lock, err := os.OpenFile(state+".lock", os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return err
-	}
-	defer lock.Close()
-	if err := unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		return fmt.Errorf("a bridge for this guild/category is already running: %w", err)
-	}
-	b, closeGateway, err := discord.Open(ctx, cfg.Token, cfg.Guild, func(api discord.API, bot string) (*discord.Bridge, error) {
-		return discord.New(cfg, api, bot, state)
-	})
-	if err != nil {
-		return err
-	}
-	defer closeGateway()
-	log.Printf("discord: connected to guild %s", cfg.Guild)
-	return b.Run(ctx, paths.Socket())
+	log.Print("discord: standalone mode; use /discord connect in Stavlos for daemon-managed operation")
+	return discord.RunStandalone(ctx, cfg, paths.Socket(), paths.DataDir())
 }

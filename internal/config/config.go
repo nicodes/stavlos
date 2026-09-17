@@ -45,7 +45,7 @@ type File struct {
 	Sandbox    *SandboxConfig `json:"sandbox,omitempty"`   // the OS boundary shell commands and MCP servers run in
 	Dirs       []string       `json:"dirs,omitempty"`      // directories every channel works in besides its own (yours, and a trusted project\'s)
 	Hosts      []string       `json:"hosts,omitempty"`     // hosts web_fetch reaches without asking: github.com, *.example.com, or * (yours, and a trusted project\'s)
-	Discord    *Discord       `json:"discord,omitempty"`   // global-only bridge configuration; token remains an environment reference
+	Discord    *Discord       `json:"discord,omitempty"`   // global-only bridge configuration; token references remain unexpanded
 }
 
 // SandboxConfig shapes the sandbox (any layer; a trusted project's wins). Paths may use ~
@@ -260,6 +260,7 @@ type Effective struct {
 	Policy      *policy.Layered // every layer's rules merged in order (defaults, global, project, local); roles add overlays that only tighten
 	Presets     map[string]Preset
 	Skills      map[string]Skill
+	Commands    map[string]Command
 	// Instructions are the AGENTS.md files every agent follows, general
 	// first: the user's own file, then, once the project is trusted, the
 	// files from the repository root down to the channel directory.
@@ -344,6 +345,9 @@ func Load(dir string, trust Trust) (*Effective, error) {
 			if err := e.loadSkills(filepath.Join(pdir, "skills")); err != nil {
 				return nil, err
 			}
+			if err := e.loadCommands(filepath.Join(pdir, "commands")); err != nil {
+				return nil, err
+			}
 			e.ProjectTrusted = true
 			e.Instructions = append(e.Instructions, instructions.Chain(dir)...)
 		} else {
@@ -401,6 +405,10 @@ func (e *Effective) allowSearch() {
 // (escalation timers, the fallback for a channel whose own config fails to
 // load); Load builds a channel's config on top of it.
 func LoadGlobal() (*Effective, error) {
+	return loadGlobalFrom(paths.ConfigDir())
+}
+
+func loadGlobalFrom(gdir string) (*Effective, error) {
 	e := &Effective{Presets: map[string]Preset{}, Skills: map[string]Skill{}, MCP: map[string]MCP{}}
 
 	// defaults, then the global layer over them
@@ -413,7 +421,6 @@ func LoadGlobal() (*Effective, error) {
 	}
 
 	// global layer
-	gdir := paths.ConfigDir()
 	gf, err := readFile(filepath.Join(gdir, "stavlos.json"))
 	if err != nil {
 		return nil, fmt.Errorf("global config: %w", err)
@@ -427,6 +434,9 @@ func LoadGlobal() (*Effective, error) {
 		return nil, err
 	}
 	if err := e.loadSkills(filepath.Join(gdir, "skills")); err != nil {
+		return nil, err
+	}
+	if err := e.loadCommands(filepath.Join(gdir, "commands")); err != nil {
 		return nil, err
 	}
 	return e, nil
@@ -961,49 +971,10 @@ func readFile(path string) (File, error) {
 
 // StripJSONC removes // and /* */ comments and trailing commas.
 func StripJSONC(b []byte) []byte {
-	out := make([]byte, 0, len(b))
-	inStr := false
-	for i := 0; i < len(b); i++ {
-		c := b[i]
-		if inStr {
-			out = append(out, c)
-			if c == '\\' && i+1 < len(b) {
-				i++
-				out = append(out, b[i])
-			} else if c == '"' {
-				inStr = false
-			}
-			continue
-		}
-		switch {
-		case c == '"':
-			inStr = true
-			out = append(out, c)
-		case c == '/' && i+1 < len(b) && b[i+1] == '/':
-			for i < len(b) && b[i] != '\n' {
-				i++
-			}
-			out = append(out, '\n')
-		case c == '/' && i+1 < len(b) && b[i+1] == '*':
-			i += 2
-			for i+1 < len(b) && !(b[i] == '*' && b[i+1] == '/') {
-				i++
-			}
-			i++
-		case c == ',':
-			// trailing comma: look ahead past whitespace for } or ]
-			j := i + 1
-			for j < len(b) && (b[j] == ' ' || b[j] == '\n' || b[j] == '\t' || b[j] == '\r') {
-				j++
-			}
-			if j < len(b) && (b[j] == '}' || b[j] == ']') {
-				continue
-			}
-			out = append(out, c)
-		default:
-			out = append(out, c)
-		}
-	}
+	out, err := maskJSONC(b)
+	if err != nil {
+		return b
+	} // let the caller report its normal JSON decode error
 	return out
 }
 
@@ -1119,6 +1090,8 @@ Report what you changed and what you verified.`,
 // file if needed and replacing an existing "model" entry otherwise. Comments
 // and other keys are preserved.
 func SetGlobalModel(modelID string) error {
+	globalWriteMu.Lock()
+	defer globalWriteMu.Unlock()
 	p := filepath.Join(paths.ConfigDir(), "stavlos.json")
 	b, err := os.ReadFile(p)
 	if err != nil {

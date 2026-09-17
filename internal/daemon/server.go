@@ -35,6 +35,9 @@ func (d *Daemon) Serve(ctx context.Context, socket string) error {
 		return err
 	}
 	_ = os.Chmod(socket, 0o600)
+	if d.Discord != nil {
+		d.Discord.Start()
+	}
 	go func() {
 		<-ctx.Done()
 		ln.Close()
@@ -155,7 +158,7 @@ func (c *conn) enqueue(line []byte, droppable bool) {
 	case c.out <- outMsg{b: line, droppable: droppable}:
 	case <-c.done:
 	default:
-		log.Printf("client %s (%s) is not reading; dropping it", c.cl.id, c.cl.name)
+		log.Printf("client %s is not reading; dropping it", c.cl.id)
 		c.close()
 	}
 }
@@ -235,7 +238,7 @@ func (d *Daemon) rememberModel(s *agent.Channel, modelID string) {
 		return
 	}
 	for _, ss := range d.channelList() {
-		if cfg, err := config.Load(ss.Dir, d.trust); err == nil {
+		if cfg, err := config.Load(ss.Dir(), d.trust); err == nil {
 			ss.SetConfig(cfg)
 		}
 	}

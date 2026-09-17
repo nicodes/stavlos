@@ -6,11 +6,32 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/nicodes/stavlos/internal/protocol"
 )
 
 type promptMessage struct {
-	Channel string `json:"channel"`
-	Message string `json:"message"`
+	Permission *protocol.PromptInfo `json:"permission,omitempty"`
+	Questions  []protocol.Question  `json:"questions,omitempty"`
+	Seq        int64                `json:"seq,omitempty"` // replay question outcomes after this point on reconnect
+	Channel    string               `json:"channel"`
+	Message    string               `json:"message"`
+	Webhook    string               `json:"webhook,omitempty"` // empty for bot messages from older bridges or permission/trust prompts
+}
+
+func (m promptMessage) withPrompt(p protocol.PromptInfo, seq int64) promptMessage {
+	switch p.Kind {
+	case protocol.PromptQuestion:
+		m.Questions, m.Seq = promptQuestions(p), seq
+	case protocol.PromptPermission:
+		m.Permission, m.Seq = &p, seq
+	case protocol.PromptTrust:
+	}
+	return m
+}
+
+func (m promptMessage) missingPrompt(p protocol.PromptInfo) bool {
+	return p.Kind == protocol.PromptPermission && m.Permission == nil || p.Kind == protocol.PromptQuestion && len(m.Questions) == 0
 }
 
 // promptStore contains no webhook tokens and no chat replay cursor. Writes

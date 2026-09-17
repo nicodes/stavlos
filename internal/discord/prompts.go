@@ -2,13 +2,13 @@ package discord
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	dg "github.com/bwmarrin/discordgo"
+	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -31,43 +31,90 @@ func promptView(p protocol.PromptInfo, clientID string) (string, []dg.MessageCom
 	var buttons []dg.MessageComponent
 	switch p.Kind {
 	case protocol.PromptPermission:
+		text = permissionHeading(p)
 		buttons = append(buttons, button(p.ID, "allow", "Allow once", disabled))
 		if p.Dir != "" {
-			text += "\nDirectory: " + p.Dir
-			buttons = append(buttons, button(p.ID, "always", "Allow and add directory", disabled), button(p.ID, "dir", "Add another directory…", disabled))
+			buttons = append(buttons, button(p.ID, "always", "Allow and add directory", disabled))
 		} else {
 			buttons = append(buttons, button(p.ID, "always", "Allow in this channel", disabled))
 			if p.Prefix != "" {
 				buttons = append(buttons, button(p.ID, "prefix", "Allow "+p.Prefix+" in this channel", disabled))
 			}
 		}
-		buttons = append(buttons, button(p.ID, "deny", "Deny…", disabled))
+		buttons = append(buttons, button(p.ID, "deny-now", "Deny", disabled), button(p.ID, "deny", "Deny with reason", disabled))
 	case protocol.PromptQuestion:
-		text += fmt.Sprintf("\n%d question(s) waiting for an answer.", len(p.Questions))
-		for n, q := range p.Questions {
-			text += fmt.Sprintf("\n\n%d. %s", n+1, q.Question)
-			for j, o := range q.Options {
-				text += fmt.Sprintf("\n  %d. %s — %s", j+1, o.Label, o.Description)
-			}
-		}
-		buttons = []dg.MessageComponent{button(p.ID, "questions", "Answer questions", disabled)}
+		return questionPrompt(p, newDraft(p), clientID)
 	case protocol.PromptTrust:
-		var data struct {
-			Dir   string   `json:"dir"`
-			Files []string `json:"files"`
-		}
-		_ = json.Unmarshal(p.Input, &data)
-		text += "\n" + data.Dir + "\n" + strings.Join(data.Files, "\n")
+		text = trustText(p)
 		buttons = []dg.MessageComponent{button(p.ID, "allow", "Trust this project's config", disabled), button(p.ID, "skip", "Not now", disabled)}
 	}
 	if p.Kind == protocol.PromptPermission && len(p.Input) > 0 {
-		text += "\n" + string(p.Input)
+		text += "\n" + permissionSubject(p)
 	}
 	if disabled {
 		text += "\nClaimed by another client."
 	}
-	text += "\nPrompt: " + p.ID
 	return text, []dg.MessageComponent{row(buttons...)}
+}
+
+// questionInteraction identifies controls whose acknowledgement updates the
+// existing question card, rather than creating a private response message.
+func questionInteraction(i *dg.Interaction) (string, bool) {
+	var raw string
+	switch i.Type {
+	case dg.InteractionMessageComponent:
+		raw = i.MessageComponentData().CustomID
+	case dg.InteractionModalSubmit:
+		raw = i.ModalSubmitData().CustomID
+	default:
+		return "", false
+	}
+	id, action, _ := parseID(raw)
+	if id == "" {
+		return "", false
+	}
+	switch action {
+	case "questions", "pick", "toggle", "next", "back", "page-next", "page-back", "submit", "text", "text-submit", "clear-text", "allow", "always", "prefix", "deny-now", "deny-submit", "dir-submit", "skip":
+		return id, true
+	}
+	return "", false
+}
+
+func (w *worker) questionDraft(p protocol.PromptInfo) *draft {
+	d := w.drafts[p.ID]
+	if d == nil {
+		d = newDraft(p)
+		w.drafts[p.ID] = d
+	}
+	return d
+}
+
+func (w *worker) promptView(p protocol.PromptInfo) (string, []dg.MessageComponent) {
+	if p.Kind == protocol.PromptQuestion {
+		return questionPrompt(p, w.questionDraft(p), w.link.id)
+	}
+	return promptView(p, w.link.id)
+}
+
+func questionPrompt(p protocol.PromptInfo, d *draft, clientID string) (string, []dg.MessageComponent) {
+	text, components := questionView(p, d)
+	if p.ClaimedBy != "" && p.ClaimedBy != clientID {
+		text = clip(text, 1950) + "\nClaimed by another client."
+		for _, c := range components {
+			r := c.(dg.ActionsRow)
+			for n, c := range r.Components {
+				switch c := c.(type) {
+				case dg.Button:
+					c.Disabled = true
+					r.Components[n] = c
+				case dg.SelectMenu:
+					c.Disabled = true
+					r.Components[n] = c
+				}
+			}
+		}
+	}
+	return text, components
 }
 
 func modalResponse(i *dg.Interaction) *dg.InteractionResponse {
@@ -80,20 +127,27 @@ func modalResponse(i *dg.Interaction) *dg.InteractionResponse {
 	}
 	label := ""
 	switch action {
+	case "text":
+		label = "Custom answer"
 	case "deny":
-		label = "Reason (optional)"
+		label = "Reason"
 	case "dir":
 		label = "Directory to add"
-	case "text":
-		label = "Your answer (optional)"
 	default:
 		return nil
 	}
 	return &dg.InteractionResponse{Type: dg.InteractionResponseModal, Data: &dg.InteractionResponseData{
 		Title: label, CustomID: componentID(id, action+"-submit", arg), Components: []dg.MessageComponent{
-			row(dg.TextInput{CustomID: "value", Label: label, Style: dg.TextInputParagraph, Required: action == "dir", MaxLength: 4000}),
+			row(dg.TextInput{CustomID: "value", Label: label, Style: dg.TextInputParagraph, Required: true, MaxLength: 4000, Placeholder: modalPlaceholder(action)}),
 		},
 	}}
+}
+
+func modalPlaceholder(action string) string {
+	if action == "text" {
+		return "Save your custom answer here, then use Submit answer on the question card."
+	}
+	return ""
 }
 
 func modalValue(i *dg.Interaction) string {
@@ -111,8 +165,10 @@ func modalValue(i *dg.Interaction) string {
 
 func (w *worker) interact(ctx context.Context, i *dg.Interaction) (string, []dg.MessageComponent, error) {
 	if i.Type == dg.InteractionApplicationCommand {
-		text, err := w.command(ctx, i)
-		return text, nil, err
+		return w.command(ctx, i)
+	}
+	if all, page, ok := statusPage(i); ok {
+		return w.status(ctx, all, page)
 	}
 	var raw, value string
 	switch i.Type {
@@ -176,8 +232,13 @@ func permissionAnswer(p protocol.PromptInfo, action, value string) (protocol.Pro
 			return r, errors.New("directory choice is unavailable or empty")
 		}
 		r.Answer, r.Dir = protocol.AnswerAllowAlways, strings.TrimSpace(value)
+	case "deny-now":
+		r.Answer = protocol.AnswerDeny
 	case "deny-submit":
-		r.Answer, r.Reason = protocol.AnswerDeny, value
+		if strings.TrimSpace(value) == "" {
+			return r, errors.New("provide a reason, or use Deny")
+		}
+		r.Answer, r.Reason = protocol.AnswerDeny, strings.TrimSpace(value)
 	default:
 		return r, errors.New("invalid permission action")
 	}
@@ -203,17 +264,37 @@ func (w *worker) answer(ctx context.Context, i *dg.Interaction, p protocol.Promp
 	if r.Reason != "" {
 		text += "\n" + r.Reason
 	}
+	if p.Kind == protocol.PromptQuestion {
+		text = answeredQuestions(p, w.drafts[p.ID])
+	}
+	if p.Kind == protocol.PromptPermission {
+		text = recordedPermissionResult(p, event.AskResolvedPayload{Outcome: event.AskAnswered, Answer: r.Answer, Reason: r.Reason, Dir: r.Dir})
+	}
+	if p.Kind == protocol.PromptTrust {
+		note := "\n\n" + text
+		text = clipMarkdown(trustText(p), max(0, 2000-units(note))) + note
+	}
 	if err := w.finishPrompt(ctx, p.ID, text); err != nil {
 		return "Decision accepted; could not update the public prompt.", err
 	}
 	return text, nil
 }
 
-func (w *worker) command(ctx context.Context, i *dg.Interaction) (string, error) {
+func (w *worker) command(ctx context.Context, i *dg.Interaction) (string, []dg.MessageComponent, error) {
 	d := i.ApplicationCommandData()
 	switch d.Name {
 	case "status":
-		return w.status(ctx)
+		all := false
+		if len(d.Options) > 1 {
+			return "", nil, errors.New("use /status active or /status all")
+		}
+		for _, option := range d.Options {
+			if option.Type != dg.ApplicationCommandOptionSubCommand || option.Name != "active" && option.Name != "all" {
+				return "", nil, errors.New("use /status active or /status all")
+			}
+			all = option.Name == "all"
+		}
+		return w.status(ctx, all, 0)
 	case "cancel":
 		name := "main"
 		for _, o := range d.Options {
@@ -223,18 +304,18 @@ func (w *worker) command(ctx context.Context, i *dg.Interaction) (string, error)
 		}
 		r, err := call(ctx, w.link.rpc, protocol.AgentTree, protocol.AgentTreeParams{Channel: w.id})
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 		for _, a := range r.Agents {
 			if !strings.EqualFold(a.Name, name) {
 				continue
 			}
 			_, err := call(ctx, w.link.rpc, protocol.AgentSend, protocol.AgentSendParams{Agent: a.ID, Kind: protocol.KindCancel})
-			return "Cancellation sent to @" + a.Name, err
+			return "Cancellation sent to @" + a.Name, nil, err
 		}
-		return "", fmt.Errorf("no agent named @%s in this channel", name)
+		return "", nil, fmt.Errorf("no agent named @%s in this channel", name)
 	default:
-		return "", errors.New("unknown command")
+		return "", nil, errors.New("unknown command")
 	}
 }
 
@@ -257,32 +338,36 @@ func (w *worker) question(ctx context.Context, i *dg.Interaction, p protocol.Pro
 	if len(p.Questions) == 0 {
 		return "", nil, errors.New("empty question batch")
 	}
-	key := p.ID + ":" + interactionUser(i)
-	d := w.drafts[key]
-	if d == nil {
-		d = newDraft(p)
-		w.drafts[key] = d
-	}
+	// One shared draft backs the one public question card. Every authorized
+	// operator sees the same selections; the worker serializes edits/submission.
+	d := w.questionDraft(p)
 	if action == "submit" {
 		answers := make([]string, len(p.Questions))
+		details := make([]protocol.QuestionAnswer, len(p.Questions))
 		for q, question := range p.Questions {
-			var parts []string
-			for n, o := range question.Options {
+			details[q].Custom = strings.TrimSpace(d.text[q])
+			for n := range question.Options {
 				if d.selected[q][n] {
-					parts = append(parts, o.Label)
+					details[q].Selected = append(details[q].Selected, n)
 				}
 			}
-			if d.text[q] != "" {
-				parts = append(parts, d.text[q])
-			}
-			answers[q] = strings.Join(parts, ", ")
-			if strings.TrimSpace(answers[q]) == "" {
-				return "", nil, fmt.Errorf("question %d still needs an answer", q+1)
+			answers[q] = draftAnswer(question, d.selected[q], d.text[q])
+			if answers[q] == "" {
+				previous := d.index
+				d.index, d.page = q, 0
+				// Old cards offered Submit on every page. Treat that as Next
+				// when the current answer is complete, never strand the human
+				// on a page different from the one that needs an answer.
+				if q > previous {
+					text, components := questionView(p, d)
+					return text, components, nil
+				}
+				return "", nil, missingAnswer(q)
 			}
 		}
-		text, err := w.answer(ctx, i, p, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerAnswered, Answers: answers})
+		text, err := w.answer(ctx, i, p, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerAnswered, Answers: answers, Details: details})
 		if err == nil {
-			delete(w.drafts, key)
+			delete(w.drafts, p.ID)
 		}
 		return text, nil, err
 	}
@@ -293,32 +378,77 @@ func (w *worker) question(ctx context.Context, i *dg.Interaction, p protocol.Pro
 	return text, components, nil
 }
 
+func draftAnswer(q protocol.Question, selected map[int]bool, custom string) string {
+	var parts []string
+	for n, option := range q.Options {
+		if selected[n] {
+			parts = append(parts, option.Label)
+		}
+	}
+	if custom = strings.TrimSpace(custom); custom != "" {
+		parts = append(parts, custom)
+	}
+	return strings.TrimSpace(strings.Join(parts, ", "))
+}
+
+func missingAnswer(index int) error {
+	return fmt.Errorf("question %d still needs an answer: select options or enter a custom answer", index+1)
+}
+
 func updateDraft(d *draft, p protocol.PromptInfo, i *dg.Interaction, action, arg, value string) error {
 	if action != "questions" {
 		q, err := strconv.Atoi(strings.Split(arg, ".")[0])
 		if err != nil || q != d.index {
-			return errors.New("this question view is stale; open Answer questions again")
+			return errors.New("this question view changed; use the current form")
 		}
 	}
 	switch action {
 	case "questions":
 	case "next":
+		if draftAnswer(p.Questions[d.index], d.selected[d.index], d.text[d.index]) == "" {
+			return missingAnswer(d.index)
+		}
 		d.index = min(len(p.Questions)-1, d.index+1)
 		d.page = 0
 	case "back":
 		d.index = max(0, d.index-1)
 		d.page = 0
 	case "page-next":
-		d.page = min(max(0, (len(p.Questions[d.index].Options)-1)/25), d.page+1)
+		d.page = min(max(0, (len(p.Questions[d.index].Options)-1)/questionPageSize), d.page+1)
 	case "page-back":
 		d.page = max(0, d.page-1)
 	case "text-submit":
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return errors.New("enter a custom answer, or close the popup to leave it unchecked")
+		}
 		d.text[d.index] = value
+	case "clear-text":
+		d.text[d.index] = ""
+	case "toggle":
+		return toggleOption(d, p, arg)
 	case "pick":
 		return selectOptions(d, p, i, arg)
 	default:
 		return errors.New("invalid question action")
 	}
+	return nil
+}
+
+// Normal questions have at most four options; legacy larger lists keep paging.
+const questionPageSize = 4
+
+func toggleOption(d *draft, p protocol.PromptInfo, arg string) error {
+	parts := strings.Split(arg, ".")
+	if len(parts) != 2 {
+		return errors.New("invalid option")
+	}
+	n, err := strconv.Atoi(parts[1])
+	start, end := d.page*questionPageSize, min(len(p.Questions[d.index].Options), (d.page+1)*questionPageSize)
+	if err != nil || n < start || n >= end {
+		return errors.New("this option page changed; use the current buttons")
+	}
+	d.selected[d.index][n] = !d.selected[d.index][n]
 	return nil
 }
 
@@ -344,25 +474,63 @@ func selectOptions(d *draft, p protocol.PromptInfo, i *dg.Interaction, arg strin
 }
 
 func questionView(p protocol.PromptInfo, d *draft) (string, []dg.MessageComponent) {
+	if len(p.Questions) == 0 {
+		return "No questions available.", nil
+	}
 	q := p.Questions[d.index]
-	text := fmt.Sprintf("Question %d/%d: %s\nCustom answer: %s", d.index+1, len(p.Questions), q.Question, d.text[d.index])
+	footer := ""
+	if custom := strings.TrimSpace(d.text[d.index]); custom != "" {
+		footer = "\nCustom answer: " + clip(custom, 1000) + footer
+	}
+	text := questionHeading(q.Question, 2000-units(footer)) + footer
 	var components []dg.MessageComponent
-	start, end := d.page*25, min(len(q.Options), (d.page+1)*25)
-	var options []dg.SelectMenuOption
+	start, end := d.page*questionPageSize, min(len(q.Options), (d.page+1)*questionPageSize)
 	for n := start; n < end; n++ {
 		o := q.Options[n]
-		options = append(options, dg.SelectMenuOption{Label: clip(fmt.Sprintf("%d. %s", n+1, o.Label), 100), Description: clip(o.Description, 100), Value: strconv.Itoa(n), Default: d.selected[d.index][n]})
+		label := o.Label
+		if o.Description != "" {
+			label += " — " + o.Description
+		}
+		mark, style := "⬜", dg.SecondaryButton
+		if d.selected[d.index][n] {
+			mark, style = "✅", dg.SuccessButton
+		}
+		components = append(components, row(dg.Button{CustomID: componentID(p.ID, "toggle", fmt.Sprintf("%d.%d", d.index, n)), Label: clip(label, 80), Emoji: &dg.ComponentEmoji{Name: mark}, Style: style}))
 	}
-	if len(options) > 0 {
-		zero := 0
-		components = append(components, row(dg.SelectMenu{CustomID: componentID(p.ID, "pick", fmt.Sprintf("%d.%d", d.index, d.page)), Placeholder: "Select any options", MinValues: &zero, MaxValues: len(options), Options: options}))
-	}
+	components = append(components, row(customAnswerButton(p.ID, d.index, d.text[d.index])))
 	qb := func(action, label string) dg.MessageComponent {
-		return dg.Button{CustomID: componentID(p.ID, action, strconv.Itoa(d.index)), Label: label, Style: dg.SecondaryButton}
+		style := dg.SecondaryButton
+		if action == "next" || action == "submit" {
+			style = dg.PrimaryButton
+		}
+		return dg.Button{CustomID: componentID(p.ID, action, strconv.Itoa(d.index)), Label: label, Style: style}
 	}
-	components = append(components, row(qb("back", "Previous question"), qb("next", "Next question"), qb("text", "Custom answer…"), qb("submit", "Submit batch")))
-	if len(q.Options) > 25 {
-		components = append(components, row(qb("page-back", "Previous options"), qb("page-next", "More options")))
+	var actions []dg.MessageComponent
+	if d.index > 0 {
+		actions = append(actions, qb("back", "Previous question"))
+	}
+	if d.index+1 < len(p.Questions) {
+		actions = append(actions, qb("next", "Next question"))
+	} else {
+		label := "Submit answer"
+		if len(p.Questions) > 1 {
+			label = "Submit answers"
+		}
+		actions = append(actions, qb("submit", label))
+	}
+	if len(q.Options) > questionPageSize {
+		actions = append(actions, qb("page-back", "Previous options"), qb("page-next", "More options"))
+	}
+	for _, action := range actions {
+		components = append(components, row(action))
 	}
 	return clip(text, 2000), components
+}
+
+func customAnswerButton(id string, index int, value string) dg.Button {
+	label, action, mark, style := "Custom answer", "text", "⬜", dg.SecondaryButton
+	if value = strings.TrimSpace(value); value != "" {
+		label, action, mark, style = strings.Join(strings.Fields(value), " "), "clear-text", "✅", dg.SuccessButton
+	}
+	return dg.Button{CustomID: componentID(id, action, strconv.Itoa(index)), Label: clip(label, 80), Emoji: &dg.ComponentEmoji{Name: mark}, Style: style}
 }

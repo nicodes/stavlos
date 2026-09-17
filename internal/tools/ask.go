@@ -13,7 +13,7 @@ import (
 )
 
 // askTool is ask_user: one to four clarifying questions with constrained
-// answers, raised to the human as one prompt. The turn waits for the
+// answers, raised to the human as individual prompts. The turn waits for the
 // answers; there is no default, so the model should ask only when guessing
 // would waste work.
 type askTool struct{}
@@ -24,7 +24,7 @@ const (
 )
 
 func (askTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AskUser, Description: "Ask the human one to four short questions when several valid approaches exist and guessing would waste work: which backend, which of two designs, whether to keep going. Each question has its text and one to four options with a label and a one-line description; put the option you would pick first. Every question is a checklist: the human may pick several options and always has a last entry for typing something else, so never add an 'Other' or 'all of the above' option. The turn waits for the answers. Do not ask what you can find out yourself, and do not ask more than once for the same thing.",
+	return model.ToolDef{Name: toolname.AskUser, Description: "Ask the human one to four short questions when several valid approaches exist and guessing would waste work: which backend, which of two designs, whether to keep going. Each question has its text and one to four options with a label and a one-line description; put the option you would pick first. Every question is a checklist: the human may pick several options and always has a last entry for typing something else, so never add an 'Other' or 'all of the above' option. All questions are shown immediately and can be answered in any order; the turn waits until all have been answered and receives answers in the original question order. Do not ask what you can find out yourself, and do not ask more than once for the same thing.",
 		Schema: schemaOf(askInput{})}
 }
 
@@ -61,6 +61,9 @@ func (askTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	}
 	answers, err := env.Ask.Ask(ctx, qs)
 	if err != nil {
+		if len(answers) > 0 {
+			return errf("%s\n\n%s", FormatAnswers(qs[:min(len(qs), len(answers))], answers), err)
+		}
 		return errf("%v", err)
 	}
 	return Result{Output: FormatAnswers(qs, answers)}

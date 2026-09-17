@@ -17,7 +17,9 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/navigation"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/render"
@@ -35,16 +37,21 @@ type (
 	disconnectedMsg struct{ err error }
 
 	reconcileMsg struct {
-		res protocol.ReconcileResult
-		err error
+		scope requestScope
+		res   protocol.ReconcileResult
+		err   error
 	}
-	subscribedMsg struct{ err error }
-	treeMsg       struct {
+	subscribedMsg struct {
+		err   error
+		scope requestScope
+	}
+	treeMsg struct {
 		channel string
 		agents  []protocol.AgentInfo
 		err     error
 	}
-	treeTickMsg struct{}
+	treeTickMsg    struct{}
+	catalogTickMsg struct{}
 	// resultMsg reports a fire-and-forget call; ok is shown on success.
 	resultMsg struct {
 		ok  string
@@ -53,6 +60,11 @@ type (
 	promptReplyMsg struct {
 		id  string
 		err error
+	}
+	directoryMsg struct {
+		scope requestScope
+		info  protocol.ChannelInfo
+		err   error
 	}
 	clearStatusMsg struct{ token int }
 	// placeholderTickMsg advances the input placeholder suggestion.
@@ -81,6 +93,7 @@ type (
 		err  error
 	}
 	modelsMsg struct {
+		scope  requestScope
 		models []protocol.ModelInfo
 		err    error
 	}
@@ -113,16 +126,29 @@ func tick(d time.Duration, msg tea.Msg) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg { return msg })
 }
 
-func reconcileCmd(ctx context.Context, c *client.Client, channel string) tea.Cmd {
+type requestScope struct {
+	channel    string
+	generation uint64
+}
+
+func (m Model) requestScope() requestScope  { return requestScope{m.channelID, m.generation} }
+func (m Model) accepts(s requestScope) bool { return s.channel == "" || s == m.requestScope() }
+
+func rememberChannelCmd(channel string) tea.Cmd {
+	selected := time.Now()
+	return func() tea.Msg { return resultMsg{err: navigation.Remember(channel, selected)} }
+}
+
+func reconcileCmd(ctx context.Context, c *client.Client, scope requestScope) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		res, err := client.Do(ctx, c, protocol.Reconcile, protocol.ChannelRef{Channel: channel})
-		return reconcileMsg{res, err}
+		res, err := client.Do(ctx, c, protocol.Reconcile, protocol.ChannelRef{Channel: scope.channel})
+		return reconcileMsg{res: res, err: err, scope: scope}
 	})
 }
 
-func subscribeCmd(ctx context.Context, c *client.Client, channel string, from int64) tea.Cmd {
+func subscribeCmd(ctx context.Context, c *client.Client, scope requestScope, from int64) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		return subscribedMsg{call(ctx, c, protocol.Subscribe, protocol.SubscribeParams{Channel: channel, From: from})}
+		return subscribedMsg{err: call(ctx, c, protocol.Subscribe, protocol.SubscribeParams{Channel: scope.channel, From: from}), scope: scope}
 	})
 }
 
@@ -224,10 +250,10 @@ func disconnectProviderCmd(ctx context.Context, c *client.Client, id string) tea
 }
 
 // modelsCmd lists models of connected providers only.
-func modelsCmd(ctx context.Context, c *client.Client) tea.Cmd {
+func modelsCmd(ctx context.Context, c *client.Client, scope requestScope) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		res, err := client.Do(ctx, c, protocol.ModelList, protocol.ModelListParams{})
-		return modelsMsg{res.Models, err}
+		return modelsMsg{models: res.Models, err: err, scope: scope}
 	})
 }
 
@@ -235,15 +261,16 @@ func modelsCmd(ctx context.Context, c *client.Client) tea.Cmd {
 // to refresh the cached roles that filter the models and variants dialogs
 // and tint role names.
 type rolesMsg struct {
+	scope requestScope
 	roles []protocol.PresetInfo
 	err   error
 	quiet bool
 }
 
-func rolesCmd(ctx context.Context, c *client.Client, channel string, quiet bool) tea.Cmd {
+func rolesCmd(ctx context.Context, c *client.Client, scope requestScope, quiet bool) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		res, err := client.Do(ctx, c, protocol.Presets, protocol.PresetsParams{Channel: channel})
-		return rolesMsg{roles: res.Presets, err: err, quiet: quiet}
+		res, err := client.Do(ctx, c, protocol.Presets, protocol.PresetsParams{Channel: scope.channel})
+		return rolesMsg{roles: res.Presets, err: err, quiet: quiet, scope: scope}
 	})
 }
 
@@ -262,6 +289,13 @@ func addDirCmd(ctx context.Context, c *client.Client, channel, dir string) tea.C
 func removeDirCmd(ctx context.Context, c *client.Client, channel, dir string) tea.Cmd {
 	return resultCmd(ctx, "removed "+format.ShortHome(dir), func(ctx context.Context) error {
 		return call(ctx, c, protocol.ChannelRemoveDir, protocol.ChannelDirParams{Channel: channel, Dir: dir})
+	})
+}
+
+func setDirCmd(ctx context.Context, c *client.Client, scope requestScope, dir string) tea.Cmd {
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
+		info, err := client.Do(ctx, c, protocol.ChannelSetDir, protocol.ChannelDirParams{Channel: scope.channel, Dir: dir})
+		return directoryMsg{scope: scope, info: info, err: err}
 	})
 }
 
@@ -334,26 +368,26 @@ func copyCmd(text string) tea.Cmd {
 type channelsPurpose int
 
 const (
-	channelsPicker  channelsPurpose = iota // the /channels picker
-	channelsHistory                        // earlier prompts for ↑/↓ on the start screen
-	channelsNav                            // the sidebar's channels section
+	channelsPicker channelsPurpose = iota // the /channels picker
+	channelsNav                           // the sidebar's channels section
 )
 
 // channelsMsg carries channel.list for one purpose.
 type channelsMsg struct {
+	scope    requestScope
 	channels []protocol.ChannelInfo
 	err      error
 	purpose  channelsPurpose
 }
 
-func channelsCmd(ctx context.Context, c *client.Client, dir string, purpose channelsPurpose) tea.Cmd {
+func channelsCmd(ctx context.Context, c *client.Client, scope requestScope, purpose channelsPurpose) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		res, err := client.Do(ctx, c, protocol.ChannelList, protocol.ChannelListParams{Dir: dir})
-		return channelsMsg{res.Channels, err, purpose}
+		res, err := client.Do(ctx, c, protocol.ChannelList, protocol.ChannelListParams{})
+		return channelsMsg{channels: res.Channels, err: err, purpose: purpose, scope: scope}
 	})
 }
 
-// resumable is the sidebar's channels section: the directory's other
+// resumable is the sidebar's channels section: all other active
 // channels, in alphabetical order.
 func resumable(ss []protocol.ChannelInfo, current string) []protocol.ChannelInfo {
 	var out []protocol.ChannelInfo
@@ -397,10 +431,22 @@ func newChannelCmd(ctx context.Context, c *client.Client, from, dir, name string
 	})
 }
 
+func createChannelCmd(ctx context.Context, c *client.Client, from, base, dir, name string) tea.Cmd {
+	return func() tea.Msg {
+		resolved, err := config.WorkingDirectory(base, dir)
+		if err != nil {
+			return switchedMsg{err: err}
+		}
+		return newChannelCmd(ctx, c, from, resolved, name)()
+	}
+}
+
 func switchChannelCmd(ctx context.Context, c *client.Client, from, to string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		_ = call(ctx, c, protocol.Unsubscribe, protocol.SubscribeParams{Channel: from})
 		info, err := client.Do(ctx, c, protocol.ChannelResume, protocol.ChannelRef{Channel: to})
+		if err == nil {
+			_ = call(ctx, c, protocol.Unsubscribe, protocol.SubscribeParams{Channel: from})
+		}
 		return switchedMsg{info, err}
 	})
 }
@@ -408,16 +454,17 @@ func switchChannelCmd(ctx context.Context, c *client.Client, from, to string) te
 // variantsMsg carries the variant names a model offers, for the /variants
 // picker.
 type variantsMsg struct {
+	scope    requestScope
 	model    string
 	current  string
 	variants []string
 	err      error
 }
 
-func variantsCmd(ctx context.Context, c *client.Client, modelID, current string) tea.Cmd {
+func variantsCmd(ctx context.Context, c *client.Client, scope requestScope, modelID, current string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
 		res, err := client.Do(ctx, c, protocol.Variants, protocol.VariantsParams{Model: modelID})
-		return variantsMsg{modelID, current, res.Variants, err}
+		return variantsMsg{model: modelID, current: current, variants: res.Variants, err: err, scope: scope}
 	})
 }
 

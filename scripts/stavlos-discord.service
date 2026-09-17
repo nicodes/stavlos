@@ -4,7 +4,7 @@ After=network-online.target
 
 [Service]
 ExecStart=%h/.local/bin/stavlos-discord
-EnvironmentFile=%h/.config/stavlos/discord.env
+EnvironmentFile=-%h/.config/stavlos/discord.env
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
