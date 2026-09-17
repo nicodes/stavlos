@@ -1116,10 +1116,10 @@ func TestDividerAndStripRepo(t *testing.T) {
 	if right := stripANSI(m.footerRightView()); right != "31% · 62k/200k tokens · $0.02" {
 		t.Fatalf("usage: %q", right)
 	}
-	if got := stripANSI(contextBar(250_000, 200_000)); got != "100% · 250k/200k tokens" {
+	if got := stripANSI(contextBar(250_000, 200_000, false)); got != "100% · 250k/200k tokens" {
 		t.Fatalf("context %q", got)
 	}
-	if contextBar(5, 0) != "" {
+	if contextBar(5, 0, false) != "" {
 		t.Fatal("no context figure without a window")
 	}
 	// a running compaction is a chat item: a rule with a sweeping bar, which
@@ -3534,5 +3534,58 @@ func TestUsageBars(t *testing.T) {
 	got := usageBars([]float64{0, 0.1, 1, 4, 8}, 8, 2)
 	if got[0] != "    █" || got[1] != " ▁▂██" {
 		t.Fatalf("bars: %q", got)
+	}
+}
+
+// TestDividerUsageOpensCharts: the divider's usage figures are buttons: the
+// tokens (or the context bar) open the selected chat's tokens chart and the
+// cost its cost chart, drawn in accent while that chart is open.
+func TestDividerUsageOpensCharts(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	m := channelModel()
+	m.superChat = false
+	m.agents[0].Role, m.agents[0].Model, m.agents[0].Tokens, m.agents[0].CostUSD = "coder", "openai/gpt-5", 62_000, 0.02
+	m.agents[0].Context, m.agents[0].ContextWindow = 62_000, 200_000
+	m.agents[1].Model, m.channel.Model = "openai/gpt-5", "openai/gpt-5"
+	m.layout()
+	click := func(label string) {
+		t.Helper()
+		row := stripANSI(m.ruleLine(m.width))
+		i := strings.LastIndex(row, label)
+		if i < 0 {
+			t.Fatalf("no %q on the divider: %q", label, row)
+		}
+		x, y := ansi.StringWidth(row[:i])+1, m.rows().rule
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+	}
+	click("62k/200k")
+	if m.focus != focusUsage || m.usage.kind != usageTokens || m.usage.agent != "a" {
+		t.Fatalf("the context bar should open the agent's tokens chart: focus=%v %+v", m.focus, m.usage)
+	}
+	if line := m.ruleLine(m.width); !strings.Contains(line, theme.StyleBoxTitleFocus.Render("31% · 62k/200k tokens")) || !strings.Contains(line, theme.StyleDim.Render("$0.02")) {
+		t.Fatalf("the open tokens chart's figure should be in accent:\n%q", line)
+	}
+	click("$0.02") // swaps for the cost chart
+	if m.focus != focusUsage || m.usage.kind != usageCost {
+		t.Fatalf("the cost should open the cost chart: %+v", m.usage)
+	}
+	if line := m.ruleLine(m.width); !strings.Contains(line, theme.StyleBoxTitleFocus.Render("$0.02")) {
+		t.Fatalf("the open cost chart's figure should be in accent:\n%q", line)
+	}
+	click("todo 0") // another divider button swaps the chart out
+	if m.focus != focusTodo {
+		t.Fatalf("todo should replace the chart: %v", m.focus)
+	}
+	// the channel chat: its rollup
+	m.closeDialog()
+	m.superChat = true
+	m.layout()
+	click("tokens")
+	if m.focus != focusUsage || m.usage.channel != m.channelID || m.usage.agent != "" || m.usageTitle() != "Tokens · #channel" {
+		t.Fatalf("the channel chat's tokens chart: %+v", m.usage)
 	}
 }
