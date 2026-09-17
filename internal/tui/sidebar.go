@@ -167,6 +167,9 @@ func (m *Model) followSidebarCursor() {
 			cur = r
 		}
 	}
+	if cur == len(body)-2 {
+		cur++ // the last row brings the blank row under it into view
+	}
 	m.sbTop, _ = listWindow(cur, m.sbTop, len(body), room)
 }
 

@@ -2265,7 +2265,7 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if f := strings.Fields(plain[2]); len(body) != na+5 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
+		if f := strings.Fields(plain[2]); len(body) != na+6 || plain[na+5] != "" || items[na+5] != -1 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
 			len(f) != 3 || f[1] != "#proj" || f[2] != channelGear || strings.Join(strings.Fields(plain[na+4]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
 			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != -1 || items[na+4] != na+3 || hereRow(m) != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)

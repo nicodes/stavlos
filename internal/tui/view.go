@@ -750,7 +750,9 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 			}
 		}
 	}
-	return rows, items
+	// a blank row at the end, so the nav scrolled to its bottom never ends
+	// on the frame's edge
+	return append(rows, ""), append(items, -1)
 }
 
 // channelLabel is a channel's label in the sidebar and the picker: "#name".
