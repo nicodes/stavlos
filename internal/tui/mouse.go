@@ -42,8 +42,18 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			// A dialog (an overlay or the tab dialog) is hit-tested in
 			// screen coordinates first; the tab dialog lets a miss fall
 			// through to whatever is under the pointer, an overlay does not.
-			if cmd, hit := m.dialogClick(msg.X, msg.Y); hit || m.ov != nil {
+			cmd, hit := m.dialogClick(msg.X, msg.Y)
+			if hit {
 				return cmd
+			}
+			if m.ov != nil {
+				if !m.dividerButtonAt(msg.X, msg.Y) {
+					return cmd
+				}
+				// one dialog at a time: a button on the divider swaps the open
+				// overlay for its own dialog
+				cmd = m.closeOverlay()
+				return tea.Batch(cmd, m.mouseClick(msg.X, msg.Y))
 			}
 			if !inMain {
 				return m.sidebarClick(msg.X, msg.Y)
@@ -388,10 +398,24 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 			return m.openTab(f)
 		}
 		if part := m.metaHit(x); part != metaNone {
-			return m.metaAction(part)
+			var closed tea.Cmd
+			if isTab(m.focus) { // one dialog at a time: the open tab dialog gives way
+				closed = m.closeDialog()
+			}
+			return tea.Batch(closed, m.metaAction(part))
 		}
 	}
 	return nil
+}
+
+// dividerButtonAt reports whether screen position (x, y) is on one of the
+// divider's buttons: an agent tab, or the role, model or variant.
+func (m *Model) dividerButtonAt(x, y int) bool {
+	if m.isHome() || y != m.rows().rule {
+		return false
+	}
+	_, onTab := m.metaTabAt(x, m.width)
+	return onTab || m.metaHit(x) != metaNone
 }
 
 // metaHit maps a column of the divider to the role, model or variant drawn
