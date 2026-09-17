@@ -270,20 +270,13 @@ type footerInfo struct {
 	model     string // selected agent model (provider/id)
 	context   int    // estimated tokens the next model call carries
 	window    int    // the model's context window; 0 hides the bar
-	tokens    int
-	cost      float64
-	open      int // the usage dialog open on this chat: 1 tokens, 2 cost, 0 neither (its figure is in accent)
-	hover     int // the figure under the pointer, likewise (the lighter text colour)
 }
 
-// footerRight builds the usage on the divider over the input (a sign-in
-// nudge on the meta row instead while nothing is connected),
-// nothing on the home view (the left side already names the role and
-// model), or how full the context is and the cost ("2% · 22k/1.1m · $0.00",
-// or the channel's tokens when the window is unknown). The
-// repo sits on the tab strip; waiting permissions and /help are not
-// repeated here either (the strip shows the former, the "/" palette lists
-// every command).
+// footerRight is the right end of the divider over the input: the sign-in
+// nudge while nothing is connected, nothing on the home view, else how full
+// the agent's context is ("31% · 62k/200k tokens"; nothing while the
+// window is unknown, and in the channel chat, which has no one agent's
+// context). Tokens and cost are the nav's (its usage rows), not repeated.
 func footerRight(f footerInfo) string {
 	switch {
 	case !f.connected:
@@ -291,48 +284,16 @@ func footerRight(f footerInfo) string {
 	case f.home:
 		return ""
 	}
-	// dim like the rule it sits on: only the context bar's warning colour
-	// stands out, and the figure whose usage dialog is open (accent)
-	figure := func(n int, st lipgloss.Style) lipgloss.Style {
-		switch n {
-		case f.open:
-			return theme.StyleBoxTitleFocus
-		case f.hover:
-			return theme.StyleLit
-		}
-		return st
-	}
-	cost := theme.StyleDim.Render(" · ") + figure(2, theme.StyleDim).Render("$"+format.Cost(f.cost))
-	if bar := contextBar(f.context, f.window, func(st lipgloss.Style) lipgloss.Style { return figure(1, st) }); bar != "" {
-		return bar + cost // the channel's total tokens are in the sidebar
-	}
-	tokensStyle := figure(1, theme.StyleDim)
-	return tokensStyle.Render(format.Tokens(f.tokens)+" tokens") + cost
-}
-
-// usageSpans are where footerRight's usage figures sit in its text: the
-// tokens (or the context bar) and the cost, which open their usage dialogs.
-func usageSpans(usage string) []span[usageKind] {
-	plain := ansi.Strip(usage)
-	i := strings.LastIndex(plain, " · $")
-	if i < 0 {
-		return nil
-	}
-	w := ansi.StringWidth(plain[:i])
-	return []span[usageKind]{{0, w, usageTokens}, {w + 3, ansi.StringWidth(plain), usageCost}}
+	return contextBar(f.context, f.window)
 }
 
 // contextBar reads how full the model's context is — "31% · 62k/200k tokens" — which
 // is what auto-compaction watches (it summarises at 80%). Dim until 70%,
-// warning-coloured from there; restyle (nil for none) may change that
-// colour (an open or hovered button). "" when the window is unknown.
-func contextBar(context, window int, restyle func(lipgloss.Style) lipgloss.Style) string {
+// warning-coloured from there. "" when the window is unknown.
+func contextBar(context, window int) string {
 	pct, st, ok := contextFill(context, window)
 	if !ok {
 		return ""
-	}
-	if restyle != nil {
-		st = restyle(st)
 	}
 	return st.Render(fmt.Sprintf("%d%% · %s/%s tokens", pct, format.Tokens(context), format.Tokens(window)))
 }
@@ -711,16 +672,6 @@ func (m Model) agentTabs() string {
 	labels, _ := m.tabLabels(m.currentPrompt())
 	lines := strings.Split(labels, "\n")
 	return lines[len(lines)-1]
-}
-
-// usageAt maps a column of the divider, drawn width wide, to the usage
-// figure drawn there: the tokens or the cost.
-func (m Model) usageAt(x, width int) (usageKind, bool) {
-	d := m.divider(width)
-	if d.usageX < 0 {
-		return 0, false
-	}
-	return hitSpan(d.usageSpan, x-d.usageX)
 }
 
 // metaTabAt maps a column of the divider, drawn width wide, to the agent tab
@@ -1505,16 +1456,11 @@ func (m Model) statusText() string {
 
 func (m Model) footerRightView() string {
 	f := footerInfo{home: m.isHome(), connected: m.connected(), model: m.channel.Model}
-	if m.focus == focusUsage && m.usageOnSelectedChat() {
-		f.open = int(m.usage.kind) + 1
-	}
-	f.hover = m.hover.usage
-	if m.superChat { // the channel chat: the rollup of every agent's tokens and cost, no one agent's context
-		f.tokens, f.cost = m.totalTokens(), m.totalCost()
+	if m.superChat { // the channel chat: no one agent's context
 		return footerRight(f)
 	}
 	if a := m.selectedAgent(); a != nil {
-		f.label, f.tokens, f.cost = a.Name, a.Tokens, a.CostUSD
+		f.label = a.Name
 		f.context, f.window = a.Context, a.ContextWindow
 		if a.Model != "" {
 			f.model = a.Model
@@ -1536,13 +1482,11 @@ type divider struct {
 	metaSpans []span[metaPart]
 	tabsX     int // column where the agent's tabs start, -1 when not drawn
 	tabSpans  []span[focus]
-	usageX    int // column where the usage starts, -1 when not drawn
-	usageSpan []span[usageKind]
 }
 
 func (m Model) divider(width int) divider {
 	dash := theme.StyleRule.Render
-	d := divider{tabsX: -1, usageX: -1}
+	d := divider{tabsX: -1}
 	tabs, usage := m.agentTabs(), m.footerRightView()
 	right, rightW := "", 0
 	fit := func(parts ...string) bool {
@@ -1558,14 +1502,7 @@ func (m Model) divider(width int) divider {
 		d.tabsX = width - rightW + 1
 		_, spans := m.tabLabels(m.currentPrompt())
 		d.tabSpans = spans[len(spans)-1]
-		if usage != "" {
-			d.usageX = d.tabsX + lipgloss.Width(tabs) + 3
-		}
 	case fit(usage):
-		d.usageX = width - rightW + 1
-	}
-	if d.usageX >= 0 {
-		d.usageSpan = usageSpans(usage)
 	}
 	left, leftW := "", 0
 	if meta, spans := m.metaLeft(); meta != "" {

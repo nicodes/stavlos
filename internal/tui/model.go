@@ -280,12 +280,11 @@ type dialogs struct {
 }
 
 // dividerHover is the divider button under the pointer: at most one of a
-// meta part, an agent tab (tabOK) or a usage figure (usage 1 tokens, 2 cost).
+// meta part or an agent tab (tabOK).
 type dividerHover struct {
 	meta  metaPart
 	tab   focus
 	tabOK bool
-	usage int
 }
 
 // chatPage is how many items pgup/pgdn move the chat cursor.
