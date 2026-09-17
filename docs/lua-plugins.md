@@ -51,7 +51,8 @@ back a compile step), goja (JavaScript; workable, heavier).
 Lua plugins are the small tier. They do not add model providers, they do not
 extend the TUI (the TUI is one client among several; a daemon-side plugin
 could not reach Discord's rendering either), and they are not the way to
-build a bridge.
+build a bridge. Scripting the TUI itself is a separate, later host: see
+[TUI scripting](#tui-scripting-later).
 
 ## What a plugin can do
 
@@ -174,6 +175,61 @@ Steps 1 and 2 are enough to tell whether the hook model earns its place. The
 host API stays unstable until a release; the event payloads a hook sees are
 the protocol's event types and change with them.
 
+## TUI scripting (later)
+
+The TUI could embed the same VM, as a second and much narrower host. It is a
+different plugin system from the daemon's: different API, different trust,
+and it comes after the daemon hooks.
+
+The dividing rule: **if it should still work with the TUI closed, it belongs
+in a daemon plugin.** Policy, steering and tools are daemon matters; a
+client-side behavior never reaches Discord or any other client. A TUI script
+affects presentation and input on one person's terminal, and gets no shell,
+network or file access at all.
+
+### What it is for
+
+| Function | Effect |
+|---|---|
+| `tui.bind(key, action)` | map a key to a command or a sequence of actions |
+| `tui.command{name, run}` | add a `/` palette command, for instance one that expands to a prompt |
+| `tui.segment(where, fn)` | a short string on the divider or sidebar header, like a statusline component (git branch, a cost-budget warning) |
+| `tui.notify(fn)` | called when an agent starts waiting on you; ring the bell, raise a desktop notification |
+| `tui.theme{…}` | colors and glyphs, with room for conditions (terminal, time of day) |
+
+Notifications sit on the client on purpose: whether to ring a bell depends on
+where the person is sitting, not on the channel.
+
+### What it is not for
+
+- **Item renderers and layout.** Rendering is the hot path: per-item caches
+  brought a chat redraw to about half a millisecond, and a Lua call per item
+  per frame would undo that and complicate cache invalidation. It would also
+  freeze `tui/transcript` and `tui/render` internals into a public API.
+- **Anything semantic.** See the dividing rule above.
+
+### Rules
+
+- **Global only.** Scripts load from `~/.config/stavlos/tui/*.lua`. A
+  repository never restyles or rebinds someone's client, so there is no
+  project tier and nothing for the trust prompt to cover.
+- **The update loop is single-threaded.** A segment or binding runs
+  synchronously under a deadline of a few milliseconds; anything slower runs
+  as a `tea.Cmd` and delivers its result as a message. A script that
+  overruns or errors is disabled with a notice.
+- **Segments are cached.** A segment function is re-evaluated on the events
+  it names (or a timer), not on every frame, and its output passes through
+  `textsafe` and is truncated to its slot.
+
+### Cost, and the cheaper first step
+
+This is a second host API to document and keep stable. Keybindings and theme
+do not strictly need a VM: a `keys` and a `theme` block in the global config
+cover most of what people want. Do that first. If `internal/plugin` keeps the
+VM setup, sandboxing and deadlines reusable, a TUI host later is mostly a
+second small API table, starting with `bind`, `command`, `segment` and
+`notify`.
+
 ## Open questions
 
 - Should hooks see events from every agent or only from agents whose role
@@ -182,3 +238,5 @@ the protocol's event types and change with them.
   (`plugin.state`) or a side file?
 - Should a TUI/Discord surface list loaded plugins and their failures (a
   `plugins` tab), or is the notice enough?
+- Is a TUI Lua host worth it once `keys` and `theme` config exist, or do
+  segments and notifications fit in config too?
