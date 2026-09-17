@@ -482,7 +482,7 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 		return m.openConfigEditor(true)
 	}
 	cmd := m.setFocus(focusSidebar)
-	if y == sidebarDiscordRow {
+	if y == m.sidebarDiscordRow() {
 		return tea.Batch(cmd, m.openDiscord("status"))
 	}
 	if _, system, tokens, cost, ok := m.usageRowFigures(y); ok { // the usage rows: their figures chart tokens or cost over time

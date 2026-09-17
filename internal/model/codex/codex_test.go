@@ -303,3 +303,51 @@ func TestCompleteCancel(t *testing.T) {
 		t.Errorf("partial blocks = %+v", resp.Blocks)
 	}
 }
+
+// TestUsageFromHeaders: the windows are read as the Codex CLI reads them:
+// used percent clamped, a window without data skipped, none at all no usage.
+func TestUsageFromHeaders(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	h := http.Header{}
+	h.Set("x-codex-primary-used-percent", "0")
+	h.Set("x-codex-primary-window-minutes", "0")
+	h.Set("x-codex-secondary-used-percent", "120.5")
+	h.Set("x-codex-secondary-window-minutes", "10080")
+	h.Set("x-codex-secondary-reset-at", "1800500000")
+	u, ok := usageFromHeaders(h, now)
+	if !ok || len(u.Windows) != 1 || u.Windows[0].UsedPercent != 100 || u.Windows[0].Minutes != 10080 || !u.Windows[0].ResetsAt.Equal(time.Unix(1800500000, 0)) || !u.Observed.Equal(now) {
+		t.Fatalf("usage: %+v %v", u, ok)
+	}
+	h.Set("x-codex-primary-used-percent", "38.5")
+	h.Set("x-codex-primary-window-minutes", "300")
+	if u, _ := usageFromHeaders(h, now); len(u.Windows) != 2 || u.Windows[0].UsedPercent != 38.5 || u.Windows[0].Minutes != 300 {
+		t.Fatalf("both windows: %+v", u)
+	}
+	if _, ok := usageFromHeaders(http.Header{"X-Codex-Primary-Used-Percent": {"NaN"}}, now); ok {
+		t.Fatal("no usable window should be no usage")
+	}
+}
+
+// TestCompleteReportsUsage: a call reports the usage its response headers
+// carry, a rejected one (429 at the limit) included, and sends no request
+// of its own.
+func TestCompleteReportsUsage(t *testing.T) {
+	stream.RetryDelay = time.Millisecond
+	requests := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("x-codex-primary-used-percent", "100")
+		w.Header().Set("x-codex-primary-window-minutes", "300")
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+	var got []model.PlanUsage
+	src := func(context.Context) (model.Token, error) { return model.Token{Access: "tok"}, nil }
+	m, _ := NewWithUsage(src, srv.URL, func(u model.PlanUsage) { got = append(got, u) }).Open("gpt-5")
+	if _, err := m.Complete(context.Background(), model.Request{Model: "gpt-5"}, nil); err == nil {
+		t.Fatal("the call should fail")
+	}
+	if requests != 1 || len(got) != 1 || got[0].Windows[0].UsedPercent != 100 {
+		t.Fatalf("requests %d, usage %+v", requests, got)
+	}
+}

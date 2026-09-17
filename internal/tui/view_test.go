@@ -2156,7 +2156,7 @@ func TestSidebarNav(t *testing.T) {
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
 		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || strings.Join(strings.Fields(sb[2]), " ") != "System 2k · $0.25" || strings.Join(strings.Fields(sb[3]), " ") != "@main 1k · $0.20" ||
-			strings.TrimSpace(sb[4]) != "" || sidebarDiscordRow != 5 || !strings.Contains(sb[sidebarDiscordRow], "Discord checking") ||
+			strings.TrimSpace(sb[4]) != "" || m.sidebarDiscordRow() != 5 || !strings.Contains(sb[m.sidebarDiscordRow()], "Discord checking") ||
 			strings.Contains(strings.Join(sb[:7], "\n"), "! 1/1") || strings.TrimSpace(sb[6]) != "" || !strings.HasPrefix(sb[7], "Channels ") || !strings.Contains(sb[7], " "+newChannelMark+" ") || strings.Contains(sb[7], "↑/↓") ||
 			strings.Contains(strings.Join(sb, "\n"), "waiting") || strings.Contains(strings.Join(sb, "\n"), "need you") {
 			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:8], "\n"))
@@ -3496,22 +3496,22 @@ func TestUsageDialogs(t *testing.T) {
 		m = nm.(Model)
 		return cmd
 	}
-	if clickRow(sidebarSelectedRow, false) == nil || m.focus != focusUsage || m.usage.kind != usageTokens || m.usage.agent != "a" || m.usageTitle() != "Tokens · @main" {
+	if clickRow(m.sidebarSelectedRow(), false) == nil || m.focus != focusUsage || m.usage.kind != usageTokens || m.usage.agent != "a" || m.usageTitle() != "Tokens · @main" {
 		t.Fatalf("the selected row's tokens: focus=%v %+v", m.focus, m.usage)
 	}
 	m.closeDialog()
-	nm, _ := m.Update(tea.MouseMsg{X: 1, Y: sidebarSelectedRow, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}) // the label is no button
-	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 1, Y: sidebarSelectedRow, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	nm, _ := m.Update(tea.MouseMsg{X: 1, Y: m.sidebarSelectedRow(), Action: tea.MouseActionPress, Button: tea.MouseButtonLeft}) // the label is no button
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 1, Y: m.sidebarSelectedRow(), Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	if m = nm.(Model); m.focus == focusUsage {
 		t.Fatal("a click on the row's label should open nothing")
 	}
-	clickRow(sidebarSystemRow, true)
+	clickRow(m.sidebarSystemRow(), true)
 	if m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" || m.usageTitle() != "Cost · System" {
 		t.Fatalf("the system row's cost: %+v", m.usage)
 	}
 	m.closeDialog()
 	m.superChat = true
-	clickRow(sidebarSelectedRow, true)
+	clickRow(m.sidebarSelectedRow(), true)
 	if m.usage.channel != m.channelID || m.usage.agent != "" || m.usageTitle() != "Cost · #channel" {
 		t.Fatalf("the channel chat's cost: %+v", m.usage)
 	}
@@ -3674,17 +3674,65 @@ func TestNavUsageFiguresHighlight(t *testing.T) {
 		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionMotion})
 		m = nm.(Model)
 	}
-	check("grey", sidebarSystemRow, theme.StyleDim, theme.StyleDim)
-	move(sidebarSystemRow, "$")
-	check("hover cost", sidebarSystemRow, theme.StyleDim, theme.StyleLit)
-	check("the other row stays grey", sidebarSelectedRow, theme.StyleDim, theme.StyleDim)
-	move(sidebarSelectedRow, "1k")
-	check("hover tokens", sidebarSelectedRow, theme.StyleLit, theme.StyleDim)
-	check("hover moved off", sidebarSystemRow, theme.StyleDim, theme.StyleDim)
+	check("grey", m.sidebarSystemRow(), theme.StyleDim, theme.StyleDim)
+	move(m.sidebarSystemRow(), "$")
+	check("hover cost", m.sidebarSystemRow(), theme.StyleDim, theme.StyleLit)
+	check("the other row stays grey", m.sidebarSelectedRow(), theme.StyleDim, theme.StyleDim)
+	move(m.sidebarSelectedRow(), "1k")
+	check("hover tokens", m.sidebarSelectedRow(), theme.StyleLit, theme.StyleDim)
+	check("hover moved off", m.sidebarSystemRow(), theme.StyleDim, theme.StyleDim)
 	m.openUsage(usageTokens, false)
-	check("selected tokens open, hovered", sidebarSelectedRow, theme.StyleBoxTitleFocus, theme.StyleDim)
-	check("system closed", sidebarSystemRow, theme.StyleDim, theme.StyleDim)
+	check("selected tokens open, hovered", m.sidebarSelectedRow(), theme.StyleBoxTitleFocus, theme.StyleDim)
+	check("system closed", m.sidebarSystemRow(), theme.StyleDim, theme.StyleDim)
 	m.openUsage(usageCost, true)
-	check("system cost open", sidebarSystemRow, theme.StyleDim, theme.StyleBoxTitleFocus)
-	check("selected closed", sidebarSelectedRow, theme.StyleLit, theme.StyleDim)
+	check("system cost open", m.sidebarSystemRow(), theme.StyleDim, theme.StyleBoxTitleFocus)
+	check("selected closed", m.sidebarSelectedRow(), theme.StyleLit, theme.StyleDim)
+}
+
+// TestPlanUsageBars: each signed-in plan's windows are bars at the top of
+// the nav, under the plan's name and the reading's age; a window whose
+// reset has passed reads 0%, and the usage rows under the block keep their
+// clicks.
+func TestPlanUsageBars(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	now := time.Now()
+	w := sidebarWidth - 1
+	if rows := m.planUsageRows(w, now); len(rows) != 0 || m.sidebarSystemRow() != 2 {
+		t.Fatalf("no reading, no block: %q", rows)
+	}
+	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-5 * time.Minute), Windows: []protocol.UsageWindowInfo{
+		{UsedPercent: 50, Minutes: 300, ResetsAt: now.Add(2*time.Hour + time.Minute)},
+		{UsedPercent: 100, Minutes: 10080, ResetsAt: now.Add(6*24*time.Hour + time.Hour)},
+		{UsedPercent: 80, Minutes: 60, ResetsAt: now.Add(-time.Minute)}, // reset since the reading
+	}}}
+	rows := m.planUsageRows(w, now)
+	plain := make([]string, len(rows))
+	for i, r := range rows {
+		plain[i] = stripANSI(r)
+		if i > 0 && i < len(rows)-1 && ansi.StringWidth(plain[i]) != w {
+			t.Fatalf("row %d is %d wide, want %d: %q", i, ansi.StringWidth(plain[i]), w, plain[i])
+		}
+	}
+	bar := w - 13
+	if len(rows) != 5 || strings.Join(strings.Fields(plain[0]), " ") != "ChatGPT 5m" ||
+		plain[1] != "5h  "+strings.Repeat("━", bar/2)+strings.Repeat("─", bar-bar/2)+"  50%  2h" ||
+		plain[2] != "7d  "+strings.Repeat("━", bar)+" 100%  6d" ||
+		plain[3] != "1h  "+strings.Repeat("─", bar)+"   0%    " || plain[4] != "" {
+		t.Fatalf("plan rows:\n%s", strings.Join(plain, "\n"))
+	}
+	header := m.sidebarHeader(w)
+	if m.sidebarSystemRow() != 7 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
+		t.Fatalf("the rows under the block move down:\n%s", stripANSI(strings.Join(header, "\n")))
+	}
+	row := stripANSI(header[m.sidebarSystemRow()])
+	x := ansi.StringWidth(row[:strings.LastIndex(row, "$")])
+	nm, _ := m.Update(tea.MouseMsg{X: x, Y: m.sidebarSystemRow(), Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: m.sidebarSystemRow(), Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	if m = nm.(Model); m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" {
+		t.Fatalf("a click on the moved System cost opens its chart: focus=%v %+v", m.focus, m.usage)
+	}
+	if windowLabel(10080) != "7d" || windowLabel(90) != "90m" || windowLabel(0) != "" || untilText(30*time.Second) != "now" || untilText(59*time.Minute) != "59m" {
+		t.Fatal("labels")
+	}
 }

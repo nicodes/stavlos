@@ -66,7 +66,7 @@ func TestDiscordPanelDropsLateResponses(t *testing.T) {
 
 func TestDiscordNavIndicatorStates(t *testing.T) {
 	m := channelModel()
-	if text := stripANSI(m.sidebarHeader(sidebarWidth - 1)[sidebarDiscordRow]); !strings.Contains(text, "Discord checking") {
+	if text := stripANSI(m.sidebarHeader(sidebarWidth - 1)[m.sidebarDiscordRow()]); !strings.Contains(text, "Discord checking") {
 		t.Fatalf("initial state: %q", text)
 	}
 	for _, tc := range []struct {
@@ -87,7 +87,7 @@ func TestDiscordNavIndicatorStates(t *testing.T) {
 		if cmd == nil || m.ov != nil {
 			t.Fatal("background update stopped polling or opened a panel")
 		}
-		if text := stripANSI(m.sidebarHeader(sidebarWidth - 1)[sidebarDiscordRow]); text != tc.want {
+		if text := stripANSI(m.sidebarHeader(sidebarWidth - 1)[m.sidebarDiscordRow()]); text != tc.want {
 			t.Fatalf("want %q, got %q", tc.want, text)
 		}
 	}
@@ -102,7 +102,7 @@ func TestDiscordNavSurvivesChannelSwitchAndOpensControls(t *testing.T) {
 	}
 	m.showTree = true
 	old := m.discordEpoch
-	if cmd := m.sidebarClick(2, sidebarDiscordRow); cmd == nil || m.ov == nil || m.ov.kind != ovDiscord {
+	if cmd := m.sidebarClick(2, m.sidebarDiscordRow()); cmd == nil || m.ov == nil || m.ov.kind != ovDiscord {
 		t.Fatal("indicator did not open controls")
 	}
 	if m.discordEpoch == old {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Role of a conversation message.
@@ -137,6 +138,22 @@ type Capabilities struct {
 // Capable is implemented by providers whose models have Capabilities.
 type Capable interface {
 	Capabilities(modelID string) Capabilities
+}
+
+// PlanUsage is how much of a subscription's allowance was used when it was
+// last observed: each rolling window the subscription limits
+// (docs/plan-usage.md).
+type PlanUsage struct {
+	Windows  []UsageWindow `json:"windows"`
+	Observed time.Time     `json:"observed"`
+}
+
+// UsageWindow is one rolling limit: how much of it is used, how long it
+// spans (0 when unknown), and when it resets (zero when unknown).
+type UsageWindow struct {
+	UsedPercent float64   `json:"used_percent"`
+	Minutes     int       `json:"minutes,omitempty"`
+	ResetsAt    time.Time `json:"resets_at,omitzero"`
 }
 
 // Variants is implemented by providers whose models come in flavours

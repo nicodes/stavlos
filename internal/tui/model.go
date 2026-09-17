@@ -77,6 +77,7 @@ type Model struct {
 	promptState  // what waits on the human, in every channel; survives a switch
 
 	navChannels    []protocol.ChannelInfo          // all other active channels, across directories
+	plans          []protocol.PlanUsageInfo        // the signed-in subscriptions' plan usage, as last observed (planusage.go)
 	visited        map[string]replayed             // channels switched away from: what their replay built, so a return replays only what it missed
 	trees          map[string][]protocol.AgentInfo // other channels' agents, so leaving a channel does not fold its tree
 	treeClosed     map[string]bool                 // channels whose tree the human closed in the nav; switching channels never changes it
@@ -338,7 +339,7 @@ func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 // Init starts the cursor blink, the spinner, the placeholder cycle and the
 // reconcile snapshot.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.requestScope()), tick(3*time.Second, catalogTickMsg{}), discordCmd(m.ctx, m.c, "status", m.discordEpoch))
+	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.requestScope()), tick(3*time.Second, catalogTickMsg{}), planUsageCmd(m.ctx, m.c), discordCmd(m.ctx, m.c, "status", m.discordEpoch))
 }
 
 // Update is the single-threaded state machine.
@@ -398,6 +399,8 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case usageMsg:
 		m.onUsage(msg)
 		m.viewDirty = true
+	case planUsageMsg:
+		m.onPlanUsage(msg)
 	case configEditorMsg:
 		cmds = append(cmds, m.onConfigEditor(msg))
 	case discordTickMsg:

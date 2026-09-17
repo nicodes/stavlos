@@ -19,7 +19,7 @@ func (m *client) Complete(ctx context.Context, req model.Request, onDelta func(m
 		return model.Response{}, fmt.Errorf("codex: %w", err)
 	}
 	return stream.Complete(ctx, stream.Request{
-		Name: "codex", Client: m.p.http, URL: m.p.endpoint, Body: body, Header: m.p.header, OnStatus: onStatus,
+		Name: "codex", Client: m.p.http, URL: m.p.endpoint, Body: body, Header: m.p.header, OnStatus: onStatus, OnResponse: m.p.observe,
 	}, onDelta, func(d func(model.Delta)) stream.Codec { return newAccumulator(d) })
 }
 

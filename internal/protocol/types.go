@@ -63,6 +63,7 @@ const (
 	MPresets     = "presets" // archetypes available to a channel
 
 	MUsageSeries = "usage.series" // tokens and cost over time: the system's, a channel's or an agent's
+	MPlanUsage   = "plan.usage"   // the signed-in subscriptions' plan usage, as last observed
 
 	// Notifications (server → client, no id).
 	NEvent  = "event"
