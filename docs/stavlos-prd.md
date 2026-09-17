@@ -581,6 +581,8 @@ A repository's files (`stavlos.json` and `stavlos.local.json` alike) use the sam
 
 Not in v1: providers are in-tree and `stavlos plugin` reports it is a roadmap item. The design below is kept for when plugins land.
 
+The current direction is different: embedded Lua scripts for hooks and small tools rather than `go-plugin` provider binaries. See [Lua plugins](lua-plugins.md); the design below is kept for reference only.
+
 ```mermaid
 flowchart LR
     LIST["plugins list<br/><i>global stavlos.json · repo@version</i>"]
