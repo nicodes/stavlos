@@ -91,6 +91,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.todoKey(msg)
 	case focusMCP:
 		return m.mcpKey(msg)
+	case focusUsage:
+		return m.usageKey(msg)
 	case focusDirs:
 		return m.dirsKey(msg)
 	case focusSidebar:
@@ -161,6 +163,10 @@ func (m *Model) command(text string) tea.Cmd {
 			return m.setStatus("usage: /rename <name>", true)
 		}
 		return renameChannelCmd(m.ctx, m.c, m.channelID, strings.TrimPrefix(rest, "#"))
+	case "/tokens":
+		return m.openUsage(usageTokens, strings.EqualFold(rest, "system"))
+	case "/cost":
+		return m.openUsage(usageCost, strings.EqualFold(rest, "system"))
 	case "/compact":
 		if c := needAgent(); c != nil {
 			return c

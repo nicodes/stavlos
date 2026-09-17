@@ -21,6 +21,7 @@ const (
 	focusTabs                          // the tab strip: ←/→ highlight a tab, enter opens its dialog
 	focusMeta                          // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
 	focusInlinePermission              // permission choices embedded in the chat
+	focusUsage                         // a usage dialog: tokens or cost over time (usage.go)
 )
 
 // focusOrder lists the sections tab cycles through, top to bottom: the chat

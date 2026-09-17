@@ -275,6 +275,7 @@ type dialogs struct {
 	dialogFrom focus                   // what had focus when the open dialog (a tab's or an overlay) was opened; closing returns there
 	providers  []protocol.ProviderInfo // last provider.list result
 	login      loginFlow               // device-code sign-in in progress
+	usage      usageDialog             // the usage dialog, while focus is focusUsage (its range is kept between openings)
 }
 
 // chatPage is how many items pgup/pgdn move the chat cursor.
@@ -382,6 +383,9 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		cmds = append(cmds, m.onListed(msg))
 	case discordMsg:
 		cmds = append(cmds, m.onDiscord(msg))
+	case usageMsg:
+		m.onUsage(msg)
+		m.viewDirty = true
 	case configEditorMsg:
 		cmds = append(cmds, m.onConfigEditor(msg))
 	case discordTickMsg:

@@ -648,6 +648,14 @@ const newChannelMark = "✚"
 // channel's project configuration.
 const channelGear = "⚙"
 
+// sidebarSystemRow and sidebarSelectedRow are the header's usage rows: a
+// click on the tokens figure opens the tokens dialog, on the cost the cost
+// dialog.
+const (
+	sidebarSystemRow   = 2
+	sidebarSelectedRow = 3
+)
+
 // sidebarDiscordRow opens the Discord status/control panel when clicked.
 const sidebarDiscordRow = 4
 
@@ -941,6 +949,9 @@ func (m Model) tabDialogBox(bodyWidth int) (string, []int) {
 // tabDialogTitle is the open tab's title with its count; a prompt dialog
 // is named after the kind of prompt at the head of the queue.
 func (m Model) tabDialogTitle() string {
+	if m.focus == focusUsage {
+		return m.usageTitle()
+	}
 	for _, t := range m.tabs() {
 		if t.focus == m.focus {
 			return t.name + " " + t.count
@@ -1014,6 +1025,8 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 	}
 	note := func(text string) ([]string, []int) { return rowsAt([]string{theme.StyleDim.Render(text)}, -1, 0) }
 	switch m.focus {
+	case focusUsage:
+		return rowsAt(m.usageBody(width), -1, 0)
 	case focusAsync:
 		if m.hasReplyDetails() {
 			return m.replyBodyRows(width)
