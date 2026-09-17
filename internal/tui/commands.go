@@ -147,9 +147,11 @@ func reconcileCmd(ctx context.Context, c *client.Client, scope requestScope) tea
 }
 
 func subscribeCmd(ctx context.Context, c *client.Client, scope requestScope, from int64) tea.Cmd {
-	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
+	// Subscription includes the entire history replay, not just an RPC round
+	// trip. Its lifetime is the TUI's context, rather than the short call timeout.
+	return func() tea.Msg {
 		return subscribedMsg{err: call(ctx, c, protocol.Subscribe, protocol.SubscribeParams{Channel: scope.channel, From: from}), scope: scope}
-	})
+	}
 }
 
 func treeCmd(ctx context.Context, c *client.Client, channel string) tea.Cmd {
@@ -519,18 +521,42 @@ func forwardNotifications(ctx context.Context, c *client.Client, p *tea.Program)
 			p.Send(disconnectedMsg{errors.New("daemon disconnected")})
 			return
 		case r := <-c.Notifications:
-			v, err := client.DecodeNotification(r)
-			if err != nil {
-				continue
-			}
-			switch n := v.(type) {
-			case protocol.EventNotification:
-				p.Send(eventMsg{n.Event})
-			case protocol.StreamNotification:
-				p.Send(streamMsg{n})
-			case protocol.PromptNotification:
-				p.Send(promptMsg{n})
-			}
+			p.Send(notificationBatch(r, c.Notifications))
 		}
 	}
+}
+
+// A bounded batch preserves wire order while doing layout/render work once
+// per batch, rather than once per historical event. Never wait to fill a batch.
+type notificationBatchMsg []tea.Msg
+
+func notificationBatch(first protocol.Response, pending <-chan protocol.Response) notificationBatchMsg {
+	batch := make(notificationBatchMsg, 0, 128)
+	r := first
+	for i := 0; i < 128; i++ {
+		v, err := client.DecodeNotification(r)
+		if err == nil {
+			switch n := v.(type) {
+			case protocol.EventNotification:
+				batch = append(batch, eventMsg{n.Event})
+			case protocol.StreamNotification:
+				batch = append(batch, streamMsg{n})
+			case protocol.PromptNotification:
+				batch = append(batch, promptMsg{n})
+			}
+		}
+		if i == 127 {
+			break
+		}
+		select {
+		case next, ok := <-pending:
+			if !ok {
+				return batch
+			}
+			r = next
+		default:
+			return batch
+		}
+	}
+	return batch
 }
