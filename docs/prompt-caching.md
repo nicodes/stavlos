@@ -19,6 +19,20 @@ with the turns.
 Other Chat Completions providers get neither: some reject `reasoning_content`
 in a request.
 
+## Compared with opencode (checked 2026-09-17)
+
+| | opencode | Stavlos |
+|---|---|---|
+| ChatGPT subscription key | the session id: `prompt_cache_key` (`provider/transform.ts`, `@ai-sdk/openai`) and the `session-id` header (`plugin/openai/codex.ts`, `chat.headers`) | the agent's id: `prompt_cache_key` and `session-id` |
+| Grok subscription key | the session id as `prompt_cache_key` on xAI's Responses API (`@ai-sdk/xai` patched to forward it; `provider.ts` uses `sdk.responses`) | the agent's id as `x-grok-conv-id` on Chat Completions |
+| Grok reasoning | carried by the Responses API | `reasoning_content` replayed on assistant messages |
+| scope of a key | one per session; each subagent is its own session | one per agent; a compaction summary gets `<id>:compact` |
+
+xAI documents `x-grok-conv-id` on Chat Completions and `prompt_cache_key` on
+Responses as the same routing hint, so the two differ in transport only. Both
+tools currently send Grok sign-ins to `api.x.ai`; the Grok CLI and others use
+`cli-chat-proxy.grok.com` for subscription traffic, a separate change.
+
 ## Why (2026-09-17)
 
 Stavlos sent no conversation key. Offline reconstruction of consecutive
