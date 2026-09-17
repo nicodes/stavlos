@@ -345,6 +345,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // which).
 func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	switch msg := msg.(type) {
+	case notificationBatchMsg:
+		for _, notification := range msg {
+			next, stop := m.onDaemon(notification)
+			cmds = append(cmds, next...)
+			if stop {
+				return cmds, true
+			}
+		}
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 	case tea.KeyMsg:
