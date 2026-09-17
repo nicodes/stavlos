@@ -2156,7 +2156,7 @@ func TestSidebarNav(t *testing.T) {
 		// dirs is the open channel's: out of the tabs the strip walks, behind
 		// the gear at the right edge of the channel's row; → on the row, or a
 		// click on the gear, opens the dirs dialog
-		if body, _ := m.sidebarBody(sidebarWidth - 1); !strings.HasSuffix(stripANSI(body[1]), " "+channelGear+" ") || !strings.Contains(stripANSI(body[2]), "/home/x/Work/proj") || !strings.Contains(stripANSI(body[3]), "@main") || ansi.StringWidth(stripANSI(body[1])) != sidebarWidth-1 {
+		if body, _ := m.sidebarBody(sidebarWidth - 1); !strings.HasSuffix(stripANSI(body[1]), " "+channelGear+" ") || !strings.Contains(stripANSI(body[1]), "#channel · …/x/Work/proj") || !strings.Contains(stripANSI(body[2]), "@main") || ansi.StringWidth(stripANSI(body[1])) != sidebarWidth-1 {
 			t.Fatalf("channel row:\n%s", stripANSI(strings.Join(body, "\n")))
 		}
 		if slices.Contains(m.tabOrder(), focusDirs) {
@@ -2265,12 +2265,12 @@ func TestSidebarNav(t *testing.T) {
 			plain[i] = stripANSI(r)
 		}
 		na := len(m.agents)
-		if f := strings.Fields(plain[2]); len(body) != na+6 || plain[na+5] != "" || items[na+5] != -1 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
-			len(f) != 3 || f[1] != "#proj" || f[2] != channelGear || strings.Join(strings.Fields(plain[na+4]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
-			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != -1 || items[na+4] != na+3 || hereRow(m) != 2 {
+		if f := strings.Fields(plain[2]); len(body) != na+5 || plain[na+4] != "" || items[na+4] != -1 || (!strings.HasPrefix(plain[0], "channels ") || !strings.HasSuffix(plain[0], " "+newChannelMark+" ")) || strings.Join(strings.Fields(plain[1]), " ") != "? #docs "+channelGear ||
+			strings.Join(f, " ") != "● #proj · /home/x/Work/proj "+channelGear || strings.Join(strings.Fields(plain[na+3]), " ") != "! #proj-2 "+channelGear || strings.Contains(strings.Join(plain, "\n"), "h00m") ||
+			items[0] != 0 || items[1] != 1 || items[2] != 2 || items[3] != 3 || items[na+3] != na+3 || hereRow(m) != 2 {
 			t.Fatalf("sidebar:\n%s\n%v", strings.Join(plain, "\n"), items)
 		}
-		for _, i := range []int{1, 2, na + 4} {
+		for _, i := range []int{1, 2, na + 3} {
 			if w := ansi.StringWidth(plain[i]); w != sidebarWidth-1 {
 				t.Fatalf("channel rows fill the width: %d %q", w, plain[i])
 			}
