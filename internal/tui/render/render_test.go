@@ -853,7 +853,7 @@ func TestFoldedToolCallIsOneRow(t *testing.T) {
 // cursor, and the last row when expanded.
 func TestStampEndsTheLastShownRow(t *testing.T) {
 	now := time.Now()
-	at := time.Date(now.Year(), now.Month(), now.Day(), 9, 5, 0, 0, time.Local)
+	at := now.Add(-5 * time.Minute)
 	tr := transcript.NewTranscript()
 	for _, ev := range append(evtest.Call("a", "c1", "shell", `{"command":"ls"}`),
 		mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "shell", Output: "a\nb\nc\nd\ne"})) {
@@ -861,7 +861,7 @@ func TestStampEndsTheLastShownRow(t *testing.T) {
 		tr.Apply(ev)
 	}
 	rowsOf := func(o Options) []string {
-		o.Width, o.Stamps = 60, true
+		o.Width, o.Stamps, o.Now = 60, true, now
 		var rows []string
 		for _, r := range renderWith(tr.All(), o) {
 			if strings.TrimSpace(r) != "" {
@@ -876,7 +876,7 @@ func TestStampEndsTheLastShownRow(t *testing.T) {
 			t.Fatalf("%s: want %d rows, got:\n%s", name, n, strings.Join(rows, "\n"))
 		}
 		for i, r := range rows {
-			if last := i == len(rows)-1; strings.HasSuffix(r, " 09:05") != last || ansi.StringWidth(r) > 59 {
+			if last := i == len(rows)-1; strings.HasSuffix(r, " (5m)") != last || ansi.StringWidth(r) > 59 {
 				t.Fatalf("%s: the stamp should end only the last row, within the width:\n%s", name, strings.Join(rows, "\n"))
 			}
 		}

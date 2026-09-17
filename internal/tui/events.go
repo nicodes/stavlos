@@ -44,6 +44,7 @@ func (m *Model) ensureSpin() tea.Cmd {
 func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case catalogTickMsg:
+		m.viewDirty = true // the chat's stamps ("5 min") age; unchanged items redraw from the render cache
 		cmds := []tea.Cmd{channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), tick(3*time.Second, catalogTickMsg{})}
 		for _, s := range m.navChannels {
 			if m.treeOpen[s.ID] {

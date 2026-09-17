@@ -59,6 +59,32 @@ func Elapsed(d time.Duration) string {
 	return fmt.Sprintf("%dh%02dm", int(d.Hours()), int(d.Minutes())%60)
 }
 
+// months are the short month names Ago dates with ("Sept", not "Sep").
+var months = [...]string{"Jan", "Feb", "Mar", "Apr", "May", "June", "July", "Aug", "Sept", "Oct", "Nov", "Dec"}
+
+// Ago renders how long before now at was: "now" under a minute, then
+// "5m", "3h" and "2d", and from three days on the date
+// ("Sept 1", with the year when it is not now's).
+func Ago(at, now time.Time) string {
+	d := now.Sub(at)
+	switch {
+	case d < time.Minute:
+		return "now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	case d < 72*time.Hour:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+	at = at.In(now.Location())
+	date := fmt.Sprintf("%s %d", months[at.Month()-1], at.Day())
+	if at.Year() != now.Year() {
+		date += fmt.Sprintf(" %d", at.Year())
+	}
+	return date
+}
+
 // Trunc cuts s to n runes, marking the cut with "…".
 func Trunc(s string, n int) string {
 	r := []rune(s)
