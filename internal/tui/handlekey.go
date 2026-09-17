@@ -91,6 +91,8 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.todoKey(msg)
 	case focusMCP:
 		return m.mcpKey(msg)
+	case focusNudges:
+		return m.nudgeKey(msg)
 	case focusUsage:
 		return m.usageKey(msg)
 	case focusDirs:
@@ -124,8 +126,8 @@ func (m *Model) command(text string) tea.Cmd {
 		}
 		return nil
 	}
-	if kind, ok := usageCommands[name]; ok { // /tokens and /cost [system]
-		return m.openUsage(kind, strings.EqualFold(rest, "system"))
+	if cmd, ok := m.usageCommand(name, rest); ok { // /tokens, /cost and /plan
+		return cmd
 	}
 
 	switch name {

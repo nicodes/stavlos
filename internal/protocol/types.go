@@ -64,6 +64,8 @@ const (
 
 	MUsageSeries = "usage.series" // tokens and cost over time: the system's, a channel's or an agent's
 	MPlanUsage   = "plan.usage"   // the signed-in subscriptions' plan usage, as last observed
+	MCacheUsage  = "usage.cache"  // how much of recent model calls came from the providers' prompt caches
+	MPlanSeries  = "plan.series"  // a subscription's plan usage over time, as it was observed
 
 	// Notifications (server → client, no id).
 	NEvent  = "event"
@@ -339,6 +341,8 @@ func ModeSummary(mode string) string {
 }
 
 type AgentInfo struct {
+	Nudges          int                  `json:"nudges,omitempty"`      // reminders in a row this agent got without replying
+	NudgeLimit      int                  `json:"nudge_limit,omitempty"` // reminders in a row before the harness stops; 0 when reminders are off
 	PendingReplies  []event.ReplyRequest `json:"pending_replies,omitempty"`
 	AwaitingReplies []event.ReplyRequest `json:"awaiting_replies,omitempty"`
 	ID              string               `json:"id"`

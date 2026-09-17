@@ -604,8 +604,8 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 
 // sidebarHeader is what precedes the tree: the app name, a blank, the
 // system's tokens and cost (every channel), the selected chat's (the
-// channel's in its chat, the agent's in an agent's chat), a blank, Discord
-// status, and a blank; the "channels" title is the body's first row. The tree's
+// channel's in its chat, the agent's in an agent's chat), a blank, the
+// prompt-cache share of the last hour's calls, Discord status, and a blank; the "channels" title is the body's first row. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	rows := []string{
@@ -613,13 +613,15 @@ func (m Model) sidebarHeader(width int) []string {
 		"",
 	}
 	rows = append(rows, m.planUsageRows(width, time.Now())...)
-	return append(rows,
+	rows = append(rows,
 		m.navUsageRow(m.sidebarSystemRow(), width),
 		m.navUsageRow(m.sidebarSelectedRow(), width),
 		"",
-		m.discordIndicator(width),
-		"",
 	)
+	if cache := m.cacheRow(width); cache != "" {
+		rows = append(rows, cache)
+	}
+	return append(rows, m.discordIndicator(width), "")
 }
 
 // usageRow is "label        12k · $0.25", grey: the label at the left, the
@@ -697,8 +699,15 @@ const channelGear = "⚙"
 func (m Model) sidebarSystemRow() int   { return 2 + len(m.planUsageRows(sidebarWidth-1, time.Now())) }
 func (m Model) sidebarSelectedRow() int { return m.sidebarSystemRow() + 1 }
 
-// sidebarDiscordRow opens the Discord status/control panel when clicked.
-func (m Model) sidebarDiscordRow() int { return m.sidebarSystemRow() + 3 }
+// sidebarDiscordRow opens the Discord status/control panel when clicked; a
+// cache monitor row sits above it once there are calls to measure.
+func (m Model) sidebarDiscordRow() int {
+	row := m.sidebarSystemRow() + 3
+	if m.cacheRow(sidebarWidth-1) != "" {
+		row++
+	}
+	return row
+}
 
 // stripRows is how many tab rows the footer strip draws: the ! ? dirs row
 // while the sidebar is hidden, none while it shows (! and ? sit in the
@@ -1035,6 +1044,7 @@ func (m Model) tabs() []tab {
 		focusPermission: {label: permKind, glyph: transcript.GlyphPermission, count: permCount, warn: waitingPerms > 0},
 		focusDirs:       {label: "dirs", count: strconv.Itoa(len(m.channelDirs()))},
 		focusAsync:      {label: "async", count: strconv.Itoa(m.asyncCount())},
+		focusNudges:     {label: "nudges", count: strconv.Itoa(m.nudgeCount()), warn: m.nudgeCount() > 0},
 		focusTodo:       {label: "todo", count: todoCount(m.selectedTodos())},
 		focusMCP:        {label: "mcp", name: "MCP", count: mcpCount(m.selectedMCP())},
 	}
@@ -1112,6 +1122,8 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 			}
 		}
 		return lines, rows
+	case focusNudges:
+		return m.nudgeRows(width - 2)
 	case focusTodo:
 		items := m.selectedTodos()
 		if len(items) == 0 {

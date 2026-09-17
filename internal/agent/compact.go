@@ -13,7 +13,8 @@ import (
 
 // prepareHistory is the history a model call carries: compacted first when
 // /compact asked for it mid-turn, or when it has grown past the threshold
-// of the model's context window. It records the size the call will carry.
+// of the model's context window (or past compaction.maxTokens, whatever the
+// window). It records the size the call will carry.
 func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info model.Info, system string, defs []model.ToolDef) []model.Message {
 	s := a.c
 	s.mu.Lock()
@@ -23,10 +24,17 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 	if !running {
 		a.compactNext = false
 	}
-	threshold := s.cfg.Compaction.Threshold
+	cc := s.cfg.Compaction
+	last := st.lastContext
 	s.mu.Unlock()
 	est := project.EstimateTokens(history, system, defs)
-	if !running && (wanted || info.ContextWindow > 0 && est > int(float64(info.ContextWindow)*threshold)) {
+	// the provider's own count of the last call, when it is larger than the
+	// estimate: the estimate drifts, and the backend's number is what fills
+	// the window
+	size := max(est, last)
+	full := info.ContextWindow > 0 && size > int(float64(info.ContextWindow)*cc.Threshold)
+	over := cc.MaxTokens > 0 && size > cc.MaxTokens
+	if !running && (wanted || full || over) {
 		if err := a.compact(turnCtx, m, info, wanted); err == nil {
 			history = a.history()
 			est = project.EstimateTokens(history, system, defs)
@@ -38,8 +46,11 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 	return history
 }
 
-// summaryInputMax bounds the transcript a summariser reads: its tail.
-const summaryInputMax = 400_000
+// summaryInputMax bounds the transcript a summariser reads. Tool results
+// are already cut to their first 800 characters (project.Transcript), so a
+// transcript reaching this is a long conversation; its middle is dropped,
+// keeping the task at the start and the recent work at the end.
+const summaryInputMax = 600_000
 
 // compact summarises older turns (PRD §4.3): everything up to the last turn
 // that ended (all, for /compact) or the last one within the older two
@@ -52,7 +63,11 @@ func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all
 		s.mu.Unlock()
 		return errors.New("a compaction is already running")
 	}
-	cut, ok := st.hist.Cut(all)
+	keep := s.cfg.Compaction.KeepTokens
+	if all {
+		keep = 0 // /compact summarises every turn that ended
+	}
+	cut, ok := st.hist.Cut(keep)
 	if !ok {
 		s.mu.Unlock()
 		return errors.New("nothing to compact")
@@ -63,7 +78,7 @@ func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all
 	if err != nil {
 		return err
 	}
-	req := summaryRequest(bareID(modelID), clip.Tail(project.Transcript(cut.Old), summaryInputMax), info)
+	req := summaryRequest(bareID(modelID), clip.Middle(project.Transcript(cut.Old), summaryInputMax), cut.Prev, info)
 	req.CacheKey = a.ID + ":compact" // a summary shares no prefix with the agent's turns
 	resp, err := m.Complete(ctx, req, nil)
 	var sb strings.Builder
@@ -96,13 +111,44 @@ const (
 	summaryWords     = "2,500"
 )
 
-// summaryRequest is the summariser call for transcript.
-func summaryRequest(modelID, transcript string, info model.Info) model.Request {
-	system := "You summarise an AI coding agent's conversation so it can continue with less context. Preserve: the task and its current status, decisions made and why, files touched with paths, commands run and their outcomes, open problems, and anything the user asked for. Be concrete and complete; omit pleasantries."
+// summaryTemplate is the shape every summary takes: what another agent
+// needs to carry the work on, section by section, so nothing important
+// depends on the summariser's own sense of what matters.
+const summaryTemplate = `Write the summary as this Markdown, keeping every heading in this order, and "(none)" under a heading with nothing to say:
+
+## Task
+- what the human asked for, and the current status
+
+## Decisions
+- what was decided and why, and constraints the human gave
+
+## Work so far
+- what is done and verified
+- what is in progress, and where it stands
+- what is blocked, with the error or unknown
+
+## Files and commands
+- paths touched and why they matter; commands run and their outcomes
+
+## Next
+- the next concrete step, then the one after it
+
+Rules: terse bullets, not prose. Keep exact paths, identifiers, commands and error text. Do not mention this summary or that the conversation was compacted.`
+
+// summaryRequest is the summariser call for transcript. prev is the
+// previous compaction's summary ("" for none): the new one replaces it, so
+// whatever it does not carry forward is lost.
+func summaryRequest(modelID, transcript, prev string, info model.Info) model.Request {
+	system := "You summarise an AI coding agent's conversation so another agent can continue the work with less context. Be concrete and complete; omit pleasantries. " + summaryTemplate
+	text := "Summarise this transcript:\n\n" + transcript
+	if prev != "" {
+		system += "\n\nThe transcript follows an earlier summary of everything before it. Merge both: carry forward every still-relevant task, decision and constraint from the earlier summary even when the transcript does not mention it, drop what is finished, and where they disagree the transcript is newer and wins."
+		text = "Earlier summary of the conversation before this transcript:\n\n" + prev + "\n\n---\n\nSummarise this transcript:\n\n" + transcript
+	}
 	req := model.Request{
 		Model: modelID,
 		Messages: []model.Message{{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText,
-			Text: "Summarise this transcript:\n\n" + transcript}}}},
+			Text: text}}}},
 	}
 	if info.IgnoresMaxTokens {
 		system += " Keep the summary under " + summaryWords + " words."

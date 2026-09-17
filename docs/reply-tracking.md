@@ -56,3 +56,13 @@ response can reference a still-pending legacy request by its input ID.
 Killing an agent removes obligations that can no longer be fulfilled. Turn-limit
 failure reports identify the requests they terminate, rather than clearing a
 sender's unrelated waits.
+
+## Watching it
+
+The nudges tab on the divider lists what the selected agent owes, oldest
+first, each with its sender and an excerpt; space on a row opens that party's
+chat. Under the list is what the harness will do: a reminder after a turn that
+ends owing them, no reminder while the agent waits on an answer or a job, the
+reminders spent (`n reminders went unanswered`), or reminders off. The count
+beside the tab is how many replies are owed, and `AgentInfo` carries `nudges`
+and `nudge_limit` for any client.

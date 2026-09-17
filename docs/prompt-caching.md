@@ -19,6 +19,14 @@ with the turns.
 Other Chat Completions providers get neither: some reject `reasoning_content`
 in a request.
 
+## Watching it
+
+The nav's `cache N%` row is the share of the last hour's model calls the
+providers served from their caches, across every channel (`usage.cache`, read
+from the event log, never from a provider). Under 70% it turns orange, under
+40% red. A healthy agent's cached tokens climb with its conversation; a share
+stuck low is the signature of the 2026-09-16 regression below.
+
 ## Compared with opencode (checked 2026-09-17)
 
 | | opencode | Stavlos |
@@ -63,5 +71,7 @@ allowance twice.
 - The per-call `[harness state for this request]` note is added to the newest
   user message only, so it costs at most that message.
 
-Open: conversations grow to hundreds of thousands of tokens before compaction
-(80% of the model's window), so even cached calls are large.
+Compaction keeps the summary plus at most `compaction.keepTokens` (15,000 by
+default) of recent conversation, so the prefix a compaction invalidates is
+rebuilt cheaply; `compaction.maxTokens` compacts on an absolute size, whatever
+the window.

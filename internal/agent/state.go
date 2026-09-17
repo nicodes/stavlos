@@ -50,11 +50,12 @@ type agentState struct {
 	jobs      map[string]event.JobStartedPayload // running background jobs
 	asks      map[string]bool                    // prompts put to the human, not yet resolved
 
-	todos      []event.TodoItem
-	todoSeq    int
-	compacting bool
-	tokens     int
-	cost       float64
+	todos       []event.TodoItem
+	todoSeq     int
+	compacting  bool
+	tokens      int
+	lastContext int // tokens the provider counted for the last model call
+	cost        float64
 
 	hist *project.Builder
 }
@@ -267,6 +268,9 @@ func (a *agentState) applyTurn(e event.Event) {
 		var p event.AssistantMessagePayload
 		if e.Decode(&p) == nil {
 			a.tokens += p.Usage.InputTokens + p.Usage.OutputTokens
+			// what the provider counted for that call: the trigger trusts it
+			// over the local estimate (docs/prompt-caching.md)
+			a.lastContext = p.Usage.InputTokens + p.Usage.CacheReadTokens + p.Usage.CacheWriteTokens + p.Usage.OutputTokens
 			a.cost += p.CostUSD
 		}
 	case event.TurnEnded:
