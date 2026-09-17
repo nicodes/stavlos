@@ -608,15 +608,18 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 // status, and a blank; the "channels" title is the body's first row. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
-	return []string{
+	rows := []string{
 		theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" "),
 		"",
-		m.navUsageRow(sidebarSystemRow, width),
-		m.navUsageRow(sidebarSelectedRow, width),
+	}
+	rows = append(rows, m.planUsageRows(width, time.Now())...)
+	return append(rows,
+		m.navUsageRow(m.sidebarSystemRow(), width),
+		m.navUsageRow(m.sidebarSelectedRow(), width),
 		"",
 		m.discordIndicator(width),
 		"",
-	}
+	)
 }
 
 // usageRow is "label        12k · $0.25", grey: the label at the left, the
@@ -654,9 +657,9 @@ func usageFigureAt(tokens int, cost float64, width, x int) (usageKind, bool) {
 // usage (system) and its tokens and cost; ok is false for other rows.
 func (m Model) usageRowFigures(y int) (label string, system bool, tokens int, cost float64, ok bool) {
 	switch y {
-	case sidebarSystemRow:
+	case m.sidebarSystemRow():
 		return "System", true, m.systemTokens(), m.systemCost(), true
-	case sidebarSelectedRow:
+	case m.sidebarSelectedRow():
 		if a := m.selectedAgent(); a != nil && !m.superChat {
 			return "@" + a.Name, false, a.Tokens, a.CostUSD, true
 		}
@@ -688,16 +691,14 @@ const newChannelMark = "✚"
 // channel's project configuration.
 const channelGear = "⚙"
 
-// sidebarSystemRow and sidebarSelectedRow are the header's usage rows: a
-// click on the tokens figure opens the tokens dialog, on the cost the cost
-// dialog.
-const (
-	sidebarSystemRow   = 2
-	sidebarSelectedRow = 3
-)
+// sidebarSystemRow and sidebarSelectedRow are the header's usage rows,
+// under the plan usage block: a click on the tokens figure opens the tokens
+// dialog, on the cost the cost dialog.
+func (m Model) sidebarSystemRow() int   { return 2 + len(m.planUsageRows(sidebarWidth-1, time.Now())) }
+func (m Model) sidebarSelectedRow() int { return m.sidebarSystemRow() + 1 }
 
 // sidebarDiscordRow opens the Discord status/control panel when clicked.
-const sidebarDiscordRow = 5
+func (m Model) sidebarDiscordRow() int { return m.sidebarSystemRow() + 3 }
 
 // stripRows is how many tab rows the footer strip draws: the ! ? dirs row
 // while the sidebar is hidden, none while it shows (! and ? sit in the

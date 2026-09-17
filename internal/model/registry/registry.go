@@ -71,7 +71,7 @@ var subscriptions = []subscription{
 		id: "openai", name: "ChatGPT", priority: 0,
 		allow: chatGPTAllowed,
 		open: func(r *Registry, src model.TokenSource) model.Provider {
-			return codex.NewWithEndpoint(src, cmp.Or(r.codexEndpoint, codex.DefaultEndpoint))
+			return codex.NewWithUsage(src, cmp.Or(r.codexEndpoint, codex.DefaultEndpoint), func(u model.PlanUsage) { r.observeUsage("openai", u) })
 		},
 	},
 	{
@@ -117,6 +117,10 @@ type Registry struct {
 	subs       map[string]model.Provider // subscription adapters, built once (their token source reads the store per call)
 	opened     map[string]model.Model    // keyed by full "provider/id"
 	refreshing map[string]*sync.Mutex    // single-flight refresh per provider
+
+	usageMu sync.Mutex
+	usage   map[string]model.PlanUsage               // provider → latest observed plan usage
+	onUsage func(provider string, u model.PlanUsage) // nil for none
 }
 
 // modelCounts memoises how many models each subscription lists for one
@@ -377,6 +381,68 @@ func (r *Registry) tokenSource(provider string) model.TokenSource {
 		}
 		return model.Token{Access: t.Access, AccountID: t.AccountID}, nil
 	}
+}
+
+// --- plan usage ---
+
+// observeUsage keeps provider's latest plan usage, as a call's response
+// reported it, and hands it to the usage hook.
+func (r *Registry) observeUsage(provider string, u model.PlanUsage) {
+	r.usageMu.Lock()
+	if r.usage == nil {
+		r.usage = map[string]model.PlanUsage{}
+	}
+	if old, ok := r.usage[provider]; ok && old.Observed.After(u.Observed) {
+		r.usageMu.Unlock()
+		return // an older response finished last
+	}
+	r.usage[provider] = u
+	hook := r.onUsage
+	r.usageMu.Unlock()
+	if hook != nil {
+		hook(provider, u)
+	}
+}
+
+// SeedPlanUsage restores a provider's usage as last observed (by an earlier
+// daemon), unless a newer reading is already kept.
+func (r *Registry) SeedPlanUsage(provider string, u model.PlanUsage) {
+	r.usageMu.Lock()
+	defer r.usageMu.Unlock()
+	if r.usage == nil {
+		r.usage = map[string]model.PlanUsage{}
+	}
+	if old, ok := r.usage[provider]; !ok || u.Observed.After(old.Observed) {
+		r.usage[provider] = u
+	}
+}
+
+// OnPlanUsage sets the hook every newly observed plan usage is handed to
+// (the daemon keeps it on disk); it runs on the calling agent's goroutine.
+func (r *Registry) OnPlanUsage(hook func(provider string, u model.PlanUsage)) {
+	r.usageMu.Lock()
+	defer r.usageMu.Unlock()
+	r.onUsage = hook
+}
+
+// PlanUsage is every provider's latest observed plan usage, keyed by
+// provider id.
+func (r *Registry) PlanUsage() map[string]model.PlanUsage {
+	r.usageMu.Lock()
+	defer r.usageMu.Unlock()
+	out := make(map[string]model.PlanUsage, len(r.usage))
+	for k, v := range r.usage {
+		out[k] = v
+	}
+	return out
+}
+
+// SubscriptionName is a subscription's display name ("ChatGPT").
+func SubscriptionName(id string) string {
+	if s, ok := subscriptionByID(id); ok {
+		return s.name
+	}
+	return id
 }
 
 // --- resolution ---

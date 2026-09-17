@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/model/stream"
@@ -24,11 +25,29 @@ type provider struct {
 	src      model.TokenSource
 	endpoint string
 	http     *http.Client
+	onUsage  func(model.PlanUsage) // nil for none
 }
 
 // NewWithEndpoint is New with a custom URL (tests, proxies).
 func NewWithEndpoint(src model.TokenSource, endpoint string) model.Provider {
-	return &provider{src: src, endpoint: endpoint, http: stream.NewHTTPClient()}
+	return NewWithUsage(src, endpoint, nil)
+}
+
+// NewWithUsage is NewWithEndpoint whose calls report the plan's usage
+// windows to onUsage as responses carry them (passively: no request of its
+// own; docs/plan-usage.md).
+func NewWithUsage(src model.TokenSource, endpoint string, onUsage func(model.PlanUsage)) model.Provider {
+	return &provider{src: src, endpoint: endpoint, http: stream.NewHTTPClient(), onUsage: onUsage}
+}
+
+// observe reports the usage a response's headers carry.
+func (p *provider) observe(h http.Header) {
+	if p.onUsage == nil {
+		return
+	}
+	if u, ok := usageFromHeaders(h, time.Now()); ok {
+		p.onUsage(u)
+	}
 }
 
 func (p *provider) Name() string { return "openai" }

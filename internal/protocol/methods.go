@@ -62,6 +62,7 @@ var (
 	ModelList          = Method[ModelListParams, ModelListResult]{MModelList}
 
 	UsageSeries = Method[UsageSeriesParams, UsageSeriesResult]{MUsageSeries}
+	PlanUsage   = Method[None, PlanUsageResult]{MPlanUsage}
 
 	Subscribe   = Method[SubscribeParams, SubscribeResult]{MSubscribe}
 	Unsubscribe = Method[SubscribeParams, None]{MUnsubscribe}
@@ -87,4 +88,27 @@ type UsageSeriesResult struct {
 	To     time.Time `json:"to"`
 	Tokens []int     `json:"tokens"`
 	Cost   []float64 `json:"cost_usd"`
+}
+
+// PlanUsageResult is the plan usage of every signed-in subscription that
+// has reported one (docs/plan-usage.md).
+type PlanUsageResult struct {
+	Plans []PlanUsageInfo `json:"plans"`
+}
+
+// PlanUsageInfo is one subscription's usage windows as its latest model
+// call's response reported them, and when that was.
+type PlanUsageInfo struct {
+	Provider string            `json:"provider"` // "openai"
+	Name     string            `json:"name"`     // "ChatGPT"
+	Windows  []UsageWindowInfo `json:"windows"`
+	Observed time.Time         `json:"observed"`
+}
+
+// UsageWindowInfo is one rolling limit: the percent used, its length in
+// minutes (0 when unknown) and when it resets (zero when unknown).
+type UsageWindowInfo struct {
+	UsedPercent float64   `json:"used_percent"`
+	Minutes     int       `json:"minutes,omitempty"`
+	ResetsAt    time.Time `json:"resets_at,omitzero"`
 }

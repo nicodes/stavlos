@@ -47,6 +47,10 @@ type Request struct {
 	// OnStatus may turn a non-2xx status into a provider-specific error
 	// (e.g. "log in again" for 401); nil or a nil return keeps the default.
 	OnStatus func(code int, body []byte) error
+	// OnResponse (nil for none) sees the headers of every response,
+	// whatever its status: a provider reads what they report beside the
+	// body (the Codex backend's rate-limit windows).
+	OnResponse func(h http.Header)
 }
 
 // Tunables; variables so tests can shrink them.
@@ -211,6 +215,9 @@ func attemptOnce(ctx context.Context, r Request) (*http.Response, error) {
 			return nil, ctx.Err()
 		}
 		return nil, &retryable{err: fmt.Errorf("%s: %w", r.Name, err)}
+	}
+	if r.OnResponse != nil {
+		r.OnResponse(resp.Header)
 	}
 	if resp.StatusCode/100 == 2 {
 		return resp, nil

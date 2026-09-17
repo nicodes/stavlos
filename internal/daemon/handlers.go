@@ -388,6 +388,9 @@ var handlers = routes(
 		}
 		return protocol.UsageSeriesResult{From: s.From, To: s.To, Tokens: s.Tokens, Cost: s.Cost}, nil
 	}),
+	route(protocol.PlanUsage, func(_ context.Context, c *conn, _ protocol.None) (protocol.PlanUsageResult, error) {
+		return c.d.planUsage(), nil
+	}),
 	route(protocol.CommandList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.CommandListResult, error) {
 		return c.d.listCommands(p.Channel)
 	}),
