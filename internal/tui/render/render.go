@@ -122,8 +122,7 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 }
 
 // stamp is how long ago an item happened, as drawn at the end of its last
-// row, in parentheses: "(5m)" (format.Ago); "" when stamps are off or the
-// item has no time.
+// row: "5m" (format.Ago); "" when stamps are off or the item has no time.
 func (o Options) stamp(lines []transcript.Line) string {
 	if !o.Stamps || len(lines) == 0 || lines[0].At.IsZero() {
 		return ""
@@ -132,7 +131,7 @@ func (o Options) stamp(lines []transcript.Line) string {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	return "(" + format.Ago(lines[0].At, now.Local()) + ")"
+	return format.Ago(lines[0].At, now.Local())
 }
 
 // stampRows right-aligns stamp, grey, on the last row (ending at the right
