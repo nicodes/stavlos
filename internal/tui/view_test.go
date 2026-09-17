@@ -3253,15 +3253,16 @@ func TestDividerTabsOpenWithTheSidebar(t *testing.T) {
 	}
 }
 
-// TestSidebarHidesQuietAgents: a channel's tree draws only agents that are
-// busy, waiting, failed or waiting on the human (and the selected one);
+// TestSidebarHidesQuietAgents: a channel's tree draws its main agent, and
+// otherwise only agents that are busy, waiting, failed or waiting on the
+// human (and the selected one);
 // the row under it shows the idle ones too, and hides them again. A click
 // on the channel whose chat is already open folds its tree.
 func TestSidebarHidesQuietAgents(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
 	m.agents = []protocol.AgentInfo{
-		{ID: "a", Name: "main", Role: "general", State: "running"},
+		{ID: "a", Name: "main", Role: "general", State: "idle"}, // the root: drawn even idle
 		{ID: "b", Parent: "a", Depth: 1, Name: "napper", Role: "general", State: "idle"},
 		{ID: "c", Parent: "a", Depth: 1, Name: "sleeper", Role: "general", State: "idle"},
 		{ID: "d", Parent: "a", Depth: 1, Name: "waiter", Role: "general", State: "waiting"},
