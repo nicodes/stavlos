@@ -177,6 +177,13 @@ var handlers = routes(
 		to, err := s.Post(ctx, p.Text, "human:"+name)
 		return protocol.ChannelPostResult{To: to}, err
 	}),
+	route(protocol.ChannelSetRecap, func(ctx context.Context, c *conn, p protocol.ChannelSetRecapParams) (protocol.None, error) {
+		s, err := c.d.channel(p.Channel)
+		if err != nil {
+			return none, err
+		}
+		return none, s.SetRecap(ctx, p.Minutes)
+	}),
 	route(protocol.ChannelSetMode, func(ctx context.Context, c *conn, p protocol.ChannelSetModeParams) (protocol.None, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {

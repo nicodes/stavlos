@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -153,4 +154,26 @@ func planUsageRow(name string, used float64, width int) string {
 	}
 	pct := fmt.Sprintf("%*s", pctW, fmt.Sprintf("%.0f%%", used))
 	return theme.StyleDim.Render(name+" ") + bar.Render(strings.Repeat("━", filled)) + theme.StyleRule.Render(strings.Repeat("─", barW-filled)) + theme.StyleDim.Render(" "+pct)
+}
+
+// recapCommand is /recap [minutes|off]: how long the channel may go without
+// the human hearing from it before its main agent is asked for a status
+// report. With no argument it reports the setting.
+func (m *Model) recapCommand(rest string) tea.Cmd {
+	rest = strings.TrimSpace(rest)
+	switch {
+	case rest == "":
+		if m.channel.Recap == 0 {
+			return m.setStatus("recap is off: /recap 10 asks for a status report after 10 quiet minutes", false)
+		}
+		return m.setStatus(fmt.Sprintf("recap every %d min of quiet; /recap off turns it off", m.channel.Recap), false)
+	case strings.EqualFold(rest, "off"), rest == "0":
+		return setRecapCmd(m.ctx, m.c, m.channelID, 0)
+	}
+	rest = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSpace(strings.TrimSuffix(rest, "minutes")), "min"), "m")
+	n, err := strconv.Atoi(strings.TrimSpace(rest))
+	if err != nil || n <= 0 {
+		return m.setStatus("usage: /recap <minutes> or /recap off", true)
+	}
+	return setRecapCmd(m.ctx, m.c, m.channelID, n)
 }

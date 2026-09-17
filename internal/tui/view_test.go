@@ -3888,3 +3888,32 @@ func TestPlanUsageChart(t *testing.T) {
 		t.Fatalf("/plan: %+v", m.usage)
 	}
 }
+
+// TestRecapCommand: /recap reports the setting, takes minutes (with or
+// without a unit), turns off, and refuses nonsense.
+func TestRecapCommand(t *testing.T) {
+	m := channelModel()
+	m.command("/recap")
+	if !strings.Contains(m.status, "recap is off") || m.statusErr {
+		t.Fatalf("unset: %q", m.status)
+	}
+	m.channel.Recap = 10
+	m.command("/recap")
+	if !strings.Contains(m.status, "every 10 min of quiet") {
+		t.Fatalf("set: %q", m.status)
+	}
+	for _, arg := range []string{"15", "15m", "15 min", "15 minutes"} {
+		if cmd := m.command("/recap " + arg); cmd == nil {
+			t.Fatalf("%q should set the timer", arg)
+		}
+	}
+	for _, arg := range []string{"off", "0"} {
+		if cmd := m.command("/recap " + arg); cmd == nil {
+			t.Fatalf("%q should turn it off", arg)
+		}
+	}
+	m.command("/recap soon")
+	if !m.statusErr || !strings.Contains(m.status, "usage: /recap") {
+		t.Fatalf("nonsense: %q", m.status)
+	}
+}

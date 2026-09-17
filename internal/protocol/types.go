@@ -30,6 +30,7 @@ const (
 	MChannelRename    = "channel.rename" // give the channel another name, unique across the daemon
 	MChannelSetModel  = "channel.set_model"
 	MChannelSetMode   = "channel.set_mode"   // permission mode: ask | auto | yolo
+	MChannelSetRecap  = "channel.set_recap"  // minutes of silence before the main agent is asked for a status report; 0 off
 	MChannelPost      = "channel.post"       // the human\'s message in the channel chat, delivered by @mention
 	MChannelAddDir    = "channel.add_dir"    // put a directory in the channel\'s working set (every agent\'s)
 	MChannelRemoveDir = "channel.remove_dir" // take one out (never the channel directory)
@@ -262,6 +263,7 @@ type ChannelInfo struct {
 	Tokens       int          `json:"tokens"` // input + output tokens every agent of the channel has used
 	TrustPending bool         `json:"trust_pending"`
 	Mode         string       `json:"mode"`                  // permission mode: ask | auto | yolo
+	Recap        int          `json:"recap,omitempty"`       // minutes of silence before a recap is asked for; 0 is off
 	State        ChannelState `json:"state,omitempty"`       // working (an agent runs) | waiting (one expects an answer) | idle; "" for a channel not in memory
 	Title        string       `json:"title,omitempty"`       // the first human prompt, for pickers
 	Dirs         []DirInfo    `json:"dirs,omitempty"`        // the working directories every agent shares, the channel directory first
@@ -300,6 +302,14 @@ type ChannelSetModelParams struct {
 type ChannelSetModeParams struct {
 	Channel string `json:"channel"`
 	Mode    string `json:"mode"` // ask | auto | yolo
+}
+
+// ChannelSetRecapParams sets a channel's recap timer: after this many
+// minutes without the human hearing from it, and with work done since the
+// last one, its main agent is asked for a status report. 0 turns it off.
+type ChannelSetRecapParams struct {
+	Channel string `json:"channel"`
+	Minutes int    `json:"minutes"`
 }
 
 // ChannelPostParams is a message to the channel chat: it reaches every

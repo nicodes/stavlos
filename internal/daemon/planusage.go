@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log"
@@ -205,4 +206,27 @@ func (d *Daemon) planUsage() protocol.PlanUsageResult {
 	}
 	sort.Slice(out.Plans, func(i, j int) bool { return out.Plans[i].Provider < out.Plans[j].Provider })
 	return out
+}
+
+// recapTick is how often the daemon looks for a channel whose recap is due;
+// the interval itself is per channel and at least a minute.
+const recapTick = 20 * time.Second
+
+// recapLoop asks each channel whose recap is due for a status report
+// (agent.Channel.MaybeRecap decides), until ctx ends.
+func (d *Daemon) recapLoop(ctx context.Context) {
+	t := time.NewTicker(recapTick)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-t.C:
+			for _, c := range d.channelList() {
+				if err := c.MaybeRecap(ctx, now); err != nil {
+					log.Printf("recap %s: %v", c.ID, err)
+				}
+			}
+		}
+	}
 }
