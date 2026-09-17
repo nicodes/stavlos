@@ -44,9 +44,14 @@ func (m *Model) ensureSpin() tea.Cmd {
 func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case catalogTickMsg:
+		m.viewDirty = true // the chat's stamps ("5 min") age; unchanged items redraw from the render cache
 		cmds := []tea.Cmd{channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), tick(3*time.Second, catalogTickMsg{})}
+		if m.focus == focusUsage {
+			cmds = append(cmds, m.usageFetch()) // the open chart keeps up
+		}
+		cmds = append(cmds, planUsageCmd(m.ctx, m.c)) // the daemon's last reading: no request to the provider
 		for _, s := range m.navChannels {
-			if m.treeOpen[s.ID] {
+			if m.otherTreeShown(s.ID) {
 				cmds = append(cmds, treeCmd(m.ctx, m.c, s.ID))
 			}
 		}
@@ -76,7 +81,7 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 		m.treeTimer = false
 		cmds := []tea.Cmd{treeCmd(m.ctx, m.c, m.channelID)}
 		for _, s := range m.navChannels { // the trees kept open beside it
-			if s.ID != m.channelID && m.treeOpen[s.ID] {
+			if s.ID != m.channelID && m.otherTreeShown(s.ID) {
 				cmds = append(cmds, treeCmd(m.ctx, m.c, s.ID))
 			}
 		}

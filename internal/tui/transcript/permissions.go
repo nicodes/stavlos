@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -51,7 +52,7 @@ func (t *Transcript) EnsurePermission(p protocol.PromptInfo) {
 		return
 	}
 	t.permissions[p.ID] = permissionItem{item: len(t.items), p: p}
-	t.appendItem(t.permissionLines(p, nil))
+	t.appendItem(stamped(t.permissionLines(p, nil), p.Created))
 }
 
 func PermissionHeader(p protocol.PromptInfo, chat bool) Line {
@@ -134,4 +135,17 @@ func (t *Transcript) applyPermission(ev event.Event) bool {
 	default:
 		return false
 	}
+}
+
+// stamped dates a prompt's lines by when the prompt was created (RFC 3339),
+// for a card drawn before its event arrives; unparsable leaves them undated.
+func stamped(lines []Line, created string) []Line {
+	at, err := time.Parse(time.RFC3339, created)
+	if err != nil {
+		return lines
+	}
+	for i := range lines {
+		lines[i].At = at
+	}
+	return lines
 }

@@ -21,6 +21,7 @@ const (
 	focusTabs                          // the tab strip: ←/→ highlight a tab, enter opens its dialog
 	focusMeta                          // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
 	focusInlinePermission              // permission choices embedded in the chat
+	focusUsage                         // a usage dialog: tokens or cost over time (usage.go)
 )
 
 // focusOrder lists the sections tab cycles through, top to bottom: the chat
@@ -31,8 +32,8 @@ func (m *Model) focusOrder() []focus {
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
-	order = append(order, focusInput) // top to bottom: under the rule come the input, the strip, the meta row
-	if m.stripShown() {
+	order = append(order, focusInput)            // top to bottom: under the rule come the input, the strip, the meta row
+	if m.stripShown() && len(m.tabOrder()) > 0 { // with the sidebar, the channel chat has no tabs
 		order = append(order, focusTabs)
 	}
 	if len(m.metaParts()) > 0 { // the channel chat's meta row has nothing to pick

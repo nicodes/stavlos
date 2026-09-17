@@ -1,5 +1,7 @@
 package protocol
 
+import "time"
+
 // Method is one request of the protocol: its name, the params it takes (P)
 // and the result it returns (R). The client calls a Method and the daemon
 // routes one, so a method's name and its shapes are declared once, here,
@@ -59,8 +61,54 @@ var (
 	ProviderDisconnect = Method[ProviderRef, None]{MProviderDisconnect}
 	ModelList          = Method[ModelListParams, ModelListResult]{MModelList}
 
+	UsageSeries = Method[UsageSeriesParams, UsageSeriesResult]{MUsageSeries}
+	PlanUsage   = Method[None, PlanUsageResult]{MPlanUsage}
+
 	Subscribe   = Method[SubscribeParams, SubscribeResult]{MSubscribe}
 	Unsubscribe = Method[SubscribeParams, None]{MUnsubscribe}
 	Reconcile   = Method[ChannelRef, ReconcileResult]{MReconcile}
 	Presets     = Method[PresetsParams, PresetsResult]{MPresets}
 )
+
+// UsageSeriesParams picks whose usage to chart: every channel's (no
+// Channel), a channel's, or one of its agents'; from From (the first model
+// call when zero) to To (now when zero), in Buckets equal spans (1–1000).
+type UsageSeriesParams struct {
+	Channel string    `json:"channel,omitempty"`
+	Agent   string    `json:"agent,omitempty"`
+	From    time.Time `json:"from,omitzero"`
+	To      time.Time `json:"to,omitzero"`
+	Buckets int       `json:"buckets"`
+}
+
+// UsageSeriesResult is input + output tokens and cost per bucket over
+// [From, To).
+type UsageSeriesResult struct {
+	From   time.Time `json:"from"`
+	To     time.Time `json:"to"`
+	Tokens []int     `json:"tokens"`
+	Cost   []float64 `json:"cost_usd"`
+}
+
+// PlanUsageResult is the plan usage of every signed-in subscription that
+// has reported one (docs/plan-usage.md).
+type PlanUsageResult struct {
+	Plans []PlanUsageInfo `json:"plans"`
+}
+
+// PlanUsageInfo is one subscription's usage windows as its latest model
+// call's response reported them, and when that was.
+type PlanUsageInfo struct {
+	Provider string            `json:"provider"` // "openai"
+	Name     string            `json:"name"`     // "ChatGPT"
+	Windows  []UsageWindowInfo `json:"windows"`
+	Observed time.Time         `json:"observed"`
+}
+
+// UsageWindowInfo is one rolling limit: the percent used, its length in
+// minutes (0 when unknown) and when it resets (zero when unknown).
+type UsageWindowInfo struct {
+	UsedPercent float64   `json:"used_percent"`
+	Minutes     int       `json:"minutes,omitempty"`
+	ResetsAt    time.Time `json:"resets_at,omitzero"`
+}

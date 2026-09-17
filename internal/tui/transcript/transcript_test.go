@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"encoding/json"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -596,5 +597,21 @@ func TestInfoMessagesDrawDoubleArrows(t *testing.T) {
 	}
 	if GlyphSpawn != "⋙" || GlyphToolCreate != "⋙" {
 		t.Fatal("a new agent reads ⋙")
+	}
+}
+
+// TestGlyphsAreOneColumn: every chat glyph measures one column, as
+// terminals draw it; a glyph the layout counts as two (☰ did) leaves its
+// rows a column short, and the terminal keeps a stale cell at their end.
+func TestGlyphsAreOneColumn(t *testing.T) {
+	for _, g := range []string{
+		GlyphChild, GlyphReply, GlyphAsk, GlyphSpawn, GlyphInfo, GlyphInfoSent, GlyphTask, GlyphFinished, GlyphError,
+		GlyphKilled, GlyphTurn, GlyphNudge, GlyphAside, GlyphModel, GlyphNotice, GlyphPrompt, GlyphAnswer, GlyphPermission, GlyphFailed,
+		GlyphToolFiles, GlyphToolRead, GlyphToolSearch, GlyphToolPatch, GlyphToolShell, GlyphJob, GlyphToolAgents, GlyphToolCreate,
+		GlyphToolTodo, GlyphToolMCP, GlyphToolWeb,
+	} {
+		if w := ansi.StringWidth(g); w != 1 {
+			t.Errorf("glyph %q measures %d columns", g, w)
+		}
 	}
 }

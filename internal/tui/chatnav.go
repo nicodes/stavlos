@@ -120,6 +120,9 @@ func (m *Model) scrollToCursor() {
 		return
 	}
 	h := m.vp.Height
+	if r.Last+2 == len(m.vp.rows) {
+		r.Last++ // the last item brings the blank row under it into view
+	}
 	switch {
 	case r.Last-r.First+1 > h || r.First < m.vp.YOffset:
 		m.vp.SetYOffset(r.First)
@@ -273,10 +276,11 @@ func (m *Model) refreshViewport() {
 		Expanded:      m.expanded[m.viewID()],
 		TurnGaps:      !m.superChat,
 		WhoStyle:      m.whoStyle,
+		Stamps:        true,
 		WhoKey:        m.whoKey(),
 		Cursor:        m.chatCursor,
 		Focused:       m.focus == focusChat,
-		KeepTextColor: !m.superChat,
+		KeepTextColor: true, // focus, hover and expansion change the background, never the text colour
 
 		CompactFrame: render.CompactFrame(time.Now()),
 	}
@@ -288,6 +292,11 @@ func (m *Model) refreshViewport() {
 		lines, rows = render.Lines(nil, opts)
 	}
 	m.itemRows = rows
+	if len(lines) > 0 {
+		// a blank row under the last message (or the loader), so the chat
+		// never rides on the divider
+		lines = append(lines, "")
+	}
 	m.vp.SetRows(lines)
 	if m.follow {
 		m.vp.GotoBottom()

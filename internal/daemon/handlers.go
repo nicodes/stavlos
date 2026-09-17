@@ -8,6 +8,7 @@ import (
 	"log"
 
 	"github.com/nicodes/stavlos/internal/escalation"
+	"github.com/nicodes/stavlos/internal/eventlog"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -371,6 +372,24 @@ var handlers = routes(
 			return protocol.PresetsResult{}, err
 		}
 		return protocol.PresetsResult{Presets: s.Presets()}, nil
+	}),
+	route(protocol.UsageSeries, func(ctx context.Context, c *conn, p protocol.UsageSeriesParams) (protocol.UsageSeriesResult, error) {
+		switch {
+		case p.Buckets < 1 || p.Buckets > 1000:
+			return protocol.UsageSeriesResult{}, fmt.Errorf("buckets must be 1–1000, not %d", p.Buckets)
+		case p.Agent != "" && p.Channel == "":
+			return protocol.UsageSeriesResult{}, errors.New("an agent's usage needs its channel")
+		case !p.From.IsZero() && !p.To.IsZero() && !p.From.Before(p.To):
+			return protocol.UsageSeriesResult{}, errors.New("from must be before to")
+		}
+		s, err := c.d.Log.Usage(ctx, eventlog.UsageQuery{Channel: p.Channel, Agent: p.Agent, From: p.From, To: p.To, Buckets: p.Buckets})
+		if err != nil {
+			return protocol.UsageSeriesResult{}, internal(err)
+		}
+		return protocol.UsageSeriesResult{From: s.From, To: s.To, Tokens: s.Tokens, Cost: s.Cost}, nil
+	}),
+	route(protocol.PlanUsage, func(_ context.Context, c *conn, _ protocol.None) (protocol.PlanUsageResult, error) {
+		return c.d.planUsage(), nil
 	}),
 	route(protocol.CommandList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.CommandListResult, error) {
 		return c.d.listCommands(p.Channel)

@@ -379,11 +379,12 @@ func (c *Channel) Info() protocol.ChannelInfo {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var states []protocol.AgentState
-	live, cost := 0, 0.0
+	live, cost, tokens := 0, 0.0, 0
 	for _, id := range c.st.order {
 		a := c.st.agents[id]
 		states = append(states, a.status())
 		cost += a.cost
+		tokens += a.tokens
 		if !a.killed {
 			live++
 		}
@@ -391,7 +392,7 @@ func (c *Channel) Info() protocol.ChannelInfo {
 	return protocol.ChannelInfo{
 		ID: c.ID, Name: c.st.name, Dir: c.st.dir, DirError: config.DirectoryError(c.st.dir), Model: c.st.model, RootAgent: c.st.role,
 		Created: c.Created.Format(time.RFC3339), Archived: c.st.archived,
-		Live: live, CostUSD: cost, TrustPending: c.cfg.TrustPending, Mode: c.st.mode,
+		Live: live, CostUSD: cost, Tokens: tokens, TrustPending: c.cfg.TrustPending, Mode: c.st.mode,
 		State: protocol.RollUp(states), Dirs: c.dirInfosLocked(),
 	}
 }

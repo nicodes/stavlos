@@ -167,6 +167,9 @@ func (m *Model) followSidebarCursor() {
 			cur = r
 		}
 	}
+	if cur == len(body)-2 {
+		cur++ // the last row brings the blank row under it into view
+	}
 	m.sbTop, _ = listWindow(cur, m.sbTop, len(body), room)
 }
 
@@ -200,6 +203,8 @@ const (
 	sbHere                          // this channel: its chat
 	sbAgent                         // one of this channel's agents
 	sbOtherAgent                    // an agent of another channel, under its row
+	sbHereAll                       // under this channel's tree: show all agents, or hide the idle ones
+	sbOtherAll                      // the same under another channel's tree
 )
 
 // sidebarRow is one row the sidebar cursor lands on; k indexes navChannels
@@ -229,8 +234,14 @@ func (m Model) sidebarRows() []sidebarRow {
 		rows = append(rows, m.otherTreeRows(k)...)
 	}
 	rows = append(rows, sidebarRow{kind: sbHere})
-	for i := range m.agents {
-		rows = append(rows, sidebarRow{kind: sbAgent, k: i})
+	if !m.treeClosed[m.channelID] {
+		shown, quiet := m.shownAgents(m.channelID, m.agents, m.openAgentID())
+		for _, i := range shown {
+			rows = append(rows, sidebarRow{kind: sbAgent, k: i})
+		}
+		if quiet > 0 {
+			rows = append(rows, sidebarRow{kind: sbHereAll})
+		}
 	}
 	for k := before; k < len(m.navChannels); k++ {
 		rows = append(rows, sidebarRow{kind: sbOther, k: k})
@@ -272,13 +283,25 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 	case sbNewChannel:
 		return m.newChannel()
 	case sbOther:
+		m.setTreeClosed(m.navChannels[r.k].ID, false) // an unselected channel: its tree opens if closed
 		return m.openOther(r.k)
 	case sbHere:
+		if m.superChat { // the selected channel: the row toggles its tree
+			m.toggleHereTree()
+			return nil
+		}
+		m.setTreeClosed(m.channelID, false) // not selected (an agent's chat is open): its tree opens if closed
 		chat := m.openChat()
 		if cmd, ok := m.openWaiting(m.channelID, ""); ok {
 			return tea.Batch(chat, cmd)
 		}
 		return tea.Batch(chat, m.setFocus(focusInput))
+	case sbHereAll:
+		m.toggleShowAll(m.channelID, r)
+		return nil
+	case sbOtherAll:
+		m.toggleShowAll(m.navChannels[r.k].ID, r)
+		return nil
 	case sbAgent:
 		m.openAgent(r.k)
 		if cmd, ok := m.openWaiting(m.channelID, m.selectedID()); ok {
@@ -299,28 +322,98 @@ func (m *Model) sidebarSelect(i int) tea.Cmd {
 // under its row while its tree is open.
 func (m Model) otherTreeRows(k int) []sidebarRow {
 	id := m.navChannels[k].ID
-	if !m.treeOpen[id] {
+	if !m.otherTreeShown(id) {
 		return nil
 	}
-	rows := make([]sidebarRow, 0, len(m.trees[id]))
-	for j := range m.trees[id] {
+	shown, quiet := m.shownAgents(id, m.trees[id], "")
+	rows := make([]sidebarRow, 0, len(shown)+1)
+	for _, j := range shown {
 		rows = append(rows, sidebarRow{kind: sbOtherAgent, k: k, j: j})
+	}
+	if quiet > 0 {
+		rows = append(rows, sidebarRow{kind: sbOtherAll, k: k})
 	}
 	return rows
 }
 
+// shownAgents is which of channel's agents its tree draws, as indexes into
+// agents, and how many are quiet: idle (or finished) with nothing waiting
+// on the human, and neither the channel's main agent (the root, always
+// drawn) nor the selected agent. Quiet agents are left out
+// unless the tree's show all row is on; with none, there is no such row.
+func (m Model) shownAgents(channel string, agents []protocol.AgentInfo, selected string) (shown []int, quiet int) {
+	all := m.treeAll[channel]
+	for i, a := range agents {
+		o := agentOutcome(a)
+		if (o == "idle" || o == "complete") && m.needsHuman(a.ID) == "" && a.ID != selected && a.Parent != "" {
+			quiet++
+			if !all {
+				continue
+			}
+		}
+		shown = append(shown, i)
+	}
+	return shown, quiet
+}
+
+// openAgentID is the agent whose own chat is open, "" in the channel chat.
+func (m Model) openAgentID() string {
+	if m.superChat {
+		return ""
+	}
+	return m.selectedID()
+}
+
+// toggleShowAll flips whether channel's tree shows its quiet agents, and
+// keeps the cursor on the row that did it.
+func (m *Model) toggleShowAll(channel string, row sidebarRow) {
+	if m.treeAll == nil {
+		m.treeAll = map[string]bool{}
+	}
+	m.treeAll[channel] = !m.treeAll[channel]
+	m.sbCursor = m.sidebarIndex(row)
+	m.followSidebarCursor()
+}
+
+// otherTreeShown reports whether another channel's tree is drawn: its
+// agents are known (it was open once) and the human has not closed it.
+func (m Model) otherTreeShown(id string) bool {
+	return len(m.trees[id]) > 0 && !m.treeClosed[id]
+}
+
+// setTreeClosed opens or closes channel id's tree in the nav; no other
+// channel's tree changes.
+func (m *Model) setTreeClosed(id string, closed bool) {
+	if m.treeClosed == nil {
+		m.treeClosed = map[string]bool{}
+	}
+	m.treeClosed[id] = closed
+}
+
+// toggleHereTree closes the bound channel's tree, or opens it again, with
+// the cursor on the channel's row.
+func (m *Model) toggleHereTree() {
+	m.setTreeClosed(m.channelID, !m.treeClosed[m.channelID])
+	m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbHere})
+	m.followSidebarCursor()
+}
+
 // toggleChannelTree folds the tree of the channel on row i, or unfolds it
-// again. The bound channel's tree is always drawn: its agents are live.
+// again.
 func (m *Model) toggleChannelTree(i int) tea.Cmd {
 	r, ok := m.sidebarAt(i)
-	if !ok || (r.kind != sbOther && r.kind != sbOtherAgent) {
+	if ok && (r.kind == sbHere || r.kind == sbAgent || r.kind == sbHereAll) {
+		m.toggleHereTree()
+		return nil
+	}
+	if !ok || (r.kind != sbOther && r.kind != sbOtherAgent && r.kind != sbOtherAll) {
 		return nil
 	}
 	s := m.navChannels[r.k]
 	if len(m.trees[s.ID]) == 0 {
 		return m.setStatus("no tree for "+channelLabel(s)+" yet: open it once", false)
 	}
-	m.treeOpen[s.ID] = !m.treeOpen[s.ID]
+	m.setTreeClosed(s.ID, !m.treeClosed[s.ID])
 	m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbOther, k: r.k})
 	m.followSidebarCursor()
 	return nil
@@ -334,7 +427,7 @@ func (m Model) channelAt(i int) (k int, ok bool) {
 		return -1, true
 	case sbOther:
 		return r.k, true
-	case sbNewChannel, sbAgent, sbOtherAgent:
+	case sbNewChannel, sbAgent, sbOtherAgent, sbHereAll, sbOtherAll:
 	}
 	return 0, false
 }
@@ -390,12 +483,12 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 		return m.openConfigEditor(true)
 	}
 	cmd := m.setFocus(focusSidebar)
-	if y == sidebarDiscordRow {
+	if y == m.sidebarDiscordRow() {
 		return tea.Batch(cmd, m.openDiscord("status"))
 	}
-	if y == sidebarTabsRow { // the ! ? dirs tabs: a click opens that tab
-		if f, ok := m.tabAt(x, 0); ok && m.sidebarVisible() {
-			return tea.Batch(cmd, m.openTab(f))
+	if _, system, tokens, cost, ok := m.usageRowFigures(y); ok { // the usage rows: their figures chart tokens or cost over time
+		if kind, on := usageFigureAt(tokens, cost, sidebarWidth-1, x); on {
+			return tea.Batch(cmd, m.openUsage(kind, system))
 		}
 		return cmd
 	}
@@ -416,6 +509,11 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 	}
 	switch r, _ := m.sidebarAt(i); r.kind {
 	case sbHere:
+		if m.superChat { // the selected channel: a click toggles its tree
+			m.toggleHereTree()
+			return cmd
+		}
+		m.setTreeClosed(m.channelID, false) // not selected (an agent's chat is open): its tree opens if closed
 		chat := m.openChat()
 		if open, ok := m.openWaiting(m.channelID, ""); ok {
 			return tea.Batch(cmd, chat, open)
@@ -427,7 +525,7 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 			return tea.Batch(cmd, open)
 		}
 		return cmd
-	case sbNewChannel, sbOther, sbOtherAgent:
+	case sbNewChannel, sbOther, sbOtherAgent, sbHereAll, sbOtherAll:
 	}
 	return tea.Batch(cmd, m.sidebarSelect(i))
 }

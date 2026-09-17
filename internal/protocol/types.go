@@ -62,6 +62,9 @@ const (
 	MReconcile   = "reconcile"
 	MPresets     = "presets" // archetypes available to a channel
 
+	MUsageSeries = "usage.series" // tokens and cost over time: the system's, a channel's or an agent's
+	MPlanUsage   = "plan.usage"   // the signed-in subscriptions' plan usage, as last observed
+
 	// Notifications (server → client, no id).
 	NEvent  = "event"
 	NStream = "stream"
@@ -254,6 +257,7 @@ type ChannelInfo struct {
 	Seq          int64        `json:"seq"` // latest per-channel sequence
 	Live         int          `json:"live_agents"`
 	CostUSD      float64      `json:"cost_usd"`
+	Tokens       int          `json:"tokens"` // input + output tokens every agent of the channel has used
 	TrustPending bool         `json:"trust_pending"`
 	Mode         string       `json:"mode"`                  // permission mode: ask | auto | yolo
 	State        ChannelState `json:"state,omitempty"`       // working (an agent runs) | waiting (one expects an answer) | idle; "" for a channel not in memory
