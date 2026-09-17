@@ -2155,10 +2155,11 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		if header != 6 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || !strings.HasPrefix(sb[2], "System · 2k tokens · $0.25") || !strings.HasPrefix(sb[3], "@main · 1k tokens · $0.20") || !strings.Contains(sb[sidebarDiscordRow], "Discord checking") ||
-			strings.Contains(strings.Join(sb[:6], "\n"), "! 1/1") || strings.TrimSpace(sb[5]) != "" || !strings.HasPrefix(sb[6], "Channels ") || !strings.Contains(sb[6], " "+newChannelMark+" ") || strings.Contains(sb[6], "↑/↓") ||
+		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || strings.Join(strings.Fields(sb[2]), " ") != "System 2k · $0.25" || strings.Join(strings.Fields(sb[3]), " ") != "@main 1k · $0.20" ||
+			strings.TrimSpace(sb[4]) != "" || sidebarDiscordRow != 5 || !strings.Contains(sb[sidebarDiscordRow], "Discord checking") ||
+			strings.Contains(strings.Join(sb[:7], "\n"), "! 1/1") || strings.TrimSpace(sb[6]) != "" || !strings.HasPrefix(sb[7], "Channels ") || !strings.Contains(sb[7], " "+newChannelMark+" ") || strings.Contains(sb[7], "↑/↓") ||
 			strings.Contains(strings.Join(sb, "\n"), "waiting") || strings.Contains(strings.Join(sb, "\n"), "need you") {
-			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:7], "\n"))
+			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:8], "\n"))
 		}
 		// dirs is the open channel's: out of the tabs the strip walks, behind
 		// the gear at the right edge of the channel's row; → on the row, or a
@@ -3451,19 +3452,23 @@ func TestDividerDialogsGreyUntilOpen(t *testing.T) {
 func TestSidebarUsageRows(t *testing.T) {
 	m := sidebarNavModel()
 	m.navChannels = []protocol.ChannelInfo{{ID: "s-2", Name: "other", Tokens: 10_000, CostUSD: 1.5}}
+	w := sidebarWidth - 1
 	rows := func() []string {
-		h := m.sidebarHeader(sidebarWidth - 1)
+		h := m.sidebarHeader(w)
 		return []string{stripANSI(h[2]), stripANSI(h[3])}
 	}
-	if r := rows(); r[0] != "System · 12k tokens · $1.75" || r[1] != "@main · 1k tokens · $0.20" {
+	row := func(label, figures string) string { // the label left, the figures flush right
+		return label + strings.Repeat(" ", w-len([]rune(label))-len([]rune(figures))) + figures
+	}
+	if r := rows(); r[0] != row("System", "12k · $1.75") || r[1] != row("@main", "1k · $0.20") {
 		t.Fatalf("agent chat: %q", r)
 	}
 	m.superChat = true
-	if r := rows(); r[0] != "System · 12k tokens · $1.75" || r[1] != "#channel · 2k tokens · $0.25" {
+	if r := rows(); r[0] != row("System", "12k · $1.75") || r[1] != row("#channel", "2k · $0.25") {
 		t.Fatalf("channel chat: %q", r)
 	}
 	m.channel.Name = strings.Repeat("long", 10)
-	if r := rows(); !strings.HasSuffix(r[1], "… · 2k tokens · $0.25") || ansi.StringWidth(r[1]) > sidebarWidth-1 {
+	if r := rows(); !strings.HasSuffix(r[1], "… 2k · $0.25") || ansi.StringWidth(r[1]) != w {
 		t.Fatalf("a long label is cut, never the figures: %q", r[1])
 	}
 	// with the sidebar, the channel chat has no tabs: tab skips the strip
