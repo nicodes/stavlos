@@ -36,6 +36,10 @@ func NewWithToken(name, baseURL string, src model.TokenSource) model.Provider {
 
 func (p *provider) Name() string { return p.name }
 
+// xai reports whether this is xAI's Grok, whose prompt cache wants the
+// conversation id header and the earlier reasoning replayed.
+func (p *provider) xai() bool { return p.name == "xai" }
+
 // Variants implements model.Variants. Grok's reasoning models (the "mini"
 // ones) take reasoning_effort low|high; the others reject the field.
 func (p *provider) Variants(id string) []string {

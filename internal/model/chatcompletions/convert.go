@@ -12,14 +12,15 @@ func strp(s string) *string { return &s }
 // Consecutive same-role model messages are merged first; tool results
 // become role "tool" messages, which the API expects directly after the
 // assistant message carrying the matching tool_calls.
-func toMessages(system string, msgs []model.Message) []chatMessage {
+// With replayReasoning, an assistant message carries its reasoning back.
+func toMessages(system string, msgs []model.Message, replayReasoning bool) []chatMessage {
 	var out []chatMessage
 	if system != "" {
 		out = append(out, chatMessage{Role: "system", Content: strp(system)})
 	}
 	for _, m := range mergeSameRole(msgs) {
 		if m.Role == model.RoleAssistant {
-			out = append(out, assistantMessage(m.Blocks))
+			out = append(out, assistantMessage(m.Blocks, replayReasoning))
 			continue
 		}
 		out = append(out, userMessages(m.Blocks)...)
@@ -41,12 +42,18 @@ func mergeSameRole(msgs []model.Message) []model.Message {
 	return out
 }
 
-// assistantMessage joins text and carries tool calls; thinking is not replayed.
-func assistantMessage(blocks []model.Block) chatMessage {
-	var texts []string
+// assistantMessage joins text and carries tool calls; with replayReasoning
+// its thinking goes back as reasoning_content (a Chat Completions reasoning
+// text: blocks with an opaque payload are another API's).
+func assistantMessage(blocks []model.Block, replayReasoning bool) chatMessage {
+	var texts, reasoning []string
 	var calls []toolCall
 	for _, b := range blocks {
 		switch b.Type {
+		case model.BlockThinking:
+			if replayReasoning && b.Opaque == "" && b.Text != "" {
+				reasoning = append(reasoning, b.Text)
+			}
 		case model.BlockText:
 			if b.Text != "" {
 				texts = append(texts, b.Text)
@@ -55,7 +62,7 @@ func assistantMessage(blocks []model.Block) chatMessage {
 			calls = append(calls, toolCall{ID: b.ID, Type: "function", Function: toolFunction{Name: b.Name, Arguments: model.ToolArguments(b)}})
 		}
 	}
-	msg := chatMessage{Role: "assistant", ToolCalls: calls}
+	msg := chatMessage{Role: "assistant", ToolCalls: calls, ReasoningContent: strings.Join(reasoning, "\n")}
 	if len(texts) > 0 {
 		msg.Content = strp(strings.Join(texts, "\n"))
 	}

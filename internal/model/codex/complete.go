@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
@@ -18,8 +19,20 @@ func (m *client) Complete(ctx context.Context, req model.Request, onDelta func(m
 	if err != nil {
 		return model.Response{}, fmt.Errorf("codex: %w", err)
 	}
+	header := m.p.header
+	if req.CacheKey != "" {
+		// ChatGPT routes a request to its cached prefix by the session-id
+		// header, as the Codex CLI sends it (codex-api requests/headers.rs)
+		header = func(ctx context.Context, h http.Header) error {
+			if err := m.p.header(ctx, h); err != nil {
+				return err
+			}
+			h.Set("session-id", req.CacheKey)
+			return nil
+		}
+	}
 	return stream.Complete(ctx, stream.Request{
-		Name: "codex", Client: m.p.http, URL: m.p.endpoint, Body: body, Header: m.p.header, OnStatus: onStatus, OnResponse: m.p.observe,
+		Name: "codex", Client: m.p.http, URL: m.p.endpoint, Body: body, Header: header, OnStatus: onStatus, OnResponse: m.p.observe,
 	}, onDelta, func(d func(model.Delta)) stream.Codec { return newAccumulator(d) })
 }
 

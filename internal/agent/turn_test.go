@@ -797,3 +797,21 @@ func TestSandboxHoldsInYolo(t *testing.T) {
 		t.Fatalf("the sandbox let a write through: %q", b)
 	}
 }
+
+// TestTurnRequestsNameTheirConversation: every model call of an agent's
+// turn carries the agent's id as its cache key, so the provider routes it
+// to the cached prefix of the agent's previous call.
+func TestTurnRequestsNameTheirConversation(t *testing.T) {
+	fm := &fakeModel{steps: []step{reply(call("c1", "read", `{"path":"f.txt"}`)), reply(text("done"))}}
+	s, h := newTestChannel(t, testConfig{}, fm)
+	runTurn(t, s, h, "go")
+	reqs := fm.requests()
+	if len(reqs) != 2 {
+		t.Fatalf("requests: %d", len(reqs))
+	}
+	for i, r := range reqs {
+		if r.CacheKey != s.Root().ID {
+			t.Fatalf("request %d cache key %q, want %q", i, r.CacheKey, s.Root().ID)
+		}
+	}
+}

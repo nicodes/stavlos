@@ -20,10 +20,13 @@ type streamOptions struct {
 }
 
 type chatMessage struct {
-	Role       string     `json:"role"`
-	Content    *string    `json:"content"`
-	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
-	ToolCallID string     `json:"tool_call_id,omitempty"`
+	Role    string  `json:"role"`
+	Content *string `json:"content"`
+	// ReasoningContent replays a reasoning model's earlier reasoning (xAI):
+	// leaving it out is the top cause of prompt-cache misses.
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCalls        []toolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string     `json:"tool_call_id,omitempty"`
 }
 
 type toolCall struct {
