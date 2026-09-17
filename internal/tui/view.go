@@ -213,8 +213,8 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 		b.WriteString(st.Render(text))
 		x += w
 	}
-	sep := func() {
-		b.WriteString(theme.StyleDim.Render(" · "))
+	sep := func() { // the divider's own rule separates its parts, as it does the tabs
+		b.WriteString(theme.StyleRule.Render(" ─ "))
 		x += 3
 	}
 	if modeTag != "" {
@@ -239,7 +239,7 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 	sep()
 	part(metaVariant, variant, theme.StyleDim)
 	if queued > 0 {
-		b.WriteString(theme.StyleDim.Render(fmt.Sprintf(" · %d queued", queued)))
+		b.WriteString(theme.StyleRule.Render(" ─ ") + theme.StyleDim.Render(fmt.Sprintf("%d queued", queued)))
 	}
 	return b.String(), spans
 }
@@ -414,11 +414,12 @@ func (m Model) metaLeft() (string, []span[metaPart]) {
 		if m.channel.Dir == "" {
 			return "", nil
 		}
-		label := channelLabel(m.channel) + " · " + format.ShortHome(m.channel.Dir)
+		sep := theme.StyleRule.Render(" ─ ")
+		label := theme.StyleDim.Render(channelLabel(m.channel)) + sep + theme.StyleDim.Render(format.ShortHome(m.channel.Dir))
 		if m.channel.DirError != "" {
-			label += " · directory unavailable"
+			label += sep + theme.StyleDim.Render("directory unavailable")
 		}
-		return theme.StyleDim.Render(label), nil
+		return label, nil
 	}
 	return metaLineSpans(label, role, model, variant, queued, "", sel, m.hover.meta) // the mode tag leads the input instead
 }

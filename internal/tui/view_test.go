@@ -113,19 +113,19 @@ func TestFmtCost(t *testing.T) {
 }
 
 func TestMetaLine(t *testing.T) {
-	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, "", metaNone, metaNone)); got != "main (coder) · claude-opus-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "anthropic/claude-opus-5", "", 0, "", metaNone, metaNone)); got != "main (coder) ─ claude-opus-5 ─ default" {
 		t.Fatalf("with model: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "", "", 0, "", metaNone, metaNone)); got != "main (coder) · no model — /models" {
+	if got := stripANSI(metaLine("main", "coder", "", "", 0, "", metaNone, metaNone)); got != "main (coder) ─ no model — /models" {
 		t.Fatalf("no model: %q", got)
 	}
-	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, "", metaNone, metaNone)); got != "scout (explorer) · llama3 · default · 2 queued" {
+	if got := stripANSI(metaLine("scout", "explorer", "ollama/llama3", "", 2, "", metaNone, metaNone)); got != "scout (explorer) ─ llama3 ─ default ─ 2 queued" {
 		t.Fatalf("queued: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone, metaNone)); got != "main (coder) · gpt-5 · high" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "high", 0, "", metaNone, metaNone)); got != "main (coder) ─ gpt-5 ─ high" {
 		t.Fatalf("variant: %q", got)
 	}
-	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "YOLO", metaNone, metaNone)); got != "YOLO · main (coder) · gpt-5 · default" {
+	if got := stripANSI(metaLine("main", "coder", "openai/gpt-5", "", 0, "YOLO", metaNone, metaNone)); got != "YOLO ─ main (coder) ─ gpt-5 ─ default" {
 		t.Fatalf("yolo: %q", got)
 	}
 }
@@ -1059,7 +1059,7 @@ func TestChannelViewFillsHeight(t *testing.T) {
 				ri = i
 			}
 		}
-		if ri < 0 || si < 2 || si != len(lines)-1 || !strings.HasPrefix(lines[ri], "─ coder ·") || !strings.Contains(lines[ri], "async ") || strings.TrimSpace(lines[ri+1]) != "" || !strings.HasPrefix(lines[ri+2], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" {
+		if ri < 0 || si < 2 || si != len(lines)-1 || !strings.HasPrefix(lines[ri], "─ coder ─ ") || !strings.Contains(lines[ri], "async ") || strings.TrimSpace(lines[ri+1]) != "" || !strings.HasPrefix(lines[ri+2], " ASK › ") || strings.TrimSpace(lines[si-1]) != "" {
 			t.Fatalf("focus %v: the divider carries the agent and its tabs, then come a blank line, the input, a blank line and the strip:\n%s", f, stripANSI(v))
 		}
 	}
@@ -1101,7 +1101,7 @@ func TestDividerAndStripRepo(t *testing.T) {
 	rule, strip := -1, -1
 	for i, l := range lines {
 		switch {
-		case strings.HasPrefix(l, "─ coder · "):
+		case strings.HasPrefix(l, "─ coder ─ "):
 			rule = i
 		case strings.HasPrefix(l, "! "):
 			strip = i
@@ -1112,7 +1112,7 @@ func TestDividerAndStripRepo(t *testing.T) {
 	}
 	// the agent on the left, its tabs then tokens and cost on the right; no
 	// context figure while the window is unknown; tokens and cost are the nav's
-	if row := lines[rule]; !strings.HasPrefix(row, "─ coder · gpt-5 · default ─") || !strings.HasSuffix(row, "─ async 0 ─ todo 0 ─ mcp 0 ─") || strings.Contains(row, "tokens") || strings.Contains(row, "$") ||
+	if row := lines[rule]; !strings.HasPrefix(row, "─ coder ─ gpt-5 ─ default ─") || strings.Contains(row, "·") || !strings.HasSuffix(row, "─ async 0 ─ todo 0 ─ mcp 0 ─") || strings.Contains(row, "tokens") || strings.Contains(row, "$") ||
 		strings.Contains(row, "%") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) != 100 {
 		t.Fatalf("divider %q", row)
 	}
@@ -1736,7 +1736,7 @@ func TestMetaRowHits(t *testing.T) {
 	m.agents = []protocol.AgentInfo{{ID: "a", Name: "main", Role: "coder", Model: "openai/gpt-5", Variant: "high"}}
 	m.selected = 0
 	m.channel.Mode = protocol.ModeYolo
-	// "─ main (coder) · gpt-5 · high ───" leads the divider (the mode tag leads the input)
+	// "─ main (coder) ─ gpt-5 ─ high ───" leads the divider (the mode tag leads the input)
 	row := stripANSI(m.ruleLine(m.width))
 	at := func(sub string) int { return ansi.StringWidth(row[:strings.Index(row, sub)]) + 1 } // a column, not a byte offset
 	for _, c := range []struct {
