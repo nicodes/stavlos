@@ -64,6 +64,7 @@ const (
 
 	MUsageSeries = "usage.series" // tokens and cost over time: the system's, a channel's or an agent's
 	MPlanUsage   = "plan.usage"   // the signed-in subscriptions' plan usage, as last observed
+	MCacheUsage  = "usage.cache"  // how much of recent model calls came from the providers' prompt caches
 
 	// Notifications (server → client, no id).
 	NEvent  = "event"

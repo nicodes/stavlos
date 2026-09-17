@@ -3727,3 +3727,38 @@ func TestPlanUsageBars(t *testing.T) {
 		t.Fatalf("a click on the moved System cost opens its chart: focus=%v %+v", m.focus, m.usage)
 	}
 }
+
+// TestNavCacheMonitor: the nav shows what share of the last hour's calls
+// came from the providers' prompt caches, above the Discord row, orange
+// under 70% and red under 40%, and nothing before any call.
+func TestNavCacheMonitor(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() { lipgloss.SetColorProfile(prev) })
+	m := sidebarNavModel()
+	m.prompts = nil
+	w := sidebarWidth - 1
+	if row := m.cacheRow(w); row != "" {
+		t.Fatalf("no calls, no row: %q", row)
+	}
+	discord := m.sidebarDiscordRow()
+	for _, c := range []struct {
+		fresh, cached int64
+		want          string
+		style         lipgloss.Style
+	}{
+		{100, 1900, "95%", theme.StyleDim},
+		{100, 150, "60%", theme.StyleWarn},
+		{900, 100, "10%", theme.StyleError},
+	} {
+		m.cache = protocol.CacheUsageResult{Fresh: c.fresh, Cached: c.cached}
+		row := m.cacheRow(w)
+		if !strings.Contains(row, c.style.Render(c.want)) || !strings.HasPrefix(stripANSI(row), "cache ") || ansi.StringWidth(stripANSI(row)) != w {
+			t.Fatalf("%d/%d: %q", c.cached, c.fresh, row)
+		}
+		header := m.sidebarHeader(w)
+		if m.sidebarDiscordRow() != discord+1 || stripANSI(header[m.sidebarDiscordRow()-1]) != stripANSI(row) || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
+			t.Fatalf("the monitor sits above Discord:\n%s", stripANSI(strings.Join(header, "\n")))
+		}
+	}
+}

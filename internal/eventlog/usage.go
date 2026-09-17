@@ -78,3 +78,16 @@ FROM events WHERE `+where+` AND time >= ? AND time < ?`, append(args, from.UnixN
 	}
 	return s, rows.Err()
 }
+
+// CacheUsage sums what the model calls since from carried: tokens the
+// provider charged as new input, and tokens it served from its prompt
+// cache. Their ratio says whether cache routing is working
+// (docs/prompt-caching.md).
+func (l *Log) CacheUsage(ctx context.Context, from time.Time) (fresh, cached int64, err error) {
+	row := l.r.QueryRowContext(ctx, `
+SELECT COALESCE(SUM(COALESCE(json_extract(CAST(payload AS TEXT), '$.usage.input_tokens'), 0)), 0),
+       COALESCE(SUM(COALESCE(json_extract(CAST(payload AS TEXT), '$.usage.cache_read_tokens'), 0)), 0)
+FROM events WHERE type = 'assistant.message' AND time >= ?`, from.UnixNano())
+	err = row.Scan(&fresh, &cached)
+	return fresh, cached, err
+}

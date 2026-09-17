@@ -63,6 +63,7 @@ var (
 
 	UsageSeries = Method[UsageSeriesParams, UsageSeriesResult]{MUsageSeries}
 	PlanUsage   = Method[None, PlanUsageResult]{MPlanUsage}
+	CacheUsage  = Method[CacheUsageParams, CacheUsageResult]{MCacheUsage}
 
 	Subscribe   = Method[SubscribeParams, SubscribeResult]{MSubscribe}
 	Unsubscribe = Method[SubscribeParams, None]{MUnsubscribe}
@@ -111,4 +112,17 @@ type UsageWindowInfo struct {
 	UsedPercent float64   `json:"used_percent"`
 	Minutes     int       `json:"minutes,omitempty"`
 	ResetsAt    time.Time `json:"resets_at,omitzero"`
+}
+
+// CacheUsageParams asks how much of the model calls of the last Minutes
+// (60 when zero) the providers served from their prompt caches.
+type CacheUsageParams struct {
+	Minutes int `json:"minutes,omitempty"`
+}
+
+// CacheUsageResult is what those calls carried: tokens charged as new
+// input, and tokens served from the cache.
+type CacheUsageResult struct {
+	Fresh  int64 `json:"fresh"`
+	Cached int64 `json:"cached"`
 }
