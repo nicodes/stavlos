@@ -75,6 +75,11 @@ type Request struct {
 	// effort, thinking budget…); "" is the provider default. Providers list
 	// the valid names through the optional Variants interface.
 	Variant string
+	// CacheKey names the conversation this request continues (an agent's
+	// id), so the provider routes it to the server holding the cached prefix
+	// of the conversation's previous request; "" for none. Without it cache
+	// hits are down to which server a request lands on.
+	CacheKey string
 }
 
 // StopReason reports why generation stopped.

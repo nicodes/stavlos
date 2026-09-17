@@ -21,8 +21,20 @@ func (m *client) Complete(ctx context.Context, req model.Request, onDelta func(m
 	if err != nil {
 		return model.Response{}, fmt.Errorf("%s: %w", m.p.name, err)
 	}
+	header := m.p.header
+	if req.CacheKey != "" && m.p.xai() {
+		// xAI routes a conversation to the server holding its cached prefix
+		// by x-grok-conv-id (docs.x.ai prompt caching)
+		header = func(ctx context.Context, h http.Header) error {
+			if err := m.p.header(ctx, h); err != nil {
+				return err
+			}
+			h.Set("x-grok-conv-id", req.CacheKey)
+			return nil
+		}
+	}
 	return stream.Complete(ctx, stream.Request{
-		Name: m.p.name, Client: m.p.http, URL: m.p.baseURL + "/chat/completions", Body: body, Header: m.p.header,
+		Name: m.p.name, Client: m.p.http, URL: m.p.baseURL + "/chat/completions", Body: body, Header: header,
 	}, onDelta, func(d func(model.Delta)) stream.Codec { return newAccumulator(d) })
 }
 
@@ -33,7 +45,7 @@ func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {
 	}
 	cr := chatRequest{
 		Model:         id,
-		Messages:      toMessages(req.System, req.Messages),
+		Messages:      toMessages(req.System, req.Messages, p.xai()),
 		Tools:         toTools(req.Tools),
 		Stream:        true,
 		StreamOptions: &streamOptions{IncludeUsage: true},

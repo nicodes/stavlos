@@ -139,7 +139,7 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 	history := a.prepareHistory(t.ctx, m, info, system, defs)
 	history = withNote(history, a.stateNote(rv, cfg))
 
-	resp, err := m.Complete(t.ctx, model.Request{Model: bareID(modelID), System: system, Messages: history, Tools: defs, Variant: variant},
+	resp, err := m.Complete(t.ctx, model.Request{Model: bareID(modelID), System: system, Messages: history, Tools: defs, Variant: variant, CacheKey: a.ID},
 		func(d model.Delta) {
 			s.host.Stream(protocol.StreamNotification{Channel: s.ID, Agent: a.ID, Turn: t.turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName, Reset: d.Reset})
 		})

@@ -19,6 +19,7 @@ type responsesRequest struct {
 	Include           []string        `json:"include"`
 	Reasoning         reasoningConfig `json:"reasoning"`
 	Text              textConfig      `json:"text"`
+	PromptCacheKey    string          `json:"prompt_cache_key,omitempty"`
 }
 
 type reasoningConfig struct {
@@ -89,6 +90,7 @@ func buildBody(id string, req model.Request) ([]byte, error) {
 		Include:           []string{"reasoning.encrypted_content"},
 		Reasoning:         reasoningConfig{Effort: "medium", Summary: "auto"},
 		Text:              textConfig{Verbosity: "medium"},
+		PromptCacheKey:    req.CacheKey,
 	}
 	if req.Variant != "" {
 		rr.Reasoning.Effort = req.Variant
