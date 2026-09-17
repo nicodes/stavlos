@@ -1194,7 +1194,11 @@ func (m Model) tabLabels(p *protocol.PromptInfo) (string, [][]span[focus]) {
 	lines := make([]string, len(layout))
 	first = 0
 	for r, tr := range layout {
-		lines[r] = strings.Join(tabs[first:first+len(tr)], theme.StyleDim.Render(" · "))
+		sep := theme.StyleDim.Render(" · ")
+		if slices.Equal(tr, tabRows[1]) {
+			sep = theme.StyleRule.Render(" ─ ") // the agent's row sits on the divider: its own rule separates the tabs
+		}
+		lines[r] = strings.Join(tabs[first:first+len(tr)], sep)
 		first += len(tr)
 	}
 	return strings.Join(lines, "\n"), spans
@@ -1441,7 +1445,7 @@ func (m Model) divider(width int) divider {
 	tabs, usage := m.agentTabs(), m.footerRightView()
 	right, rightW := "", 0
 	fit := func(parts ...string) bool {
-		text := strings.Join(slices.DeleteFunc(parts, func(p string) bool { return p == "" }), theme.StyleDim.Render(" · "))
+		text := strings.Join(slices.DeleteFunc(parts, func(p string) bool { return p == "" }), dash(" ─ "))
 		if text == "" || lipgloss.Width(text)+4 > width {
 			return false
 		}
