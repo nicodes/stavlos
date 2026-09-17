@@ -51,9 +51,10 @@ type Options struct {
 	WhoKey   string
 	// CompactFrame animates a running compaction's rule (the sweeping bar).
 	CompactFrame int
-	// Stamps draws each item's time, grey, at the right end of its last
-	// shown row.
+	// Stamps draws how long ago each item happened, grey, at the right end
+	// of its last shown row, as of Now (the current time when zero).
 	Stamps bool
+	Now    time.Time
 }
 
 // GutterMark is the chat cursor marker tests swap in for the highlight (the
@@ -120,21 +121,18 @@ func renderChatItem(lines []transcript.Line, o Options) itemRows {
 	return r
 }
 
-// stamp is an item's time as drawn at the end of its last row: the clock
-// for today, with the date before that, and the year for another year; ""
-// when stamps are off or the item has no time.
+// stamp is how long ago an item happened, as drawn at the end of its last
+// row, in parentheses: "(5m)" (format.Ago); "" when stamps are off or the
+// item has no time.
 func (o Options) stamp(lines []transcript.Line) string {
 	if !o.Stamps || len(lines) == 0 || lines[0].At.IsZero() {
 		return ""
 	}
-	at, now := lines[0].At.Local(), time.Now()
-	switch {
-	case at.Year() != now.Year():
-		return at.Format("Jan 2 2006 15:04")
-	case at.YearDay() != now.YearDay():
-		return at.Format("Jan 2 15:04")
+	now := o.Now
+	if now.IsZero() {
+		now = time.Now()
 	}
-	return at.Format("15:04")
+	return "(" + format.Ago(lines[0].At, now.Local()) + ")"
 }
 
 // stampRows right-aligns stamp, grey, on the last row (ending where wrapped
@@ -284,8 +282,7 @@ type renderKey struct {
 	width                   int
 	details, noFold, cursor bool
 	keepTextColor           bool
-	stamps                  bool
-	day                     int    // the day of year stamps were drawn on: "today" moves at midnight
+	stamp                   string // the item's stamp: an entry goes stale as time passes
 	expanded                int8   // per-item override: 0 none, 1 collapsed, 2 expanded
 	who                     string // Options.WhoKey
 	frame                   int
@@ -330,10 +327,7 @@ func Transcript(t *transcript.Transcript, c *Cache, o Options) ([]string, map[in
 			tail = tail[k:]
 			continue
 		}
-		key := renderKey{epoch: epoch, rev: t.Rev(i), width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i, who: o.WhoKey, keepTextColor: o.KeepTextColor, stamps: o.Stamps}
-		if o.Stamps {
-			key.day = time.Now().YearDay()
-		}
+		key := renderKey{epoch: epoch, rev: t.Rev(i), width: o.Width, details: o.Details, noFold: o.NoFold, cursor: o.Focused && o.Cursor == i, who: o.WhoKey, keepTextColor: o.KeepTextColor, stamp: o.stamp(lines)}
 		if v, ok := o.Expanded[i]; ok {
 			key.expanded = 1
 			if v {
