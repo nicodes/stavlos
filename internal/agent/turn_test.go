@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"github.com/nicodes/stavlos/internal/project"
 	"os"
 	"path/filepath"
 	"strings"
@@ -813,5 +814,49 @@ func TestTurnRequestsNameTheirConversation(t *testing.T) {
 		if r.CacheKey != s.Root().ID {
 			t.Fatalf("request %d cache key %q, want %q", i, r.CacheKey, s.Root().ID)
 		}
+	}
+}
+
+// TestAutoCompactTriggers: a history past compaction.maxTokens is compacted
+// before the next call even when the model's window is huge, the trigger
+// takes the provider's own count of the last call when it is larger than the
+// estimate, and what is kept afterwards is the summary plus a short tail.
+func TestAutoCompactTriggers(t *testing.T) {
+	big := strings.Repeat("x ", 4_000) // ~2k tokens of text per reply
+	fm := &fakeModel{steps: []step{
+		func(context.Context, model.Request) (model.Response, error) {
+			// the provider reports far more than the estimate: the trigger
+			// trusts it
+			return model.Response{Blocks: []model.Block{{Type: model.BlockText, Text: big}}, StopReason: model.StopEndTurn,
+				Usage: model.UsageFrom(9_000, 500, 40_000)}, nil
+		},
+	}}
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","compaction":{"maxTokens":10000,"keepTokens":2000}}`}, fm)
+	root := s.Root()
+	runTurn(t, s, h, "one")
+	if n := len(h.ofType(event.CompactionDone, root.ID)); n != 0 {
+		t.Fatalf("nothing to compact after one turn: %d", n)
+	}
+	fm.steps = []step{
+		func(_ context.Context, req model.Request) (model.Response, error) {
+			if !strings.Contains(req.System, "summarise") {
+				return text(""), errors.New("expected the summariser first, got a turn call")
+			}
+			return text("SUMMARY"), nil
+		},
+		reply(text("after")),
+	}
+	runTurn(t, s, h, "two")
+	comp := h.ofType(event.CompactionDone, root.ID)
+	var cp event.CompactionPayload
+	if len(comp) != 1 || comp[0].Decode(&cp) != nil || cp.Summary != "SUMMARY" || cp.After >= cp.Before {
+		t.Fatalf("the reported size should have triggered a compaction that shrinks: %+v %+v", comp, cp)
+	}
+	hist := root.history()
+	if len(hist) == 0 || !strings.Contains(hist[0].Blocks[0].Text, "SUMMARY") {
+		t.Fatalf("history starts with the summary: %+v", hist)
+	}
+	if project.EstimateTokens(hist, "", nil) > 6_000 {
+		t.Fatalf("the kept tail should be short: %d tokens", project.EstimateTokens(hist, "", nil))
 	}
 }

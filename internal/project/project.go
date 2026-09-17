@@ -28,6 +28,8 @@ type Builder struct {
 	open    []string                            // tool_use ids without a result, in order
 	norm    []model.Message                     // History's result, valid until the next change
 	changed bool
+	summary string // the last compaction's summary, carried into the next one
+	prefix  int    // leading messages that are that summary, not conversation
 }
 
 type message struct {
@@ -166,6 +168,7 @@ func (b *Builder) compacted(seq int64, p event.CompactionPayload) {
 		bounds = append(bounds, boundary{seq: bd.seq, n: n})
 	}
 	b.msgs, b.bounds, b.changed = kept, bounds, true
+	b.summary, b.prefix = p.Summary, 2
 }
 
 func summaryMessages(seq int64, summary string) []message {
@@ -187,31 +190,37 @@ func (b *Builder) History() []model.Message {
 
 // Cut is the older part of a history a compaction would summarise.
 type Cut struct {
-	Old            []model.Message // the history up to the turn boundary
+	Old            []model.Message // the conversation up to the turn boundary, without a previous summary
+	Prev           string          // the previous compaction's summary, to be carried forward ("" for none)
 	FromSeq, ToSeq int64
 	Before         int // estimated tokens of the whole history
 	rest           []model.Message
 }
 
-// Cut picks where to compact: after the last turn that ended (all) or the
-// last one within the older two thirds of the messages. ok is false when
-// there is no such turn.
-func (b *Builder) Cut(all bool) (Cut, bool) {
-	limit := len(b.msgs)
-	if !all {
-		limit = limit * 2 / 3
-	}
-	best := -1
+// Cut picks where to compact: the earliest turn boundary leaving at most
+// keep estimated tokens after it, so the summary is followed by as much
+// recent conversation as that budget allows. keep 0 summarises every turn
+// that ended (/compact), and so does a budget too small for even the last
+// turn. ok is false when no turn has ended yet.
+func (b *Builder) Cut(keep int) (Cut, bool) {
+	best, last := -1, -1
 	for i, bd := range b.bounds {
-		if bd.n > 0 && bd.n <= limit {
-			best = i
+		if bd.n <= b.prefix {
+			continue // nothing but the previous summary before it
 		}
+		last = i
+		if keep > 0 && best < 0 && EstimateTokens(raw(b.msgs[bd.n:]), "", nil) <= keep {
+			best = i // the earliest boundary whose tail fits: the most context kept
+		}
+	}
+	if best < 0 {
+		best = last // /compact, or a tail too big at every boundary
 	}
 	if best < 0 {
 		return Cut{}, false
 	}
 	bd := b.bounds[best]
-	return Cut{Old: normalize(raw(b.msgs[:bd.n])), FromSeq: b.msgs[0].seq, ToSeq: bd.seq,
+	return Cut{Old: normalize(raw(b.msgs[b.prefix:bd.n])), Prev: b.summary, FromSeq: b.msgs[0].seq, ToSeq: bd.seq,
 		Before: EstimateTokens(b.History(), "", nil), rest: raw(b.msgs[bd.n:])}, true
 }
 

@@ -169,23 +169,30 @@ func TestProjectGolden(t *testing.T) {
 	}
 }
 
-// TestCut: a compaction cuts at a turn boundary, the whole history or its
-// older two thirds, and the builder applies the result like any event.
+// TestCut: a compaction cuts at the last turn boundary leaving at most the
+// kept tokens after it (every ended turn for /compact), and the builder
+// applies the result like any event.
 func TestCut(t *testing.T) {
 	b := NewBuilder()
 	for _, e := range cat(user(1, "a"), assistant(2, txt("b")), ended(3, "end_turn"), user(4, "c"), assistant(5, txt("d")), ended(6, "end_turn"), user(7, "e")) {
 		b.Apply(e)
 	}
-	if _, ok := NewBuilder().Cut(true); ok {
+	if _, ok := NewBuilder().Cut(0); ok {
 		t.Fatal("an empty history has nothing to cut")
 	}
-	all, ok := b.Cut(true)
-	if !ok || all.ToSeq != 60 || len(all.Old) != 4 || all.FromSeq != 11 || all.Before <= 0 {
+	all, ok := b.Cut(0)
+	if !ok || all.ToSeq != 60 || len(all.Old) != 4 || all.FromSeq != 11 || all.Before <= 0 || all.Prev != "" {
 		t.Fatalf("all: %+v %v", all, ok)
 	}
-	older, ok := b.Cut(false)
+	// a roomy budget keeps as much recent conversation as fits: the earliest
+	// boundary, here everything after the first turn
+	older, ok := b.Cut(1_000_000)
 	if !ok || older.ToSeq != 30 || len(older.Old) != 2 {
 		t.Fatalf("older: %+v %v", older, ok)
+	}
+	// a budget too small for any tail falls back to compacting every turn
+	if tight, ok := b.Cut(1); !ok || tight.ToSeq != 60 {
+		t.Fatalf("tight: %+v %v", tight, ok)
 	}
 	if older.After("S") <= 0 {
 		t.Fatal("after")
@@ -194,9 +201,13 @@ func TestCut(t *testing.T) {
 	if got := dump(b.History()); !strings.HasSuffix(got, "user: text(c)\nassistant: text(d)\nuser: text(e)") || !strings.Contains(got, "S)") {
 		t.Fatalf("after compaction:\n%s", got)
 	}
-	again, ok := b.Cut(true)
+	again, ok := b.Cut(0)
 	if !ok || again.ToSeq != 60 {
 		t.Fatalf("the later boundary survives the compaction: %+v %v", again, ok)
+	}
+	// the previous summary is carried out of the conversation, to be merged
+	if again.Prev != "S" || strings.Contains(dump(again.Old), "S)") {
+		t.Fatalf("previous summary: %q in %s", again.Prev, dump(again.Old))
 	}
 }
 
