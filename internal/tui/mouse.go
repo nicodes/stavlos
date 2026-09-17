@@ -108,7 +108,7 @@ func (m *Model) dialogHover(x, y int) {
 // starts after it and its separator. inMain is false over the sidebar.
 // Lower rows span the window and are returned as they are.
 func (m *Model) mainX(x, y int) (int, bool) {
-	if !m.sidebarVisible() || y > m.vp.Height {
+	if !m.sidebarVisible() || y >= m.vp.Height { // the divider (row vp.Height) spans the window too
 		return x, true
 	}
 	off := sidebarWidth + 2 // separator + gap

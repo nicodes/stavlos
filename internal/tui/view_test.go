@@ -988,7 +988,7 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: the channel's tabs over the agent's, counts only
 	v := stripANSI(tabsView(m, 100))
-	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · dirs 0\nasync 2 · todo") ||
+	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · dirs 0\nasync 2 ─ todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
@@ -1105,7 +1105,7 @@ func TestDividerAndStripRepo(t *testing.T) {
 	}
 	// the agent on the left, its tabs then tokens and cost on the right; no
 	// context figure while the window is unknown
-	if row := lines[rule]; !strings.HasPrefix(row, "─ coder · gpt-5 · default ─") || !strings.Contains(row, "─ async 0 · todo 0 · mcp 0 · 2k tokens · $0.02 ─") ||
+	if row := lines[rule]; !strings.HasPrefix(row, "─ coder · gpt-5 · default ─") || !strings.Contains(row, "─ async 0 ─ todo 0 ─ mcp 0 ─ 2k tokens · $0.02 ─") ||
 		strings.Contains(row, "%") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) != 100 {
 		t.Fatalf("divider %q", row)
 	}
@@ -1382,7 +1382,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Role = "general"
 	// empty: the tab reads (0) and its dialog says so
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 · todo 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 ─ todo 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	m.focus = focusTodo
@@ -2489,7 +2489,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 
 func TestMCPTabAndDialog(t *testing.T) {
 	m := channelModel()
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 0 · mcp 0") || !strings.Contains(sv, "! 0 · dirs 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 0 ─ mcp 0") || !strings.Contains(sv, "! 0 · dirs 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	started := time.Now().Add(-2 * time.Hour).UTC().Format(time.RFC3339)
@@ -3212,5 +3212,35 @@ func TestOtherChannelTreesStayOpen(t *testing.T) {
 	press(&m, tea.KeyMsg{Type: tea.KeyLeft})
 	if kept() != 4 {
 		t.Fatalf("← again should unfold it: %d rows", kept())
+	}
+}
+
+// TestDividerTabsOpenWithTheSidebar: with the sidebar showing, the divider
+// still spans the whole window, so a click on each agent tab there opens
+// that tab's own dialog.
+func TestDividerTabsOpenWithTheSidebar(t *testing.T) {
+	for _, c := range []struct {
+		label string
+		want  focus
+	}{{"async", focusAsync}, {"todo", focusTodo}, {"mcp", focusMCP}} {
+		m := sidebarNavModel()
+		m.prompts = nil
+		m.superChat = false
+		m.layout()
+		if !m.sidebarVisible() {
+			t.Fatal("the sidebar should show")
+		}
+		lay := m.rows()
+		row := stripANSI(m.ruleLine(m.width))
+		i := strings.Index(row, c.label+" ")
+		if i < 0 {
+			t.Fatalf("no %s tab on the divider: %q", c.label, row)
+		}
+		x := ansi.StringWidth(row[:i]) + 1
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: lay.rule, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: lay.rule, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		if got := nm.(Model).focus; got != c.want {
+			t.Errorf("clicking %s on the divider opened %v, want %v", c.label, got, c.want)
+		}
 	}
 }
