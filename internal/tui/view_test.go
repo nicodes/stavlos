@@ -3645,3 +3645,43 @@ func TestDividerHoverLightens(t *testing.T) {
 	move("mcp 0")
 	check("mcp 0", "todo 0")
 }
+
+// TestNavKeepsHoverAcrossChannelSwitch: a channel picked in the nav while
+// the pointer is on it keeps the nav's focus once the switch lands, with
+// the cursor (and its background) on the opened channel's row, still the
+// row under the pointer; moving off the nav gives the input its focus back.
+func TestNavKeepsHoverAcrossChannelSwitch(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.channel.Name = "proj"
+	m.navChannels = []protocol.ChannelInfo{{ID: "s-docs", Name: "docs", Dir: "/home/x/Work/docs"}, {ID: "s-web", Name: "web", Dir: "/home/x/Work/web"}}
+	old := m.channelID
+	m.setFocus(focusInput)
+	up := func(msg tea.Msg) {
+		nm, _ := m.Update(msg)
+		m = nm.(Model)
+	}
+	idx := m.sidebarIndex(sidebarRow{kind: sbOther, k: 1}) // #web, below this channel
+	y := sidebarY(m, idx)
+	up(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionMotion})
+	up(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	up(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	if !m.switching {
+		t.Fatal("the click should switch to #web")
+	}
+	up(switchedMsg{info: protocol.ChannelInfo{ID: "s-web", Name: "web", Dir: "/home/x/Work/web"}})
+	if len(m.navChannels) != 2 || m.navChannels[1].ID != old {
+		t.Fatalf("the nav should list the channel left behind at once: %+v", m.navChannels)
+	}
+	_, items := m.sidebarLines(m.vp.Height)
+	if y >= len(items) {
+		t.Fatalf("row %d is gone after the switch: %d rows", y, len(items))
+	}
+	if m.focus != focusSidebar || m.sbCursor != hereRow(m) || items[y] != m.sbCursor {
+		t.Fatalf("after the switch the nav should keep its cursor under the pointer: focus=%v cursor=%d here=%d under pointer=%d", m.focus, m.sbCursor, hereRow(m), items[y])
+	}
+	up(tea.MouseMsg{X: 60, Y: m.rows().input, Action: tea.MouseActionMotion}) // onto the input, off the nav
+	if m.focus != focusInput {
+		t.Fatalf("moving off the nav should give the input its focus back: %v", m.focus)
+	}
+}

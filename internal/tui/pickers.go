@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -68,8 +69,20 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 			m.dirsNext = false
 			return m.setStatus("channel: "+msg.err.Error(), true)
 		}
+		fromNav, hovered := m.focus == focusSidebar, m.hoverFocus
 		cmd := m.bindChannel(cleanChannel(msg.info))
 		m.opened = true // switched to from inside the TUI: the channel's chat, not the splash
+		if fromNav {
+			// picked in the nav: the nav keeps focus, its cursor (and the
+			// background that marks it) on the channel just opened, the row
+			// the pointer is still on
+			cmd = tea.Batch(cmd, m.setFocus(focusSidebar))
+			m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbHere})
+			m.followSidebarCursor()
+			if hovered { // moving off the nav gives the input its focus back
+				m.hoverFocus, m.hoverFrom = true, focusInput
+			}
+		}
 		if m.dirsNext { // reached through its gear: its dirs dialog
 			m.dirsNext = false
 			return tea.Batch(cmd, m.openConfigEditor(false))
@@ -683,6 +696,12 @@ func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
 	}
 	m.draft = m.input.Value()
 	m.editors[m.channelID] = m.editorState
+	if prev := m.channel; m.channelID != "" && m.channelID != info.ID {
+		prev.ID = m.channelID
+		// the nav lists the channel left behind among the others at once,
+		// not only at the next catalog refresh
+		m.navChannels = resumable(append(slices.Clone(m.navChannels), prev), info.ID)
+	}
 	m.stash()
 	m.generation++
 	m.channelState = newChannelState(info.ID, info)
