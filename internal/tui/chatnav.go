@@ -273,6 +273,7 @@ func (m *Model) refreshViewport() {
 		Expanded:      m.expanded[m.viewID()],
 		TurnGaps:      !m.superChat,
 		WhoStyle:      m.whoStyle,
+		Stamps:        true,
 		WhoKey:        m.whoKey(),
 		Cursor:        m.chatCursor,
 		Focused:       m.focus == focusChat,
