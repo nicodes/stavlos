@@ -28,8 +28,9 @@ func tightenPerms(dataDir string) {
 
 // Options configure Main. Empty fields take the standard locations.
 type Options struct {
-	Socket  string // unix socket path (paths.Socket)
-	DataDir string // event log, trust records, lock (paths.DataDir)
+	Socket  string                                               // unix socket path (paths.Socket)
+	DataDir string                                               // event log, trust records, lock (paths.DataDir)
+	Discord func(context.Context, string, string) DiscordService // socket, data directory
 }
 
 // Main runs the daemon in the foreground until SIGINT, SIGTERM or a
@@ -68,6 +69,9 @@ func Main(ctx context.Context, o Options) error {
 	sctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	d.Shutdown = cancel
+	if o.Discord != nil {
+		d.Discord = o.Discord(sctx, o.Socket, o.DataDir)
+	}
 	lvl, why := sandbox.Probe()
 	log.Printf("stavlosd %s listening on %s (%d providers, sandbox %s)", buildid.ID(), o.Socket, len(reg.Providers()), lvl)
 	if why != nil {

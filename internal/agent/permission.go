@@ -96,7 +96,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	dirs := a.c.dirPaths()
 	// An edit to the files that steer the harness itself asks whatever
 	// policy says and whatever the mode.
-	control := controlFile(c.Name, sub, a.c.Dir, dirs)
+	control := controlFile(c.Name, sub, a.c.Dir(), dirs)
 	if control != "" && verb == policy.Allow {
 		verb, arg = policy.Ask, control
 	}
@@ -117,7 +117,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	// allows.
 	boundary, why := "", ""
 	if verb != policy.Deny {
-		if dir := outsideDir(sub, a.c.Dir, dirs); dir != "" {
+		if dir := outsideDir(sub, a.c.Dir(), dirs); dir != "" {
 			boundary = dir
 			switch mode {
 			case protocol.ModeYolo:
@@ -188,7 +188,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	// the call itself; the prompt carries it for display.
 	prefix := prefixFor(d.sub.Kind, d.arg)
 	ans := a.ask(turnCtx, protocol.PromptInfo{
-		ID: NewID("p"), Channel: a.c.ID, ChannelName: a.c.Name(), Agent: a.ID, From: rv.name, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
+		ID: NewID("p"), Channel: a.c.ID, ChannelName: a.c.Name(), Agent: a.ID, From: rv.name, Role: rv.role, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
 		Question: question, Dir: d.boundary, Prefix: prefix,
 	}, c.ID)
 	if ans.Withdrawn {
@@ -212,7 +212,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	if d.boundary != "" && ans.Value != protocol.AnswerAllow {
 		dir := d.boundary
 		if strings.TrimSpace(ans.Dir) != "" {
-			dir = resolveDir(a.c.Dir, ans.Dir) // the human edited the offered directory
+			dir = resolveDir(a.c.Dir(), ans.Dir) // the human edited the offered directory
 		}
 		_ = a.c.addDir(context.Background(), a.ID, dir, "human")
 	}
@@ -234,12 +234,19 @@ func denialText(ans escalation.Answer, d decision) string {
 
 // ask logs a prompt, puts it to the human, and logs how it ended.
 func (a *Agent) ask(ctx context.Context, info protocol.PromptInfo, callID string) escalation.Answer {
+	return a.askOpened(ctx, info, callID, nil)
+}
+
+func (a *Agent) askOpened(ctx context.Context, info protocol.PromptInfo, callID string, opened func()) escalation.Answer {
 	// ask.requested is logged once the prompt is open, so a client that sees
 	// it can list the prompt; the answer is logged after.
 	ans := a.c.host.Prompt(ctx, info, func() {
-		_ = a.record(event.AskRequested, event.AskRequestedPayload{ID: info.ID, Kind: string(info.Kind), CallID: callID, Tool: info.Tool, Question: info.Question})
+		_ = a.record(event.AskRequested, event.AskRequestedPayload{ID: info.ID, Kind: string(info.Kind), CallID: callID, Tool: info.Tool, Input: info.Input, Dir: info.Dir, Prefix: info.Prefix, Question: info.Question, Questions: info.Questions, From: info.From, Role: info.Role, QuestionNumber: info.QuestionNumber, QuestionTotal: info.QuestionTotal})
+		if opened != nil {
+			opened()
+		}
 	})
-	res := event.AskResolvedPayload{ID: info.ID, Outcome: event.AskAnswered, Answer: ans.Value, By: ans.Client}
+	res := event.AskResolvedPayload{ID: info.ID, Outcome: event.AskAnswered, Answer: ans.Value, By: ans.Client, Answers: ans.Answers, Details: ans.Details, Reason: ans.Reason, Dir: ans.Dir}
 	switch {
 	case ans.Withdrawn:
 		res.Outcome = event.AskWithdrawn
@@ -254,7 +261,7 @@ func (a *Agent) ask(ctx context.Context, info protocol.PromptInfo, callID string
 
 // toolEnv is what a tool gets from this agent for one call.
 func (a *Agent) toolEnv(turn int, c model.Block, rv roleView, cfg *config.Effective) *tools.Env {
-	return &tools.Env{Dir: a.c.Dir, Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a},
+	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a},
 		MaxOutput: cfg.Compaction.MaxToolOutput, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Sandbox: a.c.sandboxSpec(cfg),
 		Partial: func(out string) {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nicodes/stavlos/internal/event"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/model"
@@ -31,7 +32,7 @@ type Env struct {
 	MaxOutput int              // truncate tool output beyond this many bytes (0 = 32k)
 	Jobs      Jobs             // the agent's background jobs; nil if unavailable
 	Todo      Todos            // the agent's todo list; nil if the preset does not include "todo"
-	Ask       Asker            // raises a question batch to the human and waits; nil in tests without a runtime
+	Ask       Asker            // presents all questions immediately and waits; nil in tests without a runtime
 	Search    SearchConfig     // web_search backend; zero → the tool explains how to configure it
 	PassEnv   []string         // environment variables kept for child processes although their names look like secrets (config env.pass)
 	Sandbox   *sandbox.Spec    // the boundary commands run in; nil runs them unsandboxed
@@ -42,9 +43,9 @@ type Skill struct {
 	Name, Description, Body, Dir string
 }
 
-// Asker is implemented by the agent runtime: it blocks the turn on a
-// question prompt (kind "question") until the human answers or the turn
-// is cancelled. Answers come back one per question, in order.
+// Asker publishes independent question prompts and blocks until all are
+// answered or cancelled. Answers retain original positions, with empty slots
+// for unanswered questions in an interrupted result.
 type Asker interface {
 	Ask(ctx context.Context, questions []protocol.Question) ([]string, error)
 }
@@ -86,12 +87,13 @@ type Orchestrator interface {
 	// Spawn creates a child and returns its id and the name it got (label,
 	// normalised and made unique in the channel).
 	Spawn(ctx context.Context, parent, archetype, label, task, modelID string) (id, name string, err error)
-	// Message sends text from the caller to an agent (name or id) or to
+	// Message atomically sends text from the caller to agents (names or ids) or to
 	// User, as kind KindRequest (the recipient owes a reply, the caller
 	// waits; delivered at its next step), KindResponse (settles a request,
 	// delivered between turns to the agent waiting on it) or KindInfo (no
-	// reply, no wait, never wakes the recipient). It returns the tool result.
-	Message(caller, to, text, kind string) (string, error)
+	// reply, no wait, never wakes the recipient). Each sees the full recipient
+	// list. Invalid targets reject the whole send. It returns the tool result.
+	Message(caller string, to []string, text, kind string, replyTo ...string) (string, error)
 	Cancel(parent, id string) error
 	Status(parent, id string) ([]ChildStatus, error)
 	// CanSpawn reports whether depth/fan-out limits currently permit a spawn.
@@ -101,14 +103,16 @@ type Orchestrator interface {
 }
 
 type ChildStatus struct {
-	ID      string  `json:"id"`
-	Parent  string  `json:"parent,omitempty"`
-	You     bool    `json:"you,omitempty"` // this row is the caller
-	Name    string  `json:"name"`
-	Role    string  `json:"role"`
-	State   string  `json:"state"`
-	Turn    int     `json:"turn"`
-	CostUSD float64 `json:"cost_usd"`
+	PendingReplies  []event.ReplyRequest `json:"pending_replies,omitempty"`
+	AwaitingReplies []event.ReplyRequest `json:"awaiting_replies,omitempty"`
+	ID              string               `json:"id"`
+	Parent          string               `json:"parent,omitempty"`
+	You             bool                 `json:"you,omitempty"` // this row is the caller
+	Name            string               `json:"name"`
+	Role            string               `json:"role"`
+	State           string               `json:"state"`
+	Turn            int                  `json:"turn"`
+	CostUSD         float64              `json:"cost_usd"`
 }
 
 // Set is a named collection.

@@ -6,7 +6,6 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nicodes/stavlos/internal/protocol"
-	"github.com/nicodes/stavlos/internal/tui/format"
 )
 
 func (m *Model) findAgent(id string) int {
@@ -77,7 +76,7 @@ func (m *Model) toggleTree() tea.Cmd {
 	}
 	m.layout()
 	if m.showTree {
-		return tea.Batch(m.setFocus(focusSidebar), channelsCmd(m.ctx, m.c, m.channel.Dir, channelsNav))
+		return tea.Batch(m.setFocus(focusSidebar), channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav))
 	}
 	return m.setFocus(focusInput)
 }
@@ -185,7 +184,7 @@ func (m *Model) nextNeedy(from int) int {
 }
 
 // sidebarItems is how many rows the sidebar cursor can rest on: + channel,
-// the directory's channels and this channel's agents. The cursor counts them
+// all channels and this channel's agents. The cursor counts them
 // top to bottom: 0 is + channel, then the channels alphabetically with this
 // channel's agents right under its row (sidebarRows).
 func (m *Model) sidebarItems() int {
@@ -197,7 +196,7 @@ type sidebarKind int
 
 const (
 	sbNewChannel sidebarKind = iota // the "channels" title, with its ✚
-	sbOther                         // another channel of this directory
+	sbOther                         // another channel in the global catalog
 	sbHere                          // this channel: its chat
 	sbAgent                         // one of this channel's agents
 	sbOtherAgent                    // an agent of another channel, under its row
@@ -212,7 +211,7 @@ type sidebarRow struct {
 }
 
 // sidebarRows is the sidebar's cursor rows top to bottom: the title, the
-// directory's channels named before this one (navChannels is in
+// channels named before this one (navChannels is in
 // alphabetical order), this channel, its agents, then the channels after
 // it. The sidebar cursor is an index into it; keys, clicks and drawing all
 // read it, so none of them works out where a row sits.
@@ -261,7 +260,7 @@ func (m Model) sidebarIndex(r sidebarRow) int {
 }
 
 // sidebarSelect acts on the item under the cursor: + channel creates a
-// channel in this directory and opens it; this channel's row shows its chat
+// channel with an editable directory and opens it; this channel's row shows its chat
 // and an agent row that agent's own chat (both focus the input); another
 // channel's row opens that channel in place of this one.
 func (m *Model) sidebarSelect(i int) tea.Cmd {
@@ -328,7 +327,7 @@ func (m *Model) toggleChannelTree(i int) tea.Cmd {
 }
 
 // channelAt is the channel a sidebar cursor index names: this channel (k
-// -1) or the directory's other channel k; ok is false for any other row.
+// -1) or another channel k; ok is false for any other row.
 func (m Model) channelAt(i int) (k int, ok bool) {
 	switch r, _ := m.sidebarAt(i); r.kind {
 	case sbHere:
@@ -341,31 +340,44 @@ func (m Model) channelAt(i int) (k int, ok bool) {
 }
 
 // channelSettings is the gear of the channel on sidebar row i (→ on the row,
-// or a click on the gear): this channel's dirs dialog, or another channel
-// opened on its dirs dialog.
+// or a click on the gear): the channel's file-backed project configuration.
 func (m *Model) channelSettings(i int) tea.Cmd {
 	k, ok := m.channelAt(i)
 	switch {
 	case !ok:
 		return nil
 	case k < 0:
-		return m.openTab(focusDirs)
+		return m.openConfigEditor(false)
 	}
 	m.dirsNext = true
 	return m.openOther(k)
 }
 
-// openOther opens the directory's other channel k (navChannels order) in
+// openOther opens another channel k (navChannels order) in
 // place of this one.
 func (m *Model) openOther(k int) tea.Cmd {
 	s := m.navChannels[k]
-	return tea.Batch(m.setStatus("opening #"+s.Name, false), switchChannelCmd(m.ctx, m.c, m.channelID, s.ID))
+	if m.switching {
+		return m.setStatus("a channel is already opening", false)
+	}
+	return tea.Batch(m.setStatus("opening #"+s.Name, false), m.switchTo(s.ID))
 }
 
-// newChannel is + channel: a popup names a new channel of this directory,
-// which then opens in place of this one.
+func (m *Model) switchTo(id string) tea.Cmd {
+	if m.switching {
+		return m.setStatus("a channel is already opening", false)
+	}
+	m.switching = true
+	return switchChannelCmd(m.ctx, m.c, m.channelID, id)
+}
+
+// newChannel names a channel, then offers the current directory as an editable
+// default. The new channel opens in place of this one.
 func (m *Model) newChannel() tea.Cmd {
-	o := newOverlay(ovNewChannel, overlayInput, "New channel in "+format.ShortHome(m.channel.Dir))
+	if m.switching {
+		return m.setStatus("a channel is already opening", false)
+	}
+	o := newOverlay(ovNewChannel, overlayInput, "New channel")
 	o.input.Placeholder = "name, shown as #name"
 	return m.openOverlay(o)
 }
@@ -374,7 +386,13 @@ func (m *Model) newChannel() tea.Cmd {
 // like space: the chat row or an agent row opens that chat (the sidebar
 // keeps focus), + channel or another channel's row acts like space.
 func (m *Model) sidebarClick(x, y int) tea.Cmd {
+	if y == 0 && x >= sidebarWidth-3 {
+		return m.openConfigEditor(true)
+	}
 	cmd := m.setFocus(focusSidebar)
+	if y == sidebarDiscordRow {
+		return tea.Batch(cmd, m.openDiscord("status"))
+	}
 	if y == sidebarTabsRow { // the ! ? dirs tabs: a click opens that tab
 		if f, ok := m.tabAt(x, 0); ok && m.sidebarVisible() {
 			return tea.Batch(cmd, m.openTab(f))

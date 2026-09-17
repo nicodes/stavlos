@@ -11,6 +11,14 @@ go run ~/path/to/stavlos/cmd/stavlos     # or: go install ./cmd/stavlos, then `s
 
 The TUI opens immediately. With nothing configured, the first prompt answers "no model selected"; run `/providers` to sign in and `/models` to pick a model. The first model you pick becomes your default for future channels.
 
+Channels are global to your Stavlos data directory: running `stavlos` from any
+folder shows the same channel list and resumes the last channel you viewed.
+With no channels yet, the launch folder becomes the first channel's default
+directory. Each channel owns its default directory; switching channels never
+changes another channel's paths or grants. `stavlos new --dir /path/to/project`
+creates a channel explicitly. In the TUI, **+ channel** asks for a name, then
+prefills an editable directory from the current channel.
+
 Stavlos uses your existing subscription, not platform API keys. `/providers` offers two sign-ins:
 
 - **ChatGPT** (Plus or Pro, through the Codex sign-in). It signs in through your browser by default. A headless URL-plus-code option exists for SSH boxes once "Device code authorization for Codex" is enabled in ChatGPT's Security settings.
@@ -22,11 +30,11 @@ Tokens live in `~/.local/share/stavlos/auth.json` (mode 0600) and refresh automa
 
 ### Talking to agents
 
-A channel opens on its chat, where you talk to every agent. Start a message with one or more `@name`s, separated by spaces, to send it to those agents (`@` autocompletes them); the names are not part of the message, and an `@` later in it is left alone. A message with no leading name goes to `main`, the root agent, and a leading name that is no agent refuses the message. Agents answer you there with `message`. Posts and replies show in the order they happen, and while an agent you messaged has not replied yet, a loader at the bottom names it. Only posts and replies show there: tool calls, permission prompts, questions and notices stay in each agent's own chat, and the strip and sidebar badges still tell you when something is waiting on you. Space on a short reply opens that agent's chat.
+A channel opens on its chat, where you talk to every agent. Start a message with one or more `@name`s, separated by spaces, to send it to those agents (`@` autocompletes them); the names are not part of the message, and an `@` later in it is left alone. A message with no leading name goes to `main`, the root agent, and a leading name that is no agent refuses the message. Agents answer you there with `message`. Posts, replies, questions and tool permissions show in the order they happen, and while an agent you messaged has not replied yet, a loader at the bottom names it. Tool calls and notices stay in each agent's own chat. Questions and permissions appear in the channel chat and the asking agent's chat, with their controls and submitted results in place. Space on a short reply opens that agent's chat; space or enter on a pending question or permission activates its controls.
 
 Selecting an agent in the sidebar opens its own chat, with its tool calls and notes, where typing talks to that agent alone. The "#name" row at the top of the sidebar, or `/chat`, goes back. If an agent is busy, your message reaches it at its next step. The input grows as your message wraps; ctrl+j breaks a line and enter sends. If the agent is busy, your message reaches it at its next step. `/queue <text>` waits for the current turn to end instead, and esc pressed twice on an empty input cancels the current turn (the first press warns).
 
-Agents reply with the `message` tool, to you or to another agent. The text an agent ends a turn with is its notes: it reaches no one and shows dimmed in its chat. Every message an agent receives, from you or from another agent, is owed a reply. Whenever a turn ends with a reply still owed, the agent is nudged with another turn, unless it is waiting on an agent or a job (their result wakes it anyway). After three nudges in a row with no reply it is left alone until it replies or something new arrives. The due tab lists who is still owed. `"reminders": false` in `stavlos.json` turns nudges off.
+Agents reply with the `message` tool, to you or to another agent. The text an agent ends a turn with is its notes: it reaches no one and shows dimmed in its chat. Each response-required message has its own request ID. A response explicitly lists the IDs it answers in `reply_to`; other requests and `info` messages clear nothing. Whenever a turn ends with requests still owed, the agent is nudged unless it is waiting on an agent or a job. After three nudges in a row with no response it is left alone until it answers or something new arrives. The async panel lists each outstanding request with its ID, sender and excerpt. `"reminders": false` turns nudges off. See [explicit reply tracking](docs/reply-tracking.md).
 
 The divider over the input shows the selected agent's role, model and variant at its left end, and at its right the agent's async, todo and mcp tabs, then how full its context is (`31% · 62k/200k tokens`, orange from 70%) and its cost. A passing message such as "copied" appears at the right end of the chat row just above the divider. Context is compacted on its own when an agent's history passes 80% of its model's window: older turns become a summary. `/compact` does it for the selected agent right away, or before its next model call if it is busy. A compaction is an item in the chat: a rule with a sweeping bar while it runs, replaced in place by `┄┄ compacted 84k → 12k tokens ┄┄` and the summary when it is done.
 
@@ -35,26 +43,80 @@ The divider over the input shows the selected agent's role, model and variant at
 - Tab and shift+tab cycle focus from top to bottom: the chat, the input, the tab strip, the agent's role, model and variant on the divider, and the sidebar (ctrl+b).
 - Space and enter both select, everywhere outside a text field. They open the highlighted tab or divider part, pick a dialog row, select an agent, and expand a tool call's output in the chat.
 - ctrl+space returns to typing from anywhere, closing whatever is open; esc also goes back from the chat, the sidebar, the tab strip and the meta row.
-- In the chat, ↑/↓ move item by item. In the input, ↑/↓ walk your prompt history; on the start screen they recall the first prompts of this directory's earlier channels, and `/channels` picks one to resume.
+- In the chat, ↑/↓ move item by item. In the input, ↑/↓ walk this channel's prompt history. Drafts and history stay with their channel when you switch; `/channels` lists every active channel, with its directory.
 - On the divider, ←/→ pick the role, model or variant, and space or enter opens its dialog; a click on the mode tag before the input's › switches the mode. `/roles`, `/models` and `/variants` open the same dialogs.
 - The "/" palette lists every command. `/help` shows a key bar at the bottom (off by default; `/help` again hides it).
 
 ### The tab strip
 
-The tabs, each always there with its count, are "permission" and "questions" (shown as `! n · ? n`, every channel's prompts), "dirs" (the channel's directories), and an agent's own "async", "todo" and "mcp". In an agent's chat the last three sit on the divider, before the usage; `! ? dirs` sit in the strip under the input while the sidebar is hidden, and in the sidebar (with dirs behind each channel's ⚙) while it shows. Tab lands on the leftmost, ←/→ move the highlight, enter or a click opens that tab's dialog, and esc returns to where you came from.
+The tabs, each always there with its count, are "permission" (shown as `! n`, every channel's permissions), "dirs" (the channel's directories), and an agent's own "async", "todo" and "mcp". In an agent's chat the last three sit on the divider, before the usage; `! dirs` sit in the strip under the input while the sidebar is hidden, and in the sidebar (with dirs behind each channel's ⚙) while it shows. Tab lands on the leftmost, ←/→ move the highlight, enter or a click opens that tab's dialog, and esc returns to where you came from.
 
-- **permission** holds the permission prompts. The permission and questions dialogs show the selected agent's prompt first and the oldest one otherwise, while the strip counts every prompt in the channel.
-- **questions** holds `ask_user` batches (see below).
+- **permission** is a shortcut to a pending tool-permission card in the viewed channel. Channel cards read `! @main: Permission: Shell`, followed by the full command or arguments and the approval choices. They expand on highlight/hover in an agent's chat and stay fully visible in channel chat. Allow once, remembered approvals, prefix approvals, denial reasons and directory approvals work inline. Decisions from either client replace the controls with their recorded result. Project-config trust still uses its dedicated dialog.
+- **Questions** are chat messages, scoped to the channel being viewed: `? @main: Which format?` in channel chat, or `? @user Which format?` in the asking agent's chat. Options (`□` unchecked, `■` checked), the custom-answer field and Submit are indented below. Submitted results keep that format. Questions have no global tab or dialog.
+
+Message addresses read `@sender: @recipient1 @recipient2 message`, with the sender
+prefix in grey. The current view makes some names implicit:
+
+- Channel chat, your post to main alone: `Check this` (no automatic `@main`).
+- Channel chat, your post: `@main @scout Check this`.
+- Channel chat, an agent replying to you: `@main: Here is what I found`.
+- Main's chat, main sending: `@scout @reader Review this`.
+- Main's chat, an incoming message: `@scout: @main @reader Here are the results`.
+
+Channel chat omits `@user` as a recipient. Other tagged recipients remain visible.
+
+In an agent's own transcript, questions and their results fold to a single-line
+summary like other items. Highlight or hover a pending question to show its full
+text and controls; click an option or Submit directly, without an expansion
+click. Leaving it folds it again and preserves the draft. Answered questions
+use the normal three-line hover preview and click-to-expand behavior. The shared
+channel chat shows questions in full.
+
+In agent chat, focusing, hovering or expanding an item keeps its text colors
+unchanged; the background highlight marks the selected item.
+
+Tool permissions also appear in Discord immediately, under the requesting
+agent's name. Permission buttons share one row: approval choices, **Deny**,
+and **Deny with reason**. Deny acts immediately; Deny with reason opens a
+required-text popup. Boundary requests offer approval of the displayed directory.
+The directory sits on the heading line in regular text, and shell commands are
+shown in a code block below it rather than as JSON. Decisions update the same
+message. The configured permission answer timeout and headless default still apply.
+
+Other Discord approvals follow that layout: patches use diff blocks, fetches
+show their URL, searches show their query, and file/search tools show their paths,
+patterns and limits. MCP tools identify the server and tool and show indented
+JSON arguments. Project-trust prompts show the directory and configuration files.
 - **async** holds both directions for the selected agent: under "waiting on", the agents whose answer it expects (a child it tasked, a sibling or parent it messaged) and its running shell jobs; under "owes a reply to", who waits on its reply, you first, then any agent that messaged it. Space on an agent (or on you) opens that chat.
 - **todo** lists the selected agent's plan.
 - **mcp** lists its MCP servers with their state, tool count and uptime.
-- **dirs** edits the channel's working directories, shared by every agent: `a` adds, enter replaces, ctrl+d removes; the channel directory stays.
+- **dirs** edits the channel's working directories, shared by every agent: `a` adds, enter edits, ctrl+d removes an additional directory. The `default` row changes the channel's default directory while it is idle; `/dir /path` does the same directly.
 
 ### The sidebar
 
-The sidebar (ctrl+b) is the swarm nav: the channel directory, its tokens and cost, then a "channels" heading over its "✚" at the right of the "channels" title (a popup names a new channel in this directory) and this channel's "#name" row and, one level in, the agent tree with an orange `!` or `?` in place of the dot of any agent or channel whose permission or question is pending, and each agent's cost at the right edge. ↑/↓ move, space selects, `n` jumps to the next agent waiting on you, and a click on a row selects it. The nav scrolls on its own: the wheel over it and pgup/pgdn move its window, the chat stays where it was, and moving the cursor brings its row into view.
+The sidebar (ctrl+b, shown by default when the terminal is wide enough) lists
+all active channels alphabetically, with each channel's own directory beneath
+its name. Its `✚` creates a channel: choose a name and accept or change the
+inherited default directory. Each channel's ⚙ opens its directories. Agent
+trees sit under their channels, with `!` or `?` badges for pending prompts and
+per-agent cost. ↑/↓ move, space selects, and `n` jumps to the next agent in the
+current channel waiting on you. The sidebar scrolls independently of the chat.
 
-This directory's other channels are listed around this one, each with a state dot (full orange while an agent works, half while one waits, empty when idle). Space on a channel resumes it in place. A channel keeps its agent tree once you have opened it, so opening another folds nothing and you keep seeing both swarms; ← folds a tree you are done with and ← again brings it back. Space on an agent under another channel opens that channel on that agent.
+Every channel has a state dot (full orange while an agent works, half while one
+waits, empty when idle). The catalog refreshes even while the current channel
+is idle. Space resumes a channel in place; opened agent trees remain visible,
+and ← folds or unfolds them. Space on another channel's agent opens that
+channel on that agent. An unavailable directory is marked rather than hiding
+the channel or replacing its path with the launch folder.
+
+Changing the default directory requires an idle channel with no running jobs,
+compaction or pending agent prompts. The change preserves the channel ID,
+history, agents and explicitly added absolute directories. It reloads the
+target directory's project configuration, reevaluates trust, stops old MCP
+servers, refreshes agent instructions, clears remembered approvals and resets
+the mode to `ask`. A notice is recorded in the chat. Model and role selections
+remain channel/agent settings; a missing role becomes read-only, and a model
+disallowed by the target project's role must be reselected.
 
 ### Permissions and modes
 
@@ -87,7 +149,7 @@ The role decides what `/roles`, `/models` and `/variants` offer, and the daemon 
 
 ## What agents can do
 
-**Delegate and message.** Delegating to child agents is the model's job (`agent_create`). Every agent has a unique name in its channel (the root is `main`; a name already taken gets a suffix, `scout-2`), and agents talk with one tool, `message`, addressed by name to any other agent or to you as `user`. Each message has a kind. A request (the default) asks for something: the recipient owes a reply, the sender waits, and it reaches the recipient at its next step, even mid-turn. A response answers a request, such as a child finishing its task: it settles it and wakes the agent waiting on it between turns, never mid-turn. Info needs no reply (thanks, an acknowledgement): nobody owes or waits, and an idle recipient is not woken for it. So an agent that is waiting on you can still be asked a question first: that question is a request, and your answer later is a response. A role can keep its agents from messaging you with a deny rule on `message` for `user`. A child idles with its context intact for follow-ups for the rest of the channel: nothing kills it, and its MCP servers stop after ten idle minutes. There is no wait tool.
+**Delegate and message.** Delegating to child agents is the model's job (`agent_create`). Every agent has a unique name in its channel (the root is `main`; a name already taken gets a suffix, `scout-2`). Agents use `message` with a recipient array, such as `{"to":["scout","reviewer"],"text":"Review this change","kind":"request"}`. Every recipient sees the full list; aliases deduplicate, and an invalid recipient rejects the entire send. Policy checks every recipient. Each request is tracked independently for each receiving agent. Responses require `reply_to` IDs and clear only those requests, even when several came from the same sender. Info creates no debt, clears no requests and does not wake idle agents. Human requests also require explicit responses; other human-facing messages are updates. Older single-recipient string calls still work. A child idles with its context intact for follow-ups, and its MCP servers stop after ten idle minutes. There is no wait tool.
 
 **Search.** `grep` and `glob` search file contents and names (with ripgrep when it is installed) and never ask. They are tools, not shell commands, so searching needs no shell permission.
 
@@ -108,13 +170,86 @@ Auto mode still asks before fetching from a host that is not listed, since a fet
 
 **Use MCP servers.** A role's `mcp:` list starts MCP servers for that agent alone (stdio servers defined under `mcp` in `stavlos.json`). The model sees their tools as `mcp__<server>__<tool>` and calls them through the usual permission path.
 
-**Ask you.** An agent can ask you one to four short questions with `ask_user`. Each batch is a prompt of its own kind that waits until you answer it (no timeout, no auto-approval), in the questions tab. Every question is its text plus a checklist: space toggles options, the last row takes something typed, enter confirms and moves on, and the last answer sends the batch.
+**Ask you.** An agent can request one to four short questions with `ask_user`.
+Each question gets its own prompt and submission, with no timeout or
+auto-approval. Both the TUI and Discord show all requested questions immediately,
+each as a separate inline chat card. You can review them together and answer in
+any order. In the TUI, click an option or focus the card with space/enter, use
+↑/↓ to move and space to toggle. Typing opens its custom-answer field; enter
+saves that text, then Submit answer (or enter outside the field) sends the
+checked options and custom text together. Esc returns to the chat input with
+the draft retained. Submission turns that question's message into its result;
+the other questions remain available. Submitted answers stay recorded,
+including after reopening the channel or cancelling the remaining questions.
+The agent receives the answers in original question order once all are complete.
+
+In Discord, the option buttons are stacked vertically, followed by
+**⬜ Custom answer** and **Submit answer**, each on its own row without a
+surrounding container. Clicking Custom answer
+opens a text popup; saving changes the button to **✅ your text**, without
+submitting the question. Clicking the checked custom answer clears it, and
+clicking again opens an empty popup for a new value. **Submit answer** sends
+the selected options and saved custom text together. Chat replies are ordinary
+agent messages.
+
+Submitted custom text is shown as another checked choice, such as **✅ windy**,
+without a “Custom answer:” label. Submitted checkbox rows are indented with
+non-breaking spaces; the question heading stays flush left.
+
+TUI questions have no X/Y counters. Pending question text uses the lighter
+message color; completed answers use regular grey text. The custom-answer row
+starts with `□ Reply with a custom answer…` and becomes `■ your text` when filled
+in, aligned with the other choices in both the open question and its result.
+
+## Configuration editor
+
+Use a channel's **⚙** to edit its project config, or the gear beside the top
+**Stavlos** title for system config. `/settings [project|system]` opens the same
+editor. Browse Settings, Agents, Commands, Skills or all Files; use structured
+fields or press **F4** for raw JSON/Markdown editing. Changes are validated and
+saved directly to the files, then configuration is reloaded. Project changes
+are ordinary, committable repository edits.
+
+**Tab** switches panes, **Enter** edits/confirms a field, and **Ctrl+S** saves
+multiline/raw content. In the file pane, **Ctrl+N** creates, **F2** renames and
+**Ctrl+D** deletes. See [the config editor guide](docs/config-editor.md) for
+conflict handling and which settings apply now, next turn, or after reconnect.
+
+## Custom commands
+
+Define prompt shortcuts in `.stavlos/commands/<name>.md`. The filename supplies
+the slash-command name, and **`description` is the only frontmatter field**.
+For example, `.stavlos/commands/cmd.md`:
+
+```markdown
+---
+description: Run tests with coverage
+---
+
+Run the full test suite with coverage report and show any failures.
+Focus on the failing tests and suggest fixes.
+```
+
+Run `/cmd` in the TUI. Its Markdown body is sent as a prompt to the selected
+agent, or to the root agent from channel chat, using that agent's current role
+and model. The `/` menu shows the description and refreshes command definitions
+when opened. The prompt is loaded again when invoked.
+
+Names use lowercase letters, digits, hyphens or underscores and start with a
+letter. A nonempty description and prompt body are required. Fields such as
+`agent` and `model` are rejected. Commands take no arguments; built-in commands
+and their aliases take precedence over custom names.
+
+Global definitions live in `~/.config/stavlos/commands/` (or the configured
+Stavlos config directory). Trusted project definitions override global commands
+with the same name. Project commands participate in the existing configuration
+trust hash, just like project roles and skills.
 
 ## Other commands
 
 ```sh
-stavlos new                    # start another channel in this directory
-stavlos open <#name|id>        # open a channel by name (plain `stavlos` opens this directory's)
+stavlos new [--dir /path]       # create a channel; default directory is the shell's cwd
+stavlos open <#name|id>        # open a channel by name; plain `stavlos` resumes the last viewed
 stavlos channels               # list channels (they survive daemon restarts)
 stavlos tree <channel>         # agent tree with state and cost
 stavlos send|steer|cancel|kill <agent> [text]
@@ -128,13 +263,32 @@ stavlos --version              # version, commit and build of this binary
 
 ## Project configuration
 
-Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and a `stavlos.json` (plus a gitignored `stavlos.local.json`) that can set anything your global one can and takes precedence over it once trusted; every agent follows `AGENTS.md` instructions: yours in `~/.config/stavlos/AGENTS.md`, then the repository's from its git root down to the channel directory (a directory's `CLAUDE.md` where it has no `AGENTS.md`), 32 KiB in all, and a subdirectory's with an agent's first read, search or edit there. Editing any of them asks in every mode, and an edit made outside the harness brings the trust prompt back when an agent next starts a turn. The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
+Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and a `stavlos.json` (plus a gitignored `stavlos.local.json`) that takes precedence over the global config once trusted. The `discord` block is global-only; other settings can be overridden by the project. Every agent follows `AGENTS.md` instructions: yours in `~/.config/stavlos/AGENTS.md`, then the repository's from its git root down to the channel directory (a directory's `CLAUDE.md` where it has no `AGENTS.md`), 32 KiB in all, and a subdirectory's with an agent's first read, search or edit there. Editing any of them asks in every mode, and an edit made outside the harness brings the trust prompt back when an agent next starts a turn. The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
+
+## Discord
+
+Use `/discord` in Stavlos for connection status and controls, or
+`/discord connect` to connect using your saved global configuration. A live
+indicator at the top of the sidebar is green when connected,
+amber while connecting/reconnecting, dim when disconnected, and red on errors.
+Click it to open the controls; it refreshes even while the panel is closed.
+Discord runs as a background service in the daemon, so closing the TUI leaves it
+connected. Connecting saves `discord.enabled: true` for future daemon starts;
+`/discord disconnect` stops the integration and disables autoconnect. The shell
+equivalents are `stavlos discord status|connect|disconnect`. Each
+allowed Stavlos channel gets a Discord text channel: send tasks, reply to named
+agents, answer permission and question prompts, and use `/status` or `/cancel`.
+Questions appear immediately in both clients; permission and trust prompts
+appear as fallback after the terminal's claim timeout. The bridge uses
+outbound connections and a global-only `discord` config block with an explicit
+operator list and working-directory list. See [the setup guide](docs/discord-setup.md)
+for the bot, configuration and migration from the old standalone bridge.
 
 ## Status
 
 Implemented: daemon with SQLite event log, one state machine per channel with a goroutine per agent, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend) and Grok subscription adapters with browser and device-code sign-in, models.dev metadata, native search tools, and a Linux sandbox for commands and MCP servers.
 
-Not yet: Discord service, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
+Not yet: go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
 
 ## Development
 

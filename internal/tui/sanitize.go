@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
 )
@@ -16,6 +17,12 @@ func cleanAgents(agents []protocol.AgentInfo) []protocol.AgentInfo {
 	for i := range agents {
 		a := &agents[i]
 		a.Name, a.Role, a.LastError = textsafe.Clean(a.Name), textsafe.Clean(a.Role), textsafe.Clean(a.LastError)
+		for _, requests := range [][]event.ReplyRequest{a.PendingReplies, a.AwaitingReplies} {
+			for j := range requests {
+				r := &requests[j]
+				r.ID, r.FromName, r.Text = textsafe.Clean(r.ID), textsafe.Clean(r.FromName), textsafe.Clean(r.Text)
+			}
+		}
 		for j := range a.Jobs {
 			m := &a.Jobs[j]
 			m.Label, m.Spec, m.Progress = textsafe.Clean(m.Label), textsafe.Clean(m.Spec), textsafe.Clean(m.Progress)
@@ -31,6 +38,7 @@ func cleanAgents(agents []protocol.AgentInfo) []protocol.AgentInfo {
 }
 
 func cleanPrompt(p *protocol.PromptInfo) {
+	p.Role = textsafe.Clean(p.Role)
 	p.Question, p.Dir, p.Prefix, p.From, p.ChannelName = textsafe.Clean(p.Question), textsafe.Clean(p.Dir), textsafe.Clean(p.Prefix), textsafe.Clean(p.From), textsafe.Clean(p.ChannelName)
 	for i := range p.Options {
 		p.Options[i] = textsafe.Clean(p.Options[i])
@@ -47,6 +55,7 @@ func cleanPrompt(p *protocol.PromptInfo) {
 
 func cleanChannel(s protocol.ChannelInfo) protocol.ChannelInfo {
 	s.Title, s.Dir, s.Name = textsafe.Clean(s.Title), textsafe.Clean(s.Dir), textsafe.Clean(s.Name)
+	s.DirError = textsafe.Clean(s.DirError)
 	for i := range s.Dirs {
 		s.Dirs[i].Path = textsafe.Clean(s.Dirs[i].Path)
 	}

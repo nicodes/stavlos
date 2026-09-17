@@ -8,6 +8,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
+	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -81,11 +82,7 @@ const User = toolname.User
 // spelt "human", "@user"); anything else is an agent name or id with a
 // leading @ dropped.
 func Recipient(to string) string {
-	to = strings.TrimPrefix(strings.TrimSpace(to), "@")
-	if l := strings.ToLower(to); l == User || l == "human" {
-		return User
-	}
-	return to
+	return protocol.Recipient(to)
 }
 
 // Message kinds.
@@ -98,20 +95,21 @@ const (
 type messageTool struct{}
 
 func (messageTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Message, Description: "Send text to another agent in this channel (a child, a sibling, or your parent) by name, or to the human as \"user\". kind says what it is. request (the default) asks for something: it reaches them at their next step, mid-turn if they are busy, they owe you a reply, and their response wakes you. response answers a request someone sent you (a task, a question): it settles it and wakes the agent waiting on it between turns. info tells them something that needs no reply (thanks, an acknowledgement, a closing note): nobody owes or waits, and it does not wake an idle agent. A question back to an agent waiting on you is a request; your answer is a response. What you send the user is always a response. agent_status lists every agent.",
+	return model.ToolDef{Name: toolname.Message, Description: "Send text to one or more recipients in this channel using the to array. Every recipient sees the full recipient list. All targets and reply references are validated before delivery. request (the default) creates an independent request ID for the agents addressed; each owes its own explicit response. response requires reply_to containing the pending request IDs it answers, and to must contain their senders. One response may answer several requests, including repeated requests from one sender. Only those IDs are cleared; sending another request or info never clears a debt. info needs no reply and does not wake idle agents. Human-facing messages without explicit response references are updates; use ask_user for questions to the human. Human prompts and steers carry request IDs too. agent_status exposes pending_replies and awaiting_replies with IDs and excerpts.",
 		Schema: schemaOf(messageInput{})}
 }
 
 type messageInput struct {
-	To   string `json:"to" desc:"An agent's name or id, or \"user\" for the human" req:"true"`
-	Text string `json:"text" desc:"The message. The recipient sees only what you put here: include exact paths and results" req:"true"`
-	Kind string `json:"kind" desc:"request (the default): you want something and wait for it; response: this answers a request you received; info: no reply needed"`
+	ReplyTo []string            `json:"reply_to" desc:"Request IDs explicitly answered by this response; required for kind response, omitted for request/info" min:"1"`
+	To      protocol.Recipients `json:"to" desc:"Recipient names or ids, including user for the human; everyone sees the full recipient list" req:"true" min:"1"`
+	Text    string              `json:"text" desc:"The shared message body; include exact paths and results. Recipient context is attached separately" req:"true"`
+	Kind    string              `json:"kind" desc:"request (the default): you want something and wait for it; response: this answers a request you received; info: no reply needed"`
 }
 
 func (messageTool) Subject(in json.RawMessage) policy.Subject {
 	var a messageInput
 	_ = decode(in, &a)
-	return policy.ID(Recipient(a.To))
+	return policy.Subject{Kind: policy.KindID, Values: a.To.Normalized()}
 }
 func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
@@ -132,7 +130,22 @@ func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 	default:
 		return errf("kind %q: use request, response or info", a.Kind)
 	}
-	out, err := env.Orch.Message(env.Agent, Recipient(a.To), a.Text, kind)
+	if kind == KindResponse && len(a.ReplyTo) == 0 {
+		return errf("responses require reply_to request IDs; use info for updates that answer no request")
+	}
+	if kind != KindResponse && len(a.ReplyTo) > 0 {
+		return errf("reply_to is only valid for kind response")
+	}
+	recipients := a.To.Normalized()
+	if len(recipients) == 0 {
+		return errf("at least one recipient is required")
+	}
+	for _, to := range recipients {
+		if to == "" {
+			return errf("recipient must not be empty")
+		}
+	}
+	out, err := env.Orch.Message(env.Agent, recipients, a.Text, kind, a.ReplyTo...)
 	if err != nil {
 		return errf("%v", err)
 	}

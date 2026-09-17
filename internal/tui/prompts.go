@@ -15,19 +15,20 @@ import (
 // promptState is what waits on the human across every channel (the daemon
 // sends every channel's prompts) and where the human is in answering it.
 type promptState struct {
-	prompts     []protocol.PromptInfo // pending, oldest first, every channel's
-	claimedByUs map[string]bool
-	promptBusy  string        // prompt id with a claim/reply in flight
-	permSel     int           // highlighted option of the permission dialog
-	permFor     string        // the prompt id permSel belongs to (a new prompt starts at the top)
-	permEdit    string        // "" | "deny" (reason row open) | "dir" (path row open) in the permission dialog
-	q           questionState // the questions dialog: where the human is in the current batch
-	scope       promptScope   // what the open permission or questions dialog is limited to; zero = every channel
+	permissionDrafts map[string]permissionDraft
+	prompts          []protocol.PromptInfo // pending, oldest first, every channel's
+	claimedByUs      map[string]bool
+	promptBusy       string                   // prompt id with a claim/reply in flight
+	permSel          int                      // highlighted option of the permission dialog
+	permFor          string                   // the prompt id permSel belongs to (a new prompt starts at the top)
+	permEdit         string                   // "" | "deny" (reason row open) | "dir" (path row open) in the permission dialog
+	q                questionState            // the active inline question card
+	questionDrafts   map[string]questionState // per-prompt drafts; IDs remain channel-local when displayed
+	scope            promptScope              // permission dialog scope; zero = every channel
 }
 
-// promptScope limits the permission and questions dialogs to one channel's
-// prompts, or one agent's: set when opening a channel or agent that waits on
-// the human opens its dialog, zero when a tab opens it.
+// promptScope limits the permission dialog to a channel or agent. Questions
+// always belong to the viewed chat and do not use the global permission scope.
 type promptScope struct{ channel, agent string }
 
 // holds reports whether p is within the scope.
@@ -45,10 +46,11 @@ type questionState struct {
 	marks   map[int]bool // toggled options of the current question
 	custom  string       // the typed "something else" answer of the current question
 	answers []string     // one per question, "" until answered
-	typing  bool         // the free-text field has the keys
+	details []protocol.QuestionAnswer
+	typing  bool // the free-text field has the keys
 }
 
-// bind resets the state when the batch under the dialog changes.
+// bind resets the state when the question card changes.
 func (q *questionState) bind(p *protocol.PromptInfo) {
 	if p == nil {
 		*q = questionState{}
@@ -57,59 +59,37 @@ func (q *questionState) bind(p *protocol.PromptInfo) {
 	if q.id == p.ID {
 		return
 	}
-	*q = questionState{id: p.ID, marks: map[int]bool{}, answers: make([]string, len(p.Questions))}
+	*q = questionState{id: p.ID, marks: map[int]bool{}, answers: make([]string, len(p.Questions)), details: make([]protocol.QuestionAnswer, len(p.Questions))}
 }
 
-// questionsKey handles keys in the questions dialog. Every question is a
-// checklist: ↑/↓ move over the options and the last row, "something else";
-// space toggles an option, or opens the text field on the last row; typing
-// anywhere opens it too. Enter confirms the current question — the toggled
-// options plus any typed text, joined — and moves on; the last confirmation
-// submits the batch. ←/→ move between questions to review. Esc leaves the
-// text field, or closes the dialog (the batch keeps waiting).
+// questionsKey handles an inline question card: arrows select controls,
+// space toggles options, typing opens the custom reply field, and Enter saves
+// that text before a separate Submit. Legacy batches retain local navigation.
 func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
+	defer func() { m.refreshViewport(); m.scrollToQuestionRow() }()
 	p := m.currentQuestion()
-	if p == nil {
+	if p != nil && (m.promptBusy == p.ID || p.ClaimedBy != "" && !m.claimedByUs[p.ID]) {
 		if key.Matches(msg, keys.OvClose) {
-			return m.closeDialog()
+			return m.setFocus(focusInput)
 		}
 		return nil
 	}
-	m.q.bind(p)
+	if p == nil {
+		if key.Matches(msg, keys.OvClose) {
+			return m.setFocus(focusInput)
+		}
+		return nil
+	}
+	m.bindQuestion(p)
+	if len(p.Questions) == 0 {
+		return m.setFocus(focusInput)
+	}
 	if m.q.idx >= len(p.Questions) {
 		m.q.idx = len(p.Questions) - 1
 	}
 	cur := p.Questions[m.q.idx]
 	nopt := len(cur.Options) // the row after the options is "something else"
-	rows := nopt + 1
-	picked := func() string {
-		var out []string
-		for i, o := range cur.Options {
-			if m.q.marks[i] {
-				out = append(out, o.Label)
-			}
-		}
-		if c := strings.TrimSpace(m.q.custom); c != "" {
-			out = append(out, c)
-		}
-		return strings.Join(out, ", ")
-	}
-	confirm := func() tea.Cmd {
-		answer := picked()
-		if answer == "" {
-			return nil // nothing chosen yet
-		}
-		m.q.answers[m.q.idx] = answer
-		m.q.typing = false
-		m.promptInput.Reset()
-		m.promptInput.Blur()
-		if m.q.idx+1 < len(p.Questions) {
-			m.q.idx++
-			m.q.sel, m.q.marks, m.q.custom = 0, map[int]bool{}, ""
-			return nil
-		}
-		return m.answerQuestions(p, m.q.answers)
-	}
+	rows := nopt + 2         // options, custom answer, Submit answer
 	if m.q.typing {
 		switch {
 		case key.Matches(msg, keys.OvClose):
@@ -119,7 +99,10 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		case key.Matches(msg, keys.Submit):
 			m.q.custom = strings.TrimSpace(m.promptInput.Value())
-			return confirm()
+			m.q.typing = false
+			m.q.sel = nopt + 1
+			m.promptInput.Blur()
+			return nil
 		}
 		var cmd tea.Cmd
 		m.promptInput, cmd = m.promptInput.Update(msg)
@@ -127,24 +110,27 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 	}
 	switch {
 	case key.Matches(msg, keys.OvClose):
-		return m.closeDialog()
+		return m.setFocus(focusInput)
 	case key.Matches(msg, keys.TabLeft):
 		if m.q.idx > 0 {
 			m.q.idx--
-			m.q.sel, m.q.marks, m.q.custom = 0, map[int]bool{}, ""
+			m.q.restoreAnswer()
 		}
 		return nil
 	case key.Matches(msg, keys.TabRight):
 		if m.q.idx+1 < len(p.Questions) {
 			m.q.idx++
-			m.q.sel, m.q.marks, m.q.custom = 0, map[int]bool{}, ""
+			m.q.restoreAnswer()
 		}
 		return nil
 	case stepCursor(msg, &m.q.sel, rows, false): // no j/k: letters start the typed answer
 		return nil
 	case key.Matches(msg, keys.Submit): // enter confirms the answers; space toggles an option
-		return confirm()
+		return m.confirmQuestion(p)
 	case key.Matches(msg, keys.Select):
+		if m.q.sel == nopt+1 {
+			return m.confirmQuestion(p)
+		}
 		if m.q.sel == nopt { // "something else": type it
 			m.q.typing = true
 			m.promptInput.SetValue(m.q.custom)
@@ -167,11 +153,56 @@ func (m *Model) questionsKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+func (m *Model) confirmQuestion(p *protocol.PromptInfo) tea.Cmd {
+	var parts []string
+	detail := protocol.QuestionAnswer{Custom: strings.TrimSpace(m.q.custom)}
+	for i, o := range p.Questions[m.q.idx].Options {
+		if m.q.marks[i] {
+			parts = append(parts, o.Label)
+			detail.Selected = append(detail.Selected, i)
+		}
+	}
+	if detail.Custom != "" {
+		parts = append(parts, detail.Custom)
+	}
+	answer := strings.Join(parts, ", ")
+	if answer == "" {
+		return nil
+	}
+	m.q.answers[m.q.idx], m.q.details[m.q.idx] = answer, detail
+	m.q.typing = false
+	m.promptInput.Reset()
+	m.promptInput.Blur()
+	if m.q.idx+1 < len(p.Questions) {
+		m.q.idx++
+		m.q.restoreAnswer()
+		return nil
+	}
+	for i, a := range m.q.answers {
+		if a == "" {
+			m.q.idx = i
+			m.q.restoreAnswer()
+			return nil
+		}
+	}
+	return m.answerQuestions(p, m.q.answers)
+}
+
+func (q *questionState) restoreAnswer() {
+	q.sel, q.marks = 0, map[int]bool{}
+	d := q.details[q.idx]
+	q.custom = d.Custom
+	for _, i := range d.Selected {
+		q.marks[i] = true
+	}
+}
+
 // answerQuestions sends a batch's answers.
 func (m *Model) answerQuestions(p *protocol.PromptInfo, answers []string) tea.Cmd {
 	answers = append([]string(nil), answers...)
+	details := append([]protocol.QuestionAnswer(nil), m.q.details...)
 	return m.claimThen(p, func(ctx context.Context, c *client.Client, id string) error {
-		return call(ctx, c, protocol.PromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerAnswered, Answers: answers})
+		return call(ctx, c, protocol.PromptReply, protocol.PromptReplyParams{ID: id, Answer: protocol.AnswerAnswered, Answers: answers, Details: details})
 	})
 }
 
@@ -241,7 +272,22 @@ func (m Model) permSelection(p *protocol.PromptInfo) int {
 // submitted with enter and cancelled with esc); esc closes the dialog with
 // the prompt still waiting.
 func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
+	if m.focus == focusInlinePermission {
+		defer func() { m.refreshViewport(); m.scrollToPermissionRow() }()
+		if m.loading {
+			if key.Matches(msg, keys.Clear) {
+				return m.closeDialog()
+			}
+			return nil
+		}
+	}
 	p := m.currentPrompt()
+	if p != nil && (m.promptBusy == p.ID || p.ClaimedBy != "" && !m.claimedByUs[p.ID]) {
+		if key.Matches(msg, keys.Clear) {
+			return m.closeDialog()
+		}
+		return nil
+	}
 	if p == nil { // empty dialog: nothing to answer
 		if key.Matches(msg, keys.Clear) {
 			return m.closeDialog()
@@ -254,6 +300,7 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 	if m.permEdit != "" {
 		switch {
 		case key.Matches(msg, keys.OvClose):
+			m.savePermissionDraft()
 			m.permEdit = ""
 			m.dirInput.Blur()
 			return nil
@@ -263,6 +310,7 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 			if edit == "dir" && text == "" {
 				return nil
 			}
+			m.savePermissionDraft()
 			m.permEdit = ""
 			m.dirInput.Blur()
 			if edit == "dir" {
@@ -285,78 +333,99 @@ func (m *Model) permissionKey(msg tea.KeyMsg) tea.Cmd {
 		if m.permSel >= n {
 			m.permSel = n - 1
 		}
-		switch opts[m.permSel].id {
-		case "allow", "trust":
-			return m.answerPrompt(p, "allow")
-		case "always", "add":
-			return m.answerPrompt(p, "allow_always")
-		case "prefix":
-			return m.answerPromptPrefix(p)
-		case "skip":
-			return m.answerPrompt(p, "deny")
-		case "add_other":
-			m.permEdit = "dir"
-			m.dirInput.Placeholder = "path (absolute, ~, or relative to the channel directory)"
-			m.dirInput.SetValue(p.Dir)
-			m.dirInput.CursorEnd()
-			return m.dirInput.Focus()
-		case "deny":
-			m.permEdit = "deny"
-			m.dirInput.Placeholder = "why not? (optional) · enter denies"
-			m.dirInput.SetValue("")
-			return m.dirInput.Focus()
-		}
+		return m.choosePermission(p, opts[m.permSel].id)
 	}
 	return nil
 }
 
-// applyPromptNotification keeps the prompt queue in step with the daemon.
-// The first prompt to arrive while the input is idle (focused, nothing
-// typed, no overlay) opens the permission tab so it can be answered at
-// once; a draft in progress is never interrupted.
+func (m *Model) choosePermission(p *protocol.PromptInfo, choice string) tea.Cmd {
+	switch choice {
+	case "allow", "trust":
+		return m.answerPrompt(p, "allow")
+	case "always", "add":
+		return m.answerPrompt(p, "allow_always")
+	case "prefix":
+		return m.answerPromptPrefix(p)
+	case "skip":
+		return m.answerPrompt(p, "deny")
+	case "add_other":
+		m.permEdit = "dir"
+		m.dirInput.Placeholder = "path (absolute, ~, or relative to the channel directory)"
+		m.dirInput.SetValue(p.Dir)
+	case "deny":
+		m.permEdit = "deny"
+		m.dirInput.Placeholder = "why not? (optional) · enter denies"
+		m.dirInput.SetValue("")
+	default:
+		return nil
+	}
+	if d := m.permissionDrafts[p.ID]; d.edit == m.permEdit {
+		m.dirInput.SetValue(d.text)
+	}
+	m.dirInput.CursorEnd()
+	return m.dirInput.Focus()
+}
+
+// applyPromptNotification keeps chat cards in step with the daemon. Questions
+// and permissions do not take focus on arrival; project trust may open its
+// dialog when the input is idle.
 func (m *Model) applyPromptNotification(n protocol.PromptNotification) tea.Cmd {
-	before := len(m.prompts) // every channel's prompts are kept: the tabs span channels
+	before := len(m.prompts)
 	switch n.Action {
 	case protocol.ActionRequested, protocol.ActionEscalated, protocol.ActionClaimed:
 		m.upsertPrompt(n.Prompt)
-	case protocol.ActionAnswered, protocol.ActionWithdrawn, protocol.ActionDefaulted:
+	case protocol.ActionAnswered:
+		m.resolvePrompt(n.Prompt.ID, true)
+	case protocol.ActionWithdrawn, protocol.ActionDefaulted:
 		m.removePrompt(n.Prompt.ID)
 	}
 	// The turn indicator switches between "working…" and "permission
 	// requested" on prompt changes, which arrive outside the event stream.
-	if n.Prompt.Agent == m.selectedID() {
+	if n.Prompt.Channel == m.channelID || n.Prompt.Agent == m.selectedID() {
 		m.viewDirty = true
 	}
-	if before == 0 && len(m.prompts) > 0 && (n.Prompt.Channel == "" || n.Prompt.Channel == m.channelID) && m.focus == focusInput && m.ov == nil && strings.TrimSpace(m.input.Value()) == "" {
-		if n.Prompt.Kind == "question" {
-			return m.setFocus(focusQuestions)
+	if before == 0 && len(m.prompts) > 0 && (n.Prompt.Channel == "" || n.Prompt.Channel == m.channelID) && m.focus == focusInput && m.ov == nil && m.cfgEditor == nil && strings.TrimSpace(m.input.Value()) == "" {
+		if n.Prompt.Kind == protocol.PromptQuestion || n.Prompt.Kind == protocol.PromptPermission {
+			return nil // messages appear inline; arrival never takes the keyboard
 		}
 		return m.setFocus(focusPermission)
 	}
 	if m.focus == focusQuestions {
-		m.q.bind(m.currentQuestion()) // a batch that changed under the dialog resets it
+		m.bindQuestion(m.currentQuestion())
 	}
 	return nil
 }
 
-// currentPrompt is the head of the permission queue: the oldest waiting
-// permission or trust prompt (questions have their own tab and queue).
-func (m *Model) currentPrompt() *protocol.PromptInfo { return m.firstPrompt(false) }
+// currentQuestion is the active question, or the first pending card in the
+// viewed chat. Another channel's prompts never participate in this selection.
+func (m *Model) currentQuestion() *protocol.PromptInfo {
+	var first *protocol.PromptInfo
+	for i := range m.prompts {
+		p := &m.prompts[i]
+		if !m.questionVisible(*p) {
+			continue
+		}
+		if p.ID == m.q.id {
+			return p
+		}
+		if first == nil {
+			first = p
+		}
+	}
+	return first
+}
 
-// currentQuestion is the waiting ask_user batch the questions dialog shows.
-func (m *Model) currentQuestion() *protocol.PromptInfo { return m.firstPrompt(true) }
-
-// firstPrompt picks the prompt a dialog shows: the selected agent's oldest
-// one when it has any (the footer controls the selected agent; the nav
-// badges point at the others), else the oldest overall so nothing waits
-// unseen. question selects the question batches or the permission-ish
-// prompts.
-func (m *Model) firstPrompt(question bool) *protocol.PromptInfo {
+// currentPrompt picks the selected agent's oldest permission or trust prompt,
+// otherwise the oldest within the permission dialog's scope.
+func (m *Model) currentPrompt() *protocol.PromptInfo {
+	if m.focus == focusInlinePermission {
+		return m.inlinePermission()
+	}
 	sel := m.selectedID()
 	var first *protocol.PromptInfo
 	for i := range m.prompts {
 		p := &m.prompts[i]
-		if (p.Kind == "question") != question || !m.scope.holds(*p) {
+		if p.Kind == protocol.PromptQuestion || !m.scope.holds(*p) {
 			continue
 		}
 		if p.Agent == sel {
@@ -371,7 +440,11 @@ func (m *Model) firstPrompt(question bool) *protocol.PromptInfo {
 
 // promptCounts is how many permission-ish prompts and question batches wait
 // in every channel.
-func (m *Model) promptCounts() (perms, questions int) { return m.promptCountsIn(promptScope{}) }
+func (m *Model) promptCounts() (perms, questions int) {
+	perms, _ = m.promptCountsIn(promptScope{})
+	_, questions = m.promptCountsIn(promptScope{channel: m.channelID})
+	return
+}
 
 // promptCountsIn counts only what scope holds.
 func (m *Model) promptCountsIn(scope promptScope) (perms, questions int) {
@@ -407,19 +480,39 @@ func (m *Model) upsertPrompt(p protocol.PromptInfo) {
 }
 
 func (m *Model) removePrompt(id string) {
-	if i := m.findPrompt(id); i >= 0 {
-		m.prompts = append(m.prompts[:i], m.prompts[i+1:]...)
+	m.resolvePrompt(id, false)
+}
+
+func (m *Model) resolvePrompt(id string, answered bool) {
+	delete(m.permissionDrafts, id)
+	if m.permFor == id {
+		m.permFor, m.permEdit = "", ""
+		m.dirInput.Blur()
+		if m.focus == focusInlinePermission {
+			m.setFocus(focusInput)
+		}
 	}
-	perms, questions := m.promptCountsIn(m.scope)
-	if perms == 0 && m.focus == focusPermission {
-		m.closeDialog() // the last permission it shows was answered: the dialog closes
-	}
-	if questions == 0 && m.focus == focusQuestions {
-		m.closeDialog()
-	}
+	m.viewDirty = true
+	delete(m.questionDrafts, id)
 	delete(m.claimedByUs, id)
 	if m.promptBusy == id {
 		m.promptBusy = ""
+	}
+	i := m.findPrompt(id)
+	if i < 0 {
+		return
+	} // duplicate notification/reply must not close the next question
+	p := m.prompts[i]
+	m.prompts = append(m.prompts[:i], m.prompts[i+1:]...)
+	perms, _ := m.promptCountsIn(m.scope)
+	if perms == 0 && m.focus == focusPermission {
+		m.closeDialog() // the last permission it shows was answered: the dialog closes
+	}
+	if p.Kind == protocol.PromptQuestion && m.q.id == id {
+		m.q = questionState{}
+		if m.focus == focusQuestions {
+			m.setFocus(focusInput)
+		}
 	}
 }
 

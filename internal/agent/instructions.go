@@ -23,7 +23,7 @@ func (a *Agent) instructionsFor(sub policy.Subject, cfg *config.Effective) strin
 	}
 	var found []instructions.File // read outside the channel's lock
 	for _, v := range sub.Values {
-		found = append(found, instructions.Between(a.c.Dir, tools.ResolvePath(a.c.Dir, v))...)
+		found = append(found, instructions.Between(a.c.Dir(), tools.ResolvePath(a.c.Dir(), v))...)
 	}
 	if len(found) == 0 {
 		return ""
@@ -70,5 +70,5 @@ func (c *Channel) checkInstructions() {
 	if len(files) == 0 || instructionsStamp(files) == stamp {
 		return
 	}
-	c.host.ProjectChanged(c.Dir)
+	c.host.ProjectChanged(c.Dir())
 }

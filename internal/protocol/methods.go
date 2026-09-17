@@ -18,9 +18,12 @@ type SubscribeResult struct {
 
 // The methods.
 var (
-	DaemonStatus   = Method[None, DaemonStatusResult]{MDaemonStatus}
-	DaemonShutdown = Method[None, None]{MDaemonShutdown}
-	Attach         = Method[AttachParams, AttachResult]{MAttach}
+	DaemonStatus        = Method[None, DaemonStatusResult]{MDaemonStatus}
+	DaemonShutdown      = Method[None, None]{MDaemonShutdown}
+	DiscordStatusMethod = Method[None, DiscordStatus]{MDiscordStatus}
+	DiscordConnect      = Method[None, DiscordStatus]{MDiscordConnect}
+	DiscordDisconnect   = Method[None, DiscordStatus]{MDiscordDisconnect}
+	Attach              = Method[AttachParams, AttachResult]{MAttach}
 
 	ChannelList      = Method[ChannelListParams, ChannelListResult]{MChannelList}
 	ChannelCreate    = Method[ChannelCreateParams, ChannelInfo]{MChannelCreate}
@@ -32,6 +35,7 @@ var (
 	ChannelPost      = Method[ChannelPostParams, ChannelPostResult]{MChannelPost}
 	ChannelAddDir    = Method[ChannelDirParams, None]{MChannelAddDir}
 	ChannelRemoveDir = Method[ChannelDirParams, None]{MChannelRemoveDir}
+	ChannelSetDir    = Method[ChannelDirParams, ChannelInfo]{MChannelSetDir}
 
 	AgentTree       = Method[AgentTreeParams, AgentTreeResult]{MAgentTree}
 	AgentSend       = Method[AgentSendParams, None]{MAgentSend}

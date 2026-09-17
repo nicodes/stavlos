@@ -75,9 +75,9 @@ func TestPostDeliversByMention(t *testing.T) {
 // directly.
 func TestMessageAnswersTheLatestPost(t *testing.T) {
 	fm := &fakeModel{steps: []step{
-		reply(call("c1", "message", `{"to":"user","text":"one"}`)), reply(text("n")),
-		reply(call("c2", "message", `{"to":"user","text":"two"}`)), reply(text("n")),
-		reply(call("c3", "message", `{"to":"user","text":"three"}`)), reply(text("n")),
+		reply(call("c1", "message", `{"to":"user","text":"one","kind":"response"}`)), reply(text("n")),
+		reply(call("c2", "message", `{"to":"user","text":"two","kind":"response"}`)), reply(text("n")),
+		reply(call("c3", "message", `{"to":"user","text":"three","kind":"response"}`)), reply(text("n")),
 	}}
 	s, h := newTestChannel(t, testConfig{}, fm)
 	root := s.Root()
@@ -119,11 +119,22 @@ func TestMessageAnswersTheLatestPost(t *testing.T) {
 // does not wake an idle recipient, survives a restart, and reaches the
 // recipient with its next turn, marked as needing no reply.
 func TestNoReplyNote(t *testing.T) {
+	sendInfo := make(chan struct{})
 	fm := &fakeModel{
 		steps: []step{
 			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("delegated")),
-			reply(call("c2", "message", `{"to":"scout","text":"thanks","kind":"info"}`)), // woken by scout's answer
+			func(ctx context.Context, _ model.Request) (model.Response, error) {
+				// Scout's response can wake main before scout finishes its turn.
+				// This test specifically needs an idle recipient, not a busy one
+				// that can legitimately consume the note in its current turn.
+				select {
+				case <-sendInfo:
+					return call("c2", "message", `{"to":"scout","text":"thanks","kind":"info"}`), nil
+				case <-ctx.Done():
+					return model.Response{}, ctx.Err()
+				}
+			},
 			reply(text("noted")),
 		},
 		childSteps: []step{
@@ -136,6 +147,8 @@ func TestNoReplyNote(t *testing.T) {
 	runTurn(t, s, h, "delegate")
 	waitUntil(t, h, func() bool { return len(s.Agents()) == 2 })
 	child := s.Agents()[1]
+	waitUntil(t, h, func() bool { return child.Info().Turn == 1 && stateOf(child) == StateIdle })
+	close(sendInfo)
 	waitUntil(t, h, func() bool {
 		return len(inputsOf(h, event.InputInfo, child.ID)) == 1 && stateOf(root) == StateIdle && stateOf(child) == StateIdle
 	})
@@ -159,7 +172,7 @@ func TestNoReplyNote(t *testing.T) {
 		}
 		return text(""), errors.New("the note should reach the next turn")
 	}}})
-	s2, err := Recover(context.Background(), h2, s.ID, s.Dir, s.Created, s.Config(), h.all())
+	s2, err := Recover(context.Background(), h2, s.ID, s.Dir(), s.Created, s.Config(), h.all())
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -72,7 +72,7 @@ func TestBuildTranscript(t *testing.T) {
 	)
 	got := renderLines(transcript.Build(evs))
 	assertSubsequence(t, got, []string{
-		"› @user → @root hello",
+		"› @user: @root hello",
 		"  world",
 		"$ Shell  sleep 100 (cancelled)",
 		"  partial",
@@ -104,7 +104,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	tr.Apply(mk(3, "c1", event.TurnStarted, event.TurnPayload{Turn: 1}))
 	tr.Apply(mk(4, "c1", event.InputTaken, event.InputTakenPayload{Turn: 1, IDs: []string{"task"}}))
 	got = renderLines(tr.All())
-	assertSubsequence(t, got, []string{"⋙ @root → @scout (explorer) · m", "  look around"})
+	assertSubsequence(t, got, []string{"⋙ @root: @scout (explorer) · m", "  look around"})
 	for _, g := range got {
 		if strings.Contains(g, "Prompt from") || strings.Contains(g, "▹") {
 			t.Fatalf("the spawn and its task are one item: %q", got)
@@ -112,7 +112,7 @@ func TestRootSpawnKeepsTranscriptEmpty(t *testing.T) {
 	}
 	// a later prompt from the creator reads as a prompt
 	evtest.Apply(tr, evtest.From("c1", event.InputRequest, "root", "look around"))
-	if got := renderLines(tr.All()); !strings.Contains(strings.Join(got, "\n"), "› @root → @scout look around") {
+	if got := renderLines(tr.All()); !strings.Contains(strings.Join(got, "\n"), "› @root: @scout look around") {
 		t.Fatalf("a later prompt: %q", got)
 	}
 }
@@ -125,7 +125,7 @@ func TestInputKinds(t *testing.T) {
 		evtest.Prompt("a", "hi"),
 	))
 	got := renderLines(lines)
-	assertSubsequence(t, got, []string{"› @user focus", "› @scout child done", "› @user hi"})
+	assertSubsequence(t, got, []string{"› @user: focus", "› @scout: child done", "› @user: hi"})
 	for _, l := range got {
 		if strings.TrimSpace(l) == "steer" || strings.Contains(l, "job") {
 			t.Fatalf("a steer carries no title, and a job result is not drawn again:\n%s", strings.Join(got, "\n"))
@@ -150,7 +150,7 @@ func TestInputKinds(t *testing.T) {
 func TestUserBlockBorderAndWrap(t *testing.T) {
 	text := "one two three four five six seven eight nine ten"
 	got := renderWith(transcript.Build(evtest.Prompt("a", "hi\n"+text)), Options{Width: 30, NoFold: true})
-	if got[0] != "› @user hi" {
+	if got[0] != "› @user: hi" {
 		t.Fatalf("prompt glyph + padding: %q", got[0])
 	}
 	// Long lines wrap inside the border; every continuation keeps it.
@@ -272,7 +272,7 @@ func TestStreamingBufferReplacedByAssistantMessage(t *testing.T) {
 	tr.ApplyStream(protocol.StreamNotification{Agent: "a", Turn: 1, ToolName: "shell"})
 
 	got := renderLines(tr.All())
-	assertSubsequence(t, got, []string{"› @user hi", "◌ thinking…", "§ Aside Hello", "$ Shell"})
+	assertSubsequence(t, got, []string{"› @user: hi", "◌ thinking…", "§ Aside Hello", "$ Shell"})
 	if len(tr.Tail()) == 0 || !tr.Running() {
 		t.Fatal("expected a streaming buffer with a running tool")
 	}
@@ -330,7 +330,7 @@ func TestRenderCursorAndPerItemExpand(t *testing.T) {
 	if !contains(got, GutterMark+"$ Shell  ls") || !contains(got, GutterMark+"  x") || contains(got, GutterMark+"│  hi") {
 		t.Fatalf("cursor marks only item 1:\n%s", strings.Join(got, "\n"))
 	}
-	if !contains(got, "› @user hi") {
+	if !contains(got, "› @user: hi") {
 		t.Fatalf("non-cursor lines keep the gutter space:\n%s", strings.Join(got, "\n"))
 	}
 	// Per-item override expands item 1 while /details is off, and vice versa.
@@ -389,22 +389,20 @@ func TestToolOutputStaysWithItsCall(t *testing.T) {
 	for i := first; i <= last; i++ {
 		joined += lines[i].Text + "\n"
 	}
-	reqAt, ansAt, outAt := strings.Index(joined, "Permission"), strings.Index(joined, "allow"), strings.Index(joined, "all passed")
-	if reqAt < 0 || ansAt < 0 || outAt < 0 || !(reqAt < ansAt && ansAt < outAt) {
-		t.Fatalf("order within tool item wrong (req %d, ans %d, out %d):\n%s", reqAt, ansAt, outAt, joined)
+	if !strings.Contains(joined, "all passed") || strings.Contains(joined, "Permission") {
+		t.Fatalf("tool output must stay with the tool, not the permission card: %s", joined)
 	}
-	// the notices are nested under the call at the output's indent
-	rendered := renderWith(lines, Options{Width: 80, Focused: true, Cursor: toolItem})
-	for _, r := range rendered {
-		if strings.Contains(r, "Permission") || strings.Contains(r, "answered") {
-			if !strings.HasPrefix(strings.TrimLeft(r, "▍"), "  ") {
-				t.Fatalf("notice not indented under the call: %q", r)
-			}
-		}
+	permission, ok := tr.PermissionItem("p1")
+	if !ok || permission == toolItem {
+		t.Fatal("permission must be its own chat item")
+	}
+	card := strings.Join(renderWith(tr.Item(permission), Options{Width: 80, Details: true}), "\n")
+	if !strings.Contains(card, "! @user Permission: Shell") || !strings.Contains(card, "  Allowed once") {
+		t.Fatalf("permission/result card: %s", card)
 	}
 	// nothing of the tool item, and no permission notice, lives outside it
 	for i := last + 1; i < len(lines); i++ {
-		if lines[i].Item == toolItem || strings.Contains(lines[i].Text, "Permission") {
+		if lines[i].Item == toolItem {
 			t.Fatalf("tool item content after its range at %d: %q", i, lines[i].Text)
 		}
 	}
@@ -455,12 +453,12 @@ func TestFoldingToOneLine(t *testing.T) {
 		t.Fatalf("the agent's text should fold to its first line:\n%s", joined)
 	}
 	// thinking, tool (with its notices and output) and child result fold to one line each
-	if strings.Contains(joined, "second thought") || strings.Contains(joined, "Permission") || strings.Contains(joined, "found it") {
+	if strings.Contains(joined, "second thought") || strings.Contains(joined, "Allowed once") || strings.Contains(joined, "found it") {
 		t.Fatalf("folded items leaked lines:\n%s", joined)
 	}
 	toolRows := 0
 	for _, l := range plain {
-		if strings.Contains(l, "Shell") {
+		if strings.Contains(l, "Shell") && !strings.Contains(l, "Permission:") {
 			toolRows++
 			if strings.Contains(l, " +") {
 				t.Fatalf("a fully folded row carries no +N (only the cursor preview does): %q", l)
@@ -474,24 +472,20 @@ func TestFoldingToOneLine(t *testing.T) {
 	// answer) with a +N marker; enter (Expanded) shows everything
 	prev := nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: toolItem}))
 	joinedPrev := strings.Join(prev, "\n")
-	if !strings.Contains(joinedPrev, "Permission") || !strings.Contains(joinedPrev, "allow") || strings.Contains(joinedPrev, "found it") {
+	if !strings.Contains(joinedPrev, "\n  a") || strings.Contains(joinedPrev, "Allowed once") || strings.Contains(joinedPrev, "found it") {
 		t.Fatalf("cursor on tool:\n%s", joinedPrev)
 	}
 	toolPrev := 0
-	for _, l := range prev {
-		if strings.Contains(l, "Shell") || strings.Contains(l, "Permission") || strings.Contains(l, "allow") || strings.HasPrefix(strings.TrimLeft(l, "▍ "), "a") {
-			toolPrev++
-		}
-	}
+	toolPrev = len(nonblank(renderWith(tr.Item(toolItem), Options{Width: 80, Focused: true, Cursor: toolItem})))
 	if toolPrev > PreviewLines || !strings.Contains(joinedPrev, "+") {
 		t.Fatalf("preview should be at most %d lines with a +N marker:\n%s", PreviewLines, joinedPrev)
 	}
 	full := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: toolItem, Expanded: map[int]bool{toolItem: true}})), "\n")
-	if !strings.Contains(full, "Permission") || !strings.Contains(full, "allow") || !strings.Contains(full, "\n") || strings.Count(full, "\n") < 5 {
+	if !strings.Contains(full, "\n  e") || strings.Contains(full, "Allowed once") || strings.Count(full, "\n") < 5 {
 		t.Fatalf("expanded tool:\n%s", full)
 	}
 	child := strings.Join(nonblank(renderWith(lines, Options{Width: 80, Focused: true, Cursor: childItem})), "\n")
-	if !strings.Contains(child, "found it") || strings.Contains(child, "Permission") {
+	if !strings.Contains(child, "found it") || strings.Contains(child, "Allowed once") {
 		t.Fatalf("cursor on child:\n%s", child)
 	}
 	// /details shows everything
@@ -741,7 +735,7 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 	evtest.Apply(tr, evtest.Prompt("a", "delegate"))
 	evtest.Apply(tr, evtest.From("a", event.InputResponse, "scout", "Repository survey complete.\nNo edits were needed."))
 	folded := renderWith(tr.All(), Options{Width: 80})
-	if !contains(folded, "› @scout Repository survey complete.") {
+	if !contains(folded, "› @scout: Repository survey complete.") {
 		t.Fatalf("folded response should name itself and its sender:\n%s", strings.Join(folded, "\n"))
 	}
 	for _, l := range folded {
@@ -750,7 +744,7 @@ func TestAgentResponseBlockReadsLikeAToolLine(t *testing.T) {
 		}
 	}
 	full := renderWith(tr.All(), Options{Width: 80, NoFold: true})
-	assertSubsequence(t, full, []string{"› @scout Repository survey complete.", "  No edits were needed."})
+	assertSubsequence(t, full, []string{"› @scout: Repository survey complete.", "  No edits were needed."})
 }
 
 func TestSentMessageShowsItsText(t *testing.T) {
@@ -801,15 +795,15 @@ func TestTrackedLinesSurviveLaterItems(t *testing.T) {
 		t.Fatalf("no line %q in:\n%s", text, strings.Join(renderLines(lines), "\n"))
 		return transcript.Line{}
 	}
-	perm, question := find("**Permission** shell"), find("**Question** which?")
+	perm, question := find("Permission: Shell"), find("which?")
 	if perm.Glyph != transcript.GlyphPermission || perm.Tone != transcript.ToneNone {
 		t.Fatalf("answered permission prompt: %+v", perm)
 	}
-	if question.Glyph != transcript.GlyphPrompt || question.Tone != transcript.ToneError {
+	if question.Glyph != transcript.GlyphPrompt {
 		t.Fatalf("withdrawn question: %+v", question)
 	}
 	// an answer draws its prompt's mark: ! for a permission, ? for a question
-	if a, w := find("**Answered** allow"), find("**Prompt withdrawn**"); a.Glyph != transcript.GlyphPermission || w.Glyph != transcript.GlyphAnswer {
+	if a, w := find("Allowed once"), find("Question withdrawn"); a.Item != perm.Item || w.Item != question.Item {
 		t.Fatalf("answer glyphs: answered %q withdrawn %q", a.Glyph, w.Glyph)
 	}
 	shell, built, read, r2 := find("make"), find("built"), find("x"), find("r2")
@@ -821,7 +815,7 @@ func TestTrackedLinesSurviveLaterItems(t *testing.T) {
 		t.Fatalf("shell item range %d..%d: %q..%q", first, last, lines[first].Text, lines[last].Text)
 	}
 	for _, l := range snapshot {
-		if strings.Contains(l.Text, "built") || strings.Contains(l.Text, "r2") || (l.Glyph == transcript.GlyphPrompt && l.Tone != transcript.ToneWorking) {
+		if strings.Contains(l.Text, "built") || strings.Contains(l.Text, "r2") || strings.Contains(l.Text, "Question withdrawn") {
 			t.Fatalf("an earlier All() slice changed: %+v", l)
 		}
 	}
@@ -868,7 +862,7 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	tr.Apply(mk(7, "a", event.TurnStarted, event.TurnPayload{Turn: 2}))
 	evtest.Apply(tr, evtest.Prompt("a", "thanks"))
 	got := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
-	want := "› @user list files\n$ Shell  ls\n  a.go\n§ Aside one file\n\n› @user thanks"
+	want := "› @user: list files\n$ Shell  ls\n  a.go\n§ Aside one file\n\n› @user: thanks"
 	if got != want {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -879,7 +873,7 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	tr.Apply(mk(12, "a", event.InputTaken, event.InputTakenPayload{Turn: 3, IDs: []string{"r1"}}))
 	tr.Apply(mk(13, "a", event.AssistantMessage, event.AssistantMessagePayload{Turn: 3, Blocks: []model.Block{{Type: model.BlockText, Text: "replying now"}}}))
 	nudged := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true}), "\n")
-	if !strings.HasSuffix(nudged, "› @user thanks\n\n↻ Nudge owes a reply to you\n§ Aside replying now") {
+	if !strings.HasSuffix(nudged, "› @user: thanks\n\n↻ Nudge owes a reply to you\n§ Aside replying now") {
 		t.Fatalf("nudge spacing:\n%s", nudged)
 	}
 	tr = transcript.NewTranscript()
@@ -908,12 +902,12 @@ func TestTurnGapsSpaceOnlyTurns(t *testing.T) {
 	) {
 		between.Apply(ev)
 	}
-	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user go\n§ Aside done\n⇄ Mode → auto · allows inside the channel's directories, denies outside them\n\n› @user again" {
+	if got := strings.Join(renderWith(between.All(), Options{Width: 100, NoFold: true, TurnGaps: true}), "\n"); got != "› @user: go\n§ Aside done\n⇄ Mode → auto · allows inside the channel's directories, denies outside them\n\n› @user: again" {
 		t.Fatalf("a between-turn mode change:\n%s", got)
 	}
 	// the loader keeps one blank row above it
 	working := strings.Join(renderWith(tr.All(), Options{Width: 80, NoFold: true, TurnGaps: true, Working: true, Spinner: "◐", Verb: "Trotting"}), "\n")
-	if !strings.HasSuffix(working, "› @user thanks\n\n◐ Trotting…") {
+	if !strings.HasSuffix(working, "› @user: thanks\n\n◐ Trotting…") {
 		t.Fatalf("loader spacing:\n%s", working)
 	}
 }
@@ -931,7 +925,7 @@ func TestWhoColoursGlyphAndName(t *testing.T) {
 	evtest.Apply(tr, evtest.Call("a", "c1", "message", `{"to":"scout","text":"go"}`))
 	evtest.Apply(tr, evtest.Prompt("a", "hi"))
 	got := renderWith(tr.All(), Options{Width: 80, NoFold: true, WhoStyle: whoStyle})
-	assertSubsequence(t, got, []string{"› @main look", "‹ @scout go", "› @user hi"})
+	assertSubsequence(t, got, []string{"› @main: look", "‹ @scout go", "› @user: hi"})
 	if !asked["main"] || !asked["scout"] || !asked["user"] {
 		t.Fatalf("colours asked for %v", asked)
 	}

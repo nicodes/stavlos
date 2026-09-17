@@ -65,13 +65,13 @@ func TestRecoverRestoresNames(t *testing.T) {
 		return event.Event{Seq: seq, Channel: "old", Agent: agent, Type: typ, Payload: event.MustPayload(p)}
 	}
 	evs := []event.Event{
-		ev(1, "", event.ChannelCreated, event.ChannelCreatedPayload{Name: "old", Dir: s.Dir, Role: "general"}),
+		ev(1, "", event.ChannelCreated, event.ChannelCreatedPayload{Name: "old", Dir: s.Dir(), Role: "general"}),
 		ev(2, "r", event.AgentSpawned, event.AgentSpawnedPayload{ID: "r", Role: "general", Name: "main"}),
 		ev(3, "c1", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c1", Parent: "r", Role: "general", Name: "scout", Depth: 1}),
 		ev(4, "c2", event.AgentSpawned, event.AgentSpawnedPayload{ID: "c2", Parent: "r", Role: "general", Name: "scout-2", Depth: 1}),
 	}
 	for range 2 {
-		rs, err := Recover(context.Background(), h, "old", s.Dir, time.Now(), s.Config(), evs)
+		rs, err := Recover(context.Background(), h, "old", s.Dir(), time.Now(), s.Config(), evs)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -47,7 +47,7 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 	if q := reminders(h, root.ID); len(q) != maxNudges || !reflect.DeepEqual(q[0], []string{"user"}) {
 		t.Fatalf("reminders %v", q)
 	}
-	if !strings.Contains(reminder, "without replying to user") || !strings.Contains(reminder, "message (to: user, kind: response)") {
+	if !strings.Contains(reminder, "from @user") || !strings.Contains(reminder, "reply_to: [request IDs]") {
 		t.Fatalf("reminder: %q", reminder)
 	}
 	reqs := fm.requests()
@@ -68,7 +68,7 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 func TestNudgeGetsAReply(t *testing.T) {
 	fm := &fakeModel{steps: []step{
 		reply(text("notes")),
-		reply(call("c1", "message", `{"to":"user","text":"all good"}`)),
+		reply(call("c1", "message", `{"to":"user","text":"all good","kind":"response"}`)),
 		reply(text("done")),
 	}}
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
@@ -84,7 +84,7 @@ func TestNudgeGetsAReply(t *testing.T) {
 // TestReplyNeedsNoReminder: a message to the human settles its prompt.
 func TestReplyNeedsNoReminder(t *testing.T) {
 	fm := &fakeModel{steps: []step{
-		reply(call("c1", "message", `{"to":"user","text":"all good"}`)),
+		reply(call("c1", "message", `{"to":"user","text":"all good","kind":"response"}`)),
 		reply(text("notes")),
 	}}
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
@@ -106,7 +106,7 @@ func TestNoNudgeWhileWaiting(t *testing.T) {
 			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("waiting on scout")),
 			reply(text("got the answer, forgot to reply")),
-			reply(call("c2", "message", `{"to":"user","text":"scout found it"}`)),
+			reply(call("c2", "message", `{"to":"user","text":"scout found it","kind":"response"}`)),
 		},
 		childSteps: []step{func(context.Context, model.Request) (model.Response, error) {
 			<-release
@@ -134,12 +134,12 @@ func TestChildRemindedOfItsParent(t *testing.T) {
 	fm := &fakeModel{
 		steps: []step{
 			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
-			reply(call("c2", "message", `{"to":"user","text":"delegated to scout"}`)),
+			reply(call("c2", "message", `{"to":"user","text":"delegated to scout","kind":"response"}`)),
 		},
 		childSteps: []step{
 			reply(text("found it, but forgot to say")),
 			func(_ context.Context, req model.Request) (model.Response, error) {
-				if !strings.Contains(lastUserText(req), "without replying to main") {
+				if !strings.Contains(lastUserText(req), "from @main") {
 					return text(""), errors.New("reminder: " + lastUserText(req))
 				}
 				return call("k1", "message", `{"to":"main","text":"found it","kind":"response"}`), nil
@@ -184,8 +184,8 @@ func TestReminderSurvivesRestart(t *testing.T) {
 			break
 		}
 	}
-	h2 := newFakeHost(&fakeModel{steps: []step{reply(call("c1", "message", `{"to":"user","text":"after restart"}`))}})
-	s2, err := Recover(context.Background(), h2, s.ID, s.Dir, s.Created, s.Config(), cut)
+	h2 := newFakeHost(&fakeModel{steps: []step{reply(call("c1", "message", `{"to":"user","text":"after restart","kind":"response"}`))}})
+	s2, err := Recover(context.Background(), h2, s.ID, s.Dir(), s.Created, s.Config(), cut)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,13 +200,14 @@ func TestReminderSurvivesRestart(t *testing.T) {
 // TestDirectMessageOwesNothing: a message the human types in the agent's own
 // chat is answered in that chat, by the text the turn ends with, so no reply
 // is owed and no reminder follows.
-func TestDirectMessageOwesNothing(t *testing.T) {
+func TestDirectMessageNeedsAnExplicitResponse(t *testing.T) {
 	fm := &fakeModel{steps: []step{reply(text("answered right here")), reply(text("a reminder turn would land here"))}}
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "check it")
 	time.Sleep(50 * time.Millisecond)
-	if in := root.Info(); len(in.Due) != 0 || len(reminders(h, root.ID)) != 0 || in.Turn != 1 {
+	waitUntil(t, h, func() bool { return root.Info().Turn == 1+maxNudges && stateOf(root) == StateIdle })
+	if in := root.Info(); len(in.PendingReplies) != 1 || len(reminders(h, root.ID)) != maxNudges || in.Turn != 1+maxNudges {
 		t.Fatalf("due %v, turn %d, log:\n%s", in.Due, in.Turn, h.dump())
 	}
 }

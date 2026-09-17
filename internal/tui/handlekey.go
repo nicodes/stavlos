@@ -43,6 +43,9 @@ func (m *Model) escCancel() tea.Cmd {
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
+	if m.cfgEditor != nil {
+		return m.configEditorKey(msg)
+	}
 	if key.Matches(msg, keys.Quit) {
 		return m.ctrlC()
 	}
@@ -65,7 +68,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 
 	// While the "/" palette is open in the input, tab completes the command
 	// (handled below) instead of cycling focus.
-	paletteOpen := m.focus == focusInput && (len(paletteMatches(m.input.Value())) > 0 || len(m.mentionMatches()) > 0)
+	paletteOpen := m.focus == focusInput && (len(m.paletteMatches(m.input.Value())) > 0 || len(m.mentionMatches()) > 0)
 
 	// Section-independent keys.
 	switch {
@@ -98,7 +101,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.tabsKey(msg)
 	case focusChat:
 		return m.chatKey(msg)
-	case focusPermission:
+	case focusPermission, focusInlinePermission:
 		return m.permissionKey(msg)
 	case focusQuestions:
 		return m.questionsKey(msg)
@@ -121,6 +124,8 @@ func (m *Model) command(text string) tea.Cmd {
 	}
 
 	switch name {
+	case "/settings", "/config":
+		return m.settingsCommand(rest)
 	case "/help", "/h", "/?":
 		m.hideKeys = !m.hideKeys
 		m.layout()
@@ -132,6 +137,8 @@ func (m *Model) command(text string) tea.Cmd {
 		return m.toggleTree()
 	case "/chat":
 		return m.openChat()
+	case "/discord":
+		return m.openDiscord(rest)
 	case "/roles", "/role", "/presets":
 		// The one role dialog: enter switches the selected agent's preset.
 		// A name argument sets it directly.
@@ -139,11 +146,16 @@ func (m *Model) command(text string) tea.Cmd {
 			return c
 		}
 		if rest == "" {
-			return rolesCmd(m.ctx, m.c, m.channelID, false)
+			return rolesCmd(m.ctx, m.c, m.requestScope(), false)
 		}
 		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
 	case "/channels", "/resume", "/channel":
-		return channelsCmd(m.ctx, m.c, m.channel.Dir, channelsPicker)
+		return channelsCmd(m.ctx, m.c, m.requestScope(), channelsPicker)
+	case "/dir":
+		if rest == "" {
+			return m.openTab(focusDirs)
+		}
+		return setDirCmd(m.ctx, m.c, m.requestScope(), rest)
 	case "/rename":
 		if rest == "" {
 			return m.setStatus("usage: /rename <name>", true)
@@ -173,11 +185,17 @@ func (m *Model) command(text string) tea.Cmd {
 		return sendCmd(m.ctx, m.c, agent, protocol.KindPrompt, rest, "queued for after the current turn")
 	case "/models", "/model":
 		// The one model dialog: enter sets the selected agent's model, ctrl+s the channel default.
-		return modelsCmd(m.ctx, m.c)
+		return modelsCmd(m.ctx, m.c, m.requestScope())
 	case "/providers", "/provider", "/connect", "/login":
 		// The one provider dialog: sign in, re-sign in, sign out. A name
 		// argument jumps straight to that provider's sign-in.
 		return providersCmd(m.ctx, m.c, providersMsg{jump: strings.ToLower(rest)})
 	}
-	return m.setStatus("unknown command "+name+" (try /help)", true)
+	if rest != "" {
+		return m.setStatus("custom commands do not take arguments", true)
+	}
+	if m.superChat {
+		agent = ""
+	}
+	return customCommandRunCmd(m.ctx, m.c, m.requestScope(), strings.TrimPrefix(name, "/"), agent)
 }

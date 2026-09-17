@@ -79,9 +79,9 @@ func (m *Model) metaAction(part metaPart) tea.Cmd {
 		}
 		return setModeCmd(m.ctx, m.c, m.channelID, protocol.ModeAsk)
 	case metaRole:
-		return rolesCmd(m.ctx, m.c, m.channelID, false)
+		return rolesCmd(m.ctx, m.c, m.requestScope(), false)
 	case metaModel:
-		return modelsCmd(m.ctx, m.c)
+		return modelsCmd(m.ctx, m.c, m.requestScope())
 	case metaVariant:
 		return m.openVariants("")
 	}
