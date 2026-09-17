@@ -29,7 +29,8 @@ import (
 
 // Daemon is the stavlosd process state.
 type Daemon struct {
-	planUsageMu sync.Mutex // serialises writes of plan-usage.json
+	planUsageMu sync.Mutex                           // serialises writes of plan-usage.json
+	planHistory map[string][]protocol.PlanUsagePoint // provider → observed plan usage over time, under planUsageMu
 	Log         *eventlog.Log
 	Registry    *registry.Registry
 	DataDir     string

@@ -17,6 +17,16 @@ polling an endpoint of the Grok CLI while presenting as that CLI.
 
 Stavlos never runs a provider's CLI to read usage.
 
+## The chart
+
+Every reading becomes a point in `plan-usage.json` (the most used window's
+percentage, at most one a minute while it does not change, the last 5,000
+kept), so the nav's plan row opens a chart of the plan over time: the highest
+reading in each bucket, an empty bucket carrying the last one forward, drawn
+against the whole allowance. `plan.series` serves it, and `/plan [provider]`
+opens the same chart. Nothing is polled: the points only come from calls the
+agents were making anyway.
+
 ## ChatGPT (Codex backend)
 
 Stavlos signs in with the Codex CLI's OAuth client

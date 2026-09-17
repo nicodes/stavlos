@@ -3850,3 +3850,41 @@ func TestSidebarKeepsIdleAncestors(t *testing.T) {
 		t.Fatalf("nothing busy anywhere: quiet %d", quiet)
 	}
 }
+
+// TestPlanUsageChart: a click on a plan's row in the nav opens its chart,
+// which draws every reading against the whole allowance and reads "now
+// N%"; /plan opens the same.
+func TestPlanUsageChart(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	now := time.Now()
+	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-time.Minute),
+		Windows: []protocol.UsageWindowInfo{{UsedPercent: 40, Minutes: 10080, ResetsAt: now.Add(24 * time.Hour)}}}}
+	m.layout()
+	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	m = nm.(Model)
+	if m.focus != focusUsage || m.usage.kind != usagePlan || m.usage.provider != "openai" || m.usageTitle() != "Plan · ChatGPT" {
+		t.Fatalf("a click on the plan row opens its chart: focus=%v %+v", m.focus, m.usage)
+	}
+	n := usageChartWidth(m.width)
+	percent := make([]float64, n)
+	for i := range percent {
+		percent[i] = 20
+	}
+	percent[n-1] = 50
+	m.onUsage(usageMsg{epoch: m.usage.epoch, res: protocol.UsageSeriesResult{From: now.Add(-3 * time.Hour), To: now}, percent: percent})
+	body := stripANSI(strings.Join(m.usageBody(dialog.Width(m.width)-4), "\n"))
+	lines := strings.Split(body, "\n")
+	if !strings.Contains(lines[0], "now 50%") || !strings.Contains(lines[2], "100%") {
+		t.Fatalf("a plan is drawn against the whole allowance:\n%s", body)
+	}
+	bottom, middle := lines[1+usageChartRows], lines[2+usageChartRows/2]
+	if strings.Count(bottom, "█") != n || strings.Count(middle, "█") != 1 {
+		t.Fatalf("every reading fills the bottom row, only the 50%% one reaches the middle:\n%s", body)
+	}
+	m.closeDialog()
+	if cmd := m.command("/plan"); cmd == nil || m.usage.kind != usagePlan {
+		t.Fatalf("/plan: %+v", m.usage)
+	}
+}
