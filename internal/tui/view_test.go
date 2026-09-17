@@ -3173,8 +3173,8 @@ func TestOtherChannelTreesStayOpen(t *testing.T) {
 	m.prompts = nil
 	old := m.channelID
 	m.stash() // leaving a channel keeps its agents
-	if len(m.trees[old]) != 4 || !m.treeOpen[old] {
-		t.Fatalf("leaving a channel should keep its tree: %d rows open=%v", len(m.trees[old]), m.treeOpen[old])
+	if len(m.trees[old]) != 4 || m.treeClosed[old] {
+		t.Fatalf("leaving a channel should keep its tree: %d rows closed=%v", len(m.trees[old]), m.treeClosed[old])
 	}
 	// bound to another channel of the directory now, the old one beside it
 	dir := m.channel.Dir
@@ -3206,8 +3206,8 @@ func TestOtherChannelTreesStayOpen(t *testing.T) {
 	m.setFocus(focusSidebar)
 	m.sbCursor = m.sidebarIndex(sidebarRow{kind: sbOther, k: 0})
 	press(&m, tea.KeyMsg{Type: tea.KeyLeft})
-	if kept() != 0 || m.treeOpen[old] {
-		t.Fatalf("← should fold the tree: %d rows open=%v", kept(), m.treeOpen[old])
+	if kept() != 0 || !m.treeClosed[old] {
+		t.Fatalf("← should fold the tree: %d rows closed=%v", kept(), m.treeClosed[old])
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyLeft})
 	if kept() != 4 {
@@ -3309,5 +3309,69 @@ func TestSidebarHidesQuietAgents(t *testing.T) {
 	m.superChat = false
 	if v := nav(); !strings.Contains(v, "@napper") || !strings.Contains(v, "show all · 1 idle") {
 		t.Fatalf("the open agent stays shown:\n%s", v)
+	}
+}
+
+// TestChannelTreeOpenCloseRules: a click on the selected channel toggles
+// its tree; a click on an unselected channel opens its tree if closed and
+// leaves an open one alone; switching channels never reopens or closes a
+// tree, and no channel's toggle touches another's.
+func TestChannelTreeOpenCloseRules(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	m.superChat = true
+	old, dir := m.channelID, m.channel.Dir
+	click := func(index int) tea.Cmd {
+		y := sidebarY(m, index)
+		if y < 0 {
+			t.Fatalf("row %d is not drawn", index)
+		}
+		nm, _ := m.Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, cmd := nm.(Model).Update(tea.MouseMsg{X: 3, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+		return cmd
+	}
+	// the selected channel: a click closes its tree
+	click(hereRow(m))
+	if !m.treeClosed[old] {
+		t.Fatal("a click on the selected channel should close its tree")
+	}
+	// switch to another channel: the old one's tree stays closed
+	m.stash()
+	m.channelState = newChannelState("s2", protocol.ChannelInfo{ID: "s2", Name: "other", Dir: dir})
+	m.reconciled, m.superChat = true, true
+	m.agents = []protocol.AgentInfo{{ID: "z", Name: "solo", Role: "general", State: "running"}}
+	m.navChannels = []protocol.ChannelInfo{{ID: old, Name: "proj", Dir: dir}}
+	m.layout()
+	otherAgents := func() int {
+		n := 0
+		for _, r := range m.sidebarRows() {
+			if r.kind == sbOtherAgent {
+				n++
+			}
+		}
+		return n
+	}
+	if otherAgents() != 0 || !m.treeClosed[old] {
+		t.Fatalf("switching away must not reopen a closed tree: %d rows", otherAgents())
+	}
+	// closing the selected channel's tree leaves the other alone
+	click(hereRow(m))
+	if !m.treeClosed["s2"] || !m.treeClosed[old] {
+		t.Fatalf("toggles are per channel: s2=%v old=%v", m.treeClosed["s2"], m.treeClosed[old])
+	}
+	click(hereRow(m))
+	if m.treeClosed["s2"] {
+		t.Fatal("a second click on the selected channel should open its tree")
+	}
+	// an unselected, closed channel: a click opens its tree (and opens the channel)
+	if cmd := click(m.sidebarIndex(sidebarRow{kind: sbOther, k: 0})); cmd == nil || m.treeClosed[old] || otherAgents() == 0 || m.treeClosed["s2"] {
+		t.Fatalf("a click on an unselected closed channel should open its tree: closed=%v rows=%d", m.treeClosed[old], otherAgents())
+	}
+	// an unselected, open channel: a click leaves its tree open
+	m.switching = false
+	click(m.sidebarIndex(sidebarRow{kind: sbOther, k: 0}))
+	if m.treeClosed[old] || otherAgents() == 0 {
+		t.Fatal("a click on an unselected open channel should leave its tree open")
 	}
 }

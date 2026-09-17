@@ -726,7 +726,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 	// another channel's kept tree, rendered once and indexed by its row
 	others := map[string][]string{}
 	for _, s := range m.navChannels {
-		if m.treeOpen[s.ID] && len(m.trees[s.ID]) > 0 {
+		if m.otherTreeShown(s.ID) {
 			others[s.ID] = m.agentRows(m.trees[s.ID], "", width)
 		}
 	}
@@ -752,7 +752,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 				dot = mark
 			}
 			channel(dot, channelLabel(m.channel), m.channel.Dir, m.channel.DirError != "", style, i)
-			if len(m.agents) == 0 && !m.treeFolded[m.channelID] {
+			if len(m.agents) == 0 && !m.treeClosed[m.channelID] {
 				rows, items = append(rows, tree[0]), append(items, -1) // the "(no agents)" row
 			}
 		case sbAgent:
