@@ -603,8 +603,8 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 
 // sidebarHeader is what precedes the tree: the app name, a blank, the
 // system's tokens and cost (every channel), the selected chat's (the
-// channel's in its chat, the agent's in an agent's chat), Discord status,
-// and a blank; the "channels" title is the body's first row. The tree's
+// channel's in its chat, the agent's in an agent's chat), a blank, Discord
+// status, and a blank; the "channels" title is the body's first row. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	return []string{
@@ -612,17 +612,21 @@ func (m Model) sidebarHeader(width int) []string {
 		"",
 		usageRow("System", m.systemTokens(), m.systemCost(), width),
 		m.selectedUsageRow(width),
+		"",
 		m.discordIndicator(width),
 		"",
 	}
 }
 
-// usageRow is "label · 12k tokens · $0.25", grey; a label too long for
-// width is cut, never the figures.
+// usageRow is "label        12k · $0.25", grey: the label at the left, the
+// tokens and cost flush with the right edge (like the tree's costs); a
+// label too long for width is cut, never the figures.
 func usageRow(label string, tokens int, cost float64, width int) string {
-	figures := " · " + format.Tokens(tokens) + " tokens · $" + format.Cost(cost)
-	label = ansi.Truncate(label, max(1, width-ansi.StringWidth(figures)), "…")
-	return theme.StyleDim.Render(ansi.Truncate(label+figures, width, "…"))
+	figures := format.Tokens(tokens) + " · $" + format.Cost(cost)
+	fw := ansi.StringWidth(figures)
+	label = ansi.Truncate(label, max(1, width-fw-1), "…")
+	gap := max(1, width-ansi.StringWidth(label)-fw)
+	return theme.StyleDim.Render(ansi.Truncate(label+strings.Repeat(" ", gap)+figures, width, "…"))
 }
 
 // selectedUsageRow is the selected chat's usage: the channel's in its chat
@@ -651,7 +655,7 @@ const (
 )
 
 // sidebarDiscordRow opens the Discord status/control panel when clicked.
-const sidebarDiscordRow = 4
+const sidebarDiscordRow = 5
 
 // stripRows is how many tab rows the footer strip draws: the ! ? dirs row
 // while the sidebar is hidden, none while it shows (! and ? sit in the
