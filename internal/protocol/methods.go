@@ -34,6 +34,7 @@ var (
 	ChannelRename    = Method[ChannelRenameParams, None]{MChannelRename}
 	ChannelSetModel  = Method[ChannelSetModelParams, None]{MChannelSetModel}
 	ChannelSetMode   = Method[ChannelSetModeParams, None]{MChannelSetMode}
+	ChannelSetRecap  = Method[ChannelSetRecapParams, None]{MChannelSetRecap}
 	ChannelPost      = Method[ChannelPostParams, ChannelPostResult]{MChannelPost}
 	ChannelAddDir    = Method[ChannelDirParams, None]{MChannelAddDir}
 	ChannelRemoveDir = Method[ChannelDirParams, None]{MChannelRemoveDir}

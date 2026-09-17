@@ -39,8 +39,11 @@ func (m *Model) usageCommand(name, rest string) (tea.Cmd, bool) {
 	if kind, is := usageCommands[name]; is {
 		return m.openUsage(kind, strings.EqualFold(rest, "system")), true
 	}
-	if name == "/plan" {
+	switch name {
+	case "/plan":
 		return m.planCommand(rest), true
+	case "/recap":
+		return m.recapCommand(rest), true
 	}
 	return nil, false
 }

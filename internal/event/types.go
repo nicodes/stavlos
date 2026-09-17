@@ -101,7 +101,8 @@ type ChannelUpdatedPayload struct {
 	Dir   *string `json:"dir,omitempty"` // new default directory; clears remembered permits and resets mode to ask
 	Name  *string `json:"name,omitempty"`
 	Model *string `json:"model,omitempty"`
-	Mode  *string `json:"mode,omitempty"` // ask | auto | yolo
+	Mode  *string `json:"mode,omitempty"`  // ask | auto | yolo
+	Recap *int    `json:"recap,omitempty"` // minutes of silence after which the main agent is asked for a status report; 0 turns it off
 }
 
 // DirPayload names a working directory; Source is "human" on an add.
