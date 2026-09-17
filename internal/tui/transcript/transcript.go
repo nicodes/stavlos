@@ -1937,7 +1937,7 @@ func CleanLines(lines []Line) []Line {
 // shell's, since every job is a shell command.
 const (
 	GlyphToolFiles  = "◆" // file tools (skill)
-	GlyphToolRead   = "☰" // read: the lines of a file
+	GlyphToolRead   = "▤" // read: the lines of a file
 	GlyphToolSearch = "⌕" // web_search: a magnifying glass
 	GlyphToolPatch  = "±" // apply_patch: a diff
 	GlyphToolShell  = "$" // shell, shell_kill (and the old bash names): the shell prompt
