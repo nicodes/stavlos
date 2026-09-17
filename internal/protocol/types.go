@@ -62,6 +62,8 @@ const (
 	MReconcile   = "reconcile"
 	MPresets     = "presets" // archetypes available to a channel
 
+	MUsageSeries = "usage.series" // tokens and cost over time: the system's, a channel's or an agent's
+
 	// Notifications (server → client, no id).
 	NEvent  = "event"
 	NStream = "stream"

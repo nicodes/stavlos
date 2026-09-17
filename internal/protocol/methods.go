@@ -1,5 +1,7 @@
 package protocol
 
+import "time"
+
 // Method is one request of the protocol: its name, the params it takes (P)
 // and the result it returns (R). The client calls a Method and the daemon
 // routes one, so a method's name and its shapes are declared once, here,
@@ -59,8 +61,30 @@ var (
 	ProviderDisconnect = Method[ProviderRef, None]{MProviderDisconnect}
 	ModelList          = Method[ModelListParams, ModelListResult]{MModelList}
 
+	UsageSeries = Method[UsageSeriesParams, UsageSeriesResult]{MUsageSeries}
+
 	Subscribe   = Method[SubscribeParams, SubscribeResult]{MSubscribe}
 	Unsubscribe = Method[SubscribeParams, None]{MUnsubscribe}
 	Reconcile   = Method[ChannelRef, ReconcileResult]{MReconcile}
 	Presets     = Method[PresetsParams, PresetsResult]{MPresets}
 )
+
+// UsageSeriesParams picks whose usage to chart: every channel's (no
+// Channel), a channel's, or one of its agents'; from From (the first model
+// call when zero) to To (now when zero), in Buckets equal spans (1–1000).
+type UsageSeriesParams struct {
+	Channel string    `json:"channel,omitempty"`
+	Agent   string    `json:"agent,omitempty"`
+	From    time.Time `json:"from,omitzero"`
+	To      time.Time `json:"to,omitzero"`
+	Buckets int       `json:"buckets"`
+}
+
+// UsageSeriesResult is input + output tokens and cost per bucket over
+// [From, To).
+type UsageSeriesResult struct {
+	From   time.Time `json:"from"`
+	To     time.Time `json:"to"`
+	Tokens []int     `json:"tokens"`
+	Cost   []float64 `json:"cost_usd"`
+}

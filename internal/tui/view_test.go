@@ -2102,8 +2102,8 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 		return cmd
 	}
 	// a click in the sidebar focuses it
-	ev(tea.MouseMsg{X: 2, Y: 3, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	ev(tea.MouseMsg{X: 2, Y: 3, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	ev(tea.MouseMsg{X: 2, Y: 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	ev(tea.MouseMsg{X: 2, Y: 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	if m.focus != focusSidebar {
 		t.Fatalf("click in the sidebar: focus=%v", m.focus)
 	}
@@ -3464,5 +3464,75 @@ func TestSidebarUsageRows(t *testing.T) {
 	// with the sidebar, the channel chat has no tabs: tab skips the strip
 	if slices.Contains(m.focusOrder(), focusTabs) {
 		t.Fatalf("no tab stop without tabs: %v", m.focusOrder())
+	}
+}
+
+// TestUsageDialogs: the nav's usage rows open the tokens dialog from the
+// tokens figure and the cost dialog from the cost, on the system or the
+// selected chat (the agent's in its chat, the channel's in the channel
+// chat); ←/→ change the range and refetch, t and c switch the chart, and
+// the reply draws bars under the peak with the span below.
+func TestUsageDialogs(t *testing.T) {
+	m := sidebarNavModel()
+	m.prompts = nil
+	clickRow := func(y int, onCost bool) tea.Cmd {
+		row := stripANSI(m.sidebarHeader(sidebarWidth - 1)[y])
+		x := 1
+		if onCost {
+			x = ansi.StringWidth(row[:strings.LastIndex(row, "$")])
+		}
+		nm, _ := m.Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+		nm, cmd := nm.(Model).Update(tea.MouseMsg{X: x, Y: y, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+		m = nm.(Model)
+		return cmd
+	}
+	if clickRow(sidebarSelectedRow, false) == nil || m.focus != focusUsage || m.usage.kind != usageTokens || m.usage.agent != "a" || m.usageTitle() != "Tokens · @main" {
+		t.Fatalf("the selected row's tokens: focus=%v %+v", m.focus, m.usage)
+	}
+	m.closeDialog()
+	clickRow(sidebarSystemRow, true)
+	if m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" || m.usageTitle() != "Cost · System" {
+		t.Fatalf("the system row's cost: %+v", m.usage)
+	}
+	m.closeDialog()
+	m.superChat = true
+	clickRow(sidebarSelectedRow, true)
+	if m.usage.channel != m.channelID || m.usage.agent != "" || m.usageTitle() != "Cost · #channel" {
+		t.Fatalf("the channel chat's cost: %+v", m.usage)
+	}
+	// a reply for an older request is dropped; the current one draws
+	epoch := m.usage.epoch
+	m.onUsage(usageMsg{epoch: epoch - 1, res: protocol.UsageSeriesResult{Tokens: []int{1}}})
+	if m.usage.series != nil {
+		t.Fatal("a stale reply should be dropped")
+	}
+	n := usageChartWidth(m.width)
+	tokens, cost := make([]int, n), make([]float64, n)
+	tokens[0], tokens[n-1], cost[n-1] = 500, 2000, 1.25
+	now := time.Now()
+	m.onUsage(usageMsg{epoch: epoch, res: protocol.UsageSeriesResult{From: now.Add(-3 * time.Hour), To: now, Tokens: tokens, Cost: cost}})
+	body := stripANSI(strings.Join(m.usageBody(dialog.Width(m.width)-4), "\n"))
+	if !strings.Contains(body, "total $1.25") || !strings.Contains(body, "$1.25 ") || !strings.Contains(body, "3h ago") || !strings.Contains(body, "now") || !strings.Contains(body, "█") {
+		t.Fatalf("cost chart:\n%s", body)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	body = stripANSI(strings.Join(m.usageBody(dialog.Width(m.width)-4), "\n"))
+	lines := strings.Split(body, "\n")
+	if !strings.Contains(lines[0], "total 3k") || !strings.HasSuffix(lines[2], "█") || !strings.Contains(lines[2], "2k") || !strings.Contains(lines[1+usageChartRows], "0 █") || []rune(lines[usageChartRows-1])[usageAxisW+1] != ' ' || []rune(lines[usageChartRows])[usageAxisW+1] != '█' {
+		t.Fatalf("tokens chart:\n%s", body)
+	}
+	if cmd := press(&m, tea.KeyMsg{Type: tea.KeyRight}); cmd == nil || m.usage.rng != 1 || m.usage.series != nil || m.usage.epoch == epoch {
+		t.Fatalf("→ should pick the next range and refetch: rng=%d", m.usage.rng)
+	}
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.focus == focusUsage {
+		t.Fatal("esc should close the dialog")
+	}
+}
+
+func TestUsageBars(t *testing.T) {
+	got := usageBars([]float64{0, 0.1, 1, 4, 8}, 8, 2)
+	if got[0] != "    █" || got[1] != " ▁▂██" {
+		t.Fatalf("bars: %q", got)
 	}
 }

@@ -46,6 +46,9 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 	case catalogTickMsg:
 		m.viewDirty = true // the chat's stamps ("5 min") age; unchanged items redraw from the render cache
 		cmds := []tea.Cmd{channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), tick(3*time.Second, catalogTickMsg{})}
+		if m.focus == focusUsage {
+			cmds = append(cmds, m.usageFetch()) // the open chart keeps up
+		}
 		for _, s := range m.navChannels {
 			if m.otherTreeShown(s.ID) {
 				cmds = append(cmds, treeCmd(m.ctx, m.c, s.ID))

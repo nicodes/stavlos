@@ -43,8 +43,12 @@ func (m Model) tabLayout() [][]focus {
 // tabOrder is tabLayout's tabs in order: what the strip's highlight walks.
 func (m Model) tabOrder() []focus { return slices.Concat(m.tabLayout()...) }
 
-// isTab reports whether f is one of the strip's tabs.
+// isTab reports whether f is one of the strip's tabs, or another dialog
+// that opens and closes like one (the usage dialogs).
 func isTab(f focus) bool {
+	if f == focusUsage {
+		return true
+	}
 	for _, t := range tabFocuses {
 		if t == f {
 			return true
