@@ -608,24 +608,36 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 }
 
 // sidebarHeader is what precedes the tree: the app name, a blank, the
-// global catalog label, the channel's tokens and cost (the rollup of what
-// the meta row shows per agent), Discord status, the ! and ? tabs (sidebarTabsRow; every
-// channel's prompts, so above the channels; the footer strip keeps only the
-// agent's row while the sidebar shows, and dirs sits behind each channel's
-// gear), and a blank; the "channels" title is the body's first row. The tree's
+// system's tokens and cost (every channel), the selected chat's (the
+// channel's in its chat, the agent's in an agent's chat), Discord status,
+// and a blank; the "channels" title is the body's first row. The tree's
 // first row follows, which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
-	usage := channelLabel(m.channel) + " · " + format.Tokens(m.totalTokens()) + " tokens · $" + format.Cost(m.totalCost())
-	labels, _ := m.tabLabels(m.currentPrompt())
 	return []string{
 		theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" "),
 		"",
-		theme.StyleDim.Render("All channels"),
-		theme.StyleDim.Render(format.Trunc(usage, width)),
+		usageRow("System", m.systemTokens(), m.systemCost(), width),
+		m.selectedUsageRow(width),
 		m.discordIndicator(width),
-		ansi.Truncate(strings.Split(labels, "\n")[0], width, "…"),
 		"",
 	}
+}
+
+// usageRow is "label · 12k tokens · $0.25", grey; a label too long for
+// width is cut, never the figures.
+func usageRow(label string, tokens int, cost float64, width int) string {
+	figures := " · " + format.Tokens(tokens) + " tokens · $" + format.Cost(cost)
+	label = ansi.Truncate(label, max(1, width-ansi.StringWidth(figures)), "…")
+	return theme.StyleDim.Render(ansi.Truncate(label+figures, width, "…"))
+}
+
+// selectedUsageRow is the selected chat's usage: the channel's in its chat
+// ("#name"), the agent's in its own ("@name").
+func (m Model) selectedUsageRow(width int) string {
+	if a := m.selectedAgent(); a != nil && !m.superChat {
+		return usageRow("@"+a.Name, a.Tokens, a.CostUSD, width)
+	}
+	return usageRow(channelLabel(m.channel), m.totalTokens(), m.totalCost(), width)
 }
 
 // newChannelMark sits at the right of the channels title, in the gears'
@@ -635,9 +647,6 @@ const newChannelMark = "✚"
 // channelGear ends every channel row: → on the row or a click on it opens the
 // channel's project configuration.
 const channelGear = "⚙"
-
-// sidebarTabsRow is the sidebar header row that holds the ! and ? tabs.
-const sidebarTabsRow = 5
 
 // sidebarDiscordRow opens the Discord status/control panel when clicked.
 const sidebarDiscordRow = 4
@@ -737,7 +746,7 @@ func (m Model) sidebarBody(width int) (rows []string, items []int) {
 		case sbNewChannel:
 			// the "channels" title, with its + (a new channel) a space in from
 			// the right edge, in the gears' column
-			line(theme.StyleBold.Render("channels")+strings.Repeat(" ", max(1, width-10))+theme.StyleDim.Render(newChannelMark)+" ", i)
+			line(theme.StyleAccent.Bold(true).Render("Channels")+strings.Repeat(" ", max(1, width-10))+theme.StyleDim.Render(newChannelMark)+" ", i)
 		case sbOther:
 			other(m.navChannels[r.k], i)
 		case sbHere:

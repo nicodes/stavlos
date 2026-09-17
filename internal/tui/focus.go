@@ -31,8 +31,8 @@ func (m *Model) focusOrder() []focus {
 	if !m.isHome() {
 		order = append(order, focusChat)
 	}
-	order = append(order, focusInput) // top to bottom: under the rule come the input, the strip, the meta row
-	if m.stripShown() {
+	order = append(order, focusInput)            // top to bottom: under the rule come the input, the strip, the meta row
+	if m.stripShown() && len(m.tabOrder()) > 0 { // with the sidebar, the channel chat has no tabs
 		order = append(order, focusTabs)
 	}
 	if len(m.metaParts()) > 0 { // the channel chat's meta row has nothing to pick

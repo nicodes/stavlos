@@ -27,15 +27,13 @@ var tabRows = [][]focus{
 var tabFocuses = slices.Concat(tabRows...)
 
 // tabLayout is the tab rows as they are drawn: tabRows while the sidebar is
-// hidden; with it showing, ! on top (in the sidebar, above the
-// channels) and dirs out of the tabs, behind each channel's gear instead,
-// since the directories are that channel's.
+// hidden; with it showing, no channel row (pending permissions show on the
+// channel's dot and in the chat, and dirs sits behind each channel's gear).
 func (m Model) tabLayout() [][]focus {
-	top := tabRows[0]
-	if m.sidebarVisible() {
-		top = []focus{focusPermission}
+	var rows [][]focus
+	if !m.sidebarVisible() {
+		rows = append(rows, tabRows[0])
 	}
-	rows := [][]focus{top}
 	if !m.superChat { // async · due · todo · mcp are an agent's: its own chat has them, the channel chat does not
 		rows = append(rows, tabRows[1])
 	}
