@@ -1,11 +1,13 @@
 package daemon
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/escalation"
 	"github.com/nicodes/stavlos/internal/eventlog"
@@ -390,6 +392,17 @@ var handlers = routes(
 	}),
 	route(protocol.PlanUsage, func(_ context.Context, c *conn, _ protocol.None) (protocol.PlanUsageResult, error) {
 		return c.d.planUsage(), nil
+	}),
+	route(protocol.CacheUsage, func(ctx context.Context, c *conn, p protocol.CacheUsageParams) (protocol.CacheUsageResult, error) {
+		minutes := cmp.Or(p.Minutes, 60)
+		if minutes < 1 || minutes > 7*24*60 {
+			return protocol.CacheUsageResult{}, fmt.Errorf("minutes must be 1–%d, not %d", 7*24*60, minutes)
+		}
+		fresh, cached, err := c.d.Log.CacheUsage(ctx, time.Now().Add(-time.Duration(minutes)*time.Minute))
+		if err != nil {
+			return protocol.CacheUsageResult{}, internal(err)
+		}
+		return protocol.CacheUsageResult{Fresh: fresh, Cached: cached}, nil
 	}),
 	route(protocol.CommandList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.CommandListResult, error) {
 		return c.d.listCommands(p.Channel)

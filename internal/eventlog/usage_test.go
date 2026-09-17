@@ -61,3 +61,25 @@ func TestUsageBuckets(t *testing.T) {
 		t.Fatalf("at least an hour: %v %v %v", s.From, s.Tokens, err)
 	}
 }
+
+// TestCacheUsage sums what recent calls carried: new input and what the
+// provider served from its prompt cache; older calls and other events are
+// left out.
+func TestCacheUsage(t *testing.T) {
+	l := open(t, filepath.Join(t.TempDir(), "e.db"), nil)
+	defer l.Close()
+	ctx := context.Background()
+	appendOne(t, l, created("a", "a"))
+	call := func(at time.Duration, in, cached int) {
+		appendOne(t, l, event.Event{Channel: "a", Agent: "a1", Type: event.AssistantMessage, Time: time.Now().Add(at),
+			Payload: event.MustPayload(event.AssistantMessagePayload{Usage: model.Usage{InputTokens: in, OutputTokens: 5, CacheReadTokens: cached}})})
+	}
+	call(-90*time.Minute, 1_000, 0) // before the window
+	call(-30*time.Minute, 100, 900)
+	call(-time.Minute, 200, 800)
+	appendOne(t, l, prompt("a", "human:x", "not a call"))
+	fresh, cached, err := l.CacheUsage(ctx, time.Now().Add(-time.Hour))
+	if err != nil || fresh != 300 || cached != 1700 {
+		t.Fatalf("fresh %d cached %d: %v", fresh, cached, err)
+	}
+}

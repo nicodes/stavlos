@@ -49,7 +49,7 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 		if m.focus == focusUsage {
 			cmds = append(cmds, m.usageFetch()) // the open chart keeps up
 		}
-		cmds = append(cmds, planUsageCmd(m.ctx, m.c)) // the daemon's last reading: no request to the provider
+		cmds = append(cmds, planUsageCmd(m.ctx, m.c), cacheUsageCmd(m.ctx, m.c)) // the daemon's own records: no request to a provider
 		for _, s := range m.navChannels {
 			if m.otherTreeShown(s.ID) {
 				cmds = append(cmds, treeCmd(m.ctx, m.c, s.ID))
