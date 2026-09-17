@@ -63,5 +63,7 @@ allowance twice.
 - The per-call `[harness state for this request]` note is added to the newest
   user message only, so it costs at most that message.
 
-Open: conversations grow to hundreds of thousands of tokens before compaction
-(80% of the model's window), so even cached calls are large.
+Compaction keeps the summary plus at most `compaction.keepTokens` (15,000 by
+default) of recent conversation, so the prefix a compaction invalidates is
+rebuilt cheaply; `compaction.maxTokens` compacts on an absolute size, whatever
+the window.

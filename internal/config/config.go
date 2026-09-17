@@ -70,6 +70,8 @@ type Escalation struct {
 
 type Compaction struct {
 	Threshold     float64 `json:"threshold,omitempty"`
+	MaxTokens     int     `json:"maxTokens,omitempty"`  // compact once a history passes this many tokens, whatever the window; 0 = off
+	KeepTokens    int     `json:"keepTokens,omitempty"` // how much recent conversation a compaction keeps beside the summary
 	MaxToolOutput string  `json:"maxToolOutput,omitempty"`
 }
 
@@ -250,6 +252,8 @@ type Effective struct {
 	}
 	Compaction struct {
 		Threshold     float64
+		MaxTokens     int
+		KeepTokens    int
 		MaxToolOutput int
 	}
 	MCP         map[string]MCP
@@ -368,7 +372,7 @@ func Defaults() File {
 		Mode:       protocol.ModeAsk,
 		Limits:     &Limits{MaxDepth: 3, MaxAgents: 6},
 		Escalation: &Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: string(policy.Deny)},
-		Compaction: &Compaction{Threshold: 0.8, MaxToolOutput: "32kb"},
+		Compaction: &Compaction{Threshold: 0.8, KeepTokens: 15_000, MaxToolOutput: "32kb"},
 		Reminders:  &on,
 		Sandbox:    &SandboxConfig{Enabled: &on, Network: &network},
 		Policy: map[string]any{
@@ -585,6 +589,18 @@ func (e *Effective) applyCompaction(c *Compaction) error {
 			return fmt.Errorf("compaction.threshold %v: a fraction of the context window between 0 and 1", c.Threshold)
 		}
 		e.Compaction.Threshold = c.Threshold
+	}
+	if c.MaxTokens != 0 {
+		if c.MaxTokens < 1000 {
+			return fmt.Errorf("compaction.maxTokens %d: a token count of at least 1000, or 0 for none", c.MaxTokens)
+		}
+		e.Compaction.MaxTokens = c.MaxTokens
+	}
+	if c.KeepTokens != 0 {
+		if c.KeepTokens < 1000 {
+			return fmt.Errorf("compaction.keepTokens %d: a token count of at least 1000", c.KeepTokens)
+		}
+		e.Compaction.KeepTokens = c.KeepTokens
 	}
 	if c.MaxToolOutput != "" {
 		n, err := parseSize(c.MaxToolOutput)
