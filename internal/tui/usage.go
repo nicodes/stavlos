@@ -28,6 +28,9 @@ const (
 	usageCost
 )
 
+// usageCommands are the slash commands that open a usage dialog.
+var usageCommands = map[string]usageKind{"/tokens": usageTokens, "/cost": usageCost}
+
 // usageRanges are the spans a usage dialog charts, ←/→ between them; "all"
 // runs from the first model call.
 var usageRanges = []struct {

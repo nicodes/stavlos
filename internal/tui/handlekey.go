@@ -124,6 +124,9 @@ func (m *Model) command(text string) tea.Cmd {
 		}
 		return nil
 	}
+	if kind, ok := usageCommands[name]; ok { // /tokens and /cost [system]
+		return m.openUsage(kind, strings.EqualFold(rest, "system"))
+	}
 
 	switch name {
 	case "/settings", "/config":
@@ -163,10 +166,6 @@ func (m *Model) command(text string) tea.Cmd {
 			return m.setStatus("usage: /rename <name>", true)
 		}
 		return renameChannelCmd(m.ctx, m.c, m.channelID, strings.TrimPrefix(rest, "#"))
-	case "/tokens":
-		return m.openUsage(usageTokens, strings.EqualFold(rest, "system"))
-	case "/cost":
-		return m.openUsage(usageCost, strings.EqualFold(rest, "system"))
 	case "/compact":
 		if c := needAgent(); c != nil {
 			return c
