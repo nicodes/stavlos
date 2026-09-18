@@ -66,3 +66,5 @@ ends owing them, no reminder while the agent waits on an answer or a job, the
 reminders spent (`n reminders went unanswered`), or reminders off. The count
 beside the tab is how many replies are owed, and `AgentInfo` carries `nudges`
 and `nudge_limit` for any client.
+
+Proposed, not implemented (2026-09): [`docs/reply-debt-bedrock-2026-09.md`](reply-debt-bedrock-2026-09.md).
