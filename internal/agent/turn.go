@@ -63,7 +63,7 @@ func (a *Agent) beginTurn() (int, context.Context, bool) {
 // goes through is permission.go; what the model is told is prompt.go.
 func (a *Agent) runTurn(ctx context.Context, turn int) {
 	a.disarmMCPIdle()
-	a.c.checkInstructions() // an edited AGENTS.md is trusted again before a turn follows it
+	a.c.checkProject() // an edited AGENTS.md or role is trusted again before a turn uses it
 	t := &turnRun{a: a, ctx: ctx, turn: turn}
 	defer func() {
 		a.c.mu.Lock()

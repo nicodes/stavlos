@@ -177,3 +177,30 @@ func (m *Model) recapCommand(rest string) tea.Cmd {
 	}
 	return setRecapCmd(m.ctx, m.c, m.channelID, n)
 }
+
+// trustRow is the nav's warning that the selected channel's project
+// configuration is not trusted: its roles, skills and commands are not
+// loaded, so the channel looks like it has one role and nothing says why.
+// A click on it asks again. "" when the project is trusted, or has none.
+func (m Model) trustRow(width int) string {
+	if !m.channel.TrustPending {
+		return ""
+	}
+	label, figure := "project", "untrusted"
+	gap := max(1, width-ansi.StringWidth(label)-ansi.StringWidth(figure))
+	return theme.StyleDim.Render(label+strings.Repeat(" ", gap)) + theme.StyleWarn.Render(figure)
+}
+
+// askTrust asks the daemon to raise the channel's trust prompt again.
+// Resuming a channel re-checks its project layer, which is what publishes
+// the prompt, so the row is the way back to a decision that was skipped or
+// invalidated by an edit.
+func (m *Model) askTrust() tea.Cmd {
+	if m.channelID == "" {
+		return nil
+	}
+	channel := m.channelID
+	return resultCmd(m.ctx, "", func(ctx context.Context) error {
+		return call(ctx, m.c, protocol.ChannelResume, protocol.ChannelRef{Channel: channel})
+	})
+}

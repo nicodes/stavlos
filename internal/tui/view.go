@@ -618,6 +618,9 @@ func (m Model) sidebarHeader(width int) []string {
 		m.navUsageRow(m.sidebarSelectedRow(), width),
 		"",
 	)
+	if trust := m.trustRow(width); trust != "" {
+		rows = append(rows, trust)
+	}
 	if cache := m.cacheRow(width); cache != "" {
 		rows = append(rows, cache)
 	}
@@ -699,14 +702,26 @@ const channelGear = "⚙"
 func (m Model) sidebarSystemRow() int   { return 2 + len(m.planUsageRows(sidebarWidth-1, time.Now())) }
 func (m Model) sidebarSelectedRow() int { return m.sidebarSystemRow() + 1 }
 
-// sidebarDiscordRow opens the Discord status/control panel when clicked; a
-// cache monitor row sits above it once there are calls to measure.
+// sidebarDiscordRow opens the Discord status/control panel when clicked. An
+// untrusted-project warning and a cache monitor sit above it, each only
+// while it has something to say.
 func (m Model) sidebarDiscordRow() int {
 	row := m.sidebarSystemRow() + 3
+	if m.trustRow(sidebarWidth-1) != "" {
+		row++
+	}
 	if m.cacheRow(sidebarWidth-1) != "" {
 		row++
 	}
 	return row
+}
+
+// sidebarTrustRow is the warning's row, or -1 while the project is trusted.
+func (m Model) sidebarTrustRow() int {
+	if m.trustRow(sidebarWidth-1) == "" {
+		return -1
+	}
+	return m.sidebarSystemRow() + 3
 }
 
 // stripRows is how many tab rows the footer strip draws: the ! ? dirs row

@@ -98,8 +98,12 @@ func (m *Manager) Request(ctx context.Context, info protocol.PromptInfo, opened 
 	m.mu.Unlock()
 	info.Created = time.Now().UTC().Format(time.RFC3339Nano)
 	// Chat cards are immediately actionable from either client, including
-	// clients reconnecting via Pending. Trust retains its escalation delay.
-	if info.Kind == protocol.PromptQuestion || info.Kind == protocol.PromptPermission {
+	// clients reconnecting via Pending. Trust is here too: a project whose
+	// configuration is not trusted runs on the global layer alone, losing
+	// its roles, skills and commands, and nothing says so until someone
+	// answers. Waiting out the claim timeout before the bridge hears about
+	// it only makes that quiet gap longer.
+	if info.Kind == protocol.PromptQuestion || info.Kind == protocol.PromptPermission || info.Kind == protocol.PromptTrust {
 		info.Escalated = true
 	}
 	p := &pending{info: info, answer: make(chan Answer, 1)}
