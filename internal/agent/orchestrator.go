@@ -70,7 +70,7 @@ func (o orchestrator) Message(caller string, recipients []string, text, kind str
 			if kind == tools.KindResponse {
 				message.Kind, message.ReplyTo = kind, slices.Clone(replyTo)
 				for _, id := range replyTo {
-					if debt := from.owed[id]; debt.From == tools.User && debt.Post != "" {
+					if debt, ok := from.owedRequest(id); ok && debt.From == tools.User && debt.Post != "" {
 						message.Posts = append(message.Posts, debt.Post)
 					}
 				}
@@ -113,7 +113,7 @@ func validateReply(from *agentState, targets []string, kind string, ids []string
 			return fmt.Errorf("request %q appears more than once in reply_to", id)
 		}
 		seen[id] = true
-		request, ok := from.owed[id]
+		request, ok := from.owedRequest(id)
 		if !ok {
 			return fmt.Errorf("request %q is not pending for this agent; check agent_status", id)
 		}
@@ -219,7 +219,7 @@ func (o orchestrator) Status(caller, id string) ([]tools.ChildStatus, error) {
 	out := make([]tools.ChildStatus, 0, len(ids))
 	for _, aid := range ids {
 		a := s.st.agents[aid]
-		out = append(out, tools.ChildStatus{ID: aid, Parent: a.parent, Name: a.name, Role: a.role, State: string(a.status()), Turn: a.turn, CostUSD: a.cost, You: aid == caller, PendingReplies: a.pendingReplies(), AwaitingReplies: s.st.awaitingReplies(a)})
+		out = append(out, tools.ChildStatus{ID: aid, Parent: a.parent, Name: a.name, Role: a.role, State: string(a.status()), Turn: a.turn, CostUSD: a.cost, You: aid == caller, PendingReplies: a.pendingReplies(), AwaitingReplies: a.awaitingReplies()})
 	}
 	return out, nil
 }

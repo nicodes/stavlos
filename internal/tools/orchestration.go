@@ -90,20 +90,21 @@ const (
 	KindRequest  = "request"  // asks for something: the recipient owes a reply, the sender waits (the default)
 	KindResponse = "response" // answers a request: settles it and wakes the agent waiting on it
 	KindInfo     = "info"     // needs no reply: nobody owes or waits, and an idle recipient is not woken
+	KindNoReply  = "no_reply" // parse alias for KindInfo; stored events stay "info"
 )
 
 type messageTool struct{}
 
 func (messageTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Message, Description: "Send text to one or more recipients in this channel using the to array. Every recipient sees the full recipient list. All targets and reply references are validated before delivery. request (the default) creates an independent request ID for the agents addressed; each owes its own explicit response. response requires reply_to containing the pending request IDs it answers, and to must contain their senders. One response may answer several requests, including repeated requests from one sender. Only those IDs are cleared; sending another request or info never clears a debt. info needs no reply and does not wake idle agents. Human-facing messages without explicit response references are updates; use ask_user for questions to the human. Human prompts and steers carry request IDs too. agent_status exposes pending_replies and awaiting_replies with IDs and excerpts.",
+	return model.ToolDef{Name: toolname.Message, Description: "Send text to one or more recipients in this channel using the to array. Every recipient sees the full recipient list. All targets and reply references are validated before delivery. request (the default) creates an independent request ID for the agents addressed; each owes its own explicit response. response requires reply_to containing the pending request IDs it answers, and to must contain their senders. One response may answer several requests, including repeated requests from one sender. Only those IDs are cleared; sending another request or info/no_reply never clears a debt. info (alias no_reply) needs no reply and does not wake idle agents. Human-facing messages without explicit response references are updates; use ask_user for questions to the human. Human prompts and steers carry request IDs too. agent_status exposes pending_replies and awaiting_replies with IDs and excerpts.",
 		Schema: schemaOf(messageInput{})}
 }
 
 type messageInput struct {
-	ReplyTo []string            `json:"reply_to" desc:"Request IDs explicitly answered by this response; required for kind response, omitted for request/info" min:"1"`
+	ReplyTo []string            `json:"reply_to" desc:"Request IDs explicitly answered by this response; required for kind response, omitted for request/info/no_reply" min:"1"`
 	To      protocol.Recipients `json:"to" desc:"Recipient names or ids, including user for the human; everyone sees the full recipient list" req:"true" min:"1"`
 	Text    string              `json:"text" desc:"The shared message body; include exact paths and results. Recipient context is attached separately" req:"true"`
-	Kind    string              `json:"kind" desc:"request (the default): you want something and wait for it; response: this answers a request you received; info: no reply needed"`
+	Kind    string              `json:"kind" desc:"request (the default): you want something and wait for it; response: this answers a request you received; info or no_reply: no reply needed"`
 }
 
 func (messageTool) Subject(in json.RawMessage) policy.Subject {
@@ -126,9 +127,11 @@ func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 	switch kind {
 	case "":
 		kind = KindRequest
+	case KindNoReply:
+		kind = KindInfo
 	case KindRequest, KindResponse, KindInfo:
 	default:
-		return errf("kind %q: use request, response or info", a.Kind)
+		return errf("kind %q: use request, response, info or no_reply", a.Kind)
 	}
 	if kind == KindResponse && len(a.ReplyTo) == 0 {
 		return errf("responses require reply_to request IDs; use info for updates that answer no request")

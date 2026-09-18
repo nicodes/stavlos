@@ -490,12 +490,12 @@ func TestTabCyclesFocus(t *testing.T) {
 		if m.tabSel != 0 {
 			t.Fatalf("left at the edge: sel=%d", m.tabSel)
 		}
-		press(&m, right, right, right, right, right, right)
+		press(&m, right, right, right, right, right)
 		press(&m, right) // already rightmost (mcp): stays
-		if m.focus != focusTabs || m.tabSel != 5 {
-			t.Fatalf("right x7: focus=%v sel=%d", m.focus, m.tabSel)
+		if m.focus != focusTabs || m.tabSel != 4 {
+			t.Fatalf("right x6: focus=%v sel=%d", m.focus, m.tabSel)
 		}
-		press(&m, left, left, left)
+		press(&m, left, left)
 		if m.tabSel != 2 {
 			t.Fatalf("left x2: sel=%d", m.tabSel)
 		}
@@ -962,11 +962,11 @@ func TestAgentsAndPromptCollapseUnlessFocused(t *testing.T) {
 	if dv := stripANSI(m.tabDialog(100)); !strings.Contains(dv, "Async 2") || !strings.Contains(dv, "▸") || !strings.Contains(dv, "scout") || !strings.Contains(dv, "checks") {
 		t.Fatalf("async dialog:\n%s", dv)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // strip (async) → nudges → todo
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyRight}, tea.KeyMsg{Type: tea.KeySpace}) // strip (async) → todo
 	if m.focus != focusTodo {
 		t.Fatalf("todo: focus=%v", m.focus)
 	}
-	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeySpace}) // strip (todo) → async for the selection test
+	press(&m, tea.KeyMsg{Type: tea.KeyEsc}, tea.KeyMsg{Type: tea.KeyLeft}, tea.KeyMsg{Type: tea.KeySpace}) // strip (todo) → async for the selection test
 	if m.focus != focusAsync {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -994,7 +994,7 @@ func TestSectionTabStrip(t *testing.T) {
 
 	// unfocused: the channel's tabs over the agent's, counts only
 	v := stripANSI(tabsView(m, 100))
-	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · dirs 0\nasync 2 ─ nudges 0 ─ todo") ||
+	if strings.Count(v, "\n") != 1 || !strings.Contains(v, "! 1/1 · dirs 0\nasync 2 ─ todo") ||
 		strings.Contains(v, "scout") || strings.Contains(v, "go test") || strings.Contains(v, "make test") {
 		t.Fatalf("tab strip:\n%s", v)
 	}
@@ -1112,7 +1112,7 @@ func TestDividerAndStripRepo(t *testing.T) {
 	}
 	// the agent on the left, its tabs then tokens and cost on the right; no
 	// context figure while the window is unknown; tokens and cost are the nav's
-	if row := lines[rule]; !strings.HasPrefix(row, "─ coder ─ gpt-5 ─ default ─") || strings.Contains(row, "·") || !strings.HasSuffix(row, "─ async 0 ─ nudges 0 ─ todo 0 ─ mcp 0 ─") || strings.Contains(row, "tokens") || strings.Contains(row, "$") ||
+	if row := lines[rule]; !strings.HasPrefix(row, "─ coder ─ gpt-5 ─ default ─") || strings.Contains(row, "·") || !strings.HasSuffix(row, "─ async 0 ─ todo 0 ─ mcp 0 ─") || strings.Contains(row, "tokens") || strings.Contains(row, "$") ||
 		strings.Contains(row, "%") || strings.Contains(row, "/repo/project") || ansi.StringWidth(row) != 100 {
 		t.Fatalf("divider %q", row)
 	}
@@ -1389,7 +1389,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Role = "general"
 	// empty: the tab reads (0) and its dialog says so
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 ─ nudges 0 ─ todo 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0 ─ todo 0") {
 		t.Fatalf("strip:\n%s", sv)
 	}
 	m.focus = focusTodo
@@ -1407,10 +1407,10 @@ func TestTodoTabAndDialog(t *testing.T) {
 	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "todo 2/4") {
 		t.Fatalf("strip with items:\n%s", sv)
 	}
-	// tab → strip, → x4 lands on todo, enter opens its dialog
+	// tab → strip, → x3 lands on todo, enter opens its dialog
 	tab := tea.KeyMsg{Type: tea.KeyTab}
 	right := tea.KeyMsg{Type: tea.KeyRight}
-	press(&m, tab, right, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
+	press(&m, tab, right, right, right, tea.KeyMsg{Type: tea.KeySpace})
 	if m.focus != focusTodo {
 		t.Fatalf("focus %v", m.focus)
 	}
@@ -1429,7 +1429,7 @@ func TestTodoTabAndDialog(t *testing.T) {
 		t.Fatalf("↓ should move the cursor: %d", m.agCursor)
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 4 {
+	if m.focus != focusTabs || m.tabSel != 3 {
 		t.Fatalf("esc should return to the strip on todo: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// clicking the todo label on the strip opens the dialog
@@ -2536,7 +2536,7 @@ func TestMCPTabAndDialog(t *testing.T) {
 		t.Fatalf("enter should fold the server again:\n%s", stripANSI(m.tabDialog(120)))
 	}
 	press(&m, tea.KeyMsg{Type: tea.KeyEsc})
-	if m.focus != focusTabs || m.tabSel != 5 {
+	if m.focus != focusTabs || m.tabSel != 4 {
 		t.Fatalf("esc should return to the strip on mcp: focus=%v sel=%d", m.focus, m.tabSel)
 	}
 	// chat: tool names and server events
@@ -3763,17 +3763,17 @@ func TestNavCacheMonitor(t *testing.T) {
 	}
 }
 
-// TestNudgesTab: the tab counts the replies the selected agent owes, its
-// dialog lists them with what the harness will do, and space on one opens
-// that party's chat.
-func TestNudgesTab(t *testing.T) {
+// TestAsyncTabOwedReplies: the async tab counts the replies the selected
+// agent owes alongside what it waits on, lists them with what the harness
+// will do about them, and space on one opens that party's chat.
+func TestAsyncTabOwedReplies(t *testing.T) {
 	m := channelModel()
 	m.agents[0].Role = "general"
-	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "nudges 0") {
+	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "async 0") || strings.Contains(sv, "nudges") {
 		t.Fatalf("strip:\n%s", sv)
 	}
-	m.focus = focusNudges
-	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "Nudges 0") || !strings.Contains(dv, "nothing owed") {
+	m.focus = focusAsync
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "Async 0") || !strings.Contains(dv, "no replies due") {
 		t.Fatalf("empty dialog:\n%s", dv)
 	}
 	m.agents[0].PendingReplies = []event.ReplyRequest{
@@ -3782,12 +3782,12 @@ func TestNudgesTab(t *testing.T) {
 	}
 	m.agents[0].Nudges, m.agents[0].NudgeLimit = 1, 3
 	dv := stripANSI(m.tabDialog(120))
-	if !strings.Contains(dv, "Nudges 2") || !strings.Contains(dv, "@user: fix the failing test") || !strings.Contains(dv, "@scout: what did you find?") ||
+	if !strings.Contains(dv, "Async 2") || !strings.Contains(dv, "@user: fix the failing test") || !strings.Contains(dv, "@scout: what did you find?") ||
 		!strings.Contains(dv, "a reminder follows a turn that ends owing these (1 of 3 used)") {
 		t.Fatalf("dialog:\n%s", dv)
 	}
 	m.agents[0].Nudges = 3
-	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "3 reminders went unanswered") {
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "3 empty reminder turns") {
 		t.Fatalf("spent:\n%s", dv)
 	}
 	m.agents[0].NudgeLimit = 0
@@ -3796,9 +3796,14 @@ func TestNudgesTab(t *testing.T) {
 	}
 	m.agents[0].Awaiting = []string{"b"}
 	m.agents[0].Nudges, m.agents[0].NudgeLimit = 1, 3
-	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "no reminder until that lands") {
-		t.Fatalf("waiting:\n%s", dv)
+	if dv := stripANSI(m.tabDialog(120)); strings.Contains(dv, "no reminder until that lands") || !strings.Contains(dv, "a reminder follows a turn that ends owing these") {
+		t.Fatalf("awaiting an agent must not suppress the reminder copy:\n%s", dv)
 	}
+	m.agents[0].Jobs = []protocol.JobInfo{{ID: "j1", Spec: "sleep 30"}}
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "waiting on a job: no reminder until that lands") {
+		t.Fatalf("job:\n%s", dv)
+	}
+	m.agents[0].Jobs = nil
 	// space on the second row opens that agent's chat
 	m.superChat = true
 	m.agCursor = 1
