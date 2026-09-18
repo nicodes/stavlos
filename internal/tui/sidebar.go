@@ -509,6 +509,9 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 	if p, ok := m.planAt(y); ok { // a plan's row: its usage over time
 		return tea.Batch(cmd, m.openPlanUsage(p.Provider, p.Name))
 	}
+	if y == m.sidebarTrustRow() { // the untrusted-project warning: ask again
+		return tea.Batch(cmd, m.askTrust())
+	}
 	if y == m.sidebarDiscordRow() {
 		return tea.Batch(cmd, m.openDiscord("status"))
 	}
