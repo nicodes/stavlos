@@ -178,17 +178,34 @@ func (m *Model) recapCommand(rest string) tea.Cmd {
 	return setRecapCmd(m.ctx, m.c, m.channelID, n)
 }
 
-// trustRow is the nav's warning that the selected channel's project
-// configuration is not trusted: its roles, skills and commands are not
-// loaded, so the channel looks like it has one role and nothing says why.
-// A click on it asks again. "" when the project is trusted, or has none.
+// trustRow is the nav's project-configuration monitor: whether the selected
+// channel's project layer is trusted. Untrusted is the one that matters —
+// its roles, skills and commands are not loaded, so the channel looks like
+// it has one role and nothing else says why — but the row stays either way,
+// because "trusted" is what makes its absence meaningful. "" for a
+// directory with no project configuration at all, where there is nothing to
+// trust.
 func (m Model) trustRow(width int) string {
-	if !m.channel.TrustPending {
+	if m.channel.TrustFiles == 0 {
 		return ""
 	}
-	label, figure := "project", "untrusted"
+	figure, st := "trusted", theme.StyleDim
+	if m.channel.TrustPending {
+		figure, st = "untrusted", theme.StyleWarn
+	}
+	const label = "project"
 	gap := max(1, width-ansi.StringWidth(label)-ansi.StringWidth(figure))
-	return theme.StyleDim.Render(label+strings.Repeat(" ", gap)) + theme.StyleWarn.Render(figure)
+	return theme.StyleDim.Render(label+strings.Repeat(" ", gap)) + st.Render(figure)
+}
+
+// trustClick is what the project row does: untrusted, it asks for the
+// decision again, since that is the only thing worth doing about it;
+// trusted, it opens the configuration the row is reporting on.
+func (m *Model) trustClick() tea.Cmd {
+	if !m.channel.TrustPending {
+		return m.openConfigEditor(false)
+	}
+	return m.askTrust()
 }
 
 // askTrust asks the daemon to raise the channel's trust prompt again.
