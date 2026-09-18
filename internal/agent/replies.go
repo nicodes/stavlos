@@ -10,10 +10,16 @@ import (
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// Replies are tracked by request ID, including human prompts and steers.
-// Only explicit responses settle them; info and final prose do not. A turn
-// ending with requests owed and nothing else to wait on queues a reminder of
-// each pending request. Progress or a new request resets the bounded nudge count.
+// Open requests live in one table per channel, keyed by request ID: who
+// asked, and which recipients have not answered yet. Both directions are
+// views of that table — what an agent owes is the entries it holds
+// unanswered, what it waits on is the entries it sent — so the two can
+// never drift apart. The human is a party like any other, which is why a
+// prompt owed a reply needs no separate bookkeeping from an agent's request.
+//
+// Only explicit responses settle an entry; info and final prose do not. A
+// turn ending with entries owed and nothing else to wait on queues a
+// reminder of each. Progress or a new request resets the bounded nudge count.
 
 // maxNudges bounds reminder turns in a row that get no reply, so a stuck
 // model cannot loop.
@@ -47,15 +53,84 @@ func owedBy(in event.Input) string {
 	return ""
 }
 
-// took registers each consumed request independently. lastPost is retained for
-// legacy state snapshots; new responses associate posts through reply_to.
+// request is one open request: the asking party, and the recipients who
+// have not answered it yet. held is the subset that has taken the input,
+// and so owes the answer now; the rest is still in an inbox.
+type request struct {
+	event.ReplyRequest
+	seq    int             // arrival order, so what is owed reads oldest first
+	legacy bool            // sent before request IDs: settled by party
+	open   map[string]bool // recipient → has not answered
+	held   map[string]bool // recipient → has taken it
+}
+
+// requestID is the ID an input's obligation is filed under: its own before
+// request IDs existed.
+func requestID(in event.Input) string {
+	if in.RequestID != "" {
+		return in.RequestID
+	}
+	return in.ID
+}
+
+func replyRequest(in event.Input, party string) event.ReplyRequest {
+	name := in.FromName
+	if party == tools.User {
+		name = tools.User
+	}
+	text := []rune(strings.Join(strings.Fields(in.Text), " "))
+	if len(text) > 200 {
+		text = append(text[:199], '…')
+	}
+	return event.ReplyRequest{ID: requestID(in), From: party, FromName: name, To: slices.Clone(in.To), Text: string(text), Post: in.Post}
+}
+
+// asked opens the request an input carries, or widens an open one to
+// another recipient. Recipients join as the input is queued, so the sender
+// waits from the moment it asks; the obligation to answer starts when the
+// recipient takes the input (took).
+func (cs *channelState) asked(in event.Input, target string) *request {
+	party := owedBy(in)
+	if party == "" {
+		return nil
+	}
+	r := replyRequest(in, party)
+	req := cs.requests[r.ID]
+	if req == nil {
+		cs.reqSeq++
+		req = &request{ReplyRequest: r, seq: cs.reqSeq, legacy: in.RequestID == "", open: map[string]bool{}, held: map[string]bool{}}
+		cs.requests[r.ID] = req
+	}
+	req.open[target] = true
+	return req
+}
+
+// settle clears one recipient's obligation and the sender's wait on it in
+// the same stroke; the entry goes when nobody is left to answer.
+func (cs *channelState) settle(req *request, responder string) {
+	delete(req.open, responder)
+	delete(req.held, responder)
+	if len(req.open) == 0 {
+		delete(cs.requests, req.ID)
+	}
+}
+
+// openRequests lists the table in arrival order, so every walk of it is
+// deterministic and safe to settle from.
+func (cs *channelState) openRequests() []*request {
+	out := make([]*request, 0, len(cs.requests))
+	for _, req := range cs.requests {
+		out = append(out, req)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].seq < out[j].seq })
+	return out
+}
+
+// took marks a taken input's request as held by the agent: it owes the
+// answer from here. A new request resets the nudge count.
 func (a *agentState) took(in event.Input) {
-	if party := owedBy(in); party != "" {
-		request := replyRequest(in, party)
-		if _, exists := a.owed[request.ID]; !exists {
-			a.owedOrder = append(a.owedOrder, request.ID)
-		}
-		a.owed[request.ID] = replyDebt{ReplyRequest: request, legacy: in.RequestID == ""}
+	if req := a.cs.asked(in, a.id); req != nil {
+		req.held[a.id] = true
 		a.nudges = 0
 	}
 	if in.From == "" && (in.Kind == event.InputPrompt || in.Kind == event.InputSteer) {
@@ -63,14 +138,26 @@ func (a *agentState) took(in event.Input) {
 	}
 }
 
-// settleRequest clears one obligation and resets the nudge count.
-func (a *agentState) settleRequest(id string) {
-	if _, exists := a.owed[id]; !exists {
-		return
+// settleReplies settles the requests recipient asked responder, by ID.
+func (cs *channelState) settleReplies(responder *agentState, recipient string, ids []string) {
+	for _, id := range ids {
+		if req := cs.requests[id]; req != nil && req.From == recipient {
+			cs.settle(req, responder.id)
+			responder.nudges = 0
+		}
 	}
-	delete(a.owed, id)
-	a.owedOrder = slices.DeleteFunc(a.owedOrder, func(v string) bool { return v == id })
-	a.nudges = 0
+}
+
+// settleLegacy settles by party, for log events written before responses
+// referenced request IDs. It never clears a request that carried one, even
+// when replay mixes old and new event formats.
+func (cs *channelState) settleLegacy(responder *agentState, recipient string) {
+	for _, req := range cs.openRequests() {
+		if req.legacy && req.From == recipient && req.open[responder.id] {
+			cs.settle(req, responder.id)
+			responder.nudges = 0
+		}
+	}
 }
 
 // endReplies runs when a turn ends on its own: with replies still owed,
@@ -83,11 +170,11 @@ func (a *Agent) endReplies(reason event.TurnReason) {
 	s := a.c
 	s.mu.Lock()
 	st := a.state()
-	if !s.cfg.Reminders || len(st.owed) == 0 || st.nudges >= maxNudges || st.waiting() {
+	requests := st.pendingReplies()
+	if !s.cfg.Reminders || len(requests) == 0 || st.nudges >= maxNudges || st.waiting() {
 		s.mu.Unlock()
 		return
 	}
-	requests := st.pendingReplies()
 	var parties []string
 	for _, request := range requests {
 		parties = append(parties, request.From)
@@ -98,69 +185,60 @@ func (a *Agent) endReplies(reason event.TurnReason) {
 	signal(wake)
 }
 
-type replyDebt struct {
-	event.ReplyRequest
-	legacy bool
-}
-type replyWait struct {
-	request event.ReplyRequest
-	targets map[string]bool
-	legacy  bool
-}
+// --- views of the table ---
 
-func replyRequest(in event.Input, party string) event.ReplyRequest {
-	id := in.RequestID
-	if id == "" {
-		id = in.ID
-	}
-	name := in.FromName
-	if party == tools.User {
-		name = tools.User
-	}
-	text := []rune(strings.Join(strings.Fields(in.Text), " "))
-	if len(text) > 200 {
-		text = append(text[:199], '…')
-	}
-	return event.ReplyRequest{ID: id, From: party, FromName: name, To: slices.Clone(in.To), Text: string(text), Post: in.Post}
-}
-
-func (a *agentState) trackRequest(in event.Input, target string) {
-	r := replyRequest(in, in.From)
-	if a.waits == nil {
-		a.waits = map[string]*replyWait{}
-	}
-	w := a.waits[r.ID]
-	if w == nil {
-		w = &replyWait{request: r, targets: map[string]bool{}, legacy: in.RequestID == ""}
-		a.waits[r.ID] = w
-	}
-	w.targets[target] = true
-}
-
+// pendingReplies is what the agent owes: the requests it has taken and not
+// answered, oldest first.
 func (a *agentState) pendingReplies() []event.ReplyRequest {
 	var out []event.ReplyRequest
-	for _, id := range a.owedOrder {
-		if r, ok := a.owed[id]; ok {
-			request := r.ReplyRequest
-			request.To = slices.Clone(request.To)
-			out = append(out, request)
+	for _, req := range a.cs.openRequests() {
+		if req.held[a.id] {
+			r := req.ReplyRequest
+			r.To = slices.Clone(r.To)
+			out = append(out, r)
 		}
 	}
 	return out
 }
 
-func (cs *channelState) awaitingReplies(a *agentState) []event.ReplyRequest {
-	var out []event.ReplyRequest
-	for id, w := range a.waits {
-		for target := range w.targets {
-			name := target
-			if t := cs.agents[target]; t != nil {
-				name = t.name
-			}
-			out = append(out, event.ReplyRequest{ID: id, From: target, FromName: name, Text: w.request.Text})
+// owedRequest is one request the agent holds unanswered.
+func (a *agentState) owedRequest(id string) (event.ReplyRequest, bool) {
+	req := a.cs.requests[id]
+	if req == nil || !req.held[a.id] {
+		return event.ReplyRequest{}, false
+	}
+	return req.ReplyRequest, true
+}
+
+// due lists the parties the agent owes a reply, sorted.
+func (a *agentState) due() []string {
+	var out []string
+	for _, request := range a.pendingReplies() {
+		if !slices.Contains(out, request.From) {
+			out = append(out, request.From)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool {
+	sort.Strings(out)
+	return out
+}
+
+// awaitingReplies is what the agent waits for: a row per recipient of each
+// request it sent that is still unanswered.
+func (a *agentState) awaitingReplies() []event.ReplyRequest {
+	var out []event.ReplyRequest
+	for _, req := range a.cs.openRequests() {
+		if req.From != a.id {
+			continue
+		}
+		for _, target := range sortedKeys(req.open) {
+			name := target
+			if t := a.cs.agents[target]; t != nil {
+				name = t.name
+			}
+			out = append(out, event.ReplyRequest{ID: req.ID, From: target, FromName: name, Text: req.Text})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
 		if out[i].ID != out[j].ID {
 			return out[i].ID < out[j].ID
 		}
@@ -169,49 +247,55 @@ func (cs *channelState) awaitingReplies(a *agentState) []event.ReplyRequest {
 	return out
 }
 
-func (cs *channelState) settleReplies(responder *agentState, recipient string, ids []string) {
-	for _, id := range ids {
-		if debt, ok := responder.owed[id]; ok {
-			if debt.From != recipient {
-				continue
-			}
-			responder.settleRequest(id)
-		}
-		if requester := cs.agents[recipient]; requester != nil {
-			requester.finishWait(id, responder.id)
+// awaitingOn lists the requests the agent sent that target has not
+// answered, sorted by ID.
+func (a *agentState) awaitingOn(target string) []string {
+	var out []string
+	for _, req := range a.cs.openRequests() {
+		if req.From == a.id && req.open[target] {
+			out = append(out, req.ID)
 		}
 	}
+	sort.Strings(out)
+	return out
 }
 
-func (a *agentState) finishWait(id, target string) {
-	w := a.waits[id]
-	if w == nil || !w.targets[target] {
-		return
-	}
-	delete(w.targets, target)
-	if len(w.targets) == 0 {
-		delete(a.waits, id)
-	}
-	a.awaiting[target]--
-	if a.awaiting[target] <= 0 {
-		delete(a.awaiting, target)
-	}
-}
-
-// Legacy log events may settle legacy requests by party. They never clear a
-// newly tracked request, even when replay mixes old and new event formats.
-func (cs *channelState) settleLegacy(responder *agentState, recipient string) {
-	for id, debt := range responder.owed {
-		if debt.legacy && debt.From == recipient {
-			responder.settleRequest(id)
+// awaitingIDs lists the agents this one waits on, sorted.
+func (a *agentState) awaitingIDs() []string {
+	var out []string
+	for _, req := range a.cs.openRequests() {
+		if req.From != a.id {
+			continue
 		}
-	}
-	if requester := cs.agents[recipient]; requester != nil {
-		for id, wait := range requester.waits {
-			if wait.legacy {
-				requester.finishWait(id, responder.id)
+		for target := range req.open {
+			if !slices.Contains(out, target) {
+				out = append(out, target)
 			}
 		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// awaitingAny reports whether any request the agent sent is unanswered.
+func (a *agentState) awaitingAny() bool {
+	for _, req := range a.cs.requests {
+		if req.From == a.id && len(req.open) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// forgetParty drops an agent from the table: it can no longer answer what
+// it holds, and nothing it asked can still be owed.
+func (cs *channelState) forgetParty(id string) {
+	for _, req := range cs.openRequests() {
+		if req.From == id {
+			delete(cs.requests, req.ID)
+			continue
+		}
+		cs.settle(req, id)
 	}
 }
 

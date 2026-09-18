@@ -205,7 +205,7 @@ func (a *Agent) infoLocked() protocol.AgentInfo {
 		Queued: len(st.inbox), CostUSD: st.cost, Tokens: st.tokens,
 		Context: a.ctxTokens, ContextWindow: a.ctxWindow, LastError: st.lastError,
 		Awaiting: st.awaitingIDs(), Due: st.due(), Todos: append([]event.TodoItem(nil), st.todos...),
-		PendingReplies: st.pendingReplies(), AwaitingReplies: a.c.st.awaitingReplies(st),
+		PendingReplies: st.pendingReplies(), AwaitingReplies: st.awaitingReplies(),
 		Nudges: st.nudges, NudgeLimit: nudgeLimit(a.c.cfg.Reminders),
 		MCP: a.mcpInfo(rv.preset.MCP), Jobs: a.jobInfosLocked(),
 	}

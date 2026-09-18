@@ -91,8 +91,6 @@ func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return m.todoKey(msg)
 	case focusMCP:
 		return m.mcpKey(msg)
-	case focusNudges:
-		return m.nudgeKey(msg)
 	case focusUsage:
 		return m.usageKey(msg)
 	case focusDirs:
