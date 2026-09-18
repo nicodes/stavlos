@@ -167,11 +167,51 @@ func TestLegacyResponsesOnlySettleLegacyRequests(t *testing.T) {
 	apply("scout", event.InputQueued, event.Input{ID: "new-input", RequestID: "new", Kind: event.InputRequest, From: "main", FromName: "main", Text: "new request"})
 	apply("scout", event.InputTaken, event.InputTakenPayload{IDs: []string{"old", "new-input"}})
 	apply("main", event.InputQueued, event.Input{ID: "legacy-response", Kind: event.InputResponse, From: "scout", FromName: "scout", Text: "old response"})
-	if due := cs.agents["scout"].pendingReplies(); len(due) != 1 || due[0].ID != "new" || cs.agents["main"].awaiting["scout"] != 1 {
+	if due := cs.agents["scout"].pendingReplies(); len(due) != 1 || due[0].ID != "new" || len(cs.agents["main"].awaitingOn("scout")) != 1 {
 		t.Fatalf("legacy replay changed new obligations: %+v", due)
 	}
 	apply("main", event.InputQueued, event.Input{ID: "explicit-response", Kind: event.InputResponse, From: "scout", ReplyTo: []string{"new"}})
-	if len(cs.agents["scout"].owed) != 0 || len(cs.agents["main"].awaiting) != 0 {
+	if len(cs.agents["scout"].pendingReplies()) != 0 || len(cs.agents["main"].awaitingIDs()) != 0 {
 		t.Fatal("explicit replay failed to settle its request")
+	}
+}
+
+// TestOneRequestTableHoldsBothDirections: what an agent owes and what the
+// asker waits on are views of a single entry, so settling once clears both,
+// and a request from the human needs no agent on the waiting side.
+func TestOneRequestTableHoldsBothDirections(t *testing.T) {
+	cs := newChannelState("m", "general")
+	apply := func(agent string, typ event.Type, payload any) {
+		cs.apply(event.Event{Agent: agent, Type: typ, Payload: event.MustPayload(payload)}, &effects{})
+	}
+	apply("main", event.AgentSpawned, event.AgentSpawnedPayload{ID: "main", Name: "main"})
+	apply("scout", event.AgentSpawned, event.AgentSpawnedPayload{ID: "scout", Name: "scout"})
+	apply("main", event.InputQueued, event.Input{ID: "p1", RequestID: "h1", Kind: event.InputPrompt, Text: "status?"})
+	apply("scout", event.InputQueued, event.Input{ID: "i1", RequestID: "r1", Kind: event.InputRequest, From: "main", FromName: "main", Text: "look"})
+	main, scout := cs.agents["main"], cs.agents["scout"]
+
+	// the human's request is owed by nobody's wait: it has no agent behind it
+	if len(cs.requests) != 2 || len(main.awaitingOn("scout")) != 1 || len(main.awaitingIDs()) != 1 {
+		t.Fatalf("one entry per request: %d, main waits on %v", len(cs.requests), main.awaitingIDs())
+	}
+	// an entry is owed only once it is taken, so a queued request is not nudged
+	if len(scout.pendingReplies()) != 0 || len(main.pendingReplies()) != 0 {
+		t.Fatal("a queued request is not owed until it is taken")
+	}
+	apply("main", event.InputTaken, event.InputTakenPayload{IDs: []string{"p1"}})
+	apply("scout", event.InputTaken, event.InputTakenPayload{IDs: []string{"i1"}})
+	if due := main.pendingReplies(); len(due) != 1 || due[0].From != tools.User {
+		t.Fatalf("the human is a party like any other: %+v", due)
+	}
+	// one response settles the obligation and the wait together
+	apply("main", event.InputQueued, event.Input{ID: "i2", Kind: event.InputResponse, From: "scout", ReplyTo: []string{"r1"}})
+	if len(scout.pendingReplies()) != 0 || main.awaitingAny() || len(cs.requests) != 1 {
+		t.Fatalf("settling once clears both sides: requests %d", len(cs.requests))
+	}
+	// killing the asker drops what it asked; nothing is owed to a dead agent
+	apply("scout", event.InputQueued, event.Input{ID: "i3", RequestID: "r2", Kind: event.InputRequest, From: "main", FromName: "main", Text: "again"})
+	apply("main", event.AgentKilled, struct{}{})
+	if len(cs.requests) != 0 || len(scout.pendingReplies()) != 0 {
+		t.Fatalf("a killed asker leaves nothing owed: %d", len(cs.requests))
 	}
 }

@@ -1043,8 +1043,7 @@ func (m Model) tabs() []tab {
 	byTab := map[focus]tab{
 		focusPermission: {label: permKind, glyph: transcript.GlyphPermission, count: permCount, warn: waitingPerms > 0},
 		focusDirs:       {label: "dirs", count: strconv.Itoa(len(m.channelDirs()))},
-		focusAsync:      {label: "async", count: strconv.Itoa(m.asyncCount())},
-		focusNudges:     {label: "nudges", count: strconv.Itoa(m.nudgeCount()), warn: m.nudgeCount() > 0},
+		focusAsync:      {label: "async", count: strconv.Itoa(m.asyncCount()), warn: m.owedCount() > 0},
 		focusTodo:       {label: "todo", count: todoCount(m.selectedTodos())},
 		focusMCP:        {label: "mcp", name: "MCP", count: mcpCount(m.selectedMCP())},
 	}
@@ -1122,8 +1121,6 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 			}
 		}
 		return lines, rows
-	case focusNudges:
-		return m.nudgeRows(width - 2)
 	case focusTodo:
 		items := m.selectedTodos()
 		if len(items) == 0 {
