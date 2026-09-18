@@ -1,26 +1,30 @@
-# Web UI and canvases
+# Web UI and sheets
 
-A browser client for the daemon, and *canvases*: HTML pages an agent writes
+A browser client for the daemon, and *sheets*: HTML pages an agent writes
 for you to look at, belonging to a channel. This note records the design
 settled on 2026-09-17, before any of it was built, and what was deliberately
 left for later.
 
 The reference is [reindr](https://github.com/nicodes/reindr), which does the
-canvas half as an OpenCode plugin. Its security work is worth copying; much of
+sheet half as an OpenCode plugin. Its security work is worth copying; much of
 the rest of it exists because a plugin has no daemon of its own, and Stavlos
 does.
 
 ## Decision
 
-- **One port**, on loopback, served by the daemon. The app and the canvases
-  share it; canvas content is served with `Content-Security-Policy: sandbox`
+- **One port**, on loopback, served by the daemon. The app and the sheets
+  share it; sheet content is served with `Content-Security-Policy: sandbox`
   so it can never act as a same-origin page.
-- **Canvases belong to a channel**, not to a session or an agent. A channel
+- **Sheets belong to a channel**, not to a session or an agent. A channel
   has many; any agent in it may create, edit or delete one, silently.
-- **A canvas is a file.** Agents edit them with `read` and `apply_patch`, so
+- **A sheet is a file.** Agents edit them with `read` and `apply_patch`, so
   the diff, permission and event-log machinery is reused rather than
   reinvented.
-- **The client's core is framework-free TypeScript**; the views are SolidJS.
+- **Sheets get a CSS framework and no JavaScript framework**, the way reindr
+  does it: Tailwind and daisyUI, built with no source scanning and injected by
+  the server.
+- **The client's core is framework-free TypeScript**; the views are SolidJS
+  and Tailwind.
   The built assets are `go:embed`ded, so `stavlos` stays a single binary and
   installing it needs no Node.
 - **Stavlos never listens off loopback.** Remote access is Tailscale, or an
@@ -35,17 +39,17 @@ One listener, `127.0.0.1`, port 0. The daemon advertises the URL over the
 existing JSON-RPC, and the TUI opens it with the opener the sign-in flow
 already uses.
 
-Two ports would give the canvases a genuinely separate origin, which is the
+Two ports would give the sheets a genuinely separate origin, which is the
 cleanest way to keep agent-written pages away from the app's token. It was
 rejected because every remote user forwards ports by hand, and a second `-L`
 forever is a real cost. The header does the same job:
 
 - The app is served from `/`.
-- Canvas content is served from its own path with `Content-Security-Policy:
+- Sheet content is served from its own path with `Content-Security-Policy:
   sandbox`, which forces an opaque origin **even for a top-level document**.
-  A canvas URL pasted into a fresh tab is therefore still sandboxed, which is
+  A sheet URL pasted into a fresh tab is therefore still sandboxed, which is
   the case a bare `<iframe sandbox>` does not cover.
-- The inner frame also gets `connect-src 'none'`: a canvas cannot call out,
+- The inner frame also gets `connect-src 'none'`: a sheet cannot call out,
   to us or to anyone.
 
 Authentication, both parts of it:
@@ -62,22 +66,22 @@ The token is not the boundary — the loopback bind is. The token stops other
 local users and other tabs; it is not what stands between the daemon and the
 internet, because nothing is meant to be able to reach it from there.
 
-## Canvases
+## Sheets
 
-**Storage.** One file per canvas in the channel's state directory, not in the
-channel's working directory: nobody wants `canvases/` turning up in
+**Storage.** One file per sheet in the channel's state directory, not in the
+channel's working directory: nobody wants `sheets/` turning up in
 `git status`. That directory joins the channel's working set, so every agent
 in the channel can read and patch what is in it under the usual permission
 rules.
 
-**The log.** Creating, replacing and deleting a canvas are events, carrying
-the canvas id, its title, the authoring agent and a hash — not the HTML,
+**The log.** Creating, replacing and deleting a sheet are events, carrying
+the sheet id, its title, the authoring agent and a hash — not the HTML,
 which would bloat the log for no gain. Replay therefore rebuilds the list of
-canvases a channel has, and the TUI can show them without reading the disk.
+sheets a channel has, and the TUI can show them without reading the disk.
 
-**Tools.** Because a canvas is a file, the tool surface is small: create,
+**Tools.** Because a sheet is a file, the tool surface is small: create,
 list, delete, and hand back the URL. Editing is `read` plus `apply_patch`,
-like any other file. There is no `canvas_edit`.
+like any other file. There is no `sheet_edit`.
 
 **Authorship.** The parent frame draws a bar naming the agent that wrote the
 page. In a tree of agents, "this page is asking for my API key" needs a name
@@ -85,16 +89,44 @@ attached to it.
 
 **Limits.** Creation is silent — it is loopback-only and cannot call out, so
 a prompt for every page would be noise. Two cheap guards instead: a cap on
-how many canvases one channel may hold, so a looping agent cannot write
+how many sheets one channel may hold, so a looping agent cannot write
 thousands, and the author bar above.
 
-**Libraries.** `connect-src 'none'` means a `<script src="https://cdn…">`
-simply fails. Anything on offer — a stylesheet matching the TUI's theme, one
-small charting library — is embedded in the binary and served from the canvas
-path. Keep the set deliberately small; every library is megabytes on
-`stavlos`.
+**What a sheet is written in.** reindr settled this well and it is worth
+copying wholesale.
 
-**Concurrency.** Several agents in a channel may write the same canvas. Last
+*No JavaScript framework.* Its templates are vanilla DOM code in an IIFE, and
+each sheet is self-contained. A framework would mean either a build step,
+which a file written at runtime cannot have, or a runtime import, which
+`connect-src 'none'` forbids. The only shape that could work is a
+no-build-step library served from our own origin beside the stylesheet —
+Preact with `htm`, say, at about 6KB — and it is not worth it: sheets are
+small, models write plain DOM code reliably, and every global on offer is one
+more thing to misuse. If a sheet needs charts, vendor one small library the
+same way the stylesheet is vendored: served, never fetched.
+
+*Tailwind and daisyUI for the CSS*, compiled with **no source scanning** —
+reindr's input file is one line, `@import "tailwindcss" source(none)`, because
+the page is written at runtime by a model and there is nothing to tree-shake
+against. That emits the whole utility set: 374KB, 48KB gzipped, committed and
+served. The server injects it into the frame, so a sheet links nothing and
+`connect-src 'none'` still holds.
+
+This means **two stylesheets, built differently**. The app's Tailwind is
+tree-shaken normally, because we write its source. The sheets' is the full
+set. Sharing one build would either ship the app tens of kilobytes it does not
+use, or leave sheets silently missing any class our own source happens not to
+mention — a failure that would look like the model writing bad CSS rather than
+a build problem.
+
+*And the agents have to be told.* reindr's instruction ("the frame already
+includes Tailwind CSS 4 utilities … plus daisyUI component classes such as
+btn, card, modal, navbar, drawer and table; prefer those classes over inlining
+a component library") does as much work as the stylesheet: it is what makes
+sheets look like each other instead of each one inventing a design. The
+equivalent belongs with the sheet tool.
+
+**Concurrency.** Several agents in a channel may write the same sheet. Last
 write wins, and the log says who did it. Nothing more elaborate until it is a
 problem in practice.
 
@@ -138,7 +170,7 @@ Supporting picks, all deliberately small:
 | | pick |
 | --- | --- |
 | State | the core exposes `subscribe()`; views wrap it in a `createStore` |
-| Styling | plain CSS with custom properties mirroring the TUI's theme |
+| Styling | Tailwind, tree-shaken against our own source — a separate build from the sheets' |
 | Long transcripts | `@tanstack/virtual`, which has a Solid adapter |
 | Charts | hand-rolled SVG — the Go versions are bar charts over buckets and about twenty lines. A charting library only when that stops being true |
 | PWA | `vite-plugin-pwa`, for the manifest and service worker |
@@ -149,7 +181,7 @@ go through the framework at all: hold a ref and set `textContent`. The daemon
 already coalesces deltas at 30ms (`internal/daemon/stream.go`), so everything
 else the UI does is at human speed.
 
-Canvases need their own element: an `<iframe>` pointed at the canvas path.
+Sheets need their own element: an `<iframe>` pointed at the sheet path.
 
 **No local database.** The client is a view rebuilt from the stream. The only
 things stored are the session token, in `sessionStorage`, and UI preferences
@@ -275,11 +307,11 @@ Write the relay only when something is genuinely blocked by not having one.
 1. The listener: token exchange, origin checks, the sandbox headers, serving
    nothing but a health page. Reviewable on its own, which matters — it is
    the first port Stavlos has ever opened.
-2. Canvases: storage, the channel canvas directory, the tool, the events, a
+2. Sheets: storage, the channel sheet directory, the tool, the events, a
    list in the TUI. Viewable in a browser, no interaction.
 3. The web client: the WebSocket transport for the existing JSON-RPC, the
    TypeScript core, and a small read-only client — channels, chat, the live
    stream. QR sign-in.
 4. Interaction: answering permissions and questions from the client, and a
-   canvas submitting through `ask_user`, so it uses the prompt lifecycle that
+   sheet submitting through `ask_user`, so it uses the prompt lifecycle that
    already exists rather than a queue of its own.
