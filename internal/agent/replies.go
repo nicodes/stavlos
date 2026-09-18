@@ -18,15 +18,16 @@ import (
 // prompt owed a reply needs no separate bookkeeping from an agent's request.
 //
 // Only explicit responses settle an entry; info and final prose do not. A
-// turn ending with entries owed and nothing else to wait on queues a
-// reminder of each. Progress or a new request resets the bounded nudge count.
+// turn ending with entries owed and no running job queues a reminder of
+// each. Empty reminder-only turns (no tools, no reply) bump a seatbelt;
+// progress or a new request resets it.
 
-// maxNudges bounds reminder turns in a row that get no reply, so a stuck
-// model cannot loop.
+// maxNudges bounds consecutive empty reminder-only turns, so a stuck
+// model cannot loop. A later turn that uses a tool, replies, or takes a
+// new request can be reminded again.
 const maxNudges = 3
 
-// nudgeLimit is how many reminders in a row an agent gets before the
-// harness leaves it alone; 0 when reminders are off.
+// nudgeLimit is the empty-reminder-turn seatbelt; 0 when reminders are off.
 func nudgeLimit(reminders bool) int {
 	if !reminders {
 		return 0
@@ -144,6 +145,7 @@ func (cs *channelState) settleReplies(responder *agentState, recipient string, i
 		if req := cs.requests[id]; req != nil && req.From == recipient {
 			cs.settle(req, responder.id)
 			responder.nudges = 0
+			responder.turnSettled = true
 		}
 	}
 }
@@ -156,13 +158,15 @@ func (cs *channelState) settleLegacy(responder *agentState, recipient string) {
 		if req.legacy && req.From == recipient && req.open[responder.id] {
 			cs.settle(req, responder.id)
 			responder.nudges = 0
+			responder.turnSettled = true
 		}
 	}
 }
 
 // endReplies runs when a turn ends on its own: with replies still owed,
-// nothing to wait for and nudges to spare, a reminder naming everyone owed
-// is queued, and it starts the next turn.
+// no running job and seatbelt to spare, a reminder naming everyone owed
+// is queued, and it starts the next turn. Awaiting another agent does not
+// skip the reminder; a live job does. Cancelled turns never remind.
 func (a *Agent) endReplies(reason event.TurnReason) {
 	if reason != event.ReasonEndTurn && reason != event.ReasonMaxTokens {
 		return
@@ -171,7 +175,7 @@ func (a *Agent) endReplies(reason event.TurnReason) {
 	s.mu.Lock()
 	st := a.state()
 	requests := st.pendingReplies()
-	if !s.cfg.Reminders || len(requests) == 0 || st.nudges >= maxNudges || st.waiting() {
+	if !s.cfg.Reminders || len(requests) == 0 || st.nudges >= maxNudges || len(st.jobs) > 0 {
 		s.mu.Unlock()
 		return
 	}

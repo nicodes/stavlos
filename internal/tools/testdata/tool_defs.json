@@ -182,16 +182,16 @@
     }
   },
   {
-    "description": "Send text to one or more recipients in this channel using the to array. Every recipient sees the full recipient list. All targets and reply references are validated before delivery. request (the default) creates an independent request ID for the agents addressed; each owes its own explicit response. response requires reply_to containing the pending request IDs it answers, and to must contain their senders. One response may answer several requests, including repeated requests from one sender. Only those IDs are cleared; sending another request or info never clears a debt. info needs no reply and does not wake idle agents. Human-facing messages without explicit response references are updates; use ask_user for questions to the human. Human prompts and steers carry request IDs too. agent_status exposes pending_replies and awaiting_replies with IDs and excerpts.",
+    "description": "Send text to one or more recipients in this channel using the to array. Every recipient sees the full recipient list. All targets and reply references are validated before delivery. request (the default) creates an independent request ID for the agents addressed; each owes its own explicit response. response requires reply_to containing the pending request IDs it answers, and to must contain their senders. One response may answer several requests, including repeated requests from one sender. Only those IDs are cleared; sending another request or info/no_reply never clears a debt. info (alias no_reply) needs no reply and does not wake idle agents. Human-facing messages without explicit response references are updates; use ask_user for questions to the human. Human prompts and steers carry request IDs too. agent_status exposes pending_replies and awaiting_replies with IDs and excerpts.",
     "name": "message",
     "schema": {
       "properties": {
         "kind": {
-          "description": "request (the default): you want something and wait for it; response: this answers a request you received; info: no reply needed",
+          "description": "request (the default): you want something and wait for it; response: this answers a request you received; info or no_reply: no reply needed",
           "type": "string"
         },
         "reply_to": {
-          "description": "Request IDs explicitly answered by this response; required for kind response, omitted for request/info",
+          "description": "Request IDs explicitly answered by this response; required for kind response, omitted for request/info/no_reply",
           "items": {
             "type": "string"
           },

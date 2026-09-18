@@ -351,8 +351,8 @@ func ModeSummary(mode string) string {
 }
 
 type AgentInfo struct {
-	Nudges          int                  `json:"nudges,omitempty"`      // reminders in a row this agent got without replying
-	NudgeLimit      int                  `json:"nudge_limit,omitempty"` // reminders in a row before the harness stops; 0 when reminders are off
+	Nudges          int                  `json:"nudges,omitempty"`      // consecutive empty reminder-only turns
+	NudgeLimit      int                  `json:"nudge_limit,omitempty"` // empty-reminder-turn seatbelt; 0 when reminders are off
 	PendingReplies  []event.ReplyRequest `json:"pending_replies,omitempty"`
 	AwaitingReplies []event.ReplyRequest `json:"awaiting_replies,omitempty"`
 	ID              string               `json:"id"`

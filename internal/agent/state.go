@@ -49,10 +49,14 @@ type agentState struct {
 
 	cs       *channelState                      // the channel this agent belongs to: its request table
 	inbox    []event.Input                      // queued, not yet taken, in order
-	nudges   int                                // reminders in a row that got no reply
+	nudges   int                                // consecutive empty reminder-only turns (anti-loop seatbelt)
 	lastPost string                             // the chat post the human's latest input delivered
 	jobs     map[string]event.JobStartedPayload // running background jobs
 	asks     map[string]bool                    // prompts put to the human, not yet resolved
+
+	turnReminderOnly bool // this turn took only reminders (or nothing yet)
+	turnHadTools     bool // this turn started a tool
+	turnSettled      bool // this turn sent an explicit response
 
 	todos       []event.TodoItem
 	todoSeq     int
@@ -90,6 +94,8 @@ func (cs *channelState) apply(e event.Event, fx *effects) {
 		}
 	case event.AgentKilled:
 		cs.killed(e.Agent)
+	case event.AgentCancelled:
+		cs.forgetParty(e.Agent)
 	case event.InputQueued:
 		if a != nil {
 			cs.queued(a, e, fx)
@@ -236,7 +242,6 @@ func (cs *channelState) queued(a *agentState, e event.Event, fx *effects) {
 			}
 		}
 	case event.InputReminder:
-		a.nudges++
 	case event.InputRequest, event.InputPrompt, event.InputSteer, event.InputInfo, event.InputJob:
 	}
 	if wakes(in.Kind) && !a.killed {
@@ -256,6 +261,7 @@ func (a *agentState) applyTurn(e event.Event) {
 		var p event.TurnPayload
 		if e.Decode(&p) == nil {
 			a.turn, a.inTurn, a.lastError = p.Turn, true, ""
+			a.turnReminderOnly, a.turnHadTools, a.turnSettled = true, false, false
 		}
 	case event.AssistantMessage:
 		var p event.AssistantMessagePayload
@@ -268,12 +274,21 @@ func (a *agentState) applyTurn(e event.Event) {
 		}
 	case event.TurnEnded:
 		var p event.TurnEndedPayload
-		if e.Decode(&p) == nil && p.Reason == event.ReasonError {
-			a.lastError = p.Error
+		if e.Decode(&p) == nil {
+			if p.Reason == event.ReasonError {
+				a.lastError = p.Error
+			}
+			if (p.Reason == event.ReasonEndTurn || p.Reason == event.ReasonMaxTokens) &&
+				a.turnReminderOnly && !a.turnHadTools && !a.turnSettled {
+				a.nudges++
+			}
 		}
 		a.inTurn = false
 	case event.TurnAborted:
 		a.inTurn = false
+	case event.ToolStarted:
+		a.turnHadTools = true
+		a.nudges = 0
 	case event.AskRequested, event.AskResolved:
 		var p struct {
 			ID string `json:"id"`
@@ -317,7 +332,11 @@ func (a *agentState) taken(ids []string) {
 		if i < 0 {
 			continue
 		}
-		a.took(a.inbox[i])
+		in := a.inbox[i]
+		if in.Kind != event.InputReminder {
+			a.turnReminderOnly = false
+		}
+		a.took(in)
 		a.inbox = slices.Delete(a.inbox, i, i+1)
 	}
 }

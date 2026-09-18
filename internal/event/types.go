@@ -22,9 +22,10 @@ const (
 	ChatPosted        Type = "chat.posted"         // ChatPayload: the human's post in the channel chat, logged on the channel
 	ChatMessage       Type = "chat.message"        // ChatPayload: an agent's message to the human, logged on the agent
 
-	AgentSpawned Type = "agent.spawned" // AgentSpawnedPayload
-	AgentUpdated Type = "agent.updated" // AgentUpdatedPayload: its role, name, model or variant changed
-	AgentKilled  Type = "agent.killed"  // (none)
+	AgentSpawned   Type = "agent.spawned"   // AgentSpawnedPayload
+	AgentUpdated   Type = "agent.updated"   // AgentUpdatedPayload: its role, name, model or variant changed
+	AgentKilled    Type = "agent.killed"    // (none)
+	AgentCancelled Type = "agent.cancelled" // (none): drop this agent's reply-debt; it stays alive
 
 	InputQueued Type = "input.queued" // Input: something for the agent's model, waiting in its inbox
 	InputTaken  Type = "input.taken"  // InputTakenPayload: the inputs a model call consumed, in order
