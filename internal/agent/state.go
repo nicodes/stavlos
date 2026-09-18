@@ -2,7 +2,6 @@ package agent
 
 import (
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -31,8 +30,10 @@ type channelState struct {
 	dirs                         []dirEntry // the working set beyond the channel directory
 	permits                      permits
 	agents                       map[string]*agentState
-	order                        []string          // spawn order
-	names                        map[string]string // agent name → id; a name is never released
+	order                        []string            // spawn order
+	names                        map[string]string   // agent name → id; a name is never released
+	requests                     map[string]*request // open requests by id, the one record of who owes whom
+	reqSeq                       int                 // requests opened so far, for arrival order
 }
 
 // agentState is what the log says about one agent.
@@ -46,15 +47,12 @@ type agentState struct {
 	inTurn    bool
 	lastError string // the error that ended the latest turn
 
-	inbox     []event.Input        // queued, not yet taken, in order
-	awaiting  map[string]int       // agent id → requests to it still unanswered
-	owed      map[string]replyDebt // request id → one response obligation
-	owedOrder []string
-	waits     map[string]*replyWait              // request id → outstanding recipients
-	nudges    int                                // reminders in a row that got no reply
-	lastPost  string                             // the chat post the human's latest input delivered
-	jobs      map[string]event.JobStartedPayload // running background jobs
-	asks      map[string]bool                    // prompts put to the human, not yet resolved
+	cs       *channelState                      // the channel this agent belongs to: its request table
+	inbox    []event.Input                      // queued, not yet taken, in order
+	nudges   int                                // reminders in a row that got no reply
+	lastPost string                             // the chat post the human's latest input delivered
+	jobs     map[string]event.JobStartedPayload // running background jobs
+	asks     map[string]bool                    // prompts put to the human, not yet resolved
 
 	todos       []event.TodoItem
 	todoSeq     int
@@ -72,7 +70,7 @@ type effects struct {
 }
 
 func newChannelState(model, role string) *channelState {
-	return &channelState{model: model, role: role, mode: protocol.ModeAsk, agents: map[string]*agentState{}, names: map[string]string{}}
+	return &channelState{model: model, role: role, mode: protocol.ModeAsk, agents: map[string]*agentState{}, names: map[string]string{}, requests: map[string]*request{}}
 }
 
 // apply folds one committed event into the state.
@@ -175,8 +173,8 @@ func (cs *channelState) spawned(e event.Event) {
 		return
 	}
 	cs.agents[p.ID] = &agentState{
-		id: p.ID, parent: p.Parent, role: p.Role, name: p.Name, model: p.Model, variant: p.Variant, depth: p.Depth,
-		awaiting: map[string]int{}, owed: map[string]replyDebt{}, waits: map[string]*replyWait{}, jobs: map[string]event.JobStartedPayload{}, asks: map[string]bool{},
+		cs: cs, id: p.ID, parent: p.Parent, role: p.Role, name: p.Name, model: p.Model, variant: p.Variant, depth: p.Depth,
+		jobs: map[string]event.JobStartedPayload{}, asks: map[string]bool{},
 		hist: project.NewBuilder(),
 	}
 	cs.order = append(cs.order, p.ID)
@@ -215,21 +213,7 @@ func (cs *channelState) killed(id string) {
 	}
 	a.killed, a.inTurn = true, false
 	a.jobs, a.asks = map[string]event.JobStartedPayload{}, map[string]bool{}
-	a.owed, a.owedOrder, a.waits, a.awaiting = map[string]replyDebt{}, nil, map[string]*replyWait{}, map[string]int{}
-	for _, o := range cs.agents {
-		delete(o.awaiting, id)
-		for request, debt := range o.owed {
-			if debt.From == id {
-				o.settleRequest(request)
-			}
-		}
-		for request, wait := range o.waits {
-			delete(wait.targets, id)
-			if len(wait.targets) == 0 {
-				delete(o.waits, request)
-			}
-		}
-	}
+	cs.forgetParty(id)
 }
 
 // queued puts an input in a's inbox and does the bookkeeping its kind
@@ -241,12 +225,8 @@ func (cs *channelState) queued(a *agentState, e event.Event, fx *effects) {
 		return
 	}
 	a.inbox = append(a.inbox, in)
+	cs.asked(in, a.id) // the sender waits from the moment it asks
 	switch in.Kind {
-	case event.InputRequest:
-		if from := cs.agents[in.From]; from != nil {
-			from.awaiting[a.id]++
-			from.trackRequest(in, a.id)
-		}
 	case event.InputResponse:
 		if from := cs.agents[in.From]; from != nil {
 			if len(in.ReplyTo) == 0 {
@@ -257,7 +237,7 @@ func (cs *channelState) queued(a *agentState, e event.Event, fx *effects) {
 		}
 	case event.InputReminder:
 		a.nudges++
-	case event.InputPrompt, event.InputSteer, event.InputInfo, event.InputJob:
+	case event.InputRequest, event.InputPrompt, event.InputSteer, event.InputInfo, event.InputJob:
 	}
 	if wakes(in.Kind) && !a.killed {
 		fx.wake = append(fx.wake, a.id)
@@ -369,7 +349,7 @@ func (a *agentState) startsTurn() bool {
 
 // waiting reports whether the agent expects to be woken: an agent owes it
 // an answer, or a job of its runs.
-func (a *agentState) waiting() bool { return len(a.awaiting) > 0 || len(a.jobs) > 0 }
+func (a *agentState) waiting() bool { return a.awaitingAny() || len(a.jobs) > 0 }
 
 // busy reports whether the agent is in a turn or about to start one.
 func (a *agentState) busy() bool { return !a.killed && (a.inTurn || a.startsTurn()) }
@@ -387,26 +367,4 @@ func (a *agentState) status() protocol.AgentState {
 		return protocol.AgentWaiting
 	}
 	return protocol.AgentIdle
-}
-
-// due lists the parties the agent owes a reply, sorted.
-func (a *agentState) due() []string {
-	var out []string
-	for _, request := range a.owed {
-		if !slices.Contains(out, request.From) {
-			out = append(out, request.From)
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-// awaitingIDs lists the agents this one waits on, sorted.
-func (a *agentState) awaitingIDs() []string {
-	out := make([]string, 0, len(a.awaiting))
-	for id := range a.awaiting {
-		out = append(out, id)
-	}
-	sort.Strings(out)
-	return out
 }
