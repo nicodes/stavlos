@@ -63,16 +63,16 @@ func (m *Model) owedCount() int {
 
 // nudgeState is the line under the list: whether a reminder is coming, and
 // how many have gone unanswered.
-func nudgeState(a protocol.AgentInfo, waiting bool) string {
+func nudgeState(a protocol.AgentInfo, jobWaiting bool) string {
 	switch {
 	case len(a.PendingReplies) == 0:
 		return ""
 	case a.NudgeLimit == 0:
 		return "reminders are off: nothing will nudge this agent"
 	case a.Nudges >= a.NudgeLimit:
-		return fmt.Sprintf("%d reminders went unanswered: no more until something new arrives", a.Nudges)
-	case waiting:
-		return fmt.Sprintf("waiting on an answer or a job: no reminder until that lands (%d of %d used)", a.Nudges, a.NudgeLimit)
+		return fmt.Sprintf("%d empty reminder turns: no more until a tool, a reply, or a new request", a.Nudges)
+	case jobWaiting:
+		return fmt.Sprintf("waiting on a job: no reminder until that lands (%d of %d used)", a.Nudges, a.NudgeLimit)
 	}
 	return fmt.Sprintf("a reminder follows a turn that ends owing these (%d of %d used)", a.Nudges, a.NudgeLimit)
 }
@@ -95,7 +95,7 @@ func (m *Model) replyBodyRows(width int) ([]string, []int) {
 		indices = append(indices, i)
 	}
 	if a := m.selectedAgent(); a != nil {
-		if state := nudgeState(*a, len(a.Awaiting) > 0 || len(m.runningJobs()) > 0); state != "" {
+		if state := nudgeState(*a, len(m.runningJobs()) > 0); state != "" {
 			lines = append(lines, "", theme.StyleDim.Render(state))
 			indices = append(indices, -1, -1)
 		}

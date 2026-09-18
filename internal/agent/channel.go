@@ -656,14 +656,13 @@ func (c *Channel) Post(ctx context.Context, text, from string) ([]string, error)
 	return names, err
 }
 
-// Cancel ends an agent's current turn.
+// Cancel drops an agent's reply-debt and ends its current turn; the agent survives.
 func (c *Channel) Cancel(agentID string) error {
 	a, ok := c.Agent(agentID)
 	if !ok {
 		return fmt.Errorf("agent %q not found", agentID)
 	}
-	a.Cancel()
-	return nil
+	return a.cancel()
 }
 
 // Kill tears down an agent and its subtree, children first.

@@ -118,14 +118,25 @@ func (a *Agent) queue(ctx context.Context, kind event.InputKind, text, source st
 	return err
 }
 
-// Cancel ends the current turn; the agent survives.
+// Cancel drops this agent's reply-debt and ends the current turn; the agent survives.
 func (a *Agent) Cancel() {
-	a.c.mu.Lock()
+	_ = a.cancel()
+}
+
+func (a *Agent) cancel() error {
+	s := a.c
+	s.mu.Lock()
+	st := a.state()
+	var err error
+	if st != nil && !st.killed {
+		_, err = s.commitLocked(context.Background(), s.event(a.ID, event.AgentCancelled, nil))
+	}
 	c := a.cancelTurn
-	a.c.mu.Unlock()
+	s.mu.Unlock()
 	if c != nil {
 		c()
 	}
+	return err
 }
 
 // --- reading ---

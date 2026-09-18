@@ -215,3 +215,24 @@ func TestOneRequestTableHoldsBothDirections(t *testing.T) {
 		t.Fatalf("a killed asker leaves nothing owed: %d", len(cs.requests))
 	}
 }
+
+func TestCancelDropsDebtLikeKill(t *testing.T) {
+	cs := newChannelState("m", "general")
+	apply := func(agent string, typ event.Type, payload any) {
+		cs.apply(event.Event{Agent: agent, Type: typ, Payload: event.MustPayload(payload)}, &effects{})
+	}
+	apply("main", event.AgentSpawned, event.AgentSpawnedPayload{ID: "main", Name: "main"})
+	apply("scout", event.AgentSpawned, event.AgentSpawnedPayload{ID: "scout", Name: "scout"})
+	apply("scout", event.InputQueued, event.Input{ID: "i1", RequestID: "r1", Kind: event.InputRequest, From: "main", FromName: "main", Text: "look"})
+	apply("scout", event.InputTaken, event.InputTakenPayload{IDs: []string{"i1"}})
+	if len(cs.agents["scout"].pendingReplies()) != 1 || !cs.agents["main"].awaitingAny() {
+		t.Fatal("setup")
+	}
+	apply("scout", event.AgentCancelled, struct{}{})
+	if cs.agents["scout"].killed {
+		t.Fatal("cancel must not mark killed")
+	}
+	if len(cs.requests) != 0 || len(cs.agents["scout"].pendingReplies()) != 0 || cs.agents["main"].awaitingAny() {
+		t.Fatalf("cancel should drop debt: requests %d", len(cs.requests))
+	}
+}

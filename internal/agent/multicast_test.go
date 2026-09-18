@@ -102,3 +102,17 @@ func TestMulticastRequestsWaitForEachRecipient(t *testing.T) {
 		t.Fatal("last reply did not settle the send")
 	}
 }
+
+func TestNoReplyAliasPersistsAsInfo(t *testing.T) {
+	s, h := newTestChannel(t, testConfig{}, &fakeModel{})
+	ctx := context.Background()
+	r := tools.Builtin()["message"].Run(ctx, json.RawMessage(`{"to":["user"],"text":"fyi","kind":"no_reply"}`), &tools.Env{Agent: s.Root().ID, Orch: orchestrator{s}})
+	if r.IsError {
+		t.Fatal(r.Output)
+	}
+	posts := h.ofType(event.ChatMessage, s.Root().ID)
+	var p event.ChatPayload
+	if len(posts) != 1 || posts[0].Decode(&p) != nil || p.Kind != tools.KindInfo || p.Text != "fyi" {
+		t.Fatalf("no_reply should persist as info: %+v", p)
+	}
+}

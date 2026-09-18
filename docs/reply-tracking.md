@@ -10,7 +10,8 @@ Reply obligations belong to individual requests, not to sender/recipient pairs.
 - A response may answer several requests, including several from one sender.
 - New requests and `info` messages never settle existing requests. Info keeps
   its double-chevron presentation, creates no reply debt and never wakes an
-  idle receiving agent.
+  idle receiving agent. The `message` tool also accepts `no_reply` as an alias
+  for `info`; stored events and chat kinds stay `"info"`.
 
 ```json
 {
@@ -27,7 +28,7 @@ this response does not settle that other agent's obligation.
 All references and recipients are checked before any message is delivered.
 Unknown, already-answered, duplicate, foreign-agent or wrong-recipient references
 reject the whole response. A recipient in `to` must have a matching referenced
-request. Use a separate `info` message for an unrelated update or FYI.
+request. Use a separate `info` (or `no_reply`) message for an unrelated update or FYI.
 
 ## Context and nudges
 
@@ -37,9 +38,13 @@ after compaction or recovery. Reminders list each outstanding request separately
 several requests from the same sender remain separate entries. The TUI async
 panel likewise shows per-request rows for responses awaited and responses owed.
 
-A successful explicit response resets the nudge counter. An info message does
-not. The existing three-nudge cap and pause while waiting on agents/jobs remain.
-Final assistant prose is still notes and does not answer a request.
+A successful explicit response, taking a new request, or using a tool resets
+the empty-reminder seatbelt. An info message does not. A turn that ends still
+owing someone queues a reminder unless a background job is running. Awaiting
+another agent does not skip the reminder. Empty reminder-only turns (no tools,
+no reply) stop after three; a later turn that uses a tool, replies, or takes a
+new request can be reminded again. Final assistant prose is still notes and
+does not answer a request.
 
 Human-facing messages that are not explicit responses are updates, not answers
 to pending human requests. Use `info` for such updates and `ask_user` for questions
@@ -53,9 +58,11 @@ the same state reducer as live delivery. Legacy log responses may settle legacy
 party-based obligations, but cannot clear newly tracked requests. A new explicit
 response can reference a still-pending legacy request by its input ID.
 
-Killing an agent removes obligations that can no longer be fulfilled. Turn-limit
-failure reports identify the requests they terminate, rather than clearing a
-sender's unrelated waits.
+Killing an agent removes obligations that can no longer be fulfilled. Cancelling
+an agent has the same reply-debt effect (`agent.cancelled` in the log) without
+marking it killed: it stays alive and can take new work. Idle cancel commits
+that event too. Turn-limit failure reports identify the requests they terminate,
+rather than clearing a sender's unrelated waits.
 
 ## One table
 
@@ -66,17 +73,18 @@ it, so they cannot drift apart:
 - what an agent **owes** is the entries it has taken and not answered, oldest
   first (`pending_replies`, the reminders, the harness-state note);
 - what an agent **waits on** is the entries it sent that nobody has answered
-  (`awaiting_replies`, the waiting state, the pause on nudging).
+  (`awaiting_replies`, the waiting state).
 
 A recipient joins an entry when the input is queued, so the sender waits from
 the moment it asks, and is marked as holding it when it takes the input, so
 only a delivered request is owed. A response removes the responder from the
 entry; the entry goes when nobody is left to answer. The human is a party like
 any other (`user`), so a prompt owed a reply needs no separate bookkeeping.
-Killing an agent drops it from every entry and deletes the entries it sent.
+Killing or cancelling an agent drops it from every entry and deletes the entries it sent.
 
-The nudge count is the one thing that is not a view of the table: it records
-what the harness already tried, not who is waiting, so it stays on the agent.
+The nudge count is the one thing that is not a view of the table: it counts
+consecutive empty reminder-only turns (the anti-loop seatbelt), so it stays on
+the agent.
 
 ## Watching it
 
@@ -84,7 +92,8 @@ The async tab on the divider holds both halves: what the selected agent waits
 on (the agents it asked, then its running jobs), then the requests it owes,
 each with its ID, sender and an excerpt; space on a row opens that party's
 chat. Under them is what the harness will do about what is owed: a reminder
-after a turn that ends owing them, no reminder while the agent waits on an
-answer or a job, the reminders spent (`n reminders went unanswered`), or
-reminders off. The tab is marked when replies are owed, and `AgentInfo`
-carries `nudges` and `nudge_limit` for any client.
+after a turn that ends owing them, no reminder while a job runs, the empty
+reminder-turn seatbelt (`n empty reminder turns`), or reminders off. Awaiting
+another agent does not suppress the reminder line. The tab is marked when
+replies are owed, and `AgentInfo` carries `nudges` and `nudge_limit` for any
+client.

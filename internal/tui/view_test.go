@@ -3787,7 +3787,7 @@ func TestAsyncTabOwedReplies(t *testing.T) {
 		t.Fatalf("dialog:\n%s", dv)
 	}
 	m.agents[0].Nudges = 3
-	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "3 reminders went unanswered") {
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "3 empty reminder turns") {
 		t.Fatalf("spent:\n%s", dv)
 	}
 	m.agents[0].NudgeLimit = 0
@@ -3796,9 +3796,14 @@ func TestAsyncTabOwedReplies(t *testing.T) {
 	}
 	m.agents[0].Awaiting = []string{"b"}
 	m.agents[0].Nudges, m.agents[0].NudgeLimit = 1, 3
-	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "no reminder until that lands") {
-		t.Fatalf("waiting:\n%s", dv)
+	if dv := stripANSI(m.tabDialog(120)); strings.Contains(dv, "no reminder until that lands") || !strings.Contains(dv, "a reminder follows a turn that ends owing these") {
+		t.Fatalf("awaiting an agent must not suppress the reminder copy:\n%s", dv)
 	}
+	m.agents[0].Jobs = []protocol.JobInfo{{ID: "j1", Spec: "sleep 30"}}
+	if dv := stripANSI(m.tabDialog(120)); !strings.Contains(dv, "waiting on a job: no reminder until that lands") {
+		t.Fatalf("job:\n%s", dv)
+	}
+	m.agents[0].Jobs = nil
 	// space on the second row opens that agent's chat
 	m.superChat = true
 	m.agCursor = 1
