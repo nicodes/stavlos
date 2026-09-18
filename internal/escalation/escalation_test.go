@@ -141,7 +141,10 @@ func TestTrustAndQuestionsNeverDefault(t *testing.T) {
 	}
 }
 
-func TestQuestionVisibilityIsImmediateAndSurvivesReconcile(t *testing.T) {
+// TestPromptVisibilityIsImmediateAndSurvivesReconcile: questions,
+// permissions and trust all reach the fallback client the moment they are
+// asked, rather than waiting out the claim timeout.
+func TestPromptVisibilityIsImmediateAndSurvivesReconcile(t *testing.T) {
 	for _, kind := range []protocol.PromptKind{protocol.PromptQuestion, protocol.PromptPermission, protocol.PromptTrust} {
 		t.Run(string(kind), func(t *testing.T) {
 			sink := &recSink{}
@@ -154,23 +157,19 @@ func TestQuestionVisibilityIsImmediateAndSurvivesReconcile(t *testing.T) {
 				done <- m.Request(ctx, protocol.PromptInfo{ID: "p", Channel: "channel", Kind: kind}, func() { close(opened) })
 			}()
 			<-opened
-			visible := kind == protocol.PromptQuestion || kind == protocol.PromptPermission
 			pending := m.Pending("channel")
-			if len(pending) != 1 || pending[0].Escalated != visible {
+			if len(pending) != 1 || !pending[0].Escalated {
 				t.Fatalf("snapshot visibility: %+v", pending)
 			}
 			sink.mu.Lock()
 			first, tiers := sink.n[0], append([]protocol.Tier(nil), sink.t[0]...)
 			sink.mu.Unlock()
-			want := 1
-			if visible {
-				want = 2
-			}
-			if first.Action != protocol.ActionRequested || first.Prompt.Escalated != visible || len(tiers) != want {
+			const want = 2
+			if first.Action != protocol.ActionRequested || !first.Prompt.Escalated || len(tiers) != want {
 				t.Fatalf("notification: %+v, tiers: %v", first, tiers)
 			}
-			if visible && tiers[1] != protocol.TierFallback {
-				t.Fatal("question not delivered to fallback client")
+			if tiers[1] != protocol.TierFallback {
+				t.Fatal("prompt not delivered to fallback client")
 			}
 			if err := m.Claim("p", "discord"); err != nil {
 				t.Fatal(err)

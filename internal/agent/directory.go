@@ -53,7 +53,7 @@ func (c *Channel) SetDir(ctx context.Context, dir string, load func(string) (*co
 		a.disarmMCPIdle()
 		a.stopMCP("", false)
 	}
-	stamp := instructionsStamp(cfg.InstructionFiles)
+	stamp := trustStamp(cfg)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	evs := []event.Event{c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Dir: event.Str(dir)})}

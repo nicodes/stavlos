@@ -3917,3 +3917,35 @@ func TestRecapCommand(t *testing.T) {
 		t.Fatalf("nonsense: %q", m.status)
 	}
 }
+
+// TestUntrustedProjectShowsInNav: a channel whose project configuration is
+// not trusted says so in the nav, above the Discord row, because otherwise
+// it silently loses its roles, skills and commands; a click on the row asks
+// for the decision again.
+func TestUntrustedProjectShowsInNav(t *testing.T) {
+	m := channelModel()
+	m.channelID = "c1"
+	w := sidebarWidth - 1
+	if row := m.trustRow(w); row != "" || m.sidebarTrustRow() != -1 {
+		t.Fatalf("a trusted project says nothing: %q", stripANSI(row))
+	}
+	discord := m.sidebarDiscordRow()
+
+	m.channel.TrustPending = true
+	row := m.trustRow(w)
+	if !strings.HasPrefix(stripANSI(row), "project ") || !strings.Contains(row, theme.StyleWarn.Render("untrusted")) ||
+		ansi.StringWidth(stripANSI(row)) != w {
+		t.Fatalf("warning row: %q", stripANSI(row))
+	}
+	header := m.sidebarHeader(w)
+	at := m.sidebarTrustRow()
+	if at < 0 || at >= len(header) || stripANSI(header[at]) != stripANSI(row) {
+		t.Fatalf("the warning is not at its row:\n%s", stripANSI(strings.Join(header, "\n")))
+	}
+	if m.sidebarDiscordRow() != discord+1 || at >= m.sidebarDiscordRow() {
+		t.Fatalf("the warning sits above Discord: trust %d discord %d", at, m.sidebarDiscordRow())
+	}
+	if cmd := m.sidebarClick(0, at); cmd == nil {
+		t.Fatal("a click on the warning should ask for trust again")
+	}
+}
