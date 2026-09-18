@@ -88,7 +88,7 @@ func TestChangedInstructionsAskForTrustAgain(t *testing.T) {
 	if err := os.WriteFile(file, []byte("one"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cfg.InstructionFiles = []string{file}
+	cfg.InstructionFiles, cfg.TrustFiles = []string{file}, []string{"AGENTS.md"}
 	h := newFakeHost(&fakeModel{steps: []step{reply(text("a")), reply(text("b"))}})
 	s := New(h, "s1", work, cfg, "", "")
 	if err := s.Start(context.Background(), "test"); err != nil {
@@ -111,5 +111,46 @@ func TestChangedInstructionsAskForTrustAgain(t *testing.T) {
 	h.mu.Unlock()
 	if len(changed) != 1 || changed[0] != work {
 		t.Fatalf("the edit tells the host once: %v", changed)
+	}
+}
+
+// TestChangedProjectLayerAsksForTrustAgain: editing the project layer
+// itself — a role, a command, stavlos.json — changes the trust hash just as
+// an edited AGENTS.md does, so it has to ask again too. Watching only the
+// instructions let a channel quietly lose its roles: the hash no longer
+// matched, the project layer stopped loading, and nothing said so until the
+// channel was resumed.
+func TestChangedProjectLayerAsksForTrustAgain(t *testing.T) {
+	cfg, work := loadTestConfig(t, testConfig{})
+	role := filepath.Join(work, ".stavlos", "agents", "coder.md")
+	if err := os.MkdirAll(filepath.Dir(role), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(role, []byte("one"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg.TrustFiles = []string{filepath.Join(".stavlos", "agents", "coder.md")}
+	h := newFakeHost(&fakeModel{steps: []step{reply(text("a")), reply(text("b"))}})
+	s := New(h, "s1", work, cfg, "", "")
+	if err := s.Start(context.Background(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Stop)
+	runTurn(t, s, h, "first")
+	h.mu.Lock()
+	n := len(h.changed)
+	h.mu.Unlock()
+	if n != 0 {
+		t.Fatal("an unchanged project layer tells the host nothing")
+	}
+	if err := os.WriteFile(role, []byte("two, and longer"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runTurn(t, s, h, "second")
+	h.mu.Lock()
+	changed := append([]string(nil), h.changed...)
+	h.mu.Unlock()
+	if len(changed) != 1 || changed[0] != work {
+		t.Fatalf("the edited role tells the host once: %v", changed)
 	}
 }

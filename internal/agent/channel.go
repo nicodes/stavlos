@@ -89,7 +89,7 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, role string)
 	st.dir = dir
 	return &Channel{
 		ID: id, Created: time.Now().UTC(),
-		host: host, tools: tools.Builtin(), cfg: cfg, stamp: instructionsStamp(cfg.InstructionFiles),
+		host: host, tools: tools.Builtin(), cfg: cfg, stamp: trustStamp(cfg),
 		st: st, agents: map[string]*Agent{},
 		ctx: ctx, cancel: cancel,
 	}
@@ -205,7 +205,7 @@ func (c *Channel) Config() *config.Effective {
 
 // SetConfig swaps the effective config (after a trust decision or edit).
 func (c *Channel) SetConfig(cfg *config.Effective) {
-	stamp := instructionsStamp(cfg.InstructionFiles)
+	stamp := trustStamp(cfg)
 	c.mu.Lock()
 	if c.reconfiguring || cfg.Dir != "" && cfg.Dir != c.st.dir {
 		c.mu.Unlock()

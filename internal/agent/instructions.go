@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/config"
@@ -59,15 +60,29 @@ func instructionsStamp(files []string) string {
 	return b.String()
 }
 
-// checkInstructions asks the host to load the project again when one of its
-// instructions files changed since the config was loaded: the trust hash no
-// longer matches, so the human is asked before any agent follows the new
-// text.
-func (c *Channel) checkInstructions() {
+// trustStamp covers every file the trust hash does: the project layer
+// itself — its roles, skills, commands and stavlos.json — as well as the
+// instructions agents follow. Watching only the instructions left the rest
+// silent: a role added or a command edited changed the hash, the project
+// quietly stopped being trusted, and nothing asked again until the channel
+// was resumed. Stat is cheap next to the turn this runs before.
+func trustStamp(cfg *config.Effective) string {
+	files := make([]string, 0, len(cfg.TrustFiles))
+	for _, f := range cfg.TrustFiles {
+		files = append(files, filepath.Join(cfg.Dir, f))
+	}
+	return instructionsStamp(files)
+}
+
+// checkProject asks the host to load the project again when anything the
+// trust hash covers changed since the config was loaded: the hash no longer
+// matches, so the human is asked before any agent follows the new text or
+// the channel loses what the project defined.
+func (c *Channel) checkProject() {
 	c.mu.Lock()
-	files, stamp := c.cfg.InstructionFiles, c.stamp
+	cfg, stamp := c.cfg, c.stamp
 	c.mu.Unlock()
-	if len(files) == 0 || instructionsStamp(files) == stamp {
+	if len(cfg.TrustFiles) == 0 || trustStamp(cfg) == stamp {
 		return
 	}
 	c.host.ProjectChanged(c.Dir())
