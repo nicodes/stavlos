@@ -17,10 +17,9 @@ func hint(key, desc string) dialog.Hint { return dialog.Hint{Key: key, Desc: des
 // hints but for what space does, so keyHints keeps one case each for the
 // dialogs that differ.
 var listDialogHints = map[focus]func() []dialog.Hint{
-	focusAsync:  func() []dialog.Hint { return listHints(hint("space/enter", "open chat")) },
-	focusNudges: func() []dialog.Hint { return listHints(hint("space/enter", "open chat")) },
-	focusMCP:    func() []dialog.Hint { return listHints(hint("space/enter", "show/hide tools")) },
-	focusTodo:   func() []dialog.Hint { return listHints() },
+	focusAsync: func() []dialog.Hint { return listHints(hint("space/enter", "open chat")) },
+	focusMCP:   func() []dialog.Hint { return listHints(hint("space/enter", "show/hide tools")) },
+	focusTodo:  func() []dialog.Hint { return listHints() },
 }
 
 // listHints is ↑/↓ over a list, whatever select does there, and the keys

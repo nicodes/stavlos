@@ -13,7 +13,7 @@ const (
 	focusChat                          // the transcript: a cursor walks its items
 	focusPermission                    // the permission tab: pending permission/trust prompts (y/n/a)
 	focusQuestions                     // controls inside a question message in the chat
-	focusAsync                         // the async tab: running shell jobs
+	focusAsync                         // the async tab: what the agent waits on, and the replies it owes (replies.go)
 	focusTodo                          // the todo tab: the selected agent's todo list
 	focusMCP                           // the mcp tab: the selected agent's MCP servers
 	focusDirs                          // the dirs tab: the channel's working directories (every agent's)
@@ -22,7 +22,6 @@ const (
 	focusMeta                          // the meta row under the input: ←/→ pick yolo/role/model/variant, enter opens it
 	focusInlinePermission              // permission choices embedded in the chat
 	focusUsage                         // a usage dialog: tokens or cost over time (usage.go)
-	focusNudges                        // the nudges tab: replies the selected agent owes (nudges.go)
 )
 
 // focusOrder lists the sections tab cycles through, top to bottom: the chat
