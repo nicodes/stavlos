@@ -20,13 +20,14 @@ does.
 - **A canvas is a file.** Agents edit them with `read` and `apply_patch`, so
   the diff, permission and event-log machinery is reused rather than
   reinvented.
-- **The client's core is framework-free TypeScript**; the views are React
-  Native, web first. The built assets are `go:embed`ded, so `stavlos` stays a
-  single binary and installing it needs no Node.
-- **Stavlos never listens off loopback.** Remote access is an SSH tunnel or
-  Tailscale — somebody else's infrastructure, not ours.
-- **No relay, no server, no database.** Deferred, with the shape written down
-  below in case that changes.
+- **The client's core is framework-free TypeScript**; the views are SolidJS.
+  The built assets are `go:embed`ded, so `stavlos` stays a single binary and
+  installing it needs no Node.
+- **Stavlos never listens off loopback.** Remote access is Tailscale, or an
+  SSH tunnel on a laptop — somebody else's infrastructure, not ours.
+- **No relay, no server, no database, and no native app.** Considered and
+  rejected; the reasoning is at the end so the decision can be revisited
+  quickly rather than re-argued.
 
 ## The port
 
@@ -116,40 +117,66 @@ prompt state, and the formatting — roughly the browser's counterpart to
 no view framework, because it is the part that would otherwise have to be
 rewritten to move platforms. Views are the cheap layer.
 
-**Views are React Native** (`react-native-web` for the browser), so that a
-native app later reuses the core and rewrites only the views. Two places this
-is known to cost something, and both should be checked early:
+**Views are SolidJS.** Fine-grained signals compile to direct DOM operations:
+no virtual DOM, no reconciliation, and a ~7KB runtime. On the benchmark that
+measures this it sits closest to hand-written DOM code, and the JSX keeps it
+legible to anyone who knows React.
 
-- **Selecting and copying transcript text.** Everything lives inside `<Text>`,
-  and selection across a long chat is worse than plain DOM. This is the main
-  content of the app.
-- **Charts.** The tokens, cost and plan charts need `react-native-svg`-based
-  libraries; the web ones are better.
+That is not why the choice is low-stakes, though — the core/view split is. The
+protocol client and the reducer do not import the view layer, so replacing
+Solid later is a weekend rather than a rewrite. This is the reversible
+decision in the design, and it should stay that way: nothing Solid-shaped
+belongs in the core.
 
-Canvases need a platform split either way: an `<iframe>` on the web, a
-`WebView` natively.
+Two notes for whoever writes it. Solid's props are getters, so destructuring
+them loses reactivity — a mistake that is easy to make and silent when made.
+And `createStore` fits the reducer's output better than a signal per field,
+because it updates only the paths that changed.
+
+Supporting picks, all deliberately small:
+
+| | pick |
+| --- | --- |
+| State | the core exposes `subscribe()`; views wrap it in a `createStore` |
+| Styling | plain CSS with custom properties mirroring the TUI's theme |
+| Long transcripts | `@tanstack/virtual`, which has a Solid adapter |
+| Charts | hand-rolled SVG — the Go versions are bar charts over buckets and about twenty lines. A charting library only when that stops being true |
+| PWA | `vite-plugin-pwa`, for the manifest and service worker |
+| Tests | Vitest, with the reducer run against event fixtures exported from a real log |
+
+The highest-frequency update in the app — streamed model tokens — should not
+go through the framework at all: hold a ref and set `textContent`. The daemon
+already coalesces deltas at 30ms (`internal/daemon/stream.go`), so everything
+else the UI does is at human speed.
+
+Canvases need their own element: an `<iframe>` pointed at the canvas path.
 
 **No local database.** The client is a view rebuilt from the stream. The only
-things stored are the token or device key — `sessionStorage` on the web,
-Keychain or Keystore natively — and UI preferences such as the open channel
-and the tree's folded state. Transcripts are deliberately *not* cached: it
+things stored are the session token, in `sessionStorage`, and UI preferences
+such as the open channel and the tree's folded state. Transcripts are deliberately *not* cached: it
 buys a faster cold start and costs model output, source and possibly secrets
 sitting on a device that can be lost.
 
-**Versioning.** Today the TUI and daemon ship in one binary, so the protocol
-can change freely. An app installed from a store cannot be updated in
-lockstep with the daemon, so from the first release the client negotiates a
-version on connect and protocol changes stay additive. Cheap now, expensive
-to retrofit.
+**Versioning.** The TUI, the daemon and the web assets all ship in one
+binary, so the protocol can keep changing freely — there is no client in the
+wild to keep in step with. That is a direct consequence of dropping the native
+app, and it is worth guarding: the day something installs separately, the
+protocol needs version negotiation on connect and additive-only changes.
+
+**Building it.** `go install` builds from what is in the repo, and nobody
+installing Stavlos has Node. So the built assets are committed, with the build
+wired to a `make web` step and a check that the committed output matches its
+sources — a stale bundle must not be able to ship quietly. (reindr commits its
+bundle for the same reason.)
 
 ## Reaching it from somewhere else
 
 | Where the client is | Works with nothing hosted? |
 | --- | --- |
 | Same machine | Yes — `127.0.0.1` |
-| Same network as the daemon | Yes — direct connection, paired by QR |
+| Same network as the daemon | Yes — but Stavlos does not accept those connections; use Tailscale or a tunnel |
 | Anywhere, over Tailscale or another WireGuard network | Yes, but that network is the infrastructure |
-| Anywhere, no VPN, daemon behind a home router or CGNAT | No — needs a relay, or manual port forwarding |
+| Anywhere, no VPN, daemon behind a home router or CGNAT | No — that is what a relay would be for, and we are not building one |
 | Anywhere, daemon on a host with a public address | Technically yes, with a pinned certificate — but that is a port on the internet in front of something that runs arbitrary commands |
 
 Two devices behind different NATs cannot find each other without a third
@@ -157,45 +184,59 @@ party. Hole punching still needs a signalling server to exchange addresses,
 and a relay for when punching fails, which on mobile carriers is often. The
 choice is never "infrastructure or not", only whose.
 
-**The recipes we support:**
+**Tailscale is the supported answer.** `tailscale serve` proxies to the
+daemon's loopback port and terminates TLS with a real certificate on a
+`*.ts.net` name. That certificate is not a nicety: a service worker needs a
+secure context, so it is what makes the client installable as a progressive
+web app, and a bare `100.x` address over plain HTTP is not one.
 
-- **SSH tunnel.** `ssh -L 8080:127.0.0.1:<port> host`, then open
-  `localhost:8080`. The authentication is the SSH keys you already have and
-  nothing new is exposed.
-- **Tailscale.** `tailscale serve` puts a real HTTPS certificate on a
-  `*.ts.net` name, which is what makes the client installable as a PWA —
-  service workers need a secure context, and a bare `100.x` address over HTTP
-  is not one. `tailscale serve` reaches your devices only; `tailscale funnel`
-  is public and is never the right answer here.
-- Tailscale also ships `tsnet`, which embeds a node in a Go binary. The
-  daemon could join a tailnet with no system install. Worth revisiting; it
-  removes the setup on the machine that is harder to configure.
+Stavlos knows nothing about any of this. It binds to `127.0.0.1` exactly as it
+would for a browser on the same machine; Tailscale is what makes the port
+reachable. That is the whole point of choosing it — it moves every hard
+problem (NAT traversal, device identity, transport encryption, certificates)
+to something that already solves them, and leaves this repo with a local
+server and a static bundle.
+
+⚠️ `tailscale serve` reaches your own devices. `tailscale funnel` publishes to
+the internet and is never the right answer for a daemon that runs arbitrary
+commands.
+
+**On a laptop**, an SSH tunnel is simpler than installing anything:
+`ssh -L 8080:127.0.0.1:<port> host`, then open `localhost:8080`. The
+authentication is the SSH keys you already have, and `localhost` is a secure
+context, so the PWA works there too.
+
+Tailscale also ships `tsnet`, which embeds a node in a Go binary — the daemon
+could join a tailnet with no system install at all. Worth revisiting later; it
+would remove the setup on the machine that is harder to configure.
 
 **Notifications** stay with Discord, which already reaches your phone and
 costs nothing to run. Web push would also work from a loopback daemon — the
 push call is outbound — but there is no reason to build it while the bridge
 exists.
 
-## Pairing by QR
+## Signing a phone in
 
-The TUI shows a QR code; the client scans it. It carries the address, the
-port, the daemon's certificate fingerprint and a one-time pairing secret. The
-device ends up enrolled with its own key, revocable from the TUI.
+The TUI shows a QR code carrying the URL and a one-time code; the phone scans
+it and lands on the app already signed in, instead of typing a token on a
+phone keyboard.
 
-The fingerprint is the useful part: the client pins that exact certificate,
-so there is no certificate authority, no self-signed warning and no
-trust-on-first-use window.
+That is all the QR is for now. An earlier draft had it carrying a certificate
+fingerprint and a pairing secret so a client could pin the daemon's
+certificate and enrol its own key — the design that makes direct connections
+over an untrusted network safe. Choosing Tailscale makes that unnecessary:
+the transport is already authenticated and encrypted, and the certificate is
+already real. Keep the idea in mind only if the day comes that Stavlos has to
+accept connections itself.
 
-It pays off before any app exists — **a QR in the TUI that signs a phone into
-the web UI**, instead of typing a forty-character token on a phone keyboard.
-
-A QR transfers credentials; it does not create connectivity. If the address
-in it is not reachable, the scan does not help. That is why the table above
+A QR transfers credentials; it does not create connectivity. If the address in
+it is not reachable, the scan does not help. That is why the table above
 matters.
 
-## Deferred: a relay, and a native app
+## Considered and rejected: a relay, and a native app
 
-Neither is planned. The shape, so the decision can be made quickly later:
+Neither is planned, and choosing Tailscale is what rules both out. The shape
+is written down so the decision can be remade quickly rather than re-argued.
 
 **A relay** lets two devices that cannot address each other talk: both hold
 an outbound connection to it and it forwards between them. The QR keeps it
@@ -212,16 +253,22 @@ device ids. That is a well-understood pipe, not new cryptography.
   forever.
 - Even a dumb pipe sees metadata: which devices talk, when, how much.
 
-**A native app** would exist for onboarding, not for features: the browser
-client installed as a PWA already gives a home-screen icon, full screen and
-push. If it is ever built, it should reach the daemon over a relay rather than
-a VPN. Apple allows the VPN approval to happen in-app
-(`NETunnelProviderManager`, one system modal), but VPN apps must ship from an
-Organization account and the app would have to embed a WireGuard client. A
-relay-based app is an app that opens a socket.
+**A native app** would have existed for onboarding, not for features: the
+browser client installed as a progressive web app already gives a home-screen
+icon, full screen and notifications. Its one real advantage was making the
+network setup disappear — and Tailscale is that, for the cost of installing
+one app and approving it once.
 
-Build the LAN and Tailscale paths first. Write the relay only when something
-is actually blocked by not having one.
+If it is ever revisited, it should reach the daemon over a relay rather than a
+VPN. Apple does allow the VPN approval to happen in-app
+(`NETunnelProviderManager`, one system modal), but VPN apps must ship from an
+Organization account and the app would have to embed a WireGuard client; a
+relay-based app is an app that opens a socket. That is also the reason the
+view layer is Solid rather than React Native: React Native would have been a
+bet on this app, paid for in worse text selection and worse charts on the web,
+which is the only place the client actually runs.
+
+Write the relay only when something is genuinely blocked by not having one.
 
 ## Order of work
 
