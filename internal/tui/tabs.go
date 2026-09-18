@@ -18,7 +18,7 @@ import (
 // agent.
 var tabRows = [][]focus{
 	{focusPermission, focusDirs},
-	{focusAsync, focusNudges, focusTodo, focusMCP},
+	{focusAsync, focusTodo, focusMCP},
 }
 
 // tabFocuses is every tab in strip order: the top row, then the bottom.

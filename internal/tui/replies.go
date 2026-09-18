@@ -1,14 +1,22 @@
 package tui
 
 import (
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/theme"
-	"strings"
-	"time"
 )
+
+// The async tab is both halves of the selected agent's waiting: what it
+// waits on (agents it asked, running jobs) and what it owes a reply to,
+// with the line under them saying what the harness will do about the
+// second half (docs/reply-tracking.md).
 
 func (m *Model) hasReplyDetails() bool {
 	a := m.selectedAgent()
@@ -45,6 +53,30 @@ func (m *Model) replyRows(width int) (rows, targets []string, waiting int) {
 	return
 }
 
+// owedCount is how many replies the selected agent owes.
+func (m *Model) owedCount() int {
+	if a := m.selectedAgent(); a != nil {
+		return len(a.PendingReplies)
+	}
+	return 0
+}
+
+// nudgeState is the line under the list: whether a reminder is coming, and
+// how many have gone unanswered.
+func nudgeState(a protocol.AgentInfo, waiting bool) string {
+	switch {
+	case len(a.PendingReplies) == 0:
+		return ""
+	case a.NudgeLimit == 0:
+		return "reminders are off: nothing will nudge this agent"
+	case a.Nudges >= a.NudgeLimit:
+		return fmt.Sprintf("%d reminders went unanswered: no more until something new arrives", a.Nudges)
+	case waiting:
+		return fmt.Sprintf("waiting on an answer or a job: no reminder until that lands (%d of %d used)", a.Nudges, a.NudgeLimit)
+	}
+	return fmt.Sprintf("a reminder follows a turn that ends owing these (%d of %d used)", a.Nudges, a.NudgeLimit)
+}
+
 func (m *Model) replyBodyRows(width int) ([]string, []int) {
 	rows, _, waiting := m.replyRows(width - 2)
 	rows = m.cursorRows(rows)
@@ -61,6 +93,12 @@ func (m *Model) replyBodyRows(width int) ([]string, []int) {
 		}
 		lines = append(lines, row)
 		indices = append(indices, i)
+	}
+	if a := m.selectedAgent(); a != nil {
+		if state := nudgeState(*a, len(a.Awaiting) > 0 || len(m.runningJobs()) > 0); state != "" {
+			lines = append(lines, "", theme.StyleDim.Render(state))
+			indices = append(indices, -1, -1)
+		}
 	}
 	return lines, indices
 }
