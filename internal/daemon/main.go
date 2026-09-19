@@ -53,6 +53,14 @@ func Main(ctx context.Context, o Options) error {
 	buildid.ID() // before a go run binary can be deleted under us
 	unix.Umask(0o077)
 	_ = unix.Prctl(unix.PR_SET_DUMPABLE, 0, 0, 0, 0)
+	// What the agents start stays a descendant of the daemon however it
+	// forks, so the socket can go on refusing it (peercred.DescendsFrom); the
+	// price of adopting orphans is reaping them.
+	if err := unix.Prctl(unix.PR_SET_CHILD_SUBREAPER, 1, 0, 0, 0); err != nil {
+		log.Printf("could not become a subreaper: %v (a process that detaches itself escapes the socket's descendant check)", err)
+	} else {
+		go reapOrphans(ctx, orphanScanEvery)
+	}
 	if err := os.MkdirAll(o.DataDir, 0o700); err != nil {
 		return err
 	}
