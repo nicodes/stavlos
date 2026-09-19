@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -227,5 +228,46 @@ func TestSheetsAreServedInert(t *testing.T) {
 	// the stylesheet is loadable from a sheet's opaque origin
 	if res := do(t, "GET", base+"/sheet.css", nil, ""); res.Header.Get("Cross-Origin-Resource-Policy") != "cross-origin" {
 		t.Fatalf("sheet.css CORP: %q", res.Header.Get("Cross-Origin-Resource-Policy"))
+	}
+}
+
+// Signing out ends what the session had open, and only that.
+func TestSigningOutEndsTheSessionsSockets(t *testing.T) {
+	s, base := start(t)
+	wsURL := "ws" + strings.TrimPrefix(base, "http") + "/ws"
+	open := func(c *http.Cookie) *websocket.Conn {
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL, http.Header{"Origin": {base}, "Cookie": {c.Name + "=" + c.Value}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { conn.Close() })
+		return conn
+	}
+	leaving, staying := signIn(t, s, base), signIn(t, s, base)
+	gone, kept := open(leaving), open(staying)
+	if res := do(t, "DELETE", base+"/api/session", map[string]string{"Origin": base, "Cookie": leaving.Name + "=" + leaving.Value}, ""); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("sign out: %d", res.StatusCode)
+	}
+	_ = gone.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if _, _, err := gone.ReadMessage(); err == nil || strings.Contains(err.Error(), "timeout") {
+		t.Fatalf("the socket outlived its session: %v", err)
+	}
+	if err := kept.WriteMessage(websocket.TextMessage, []byte(`{"id":1}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, got, err := kept.ReadMessage(); err != nil || string(got) != `{"id":1}` {
+		t.Fatalf("another session's socket was ended too: %v %s", err, got)
+	}
+}
+
+// A sheet goes to the app's frame, not to a tab, a fetch or a script tag.
+func TestASheetIsServedOnlyToAFrame(t *testing.T) {
+	s, base := start(t)
+	cookie := signIn(t, s, base)
+	for dest, want := range map[string]int{"iframe": 200, "document": 403, "empty": 403, "script": 403, "image": 403} {
+		res := do(t, "GET", base+"/sheets/c1/s1", map[string]string{"Cookie": cookie.Name + "=" + cookie.Value, "Sec-Fetch-Dest": dest}, "")
+		if res.StatusCode != want {
+			t.Errorf("Sec-Fetch-Dest %s: %d, want %d", dest, res.StatusCode, want)
+		}
 	}
 }
