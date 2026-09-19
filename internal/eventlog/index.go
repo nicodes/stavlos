@@ -41,6 +41,8 @@ func index(ctx context.Context, tx *sql.Tx, e event.Event) error {
 	case event.ChannelArchived:
 		_, err := tx.ExecContext(ctx, `UPDATE channels SET archived = 1 WHERE id = ?`, e.Channel)
 		return err
+	case event.AssistantMessage:
+		return indexUsage(ctx, tx, e)
 	case event.ChatPosted, event.InputQueued:
 		if title := titleOf(e); title != "" {
 			_, err := tx.ExecContext(ctx, `UPDATE channels SET title = ? WHERE id = ? AND title = ''`, title, e.Channel)
