@@ -82,6 +82,7 @@ var subcommands = map[string]func(ctx context.Context, cmd string, args []string
 	"daemon":    cmdDaemon,
 	"status":    cmdStatus,
 	"discord":   cmdDiscord,
+	"web":       cmdWeb,
 	"init":      func(_ context.Context, _ string, args []string) error { return initConfig(args) },
 	"auth":      cmdAuth,
 	"provider":  cmdAuth,
@@ -343,6 +344,7 @@ const usage = `usage:
   stavlos open <#name|id>                               a channel by name + TUI
   stavlos channels | status | tree <channel>
   stavlos discord [status|connect|disconnect]           manage the daemon's Discord integration
+  stavlos web [status|on|off|open] [--print]            the browser UI on 127.0.0.1:4999 (--print shows the sign-in link instead of opening it)
   stavlos send|steer|cancel|kill <agent> [text]
   stavlos auth login [provider] | auth list | auth logout [provider]
   stavlos trust [dir] | init [--model p/m] | daemon

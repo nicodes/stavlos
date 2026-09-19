@@ -25,6 +25,10 @@ var (
 	DiscordStatusMethod = Method[None, DiscordStatus]{MDiscordStatus}
 	DiscordConnect      = Method[None, DiscordStatus]{MDiscordConnect}
 	DiscordDisconnect   = Method[None, DiscordStatus]{MDiscordDisconnect}
+	WebStatusMethod     = Method[None, WebStatus]{MWebStatus}
+	WebEnable           = Method[None, WebStatus]{MWebEnable}
+	WebDisable          = Method[None, WebStatus]{MWebDisable}
+	WebOpen             = Method[None, WebStatus]{MWebOpen}
 	Attach              = Method[AttachParams, AttachResult]{MAttach}
 
 	ChannelList      = Method[ChannelListParams, ChannelListResult]{MChannelList}
