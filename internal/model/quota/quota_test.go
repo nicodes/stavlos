@@ -59,7 +59,7 @@ func TestReadings(t *testing.T) {
 			body: `{"config":{"currentPeriod":{"type":"USAGE_PERIOD_TYPE_WEEKLY","end":"2026-07-20T02:24:00Z"}}}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			u, err := parsers[tc.provider]([]byte(tc.body), time.Unix(1790000000, 0))
+			u, err := sources[tc.provider].parse([]byte(tc.body), time.Unix(1790000000, 0))
 			if err != nil {
 				t.Fatal(err)
 			}

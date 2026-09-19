@@ -51,6 +51,12 @@ type Request struct {
 	// whatever its status: a provider reads what they report beside the
 	// body (the Codex backend's rate-limit windows).
 	OnResponse func(h http.Header)
+	// IsLimit (nil for PlanLimit) reports whether a refusal means the plan's
+	// allowance is used up. What that looks like is a provider's business:
+	// the Codex backend says usage_limit_reached in a 429, xAI says
+	// spending-limit in a 403. Such a refusal is a model.LimitError at once;
+	// it is not retried, because a used-up plan is not back in a second.
+	IsLimit func(status int, body []byte) bool
 }
 
 // Tunables; variables so tests can shrink them.
@@ -239,11 +245,12 @@ func attemptOnce(ctx context.Context, r Request) (*http.Response, error) {
 	// 402. It is not back in a second, so it is not retried; the agent
 	// runtime moves the agent to another model instead.
 	after := retryAfter(resp.Header.Get("Retry-After"))
-	switch resp.StatusCode {
-	case http.StatusTooManyRequests, http.StatusForbidden, http.StatusPaymentRequired:
-		if planLimit(raw) {
-			return nil, &model.LimitError{Err: err, RetryAfter: after}
-		}
+	isLimit := r.IsLimit
+	if isLimit == nil {
+		isLimit = PlanLimit
+	}
+	if isLimit(resp.StatusCode, raw) {
+		return nil, &model.LimitError{Err: err, RetryAfter: after}
 	}
 	if resp.StatusCode == http.StatusTooManyRequests {
 		return nil, &retryable{err: err, after: after, limit: true}
@@ -255,17 +262,24 @@ func attemptOnce(ctx context.Context, r Request) (*http.Response, error) {
 	return nil, err
 }
 
-// planLimit reports whether a refusal's body says a plan's allowance is used
-// up (the Codex backend's usage_limit_reached, xAI's spending-limit and "run
-// out of credits", a quota or balance message) rather than a burst the next
-// second forgives, or a 403 that means what 403 usually means. The marks are
-// about allowance only: "insufficient permissions" is not one.
-func planLimit(raw []byte) bool {
-	s := strings.ToLower(string(raw))
-	for _, mark := range []string{
-		"usage_limit", "usage limit", "spending-limit", "spending limit", "limit reached", "limit_reached",
-		"quota", "exceeded your current", "out of credits", "insufficient_quota", "insufficient balance", "insufficient credit",
-	} {
+// PlanLimit is the general reading of a refusal, for a provider that has not
+// said how it refuses (Request.IsLimit): a 429, 403 or 402 whose body speaks
+// of allowance. The marks are about allowance only: "insufficient
+// permissions" on a 403 means what 403 usually means.
+func PlanLimit(status int, body []byte) bool {
+	switch status {
+	case http.StatusTooManyRequests, http.StatusForbidden, http.StatusPaymentRequired:
+	default:
+		return false
+	}
+	return HasAny(body, "usage_limit", "usage limit", "spending-limit", "spending limit", "limit reached", "limit_reached",
+		"quota", "exceeded your current", "out of credits", "insufficient_quota", "insufficient balance", "insufficient credit")
+}
+
+// HasAny reports whether body holds any of the marks, whatever their case.
+func HasAny(body []byte, marks ...string) bool {
+	s := strings.ToLower(string(body))
+	for _, mark := range marks {
 		if strings.Contains(s, mark) {
 			return true
 		}

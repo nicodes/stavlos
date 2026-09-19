@@ -32,6 +32,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model/chatcompletions"
 	"github.com/nicodes/stavlos/internal/model/codex"
 	"github.com/nicodes/stavlos/internal/model/quota"
+	"github.com/nicodes/stavlos/internal/model/stream"
 	"github.com/nicodes/stavlos/internal/modelsdev"
 	"github.com/nicodes/stavlos/internal/oauth"
 )
@@ -94,6 +95,17 @@ type subscription struct {
 	open func(r *Registry, src model.TokenSource) model.Provider
 }
 
+// supported names the subscriptions for an error message, from the table:
+// "openai (ChatGPT), xai (Grok), …". It used to be written out by hand and
+// went on saying two after there were four.
+func supported() string {
+	names := make([]string, len(subscriptions))
+	for i, s := range subscriptions {
+		names[i] = s.id + " (" + s.name + ")"
+	}
+	return strings.Join(names, ", ")
+}
+
 // catalogID is the models.dev provider to read this subscription's models
 // from.
 func (s subscription) catalogID() string { return cmp.Or(s.catalog, s.id) }
@@ -110,20 +122,36 @@ var subscriptions = []subscription{
 		id: "xai", name: "Grok", priority: 1,
 		allow: grokAllowed,
 		open: func(r *Registry, src model.TokenSource) model.Provider {
-			return chatcompletions.NewWithToken("xai", cmp.Or(r.xaiBaseURL, xaiBaseURL), src)
+			return chatcompletions.NewWithToken("xai", cmp.Or(r.xaiBaseURL, xaiBaseURL), src, chatcompletions.Traits{
+				CacheHeader:      "x-grok-conv-id", // docs.x.ai prompt caching
+				ReplaysReasoning: true,
+				// Grok's reasoning models (the "mini" ones) take low|high; the others reject the field
+				Variants: func(id string) []string {
+					if strings.Contains(id, "mini") {
+						return []string{"low", "high"}
+					}
+					return nil
+				},
+				// a SuperGrok account out of credits is refused with a 403
+				IsLimit: func(status int, body []byte) bool {
+					return status == http.StatusForbidden && stream.HasAny(body, "spending-limit", "out of credits") || stream.PlanLimit(status, body)
+				},
+			})
 		},
 	},
 	{
 		id: "zai", name: "Z.ai Coding Plan", priority: 2, catalog: "zai-coding-plan", key: true,
 		allow: zaiAllowed,
 		open: func(r *Registry, src model.TokenSource) model.Provider {
-			return chatcompletions.NewWithToken("zai", cmp.Or(r.zaiBaseURL, zaiBaseURL), src)
+			// GLM caches a matching prefix with no hint, and documents none
+			return chatcompletions.NewWithToken("zai", cmp.Or(r.zaiBaseURL, zaiBaseURL), src, chatcompletions.Traits{ReplaysReasoning: true})
 		},
 	},
 	{
 		id: "kimi", name: "Kimi For Coding", priority: 3, catalog: "kimi-code-plan-global", key: true,
 		open: func(r *Registry, src model.TokenSource) model.Provider {
-			return chatcompletions.NewWithToken("kimi", cmp.Or(r.kimiBaseURL, kimiBaseURL), src)
+			// prompt_cache_key as kimi-cli sends its session id
+			return chatcompletions.NewWithToken("kimi", cmp.Or(r.kimiBaseURL, kimiBaseURL), src, chatcompletions.Traits{CacheKeyField: true, ReplaysReasoning: true})
 		},
 	},
 }
@@ -336,7 +364,7 @@ func (r *Registry) Providers() []string {
 func (r *Registry) Flow(provider string) (oauth.Flow, error) {
 	f, ok := r.flows[provider]
 	if !ok {
-		return nil, fmt.Errorf("unknown provider %q: Stavlos supports openai (ChatGPT), xai (Grok), zai (GLM Coding Plan) and kimi (Kimi For Coding)", provider)
+		return nil, fmt.Errorf("unknown provider %q: Stavlos supports %s", provider, supported())
 	}
 	return f, nil
 }
@@ -601,7 +629,7 @@ func (r *Registry) lookup(full string) (model.Provider, string, error) {
 	}
 	s, known := subscriptionByID(name)
 	if !known {
-		return nil, "", fmt.Errorf("unknown provider %q: Stavlos supports openai (ChatGPT) and xai (Grok); run /provider", name)
+		return nil, "", fmt.Errorf("unknown provider %q: Stavlos supports %s; run /provider", name, supported())
 	}
 	if _, ok := r.credential(name); !ok {
 		return nil, "", fmt.Errorf("%s is not connected: run /provider to sign in with your %s subscription", s.name, s.name)
