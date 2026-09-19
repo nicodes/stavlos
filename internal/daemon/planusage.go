@@ -198,7 +198,7 @@ func (d *Daemon) planUsage() protocol.PlanUsageResult {
 		if st, ok := d.Registry.Status(provider); !ok || !st.Connected || len(u.Windows) == 0 {
 			continue
 		}
-		info := protocol.PlanUsageInfo{Provider: provider, Name: registry.SubscriptionName(provider), Observed: u.Observed}
+		info := protocol.PlanUsageInfo{Provider: provider, Name: registry.SubscriptionName(provider), Plan: u.Plan, Observed: u.Observed}
 		for _, w := range u.Windows {
 			info.Windows = append(info.Windows, protocol.UsageWindowInfo{UsedPercent: w.UsedPercent, Minutes: w.Minutes, ResetsAt: w.ResetsAt})
 		}

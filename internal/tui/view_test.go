@@ -3701,22 +3701,47 @@ func TestPlanUsageBars(t *testing.T) {
 	if rows := m.planUsageRows(w, now); len(rows) != 0 || m.sidebarSystemRow() != navTopRows {
 		t.Fatalf("no reading, no block: %q", rows)
 	}
-	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-5 * time.Minute), Windows: []protocol.UsageWindowInfo{
-		{UsedPercent: 50, Minutes: 300, ResetsAt: now.Add(2 * time.Hour)},
-		{UsedPercent: 100, Minutes: 60, ResetsAt: now.Add(-time.Minute)}, // reset since the reading: 0%
-	}}}
-	rows := m.planUsageRows(w, now)
-	bar := w - len("ChatGPT") - 1 - 1 - 4
-	want := "ChatGPT " + strings.Repeat("━", bar/2) + strings.Repeat("─", bar-bar/2) + "  50%"
-	if len(rows) != 2 || stripANSI(rows[0]) != want || ansi.StringWidth(stripANSI(rows[0])) != w || rows[1] != "" {
-		t.Fatalf("plan rows: %q, want %q", rows, want)
+	// a row per window, shortest first, the plan's name on the first only
+	m.plans = []protocol.PlanUsageInfo{
+		{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-5 * time.Minute), Windows: []protocol.UsageWindowInfo{
+			{UsedPercent: 50, Minutes: 300, ResetsAt: now.Add(2 * time.Hour)},
+			{UsedPercent: 100, Minutes: 10080, ResetsAt: now.Add(-time.Minute)}, // reset since the reading: 0%
+		}},
+		{Provider: "xai", Name: "Grok", Observed: now, Windows: []protocol.UsageWindowInfo{{UsedPercent: 100, Minutes: 10080, ResetsAt: now.Add(24 * time.Hour)}}},
+		{Provider: "zai", Name: "Z.ai Coding Plan", Observed: now}, // signed in, no reading: no row
 	}
-	m.plans[0].Windows = append(m.plans[0].Windows, protocol.UsageWindowInfo{UsedPercent: 100, Minutes: 10080, ResetsAt: now.Add(24 * time.Hour)})
-	if got := stripANSI(m.planUsageRows(w, now)[0]); got != "ChatGPT "+strings.Repeat("━", bar)+" 100%" {
-		t.Fatalf("the most used window: %q", got)
+	rows := m.planUsageRows(w, now)
+	bar := w - len("ChatGPT 5h") - 1 - 1 - 4
+	want := []string{
+		"ChatGPT 5h " + strings.Repeat("━", (bar+1)/2) + strings.Repeat("─", bar-(bar+1)/2) + "  50%", // half, rounded up
+		"        wk " + strings.Repeat("─", bar) + "   0%",
+		"Grok    wk " + strings.Repeat("━", bar) + " 100%",
+		"",
+	}
+	if len(rows) != len(want) {
+		t.Fatalf("plan rows: %q", rows)
+	}
+	for i := range want {
+		if got := stripANSI(rows[i]); got != want[i] || (want[i] != "" && ansi.StringWidth(got) != w) {
+			t.Fatalf("row %d: %q, want %q", i, got, want[i])
+		}
+	}
+	// every row of a plan opens that plan's chart
+	for y, provider := range map[int]string{navTopRows: "openai", navTopRows + 1: "openai", navTopRows + 2: "xai"} {
+		if p, ok := m.planAt(y); !ok || p.Provider != provider {
+			t.Fatalf("row %d belongs to %q, got %q %v", y, provider, p.Provider, ok)
+		}
+	}
+	if _, ok := m.planAt(navTopRows + 3); ok {
+		t.Fatal("the blank row under the block is no plan")
+	}
+	for minutes, span := range map[int]string{300: "5h", 10080: "wk", 43200: "mo", 1440: "1d", 90: "90m", 0: ""} {
+		if got := windowSpan(minutes); got != span {
+			t.Fatalf("windowSpan(%d) = %q, want %q", minutes, got, span)
+		}
 	}
 	header := m.sidebarHeader(w)
-	if m.sidebarSystemRow() != navTopRows+2 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
+	if m.sidebarSystemRow() != navTopRows+4 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
 		t.Fatalf("the rows under the block move down:\n%s", stripANSI(strings.Join(header, "\n")))
 	}
 	row := stripANSI(header[m.sidebarSystemRow()])

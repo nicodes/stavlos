@@ -411,10 +411,16 @@ var handlers = routes(
 	route(protocol.PlanUsage, func(_ context.Context, c *conn, _ protocol.None) (protocol.PlanUsageResult, error) {
 		return c.d.planUsage(), nil
 	}),
-	route(protocol.PlanSeries, func(_ context.Context, c *conn, p protocol.PlanSeriesParams) (protocol.PlanSeriesResult, error) {
+	route(protocol.PlanSeries, func(ctx context.Context, c *conn, p protocol.PlanSeriesParams) (protocol.PlanSeriesResult, error) {
 		if p.Buckets < 1 || p.Buckets > 1000 {
 			return protocol.PlanSeriesResult{}, fmt.Errorf("buckets must be 1–1000, not %d", p.Buckets)
 		}
+		// Opening a plan's chart is the human asking how it stands now.
+		pollCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		if err := c.d.Registry.PollPlanUsage(pollCtx, p.Provider, 30*time.Second); err != nil {
+			log.Printf("%v", err)
+		}
+		cancel()
 		to := cmp.Or(p.To, time.Now())
 		from := p.From
 		if from.IsZero() {
