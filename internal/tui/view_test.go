@@ -3800,6 +3800,34 @@ func TestNavCacheMonitor(t *testing.T) {
 	}
 }
 
+// TestNavCacheMonitorNamesTheProviderThatIsMissing: a total is dominated by
+// whichever provider does the most work. One provider whose cache stopped
+// working, as ChatGPT's did on 2026-09-16, is named and colours the row,
+// once it has carried enough traffic to judge.
+func TestNavCacheMonitorNamesTheProviderThatIsMissing(t *testing.T) {
+	prev := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.ANSI256)
+	defer lipgloss.SetColorProfile(prev)
+	m := sidebarNavModel()
+	w := sidebarWidth - 1
+	m.cache = protocol.CacheUsageResult{Fresh: 30_000_000 + 9_800_000, Cached: 970_000_000 + 200_000, Providers: []protocol.CacheProviderUsage{
+		{Provider: "xai", Fresh: 30_000_000, Cached: 970_000_000},
+		{Provider: "openai", Fresh: 9_800_000, Cached: 200_000}, // 2%
+		{Provider: "kimi", Fresh: 4_000, Cached: 0},             // one first call: too little to judge
+	}}
+	row := m.cacheRow(w)
+	if text := stripANSI(row); !strings.HasSuffix(text, "96% · openai 2%") || ansi.StringWidth(text) != w {
+		t.Fatalf("row %q", text)
+	}
+	if !strings.Contains(row, theme.StyleError.Render("96% · openai 2%")) {
+		t.Fatalf("the row is not red for a provider at 2%%: %q", row)
+	}
+	m.cache.Providers[1] = protocol.CacheProviderUsage{Provider: "openai", Fresh: 1_000_000, Cached: 9_000_000}
+	if text := stripANSI(m.cacheRow(w)); strings.Contains(text, "openai") {
+		t.Fatalf("every provider is healthy, none is named: %q", text)
+	}
+}
+
 // TestAsyncTabOwedReplies: the async tab counts the replies the selected
 // agent owes alongside what it waits on, lists them with what the harness
 // will do about them, and space on one opens that party's chat.

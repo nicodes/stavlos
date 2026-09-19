@@ -83,3 +83,26 @@ func TestCacheUsage(t *testing.T) {
 		t.Fatalf("fresh %d cached %d: %v", fresh, cached, err)
 	}
 }
+
+// TestCacheUsageByProvider: the same sums, split by the provider of each
+// call's model, so one provider whose cache stopped working shows although
+// another's traffic dominates the total.
+func TestCacheUsageByProvider(t *testing.T) {
+	l := open(t, filepath.Join(t.TempDir(), "e.db"), nil)
+	defer l.Close()
+	ctx := context.Background()
+	appendOne(t, l, created("a", "a"))
+	call := func(at time.Duration, modelID string, in, cached int) {
+		appendOne(t, l, event.Event{Channel: "a", Agent: "a1", Type: event.AssistantMessage, Time: time.Now().Add(at),
+			Payload: event.MustPayload(event.AssistantMessagePayload{Model: modelID, Usage: model.Usage{InputTokens: in, OutputTokens: 5, CacheReadTokens: cached}})})
+	}
+	call(-90*time.Minute, "openai/gpt", 5_000, 0) // before the window
+	call(-30*time.Minute, "xai/grok-4.6", 100, 9_900)
+	call(-20*time.Minute, "xai/grok-4.6-mini", 100, 9_900)
+	call(-10*time.Minute, "openai/gpt", 980, 20)
+	call(-time.Minute, "", 7, 7) // a call that names no model belongs to nobody
+	got, err := l.CacheUsageByProvider(ctx, time.Now().Add(-time.Hour))
+	if err != nil || len(got) != 2 || got["xai"] != [2]int64{200, 19_800} || got["openai"] != [2]int64{980, 20} {
+		t.Fatalf("%v %v", got, err)
+	}
+}

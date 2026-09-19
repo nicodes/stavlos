@@ -52,6 +52,9 @@ func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {
 		StreamOptions: &streamOptions{IncludeUsage: true},
 	}
 	cr.MaxTokens = maxTokens
+	if p.name == "kimi" {
+		cr.PromptCacheKey = req.CacheKey
+	}
 	// Only a variant this model takes is sent. The agent runtime fits the
 	// variant whenever a model changes, but an agent already in the log may
 	// carry one from a model it has since left, and a model with no reasoning

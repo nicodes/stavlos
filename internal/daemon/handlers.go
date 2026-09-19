@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/escalation"
@@ -440,7 +441,22 @@ var handlers = routes(
 		if err != nil {
 			return protocol.CacheUsageResult{}, internal(err)
 		}
-		return protocol.CacheUsageResult{Fresh: fresh, Cached: cached}, nil
+		res := protocol.CacheUsageResult{Fresh: fresh, Cached: cached}
+		by, err := c.d.Log.CacheUsageByProvider(ctx, time.Now().Add(-time.Duration(minutes)*time.Minute))
+		if err != nil {
+			return protocol.CacheUsageResult{}, internal(err)
+		}
+		for provider, v := range by {
+			res.Providers = append(res.Providers, protocol.CacheProviderUsage{Provider: provider, Fresh: v[0], Cached: v[1]})
+		}
+		sort.Slice(res.Providers, func(i, j int) bool {
+			a, b := res.Providers[i], res.Providers[j]
+			if a.Fresh+a.Cached != b.Fresh+b.Cached {
+				return a.Fresh+a.Cached > b.Fresh+b.Cached
+			}
+			return a.Provider < b.Provider
+		})
+		return res, nil
 	}),
 	route(protocol.CommandList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.CommandListResult, error) {
 		return c.d.listCommands(p.Channel)
