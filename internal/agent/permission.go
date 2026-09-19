@@ -76,7 +76,24 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 			return
 		}
 	}
+	// The sheets directory is inside the working set for the file tools, so
+	// the limits on sheets have to hold for them too, not only for the sheet
+	// tool: a known sheet's file, and no larger than a sheet may be.
+	var sheetsAfter func() string
+	if c.Name == toolname.ApplyPatch {
+		refusal, after := a.guardSheets(d.sub)
+		if refusal != "" {
+			finish(refusal, true, false, true)
+			return
+		}
+		sheetsAfter = after
+	}
 	res := t.Run(turnCtx, c.Input, a.toolEnv(turn, c, rv, cfg))
+	if sheetsAfter != nil && !res.IsError {
+		if undone := sheetsAfter(); undone != "" {
+			res = tools.Result{Output: undone, IsError: true}
+		}
+	}
 	if turnCtx.Err() != nil {
 		finish(res.Output, true, true, false)
 		return
