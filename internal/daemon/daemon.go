@@ -25,6 +25,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model/registry"
 	"github.com/nicodes/stavlos/internal/oauth"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/web"
 )
 
 // Daemon is the stavlosd process state.
@@ -55,6 +56,10 @@ type Daemon struct {
 	lock         *os.File // the data directory's lock, held until Close
 
 	streams *streams // stream deltas waiting to be sent together
+
+	webMu  sync.Mutex
+	web    *web.Server     // the browser front door (web.go); nil until Serve
+	webCtx context.Context // what its listener lives under
 }
 
 // New locks the data directory, opens the log and registry and recovers
@@ -97,6 +102,11 @@ func (d *Daemon) Close() {
 	if d.Discord != nil {
 		d.Discord.Close()
 	}
+	d.webMu.Lock()
+	if d.web != nil {
+		d.web.Disable() // the listener only; whether it is on stays as the human left it
+	}
+	d.webMu.Unlock()
 	for _, s := range d.channelList() {
 		s.Stop()
 	}

@@ -122,7 +122,7 @@ func (m *Model) planCommand(rest string) tea.Cmd {
 // planAt is the plan whose row the nav draws at header row y (the block
 // starts at row 2), and whether y is one of those rows.
 func (m Model) planAt(y int) (protocol.PlanUsageInfo, bool) {
-	i := y - 2
+	i := y - navTopRows
 	if i < 0 || i >= len(m.plans) {
 		return protocol.PlanUsageInfo{}, false
 	}

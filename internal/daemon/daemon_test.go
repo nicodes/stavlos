@@ -143,8 +143,22 @@ func newHarness(t *testing.T, data string, fm *fakeModel) *harness {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A long test name under a long GOTMPDIR overflows a Unix socket path,
+	// and Serve's refusal would only show as a dial that never connects.
 	sock := filepath.Join(data, "s.sock")
-	go d.Serve(ctx, sock)
+	if len(sock) > 100 {
+		short, err := os.MkdirTemp("/tmp", "sv")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(short) })
+		sock = filepath.Join(short, "s.sock")
+	}
+	go func() {
+		if err := d.Serve(ctx, sock); err != nil {
+			t.Errorf("serve: %v", err)
+		}
+	}()
 	var c *rpc.Client
 	for i := 0; i < 50; i++ {
 		if c, err = rpc.Dial(sock); err == nil {
