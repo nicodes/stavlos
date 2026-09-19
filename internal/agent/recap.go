@@ -75,10 +75,11 @@ func (c *Channel) MaybeRecap(ctx context.Context, now time.Time) error {
 		c.mu.Unlock()
 		return nil // already asked, quiet for less than the interval, or nothing new to report
 	}
-	st.lastRecap, st.recapOpen = now, true
+	// (lastRecap and recapOpen are set by the fold, from this event: state is
+	// only ever what the log says, so a restart finds the recap still open)
 	id := NewID("recap")
 	wake, err := c.commitLocked(ctx, c.event(main, event.InputQueued, event.Input{
-		ID: NewID("i"), RequestID: id, Kind: event.InputPrompt, Text: recapText, To: []string{st.agents[main].name}, From: "", FromName: tools.User,
+		ID: NewID("i"), RequestID: id, Kind: event.InputPrompt, Text: recapText, To: []string{st.agents[main].name}, From: "", FromName: tools.User, Recap: true,
 	}))
 	c.mu.Unlock()
 	signal(wake)

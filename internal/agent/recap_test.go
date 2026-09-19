@@ -79,3 +79,39 @@ func recapInputs(h *fakeHost, agent string) []event.Input {
 	}
 	return out
 }
+
+// TestAnOpenRecapSurvivesARestart (RT1): that a recap was asked for and is
+// still unanswered was kept only in memory, set before the event that says
+// so was written. After a restart the daemon asked again. It is now folded
+// from the log like everything else.
+func TestAnOpenRecapSurvivesARestart(t *testing.T) {
+	fm := &fakeModel{steps: []step{reply(text("worked")), reply(text("noted, no report yet"))}}
+	s, h := newTestChannel(t, testConfig{}, fm)
+	ctx := context.Background()
+	runTurn(t, s, h, "do something") // work worth a recap
+	if err := s.SetRecap(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	later := time.Now().Add(10 * time.Minute)
+	if err := s.MaybeRecap(ctx, later); err != nil {
+		t.Fatal(err)
+	}
+	h.waitTurnEnd(t, s.Root().ID, 2) // the agent took the ask and did not answer the human
+	if n := len(recapInputs(h, s.Root().ID)); n != 1 {
+		t.Fatalf("%d recap asks", n)
+	}
+	s.Stop()
+	r, err := Recover(ctx, newFakeHost(fm), s.ID, s.Dir(), time.Now(), s.Config(), h.all())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer r.Stop()
+	rh := r.host.(*fakeHost)
+	if err := r.MaybeRecap(ctx, later.Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(30 * time.Millisecond)
+	if n := len(recapInputs(rh, r.Root().ID)); n != 0 {
+		t.Fatalf("the restarted daemon asked for a recap that was already open: %d new asks", n)
+	}
+}
