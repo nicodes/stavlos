@@ -158,7 +158,8 @@ func (d *Daemon) Append(ctx context.Context, evs ...event.Event) ([]event.Event,
 
 // committed fans committed events out to subscribed clients. The log calls
 // it on its writer, in commit order, so clients see every channel's events
-// in sequence; each event is encoded once for all of them, and delivery
+// in sequence; each event is encoded once for all of them (an event nobody
+// is subscribed to, not at all), and delivery
 // only queues, so a slow client never holds up a commit.
 func (d *Daemon) committed(evs []event.Event) {
 	for i, e := range evs {
@@ -168,9 +169,14 @@ func (d *Daemon) committed(evs []event.Event) {
 	}
 	clients := d.clientList()
 	for _, e := range evs {
-		line := eventLine(e)
+		var line []byte // encoded for the first client subscribed to it, and not at all for none
 		for _, c := range clients {
-			c.deliver(e, line)
+			c.deliver(e, func() []byte {
+				if line == nil {
+					line = eventLine(e)
+				}
+				return line
+			})
 		}
 	}
 }
@@ -664,9 +670,9 @@ func eventLine(e event.Event) []byte {
 	return notification(protocol.NEvent, b)
 }
 
-// deliver sends a committed event, already encoded, once per subscription
-// and in order.
-func (c *client) deliver(e event.Event, line []byte) {
+// deliver sends a committed event once per subscription and in order; line
+// encodes it, once for all the clients that want it.
+func (c *client) deliver(e event.Event, line func() []byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	last, ok := c.subs[e.Channel]
@@ -674,7 +680,7 @@ func (c *client) deliver(e event.Event, line []byte) {
 		return
 	}
 	c.subs[e.Channel] = e.Seq
-	c.send(line, false)
+	c.send(line(), false)
 }
 
 // subscribe replays a channel's events from seq from, then hands the

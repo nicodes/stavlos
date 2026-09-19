@@ -76,7 +76,9 @@ type conn struct {
 	// such a process could answer its own permission prompts or switch its
 	// channel to yolo.
 	ran bool
-	web bool // a browser connection: webMethods only
+	web bool // a browser connection: only what its routes open to it
+
+	queued atomic.Int64 // bytes waiting in out
 
 	replaying atomic.Int32 // replays in progress, for the log line when a client is dropped
 }
@@ -91,6 +93,11 @@ type outMsg struct {
 // replies and prompts are never dropped, and a queue full of them means the
 // client is gone for practical purposes.
 var outQueue = 1 << 14 // a variable so a test can make a queue a replay fills
+
+// maxQueueBytes bounds the same queue by what it holds rather than by how
+// many: a tool result is up to 130 KB, so a count alone let one client that
+// stopped reading pin about 2 GB until its write timed out.
+var maxQueueBytes int64 = 64 << 20
 
 // writeTimeout bounds one write to a client (a variable for tests).
 var writeTimeout = 10 * time.Second
@@ -168,15 +175,26 @@ func (c *conn) write(v any) {
 // enqueue queues one encoded, newline-terminated message without blocking.
 // The bytes may be shared with other connections and are never modified.
 func (c *conn) enqueue(line []byte, droppable bool) {
-	if droppable && len(c.out) > outQueue/2 {
+	if droppable && (len(c.out) > outQueue/2 || c.queued.Load() > maxQueueBytes/2) {
 		return
 	}
+	full := c.queued.Load()+int64(len(line)) > maxQueueBytes
+	if !full {
+		c.queued.Add(int64(len(line)))
+		select {
+		case c.out <- outMsg{b: line, droppable: droppable}:
+			return
+		case <-c.done:
+			return
+		default:
+			c.queued.Add(-int64(len(line)))
+		}
+	}
 	select {
-	case c.out <- outMsg{b: line, droppable: droppable}:
 	case <-c.done:
 	default:
 		// (the client's name is behind its lock, which a delivery holds here)
-		log.Printf("client %s is not reading: %d messages queued, replaying=%v; dropping it", c.cl.id, len(c.out), c.replaying.Load() > 0)
+		log.Printf("client %s is not reading: %d messages (%d bytes) queued, replaying=%v; dropping it", c.cl.id, len(c.out), c.queued.Load(), c.replaying.Load() > 0)
 		c.close()
 	}
 }
@@ -196,7 +214,7 @@ func (c *conn) enqueue(line []byte, droppable bool) {
 func (c *conn) enqueueReplay(ctx context.Context, line []byte) error {
 	c.replaying.Add(1)
 	defer c.replaying.Add(-1)
-	for len(c.out) >= outQueue/4 {
+	for len(c.out) >= outQueue/4 || c.queued.Load() >= maxQueueBytes/4 {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -212,6 +230,7 @@ func (c *conn) enqueueReplay(ctx context.Context, line []byte) error {
 	case <-c.done:
 		return net.ErrClosed
 	case c.out <- outMsg{b: line}:
+		c.queued.Add(int64(len(line)))
 		return nil
 	}
 }
@@ -223,6 +242,7 @@ func (c *conn) writer() {
 	for {
 		select {
 		case m := <-c.out:
+			c.queued.Add(-int64(len(m.b)))
 			_ = c.c.SetWriteDeadline(time.Now().Add(writeTimeout))
 			_, err := w.Write(m.b)
 			if err == nil && len(c.out) == 0 {
