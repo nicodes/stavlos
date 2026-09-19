@@ -12,7 +12,6 @@ import (
 	"path"
 	"slices"
 	"strings"
-	"unicode"
 )
 
 // Prefixes a human may allow for a channel come from an allowlist: a
@@ -204,6 +203,9 @@ func Prefix(cmd string) string {
 		return ""
 	}
 	first := w[0]
+	if !plainWord(first) {
+		return "" // "./my\\ script": a word with a space in it reads back as two
+	}
 	if sub, two := twoWordTools[first]; two {
 		if len(w) < 2 || w[1] == "" || strings.HasPrefix(w[1], "-") || slices.Contains(sub, w[1]) || !plainWord(w[1]) {
 			return ""
@@ -216,12 +218,27 @@ func Prefix(cmd string) string {
 	return ""
 }
 
-// plainWord reports whether w can stand in a prefix a human is offered: no
-// space of any kind and no control character. The shell splits words on
-// blanks only, so "0\f" is one word to it and two to anything that reads the
-// prefix back; such a word is not offered.
+// plainWord reports whether w can stand in a prefix a human is offered and
+// the harness then remembers as text: only characters that mean themselves
+// to a shell and to anything that reads the prefix back. A word with a space,
+// a quote, a backslash or a "$" in it (./my\ script, ./\") is one word when
+// the command is parsed and something else when the prefix is, so a prefix
+// holding one would be offered, remembered, and never match again. Such a
+// command is simply not offered a prefix; it can still be allowed once or for
+// the channel.
 func plainWord(w string) bool {
-	return !strings.ContainsFunc(w, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
+	if w == "" {
+		return false
+	}
+	for _, r := range w {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune("._/+-=@:,%", r):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Covers reports whether an allowed prefix covers cmd: cmd is one simple
