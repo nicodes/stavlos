@@ -256,9 +256,7 @@ func (h *harness) waitTree(channel string, cond func([]protocol.AgentInfo) bool)
 }
 
 func setupConfig(t *testing.T) {
-	g := t.TempDir()
-	t.Setenv("STAVLOS_CONFIG_DIR", g)
-	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
+	g := testutil.Isolate(t).Config // its own config, data and cache
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"model":"fake/m1","reminders":false,"policy":{"shell":{"echo*":"allow","*":"ask"},"write":"allow"}}`), 0o644)
 }
 
