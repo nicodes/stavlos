@@ -342,7 +342,15 @@ var nonPublic = func() []netip.Prefix {
 
 // publicIP reports whether ip is routable on the public internet. An
 // IPv4-mapped IPv6 address is judged as the IPv4 address it carries.
+//
+// An address with a zone ("::1%lo", "fe80::1%eth0") is never public: a zone
+// scopes an address to a link of this machine. It must be refused before the
+// prefix test, not by it, because netip keeps the zone in its comparisons:
+// "::1%lo" is not contained in ::1/128, and would pass as public.
 func publicIP(ip netip.Addr) bool {
+	if ip.Zone() != "" {
+		return false
+	}
 	ip = ip.Unmap()
 	for _, p := range nonPublic {
 		if p.Contains(ip) {

@@ -12,6 +12,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"unicode"
 )
 
 // Prefixes a human may allow for a channel come from an allowlist: a
@@ -204,7 +205,7 @@ func Prefix(cmd string) string {
 	}
 	first := w[0]
 	if sub, two := twoWordTools[first]; two {
-		if len(w) < 2 || w[1] == "" || strings.HasPrefix(w[1], "-") || slices.Contains(sub, w[1]) {
+		if len(w) < 2 || w[1] == "" || strings.HasPrefix(w[1], "-") || slices.Contains(sub, w[1]) || !plainWord(w[1]) {
 			return ""
 		}
 		return first + " " + w[1]
@@ -215,11 +216,21 @@ func Prefix(cmd string) string {
 	return ""
 }
 
+// plainWord reports whether w can stand in a prefix a human is offered: no
+// space of any kind and no control character. The shell splits words on
+// blanks only, so "0\f" is one word to it and two to anything that reads the
+// prefix back; such a word is not offered.
+func plainWord(w string) bool {
+	return !strings.ContainsFunc(w, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
+}
+
 // Covers reports whether an allowed prefix covers cmd: cmd is one simple
-// command whose first words are the prefix's, word for word.
+// command whose first words are the prefix's, word for word. The prefix is
+// split the way a command is, so a prefix always covers the command it was
+// offered for.
 func Covers(prefix, cmd string) bool {
-	pw := strings.Fields(prefix)
-	if len(pw) == 0 {
+	pw, ok := Words(prefix)
+	if !ok || len(pw) == 0 {
 		return false
 	}
 	cw, ok := Words(cmd)
