@@ -278,6 +278,12 @@ func (b *Builder) result(seq int64, bl model.Block) {
 func InputText(in event.Input, job event.JobFinishedPayload) string {
 	switch in.Kind {
 	case event.InputRequest, event.InputResponse, event.InputInfo:
+		if in.FromName == "" && in.From == "" {
+			// nobody sent it: the harness is telling the agent something (its
+			// channel's directory changed). It used to read "[message from
+			// agent , no reply needed…", an agent with no name.
+			return "[from the harness] " + in.Text
+		}
 		needs := ""
 		switch in.Kind {
 		case event.InputInfo:

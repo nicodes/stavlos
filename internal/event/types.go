@@ -5,6 +5,7 @@ package event
 
 import (
 	"encoding/json"
+	"slices"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/model"
@@ -171,6 +172,48 @@ const (
 	InputReminder InputKind = "reminder" // the harness's reminder of replies still owed (Parties)
 	InputResume   InputKind = "resume"   // the harness's: a model is available again after the turn stopped at every plan's limit
 )
+
+// InputRule is what a kind of input means to the runtime. The rules used to
+// be spread over the state machine, the reply tracker, the projector and the
+// clients as separate switches, so a new kind meant finding all of them (the
+// resume kind touched nine places); they are declared here, once, beside the
+// kinds, and a test fails when a kind has none.
+type InputRule struct {
+	Wakes   bool // it starts a turn when the agent is idle
+	MidTurn bool // it reaches a running turn at its next model call, not after the turn
+	Harness bool // the harness wrote it, not a person or an agent: it is framed as such to the model, owes nobody a reply, and clients draw it as a notice
+}
+
+var inputRules = map[InputKind]InputRule{
+	InputPrompt:   {Wakes: true},
+	InputSteer:    {Wakes: true, MidTurn: true},
+	InputRequest:  {Wakes: true, MidTurn: true},
+	InputInfo:     {MidTurn: true},
+	InputResponse: {Wakes: true},
+	InputJob:      {Wakes: true},
+	InputReminder: {Wakes: true, Harness: true},
+	InputResume:   {Wakes: true, Harness: true},
+}
+
+// Rule is the kind's rule. A kind nobody declared (a log written by a newer
+// build) wakes the agent and waits for the turn to end: the safe reading of
+// something addressed to an agent is that it should be looked at.
+func (k InputKind) Rule() InputRule {
+	if r, ok := inputRules[k]; ok {
+		return r
+	}
+	return InputRule{Wakes: true}
+}
+
+// InputKinds lists the declared kinds, for tests and tables.
+func InputKinds() []InputKind {
+	out := make([]InputKind, 0, len(inputRules))
+	for k := range inputRules {
+		out = append(out, k)
+	}
+	slices.Sort(out)
+	return out
+}
 
 // Input is one entry of an agent's inbox.
 type Input struct {
