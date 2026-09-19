@@ -135,6 +135,17 @@ type CacheUsageParams struct {
 type CacheUsageResult struct {
 	Fresh  int64 `json:"fresh"`
 	Cached int64 `json:"cached"`
+	// Providers splits the same figures by provider, largest first: a total
+	// hides one provider whose cache has stopped working behind another's
+	// traffic.
+	Providers []CacheProviderUsage `json:"providers,omitempty"`
+}
+
+// CacheProviderUsage is one provider's share of CacheUsageResult.
+type CacheProviderUsage struct {
+	Provider string `json:"provider"`
+	Fresh    int64  `json:"fresh"`
+	Cached   int64  `json:"cached"`
 }
 
 // PlanUsagePoint is a plan's most used window as one reading saw it.
