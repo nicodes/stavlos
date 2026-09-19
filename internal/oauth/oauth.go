@@ -1,6 +1,6 @@
 // Package oauth implements the subscription logins Stavlos supports:
 // ChatGPT Plus/Pro (via the Codex sign-in), SuperGrok (via the Grok CLI
-// sign-in) and the Z.ai GLM Coding Plan. The first two are device-code
+// sign-in), the Z.ai GLM Coding Plan and Kimi For Coding. The first two are device-code
 // flows using the official CLIs' public client ids, the same mechanism
 // opencode uses: the user opens a URL on any device, enters a short code,
 // and the daemon polls for the tokens. Z.ai issues no OAuth credential at
@@ -123,7 +123,7 @@ func Flows() map[string]Flow {
 		g.DeviceURL, g.TokenURL = strings.TrimRight(v, "/")+"/device/code", strings.TrimRight(v, "/")+"/token"
 		fmt.Fprintf(os.Stderr, "stavlos: STAVLOS_OAUTH_XAI_BASE is set: Grok sign-ins and tokens go to %s\n", strings.TrimRight(v, "/"))
 	}
-	return map[string]Flow{"openai": c, "xai": g, "zai": &ZAI{}}
+	return map[string]Flow{"openai": c, "xai": g, "zai": ZAI(), "kimi": Kimi()}
 }
 
 // ErrDenied is returned when the user rejects the login.

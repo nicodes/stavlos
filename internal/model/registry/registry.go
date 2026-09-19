@@ -4,11 +4,12 @@
 //   - openai: ChatGPT Plus/Pro, via the Codex sign-in and backend
 //   - xai:    SuperGrok, via the Grok CLI sign-in and api.x.ai
 //   - zai:    the GLM Coding Plan, via a key from the Z.ai console
+//   - kimi:   Kimi For Coding, via a key from the Kimi Code console
 //
 // Credentials live in the auth store; access tokens are refreshed on
-// demand. Z.ai issues no OAuth credential, so its plan is bound to a key
-// the user pastes once: still a subscription, still one credential in the
-// same store, with nothing to refresh.
+// demand. The coding plans issue no OAuth credential, so each is bound to
+// a key the user pastes once: still a subscription, still one credential
+// in the same store, with nothing to refresh.
 package registry
 
 import (
@@ -64,6 +65,12 @@ const xaiBaseURL = "https://api.x.ai/v1"
 // which bills pay-as-you-go credits instead of the subscription.
 const zaiBaseURL = "https://api.z.ai/api/coding/paas/v4"
 
+// kimiBaseURL is Kimi For Coding's OpenAI Chat Completions endpoint. The
+// plan's endpoint, not api.moonshot.ai/v1, which is the pay-as-you-go
+// platform. This is the global one; the China site serves the same plan at
+// api.kimi.com/coding/v1.
+const kimiBaseURL = "https://api.kimi.ai/coding/v1"
+
 // subscription is everything provider-specific about one supported
 // subscription; the rest of the registry is generic over this table.
 type subscription struct {
@@ -77,7 +84,8 @@ type subscription struct {
 	// key marks a subscription bound to a pasted key rather than an OAuth
 	// login: there is no refresh, and the credential holds a key.
 	key bool
-	// allow keeps the catalog models the subscription actually serves.
+	// allow keeps the catalog models the subscription actually serves. A
+	// plan whose catalog entry is already its own list needs none.
 	allow func(model string) bool
 	// open builds the adapter; src reads (and refreshes) the stored login.
 	open func(r *Registry, src model.TokenSource) model.Provider
@@ -107,6 +115,12 @@ var subscriptions = []subscription{
 		allow: zaiAllowed,
 		open: func(r *Registry, src model.TokenSource) model.Provider {
 			return chatcompletions.NewWithToken("zai", cmp.Or(r.zaiBaseURL, zaiBaseURL), src)
+		},
+	},
+	{
+		id: "kimi", name: "Kimi For Coding", priority: 3, catalog: "kimi-code-plan-global", key: true,
+		open: func(r *Registry, src model.TokenSource) model.Provider {
+			return chatcompletions.NewWithToken("kimi", cmp.Or(r.kimiBaseURL, kimiBaseURL), src)
 		},
 	},
 }
@@ -140,6 +154,7 @@ type Registry struct {
 	codexEndpoint string
 	xaiBaseURL    string
 	zaiBaseURL    string
+	kimiBaseURL   string
 
 	mu         sync.Mutex
 	providers  map[string]model.Provider // explicit registrations
@@ -174,10 +189,10 @@ func (r *Registry) WithFlows(f map[string]oauth.Flow) *Registry { r.flows = f; r
 
 // WithEndpoints overrides service URLs (tests). Adapters built for the old
 // endpoints are dropped.
-func (r *Registry) WithEndpoints(codexEndpoint, xaiBaseURL, zaiBaseURL string) *Registry {
+func (r *Registry) WithEndpoints(codexEndpoint, xaiBaseURL, zaiBaseURL, kimiBaseURL string) *Registry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.codexEndpoint, r.xaiBaseURL, r.zaiBaseURL = codexEndpoint, xaiBaseURL, zaiBaseURL
+	r.codexEndpoint, r.xaiBaseURL, r.zaiBaseURL, r.kimiBaseURL = codexEndpoint, xaiBaseURL, zaiBaseURL, kimiBaseURL
 	r.subs = map[string]model.Provider{}
 	r.opened = map[string]model.Model{}
 	return r
@@ -316,7 +331,7 @@ func (r *Registry) Providers() []string {
 func (r *Registry) Flow(provider string) (oauth.Flow, error) {
 	f, ok := r.flows[provider]
 	if !ok {
-		return nil, fmt.Errorf("unknown provider %q: Stavlos supports openai (ChatGPT), xai (Grok) and zai (GLM Coding Plan)", provider)
+		return nil, fmt.Errorf("unknown provider %q: Stavlos supports openai (ChatGPT), xai (Grok), zai (GLM Coding Plan) and kimi (Kimi For Coding)", provider)
 	}
 	return f, nil
 }
@@ -654,7 +669,7 @@ func (r *Registry) Models(provider string, all bool) []ModelEntry {
 		// the models listed are the ones the subscription actually serves
 		key := s.catalogID()
 		for _, id := range cat.Models(key) {
-			if !s.allow(id) {
+			if s.allow != nil && !s.allow(id) {
 				continue
 			}
 			info, _ := cat.Model(key, id)
