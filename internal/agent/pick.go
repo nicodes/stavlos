@@ -20,32 +20,78 @@ import (
 // subscription has the most allowance about to go to waste, and moves a
 // running agent to the next when its model's plan runs out.
 //
-// A subscription's long window (the week) is its budget: what is unused when
-// it resets is lost. Its short window (five hours) is a throttle on spending
-// that budget. So a provider with any window used up is passed over until
-// that window resets, and the rest are ranked by how far behind pace their
-// budget is: the share of the window that has gone by, less the share used.
-// 17% used with 60% of the week gone is 43 points of allowance that will
-// lapse unless something uses it; 80% used on day two is a plan to spare.
+// What is unused when a window resets is lost, and how much is lost depends
+// on the window: most of a week about to lapse is a great deal of allowance,
+// most of five hours very little, and there is another five hours right
+// behind it. A provider may limit by any mix of windows (five hours and a
+// week, the week alone, five hours alone, a day, a month), so nothing here
+// knows the mixes; it reads whatever windows a reading has.
+//
+//  1. A provider with any window used up is passed over until that window
+//     resets: a short window above a long one is a throttle on spending it.
+//  2. The rest are ranked by the allowance about to lapse in their budget,
+//     their longest window: how far behind pace it is (the share of the
+//     window gone by, less the share used), weighted by the window's length
+//     so that a week outweighs five hours. 50% used with a day of the week
+//     left is 36 points of a week going to waste; a five-hour window in the
+//     same state is one point of a week.
+//  3. Providers level on that are compared window by window, longest first,
+//     on plain pace: the week first, then down to the five hours. A provider
+//     without a window of some length has nothing lapsing there.
+//  4. Then the sooner reset of the budget, then the role's order.
 
 // limitedAt is the used percent at which a window counts as used up.
 const limitedAt = 99.5
 
-// paceBand is how many points of pace count as a tie, which the sooner
-// reset, then the role's order, break: readings are minutes old, and a
-// choice that flips on a point of noise would scatter agents for no gain.
+// paceBand is how many points count as level: readings are minutes old, and
+// a choice that flips on a point of noise would scatter agents for no gain.
 const paceBand = 5.0
+
+// weekMinutes is the unit allowance at risk is measured in: points of a week.
+const weekMinutes = 7 * 24 * 60
+
+// pace is one window of a reading as the picker sees it.
+type pace struct {
+	minutes int       // the window's length, 0 when the provider did not say
+	used    float64   // percent used
+	elapsed float64   // percent of the window gone by
+	surplus float64   // elapsed less used: points behind pace (negative: ahead)
+	resets  time.Time // zero when unknown
+}
 
 // plan is what a provider's reading says to the picker.
 type plan struct {
-	known   bool      // a reading exists
 	limited bool      // a window is used up, or a call was refused
 	until   time.Time // when it stops being limited (zero: unknown)
-	surplus float64   // points behind pace in its longest window (negative: ahead)
-	used    float64   // percent of that window used
-	elapsed float64   // percent of that window gone by
-	span    int       // that window's length in minutes
-	resets  time.Time // when that window resets
+	windows []pace    // longest first; none when there is no reading
+}
+
+// budget is the plan's longest window, the allowance that lapses.
+func (p plan) budget() (pace, bool) {
+	if len(p.windows) == 0 {
+		return pace{}, false
+	}
+	return p.windows[0], true
+}
+
+// atRisk is the allowance about to lapse in the budget, in points of a week.
+func (p plan) atRisk() float64 {
+	b, ok := p.budget()
+	if !ok || b.minutes <= 0 {
+		return 0
+	}
+	return b.surplus * float64(b.minutes) / weekMinutes
+}
+
+// surplusAt is the pace of the plan's window of that length, 0 when it has
+// none: nothing of that length is lapsing.
+func (p plan) surplusAt(minutes int) float64 {
+	for _, w := range p.windows {
+		if w.minutes == minutes {
+			return w.surplus
+		}
+	}
+	return 0
 }
 
 func readPlan(u model.PlanUsage, now time.Time) plan {
@@ -53,34 +99,27 @@ func readPlan(u model.PlanUsage, now time.Time) plan {
 	if u.LimitedUntil.After(now) {
 		p.limited, p.until = true, u.LimitedUntil
 	}
-	longest := -1
-	for i, w := range u.Windows {
-		live := w.ResetsAt.IsZero() || w.ResetsAt.After(now)
-		if live && w.UsedPercent >= limitedAt {
+	for _, w := range u.Windows {
+		if !w.ResetsAt.IsZero() && !w.ResetsAt.After(now) {
+			// it has reset since the reading: nothing used, nothing gone by
+			p.windows = append(p.windows, pace{minutes: w.Minutes})
+			continue
+		}
+		if w.UsedPercent >= limitedAt {
 			p.limited = true
 			if w.ResetsAt.After(p.until) {
 				p.until = w.ResetsAt
 			}
 		}
-		if longest < 0 || w.Minutes > u.Windows[longest].Minutes {
-			longest = i
+		pc := pace{minutes: w.Minutes, used: w.UsedPercent, resets: w.ResetsAt}
+		if w.Minutes > 0 && !w.ResetsAt.IsZero() {
+			left := w.ResetsAt.Sub(now).Minutes() / float64(w.Minutes)
+			pc.elapsed = 100 * (1 - min(max(left, 0), 1))
+			pc.surplus = pc.elapsed - pc.used
 		}
+		p.windows = append(p.windows, pc)
 	}
-	if longest < 0 {
-		return p
-	}
-	p.known = true
-	w := u.Windows[longest]
-	p.span, p.resets = w.Minutes, w.ResetsAt
-	if !w.ResetsAt.IsZero() && !w.ResetsAt.After(now) {
-		return p // it has reset since the reading: nothing used, nothing gone by
-	}
-	p.used = w.UsedPercent
-	if w.Minutes > 0 && !w.ResetsAt.IsZero() {
-		left := w.ResetsAt.Sub(now).Minutes() / float64(w.Minutes)
-		p.elapsed = 100 * (1 - min(max(left, 0), 1))
-		p.surplus = p.elapsed - p.used
-	}
+	sort.SliceStable(p.windows, func(i, j int) bool { return p.windows[i].minutes > p.windows[j].minutes })
 	return p
 }
 
@@ -91,9 +130,9 @@ type choice struct {
 }
 
 // pickModel takes the candidate (in the role's order) whose provider has the
-// most allowance at risk, passing over limited providers and avoid. ok is
-// false when every candidate is limited; soonest is then when the first of
-// them comes back (zero when none says).
+// most allowance about to lapse, passing over limited providers and avoid.
+// ok is false when every candidate is limited; soonest is then when the
+// first of them comes back (zero when none says).
 func pickModel(candidates []string, usage map[string]model.PlanUsage, now time.Time, avoid string) (c choice, soonest time.Time, ok bool) {
 	type ranked struct {
 		model string
@@ -101,13 +140,14 @@ func pickModel(candidates []string, usage map[string]model.PlanUsage, now time.T
 		at    int
 	}
 	var open []ranked
+	lengths := map[int]bool{}
 	for i, id := range candidates {
 		provider, _, err := model.Split(id)
 		if err != nil {
 			continue
 		}
 		p := readPlan(usage[provider], now)
-		if provider == avoid && !p.limited {
+		if provider == avoid {
 			p.limited = true
 		}
 		if p.limited {
@@ -116,19 +156,36 @@ func pickModel(candidates []string, usage map[string]model.PlanUsage, now time.T
 			}
 			continue
 		}
+		for _, w := range p.windows {
+			if w.minutes > 0 {
+				lengths[w.minutes] = true
+			}
+		}
 		open = append(open, ranked{id, p, i})
 	}
 	if len(open) == 0 {
 		return choice{}, soonest, false
 	}
-	band := func(p plan) float64 { return math.Round(p.surplus / paceBand) }
+	tiers := make([]int, 0, len(lengths)) // every window length among them, longest first
+	for m := range lengths {
+		tiers = append(tiers, m)
+	}
+	sort.Sort(sort.Reverse(sort.IntSlice(tiers)))
+	band := func(points float64) float64 { return math.Round(points / paceBand) }
 	sort.SliceStable(open, func(i, j int) bool {
 		a, b := open[i].plan, open[j].plan
-		if band(a) != band(b) {
-			return band(a) > band(b)
+		if x, y := band(a.atRisk()), band(b.atRisk()); x != y {
+			return x > y
 		}
-		if a.known && b.known && !a.resets.IsZero() && !b.resets.IsZero() && !a.resets.Equal(b.resets) {
-			return a.resets.Before(b.resets)
+		for _, m := range tiers {
+			if x, y := band(a.surplusAt(m)), band(b.surplusAt(m)); x != y {
+				return x > y
+			}
+		}
+		ab, aok := a.budget()
+		bb, bok := b.budget()
+		if aok && bok && !ab.resets.IsZero() && !bb.resets.IsZero() && !ab.resets.Equal(bb.resets) {
+			return ab.resets.Before(bb.resets)
 		}
 		return open[i].at < open[j].at
 	})
@@ -139,13 +196,14 @@ func pickModel(candidates []string, usage map[string]model.PlanUsage, now time.T
 // describePlan says what made a model the choice.
 func describePlan(id string, p plan) string {
 	provider, _, _ := model.Split(id)
+	b, ok := p.budget()
 	switch {
-	case !p.known:
+	case !ok:
 		return provider + " has reported no plan usage yet"
-	case p.span <= 0 || p.resets.IsZero():
-		return fmt.Sprintf("%s: %.0f%% used", provider, p.used)
+	case b.minutes <= 0 || b.resets.IsZero():
+		return fmt.Sprintf("%s: %.0f%% used", provider, b.used)
 	}
-	return fmt.Sprintf("%s: %.0f%% of its %s used with %.0f%% of it gone", provider, p.used, spanName(p.span), p.elapsed)
+	return fmt.Sprintf("%s: %.0f%% of its %s used with %.0f%% of it gone", provider, b.used, spanName(b.minutes), b.elapsed)
 }
 
 func spanName(minutes int) string {
