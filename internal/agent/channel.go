@@ -226,7 +226,7 @@ func (c *Channel) Stop() {
 	c.mu.Unlock()
 	c.cancel()
 	for _, a := range agents {
-		a.stopMCP("", false)
+		a.release()
 	}
 	// Model calls, tools and prompts all end with their context; a call that
 	// ignores it must not hold the daemon's shutdown hostage.
@@ -761,8 +761,7 @@ func (c *Channel) Kill(agentID string) error {
 	}
 	c.mu.Unlock()
 	for _, a := range victims {
-		a.kill()
-		a.stopMCP("", false)
+		a.release()
 	}
 	return err
 }
