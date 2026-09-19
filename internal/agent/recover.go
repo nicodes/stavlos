@@ -69,7 +69,7 @@ func (c *Channel) resume(ctx context.Context) error {
 				c.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputJob, Job: job}))
 		}
 	}
-	wake, err := c.commitLocked(ctx, evs...)
+	err := c.commitLocked(ctx, evs...)
 	if err != nil {
 		c.mu.Unlock()
 		return err
@@ -82,14 +82,13 @@ func (c *Channel) resume(ctx context.Context) error {
 		}
 		a.start()
 		if st.startsTurn() {
-			wake = append(wake, a)
+			a.signal() // what was waiting in its inbox when the daemon stopped
 		}
 	}
 	if c.st.archived {
 		c.cancel()
 	}
 	c.mu.Unlock()
-	signal(wake)
 	return nil
 }
 

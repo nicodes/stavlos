@@ -334,7 +334,7 @@ func (a *Agent) moveOff(provider string, until time.Time) (bool, time.Time) {
 	}
 	up := changed(st, "", pick.model, fitVariant(preset, c.host.Variants(pick.model), pick.model, st.variant))
 	up.Reason = reason + "; " + pick.why
-	_, err := c.commitLocked(context.Background(), c.event(a.ID, event.AgentUpdated, up))
+	err := c.commitLocked(context.Background(), c.event(a.ID, event.AgentUpdated, up))
 	return err == nil, soonest
 }
 
@@ -403,9 +403,8 @@ func (c *Channel) MaybeResume(ctx context.Context, now time.Time) error {
 		c.mu.Unlock()
 		return nil
 	}
-	wake, err := c.commitLocked(ctx, evs...)
+	err := c.commitLocked(ctx, evs...)
 	c.mu.Unlock()
-	signal(wake)
 	return err
 }
 

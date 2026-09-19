@@ -50,7 +50,7 @@ func (a *Agent) adoptJob(command string, job tools.Job, timeout time.Duration) (
 		return "", fmt.Errorf("agent %s is killed", a.ID)
 	}
 	id := NewID("m")
-	if _, err := s.commitLocked(context.Background(), s.event(a.ID, event.JobStarted, event.JobStartedPayload{ID: id, Command: command})); err != nil {
+	if err := s.commitLocked(context.Background(), s.event(a.ID, event.JobStarted, event.JobStartedPayload{ID: id, Command: command})); err != nil {
 		s.mu.Unlock()
 		return "", err
 	}
@@ -101,11 +101,11 @@ func (a *Agent) finishJob(run *jobRun, res event.JobFinishedPayload) {
 		return
 	}
 	delete(a.jobs, run.id)
-	wake, _ := s.commitLocked(context.Background(),
+	// the process has exited whether or not the log takes it
+	_ = s.commitFactLocked(context.Background(),
 		s.event(a.ID, event.JobFinished, res),
 		s.event(a.ID, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputJob, Job: run.id}))
 	s.mu.Unlock()
-	signal(wake)
 }
 
 // stopJob kills a running job and logs that it was stopped.
@@ -118,7 +118,7 @@ func (a *Agent) stopJob(id, reason string) error {
 		return fmt.Errorf("no running job %q", id)
 	}
 	delete(a.jobs, id)
-	_, err := s.commitLocked(context.Background(), s.event(a.ID, event.JobStopped, event.JobStoppedPayload{ID: id, Reason: reason}))
+	err := s.commitFactLocked(context.Background(), s.event(a.ID, event.JobStopped, event.JobStoppedPayload{ID: id, Reason: reason}))
 	s.mu.Unlock()
 	run.cancel()
 	return err

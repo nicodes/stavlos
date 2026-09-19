@@ -33,7 +33,9 @@ func (c *Channel) SetDir(ctx context.Context, dir string, load func(string) (*co
 		c.reconfiguring = false
 		agents := c.agentsLocked()
 		c.mu.Unlock()
-		signal(agents) // inputs arriving during the transition now have a stable environment
+		for _, a := range agents { // inputs arriving during the transition now have a stable environment
+			a.signal()
+		}
 	}()
 	dir, err := config.WorkingDirectory(old, dir)
 	if err != nil {
@@ -63,7 +65,7 @@ func (c *Channel) SetDir(ctx context.Context, dir string, load func(string) (*co
 				Text: fmt.Sprintf("[harness] The human changed this channel's default directory from %s to %s. Earlier relative paths refer to the old directory. Project configuration and instructions have been reloaded; remembered permissions were cleared and mode is now ask.", old, dir)}))
 		}
 	}
-	if _, err := c.commitLocked(ctx, evs...); err != nil {
+	if err := c.commitLocked(ctx, evs...); err != nil {
 		return err
 	}
 	c.cfg, c.stamp = cfg, stamp

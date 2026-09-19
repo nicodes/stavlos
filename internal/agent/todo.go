@@ -78,6 +78,6 @@ func (t todosAPI) change(edit func(*agentState, []event.TodoItem) ([]event.TodoI
 	if err != nil {
 		return err
 	}
-	_, err = s.commitLocked(context.Background(), s.event(t.a.ID, event.TodoChanged, event.TodoPayload{Items: items}))
+	err = s.commitLocked(context.Background(), s.event(t.a.ID, event.TodoChanged, event.TodoPayload{Items: items}))
 	return err
 }

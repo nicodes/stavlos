@@ -34,8 +34,7 @@ func (c *Channel) RunCommand(ctx context.Context, dir, agent, text, source strin
 		evs = append(evs, c.event("", event.ChatPosted, event.ChatPayload{ID: in.Post, RequestID: in.Post, Kind: "request", From: source, Text: text, To: in.To}))
 	}
 	evs = append(evs, c.event(agent, event.InputQueued, in))
-	wake, err := c.commitLocked(ctx, evs...)
+	err := c.commitLocked(ctx, evs...)
 	c.mu.Unlock()
-	signal(wake)
 	return err
 }
