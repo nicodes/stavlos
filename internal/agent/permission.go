@@ -286,7 +286,7 @@ func (a *Agent) askOpened(ctx context.Context, info protocol.PromptInfo, callID 
 	case len(ans.Answers) > 0:
 		res.Answer = strings.Join(ans.Answers, " · ")
 	}
-	_ = a.record(event.AskResolved, res)
+	_ = a.recordFact(event.AskResolved, res) // the prompt is closed whether or not the log takes it
 	return ans
 }
 

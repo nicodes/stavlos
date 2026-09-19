@@ -118,7 +118,7 @@ func (c *Channel) addDir(ctx context.Context, agent, dir, source string) error {
 	if inDirs(c.dirPathsLocked(), dir) {
 		return nil
 	}
-	_, err := c.commitLocked(ctx, c.event(agent, event.ChannelDirAdded, event.DirPayload{Dir: dir, Source: source}))
+	err := c.commitLocked(ctx, c.event(agent, event.ChannelDirAdded, event.DirPayload{Dir: dir, Source: source}))
 	return err
 }
 
@@ -146,7 +146,7 @@ func (c *Channel) RemoveDir(ctx context.Context, dir string) error {
 	if !slices.ContainsFunc(c.st.dirs, func(e dirEntry) bool { return e.path == dir }) {
 		return fmt.Errorf("%s is not one of the channel's directories", dir)
 	}
-	_, err := c.commitLocked(ctx, c.event("", event.ChannelDirRemoved, event.DirPayload{Dir: dir}))
+	err := c.commitLocked(ctx, c.event("", event.ChannelDirRemoved, event.DirPayload{Dir: dir}))
 	return err
 }
 

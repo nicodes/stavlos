@@ -84,9 +84,8 @@ func (o orchestrator) Message(caller string, recipients []string, text, kind str
 		in := event.Input{ID: NewID("i"), RequestID: requestID, ReplyTo: slices.Clone(replyTo), Kind: inKind, Text: text, From: caller, FromName: from.name, To: names}
 		evs = append(evs, s.event(target, event.InputQueued, in))
 	}
-	wake, err := s.commitLocked(context.Background(), evs...)
+	err = s.commitLocked(context.Background(), evs...)
 	s.mu.Unlock()
-	signal(wake)
 	if err != nil {
 		return "", err
 	}

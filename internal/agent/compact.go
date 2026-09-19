@@ -73,7 +73,7 @@ func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all
 		return errors.New("nothing to compact")
 	}
 	modelID := st.model
-	_, err := s.commitLocked(context.Background(), s.event(a.ID, event.CompactionStarted, event.CompactionPayload{Before: cut.Before}))
+	err := s.commitLocked(context.Background(), s.event(a.ID, event.CompactionStarted, event.CompactionPayload{Before: cut.Before}))
 	s.mu.Unlock()
 	if err != nil {
 		return err
@@ -91,11 +91,14 @@ func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all
 		err = errors.New("empty summary")
 	}
 	if err != nil {
-		_ = a.record(event.CompactionFailed, event.CompactionPayload{Before: cut.Before, Error: err.Error()})
+		_ = a.recordFact(event.CompactionFailed, event.CompactionPayload{Before: cut.Before, Error: err.Error()})
 		return err
 	}
 	summary := sb.String()
 	if err := a.record(event.CompactionDone, event.CompactionPayload{FromSeq: cut.FromSeq, ToSeq: cut.ToSeq, Summary: summary, Before: cut.Before, After: cut.After(summary)}); err != nil {
+		// The summary was not recorded, so it is not used; but the compaction
+		// is over, and the state must say so or no other ever starts.
+		_ = a.recordFact(event.CompactionFailed, event.CompactionPayload{Before: cut.Before, Error: err.Error()})
 		return err
 	}
 	a.c.mu.Lock()

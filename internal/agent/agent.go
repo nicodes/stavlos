@@ -68,10 +68,24 @@ func (a *Agent) record(t event.Type, payload any) error {
 	return a.recordAll(a.c.event(a.ID, t, payload))
 }
 
+// recordFact is record for something that has already happened
+// (Channel.commitFactLocked): the state follows the world even when the log
+// refuses the event.
+func (a *Agent) recordFact(t event.Type, payload any) error {
+	s := a.c
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := s.commitFactLocked(context.Background(), s.event(a.ID, t, payload))
+	if err != nil {
+		err = fmt.Errorf("event log: %w", err)
+	}
+	return err
+}
+
 func (a *Agent) recordAll(evs ...event.Event) error {
 	s := a.c
 	s.mu.Lock()
-	wake, err := s.commitLocked(context.Background(), evs...)
+	err := s.commitLocked(context.Background(), evs...)
 	if err != nil {
 		err = fmt.Errorf("event log: %w", err)
 		if a.logErr == nil {
@@ -79,7 +93,6 @@ func (a *Agent) recordAll(evs ...event.Event) error {
 		}
 	}
 	s.mu.Unlock()
-	signal(wake)
 	return err
 }
 
@@ -112,9 +125,8 @@ func (a *Agent) queue(ctx context.Context, kind event.InputKind, text, source st
 			in.Kind, in.From, in.FromName = event.InputRequest, from, f.name
 		}
 	}
-	wake, err := s.commitLocked(ctx, s.event(a.ID, event.InputQueued, in))
+	err := s.commitLocked(ctx, s.event(a.ID, event.InputQueued, in))
 	s.mu.Unlock()
-	signal(wake)
 	return err
 }
 
@@ -129,7 +141,7 @@ func (a *Agent) cancel() error {
 	st := a.state()
 	var err error
 	if st != nil && !st.killed {
-		_, err = s.commitLocked(context.Background(), s.event(a.ID, event.AgentCancelled, nil))
+		err = s.commitLocked(context.Background(), s.event(a.ID, event.AgentCancelled, nil))
 	}
 	c := a.cancelTurn
 	s.mu.Unlock()
@@ -294,7 +306,7 @@ func (a *Agent) SetRole(ctx context.Context, role string) error {
 	if p == (event.AgentUpdatedPayload{}) {
 		return nil
 	}
-	_, err := s.commitLocked(ctx, s.event(a.ID, event.AgentUpdated, p))
+	err := s.commitLocked(ctx, s.event(a.ID, event.AgentUpdated, p))
 	return err
 }
 

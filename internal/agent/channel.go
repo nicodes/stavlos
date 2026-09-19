@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"slices"
 	"sort"
 	"strings"
@@ -111,45 +112,87 @@ func (c *Channel) event(agent string, t event.Type, payload any) event.Event {
 	return e
 }
 
-// commitLocked logs events and applies them. The caller holds c.mu and
-// signals the returned agents once it has released it.
-func (c *Channel) commitLocked(ctx context.Context, evs ...event.Event) ([]*Agent, error) {
+// commitLocked is the one way a channel's state changes: it logs the events,
+// folds them into the state, and does what follows a record. The caller
+// holds c.mu.
+//
+// What follows a record is dispatched here and nowhere else (it used to be
+// the caller's job: sixteen call sites signalled the agents a commit said to
+// wake, and nineteen dropped the list): an agent whose inbox now holds
+// something that starts a turn is woken. Waking is a non-blocking send, so
+// it is safe under the lock, and the agent's goroutine takes the lock itself
+// before it looks at anything.
+//
+// An error means nothing was logged and nothing changed. What the caller
+// does about it is the caller's to decide, but it must decide: a side effect
+// that happens anyway is a side effect with no record.
+func (c *Channel) commitLocked(ctx context.Context, evs ...event.Event) error {
 	if c.stopped {
-		return nil, errStopped
+		return errStopped
 	}
 	if len(evs) == 0 {
-		return nil, nil
+		return nil
 	}
 	out, err := c.host.Append(ctx, evs...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var fx effects
 	for _, e := range out {
 		c.st.apply(e, &fx)
 	}
-	var wake []*Agent
+	c.dispatchLocked(fx)
+	return nil
+}
+
+// dispatchLocked does what applying events asked of the runtime.
+func (c *Channel) dispatchLocked(fx effects) {
 	for _, id := range fx.wake {
 		if a, ok := c.agents[id]; ok {
-			wake = append(wake, a)
+			a.signal()
 		}
 	}
-	return wake, nil
+}
+
+// commitFactLocked records something that has already happened in the world:
+// a turn ended, a job exited, the human answered. A decision that cannot be
+// recorded must not take effect, which is what commitLocked's error is for;
+// a fact is true whether or not the log took it. So when the write fails the
+// events are folded into the state anyway, the one place state is not what
+// the log says, and the failure is logged loudly. Otherwise the state would
+// go on saying what the world no longer does (an agent in a turn that has
+// ended takes no other; a job that has exited keeps its agent "waiting" and
+// its channel's directory locked), until the daemon restarted. The log is
+// left short of those events, which is what recovery expects of a daemon
+// that stopped at that moment: it closes open turns, asks and jobs itself.
+//
+// A channel that is stopping records nothing and folds nothing: recovery
+// will find things as the log left them.
+func (c *Channel) commitFactLocked(ctx context.Context, evs ...event.Event) error {
+	err := c.commitLocked(ctx, evs...)
+	if err == nil || errors.Is(err, errStopped) {
+		return err
+	}
+	var fx effects
+	now := time.Now().UTC()
+	for _, e := range evs {
+		e.Time = now
+		c.st.apply(e, &fx)
+	}
+	c.dispatchLocked(fx)
+	types := make([]string, len(evs))
+	for i, e := range evs {
+		types[i] = string(e.Type)
+	}
+	log.Printf("channel %s: %s happened but could not be logged: %v", c.ID, strings.Join(types, ", "), err)
+	return err
 }
 
 // commit is commitLocked for a caller that does not hold the lock.
 func (c *Channel) commit(ctx context.Context, evs ...event.Event) error {
 	c.mu.Lock()
-	wake, err := c.commitLocked(ctx, evs...)
-	c.mu.Unlock()
-	signal(wake)
-	return err
-}
-
-func signal(agents []*Agent) {
-	for _, a := range agents {
-		a.signal()
-	}
+	defer c.mu.Unlock()
+	return c.commitLocked(ctx, evs...)
 }
 
 // Start logs the channel's creation under name and spawns its main agent.
@@ -162,7 +205,7 @@ func (c *Channel) Start(ctx context.Context, name string) error {
 		c.mu.Unlock()
 		return fmt.Errorf("root preset %q not found", role)
 	}
-	_, err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.st.dir, Model: modelID, Role: role, Mode: c.cfg.Mode}))
+	err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.st.dir, Model: modelID, Role: role, Mode: c.cfg.Mode}))
 	c.mu.Unlock()
 	if err != nil {
 		return err
@@ -263,7 +306,7 @@ func (c *Channel) SetMode(ctx context.Context, mode string) error {
 	if c.st.mode == mode {
 		return nil
 	}
-	_, err := c.commitLocked(ctx, c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Mode: event.Str(mode)}))
+	err := c.commitLocked(ctx, c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Mode: event.Str(mode)}))
 	return err
 }
 
@@ -497,50 +540,48 @@ func fitVariant(p config.Preset, offered []string, id, want string) string {
 // with the spawn in one transaction.
 func (c *Channel) spawn(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, error) {
 	c.mu.Lock()
-	a, wake, err := c.spawnLocked(ctx, parentID, role, label, task, modelArg)
-	c.mu.Unlock()
-	signal(wake)
-	return a, err
+	defer c.mu.Unlock()
+	return c.spawnLocked(ctx, parentID, role, label, task, modelArg)
 }
 
-func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, []*Agent, error) {
+func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, error) {
 	if c.reconfiguring {
-		return nil, nil, errors.New("a directory change is in progress")
+		return nil, errors.New("a directory change is in progress")
 	}
 	preset, ok := c.cfg.Presets[role]
 	if !ok {
-		return nil, nil, fmt.Errorf("unknown archetype %q", role)
+		return nil, fmt.Errorf("unknown archetype %q", role)
 	}
 	var parent *agentState
 	depth := 0
 	if parentID != "" {
 		if reservedNames[normalizeName(label)] {
-			return nil, nil, fmt.Errorf("label %q is reserved: a child's name appears on its messages, so it may not read as the human or the system", label)
+			return nil, fmt.Errorf("label %q is reserved: a child's name appears on its messages, so it may not read as the human or the system", label)
 		}
 		if parent = c.st.agents[parentID]; parent == nil || parent.killed {
-			return nil, nil, fmt.Errorf("parent %q not found", parentID)
+			return nil, fmt.Errorf("parent %q not found", parentID)
 		}
 		depth = parent.depth + 1
 		if pp := c.roleLocked(parent).preset; !contains(pp.Spawn, role) {
-			return nil, nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", pp.Name, role, pp.Spawn)
+			return nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", pp.Name, role, pp.Spawn)
 		}
 		if !preset.CanBeSubagent() {
-			return nil, nil, fmt.Errorf("role %q is primary-only: it cannot be spawned", role)
+			return nil, fmt.Errorf("role %q is primary-only: it cannot be spawned", role)
 		}
 	} else if !preset.CanBePrimary() {
-		return nil, nil, fmt.Errorf("role %q is subagent-only: it cannot be the main agent", role)
+		return nil, fmt.Errorf("role %q is subagent-only: it cannot be the main agent", role)
 	}
 	modelID, err := c.resolveModelLocked(modelArg, preset, parent)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	variant := ""
 	if parent != nil {
 		if modelID == "" {
-			return nil, nil, errors.New(ErrNoModel)
+			return nil, errors.New(ErrNoModel)
 		}
 		if err := c.host.CheckModel(modelID); err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		if modelID == parent.model {
 			variant = parent.variant // same model: same flavour
@@ -550,7 +591,7 @@ func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 	id := NewID("a")
 	name, err := c.st.uniqueName(label, role, id)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	parentCtx := c.ctx
 	if p := c.agents[parentID]; p != nil {
@@ -567,14 +608,15 @@ func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 		}
 		evs = append(evs, c.event(id, event.InputQueued, in))
 	}
-	wake, err := c.commitLocked(ctx, evs...)
-	if err != nil {
+	// (the commit wakes the new agent for its task; its goroutine finds the
+	// signal waiting when it starts)
+	if err := c.commitLocked(ctx, evs...); err != nil {
 		delete(c.agents, id)
 		a.kill()
-		return nil, nil, err
+		return nil, err
 	}
 	a.start()
-	return a, wake, nil
+	return a, nil
 }
 
 // canSpawnLocked reports whether agent p may create a child now.
@@ -603,9 +645,8 @@ func (c *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, ta
 		c.mu.Unlock()
 		return "", errors.New(why)
 	}
-	a, wake, err := c.spawnLocked(ctx, parentID, role, label, task, modelArg)
+	a, err := c.spawnLocked(ctx, parentID, role, label, task, modelArg)
 	c.mu.Unlock()
-	signal(wake)
 	if err != nil {
 		return "", err
 	}
@@ -677,9 +718,8 @@ func (c *Channel) Post(ctx context.Context, text, from string) ([]string, error)
 		evs = append(evs, c.event(a.id, event.InputQueued, event.Input{ID: NewID("i"), RequestID: post, Kind: event.InputSteer, Text: message, Post: post, To: names}))
 	}
 	evs[0] = c.event("", event.ChatPosted, event.ChatPayload{ID: post, RequestID: post, Kind: tools.KindRequest, From: from, Text: message, To: names})
-	wake, err := c.commitLocked(ctx, evs...)
+	err := c.commitLocked(ctx, evs...)
 	c.mu.Unlock()
-	signal(wake)
 	return names, err
 }
 
@@ -713,7 +753,7 @@ func (c *Channel) Kill(agentID string) error {
 		}
 	}
 	walk(agentID)
-	_, err := c.commitLocked(context.Background(), evs...)
+	err := c.commitLocked(context.Background(), evs...)
 	for _, a := range victims {
 		a.jobs = map[string]*jobRun{} // their processes end with the agent's context
 	}

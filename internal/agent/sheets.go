@@ -226,13 +226,13 @@ func (s sheetsAPI) Delete(id string) error {
 	if err := os.Remove(sheetPath(c.SheetDir(), id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	_, err := c.commitLocked(context.Background(), c.event(s.a.ID, event.SheetDeleted, event.SheetPayload{ID: id}))
+	err := c.commitLocked(context.Background(), c.event(s.a.ID, event.SheetDeleted, event.SheetPayload{ID: id}))
 	return err
 }
 
 func (c *Channel) sheetWrittenLocked(a *Agent, id, title string, page []byte) error {
 	sum := sha256.Sum256(page)
-	_, err := c.commitLocked(context.Background(), c.event(a.ID, event.SheetWritten,
+	err := c.commitLocked(context.Background(), c.event(a.ID, event.SheetWritten,
 		event.SheetPayload{ID: id, Title: title, Author: a.state().name, Hash: hex.EncodeToString(sum[:]), Size: len(page)}))
 	return err
 }
@@ -258,7 +258,7 @@ func (a *Agent) sheetsPatched(sub policy.Subject) {
 		switch {
 		case c.st.sheets[m[1]] == nil:
 		case errors.Is(err, os.ErrNotExist):
-			_, _ = c.commitLocked(context.Background(), c.event(a.ID, event.SheetDeleted, event.SheetPayload{ID: m[1]}))
+			_ = c.commitLocked(context.Background(), c.event(a.ID, event.SheetDeleted, event.SheetPayload{ID: m[1]}))
 		case err == nil:
 			_ = c.sheetWrittenLocked(a, m[1], "", page)
 		}

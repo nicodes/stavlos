@@ -183,10 +183,9 @@ func (a *Agent) endReplies(reason event.TurnReason) {
 	for _, request := range requests {
 		parties = append(parties, request.From)
 	}
-	wake, _ := s.commitLocked(context.Background(), s.event(a.ID, event.InputQueued,
+	_ = s.commitLocked(context.Background(), s.event(a.ID, event.InputQueued,
 		event.Input{ID: NewID("i"), Kind: event.InputReminder, Parties: parties, Names: s.partyNamesLocked(parties), Requests: requests}))
 	s.mu.Unlock()
-	signal(wake)
 }
 
 // --- views of the table ---

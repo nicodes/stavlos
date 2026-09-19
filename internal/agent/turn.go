@@ -2,8 +2,9 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
+	"strings"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/config"
@@ -49,7 +50,7 @@ func (a *Agent) beginTurn() (int, context.Context, bool) {
 	for i, in := range st.inbox {
 		ids[i] = in.ID
 	}
-	if _, err := s.commitLocked(context.Background(),
+	if err := s.commitLocked(context.Background(),
 		s.event(a.ID, event.TurnStarted, event.TurnPayload{Turn: turn}),
 		s.event(a.ID, event.InputTaken, event.InputTakenPayload{Turn: turn, IDs: ids})); err != nil {
 		return 0, nil, false
@@ -107,7 +108,7 @@ func (t *turnRun) end(reason event.TurnReason, errText string) {
 	if reason == event.ReasonError {
 		p.ResumeAt = t.resumeAt
 	}
-	if err := t.a.record(event.TurnEnded, p); err != nil {
+	if err := t.a.recordFact(event.TurnEnded, p); err != nil && !errors.Is(err, errStopped) {
 		t.a.turnEndLost(err)
 	}
 	t.a.armMCPIdle()
@@ -215,7 +216,7 @@ func (t *turnRun) takeMidTurn() error {
 	if len(ids) == 0 {
 		return nil
 	}
-	_, err := s.commitLocked(context.Background(), s.event(a.ID, event.InputTaken, event.InputTakenPayload{Turn: t.turn, IDs: ids}))
+	err := s.commitLocked(context.Background(), s.event(a.ID, event.InputTaken, event.InputTakenPayload{Turn: t.turn, IDs: ids}))
 	return err
 }
 
@@ -244,20 +245,13 @@ func bareID(full string) string {
 	return id
 }
 
-// turnEndLost is what happens when a turn's end cannot be written. The state
-// says the agent is in a turn only because the event that says otherwise
-// failed, and an agent in a turn takes no other: it would sit refusing work
-// until the daemon restarted. So the turn is ended in memory, the one place
-// state is set outside the fold, and the agent says what happened. The log is
-// left with an open turn, which is what recovery expects of a daemon that
-// stopped mid-turn: it records the turn as aborted at the next start.
+// turnEndLost says what happened when a turn's end could not be written. The
+// turn has ended in memory all the same (commitFactLocked), so the agent
+// takes the next; this is where the human learns why the log is short.
 func (a *Agent) turnEndLost(err error) {
 	c := a.c
 	c.mu.Lock()
-	st := a.state()
-	st.inTurn = false
-	st.lastError = "the turn ended but could not be logged: " + err.Error()
+	a.state().lastError = "the turn ended but could not be logged: " + strings.TrimPrefix(err.Error(), "event log: ")
 	a.logErr = nil // reported here; the next turn starts clean
 	c.mu.Unlock()
-	log.Printf("channel %s agent %s: turn.ended was not written: %v", c.ID, a.ID, err)
 }

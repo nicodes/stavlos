@@ -901,3 +901,30 @@ func TestAToolDoesNotRunWithoutItsStartOnTheRecord(t *testing.T) {
 		t.Fatalf("the turn should end with the log's error: %+v", end)
 	}
 }
+
+// TestFactsAreFoldedEvenWhenTheLogRefusesThem (RT3, RT7): a job that exited
+// and a compaction that ended are true whether or not their events could be
+// written. Left out of the state, the agent stayed "waiting" on a job that
+// was gone (and its channel's directory stayed locked), or "compacting" for
+// ever, until the daemon restarted.
+func TestFactsAreFoldedEvenWhenTheLogRefusesThem(t *testing.T) {
+	fm := &fakeModel{steps: []step{
+		reply(call("c1", "shell", `{"command":"sleep 0.2","background":true}`)),
+		reply(text("started")),
+	}}
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"shell":"allow"},"sandbox":{"enabled":false}}`}, fm)
+	runTurn(t, s, h, "start a job")
+	if n := len(s.Root().Info().Jobs); n != 1 {
+		t.Fatalf("%d jobs running", n)
+	}
+	h.mu.Lock()
+	h.failType = event.JobFinished
+	h.mu.Unlock()
+	waitUntil(t, h, func() bool {
+		info := s.Root().Info()
+		return len(info.Jobs) == 0 && info.State != protocol.AgentWaiting
+	})
+	if got := len(h.ofType(event.JobFinished, s.Root().ID)); got != 0 {
+		t.Fatalf("the write was meant to fail: %d job.finished events logged", got)
+	}
+}
