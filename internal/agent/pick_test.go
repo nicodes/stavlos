@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 )
@@ -219,5 +220,89 @@ func TestWeekBeforeFiveHours(t *testing.T) {
 				t.Fatalf("picked %q (%s), want %q", got.model, got.why, tc.want)
 			}
 		})
+	}
+}
+
+// TestVariantDoesNotFollowAnAgentToAModelThatRejectsIt (#36): a variant is a
+// provider's word. An agent moved off a model with reasoning efforts onto
+// one that has none must not carry "medium" along, although the role's
+// entry for the new model lists no variants and so allows any.
+func TestVariantDoesNotFollowAnAgentToAModelThatRejectsIt(t *testing.T) {
+	var sent []string
+	fm := &fakeModel{steps: []step{
+		func(_ context.Context, req model.Request) (model.Response, error) {
+			sent = append(sent, req.Model+":"+req.Variant)
+			return model.Response{}, &model.LimitError{Err: errors.New("fake: status 429: usage_limit_reached")}
+		},
+		func(_ context.Context, req model.Request) (model.Response, error) {
+			sent = append(sent, req.Model+":"+req.Variant)
+			return text("carried on"), nil
+		},
+	}}
+	s, h := newTestChannel(t, testConfig{
+		json:  `{"model":"fake/m1"}`,
+		roles: map[string]string{"worker": "---\ndescription: works\nmodels:\n  - id: fake/m1\n    variants: [medium, high]\n  - other/plain\n  - third/efforts\n---\nwork\n"},
+	}, fm)
+	h.variants = map[string][]string{"fake/m1": {"low", "medium", "high"}, "third/efforts": {"low", "high"}} // other/plain takes none
+	ctx := context.Background()
+	if err := s.Root().SetRole(ctx, "worker"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Root().Info().Variant; got != "medium" {
+		t.Fatalf("the role's default variant for fake/m1: %q", got)
+	}
+	runTurn(t, s, h, "go")
+	if strings.Join(sent, " ") != "m1:medium plain:" {
+		t.Fatalf("calls carried %v, want the variant dropped on the model that takes none", sent)
+	}
+	if info := s.Root().Info(); info.Model != "other/plain" || info.Variant != "" {
+		t.Fatalf("after the move: %s %q", info.Model, info.Variant)
+	}
+	// /models onto a model with other words for it: "medium" is not one of
+	// them and the role names no default there, so the provider's own applies
+	if err := s.Root().SetModel(ctx, "fake/m1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Root().SetVariant(ctx, "medium"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Root().SetModel(ctx, "third/efforts"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Root().Info().Variant; got != "" {
+		t.Fatalf("medium followed the agent to a model that takes low and high: %q", got)
+	}
+	// one both models take does carry over
+	if err := s.Root().SetVariant(ctx, "high"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Root().SetModel(ctx, "fake/m1"); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.Root().Info().Variant; got != "high" {
+		t.Fatalf("high is allowed and taken by both: %q", got)
+	}
+}
+
+// TestFitVariant covers the fallbacks, among them the one the fix suggested
+// in #36 would have broken: an agent arriving with no variant still gets the
+// role's default for its model.
+func TestFitVariant(t *testing.T) {
+	role := config.Preset{Models: []config.ModelSpec{{ID: "a/efforts", Variants: []string{"medium", "high"}}, {ID: "b/any"}, {ID: "c/odd", Variants: []string{"turbo"}}}}
+	efforts := []string{"low", "medium", "high"}
+	for _, tc := range []struct {
+		name, id, want, got string
+		offered             []string
+	}{
+		{"kept: allowed and taken", "a/efforts", "high", "high", efforts},
+		{"no variant yet: the role's default, not none", "a/efforts", "", "medium", efforts},
+		{"not allowed by the role: its default", "a/efforts", "low", "medium", efforts},
+		{"the role allows any, the model takes none", "b/any", "medium", "", nil},
+		{"the role allows any, the model takes it", "b/any", "medium", "medium", efforts},
+		{"the role's own default is not one the model takes: the provider's", "c/odd", "high", "", efforts},
+	} {
+		if got := fitVariant(role, tc.offered, tc.id, tc.want); got != tc.got {
+			t.Errorf("%s: fitVariant(%s, %q) = %q, want %q", tc.name, tc.id, tc.want, got, tc.got)
+		}
 	}
 }

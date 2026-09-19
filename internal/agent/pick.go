@@ -330,7 +330,7 @@ func (a *Agent) moveOff(provider string, until time.Time) (bool, time.Time) {
 	if !until.IsZero() {
 		reason += " until " + until.Local().Format("15:04")
 	}
-	up := changed(st, "", pick.model, fitVariant(preset, pick.model, st.variant))
+	up := changed(st, "", pick.model, fitVariant(preset, c.host.Variants(pick.model), pick.model, st.variant))
 	up.Reason = reason + "; " + pick.why
 	_, err := c.commitLocked(context.Background(), c.event(a.ID, event.AgentUpdated, up))
 	return err == nil, soonest
