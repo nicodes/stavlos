@@ -337,6 +337,9 @@ var handlers = routes(
 		}
 		return providerInfo(st), nil
 	}),
+	route(protocol.ProviderLoginKey, func(_ context.Context, c *conn, p protocol.LoginKeyParams) (protocol.None, error) {
+		return none, c.d.LoginKey(p.ID, p.Key)
+	}),
 	route(protocol.ProviderDisconnect, func(_ context.Context, c *conn, p protocol.ProviderRef) (protocol.None, error) {
 		return none, c.d.Registry.Disconnect(p.Provider)
 	}),

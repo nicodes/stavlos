@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/nicodes/stavlos/internal/oauth"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/format"
 	"github.com/nicodes/stavlos/internal/tui/theme"
@@ -214,9 +215,12 @@ func (m *Model) loginKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.OvClose):
 		return m.cancelLogin()
-	case key.Matches(msg, keys.OvOpen):
+	case key.Matches(msg, keys.OvOpen) && !o.login.key: // "o" is a character to type in the field
 		return openBrowserCmd(o.login.url)
 	case key.Matches(msg, keys.OvSelect):
+		if o.login.key {
+			return m.submitLoginKey()
+		}
 		if o.login.err == "" {
 			return nil
 		}
@@ -227,7 +231,29 @@ func (m *Model) loginKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return m.startLogin(protocol.ProviderInfo{ID: m.login.provider, Name: m.login.name}, m.login.method)
 	}
+	if o.login.key {
+		return o.update(msg) // the field takes everything else
+	}
 	return nil
+}
+
+// submitLoginKey hands what was typed to the waiting login. The overlay
+// stays open: provider.login.wait is what reports success or failure, the
+// same as for a code the user entered elsewhere.
+func (m *Model) submitLoginKey() tea.Cmd {
+	o := m.ov
+	k := strings.TrimSpace(o.input.Value())
+	if k == "" {
+		o.setLoginError("paste the key from the console first")
+		o.login.key = true // the field stays: the error is about what was typed
+		return nil
+	}
+	o.input.Reset()
+	id := m.login.id
+	ctx, c := m.ctx, m.c
+	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
+		return resultMsg{err: call(ctx, c, protocol.ProviderLoginKey, protocol.LoginKeyParams{ID: id, Key: k})}
+	})
 }
 
 // cancelLogin abandons the pending wait and closes the overlay.
@@ -388,10 +414,17 @@ func (m *Model) onLoginStart(msg loginStartMsg) tea.Cmd {
 		m.ov.setLoginError(msg.err.Error())
 		return nil
 	}
-	m.ov.setLogin(msg.res.URL, msg.res.Code, msg.res.Instructions)
+	m.ov.setLogin(msg.res.URL, msg.res.Code, msg.res.Instructions, msg.res.Method)
 	ctx, cancel := context.WithCancel(m.ctx)
 	m.login.id, m.login.cancel = msg.res.ID, cancel
-	return tea.Batch(openBrowserCmd(msg.res.URL), loginWaitCmd(ctx, m.c, msg.res.ID))
+	wait := loginWaitCmd(ctx, m.c, msg.res.ID)
+	if msg.res.Method == oauth.MethodAPIKey {
+		// nothing to poll and nothing to open: the wait is for the key the
+		// field is about to take, and opening the console unasked would
+		// steal the window from someone pasting a key they already have
+		return wait
+	}
+	return tea.Batch(openBrowserCmd(msg.res.URL), wait)
 }
 
 // onLoginDone finishes the sign-in: close the overlay, refresh providers and
