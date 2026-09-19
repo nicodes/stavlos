@@ -6,8 +6,10 @@ description: Implements features and fixes bugs in Go; runs the tests before rep
 # with agent_create by a role that lists it in spawn. all: both (the default).
 type: all
 
-# Model whitelist, in order; the first entry is the default. Omit the key to
-# allow any model and inherit the parent's (or the channel's) choice.
+# The models good enough for this role, in the order it prefers them. The
+# harness chooses among them by their plans' usage and moves the agent to the
+# next when one runs out (docs/model-selection.md); no agent names a model.
+# Omit the key to choose from "models" in stavlos.json instead.
 models:
   - id: openai/gpt-5.1-codex
     variants: [medium, high]        # allowed for this model; the first is its default

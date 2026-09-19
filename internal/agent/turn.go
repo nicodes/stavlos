@@ -92,9 +92,10 @@ func (a *Agent) runTurn(ctx context.Context, turn int) {
 
 // turnRun is one turn in progress.
 type turnRun struct {
-	a    *Agent
-	ctx  context.Context
-	turn int
+	a     *Agent
+	ctx   context.Context
+	turn  int
+	moves int // models the harness moved the agent to within this turn
 }
 
 // end logs the turn's end.
@@ -116,6 +117,7 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 	if err := t.takeMidTurn(); err != nil {
 		return event.ReasonError, err.Error(), true
 	}
+	a.leaveLimitedModel() // a plan known to be used up is not called just to be refused
 	s.mu.Lock()
 	st, cfg := a.state(), s.cfg
 	rv, modelID, variant := s.roleLocked(st), st.model, st.variant
@@ -144,6 +146,9 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 			s.host.Stream(protocol.StreamNotification{Channel: s.ID, Agent: a.ID, Turn: t.turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName, Reset: d.Reset})
 		})
 	msg := event.AssistantMessagePayload{Turn: t.turn, Blocks: resp.Blocks, StopReason: string(resp.StopReason), Model: modelID, Usage: resp.Usage, CostUSD: info.Cost(resp.Usage)}
+	if err != nil && t.ctx.Err() == nil && t.movedOn(err, modelID) {
+		return "", "", false // the same step again, on the model the harness moved the agent to
+	}
 	if err != nil {
 		cancelled := t.ctx.Err() != nil
 		if len(resp.Blocks) > 0 || resp.Usage != (model.Usage{}) {
@@ -155,7 +160,7 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 		if cancelled {
 			return event.ReasonCancelled, "", true
 		}
-		return event.ReasonError, err.Error(), true
+		return event.ReasonError, limitHint(err), true
 	}
 	if err := a.record(event.AssistantMessage, msg); err != nil {
 		return event.ReasonError, err.Error(), true

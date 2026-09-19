@@ -1342,7 +1342,11 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Role", "→ "+*p.Role)})
 		}
 		if p.Model != nil {
-			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Model", "→ "+*p.Model)})
+			text := "→ " + *p.Model
+			if p.Reason != "" {
+				text += " · " + p.Reason // the harness moved it: its old model's plan ran out
+			}
+			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Model", text)})
 		}
 		if p.Variant != nil {
 			v := *p.Variant
