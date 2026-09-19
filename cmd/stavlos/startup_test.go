@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,5 +65,57 @@ func TestWaitForSocketGivesUpOnContext(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the wait ignored its context")
+	}
+}
+
+// TestWaitLockFree: replacing a daemon waits for it to let go of the data
+// directory, not for its socket to vanish. A daemon closes its listener and
+// removes the socket at the start of shutdown but holds the lock until the
+// process exits, so a replacement started on the socket's absence dies with
+// ErrAlreadyRunning and nothing ever binds.
+func TestWaitLockFree(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("STAVLOS_DATA_DIR", dir)
+	f, err := os.OpenFile(filepath.Join(dir, "stavlosd.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		t.Fatal(err)
+	}
+	if waitLockFree(context.Background(), 200*time.Millisecond) {
+		t.Fatal("a held lock is not free")
+	}
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		_ = unix.Flock(int(f.Fd()), unix.LOCK_UN)
+	}()
+	if !waitLockFree(context.Background(), 5*time.Second) {
+		t.Fatal("the release should end the wait")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		t.Fatal(err)
+	}
+	if waitLockFree(ctx, 5*time.Second) {
+		t.Fatal("a cancelled context ends the wait")
+	}
+}
+
+// TestWaitForSocketFailsFastWhenTheDaemonDied: a daemon that exits during
+// startup leaves the lock free, and the wait says so instead of sitting out
+// the whole budget.
+func TestWaitForSocketFailsFastWhenTheDaemonDied(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("STAVLOS_DATA_DIR", dir)
+	start := time.Now()
+	_, err := waitForSocket(context.Background(), filepath.Join(dir, "nothing.sock"))
+	if err == nil || !strings.Contains(err.Error(), "exited while starting") {
+		t.Fatalf("err: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("it waited %s for a daemon that was never there", elapsed)
 	}
 }
