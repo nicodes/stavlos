@@ -98,9 +98,10 @@ resets.
   provider's prompt cache, so the whole history is sent again. Two triggers:
   - before a model call, when the readings say the agent's provider is used
     up, it moves first rather than call to be refused;
-  - when a call is refused for a limit (`model.LimitError`: a 429 whose body
-    says the plan is used up, not retried; or a 429 that outlasted its
-    retries), the provider is marked limited for everyone (until the
+  - when a call is refused for a limit (`model.LimitError`: a 429, 403 or
+    402 whose body says the plan is used up, not retried; or a 429 that
+    outlasted its retries; providers disagree on the status, and xAI's "run
+    out of credits" is a 403), the provider is marked limited for everyone (until the
     `Retry-After`, else the full window's reset, else fifteen minutes), the
     agent moves, and **the same step runs again**: the turn carries on.
 
