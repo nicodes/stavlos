@@ -83,6 +83,36 @@ FROM events WHERE `+where+` AND time >= ? AND time < ?`, append(args, from.UnixN
 // provider charged as new input, and tokens it served from its prompt
 // cache. Their ratio says whether cache routing is working
 // (docs/prompt-caching.md).
+// CacheUsageByProvider is CacheUsage split by the provider of each call's
+// model ("openai" of "openai/gpt-…"): one provider whose cache has stopped
+// working is invisible in a total that another provider's traffic dominates.
+func (l *Log) CacheUsageByProvider(ctx context.Context, from time.Time) (map[string][2]int64, error) {
+	rows, err := l.r.QueryContext(ctx, `
+SELECT provider, SUM(fresh), SUM(cached) FROM (
+  SELECT COALESCE(json_extract(CAST(payload AS TEXT), '$.model'), '') AS model,
+         CASE WHEN instr(COALESCE(json_extract(CAST(payload AS TEXT), '$.model'), ''), '/') > 0
+              THEN substr(json_extract(CAST(payload AS TEXT), '$.model'), 1, instr(json_extract(CAST(payload AS TEXT), '$.model'), '/') - 1)
+              ELSE '' END AS provider,
+         COALESCE(json_extract(CAST(payload AS TEXT), '$.usage.input_tokens'), 0) AS fresh,
+         COALESCE(json_extract(CAST(payload AS TEXT), '$.usage.cache_read_tokens'), 0) AS cached
+  FROM events WHERE type = 'assistant.message' AND time >= ?)
+WHERE provider != '' GROUP BY provider`, from.UnixNano())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string][2]int64{}
+	for rows.Next() {
+		var provider string
+		var fresh, cached int64
+		if err := rows.Scan(&provider, &fresh, &cached); err != nil {
+			return nil, err
+		}
+		out[provider] = [2]int64{fresh, cached}
+	}
+	return out, rows.Err()
+}
+
 func (l *Log) CacheUsage(ctx context.Context, from time.Time) (fresh, cached int64, err error) {
 	row := l.r.QueryRowContext(ctx, `
 SELECT COALESCE(SUM(COALESCE(json_extract(CAST(payload AS TEXT), '$.usage.input_tokens'), 0)), 0),
