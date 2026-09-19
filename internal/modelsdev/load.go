@@ -31,15 +31,25 @@ func CachePath() string { return filepath.Join(paths.CacheDir(), "models.json") 
 // stale cache or the embedded fallback was returned). An error is returned
 // only if nothing parses. keep names the providers to keep (Parse).
 func Load(ctx context.Context, keep ...string) (c *Catalog, stale bool, err error) {
-	path := CachePath()
-	if data, fresh := readCache(path); data != nil {
+	var cached *Catalog
+	if data, fresh := readCache(CachePath()); data != nil {
 		if c, err := Parse(data, keep...); err == nil {
-			return c, !fresh, nil
+			// The cache holds only the providers the build that wrote it
+			// kept. One written before a provider existed is missing it
+			// however recent the file is, and serving it would offer that
+			// subscription no models at all, with nothing to say why.
+			if c.covers(keep...) {
+				return c, !fresh, nil
+			}
+			cached = c
 		}
 	}
 	c, fetchErr := Refresh(ctx, keep...)
 	if fetchErr == nil {
 		return c, false, nil
+	}
+	if cached != nil {
+		return cached, true, nil // incomplete, but better than the embedded copy
 	}
 	c, err = Parse(fallbackJSON, keep...)
 	if err != nil {
