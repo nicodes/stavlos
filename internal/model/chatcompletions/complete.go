@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 
@@ -51,7 +52,11 @@ func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {
 		StreamOptions: &streamOptions{IncludeUsage: true},
 	}
 	cr.MaxTokens = maxTokens
-	if req.Variant != "" {
+	// Only a variant this model takes is sent. The agent runtime fits the
+	// variant whenever a model changes, but an agent already in the log may
+	// carry one from a model it has since left, and a model with no reasoning
+	// effort rejects the field.
+	if slices.Contains(p.Variants(id), req.Variant) {
 		cr.ReasoningEffort = req.Variant
 	}
 	return json.Marshal(cr)

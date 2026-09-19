@@ -473,13 +473,23 @@ func modelList(p config.Preset) string {
 	return strings.Join(ids, ", ")
 }
 
-// fitVariant is the variant an agent on model id runs under role p when it
-// would otherwise inherit want: want when allowed, else the role's default.
-func fitVariant(p config.Preset, id, want string) string {
-	if p.AllowsVariant(id, want) {
+// fitVariant is the variant an agent runs on model id under role p when it
+// would otherwise carry want over (from its last model, its old role, its
+// parent): want when the role allows it and the model takes it, else the
+// role's default for that model on the same terms, else "", the provider's
+// own default. offered is what the model takes (Host.Variants). The role
+// alone cannot answer: an entry that lists no variants allows any, and a
+// variant is a provider's word ("medium" means nothing to a model that has
+// no reasoning effort, which rejects the field).
+func fitVariant(p config.Preset, offered []string, id, want string) string {
+	fits := func(v string) bool { return p.AllowsVariant(id, v) && (v == "" || contains(offered, v)) }
+	if fits(want) {
 		return want
 	}
-	return p.DefaultVariant(id)
+	if d := p.DefaultVariant(id); fits(d) {
+		return d
+	}
+	return ""
 }
 
 // spawn creates and starts an agent; parentID is "" for the main agent. A
@@ -536,7 +546,7 @@ func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 			variant = parent.variant // same model: same flavour
 		}
 	}
-	variant = fitVariant(preset, modelID, variant)
+	variant = fitVariant(preset, c.host.Variants(modelID), modelID, variant)
 	id := NewID("a")
 	name, err := c.st.uniqueName(label, role, id)
 	if err != nil {
