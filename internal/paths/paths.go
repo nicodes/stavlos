@@ -2,8 +2,11 @@
 package paths
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 func home() string {
@@ -12,10 +15,22 @@ func home() string {
 }
 
 func xdg(env, fallback string) string {
+	if underTest() {
+		// A test never reaches the user's own config, data or cache, even
+		// one that forgot to say where its own are: 58 t.Setenv lines in 25
+		// files is 58 chances to forget, and the code under test writes
+		// sheets, state files and an event log.
+		return filepath.Join(os.TempDir(), "stavlos-test-"+strconv.Itoa(os.Getpid()), fallback)
+	}
 	if v := os.Getenv(env); v != "" {
 		return v
 	}
 	return filepath.Join(home(), fallback)
+}
+
+// underTest reports whether this process is a test binary.
+func underTest() bool {
+	return strings.HasSuffix(os.Args[0], ".test") || flag.Lookup("test.v") != nil
 }
 
 // ConfigDir is the global config layer: ~/.config/stavlos.
@@ -49,7 +64,7 @@ func Socket() string {
 	if v := os.Getenv("STAVLOS_SOCKET"); v != "" {
 		return v
 	}
-	if rt := os.Getenv("XDG_RUNTIME_DIR"); rt != "" {
+	if rt := os.Getenv("XDG_RUNTIME_DIR"); rt != "" && !underTest() {
 		return filepath.Join(rt, "stavlosd.sock")
 	}
 	return filepath.Join(DataDir(), "stavlosd.sock")

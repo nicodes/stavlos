@@ -330,9 +330,7 @@ type testConfig struct {
 
 func loadTestConfig(t *testing.T, tc testConfig) (*config.Effective, string) {
 	t.Helper()
-	cfgDir := t.TempDir()
-	t.Setenv("STAVLOS_CONFIG_DIR", cfgDir)
-	t.Setenv("STAVLOS_CACHE_DIR", t.TempDir())
+	cfgDir := testutil.Isolate(t).Config // its own config, data and cache: sheets and state files go to the data directory
 	if tc.json == "" {
 		tc.json = `{"model":"fake/m1"}`
 	}
