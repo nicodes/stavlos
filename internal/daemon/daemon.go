@@ -573,6 +573,19 @@ func (d *Daemon) LoginStart(ctx context.Context, provider, method string) (proto
 	return protocol.LoginStartResult{ID: id, Provider: provider, Method: p.Method, URL: p.URL, Code: p.Code, Instructions: p.Instructions, ExpiresIn: int(p.ExpiresIn.Seconds())}, nil
 }
 
+// LoginKey hands a pasted key to a login waiting for one, which is what
+// completes an "apikey" sign-in: the waiting LoginWait then stores it like
+// any other credential.
+func (d *Daemon) LoginKey(id, key string) error {
+	d.loginMu.Lock()
+	pl, ok := d.logins[id]
+	d.loginMu.Unlock()
+	if !ok {
+		return fmt.Errorf("no login in progress with id %q", id)
+	}
+	return pl.pending.Deliver(key)
+}
+
 // LoginWait polls until the login completes, then stores the tokens.
 func (d *Daemon) LoginWait(ctx context.Context, id string) (registry.Status, error) {
 	d.loginMu.Lock()

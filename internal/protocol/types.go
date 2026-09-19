@@ -55,6 +55,7 @@ const (
 	MProviderList       = "provider.list"
 	MProviderLoginStart = "provider.login.start" // begin a device-code login
 	MProviderLoginWait  = "provider.login.wait"  // block until it completes
+	MProviderLoginKey   = "provider.login.key"   // hand a pasted API key to a login waiting for one
 	MProviderDisconnect = "provider.disconnect"
 	MModelList          = "model.list"
 
@@ -570,7 +571,7 @@ type ProviderListResult struct {
 type LoginStartResult struct {
 	ID           string `json:"id"`
 	Provider     string `json:"provider"`
-	Method       string `json:"method"` // "browser": open URL, no code; "device": URL + code
+	Method       string `json:"method"` // "browser": open URL, no code; "device": URL + code; "apikey": paste a key
 	URL          string `json:"url"`
 	Code         string `json:"code"`
 	Instructions string `json:"instructions"`
@@ -578,6 +579,13 @@ type LoginStartResult struct {
 }
 type LoginWaitParams struct {
 	ID string `json:"id"`
+}
+
+// LoginKeyParams delivers the key an "apikey" login is waiting for. The
+// waiting provider.login.wait then returns as any other login would.
+type LoginKeyParams struct {
+	ID  string `json:"id"`
+	Key string `json:"key"`
 }
 type ProviderRef struct {
 	Provider string `json:"provider"`

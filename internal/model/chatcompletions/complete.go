@@ -45,7 +45,7 @@ func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {
 	}
 	cr := chatRequest{
 		Model:         id,
-		Messages:      toMessages(req.System, req.Messages, p.xai()),
+		Messages:      toMessages(req.System, req.Messages, p.replaysReasoning()),
 		Tools:         toTools(req.Tools),
 		Stream:        true,
 		StreamOptions: &streamOptions{IncludeUsage: true},

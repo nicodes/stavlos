@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/nicodes/stavlos/internal/oauth"
 	"strings"
 	"testing"
 
@@ -158,7 +159,7 @@ func TestLoginOverlayView(t *testing.T) {
 		t.Fatalf("login mode must not render a text field:\n%s", v)
 	}
 
-	o.setLogin("https://auth.openai.com/device", "ABCD-EFGH", "The code expires in 15 minutes.")
+	o.setLogin("https://auth.openai.com/device", "ABCD-EFGH", "The code expires in 15 minutes.", "")
 	v = stripANSI(o.view(100, "⠋"))
 	for _, want := range []string{
 		"Open this URL on any device:",
@@ -193,7 +194,7 @@ func TestLoginOverlayView(t *testing.T) {
 	}
 
 	// A fresh setLogin (retry) clears the error.
-	o.setLogin("https://auth.openai.com/device", "WXYZ-1234", "")
+	o.setLogin("https://auth.openai.com/device", "WXYZ-1234", "", "")
 	v = stripANSI(o.view(100, "⠙"))
 	if strings.Contains(v, "login expired") || !strings.Contains(v, "W X Y Z - 1 2 3 4") || !strings.Contains(v, "⠙ "+loginWaitingText) {
 		t.Fatalf("retry view:\n%s", v)
@@ -201,7 +202,7 @@ func TestLoginOverlayView(t *testing.T) {
 
 	// Long URLs are hard-wrapped, never truncated.
 	long := "https://example.com/" + strings.Repeat("abcdefghij", 12)
-	o.setLogin(long, "AB", "")
+	o.setLogin(long, "AB", "", "")
 	v = stripANSI(o.view(100, ""))
 	joined := strings.NewReplacer("\n", "", " ", "", "│", "").Replace(v)
 	if !strings.Contains(joined, long) {
@@ -261,7 +262,7 @@ func TestCompositeKeepsWidth(t *testing.T) {
 func TestLoginOverlayBrowserMode(t *testing.T) {
 	o := newOverlay(ovProviders, overlayLogin, "")
 	o.switchLogin("ChatGPT")
-	o.setLogin("https://auth.example/oauth/authorize?x=1", "", "Complete the sign-in in your browser.")
+	o.setLogin("https://auth.example/oauth/authorize?x=1", "", "Complete the sign-in in your browser.", "")
 	if !o.login.browser {
 		t.Fatal("browser mode not detected")
 	}
@@ -269,9 +270,32 @@ func TestLoginOverlayBrowserMode(t *testing.T) {
 	if !strings.Contains(out, "browser should open") || !strings.Contains(out, "auth.example") || strings.Contains(out, "enter the code") {
 		t.Fatalf("%s", out)
 	}
-	o.setLogin("https://x/dev", "AB-CD", "")
+	o.setLogin("https://x/dev", "AB-CD", "", "")
 	out = strings.Join(o.loginLines(60, "⠋"), "\n")
 	if !strings.Contains(out, "enter the code") || !strings.Contains(out, "A B - C D") {
 		t.Fatalf("%s", out)
+	}
+}
+
+// TestLoginOverlayTakesAKey: a sign-in whose method is a pasted key shows
+// a field instead of a code and a spinner, echoes nothing back, and its
+// hints say what enter does.
+func TestLoginOverlayTakesAKey(t *testing.T) {
+	o := newOverlay(ovProviders, overlayLogin, "Sign in to Z.ai Coding Plan")
+	o.setLogin("https://z.ai/manage-apikey/apikey-list", "", "Create a key for your GLM Coding Plan and paste it here.", oauth.MethodAPIKey)
+	if !o.login.key || o.login.browser {
+		t.Fatalf("an apikey login is neither a code nor a browser callback: %+v", o.login)
+	}
+	o.input.SetValue("zk-secret")
+	v := stripANSI(o.view(80, "-"))
+	switch {
+	case !strings.Contains(v, "Create a key for your plan at:"):
+		t.Fatalf("no console link:\n%s", v)
+	case strings.Contains(v, loginWaitingText):
+		t.Fatalf("nothing is polled for a key:\n%s", v)
+	case strings.Contains(v, "zk-secret"):
+		t.Fatalf("the key should not be echoed:\n%s", v)
+	case !strings.Contains(v, "enter: sign in"):
+		t.Fatalf("no hint:\n%s", v)
 	}
 }

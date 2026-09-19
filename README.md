@@ -19,12 +19,14 @@ changes another channel's paths or grants. `stavlos new --dir /path/to/project`
 creates a channel explicitly. In the TUI, **+ channel** asks for a name, then
 prefills an editable directory from the current channel.
 
-Stavlos uses your existing subscription, not platform API keys. `/providers` offers two sign-ins:
+Stavlos uses your existing subscription, not platform API keys. `/providers` offers four sign-ins:
 
 - **ChatGPT** (Plus or Pro, through the Codex sign-in). It signs in through your browser by default. A headless URL-plus-code option exists for SSH boxes once "Device code authorization for Codex" is enabled in ChatGPT's Security settings.
 - **Grok** (SuperGrok, through the Grok CLI sign-in). It shows a URL and a short code.
+- **Z.ai Coding Plan** (the GLM Coding Plan). Z.ai issues no OAuth credential: the plan is bound to a key you create in the console, so the sign-in is a field you paste it into. Calls go to the plan's endpoint, `api.z.ai/api/coding/paas/v4`, which draws on the subscription — never `api.z.ai/api/paas/v4`, which spends pay-as-you-go credits. The models offered are the plan's, from its own models.dev entry.
+- **Kimi For Coding**, the same way: a key from the **Kimi Code** console, not the Kimi API platform, whose keys are pay-as-you-go and do not reach the plan. Calls go to `api.kimi.ai/coding/v1`, not `api.moonshot.ai/v1`.
 
-Tokens live in `~/.local/share/stavlos/auth.json` (mode 0600) and refresh automatically. On the command line, `stavlos auth login [openai|xai]`, `stavlos auth list` and `stavlos auth logout` do the same. Model ids are `openai/gpt-5.4`, `xai/grok-4`, and so on; `/models` lists what each subscription serves.
+Credentials live in `~/.local/share/stavlos/auth.json` (mode 0600); OAuth tokens refresh automatically, and a key does not expire. On the command line, `stavlos auth login [openai|xai|zai|kimi]`, `stavlos auth list` and `stavlos auth logout` do the same. Model ids are `openai/gpt-5.4`, `xai/grok-4`, `zai/glm-5.3`, `kimi/kimi-for-coding`, and so on; `/models` lists what each subscription serves.
 
 ## Using the TUI
 
@@ -290,7 +292,7 @@ for the bot, configuration and migration from the old standalone bridge.
 
 ## Status
 
-Implemented: daemon with SQLite event log, one state machine per channel with a goroutine per agent, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend) and Grok subscription adapters with browser and device-code sign-in, models.dev metadata, native search tools, and a Linux sandbox for commands and MCP servers.
+Implemented: daemon with SQLite event log, one state machine per channel with a goroutine per agent, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend), Grok, Z.ai GLM Coding Plan and Kimi For Coding subscription adapters with browser, device-code and API-key sign-in, models.dev metadata, native search tools, and a Linux sandbox for commands and MCP servers.
 
 Not yet: go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
 
