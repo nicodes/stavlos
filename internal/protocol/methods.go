@@ -109,9 +109,10 @@ type PlanUsageResult struct {
 // PlanUsageInfo is one subscription's usage windows as its latest model
 // call's response reported them, and when that was.
 type PlanUsageInfo struct {
-	Provider string            `json:"provider"` // "openai"
-	Name     string            `json:"name"`     // "ChatGPT"
-	Windows  []UsageWindowInfo `json:"windows"`
+	Provider string            `json:"provider"`       // "openai"
+	Name     string            `json:"name"`           // "ChatGPT"
+	Plan     string            `json:"plan,omitempty"` // "pro", where the provider names it
+	Windows  []UsageWindowInfo `json:"windows"`        // shortest first
 	Observed time.Time         `json:"observed"`
 }
 

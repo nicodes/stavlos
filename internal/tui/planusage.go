@@ -83,32 +83,84 @@ func (m *Model) onPlanUsage(msg planUsageMsg) {
 	}
 }
 
-// planUsageRows are the nav's plan usage block, width wide: a row per plan,
-// "ChatGPT ━━━━━━──────  38%", the bar and percent of its most used window
-// (the limit that binds first), then a blank row; none without a reading.
-func (m Model) planUsageRows(width int, now time.Time) []string {
-	var rows []string
-	for _, p := range m.plans {
-		if len(p.Windows) == 0 {
-			continue
+// planRow is one row of the nav's plan usage block: a window of a plan.
+type planRow struct {
+	plan   int // index into m.plans
+	window protocol.UsageWindowInfo
+	first  bool // the plan's first row, which carries its name
+}
+
+// planRowList is a row for every window of every plan with a reading, the
+// plans in order and each plan's windows shortest first: a plan limited by
+// five hours and by the week shows both, since either can be the one that
+// stops the work.
+func (m Model) planRowList() []planRow {
+	var rows []planRow
+	for i, p := range m.plans {
+		for j, w := range p.Windows {
+			rows = append(rows, planRow{plan: i, window: w, first: j == 0})
 		}
-		used := 0.0
-		for _, w := range p.Windows {
-			used = max(used, windowUsed(w, now))
-		}
-		rows = append(rows, planUsageRow(p.Name, used, width))
-	}
-	if len(rows) > 0 {
-		rows = append(rows, "")
 	}
 	return rows
+}
+
+// planUsageRows are the nav's plan usage block, width wide:
+//
+//	ChatGPT 5h ━━━━━━──────  38%
+//	        wk ━━──────────  17%
+//
+// a row per window, the plan's name on its first, then a blank row; none
+// without a reading.
+func (m Model) planUsageRows(width int, now time.Time) []string {
+	list := m.planRowList()
+	if len(list) == 0 {
+		return nil
+	}
+	nameW := 0
+	for _, p := range m.plans {
+		if len(p.Windows) > 0 {
+			nameW = max(nameW, ansi.StringWidth(p.Name))
+		}
+	}
+	nameW = min(nameW, max(1, width/3))
+	rows := make([]string, 0, len(list)+1)
+	for _, r := range list {
+		name := ""
+		if r.first {
+			name = ansi.Truncate(m.plans[r.plan].Name, nameW, "…")
+		}
+		label := name + strings.Repeat(" ", nameW-ansi.StringWidth(name))
+		if span := windowSpan(r.window.Minutes); span != "" {
+			label += " " + span
+		}
+		rows = append(rows, planUsageRow(label, windowUsed(r.window, now), width))
+	}
+	return append(rows, "")
+}
+
+// windowSpan names a window by its length: "5h", "wk", "mo", "3d"; "" when
+// the provider did not say.
+func windowSpan(minutes int) string {
+	switch {
+	case minutes <= 0:
+		return ""
+	case minutes == 7*24*60:
+		return "wk"
+	case minutes >= 28*24*60 && minutes <= 31*24*60:
+		return "mo"
+	case minutes%(24*60) == 0:
+		return strconv.Itoa(minutes/(24*60)) + "d"
+	case minutes%60 == 0:
+		return strconv.Itoa(minutes/60) + "h"
+	}
+	return strconv.Itoa(minutes) + "m"
 }
 
 // planCommand is /plan [provider]: the chart of that subscription's plan
 // usage, or of the first plan with a reading.
 func (m *Model) planCommand(rest string) tea.Cmd {
 	if len(m.plans) == 0 {
-		return m.setStatus("no plan usage yet: it comes with the next model call", false)
+		return m.setStatus("no plan usage yet: it comes with the next model call, or when the daemon next asks the provider", false)
 	}
 	p := m.plans[0]
 	for _, q := range m.plans {
@@ -119,14 +171,15 @@ func (m *Model) planCommand(rest string) tea.Cmd {
 	return m.openPlanUsage(p.Provider, p.Name)
 }
 
-// planAt is the plan whose row the nav draws at header row y (the block
+// planAt is the plan one of whose rows the nav draws at header row y (the block
 // starts at row 2), and whether y is one of those rows.
 func (m Model) planAt(y int) (protocol.PlanUsageInfo, bool) {
+	rows := m.planRowList()
 	i := y - navTopRows
-	if i < 0 || i >= len(m.plans) {
+	if i < 0 || i >= len(rows) {
 		return protocol.PlanUsageInfo{}, false
 	}
-	return m.plans[i], true
+	return m.plans[rows[i].plan], true
 }
 
 // windowUsed is a window's percent used, clamped; a window whose reset has
@@ -142,7 +195,7 @@ func windowUsed(w protocol.UsageWindowInfo, now time.Time) float64 {
 // from 70% and red from 90%.
 func planUsageRow(name string, used float64, width int) string {
 	const pctW = 4
-	name = ansi.Truncate(name, max(1, width/2), "…")
+	name = ansi.Truncate(name, max(1, width*2/3), "…")
 	barW := max(1, width-ansi.StringWidth(name)-1-1-pctW)
 	filled := int(math.Round(used / 100 * float64(barW)))
 	bar := theme.StyleAccent
