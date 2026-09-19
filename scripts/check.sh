@@ -29,12 +29,27 @@ step "gocyclo -over 30"
 out=$(go tool gocyclo -over 30 -ignore '_test' .)
 if [ -n "$out" ]; then echo "$out"; failed+=(gocyclo); fi
 
+# The web client's bundle is committed (docs/web-ui.md), so a stale one must
+# not ship quietly: rebuild it and fail when the result differs from what is
+# committed. Skipped where Node is not installed; `go install` never needs it.
+step "web bundle"
+if command -v npm >/dev/null; then
+	(cd web && { [ -d node_modules ] || npm ci --no-audit --no-fund >/dev/null; } && npm test --silent && npm run build --silent) >/dev/null || failed+=(web-build)
+	if [ -n "$(git status --porcelain -- internal/web/dist)" ]; then
+		git status --short -- internal/web/dist
+		echo "internal/web/dist is stale: commit the rebuilt bundle"
+		failed+=(web-stale)
+	fi
+else
+	echo "npm not found: skipped"
+fi
+
 step race
 go test -race -count=1 \
 	./internal/agent/ ./internal/daemon/ ./internal/proc/ ./internal/tools/ ./internal/shellcmd/ \
 	./internal/textsafe/ ./internal/oauth/ ./internal/eventlog/ ./internal/escalation/ \
 	./internal/model/... ./internal/modelsdev/ ./internal/auth/ ./internal/config/ ./internal/policy/ \
-	./internal/tui/... ./internal/discord/ ./internal/navigation/ ./pkg/client/ | grep -v '^ok '
+	./internal/tui/... ./internal/discord/ ./internal/navigation/ ./internal/web/ ./pkg/client/ | grep -v '^ok '
 [ "${PIPESTATUS[0]}" -eq 0 ] || failed+=(race)
 
 for i in 1 2 3; do

@@ -128,6 +128,10 @@ func (m *Model) command(text string) tea.Cmd {
 		return cmd
 	}
 
+	if cmd, ok := m.serviceCommand(name, rest); ok { // /discord and /web
+		return cmd
+	}
+
 	switch name {
 	case "/settings", "/config":
 		return m.settingsCommand(rest)
@@ -142,8 +146,6 @@ func (m *Model) command(text string) tea.Cmd {
 		return m.toggleTree()
 	case "/chat":
 		return m.openChat()
-	case "/discord":
-		return m.openDiscord(rest)
 	case "/roles", "/role", "/presets":
 		// The one role dialog: enter switches the selected agent's preset.
 		// A name argument sets it directly.

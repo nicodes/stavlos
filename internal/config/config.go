@@ -46,6 +46,14 @@ type File struct {
 	Dirs       []string       `json:"dirs,omitempty"`      // directories every channel works in besides its own (yours, and a trusted project\'s)
 	Hosts      []string       `json:"hosts,omitempty"`     // hosts web_fetch reaches without asking: github.com, *.example.com, or * (yours, and a trusted project\'s)
 	Discord    *Discord       `json:"discord,omitempty"`   // global-only bridge configuration; token references remain unexpanded
+	Web        *Web           `json:"web,omitempty"`       // global-only: the browser listener's port and the names it answers to
+}
+
+// Web configures the loopback browser listener (docs/web-ui.md). Whether it
+// is on is not configuration: the nav's Web UI row turns it on and off.
+type Web struct {
+	Port  int      `json:"port,omitempty"`  // default 4999
+	Hosts []string `json:"hosts,omitempty"` // names a proxy in front of it uses, such as box.tailnet.ts.net
 }
 
 // SandboxConfig shapes the sandbox (any layer; a trusted project's wins). Paths may use ~
@@ -259,6 +267,7 @@ type Effective struct {
 	MCP         map[string]MCP
 	Search      Search          // web_search backend, key expanded
 	Discord     *Discord        // global bridge configuration, never project-merged or token-expanded
+	Web         *Web            // global browser listener configuration
 	PassEnv     []string        // environment variables child processes keep although their names look like secrets
 	searchRuled bool            // a layer's policy decided web_search, so a search backend does not allow it
 	Policy      *policy.Layered // every layer's rules merged in order (defaults, global, project, local); roles add overlays that only tighten
@@ -446,15 +455,33 @@ func loadGlobalFrom(gdir string) (*Effective, error) {
 	return e, nil
 }
 
-// applyFile layers one file onto e. Every value is validated: a setting
-// that cannot be applied is an error, never a silent fallback to the
-// default (an unreadable deny rule is the worst kind of failure).
-func (e *Effective) applyFile(f File, layer string) error {
+// applyGlobalOnly takes the blocks only the global file may carry: the
+// daemon's own services, which a project has no say in.
+func (e *Effective) applyGlobalOnly(f File, layer string) error {
 	if f.Discord != nil {
 		if layer != "global" {
 			return errors.New("discord is global-only")
 		}
 		e.Discord = f.Discord
+	}
+	if f.Web != nil {
+		if layer != "global" {
+			return errors.New("web is global-only")
+		}
+		if f.Web.Port < 0 || f.Web.Port > 65535 {
+			return fmt.Errorf("web.port %d is not a port", f.Web.Port)
+		}
+		e.Web = f.Web
+	}
+	return nil
+}
+
+// applyFile layers one file onto e. Every value is validated: a setting
+// that cannot be applied is an error, never a silent fallback to the
+// default (an unreadable deny rule is the worst kind of failure).
+func (e *Effective) applyFile(f File, layer string) error {
+	if err := e.applyGlobalOnly(f, layer); err != nil {
+		return err
 	}
 	if _, ok := f.Policy[toolname.WebSearch]; ok && layer != "defaults" {
 		e.searchRuled = true // a layer decided web_search itself: a search backend does not allow it

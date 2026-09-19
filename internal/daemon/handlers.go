@@ -88,6 +88,7 @@ func promptErr(err error) error {
 var none = protocol.None{}
 
 var handlers = routes(
+	webRoute(protocol.WebStatusMethod), webRoute(protocol.WebEnable), webRoute(protocol.WebDisable), webRoute(protocol.WebOpen),
 	route(protocol.DiscordStatusMethod, func(_ context.Context, c *conn, _ protocol.None) (protocol.DiscordStatus, error) {
 		if c.d.Discord == nil {
 			return protocol.DiscordStatus{State: "disconnected", Error: "Discord service is unavailable in this daemon"}, nil

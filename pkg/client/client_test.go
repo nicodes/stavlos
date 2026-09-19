@@ -50,7 +50,10 @@ func TestCloseWithFullNotifications(t *testing.T) {
 
 func TestCancelledBlockedWrite(t *testing.T) {
 	c, _ := pair(t) // the peer deliberately never reads
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	// Long enough that the write has begun when it fires even under the race
+	// detector, where encoding the megabyte alone outlasted 50ms: a call
+	// cancelled before its write starts rightly leaves the connection open.
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- c.Call(ctx, "blocked", strings.Repeat("x", 1<<20), nil) }()
@@ -59,7 +62,7 @@ func TestCancelledBlockedWrite(t *testing.T) {
 		if !errors.Is(err, context.DeadlineExceeded) {
 			t.Fatalf("got %v", err)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(10 * time.Second):
 		t.Fatal("write ignored cancellation")
 	}
 	select {

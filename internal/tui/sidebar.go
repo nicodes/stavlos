@@ -512,6 +512,9 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 	if y == m.sidebarTrustRow() { // the project row: ask for trust, or open the config
 		return tea.Batch(cmd, m.trustClick())
 	}
+	if y == sidebarWebRow {
+		return tea.Batch(cmd, m.webClick())
+	}
 	if y == m.sidebarDiscordRow() {
 		return tea.Batch(cmd, m.openDiscord("status"))
 	}
