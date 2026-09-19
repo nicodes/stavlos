@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/config"
@@ -106,7 +107,9 @@ func (t *turnRun) end(reason event.TurnReason, errText string) {
 	if reason == event.ReasonError {
 		p.ResumeAt = t.resumeAt
 	}
-	_ = t.a.record(event.TurnEnded, p)
+	if err := t.a.record(event.TurnEnded, p); err != nil {
+		t.a.turnEndLost(err)
+	}
 	t.a.armMCPIdle()
 }
 
@@ -239,4 +242,22 @@ func bareID(full string) string {
 		return full
 	}
 	return id
+}
+
+// turnEndLost is what happens when a turn's end cannot be written. The state
+// says the agent is in a turn only because the event that says otherwise
+// failed, and an agent in a turn takes no other: it would sit refusing work
+// until the daemon restarted. So the turn is ended in memory, the one place
+// state is set outside the fold, and the agent says what happened. The log is
+// left with an open turn, which is what recovery expects of a daemon that
+// stopped mid-turn: it records the turn as aborted at the next start.
+func (a *Agent) turnEndLost(err error) {
+	c := a.c
+	c.mu.Lock()
+	st := a.state()
+	st.inTurn = false
+	st.lastError = "the turn ended but could not be logged: " + err.Error()
+	a.logErr = nil // reported here; the next turn starts clean
+	c.mu.Unlock()
+	log.Printf("channel %s agent %s: turn.ended was not written: %v", c.ID, a.ID, err)
 }

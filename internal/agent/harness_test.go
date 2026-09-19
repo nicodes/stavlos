@@ -35,8 +35,9 @@ type fakeHost struct {
 	answer   func(ctx context.Context, p protocol.PromptInfo) escalation.Answer
 	prompts  []protocol.PromptInfo
 	streams  []protocol.StreamNotification
-	badModel error // CheckModel/Resolve fail with this when set
-	failNext error // the next Append fails with this, once
+	badModel error      // CheckModel/Resolve fail with this when set
+	failNext error      // the next Append fails with this, once
+	failType event.Type // the next Append holding an event of this type fails, once
 	usage    map[string]model.PlanUsage
 	variants map[string][]string // model → the variants it takes; nil = low and high for every model
 }
@@ -52,6 +53,12 @@ func (h *fakeHost) Append(_ context.Context, evs ...event.Event) ([]event.Event,
 		err := h.failNext
 		h.failNext = nil
 		return nil, err
+	}
+	for _, e := range evs { // a write of this type fails, once
+		if h.failType != "" && e.Type == h.failType {
+			h.failType = ""
+			return nil, errors.New("disk full")
+		}
 	}
 	out := make([]event.Event, 0, len(evs))
 	for _, e := range evs {
