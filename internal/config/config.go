@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/instructions"
+	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -31,6 +32,7 @@ import (
 type File struct {
 	Schema     string         `json:"$schema,omitempty"`
 	Model      string         `json:"model,omitempty"`
+	Models     []string       `json:"models,omitempty"` // the models the harness chooses from for a role that lists none, in preferred order
 	RootAgent  string         `json:"rootAgent,omitempty"`
 	Mode       string         `json:"mode,omitempty"` // the permission mode a new channel starts in: ask | auto | yolo
 	Limits     *Limits        `json:"limits,omitempty"`
@@ -251,6 +253,7 @@ type Skill struct {
 type Effective struct {
 	Dir        string
 	Model      string
+	Models     []string // what the harness chooses from for a role that lists no models, in preferred order
 	RootAgent  string
 	Mode       string // the permission mode a new channel starts in
 	Limits     Limits
@@ -490,6 +493,15 @@ func (e *Effective) applyFile(f File, layer string) error {
 	for _, pl := range f.Plugins {
 		if !contains(e.Plugins, pl) {
 			e.Plugins = append(e.Plugins, pl)
+		}
+	}
+	if f.Models != nil { // a later layer's list replaces the earlier one: it is an order, not a set
+		e.Models = nil
+		for _, id := range f.Models {
+			if _, _, err := model.Split(id); err != nil {
+				return fmt.Errorf("models: %w", err)
+			}
+			e.Models = append(e.Models, id)
 		}
 	}
 	if f.Model != "" {

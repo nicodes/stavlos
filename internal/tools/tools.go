@@ -87,7 +87,9 @@ type Tool interface {
 type Orchestrator interface {
 	// Spawn creates a child and returns its id and the name it got (label,
 	// normalised and made unique in the channel).
-	Spawn(ctx context.Context, parent, archetype, label, task, modelID string) (id, name string, err error)
+	// The child's model is the harness's choice among its role's
+	// (docs/model-selection.md), never the caller's.
+	Spawn(ctx context.Context, parent, archetype, label, task string) (id, name string, err error)
 	// Message atomically sends text from the caller to agents (names or ids) or to
 	// User, as kind KindRequest (the recipient owes a reply, the caller
 	// waits; delivered at its next step), KindResponse (settles a request,

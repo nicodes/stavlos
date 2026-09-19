@@ -15,8 +15,8 @@ import (
 // or the caller's parent. Cancelling stays with the parent.
 type orchestrator struct{ c *Channel }
 
-func (o orchestrator) Spawn(ctx context.Context, parent, role, label, task, modelID string) (id, name string, err error) {
-	a, err := o.c.spawn(ctx, parent, role, label, task, modelID)
+func (o orchestrator) Spawn(ctx context.Context, parent, role, label, task string) (id, name string, err error) {
+	a, err := o.c.spawn(ctx, parent, role, label, task, "")
 	if err != nil {
 		return "", "", err
 	}

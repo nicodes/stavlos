@@ -56,6 +56,7 @@ export function apply(v: ChannelView, e: WireEvent): void {
       break;
     case "agent.updated":
       if (p.name) v.names[agent] = p.name;
+      if (p.model) push(v, agent, { key, kind: "notice", time: e.time, text: `model → ${p.model}${p.reason ? " · " + p.reason : ""}` });
       break;
     case "agent.killed":
       push(v, agent, { key, kind: "notice", time: e.time, text: "killed" });
