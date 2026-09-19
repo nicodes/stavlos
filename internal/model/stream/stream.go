@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/httpx"
 	"github.com/nicodes/stavlos/internal/model"
 )
 
@@ -80,10 +81,7 @@ var ErrIncomplete = errors.New("stream ended before the response was complete")
 // long and the context bounds them), three minutes for the first response
 // header, proxies from the environment.
 func NewHTTPClient() *http.Client {
-	return &http.Client{Transport: &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		ResponseHeaderTimeout: 3 * time.Minute,
-	}}
+	return httpx.New(httpx.Options{HeaderTimeout: 3 * time.Minute})
 }
 
 // Complete runs one streaming call. newCodec makes the codec for an

@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nicodes/stavlos/internal/httpx"
 	"io"
 	"net/http"
 	"net/url"
@@ -132,7 +133,7 @@ var ErrDenied = errors.New("login was denied")
 // ErrExpired is returned when the code expired before the user finished.
 var ErrExpired = errors.New("login code expired; start again")
 
-var client = &http.Client{Timeout: 30 * time.Second}
+var client = httpx.New(httpx.Options{Timeout: 30 * time.Second})
 
 // pollMargin is added to every poll interval (RFC 8628 §3.5 safety margin).
 var pollMargin = 3 * time.Second
