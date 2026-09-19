@@ -46,6 +46,17 @@ func newAgent(c *Channel, id, parent string, depth int, parentCtx context.Contex
 	return &Agent{ID: id, Parent: parent, Depth: depth, c: c, ctx: ctx, kill: kill, wake: make(chan struct{}, 1), jobs: map[string]*jobRun{}}
 }
 
+// release gives back what an agent holds outside the log: its context (and
+// with it the turn, its tools, its jobs' processes and its children's
+// contexts) and its MCP servers. Stopping a channel, killing an agent and a
+// spawn that was never recorded all end here, so a new kind of resource has
+// one place to be closed. Never called with c.mu held: stopping a server
+// waits for it.
+func (a *Agent) release() {
+	a.kill()
+	a.stopMCP("", false)
+}
+
 func (a *Agent) start() {
 	a.c.wg.Add(1)
 	go a.run()
