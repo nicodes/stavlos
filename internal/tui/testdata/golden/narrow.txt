@@ -1,0 +1,24 @@
+› find out why the build is slow                                   19m
+
+‹ @main: Linking takes 38 of the 41 seconds. I've asked scout to
+  look at the linker flags.                                         8m
+
+⠋ Prancing… · @main
+
+
+
+
+
+
+
+
+
+
+
+
+
+─ #proj ─ /home/x/Work/proj ───────────────── Get started /providers ─
+
+ ASK › Ask anything… "Fix a TODO in the codebase"
+
+! 0 · dirs 0

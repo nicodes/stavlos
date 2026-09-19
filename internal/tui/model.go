@@ -65,6 +65,11 @@ func Run(ctx context.Context, c *client.Client, channelID string) error {
 
 // Model is the Bubble Tea model for one channel. Update only performs state
 // transitions; every daemon interaction is a tea.Cmd from commands.go.
+// clock is the TUI's time: everything it draws that depends on the hour
+// (how long ago, which suggestion, whether a window has reset) reads it, so
+// a golden frame can be drawn at a fixed moment (golden_test.go).
+var clock = time.Now
+
 type Model struct {
 	cfgEditor   *configEditor
 	configEpoch uint64
@@ -218,7 +223,7 @@ func (m *Model) stash() {
 		}
 		delete(m.visited, oldest)
 	}
-	m.visited[m.channelID] = replayed{m.spawned, m.parentOf, m.transcripts, m.seq, time.Now()}
+	m.visited[m.channelID] = replayed{m.spawned, m.parentOf, m.transcripts, m.seq, clock()}
 	m.keepTree(m.channelID, m.agents)
 }
 
@@ -307,7 +312,7 @@ const (
 
 func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 	ti := newInputArea()
-	ti.Placeholder = placeholders[placeholderIndex(time.Now())]
+	ti.Placeholder = placeholders[placeholderIndex(clock())]
 	ti.Focus()
 
 	vp := chatViewport{Width: 80, Height: 20}

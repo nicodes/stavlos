@@ -113,7 +113,15 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn, web bool) {
 			nc.Close()
 			return
 		}
-		ran = cred.PID != os.Getpid() && peercred.DescendsFrom(cred.PID, os.Getpid())
+		if cred.PID != os.Getpid() {
+			// A peer whose ancestry cannot be read is refused, not waved
+			// through: it may be one of the processes this check exists for.
+			if ran, err = peercred.DescendsFrom(cred.PID, os.Getpid()); err != nil {
+				log.Printf("refused a connection: %v", err)
+				nc.Close()
+				return
+			}
+		}
 	}
 	// Requests run under the connection's context: a client that goes away
 	// mid-login.wait (or mid-anything) takes its work with it.

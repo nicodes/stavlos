@@ -242,6 +242,9 @@ func (cs *channelState) queued(a *agentState, e event.Event, fx *effects) {
 	}
 	a.inbox = append(a.inbox, in)
 	cs.asked(in, a.id) // the sender waits from the moment it asks
+	if in.Recap {
+		cs.lastRecap, cs.recapOpen = e.Time, true
+	}
 	switch in.Kind {
 	case event.InputResponse:
 		if from := cs.agents[in.From]; from != nil {
