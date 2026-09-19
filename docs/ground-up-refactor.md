@@ -246,6 +246,43 @@ Sizes are relative: S is an afternoon, M a day or two, L most of a week.
 | 1.8 Discord fences | **done** | |
 | 1.9 the log is never deleted | **done** | With 0.6. |
 
+### Status of phases 2 to 7 (pull request `refactor/ground-up`, stacked on the first)
+
+Every row marked done is one commit behind the whole gate. Rows marked open
+are not started: they are the large redesigns, and each changes what every
+client receives, so they want to be reviewed (and run against a real daemon)
+on their own rather than arrive in one diff.
+
+| Step | State | Notes |
+|---|---|---|
+| 2.1 event registry | **half** | Input kinds declare their rule (`event.InputRule`) and a test pins the vocabulary. Event types are not yet registered with payload and origin. |
+| 2.2 one commit, one dispatch | **done** | `commitLocked` dispatches its own wakes; `commitFactLocked` folds what happened even when the write fails. |
+| 2.3 runtime state derived | open | |
+| 2.4 one system input | **done** | Framed from the rule; the "[harness]" text prefix is gone. |
+| 2.5 turn loop | open | |
+| 2.6 `Host` / `Env` split | open | |
+| 2.7 channel resources | **done** | `Agent.release`. |
+| 3.1 `pathx`, `os.Root` | open | |
+| 3.2 pure `Decide` | open | The non-† part still depends on 3.1's parsed paths. |
+| 3.3 shell grammar | **done** | Keywords, launcher flag arity, `eval`, here-strings, same-line literals. A prefix is offered only for words that read back as themselves (found by the fuzzer). |
+| 3.4 trust snapshot | open | |
+| 3.5 one config writer | **done** | `statefile.WriteAtomic` everywhere but the patch tool (its own semantics) and `init` (a new file). |
+| 3.6 who may call what | **half** | Scope is on the route and dispatch enforces it; a web connection cannot name itself. The owner token and the `internal` scope for the Discord bridge are open. |
+| 3.7 sandbox level | open | † |
+| 3.8 web listener | **half** | Sign-out ends the session's sockets; a sheet is served only to a frame. Moving the session out of the cookie and the code out of `argv` are open. |
+| 3.9 HTTP client | **done** | `httpx.New`, redirects stay on the host asked. |
+| 4.1, 4.3, 4.4 providers | **done** | `chatcompletions.Traits`, the quota source table, the `market` snapshot and `retarget`, `IsLimit` out of the transport. |
+| 4.2 registry split | open | |
+| 5.1 lazy channels | open | |
+| 5.2 snapshot and pages | open | |
+| 5.3 lanes in bytes | **half** | The queue is bounded at 64 MB; separate lanes wait for 5.2, which removes pushed history. |
+| 5.4 dispatcher | **half** | An event nobody watches is not encoded. Encoding still runs on the writer. |
+| 5.5 usage table | **done** | Migration 5 to 6, checked against a copy of the real log: identical totals. |
+| 5.6 to 5.9 | open | |
+| 6.5 nav rows | **done** | Rows by id; no row arithmetic in the tests. |
+| 6.1 to 6.4, 6.6, 6.7 | open | |
+| 7 | open | |
+
 ### Phase 0: lock the behaviour, arm the gate (M)
 
 Nothing else is safe without this, and it is the phase the last plan never
