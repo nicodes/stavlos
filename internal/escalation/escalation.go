@@ -210,6 +210,25 @@ func (m *Manager) finish(id string, a Answer) bool {
 	return true
 }
 
+// ReleaseClient gives up every claim client holds, because it has gone: the
+// prompts are announced again so another client (or the same human's,
+// reconnected under a new id) can take them at once rather than after
+// ClaimExpiry.
+func (m *Manager) ReleaseClient(client string) {
+	m.mu.Lock()
+	var freed []protocol.PromptInfo
+	for _, p := range m.pend {
+		if p.info.ClaimedBy == client && !p.done {
+			p.info.ClaimedBy = ""
+			freed = append(freed, p.info)
+		}
+	}
+	m.mu.Unlock()
+	for _, info := range freed {
+		m.sink.Notify(protocol.PromptNotification{Action: protocol.ActionRequested, Prompt: info}, m.tiersFor(info))
+	}
+}
+
 // Claim marks a prompt as being answered by client (a human engaged).
 func (m *Manager) Claim(id, client string) error {
 	m.mu.Lock()
