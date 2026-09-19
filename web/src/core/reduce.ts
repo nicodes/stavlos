@@ -70,6 +70,10 @@ export function apply(v: ChannelView, e: WireEvent): void {
       break;
     case "input.queued":
       if (p.kind === "reminder") break;
+      if (p.kind === "resume") {
+        push(v, agent, { key, kind: "notice", time: e.time, text: "resumed: a model is available again" });
+        break;
+      }
       push(v, agent, { key, kind: "input", time: e.time, from: p.from_name || (p.kind === "job" ? "job" : "you"), inputKind: p.kind, text: p.text ?? "" });
       break;
     case "assistant.message": {
