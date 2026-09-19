@@ -23,6 +23,7 @@ import (
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/statefile"
 	"github.com/nicodes/stavlos/internal/toolname"
 	"gopkg.in/yaml.v3"
 )
@@ -1170,24 +1171,25 @@ func SetGlobalModel(modelID string) error {
 	defer globalWriteMu.Unlock()
 	p := filepath.Join(paths.ConfigDir(), "stavlos.json")
 	b, err := os.ReadFile(p)
-	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 			return err
 		}
-		return os.WriteFile(p, []byte(fmt.Sprintf("{\n  \"model\": %q\n}\n", modelID)), 0o600)
+		b = []byte("{}\n")
+	} else if err != nil {
+		return err
 	}
-	s := string(b)
-	re := regexp.MustCompile(`"model"\s*:\s*"[^"]*"`)
-	if re.MatchString(s) {
-		s = re.ReplaceAllString(s, fmt.Sprintf(`"model": %q`, modelID))
-	} else {
-		i := strings.IndexByte(s, '{')
-		if i < 0 {
-			return fmt.Errorf("%s is not a JSON object", p)
-		}
-		s = s[:i+1] + fmt.Sprintf("\n  \"model\": %q,", modelID) + s[i+1:]
+	// One field is set, by the editor that keeps every comment and every
+	// other byte. This used to be a regular expression over the whole file:
+	// it rewrote every "model" key at any depth, comments included, expanded
+	// a "$" in the id, and wrote the result in place, where a crash left
+	// half a configuration.
+	value, _ := json.Marshal(modelID)
+	out, err := EditJSONField(b, []string{"model"}, value)
+	if err != nil {
+		return fmt.Errorf("%s: %w", p, err)
 	}
-	return os.WriteFile(p, []byte(s), 0o600) // it may hold a search key
+	return statefile.WriteAtomic(p, out, 0o600, false) // it may hold a search key
 }
 
 func contains(xs []string, x string) bool {
