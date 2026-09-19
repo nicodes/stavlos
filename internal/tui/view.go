@@ -602,17 +602,37 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 	return rows, items
 }
 
-// sidebarHeader is what precedes the tree: the app name, the Web UI row, a blank, the
-// system's tokens and cost (every channel), the selected chat's (the
-// channel's in its chat, the agent's in an agent's chat), a blank, whether
-// the channel's project configuration is trusted, the prompt-cache share of
-// the last hour's calls, Discord status, and a blank; the "channels" title
-// is the body's first row. The tree's first row follows, which is how a
-// click on the sidebar finds its agent.
+// navSection is a section title in the nav's header, drawn like the
+// "Channels" title under it.
+func navSection(title string) string { return theme.StyleAccent.Bold(true).Render(title) }
+
+// sidebarHeader is what precedes the tree, in sections:
+//
+//	Stavlos                       ⚙
+//
+//	Clients
+//	● Web UI 127.0.0.1:4999
+//	○ Discord disconnected
+//
+//	Subscriptions                   (only with a plan reading)
+//	ChatGPT 5h ━━━━━━──────  38%
+//	        wk ━━──────────  17%
+//
+//	System               2k · $0.25
+//	@main                1k · $0.20
+//
+//	project trusted                 (each only while it has something to say,
+//	cache 94%                        and the blank under them with them)
+//
+// The "Channels" title is the body's first row. The tree's first row follows,
+// which is how a click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	rows := []string{
 		theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" "),
+		"",
+		navSection("Clients"),
 		m.webIndicator(width),
+		m.discordIndicator(width),
 		"",
 	}
 	rows = append(rows, m.planUsageRows(width, time.Now())...)
@@ -621,13 +641,17 @@ func (m Model) sidebarHeader(width int) []string {
 		m.navUsageRow(m.sidebarSelectedRow(), width),
 		"",
 	)
+	monitors := len(rows)
 	if trust := m.trustRow(width); trust != "" {
 		rows = append(rows, trust)
 	}
 	if cache := m.cacheRow(width); cache != "" {
 		rows = append(rows, cache)
 	}
-	return append(rows, m.discordIndicator(width), "")
+	if len(rows) > monitors {
+		rows = append(rows, "")
+	}
+	return rows
 }
 
 // usageRow is "label        12k · $0.25", grey: the label at the left, the
@@ -707,19 +731,9 @@ func (m Model) sidebarSystemRow() int {
 }
 func (m Model) sidebarSelectedRow() int { return m.sidebarSystemRow() + 1 }
 
-// sidebarDiscordRow opens the Discord status/control panel when clicked. The
-// project row and a cache monitor sit above it, each only while it has
-// something to say.
-func (m Model) sidebarDiscordRow() int {
-	row := m.sidebarSystemRow() + 3
-	if m.trustRow(sidebarWidth-1) != "" {
-		row++
-	}
-	if m.cacheRow(sidebarWidth-1) != "" {
-		row++
-	}
-	return row
-}
+// sidebarDiscordRow opens the Discord status/control panel when clicked: the
+// row under the Web UI's in the Clients section.
+func (m Model) sidebarDiscordRow() int { return sidebarWebRow + 1 }
 
 // sidebarTrustRow is the project row, or -1 for a directory with no project
 // configuration.

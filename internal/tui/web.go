@@ -13,16 +13,18 @@ import (
 	"github.com/nicodes/stavlos/pkg/client"
 )
 
-// The web UI (docs/web-ui.md) is a loopback listener in the daemon. The nav's
-// second row shows whether it is on; a click turns it on and opens it in a
+// The web UI (docs/web-ui.md) is a loopback listener in the daemon. Its row in
+// the nav's Clients section shows whether it is on; a click turns it on and opens it in a
 // browser tab, and a click while it is on opens its controls.
 
-// navTopRows is the nav header's fixed top: the title, the Web UI row and a
-// blank. The plan usage rows follow.
-const navTopRows = 3
+// navTopRows is the nav header's fixed top: the title, a blank, the Clients
+// section (its title, the Web UI row, the Discord row) and a blank. The
+// Subscriptions section follows, when there is a plan reading.
+const navTopRows = 6
 
-// sidebarWebRow is the header row of the Web UI indicator.
-const sidebarWebRow = 1
+// sidebarWebRow is the header row of the Web UI indicator, the first of the
+// Clients section.
+const sidebarWebRow = 3
 
 type webMsg struct {
 	status protocol.WebStatus
