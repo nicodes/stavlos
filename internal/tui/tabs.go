@@ -3,7 +3,6 @@ package tui
 import (
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -336,7 +335,7 @@ func (m *Model) listKey(msg tea.KeyMsg, n int) tea.Cmd {
 // mcpKey handles keys while the mcp dialog is open: ↑/↓ (or j/k) move over
 // the rows, enter shows or hides a server's tools, esc closes.
 func (m *Model) mcpKey(msg tea.KeyMsg) tea.Cmd {
-	_, owners := mcpRows(m.selectedMCP(), m.mcpOpen, time.Now(), 200)
+	_, owners := mcpRows(m.selectedMCP(), m.mcpOpen, clock(), 200)
 	n := len(owners)
 	switch {
 	case key.Matches(msg, keys.OvClose):

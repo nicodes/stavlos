@@ -1,0 +1,34 @@
+Stavlos                      ⚙  │ › find out why the build is slow                                         19m
+                                │
+System               2k · $0.25 │ ‹ @main: Linking takes 38 of the 41 seconds. I've asked scout to look at
+#proj                2k · $0.25 │   the linker flags.                                                       8m
+                                │
+Clients                         │ ⠋ Prancing… · @main
+○ Web UI                        │
+○ Discord checking…             │
+                                │
+Channels                     ✚  │
+● #proj · /home/x/Work/proj  ⚙  │
+  ◐ @main (general)       $0.20 │
+    ● @scout (general)    $0.05 │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+─ #proj ─ /home/x/Work/proj ───────────────────────────────────────────────────────── Get started /providers ─
+
+▸ /models   pick a model: enter sets the selected agent's, ctrl+s the channel default
+  /mode     permission mode for the channel: ask, auto (free inside the channel's directories) or yolo
+  ↑/↓ move · tab complete · enter run · esc clear
+ ASK › /mo
