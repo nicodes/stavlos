@@ -19,6 +19,7 @@ import (
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/statefile"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -267,19 +268,5 @@ func (a *Agent) sheetsPatched(sub policy.Subject) {
 }
 
 func writeFileAtomic(path string, b []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".sheet-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err = f.Write(b); err == nil {
-		err = f.Chmod(0o600)
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
+	return statefile.WriteAtomic(path, b, 0o600, false)
 }

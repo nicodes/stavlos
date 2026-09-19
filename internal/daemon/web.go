@@ -11,6 +11,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/statefile"
 	"github.com/nicodes/stavlos/internal/web"
 )
 
@@ -69,7 +70,7 @@ func (d *Daemon) Web(method string) (protocol.WebStatus, error) {
 
 func (d *Daemon) saveWebState(enabled bool) {
 	b, _ := json.Marshal(webState{Enabled: enabled})
-	if err := os.WriteFile(d.webStatePath(), b, 0o600); err != nil {
+	if err := statefile.WriteAtomic(d.webStatePath(), b, 0o600, false); err != nil {
 		log.Printf("web: saving state: %v", err)
 	}
 }
