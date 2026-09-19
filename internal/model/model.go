@@ -149,7 +149,8 @@ type Capable interface {
 // last observed: each rolling window the subscription limits
 // (docs/plan-usage.md).
 type PlanUsage struct {
-	Windows  []UsageWindow `json:"windows"`
+	Plan     string        `json:"plan,omitempty"` // the plan's name where the provider says it ("pro")
+	Windows  []UsageWindow `json:"windows"`        // shortest first
 	Observed time.Time     `json:"observed"`
 }
 

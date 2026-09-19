@@ -355,3 +355,85 @@ func TestKimiServesThePlanNotTheAPI(t *testing.T) {
 		t.Fatalf("the plan endpoint, not the platform: %s", kimiBaseURL)
 	}
 }
+
+// TestPlanUsageIsAskedForAfterACall: Z.ai reports plan usage nowhere but its
+// usage endpoint, so a model call is followed by one question to it, on the
+// host the key already goes to and with the key sent the way that endpoint
+// takes it; a second call soon after asks nothing, and a signed-out provider
+// is never asked.
+func TestPlanUsageIsAskedForAfterACall(t *testing.T) {
+	r, _, _ := newReg(t)
+	if err := r.SaveLogin("zai", oauth.Tokens{Access: "zk-123"}); err != nil {
+		t.Fatal(err)
+	}
+	var asked atomic.Int32
+	var quotaAuth atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path == "/api/monitor/usage/quota/limit" {
+			asked.Add(1)
+			quotaAuth.Store(req.Header.Get("Authorization"))
+			w.Write([]byte(`{"code":200,"data":{"limits":[{"type":"TOKENS_LIMIT","unit":6,"percentage":40,"nextResetTime":1800500000000},{"type":"TOKENS_LIMIT","unit":3,"percentage":12,"nextResetTime":1800000000000}]}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ni\"},\"finish_reason\":null}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\ndata: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+	r.WithEndpoints(srv.URL+"/backend-api/codex/responses", srv.URL+"/v1", srv.URL+"/api/coding/paas/v4", srv.URL+"/coding/v1")
+	got := make(chan model.PlanUsage, 4)
+	r.OnPlanUsage(func(provider string, u model.PlanUsage) {
+		if provider == "zai" {
+			got <- u
+		}
+	})
+	m, _, err := r.Resolve("zai/glm-5.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := model.Request{Model: "glm-5.3", Messages: []model.Message{{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "x"}}}}}
+	if _, err := m.Complete(context.Background(), req, nil); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if asked.Load() != 0 {
+		t.Fatal("asked before polling was enabled")
+	}
+	r.EnablePlanPolling()
+	for range 2 { // two calls, one question
+		if _, err := m.Complete(context.Background(), req, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	select {
+	case u := <-got:
+		if len(u.Windows) != 2 || u.Windows[0].Minutes != 300 || u.Windows[0].UsedPercent != 12 || u.Windows[1].Minutes != 10080 || u.Windows[1].UsedPercent != 40 {
+			t.Fatalf("reading: %+v", u)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no reading after a model call")
+	}
+	time.Sleep(50 * time.Millisecond)
+	if asked.Load() != 1 || quotaAuth.Load() != "zk-123" {
+		t.Fatalf("asked %d times with Authorization %q", asked.Load(), quotaAuth.Load())
+	}
+	// the chart opening asks again; kimi and xai are signed out and are not asked
+	r.PollAllPlanUsage(context.Background(), 0)
+	if asked.Load() != 2 {
+		t.Fatalf("a forced poll asked %d times in all", asked.Load())
+	}
+	if _, ok := r.PlanUsage()["kimi"]; ok {
+		t.Fatal("a signed-out provider has a reading")
+	}
+}
+
+// TestPlanNameSurvivesAHeaderReading: ChatGPT's usage endpoint names the
+// plan and its model calls' headers do not; the name is kept.
+func TestPlanNameSurvivesAHeaderReading(t *testing.T) {
+	r := New(nil)
+	t0 := time.Unix(1_700_000_000, 0)
+	r.observeUsage("openai", model.PlanUsage{Plan: "pro", Observed: t0, Windows: []model.UsageWindow{{UsedPercent: 10, Minutes: 300}}})
+	r.observeUsage("openai", model.PlanUsage{Observed: t0.Add(time.Minute), Windows: []model.UsageWindow{{UsedPercent: 11, Minutes: 300}}})
+	if got := r.PlanUsage()["openai"]; got.Plan != "pro" || got.Windows[0].UsedPercent != 11 {
+		t.Fatalf("%+v", got)
+	}
+}
