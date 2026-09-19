@@ -7,61 +7,48 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 )
 
-// TestOnlyAVariantTheModelTakesIsSent (#36): an agent already in the log may
-// carry a variant from a model it has since left. GLM, Kimi and the Grok
-// models without reasoning effort reject the field, so it is left out for
-// them whatever the request says.
-func TestOnlyAVariantTheModelTakesIsSent(t *testing.T) {
-	req := model.Request{Variant: "high", Messages: []model.Message{{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "x"}}}}}
-	for _, tc := range []struct {
-		provider, id string
-		sent         bool
-	}{
-		{"zai", "glm-5.3", false},
-		{"kimi", "kimi-for-coding", false},
-		{"xai", "grok-4", false},
-		{"xai", "grok-4-mini", true},
-	} {
-		p := NewWithToken(tc.provider, "http://unused", nil).(*provider)
-		body, err := p.buildBody(tc.id, req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := strings.Contains(string(body), `"reasoning_effort":"high"`); got != tc.sent {
-			t.Errorf("%s/%s: reasoning_effort sent = %v, want %v\n%s", tc.provider, tc.id, got, tc.sent, body)
-		}
-	}
-	p := NewWithToken("xai", "http://unused", nil).(*provider)
-	req.Variant = "medium" // ChatGPT's word, not one of Grok mini's
-	if body, _ := p.buildBody("grok-4-mini", req); strings.Contains(string(body), "reasoning_effort") {
-		t.Errorf("another provider's variant reached grok-4-mini: %s", body)
-	}
-}
-
-// TestWhatEachProviderIsSentForItsCache pins the request fields a provider's
-// prompt cache depends on, per provider. Grok is routed by a header
-// (complete.go), Kimi by prompt_cache_key as kimi-cli sends it, and GLM
-// caches a prefix with no hint at all; all three get their earlier reasoning
-// back, whose omission is the top cause of misses.
-func TestWhatEachProviderIsSentForItsCache(t *testing.T) {
-	req := model.Request{CacheKey: "a1b2c3", Messages: []model.Message{
+// TestTraitsShapeTheRequest: the adapter knows no provider by name. What a
+// provider's prompt cache and its models need is said by its traits, and
+// only that is sent: a variant only to a model that takes it (#36: a model
+// with no reasoning effort rejects the field, and an agent already in the log
+// may carry one from a model it has left), a cache key only where the
+// provider reads one, earlier reasoning only to a provider that replays it.
+// Which provider has which traits is the registry's table, tested there.
+func TestTraitsShapeTheRequest(t *testing.T) {
+	req := model.Request{Variant: "high", CacheKey: "a1b2c3", Messages: []model.Message{
 		{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "x"}}},
 		{Role: model.RoleAssistant, Blocks: []model.Block{{Type: model.BlockThinking, Text: "let me think"}, {Type: model.BlockText, Text: "y"}}},
 		{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "z"}}},
 	}}
+	efforts := func(id string) []string {
+		if strings.Contains(id, "mini") {
+			return []string{"low", "high"}
+		}
+		return nil
+	}
 	for _, tc := range []struct {
-		provider, id string
-		key          bool
-	}{{"kimi", "k3", true}, {"zai", "glm-5.3", false}, {"xai", "grok-4.6", false}} {
-		body, err := NewWithToken(tc.provider, "http://unused", nil).(*provider).buildBody(tc.id, req)
+		name, id                string
+		traits                  Traits
+		variant, key, reasoning bool
+	}{
+		{"nothing declared", "m", Traits{}, false, false, false},
+		{"a model that takes the variant", "m-mini", Traits{Variants: efforts}, true, false, false},
+		{"a model of the same provider that does not", "m", Traits{Variants: efforts}, false, false, false},
+		{"a cache key in the body, reasoning replayed", "m", Traits{CacheKeyField: true, ReplaysReasoning: true}, false, true, true},
+		{"routed by header: nothing about it in the body", "m", Traits{CacheHeader: "x-conv", ReplaysReasoning: true}, false, false, true},
+	} {
+		body, err := NewWithToken("p", "http://unused", nil, tc.traits).(*provider).buildBody(tc.id, req)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := strings.Contains(string(body), `"prompt_cache_key":"a1b2c3"`); got != tc.key {
-			t.Errorf("%s: prompt_cache_key sent = %v, want %v", tc.provider, got, tc.key)
+		for field, want := range map[string]bool{`"reasoning_effort":"high"`: tc.variant, `"prompt_cache_key":"a1b2c3"`: tc.key, `"reasoning_content":"let me think"`: tc.reasoning} {
+			if got := strings.Contains(string(body), field); got != want {
+				t.Errorf("%s: %s sent = %v, want %v", tc.name, field, got, want)
+			}
 		}
-		if !strings.Contains(string(body), `"reasoning_content":"let me think"`) {
-			t.Errorf("%s: earlier reasoning is not replayed: %s", tc.provider, body)
-		}
+	}
+	req.Variant = "medium" // another provider's word for it
+	if body, _ := NewWithToken("p", "http://unused", nil, Traits{Variants: efforts}).(*provider).buildBody("m-mini", req); strings.Contains(string(body), "reasoning_effort") {
+		t.Errorf("a variant the model does not take was sent: %s", body)
 	}
 }
