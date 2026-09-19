@@ -41,10 +41,16 @@ func (p *provider) Name() string { return p.name }
 func (p *provider) xai() bool { return p.name == "xai" }
 
 // replaysReasoning reports whether an assistant turn's thinking goes back
-// to the provider as reasoning_content. Grok and GLM both read it
+// to the provider as reasoning_content. Grok, GLM and Kimi all read it
 // (models.dev marks them interleaved on that field); sending it to a
 // provider that does not would be a stray field in every request.
-func (p *provider) replaysReasoning() bool { return p.name == "xai" || p.name == "zai" }
+func (p *provider) replaysReasoning() bool {
+	switch p.name {
+	case "xai", "zai", "kimi":
+		return true
+	}
+	return false
+}
 
 // Variants implements model.Variants. Grok's reasoning models (the "mini"
 // ones) take reasoning_effort low|high; the others reject the field.

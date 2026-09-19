@@ -319,7 +319,7 @@ func cmdSend(ctx context.Context, cmd string, args []string) error {
 }
 
 func cmdPlugin(context.Context, string, []string) error {
-	return errors.New("plugins are a roadmap item (PRD §11); Stavlos serves the ChatGPT (openai), Grok (xai) and Z.ai Coding Plan (zai) subscriptions: see `stavlos auth login`")
+	return errors.New("plugins are a roadmap item (PRD §11); Stavlos serves the ChatGPT (openai), Grok (xai), Z.ai Coding Plan (zai) and Kimi For Coding (kimi) subscriptions: see `stavlos auth login`")
 }
 
 func cmdHelp(context.Context, string, []string) error {

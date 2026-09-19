@@ -25,7 +25,7 @@ type Command struct {
 // commands is every slash command, in palette order.
 var commands = []Command{
 	{Name: "/queue", Args: "<text>", Desc: "send after the current turn ends (plain enter reaches a busy agent at its next step)"},
-	{Name: "/providers", Args: "[openai|xai|zai]", Desc: "manage providers: sign in with ChatGPT, Grok or the Z.ai Coding Plan (enter) or sign out (ctrl+d); a name jumps to its sign-in", Aliases: []string{"/provider", "/connect", "/login"}, Direct: true},
+	{Name: "/providers", Args: "[openai|xai|zai|kimi]", Desc: "manage providers: sign in with ChatGPT, Grok, the Z.ai Coding Plan or Kimi For Coding (enter) or sign out (ctrl+d); a name jumps to its sign-in", Aliases: []string{"/provider", "/connect", "/login"}, Direct: true},
 	{Name: "/models", Desc: "pick a model: enter sets the selected agent's, ctrl+s the channel default", Aliases: []string{"/model"}, Direct: true},
 	{Name: "/variants", Args: "[name|default]", Desc: "pick a model variant (reasoning effort) for the selected agent; no arg opens a picker", Aliases: []string{"/variant"}, Direct: true},
 	{Name: "/roles", Args: "[name]", Desc: "pick the selected agent's role (preset); a name sets it directly", Aliases: []string{"/role", "/presets"}, Direct: true},

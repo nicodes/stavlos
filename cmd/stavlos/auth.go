@@ -88,7 +88,7 @@ func loginFlow(ctx context.Context, c *client.Client, want string) (string, erro
 			}
 		}
 		if chosen.id == "" {
-			return "", fmt.Errorf("unknown provider %q; Stavlos supports openai (ChatGPT), xai (Grok) and zai (GLM Coding Plan)", want)
+			return "", fmt.Errorf("unknown provider %q; Stavlos supports openai (ChatGPT), xai (Grok), zai (GLM Coding Plan) and kimi (Kimi For Coding)", want)
 		}
 	} else {
 		chosen, err = selectFrom("Sign in with", items)
