@@ -17,14 +17,15 @@ import (
 // the nav's Clients section shows whether it is on; a click turns it on and opens it in a
 // browser tab, and a click while it is on opens its controls.
 
-// navTopRows is the nav header's fixed top: the title, a blank, the Clients
-// section (its title, the Web UI row, the Discord row) and a blank. The
-// Subscriptions section follows, when there is a plan reading.
-const navTopRows = 6
+// navTopRows is the nav header's fixed top: the title, a blank, the two usage
+// rows, a blank, the Clients section (its title, the Web UI row, the Discord
+// row) and a blank. The Subscriptions section follows, when there is a plan
+// reading.
+const navTopRows = 9
 
 // sidebarWebRow is the header row of the Web UI indicator, the first of the
 // Clients section.
-const sidebarWebRow = 3
+const sidebarWebRow = 6
 
 type webMsg struct {
 	status protocol.WebStatus
