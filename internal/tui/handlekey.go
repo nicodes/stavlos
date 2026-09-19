@@ -18,7 +18,7 @@ func (m *Model) ctrlC() tea.Cmd {
 	if !m.quitArmed.IsZero() && time.Since(m.quitArmed) <= cancelWindow {
 		return tea.Quit
 	}
-	m.quitArmed = time.Now()
+	m.quitArmed = clock()
 	m.cancelArmed = time.Time{}
 	m.ov = nil
 	m.input.Reset()
@@ -38,7 +38,7 @@ func (m *Model) escCancel() tea.Cmd {
 		m.cancelArmed = time.Time{}
 		return sendCmd(m.ctx, m.c, a.ID, protocol.KindCancel, "", "cancel sent")
 	}
-	m.cancelArmed = time.Now()
+	m.cancelArmed = clock()
 	return m.setStatusFor("press esc again to cancel "+a.Name+"'s turn", true, cancelWindow)
 }
 

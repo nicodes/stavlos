@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -239,7 +238,7 @@ func (m *Model) refreshViewport() {
 	working, waiting, verb, stats, active := false, false, "", "", ""
 	if t != nil && t.InTurn() {
 		working, verb = true, t.TurnVerb()
-		stats = render.TurnStats(t.TurnStats(time.Now()))
+		stats = render.TurnStats(t.TurnStats(clock()))
 		active = m.activeTodo()
 	}
 	// Between turns an agent waiting on other agents or on its jobs is still
@@ -277,12 +276,13 @@ func (m *Model) refreshViewport() {
 		TurnGaps:      !m.superChat,
 		WhoStyle:      m.whoStyle,
 		Stamps:        true,
+		Now:           clock(),
 		WhoKey:        m.whoKey(),
 		Cursor:        m.chatCursor,
 		Focused:       m.focus == focusChat,
 		KeepTextColor: true, // focus, hover and expansion change the background, never the text colour
 
-		CompactFrame: render.CompactFrame(time.Now()),
+		CompactFrame: render.CompactFrame(clock()),
 	}
 	var lines []string
 	var rows map[int]render.RowRange
