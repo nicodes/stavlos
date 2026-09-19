@@ -45,23 +45,45 @@ func (m *Model) onCacheUsage(msg cacheUsageMsg) {
 // calls came from the providers' prompt caches ("cache 94%"), grey, orange
 // under 70% and red under 40% — a low share means calls are re-sending
 // conversations at full price (docs/prompt-caching.md). "" before any call.
+//
+// The figure is the total, but the colour and the name beside it are the
+// worst provider's, once it has carried enough traffic to judge
+// (cacheJudgeTokens): "cache 96% · openai 2%". A total is dominated by
+// whichever provider does the most work, and the regression this row exists
+// for was one provider's.
 func (m Model) cacheRow(width int) string {
 	total := m.cache.Fresh + m.cache.Cached
 	if total <= 0 {
 		return ""
 	}
 	pct := int(m.cache.Cached * 100 / total)
+	worst, worstName := pct, ""
+	for _, p := range m.cache.Providers {
+		if t := p.Fresh + p.Cached; t >= cacheJudgeTokens {
+			if share := int(p.Cached * 100 / t); share < worst {
+				worst, worstName = share, p.Provider
+			}
+		}
+	}
 	st := theme.StyleDim
 	switch {
-	case pct < 40:
+	case worst < 40:
 		st = theme.StyleError
-	case pct < 70:
+	case worst < 70:
 		st = theme.StyleWarn
 	}
 	label, figure := "cache", fmt.Sprintf("%d%%", pct)
+	if worstName != "" && worst < 70 {
+		figure += fmt.Sprintf(" · %s %d%%", worstName, worst)
+	}
 	gap := max(1, width-ansi.StringWidth(label)-ansi.StringWidth(figure))
 	return theme.StyleDim.Render(label+strings.Repeat(" ", gap)) + st.Render(figure)
 }
+
+// cacheJudgeTokens is how much input a provider must have carried in the
+// window before its cache share is judged: the first call of a conversation
+// caches nothing, and a handful of short calls says little.
+const cacheJudgeTokens = 200_000
 
 // planUsageMsg is a plan.usage reply.
 type planUsageMsg struct {
