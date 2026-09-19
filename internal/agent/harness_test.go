@@ -38,6 +38,7 @@ type fakeHost struct {
 	badModel error // CheckModel/Resolve fail with this when set
 	failNext error // the next Append fails with this, once
 	usage    map[string]model.PlanUsage
+	variants map[string][]string // model → the variants it takes; nil = low and high for every model
 }
 
 func newFakeHost(m *fakeModel) *fakeHost {
@@ -91,7 +92,17 @@ func (h *fakeHost) ProjectChanged(dir string) {
 	h.changed = append(h.changed, dir)
 	h.mu.Unlock()
 }
-func (h *fakeHost) Variants(string) []string { return []string{"low", "high"} }
+
+// Variants is what a model takes: low and high, unless the test says what
+// each model takes (a model missing from that map takes none).
+func (h *fakeHost) Variants(id string) []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.variants != nil {
+		return h.variants[id]
+	}
+	return []string{"low", "high"}
+}
 
 func (h *fakeHost) PlanUsage() map[string]model.PlanUsage {
 	h.mu.Lock()

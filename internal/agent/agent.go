@@ -253,7 +253,7 @@ func (a *Agent) SetModel(ctx context.Context, id string) error {
 	a.c.mu.Lock()
 	st := a.state()
 	p := a.c.roleLocked(st).preset
-	up := changed(st, "", id, fitVariant(p, id, st.variant))
+	up := changed(st, "", id, fitVariant(p, a.c.host.Variants(id), id, st.variant))
 	a.c.mu.Unlock()
 	if !p.AllowsModel(id) {
 		return fmt.Errorf("role %s does not allow model %s (allowed: %s)", p.Name, id, modelList(p))
@@ -285,7 +285,7 @@ func (a *Agent) SetRole(ctx context.Context, role string) error {
 			modelID = d
 		}
 	}
-	p := changed(st, role, modelID, fitVariant(preset, modelID, st.variant))
+	p := changed(st, role, modelID, fitVariant(preset, s.host.Variants(modelID), modelID, st.variant))
 	if st.name == st.role && role != st.role {
 		if name, err := s.st.uniqueName(role, role, a.ID); err == nil {
 			p.Name = event.Str(name)

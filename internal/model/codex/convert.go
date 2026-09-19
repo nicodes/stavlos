@@ -2,6 +2,7 @@ package codex
 
 import (
 	"encoding/json"
+	"slices"
 
 	"github.com/nicodes/stavlos/internal/model"
 )
@@ -92,7 +93,7 @@ func buildBody(id string, req model.Request) ([]byte, error) {
 		Text:              textConfig{Verbosity: "medium"},
 		PromptCacheKey:    req.CacheKey,
 	}
-	if req.Variant != "" {
+	if slices.Contains(codexVariants, req.Variant) { // never another provider's word for it
 		rr.Reasoning.Effort = req.Variant
 	}
 	// Request.MaxTokens is not forwarded: the ChatGPT Codex backend rejects
