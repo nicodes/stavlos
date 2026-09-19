@@ -30,7 +30,7 @@ export function Nav(props: { state: ViewState; client: Client; onPick: () => voi
           <div>
             <button
               class="flex w-full items-center gap-2 rounded px-2 py-1 text-left hover:bg-line"
-              classList={{ "bg-line": c.id === app().current && app().chat === CHAT }}
+              classList={{ "bg-line": c.id === app().current && app().chat === CHAT && !app().sheet }}
               onClick={pick(() => void props.client.openChannel(c.id, CHAT))}
             >
               <Dot state={c.state} />
@@ -50,7 +50,7 @@ export function Nav(props: { state: ViewState; client: Client; onPick: () => voi
                 {(a: AgentInfo) => (
                   <button
                     class="flex w-full items-center gap-2 rounded py-1 pr-2 text-left hover:bg-line"
-                    classList={{ "bg-line": app().chat === a.id, "opacity-50": a.state === "killed" }}
+                    classList={{ "bg-line": app().chat === a.id && !app().sheet, "opacity-50": a.state === "killed" }}
                     style={{ "padding-left": `${1.25 + a.depth}rem` }}
                     onClick={pick(() => props.client.openChat(a.id))}
                   >
@@ -58,6 +58,20 @@ export function Nav(props: { state: ViewState; client: Client; onPick: () => voi
                     <span class="truncate">{a.name}</span>
                     <span class="truncate text-dim">({a.role})</span>
                     <span class="ml-auto shrink-0 text-dim">${a.cost_usd.toFixed(2)}</span>
+                  </button>
+                )}
+              </For>
+              {/* the channel's sheets, under its agents: a click opens the page in place of the chat */}
+              <For each={props.state.sheets}>
+                {(s) => (
+                  <button
+                    class="flex w-full items-center gap-2 rounded py-1 pr-2 pl-5 text-left hover:bg-line"
+                    classList={{ "bg-line": app().sheet === s.id }}
+                    onClick={pick(() => props.client.openSheet(s.id))}
+                  >
+                    <span class="text-accent">▤</span>
+                    <span class="truncate">{s.title}</span>
+                    <span class="ml-auto shrink-0 truncate text-dim">@{s.author}</span>
                   </button>
                 )}
               </For>
