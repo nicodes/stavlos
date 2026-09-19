@@ -198,12 +198,10 @@ func (m *Model) planCommand(rest string) tea.Cmd {
 // planAt is the plan one of whose rows the nav draws at header row y (the block
 // starts at row 2), and whether y is one of those rows.
 func (m Model) planAt(y int) (protocol.PlanUsageInfo, bool) {
-	rows := m.planRowList()
-	i := y - navTopRows - 1 // the section's title comes first
-	if i < 0 || i >= len(rows) {
-		return protocol.PlanUsageInfo{}, false
+	if r, ok := m.navRowAt(y); ok && r.id == navPlan {
+		return m.plans[r.plan], true
 	}
-	return m.plans[rows[i].plan], true
+	return protocol.PlanUsageInfo{}, false
 }
 
 // windowUsed is a window's percent used, clamped; a window whose reset has
