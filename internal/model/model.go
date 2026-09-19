@@ -145,6 +145,18 @@ type Capable interface {
 	Capabilities(modelID string) Capabilities
 }
 
+// LimitError is a model call refused because the account is at a limit: a
+// plan's window is used up, or the provider kept answering 429. The agent
+// runtime answers it by moving the agent to another model its role allows
+// (docs/model-selection.md).
+type LimitError struct {
+	Err        error
+	RetryAfter time.Duration // the server's Retry-After, 0 when it gave none
+}
+
+func (e *LimitError) Error() string { return e.Err.Error() }
+func (e *LimitError) Unwrap() error { return e.Err }
+
 // PlanUsage is how much of a subscription's allowance was used when it was
 // last observed: each rolling window the subscription limits
 // (docs/plan-usage.md).
@@ -152,6 +164,9 @@ type PlanUsage struct {
 	Plan     string        `json:"plan,omitempty"` // the plan's name where the provider says it ("pro")
 	Windows  []UsageWindow `json:"windows"`        // shortest first
 	Observed time.Time     `json:"observed"`
+	// LimitedUntil is set when a model call was refused for a limit: the
+	// provider is passed over until then, whatever the windows say.
+	LimitedUntil time.Time `json:"limited_until,omitzero"`
 }
 
 // UsageWindow is one rolling limit: how much of it is used, how long it

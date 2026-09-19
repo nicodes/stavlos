@@ -461,6 +461,9 @@ func (r *Registry) observeUsage(provider string, u model.PlanUsage) {
 			return // an older response finished last
 		}
 		u.Plan = cmp.Or(u.Plan, old.Plan) // a call's headers carry no plan name; the usage endpoint does
+		if u.LimitedUntil.IsZero() {
+			u.LimitedUntil = old.LimitedUntil // a refusal outlasts the readings that follow it
+		}
 	}
 	r.usage[provider] = u
 	hook := r.onUsage
@@ -468,6 +471,22 @@ func (r *Registry) observeUsage(provider string, u model.PlanUsage) {
 	if hook != nil {
 		hook(provider, u)
 	}
+}
+
+// MarkLimited records that provider refused a model call for a limit, so
+// the agents choosing a model pass it over until then. The reading itself is
+// left as it was.
+func (r *Registry) MarkLimited(provider string, until time.Time) {
+	r.usageMu.Lock()
+	if r.usage == nil {
+		r.usage = map[string]model.PlanUsage{}
+	}
+	u := r.usage[provider]
+	if until.After(u.LimitedUntil) {
+		u.LimitedUntil = until
+		r.usage[provider] = u
+	}
+	r.usageMu.Unlock()
 }
 
 // SeedPlanUsage restores a provider's usage as last observed (by an earlier
