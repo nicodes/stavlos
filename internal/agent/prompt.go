@@ -116,6 +116,9 @@ func (a *Agent) toolNames(sb *strings.Builder, rv roleView) []string {
 	if contains(names, toolname.Todo) {
 		sb.WriteString("\n# Todo list\nFor work with three or more steps, plan with the todo tool: add one item per step (short and imperative), then keep the list honest: exactly one item in_progress while you work, done the moment a step is finished and verified, cancelled for steps you drop. Add a new item for a blocker rather than marking blocked work done. One call carries every change you have, so post the plan and start its first step together, and finish one step and start the next in the same call; two todo calls in a row are one call you should have batched. Skip the list for single-step or trivial requests. The human sees it beside your chat; it survives compaction, and its current state comes with each request.\n")
 	}
+	if contains(names, toolname.Sheet) {
+		sb.WriteString("\n# Sheets\nThe sheet tool writes an HTML page the human sees as a tab beside this channel's chat in the web UI. Reach for it when a page says it better than chat text (a report, a comparison, a diagram, a dashboard of what you found) or when the human asks for a sheet, a page or a tab; chat stays the place for conversation. Pages are self-contained and sandboxed, styled with the Tailwind and daisyUI classes already in the frame. The channel's sheets are shared by its agents.\n")
+	}
 	if canOrchestrate(rv) {
 		sb.WriteString("\n# Delegation\nYou may create child agents with agent_create. Archetypes available to you:\n")
 		for _, arch := range rv.preset.Spawn {
