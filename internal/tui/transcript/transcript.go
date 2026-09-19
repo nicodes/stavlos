@@ -1733,6 +1733,8 @@ func ToolArg(name string, raw json.RawMessage) string {
 		return ""
 	case toolname.Todo:
 		return todoArg(raw)
+	case toolname.Sheet: // the action and which sheet, never the page
+		return strings.TrimSpace(str("action") + " " + str("id") + " " + str("title"))
 	case toolname.Message:
 		return addressed(messageRecipients(raw), "")
 	}
