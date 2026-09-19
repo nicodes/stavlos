@@ -142,7 +142,7 @@ Each channel owns:
 - its default directory, project configuration and additional working directories
 - its own agent tree
 - its own live-agent budget (§6.5)
-- its own model selection, which children inherit by default (§8.3)
+- its own model, chosen by the harness among its role's (§8.3)
 
 Channels survive client disconnects and daemon restarts (§4.3). They can be listed, resumed, forked from any per-channel sequence offset, and archived. Fork and archive are protocol operations; the TUI lists and resumes channels but does not fork or archive them yet.
 
@@ -240,7 +240,7 @@ Available to any agent whose preset permits them:
 
 | Tool | Effect |
 |---|---|
-| `agent_create(archetype, label, task, model?)` | Create a child agent; returns its ID immediately; the task is its first prompt |
+| `agent_create(archetype, label, task)` | Create a child agent; returns its ID immediately; the task is its first prompt. Its model is the harness's choice (§8.3) |
 | `message(to, text, kind)` | `to` is a recipient array. Validation and delivery are atomic; each recipient sees the full canonical recipient list. `request` (the default) reaches each agent at its next step, makes it owe a reply and makes the caller await it. `response` settles each recipient's wait and is delivered between turns. `info` creates no reply debt and never wakes an idle recipient. Delivery to `user` is always a response, including in mixed lists. |
 | `agent_cancel(id)` | Deliver a `Cancel` to one of your children |
 | `agent_status(id?)` | State and usage (§4.4) of one agent, or the whole channel tree |
@@ -265,7 +265,7 @@ In the TUI, permission, dirs and the selected agent's async, todo and mcp are pe
 
 `label` is **required** on `agent_create`. It is the human-facing name in thread titles, pickers, and webhook identities. Optional labels produce unusable UI.
 
-`model` is optional. When given, it overrides the child's preset default (§8.3). This lets an orchestrator make its own cost/capability decisions — "use a light model for the easy tasks, a heavy one for the hard tasks" — from instructions in `AGENTS.md` or its preset.
+There is no `model` argument: a parent never saw which models a role allowed, so it could not choose well, and a harness that reads every plan's usage can (§8.3).
 
 ### 6.5 Limits
 
@@ -378,16 +378,13 @@ Both use the official CLIs' public client ids, the same arrangement opencode use
 
 ### 8.3 Resolution
 
-Model IDs are `provider/model-id`. When an agent starts, its model is resolved in this order, first match wins:
+Model IDs are `provider/model-id`. The harness chooses an agent's model, not the agent that creates it ([model selection](model-selection.md)). When an agent starts, first match wins:
 
-1. The `model` argument to `agent_create`, if the parent supplied one
-2. The first entry of the role's `models` list, if set
-3. The parent's active model (for the root agent: the channel's selected model)
-4. Global config
+1. A model a human named: a client's spawn, or the model the channel was created with (for its main agent). It must be one the role allows.
+2. The harness's choice among the role's `models`, which list what is good enough for the role in preferred order (a role that lists none chooses from `models` in `stavlos.json`): providers at a limit are passed over, and of the rest the plan with the most allowance about to lapse is taken.
+3. With nothing to choose from: the parent's active model (for the root agent: the channel's selected model) when the role allows it, else the role's first model, else global config.
 
-Example: global config says `openai/gpt-5.4`; the user switches the channel to `openai/gpt-5.5`; the root creates a `tester` whose role lists `xai/grok-4`. The tester runs on `grok-4`. If the role listed no models, it would run on `gpt-5.5` — the parent's active model, not the global default. A child that inherits the global default while its parent is running something else is a real bug in existing harnesses; cover it in tests.
-
-Resolution happens **once, when the agent is created**. Switching a channel's or a parent's model afterwards does not touch running children; to change a child's model, address the child directly with the model-switch command (§9). Live-linking would make a child's behaviour change under it mid-task with no event in its own history to explain why.
+A running agent keeps its model until that model's plan runs out; the harness then moves it to its next choice, mid-turn, with an `agent.updated` whose `reason` says why, and the turn carries on. It never moves an agent to optimise: a move costs the old provider's prompt cache. Switching a channel's or a parent's model does not touch running children; to change a child's model, address the child directly with the model-switch command (§9).
 
 The `provider` prefix is looked up in the provider map (§11.4). An unknown prefix fails with an error naming the supported providers; plugins, which would add more, are post-v1.
 
