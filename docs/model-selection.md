@@ -47,21 +47,41 @@ aim is to spend every plan's allowance before it lapses rather than drain one
 plan and leave the others untouched. The readings are
 [plan usage](plan-usage.md).
 
-A plan's long window (the week) is its **budget**. Its short window (five
-hours) is a **throttle** on spending it: unused five-hour capacity is not
-lost, and for some plans the window does not start until the first call.
-"Use whatever resets soonest" would therefore always chase a five-hour window
-and say nothing about the week. Instead (`internal/agent/pick.go`):
+What lapses with a window depends on the window: most of a week about to
+reset is a great deal of allowance, most of five hours is very little, and
+another five hours follows at once. So a plan's **longest window is its
+budget**, and a shorter window above it is a **throttle** on spending it:
+unused five-hour capacity under a weekly budget is not lost at all.
+
+Providers limit in different mixes (ChatGPT and Z.ai by five hours and a week,
+Grok by the week alone, some plans by five hours alone, a day or a month), and
+nothing in the picker knows the mixes. It reads whatever windows a reading
+has (`internal/agent/pick.go`):
 
 1. **Pass over** a provider with any window used up (99.5%) that has not
    reset, or that refused a call for a limit, until it comes back.
-2. **Rank the rest by pace** in their longest window: the share of the window
-   gone by, less the share used. 17% used with 60% of the week gone is 43
-   points that will lapse unless something uses them, so that plan goes
-   first; 80% used on day two is ahead of pace and is spared. A plan with no
-   reading counts as on pace.
-3. **Ties** (within five points, since readings are minutes old): the sooner
-   reset, then the role's order.
+2. **Rank the rest by the allowance about to lapse in their budget**: how far
+   behind pace the longest window is (the share of it gone by, less the share
+   used), weighted by that window's length and measured in points of a week.
+   50% used with a day of the week left is 36 points going to waste. A
+   five-hour-only plan in the same state is one point: five hours is a
+   thirty-fourth of a week. A plan ahead of its pace is negative, and is
+   spared for a plan with nothing longer to protect.
+3. **Level on that** (within five points, since readings are minutes old):
+   compare window by window, longest first, on plain pace, the week and then
+   down to the five hours. A provider with no window of some length has
+   nothing lapsing there.
+4. Then the sooner reset of the budget, then the role's order.
+
+So "whatever resets soonest" never wins by itself: a five-hour window always
+ends before a week does, and says little about what is being wasted.
+
+| | budget | about to lapse | chosen |
+|---|---|---|---|
+| Grok: week 50% used, resets in 1 day | week | 36 points of a week | **yes** |
+| Kimi: 5h 50% used, ends in 30 min; week 10% used, resets in 5 days | week | 19 points of a week | |
+| Kimi with five hours alone, same state | 5h | 1 point of a week | |
+| Kimi's 5h wholly unused, 10 min left | 5h | 3 points of a week | |
 
 In practice the plan furthest behind is used until its five-hour throttle
 trips, the next takes over, and the first comes back when its throttle

@@ -167,3 +167,57 @@ func TestNowhereToMoveSaysSo(t *testing.T) {
 		t.Fatalf("%q %q", end.Reason, end.Error)
 	}
 }
+
+// TestWeekBeforeFiveHours: what lapses with a week outweighs what lapses
+// with five hours, whichever window ends first, and for whatever mix of
+// windows a provider has. The five-hour pace only settles providers the
+// longer windows leave level.
+func TestWeekBeforeFiveHours(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	day := 24 * time.Hour
+	win := func(used float64, minutes int, left time.Duration) model.UsageWindow {
+		return model.UsageWindow{UsedPercent: used, Minutes: minutes, ResetsAt: now.Add(left)}
+	}
+	plan := func(ws ...model.UsageWindow) model.PlanUsage { return model.PlanUsage{Observed: now, Windows: ws} }
+	grokWeek := plan(win(50, week, day)) // 50% used, a day left: 36 points of a week about to lapse
+
+	for _, tc := range []struct {
+		name  string
+		order []string
+		usage map[string]model.PlanUsage
+		want  string
+	}{
+		{name: "grok's week lapses tomorrow; kimi's five hours end first, its week in five days",
+			order: []string{"kimi/k2", "xai/grok"}, want: "xai/grok",
+			usage: map[string]model.PlanUsage{"xai": grokWeek, "kimi": plan(win(50, 300, 30*time.Minute), win(10, week, 5*day))}},
+		{name: "the same with kimi limited by five hours alone",
+			order: []string{"kimi/k2", "xai/grok"}, want: "xai/grok",
+			usage: map[string]model.PlanUsage{"xai": grokWeek, "kimi": plan(win(50, 300, 30*time.Minute))}},
+		{name: "a whole five-hour window about to lapse is still no match for a third of a week",
+			order: []string{"kimi/k2", "xai/grok"}, want: "xai/grok",
+			usage: map[string]model.PlanUsage{"xai": grokWeek, "kimi": plan(win(0, 300, 10*time.Minute))}},
+		{name: "a week ahead of its pace is spared for a plan with no week to protect",
+			order: []string{"xai/grok", "kimi/k2"}, want: "kimi/k2",
+			usage: map[string]model.PlanUsage{"xai": plan(win(80, week, 5*day)), "kimi": plan(win(50, 300, 2*time.Hour))}},
+		{name: "weeks level: the five hours decide, down the cascade",
+			order: []string{"zai/glm", "openai/gpt"}, want: "openai/gpt",
+			usage: map[string]model.PlanUsage{
+				"zai":    plan(win(90, 300, 4*time.Hour), win(40, week, 4*day)),     // five hours nearly spent
+				"openai": plan(win(5, 300, 30*time.Minute), win(40, week, 4*day))}}, // five hours about to lapse unused
+		{name: "windows nobody has seen yet: most of a month lapsing beats a little of a week",
+			order: []string{"zai/glm", "kimi/k2"}, want: "kimi/k2",
+			usage: map[string]model.PlanUsage{
+				"zai":  plan(win(60, week, 2*day)),                                    // 71% gone, 60% used: 11 points of a week
+				"kimi": plan(win(30, 30*24*60, 3*day), win(20, 24*60, 6*time.Hour))}}, // 90% gone, 30% used: 60 points of a month
+		{name: "a throttle that is full passes the plan over, whatever its week says",
+			order: []string{"xai/grok", "kimi/k2"}, want: "kimi/k2",
+			usage: map[string]model.PlanUsage{"xai": plan(win(100, 300, time.Hour), win(50, week, day)), "kimi": plan(win(50, 300, 30*time.Minute))}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, _, ok := pickModel(tc.order, tc.usage, now, "")
+			if !ok || got.model != tc.want {
+				t.Fatalf("picked %q (%s), want %q", got.model, got.why, tc.want)
+			}
+		})
+	}
+}
