@@ -171,6 +171,9 @@ func post(ctx context.Context, r Request) (*http.Response, error) {
 		var re *retryable
 		if !errors.As(err, &re) || attempt >= MaxAttempts || ctx.Err() != nil {
 			if re != nil {
+				if re.limit && ctx.Err() == nil {
+					return nil, &model.LimitError{Err: re.err, RetryAfter: re.after}
+				}
 				return nil, re.err
 			}
 			return nil, err
@@ -192,6 +195,7 @@ func post(ctx context.Context, r Request) (*http.Response, error) {
 type retryable struct {
 	err   error
 	after time.Duration // the server's Retry-After, if any
+	limit bool          // a 429: giving up on it is a model.LimitError
 }
 
 func (e *retryable) Error() string { return e.err.Error() }
@@ -230,11 +234,31 @@ func attemptOnce(ctx context.Context, r Request) (*http.Response, error) {
 		}
 	}
 	err = fmt.Errorf("%s: status %d: %s", r.Name, resp.StatusCode, ErrorText(raw))
+	if resp.StatusCode == http.StatusTooManyRequests {
+		after := retryAfter(resp.Header.Get("Retry-After"))
+		if planLimit(raw) { // a used-up plan is not back in a second: no retry
+			return nil, &model.LimitError{Err: err, RetryAfter: after}
+		}
+		return nil, &retryable{err: err, after: after, limit: true}
+	}
 	switch c := resp.StatusCode; {
 	case c == http.StatusRequestTimeout, c == http.StatusConflict, c == http.StatusTooManyRequests, c >= 500:
 		return nil, &retryable{err: err, after: retryAfter(resp.Header.Get("Retry-After"))}
 	}
 	return nil, err
+}
+
+// planLimit reports whether a 429's body says a plan's allowance is used up
+// (the Codex backend's usage_limit_reached, a quota or balance message)
+// rather than a burst the next second forgives.
+func planLimit(raw []byte) bool {
+	s := strings.ToLower(string(raw))
+	for _, mark := range []string{"usage_limit", "usage limit", "quota", "insufficient", "exceeded your current", "limit reached", "limit_reached"} {
+		if strings.Contains(s, mark) {
+			return true
+		}
+	}
+	return false
 }
 
 // retryAfter parses a Retry-After header: seconds or an HTTP date.

@@ -37,6 +37,7 @@ type fakeHost struct {
 	streams  []protocol.StreamNotification
 	badModel error // CheckModel/Resolve fail with this when set
 	failNext error // the next Append fails with this, once
+	usage    map[string]model.PlanUsage
 }
 
 func newFakeHost(m *fakeModel) *fakeHost {
@@ -91,6 +92,27 @@ func (h *fakeHost) ProjectChanged(dir string) {
 	h.mu.Unlock()
 }
 func (h *fakeHost) Variants(string) []string { return []string{"low", "high"} }
+
+func (h *fakeHost) PlanUsage() map[string]model.PlanUsage {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := map[string]model.PlanUsage{}
+	for k, v := range h.usage {
+		out[k] = v
+	}
+	return out
+}
+
+func (h *fakeHost) MarkLimited(provider string, until time.Time) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.usage == nil {
+		h.usage = map[string]model.PlanUsage{}
+	}
+	u := h.usage[provider]
+	u.LimitedUntil = until
+	h.usage[provider] = u
+}
 
 func (h *fakeHost) Prompt(ctx context.Context, p protocol.PromptInfo, opened func()) escalation.Answer {
 	h.mu.Lock()

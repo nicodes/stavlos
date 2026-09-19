@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/instructions"
+	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -31,6 +32,7 @@ import (
 type File struct {
 	Schema     string         `json:"$schema,omitempty"`
 	Model      string         `json:"model,omitempty"`
+	Models     []string       `json:"models,omitempty"` // the models the harness chooses from for a role that lists none, in preferred order
 	RootAgent  string         `json:"rootAgent,omitempty"`
 	Mode       string         `json:"mode,omitempty"` // the permission mode a new channel starts in: ask | auto | yolo
 	Limits     *Limits        `json:"limits,omitempty"`
@@ -251,6 +253,7 @@ type Skill struct {
 type Effective struct {
 	Dir        string
 	Model      string
+	Models     []string // what the harness chooses from for a role that lists no models, in preferred order
 	RootAgent  string
 	Mode       string // the permission mode a new channel starts in
 	Limits     Limits
@@ -456,6 +459,22 @@ func loadGlobalFrom(gdir string) (*Effective, error) {
 	return e, nil
 }
 
+// applyModels takes a layer's models list, which replaces the earlier
+// layer's: it is an order of preference, not a set to add to.
+func (e *Effective) applyModels(ids []string) error {
+	if ids == nil {
+		return nil
+	}
+	e.Models = nil
+	for _, id := range ids {
+		if _, _, err := model.Split(id); err != nil {
+			return fmt.Errorf("models: %w", err)
+		}
+		e.Models = append(e.Models, id)
+	}
+	return nil
+}
+
 // applyGlobalOnly takes the blocks only the global file may carry: the
 // daemon's own services, which a project has no say in.
 func (e *Effective) applyGlobalOnly(f File, layer string) error {
@@ -491,6 +510,9 @@ func (e *Effective) applyFile(f File, layer string) error {
 		if !contains(e.Plugins, pl) {
 			e.Plugins = append(e.Plugins, pl)
 		}
+	}
+	if err := e.applyModels(f.Models); err != nil {
+		return err
 	}
 	if f.Model != "" {
 		e.Model = f.Model
