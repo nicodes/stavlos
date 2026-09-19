@@ -54,4 +54,19 @@ describe("reduce", () => {
     expect(tool.kind === "tool" && tool.state).toBe("denied");
     expect(notice.kind === "notice" && notice.error).toBe(true);
   });
+
+  it("lists sheets, and a rewrite changes the hash without a second notice", () => {
+    seq = 0;
+    const v = emptyChannel();
+    apply(v, ev("agent.spawned", "", { id: "a1", name: "main" }));
+    apply(v, ev("sheet.written", "a1", { id: "s1", title: "Findings", author: "main", hash: "aaa" }));
+    apply(v, ev("sheet.written", "a1", { id: "s2", title: "Other", author: "main", hash: "bbb" }));
+    const before = v.sheets[0];
+    apply(v, ev("sheet.written", "a1", { id: "s1", author: "scout", hash: "ccc" })); // an apply_patch: no title
+    expect(v.sheets.map((s) => [s.id, s.title, s.author, s.hash])).toEqual([["s1", "Findings", "scout", "ccc"], ["s2", "Other", "main", "bbb"]]);
+    expect(v.sheets[0]).not.toBe(before);
+    expect(v.chats[CHAT].filter((i) => i.kind === "notice")).toHaveLength(2);
+    apply(v, ev("sheet.deleted", "a1", { id: "s1" }));
+    expect(v.sheets.map((s) => s.id)).toEqual(["s2"]);
+  });
 });

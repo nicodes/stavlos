@@ -56,6 +56,9 @@ type Options struct {
 	// Serve runs the protocol on one authenticated connection until it
 	// closes. The connection carries newline-delimited JSON-RPC.
 	Serve func(context.Context, net.Conn)
+	// Sheet returns one of a channel's sheets, an HTML page an agent wrote.
+	// nil serves none.
+	Sheet func(channel, id string) (Sheet, error)
 	// Assets is the built client; nil serves the embedded one.
 	Assets fs.FS
 }
@@ -287,6 +290,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /api/session", s.sessionPost)
 	mux.HandleFunc("DELETE /api/session", s.sessionDelete)
 	mux.HandleFunc("GET /ws", s.ws)
+	mux.HandleFunc("GET /sheets/{channel}/{id}", s.sheet)
 	mux.HandleFunc("GET /", s.asset)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.hostAllowed(r.Host) {
@@ -388,6 +392,12 @@ func (s *Server) asset(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy",
 		"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; "+
 			"connect-src 'self' "+ws+"; manifest-src 'self'; frame-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+	if name == sheetCSS {
+		// A sheet's document has an opaque origin, so its stylesheet is a
+		// cross-origin load; it holds nothing private.
+		w.Header().Set("Cross-Origin-Resource-Policy", "cross-origin")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+	}
 	if strings.HasPrefix(name, "assets/") {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable") // content-hashed by the build
 	}

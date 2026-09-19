@@ -56,4 +56,12 @@ export type Item =
   | { key: string; kind: "ask"; time: string; from: string; askKind: string; question: string; detail: string; outcome?: string }
   | { key: string; kind: "notice"; time: string; text: string; error?: boolean };
 
+/** A sheet: an HTML page an agent wrote, shown as a tab of its channel. */
+export interface SheetInfo {
+  id: string;
+  title: string;
+  author: string;
+  hash: string;
+}
+
 export const CHAT = "#chat";

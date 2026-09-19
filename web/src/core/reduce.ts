@@ -1,4 +1,4 @@
-import { CHAT, type Item, type StreamDelta, type WireEvent } from "./types";
+import { CHAT, type Item, type SheetInfo, type StreamDelta, type WireEvent } from "./types";
 
 /**
  * A channel as the browser sees it: a fold of its events, the counterpart of
@@ -13,10 +13,11 @@ export interface ChannelView {
   streaming: Record<string, string>; // agent id → text streamed for the open model call
   tools: Record<string, [string, number]>; // call id → [chat, index]: where tool.finished lands
   asks: Record<string, [string, number][]>; // ask id → the rows that show it
+  sheets: SheetInfo[]; // oldest first; a new hash means the page changed
 }
 
 export function emptyChannel(): ChannelView {
-  return { seq: 0, names: {}, chats: { [CHAT]: [] }, revs: {}, streaming: {}, tools: {}, asks: {} };
+  return { seq: 0, names: {}, chats: { [CHAT]: [] }, revs: {}, streaming: {}, tools: {}, asks: {}, sheets: [] };
 }
 
 function push(v: ChannelView, chat: string, item: Item): number {
@@ -113,6 +114,18 @@ export function apply(v: ChannelView, e: WireEvent): void {
         touch(v, chat);
       }
       delete v.asks[p.id];
+      break;
+    case "sheet.written": {
+      const at = v.sheets.findIndex((s) => s.id === p.id);
+      const old = v.sheets[at];
+      const next: SheetInfo = { id: p.id, title: p.title || old?.title || p.id, author: p.author ?? "", hash: p.hash ?? "" };
+      // replaced, never mutated: a view keys a frame's reload on the hash
+      v.sheets = at < 0 ? [...v.sheets, next] : v.sheets.map((s, i) => (i === at ? next : s));
+      if (at < 0) push(v, CHAT, { key, kind: "notice", time: e.time, text: `@${next.author || name()} wrote the sheet “${next.title}”` });
+      break;
+    }
+    case "sheet.deleted":
+      v.sheets = v.sheets.filter((s) => s.id !== p.id);
       break;
     case "compaction.done":
       push(v, agent, { key, kind: "notice", time: e.time, text: "context compacted" });
