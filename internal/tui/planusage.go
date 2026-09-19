@@ -126,13 +126,14 @@ func (m Model) planRowList() []planRow {
 	return rows
 }
 
-// planUsageRows are the nav's plan usage block, width wide:
+// planUsageRows are the nav's Subscriptions section, width wide:
 //
+//	Subscriptions
 //	ChatGPT 5h ━━━━━━──────  38%
 //	        wk ━━──────────  17%
 //
-// a row per window, the plan's name on its first, then a blank row; none
-// without a reading.
+// the title, a row per window with the plan's name on its first, then a blank
+// row; nothing at all without a reading.
 func (m Model) planUsageRows(width int, now time.Time) []string {
 	list := m.planRowList()
 	if len(list) == 0 {
@@ -145,7 +146,8 @@ func (m Model) planUsageRows(width int, now time.Time) []string {
 		}
 	}
 	nameW = min(nameW, max(1, width/3))
-	rows := make([]string, 0, len(list)+1)
+	rows := make([]string, 0, len(list)+2)
+	rows = append(rows, navSection("Subscriptions"))
 	for _, r := range list {
 		name := ""
 		if r.first {
@@ -197,7 +199,7 @@ func (m *Model) planCommand(rest string) tea.Cmd {
 // starts at row 2), and whether y is one of those rows.
 func (m Model) planAt(y int) (protocol.PlanUsageInfo, bool) {
 	rows := m.planRowList()
-	i := y - navTopRows
+	i := y - navTopRows - 1 // the section's title comes first
 	if i < 0 || i >= len(rows) {
 		return protocol.PlanUsageInfo{}, false
 	}
