@@ -398,12 +398,12 @@ that loses these has made things worse.
 
 ## 7. How it is delivered, and how it fails
 
-**Delivery.** Not one commit, and not one reviewable diff: this touches most
-of 43,000 lines. It is an integration branch, `refactor/ground-up`, with each
-step its own commit behind the gate and each phase a stacked pull request into
-it, and **one umbrella pull request to `main`** that the owner merges when they
-choose. `main`, and the binary installed from it, are untouched until then.
-Nothing is reinstalled along the way. (Decision D2 offers the alternative.)
+**Delivery** (as decided, D2). Not one commit, and not one reviewable diff:
+this touches most of 43,000 lines. Two pull requests, both left open until
+the owner merges them: `refactor/phase-0-1` (the safety net and the urgent
+fixes) and `refactor/ground-up` (phases 2 to 7, stacked on the first). Each
+step is its own commit behind the gate. `main`, and the binary installed from
+it, are untouched until then. Nothing is reinstalled along the way.
 
 **How it fails, from the last plan's example.**
 
@@ -421,6 +421,11 @@ Nothing is reinstalled along the way. (Decision D2 offers the alternative.)
 - *It loses the log.* Phase 0.6 comes before any schema change.
 
 ## 8. Decisions needed before work starts
+
+**Answered by the owner on 2026-09-19:** D1 migrate; D2 two pull requests,
+one for phases 0 and 1 and one for phases 2 to 7, both left open so nothing
+reaches `main` until they say so; D10 features hold off. D3 to D9 are still
+open, and none of them blocks phases 0 to 2.
 
 | | Decision | Recommended |
 |---|---|---|
