@@ -62,7 +62,7 @@ func (c *Channel) SetDir(ctx context.Context, dir string, load func(string) (*co
 	for _, id := range c.st.order {
 		if !c.st.agents[id].killed {
 			evs = append(evs, c.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputInfo,
-				Text: fmt.Sprintf("[harness] The human changed this channel's default directory from %s to %s. Earlier relative paths refer to the old directory. Project configuration and instructions have been reloaded; remembered permissions were cleared and mode is now ask.", old, dir)}))
+				Text: fmt.Sprintf("The human changed this channel's default directory from %s to %s. Earlier relative paths refer to the old directory. Project configuration and instructions have been reloaded; remembered permissions were cleared and mode is now ask.", old, dir)}))
 		}
 	}
 	if err := c.commitLocked(ctx, evs...); err != nil {

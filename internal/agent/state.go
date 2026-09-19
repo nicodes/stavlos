@@ -371,13 +371,11 @@ func (a *agentState) setTodos(items []event.TodoItem) {
 // --- derived views ---
 
 // wakes reports whether an input of kind starts a turn (info never does).
-func wakes(kind event.InputKind) bool { return kind != event.InputInfo }
+func wakes(kind event.InputKind) bool { return kind.Rule().Wakes }
 
 // midTurn reports whether an input of kind reaches a running turn at its
 // next model call; the others wait for the turn to end.
-func midTurn(kind event.InputKind) bool {
-	return kind == event.InputSteer || kind == event.InputRequest || kind == event.InputInfo
-}
+func midTurn(kind event.InputKind) bool { return kind.Rule().MidTurn }
 
 // startsTurn reports whether the inbox holds anything that starts a turn.
 func (a *agentState) startsTurn() bool {

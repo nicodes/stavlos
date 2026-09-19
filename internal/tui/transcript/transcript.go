@@ -319,7 +319,7 @@ func isReminder(ev event.Event) bool {
 // joins the conversation, and when the chat shows it.
 func (t *Transcript) queueInput(ev event.Event) {
 	var in event.Input
-	if ev.Decode(&in) == nil && in.ID != "" && in.Kind != event.InputReminder && in.Kind != event.InputResume {
+	if ev.Decode(&in) == nil && in.ID != "" && !in.Kind.Rule().Harness { // the harness's own inputs draw as notices when queued
 		t.inputs[in.ID] = in
 	}
 }
