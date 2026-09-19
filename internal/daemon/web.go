@@ -14,19 +14,6 @@ import (
 	"github.com/nicodes/stavlos/internal/web"
 )
 
-// webMethods is what a browser connection may call: read the channels and
-// their streams, and post to a chat. Everything that changes what agents are
-// allowed to do (modes, directories, trust, permission answers, providers,
-// configuration, shutdown) stays with the socket's clients until the daemon
-// has per-connection scopes (docs/pre-plugin-refactor.md 1A.3).
-var webMethods = map[string]bool{
-	protocol.MAttach: true, protocol.MDaemonStatus: true,
-	protocol.MChannelList: true, protocol.MChannelResume: true, protocol.MChannelPost: true,
-	protocol.MAgentTree: true, protocol.MPromptList: true, protocol.MSheetList: true,
-	protocol.MSubscribe: true, protocol.MUnsubscribe: true, protocol.MReconcile: true,
-	protocol.MUsageSeries: true, protocol.MPlanUsage: true, protocol.MCacheUsage: true,
-}
-
 // webState is whether the human turned the web UI on, kept in the data
 // directory so it comes back with the daemon.
 type webState struct {
