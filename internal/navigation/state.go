@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/paths"
+	"github.com/nicodes/stavlos/internal/statefile"
 )
 
 type state struct {
@@ -47,17 +48,5 @@ func Remember(channel string, selected time.Time) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(paths.DataDir(), ".navigation-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	_, err = f.Write(b)
-	if ce := f.Close(); err == nil {
-		err = ce
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), filename())
+	return statefile.WriteAtomic(filename(), b, 0o600, false)
 }
