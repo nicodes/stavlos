@@ -1,6 +1,6 @@
 module github.com/nicodes/stavlos
 
-go 1.26.0
+go 1.26.6
 
 require (
 	github.com/bwmarrin/discordgo v0.29.0
