@@ -92,6 +92,8 @@ type Model struct {
 	discordEpoch   uint64
 	discordStatus  protocol.DiscordStatus // daemon-wide; retained across channel switches
 	discordKnown   bool
+	webStatus      protocol.WebStatus // daemon-wide, like Discord's
+	webKnown       bool
 	editors        map[string]editorState
 
 	presets []protocol.PresetInfo
@@ -340,7 +342,7 @@ func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 // Init starts the cursor blink, the spinner, the placeholder cycle and the
 // reconcile snapshot.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.requestScope()), tick(3*time.Second, catalogTickMsg{}), planUsageCmd(m.ctx, m.c), cacheUsageCmd(m.ctx, m.c), discordCmd(m.ctx, m.c, "status", m.discordEpoch))
+	return tea.Batch(textinput.Blink, textarea.Blink, m.sp.Tick, placeholderTickCmd(), reconcileCmd(m.ctx, m.c, m.requestScope()), tick(3*time.Second, catalogTickMsg{}), planUsageCmd(m.ctx, m.c), cacheUsageCmd(m.ctx, m.c), discordCmd(m.ctx, m.c, "status", m.discordEpoch), webCmd(m.ctx, m.c, "status"))
 }
 
 // Update is the single-threaded state machine.
@@ -395,6 +397,10 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		return m.onDaemon(msg)
 	case providersMsg, loginStartMsg, loginDoneMsg, rolesMsg, variantsMsg, channelsMsg, switchedMsg, modelsMsg:
 		cmds = append(cmds, m.onListed(msg))
+	case webMsg:
+		cmds = append(cmds, m.onWeb(msg))
+	case webTickMsg:
+		cmds = append(cmds, webCmd(m.ctx, m.c, "status"))
 	case discordMsg:
 		cmds = append(cmds, m.onDiscord(msg))
 	case usageMsg:

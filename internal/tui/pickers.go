@@ -268,6 +268,8 @@ func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 	switch o.kind {
 	case ovDiscord:
 		return m.submitDiscord()
+	case ovWeb:
+		return m.submitWeb()
 	case ovProviders:
 		it := o.selected()
 		if it == nil {

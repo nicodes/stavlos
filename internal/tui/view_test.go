@@ -2155,11 +2155,11 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		if header != 7 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" || strings.Join(strings.Fields(sb[2]), " ") != "System 2k · $0.25" || strings.Join(strings.Fields(sb[3]), " ") != "@main 1k · $0.20" ||
-			strings.TrimSpace(sb[4]) != "" || m.sidebarDiscordRow() != 5 || !strings.Contains(sb[m.sidebarDiscordRow()], "Discord checking") ||
-			strings.Contains(strings.Join(sb[:7], "\n"), "! 1/1") || strings.TrimSpace(sb[6]) != "" || !strings.HasPrefix(sb[7], "Channels ") || !strings.Contains(sb[7], " "+newChannelMark+" ") || strings.Contains(sb[7], "↑/↓") ||
+		if header != 8 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[sidebarWebRow]) != "○ Web UI" || strings.TrimSpace(sb[2]) != "" || strings.Join(strings.Fields(sb[3]), " ") != "System 2k · $0.25" || strings.Join(strings.Fields(sb[4]), " ") != "@main 1k · $0.20" ||
+			strings.TrimSpace(sb[5]) != "" || m.sidebarDiscordRow() != 6 || !strings.Contains(sb[m.sidebarDiscordRow()], "Discord checking") ||
+			strings.Contains(strings.Join(sb[:8], "\n"), "! 1/1") || strings.TrimSpace(sb[7]) != "" || !strings.HasPrefix(sb[8], "Channels ") || !strings.Contains(sb[8], " "+newChannelMark+" ") || strings.Contains(sb[8], "↑/↓") ||
 			strings.Contains(strings.Join(sb, "\n"), "waiting") || strings.Contains(strings.Join(sb, "\n"), "need you") {
-			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:8], "\n"))
+			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:9], "\n"))
 		}
 		// dirs is the open channel's: out of the tabs the strip walks, behind
 		// the gear at the right edge of the channel's row; → on the row, or a
@@ -3456,7 +3456,7 @@ func TestSidebarUsageRows(t *testing.T) {
 	w := sidebarWidth - 1
 	rows := func() []string {
 		h := m.sidebarHeader(w)
-		return []string{stripANSI(h[2]), stripANSI(h[3])}
+		return []string{stripANSI(h[navTopRows]), stripANSI(h[navTopRows+1])}
 	}
 	row := func(label, figures string) string { // the label left, the figures flush right
 		return label + strings.Repeat(" ", w-len([]rune(label))-len([]rune(figures))) + figures
@@ -3698,7 +3698,7 @@ func TestPlanUsageBars(t *testing.T) {
 	m.prompts = nil
 	now := time.Now()
 	w := sidebarWidth - 1
-	if rows := m.planUsageRows(w, now); len(rows) != 0 || m.sidebarSystemRow() != 2 {
+	if rows := m.planUsageRows(w, now); len(rows) != 0 || m.sidebarSystemRow() != navTopRows {
 		t.Fatalf("no reading, no block: %q", rows)
 	}
 	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-5 * time.Minute), Windows: []protocol.UsageWindowInfo{
@@ -3716,7 +3716,7 @@ func TestPlanUsageBars(t *testing.T) {
 		t.Fatalf("the most used window: %q", got)
 	}
 	header := m.sidebarHeader(w)
-	if m.sidebarSystemRow() != 4 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
+	if m.sidebarSystemRow() != navTopRows+2 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
 		t.Fatalf("the rows under the block move down:\n%s", stripANSI(strings.Join(header, "\n")))
 	}
 	row := stripANSI(header[m.sidebarSystemRow()])
@@ -3866,8 +3866,8 @@ func TestPlanUsageChart(t *testing.T) {
 	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-time.Minute),
 		Windows: []protocol.UsageWindowInfo{{UsedPercent: 40, Minutes: 10080, ResetsAt: now.Add(24 * time.Hour)}}}}
 	m.layout()
-	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: 2, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: 2, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: navTopRows, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: navTopRows, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
 	if m.focus != focusUsage || m.usage.kind != usagePlan || m.usage.provider != "openai" || m.usageTitle() != "Plan · ChatGPT" {
 		t.Fatalf("a click on the plan row opens its chart: focus=%v %+v", m.focus, m.usage)
