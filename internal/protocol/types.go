@@ -263,6 +263,7 @@ type ChannelInfo struct {
 	CostUSD      float64      `json:"cost_usd"`
 	Tokens       int          `json:"tokens"` // input + output tokens every agent of the channel has used
 	TrustPending bool         `json:"trust_pending"`
+	TrustFiles   int          `json:"trust_files,omitempty"` // files the project layer's trust hash covers; 0 when the directory has no project configuration
 	Mode         string       `json:"mode"`                  // permission mode: ask | auto | yolo
 	Recap        int          `json:"recap,omitempty"`       // minutes of silence before a recap is asked for; 0 is off
 	State        ChannelState `json:"state,omitempty"`       // working (an agent runs) | waiting (one expects an answer) | idle; "" for a channel not in memory

@@ -392,7 +392,7 @@ func (c *Channel) Info() protocol.ChannelInfo {
 	return protocol.ChannelInfo{
 		ID: c.ID, Name: c.st.name, Dir: c.st.dir, DirError: config.DirectoryError(c.st.dir), Model: c.st.model, RootAgent: c.st.role,
 		Created: c.Created.Format(time.RFC3339), Archived: c.st.archived,
-		Live: live, CostUSD: cost, Tokens: tokens, TrustPending: c.cfg.TrustPending, Mode: c.st.mode,
+		Live: live, CostUSD: cost, Tokens: tokens, TrustPending: c.cfg.TrustPending, TrustFiles: len(c.cfg.TrustFiles), Mode: c.st.mode,
 		State: protocol.RollUp(states), Dirs: c.dirInfosLocked(), Recap: c.st.recap,
 	}
 }
