@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -67,6 +68,7 @@ type conn struct {
 	c    net.Conn
 	cl   *client
 	out  chan outMsg
+	room chan struct{} // the writer wrote something: a replay waiting for room looks again
 	done chan struct{}
 	once sync.Once
 	// ran is set for a peer the daemon itself runs (an agent's command, an
@@ -75,6 +77,8 @@ type conn struct {
 	// channel to yolo.
 	ran bool
 	web bool // a browser connection: webMethods only
+
+	replaying atomic.Int32 // replays in progress, for the log line when a client is dropped
 }
 
 type outMsg struct {
@@ -86,7 +90,7 @@ type outMsg struct {
 // full, so a burst of tokens never costs a client its connection; events,
 // replies and prompts are never dropped, and a queue full of them means the
 // client is gone for practical purposes.
-const outQueue = 1 << 14
+var outQueue = 1 << 14 // a variable so a test can make a queue a replay fills
 
 // writeTimeout bounds one write to a client (a variable for tests).
 var writeTimeout = 10 * time.Second
@@ -115,12 +119,13 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn, web bool) {
 	// mid-login.wait (or mid-anything) takes its work with it.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), done: make(chan struct{}), ran: ran, web: web}
+	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), room: make(chan struct{}, 1), done: make(chan struct{}), ran: ran, web: web}
 	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.enqueue, replay: c.enqueueReplay}
 	d.addClient(c.cl)
 	go c.writer()
 	defer func() {
 		d.removeClient(c.cl.id)
+		d.esc.ReleaseClient(c.cl.id) // what it claimed is nobody's now, not held for two minutes
 		c.close()
 	}()
 	inFlight := make(chan struct{}, maxInFlight)
@@ -162,7 +167,8 @@ func (c *conn) enqueue(line []byte, droppable bool) {
 	case c.out <- outMsg{b: line, droppable: droppable}:
 	case <-c.done:
 	default:
-		log.Printf("client %s is not reading; dropping it", c.cl.id)
+		// (the client's name is behind its lock, which a delivery holds here)
+		log.Printf("client %s is not reading: %d messages queued, replaying=%v; dropping it", c.cl.id, len(c.out), c.replaying.Load() > 0)
 		c.close()
 	}
 }
@@ -171,7 +177,27 @@ func (c *conn) enqueue(line []byte, droppable bool) {
 // faster than a healthy reader. Unlike live broadcasts, replay may wait, but
 // never while holding the event log barrier. The writer still times out peers
 // that stop reading entirely.
+//
+// History takes only a quarter of the queue. It shares the queue with live
+// traffic, which must keep its order with it, and live traffic never waits:
+// a reply, a prompt or another channel's event that finds the queue full
+// drops the client as not reading. A replay allowed to fill the queue held
+// it full for as long as it ran (a channel with more events than the queue
+// has slots does that to any reader), so the first reply sent meanwhile
+// dropped a client that was reading as fast as it could (#39).
 func (c *conn) enqueueReplay(ctx context.Context, line []byte) error {
+	c.replaying.Add(1)
+	defer c.replaying.Add(-1)
+	for len(c.out) >= outQueue/4 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-c.done:
+			return net.ErrClosed
+		case <-c.room:
+		case <-time.After(50 * time.Millisecond): // several replays share one signal
+		}
+	}
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -197,6 +223,10 @@ func (c *conn) writer() {
 			if err != nil {
 				c.close()
 				return
+			}
+			select {
+			case c.room <- struct{}{}:
+			default:
 			}
 		case <-c.done:
 			return
