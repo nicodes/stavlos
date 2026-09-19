@@ -82,6 +82,10 @@ type Server struct {
 	codes    map[[32]byte]time.Time // one-time codes by hash → expiry
 	sessions map[[32]byte]time.Time // session tokens by hash → expiry
 	failures int
+	// sockets are the open connections of each session, so that signing a
+	// session out ends them: a cookie that is gone must not leave a live
+	// stream behind it.
+	sockets map[[32]byte]map[*context.CancelFunc]struct{}
 }
 
 // New returns a disabled Server.
@@ -92,7 +96,7 @@ func New(o Options) *Server {
 	if o.Assets == nil {
 		o.Assets = embedded()
 	}
-	return &Server{o: o, codes: map[[32]byte]time.Time{}, sessions: map[[32]byte]time.Time{}}
+	return &Server{o: o, codes: map[[32]byte]time.Time{}, sessions: map[[32]byte]time.Time{}, sockets: map[[32]byte]map[*context.CancelFunc]struct{}{}}
 }
 
 // URL is the address of the client on this machine.
@@ -151,6 +155,7 @@ func (s *Server) Disable() {
 	s.ln, s.srv, s.cancel = nil, nil, nil
 	clear(s.codes)
 	clear(s.sessions)
+	clear(s.sockets)
 }
 
 // OpenURL is the client's address carrying a fresh one-time code in its
@@ -235,11 +240,46 @@ func (s *Server) signedIn(r *http.Request) bool {
 }
 
 func (s *Server) signOut(r *http.Request) {
-	if c, err := r.Cookie(cookieName); err == nil {
-		s.mu.Lock()
-		delete(s.sessions, sha256.Sum256([]byte(c.Value)))
-		s.mu.Unlock()
+	c, err := r.Cookie(cookieName)
+	if err != nil {
+		return
 	}
+	key := sha256.Sum256([]byte(c.Value))
+	s.mu.Lock()
+	delete(s.sessions, key)
+	open := s.sockets[key]
+	delete(s.sockets, key)
+	s.mu.Unlock()
+	for cancel := range open {
+		(*cancel)()
+	}
+}
+
+// hold ties a connection to the session that opened it until release; it
+// reports false when the session ended in the meantime.
+func (s *Server) hold(r *http.Request, cancel *context.CancelFunc) (release func(), ok bool) {
+	c, err := r.Cookie(cookieName)
+	if err != nil {
+		return nil, false
+	}
+	key := sha256.Sum256([]byte(c.Value))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if exp, live := s.sessions[key]; !live || !time.Now().Before(exp) {
+		return nil, false
+	}
+	if s.sockets[key] == nil {
+		s.sockets[key] = map[*context.CancelFunc]struct{}{}
+	}
+	s.sockets[key][cancel] = struct{}{}
+	return func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.sockets[key], cancel)
+		if len(s.sockets[key]) == 0 {
+			delete(s.sockets, key)
+		}
+	}, true
 }
 
 // --- what may talk to us ---
@@ -367,7 +407,12 @@ func (s *Server) ws(w http.ResponseWriter, r *http.Request) {
 	defer nc.Close()
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
-	go func() { // the listener closing, or Disable, ends the connection
+	release, ok := s.hold(r, &cancel)
+	if !ok {
+		return // signed out between the check and the upgrade
+	}
+	defer release()
+	go func() { // the listener closing, Disable, or signing out ends the connection
 		<-ctx.Done()
 		nc.Close()
 	}()
