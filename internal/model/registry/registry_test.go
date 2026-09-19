@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -26,6 +27,15 @@ const fixture = `{
    "grok-4":{"id":"grok-4","name":"Grok 4","limit":{"context":256000},"cost":{"input":3,"output":15}},
    "grok-imagine-image":{"id":"grok-imagine-image"},
    "other":{"id":"other","limit":{"context":1}}}},
+ "zai-coding-plan":{"id":"zai-coding-plan","api":"https://api.z.ai/api/coding/paas/v4","models":{
+   "glm-5.3":{"id":"glm-5.3","name":"GLM-5.3","limit":{"context":200000,"output":128000},"cost":{"input":0,"output":0}},
+   "glm-5.3-flash":{"id":"glm-5.3-flash","limit":{"context":200000}},
+   "text-embedding":{"id":"text-embedding","limit":{"context":1}}}},
+ "zai":{"id":"zai","api":"https://api.z.ai/api/paas/v4","models":{"glm-4.5":{"id":"glm-4.5","limit":{"context":1}}}},
+ "kimi-code-plan-global":{"id":"kimi-code-plan-global","api":"https://api.kimi.ai/coding/v1","models":{
+   "kimi-for-coding":{"id":"kimi-for-coding","name":"Kimi For Coding","limit":{"context":1048576},"cost":{"input":0,"output":0}},
+   "k3":{"id":"k3","limit":{"context":1048576}}}},
+ "moonshotai":{"id":"moonshotai","api":"https://api.moonshot.ai/v1","models":{"kimi-k2.7-code":{"id":"kimi-k2.7-code","limit":{"context":1}}}},
  "anthropic":{"id":"anthropic","env":["ANTHROPIC_API_KEY"],"npm":"@ai-sdk/anthropic","models":{"claude":{"id":"claude"}}}
 }`
 
@@ -56,15 +66,28 @@ func newReg(t *testing.T) (*Registry, *fakeFlow, *fakeFlow) {
 		t.Fatal(err)
 	}
 	fo, fx := &fakeFlow{provider: "openai"}, &fakeFlow{provider: "xai"}
-	r := New(cat).WithStore(auth.Open(filepath.Join(t.TempDir(), "auth.json"))).WithFlows(map[string]oauth.Flow{"openai": fo, "xai": fx})
+	r := New(cat).WithStore(auth.Open(filepath.Join(t.TempDir(), "auth.json"))).WithFlows(map[string]oauth.Flow{"openai": fo, "xai": fx, "zai": oauth.ZAI(), "kimi": oauth.Kimi()})
 	return r, fo, fx
 }
 
-func TestOnlyTwoProviders(t *testing.T) {
+func TestOnlySubscriptionsAreOffered(t *testing.T) {
 	r, _, _ := newReg(t)
 	l := r.List()
-	if len(l) != 2 || l[0].ID != "openai" || l[0].Name != "ChatGPT" || l[1].ID != "xai" || l[1].Name != "Grok" || l[0].Connected {
+	if len(l) != 4 || l[0].ID != "openai" || l[0].Name != "ChatGPT" || l[1].ID != "xai" || l[1].Name != "Grok" || l[0].Connected {
 		t.Fatalf("%+v", l)
+	}
+	// zai reads the coding plan's catalog entry, not the pay-as-you-go one,
+	// and keeps only its GLM models
+	if l[2].ID != "zai" || l[2].Name != "Z.ai Coding Plan" || l[2].Models != 2 || l[2].Connected {
+		t.Fatalf("zai: %+v", l[2])
+	}
+	if l[2].Methods[0].ID != oauth.MethodAPIKey {
+		t.Fatalf("zai signs in with a key: %+v", l[2].Methods)
+	}
+	// kimi likewise reads its plan's entry, and every model in it is the
+	// plan's, so it filters nothing
+	if l[3].ID != "kimi" || l[3].Name != "Kimi For Coding" || l[3].Models != 2 || l[3].Methods[0].ID != oauth.MethodAPIKey {
+		t.Fatalf("kimi: %+v", l[3])
 	}
 	if _, ok := r.Status("anthropic"); ok {
 		t.Fatal("anthropic should not be offered")
@@ -137,7 +160,7 @@ func TestLoginRefreshAndResolve(t *testing.T) {
 		w.Write([]byte("data: {\"type\":\"response.output_text.delta\",\"delta\":\"hi\"}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"usage\":{\"input_tokens\":3,\"output_tokens\":1}}}\n\n"))
 	}))
 	defer srv.Close()
-	r.WithEndpoints(srv.URL, "")
+	r.WithEndpoints(srv.URL, "", "", "")
 	m, info, err := r.Resolve("openai/gpt-5.4")
 	if err != nil || info.InputPrice != 0 {
 		t.Fatalf("%v %+v", err, info)
@@ -174,7 +197,7 @@ func TestGrokUsesBearer(t *testing.T) {
 		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"yo\"},\"finish_reason\":null}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\ndata: [DONE]\n\n"))
 	}))
 	defer srv.Close()
-	r.WithEndpoints("", srv.URL)
+	r.WithEndpoints("", srv.URL, "", "")
 	m, _, err := r.Resolve("xai/grok-4")
 	if err != nil {
 		t.Fatal(err)
@@ -200,7 +223,7 @@ func TestProvidersBuiltOnce(t *testing.T) {
 	if p1 != p2 {
 		t.Fatal("the adapter was rebuilt")
 	}
-	r.WithEndpoints("http://127.0.0.1:1", "")
+	r.WithEndpoints("http://127.0.0.1:1", "", "", "")
 	if p3, _, _ := r.lookup("openai/gpt-5.4"); p3 == p1 {
 		t.Fatal("new endpoints should build a new adapter")
 	}
@@ -242,5 +265,93 @@ func TestPlanUsageTracking(t *testing.T) {
 	}
 	if SubscriptionName("openai") != "ChatGPT" {
 		t.Fatal(SubscriptionName("openai"))
+	}
+}
+
+// TestZaiSignsInWithAKey: the GLM Coding Plan stores the pasted key rather
+// than an OAuth pair, sends it as a bearer token, and never refreshes —
+// there is no session to rotate.
+func TestZaiSignsInWithAKey(t *testing.T) {
+	r, _, _ := newReg(t)
+	if err := r.SaveLogin("zai", oauth.Tokens{Access: "zk-123"}); err != nil {
+		t.Fatal(err)
+	}
+	c, ok := r.store.Get("zai")
+	if !ok || c.Type != auth.TypeAPIKey || c.Key != "zk-123" || c.Access != "" || c.Refresh != "" {
+		t.Fatalf("stored credential: %+v", c)
+	}
+	if st, ok := r.Status("zai"); !ok || !st.Connected {
+		t.Fatalf("a stored key connects the provider: %+v", st)
+	}
+
+	var gotAuth atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		gotAuth.Store(req.Header.Get("Authorization"))
+		if !strings.HasSuffix(req.URL.Path, "/chat/completions") {
+			t.Errorf("path %s", req.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ni\"},\"finish_reason\":null}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\ndata: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+	r.WithEndpoints("", "", srv.URL, "")
+	m, info, err := r.Resolve("zai/glm-5.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.ContextWindow != 200000 {
+		t.Fatalf("metadata comes from the plan's catalog entry: %+v", info)
+	}
+	resp, err := m.Complete(context.Background(), model.Request{Model: "glm-5.3", Messages: []model.Message{{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "x"}}}}}, nil)
+	if err != nil || resp.Blocks[0].Text != "ni" || gotAuth.Load() != "Bearer zk-123" {
+		t.Fatalf("%+v %v %v", resp, err, gotAuth.Load())
+	}
+}
+
+// TestZaiServesThePlanNotTheAPI: the models offered are the coding plan's,
+// not the pay-as-you-go catalog that shares the vendor's name — the two
+// endpoints look alike and bill differently.
+func TestZaiServesThePlanNotTheAPI(t *testing.T) {
+	r, _, _ := newReg(t)
+	if err := r.SaveLogin("zai", oauth.Tokens{Access: "zk"}); err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, m := range r.Models("zai", false) {
+		ids = append(ids, m.ID)
+	}
+	want := []string{"zai/glm-5.3", "zai/glm-5.3-flash"}
+	if !slices.Equal(ids, want) {
+		t.Fatalf("plan models: %v, want %v", ids, want)
+	}
+	// and the endpoint is the plan's. The two URLs differ by one path
+	// segment and bill differently: /api/coding/paas/v4 draws on the
+	// subscription, /api/paas/v4 spends pay-as-you-go credits.
+	if zaiBaseURL != "https://api.z.ai/api/coding/paas/v4" {
+		t.Fatalf("the plan endpoint, not the API: %s", zaiBaseURL)
+	}
+}
+
+// TestKimiServesThePlanNotTheAPI: Kimi For Coding is the subscription —
+// its own endpoint, its own models — not the Moonshot platform that sells
+// the same family by the token.
+func TestKimiServesThePlanNotTheAPI(t *testing.T) {
+	r, _, _ := newReg(t)
+	if err := r.SaveLogin("kimi", oauth.Tokens{Access: "kk-1"}); err != nil {
+		t.Fatal(err)
+	}
+	c, ok := r.store.Get("kimi")
+	if !ok || c.Type != auth.TypeAPIKey || c.Key != "kk-1" {
+		t.Fatalf("stored credential: %+v", c)
+	}
+	var ids []string
+	for _, m := range r.Models("kimi", false) {
+		ids = append(ids, m.ID)
+	}
+	if want := []string{"kimi/k3", "kimi/kimi-for-coding"}; !slices.Equal(ids, want) {
+		t.Fatalf("plan models: %v, want %v", ids, want)
+	}
+	if kimiBaseURL != "https://api.kimi.ai/coding/v1" {
+		t.Fatalf("the plan endpoint, not the platform: %s", kimiBaseURL)
 	}
 }

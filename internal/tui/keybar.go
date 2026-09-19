@@ -17,10 +17,9 @@ func hint(key, desc string) dialog.Hint { return dialog.Hint{Key: key, Desc: des
 // hints but for what space does, so keyHints keeps one case each for the
 // dialogs that differ.
 var listDialogHints = map[focus]func() []dialog.Hint{
-	focusAsync:  func() []dialog.Hint { return listHints(hint("space/enter", "open chat")) },
-	focusNudges: func() []dialog.Hint { return listHints(hint("space/enter", "open chat")) },
-	focusMCP:    func() []dialog.Hint { return listHints(hint("space/enter", "show/hide tools")) },
-	focusTodo:   func() []dialog.Hint { return listHints() },
+	focusAsync: func() []dialog.Hint { return listHints(hint("space/enter", "open chat")) },
+	focusMCP:   func() []dialog.Hint { return listHints(hint("space/enter", "show/hide tools")) },
+	focusTodo:  func() []dialog.Hint { return listHints() },
 }
 
 // listHints is ↑/↓ over a list, whatever select does there, and the keys
@@ -33,6 +32,9 @@ func listHints(sel ...dialog.Hint) []dialog.Hint {
 func (m Model) keyHints() []dialog.Hint {
 	switch {
 	case m.ov != nil && m.ov.mode == overlayLogin:
+		if m.ov.login.key {
+			return []dialog.Hint{hint("enter", "sign in"), hint("esc", "cancel sign-in")}
+		}
 		h := []dialog.Hint{hint("o", "open in browser"), hint("esc", "cancel sign-in")}
 		if m.ov.login.err != "" {
 			h = append([]dialog.Hint{hint("enter", "retry")}, h...)

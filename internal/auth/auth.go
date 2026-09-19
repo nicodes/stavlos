@@ -1,7 +1,13 @@
-// Package auth is the credential store (PRD §8.4): the OAuth tokens of the
-// subscription logins (ChatGPT, Grok) made through /providers or
+// Package auth is the credential store (PRD §8.4): the credentials of the
+// subscription logins (ChatGPT, Grok, Z.ai) made through /providers or
 // `stavlos auth login`, kept in <data dir>/auth.json with mode 0600, never
-// in project config. There are no API keys and no environment variables.
+// in project config, and never read from the environment.
+//
+// Most logins store an OAuth pair. A plan that issues no OAuth credential
+// stores the key its subscription is bound to instead (Z.ai's GLM Coding
+// Plan): it is still a credential the user pasted into Stavlos once, kept
+// in the same file under the same mode, not a key read from the
+// environment or from a repository's configuration.
 package auth
 
 import (
@@ -18,7 +24,13 @@ import (
 	"time"
 )
 
-// Credential is one stored subscription login. Type is "oauth".
+// Credential types.
+const (
+	TypeOAuth  = "oauth"  // an access/refresh pair from a device or browser flow
+	TypeAPIKey = "apikey" // a key the user pasted, bound to their plan
+)
+
+// Credential is one stored subscription login.
 type Credential struct {
 	Type  string `json:"type"`
 	Added string `json:"added,omitempty"`
@@ -29,6 +41,18 @@ type Credential struct {
 	Expires   int64  `json:"expires,omitempty"` // unix milliseconds
 	AccountID string `json:"account_id,omitempty"`
 	Email     string `json:"email,omitempty"`
+
+	// apikey
+	Key string `json:"key,omitempty"`
+}
+
+// Secret is what a request authenticates with: the access token of an
+// OAuth login, or the key of a pasted one.
+func (c Credential) Secret() string {
+	if c.Type == TypeAPIKey {
+		return c.Key
+	}
+	return c.Access
 }
 
 // Store reads and writes auth.json. Reads are served from memory while the

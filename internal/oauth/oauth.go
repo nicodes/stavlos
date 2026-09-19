@@ -1,8 +1,11 @@
 // Package oauth implements the subscription logins Stavlos supports:
-// ChatGPT Plus/Pro (via the Codex sign-in) and SuperGrok (via the Grok CLI
-// sign-in). Both are device-code flows using the official CLIs' public
-// client ids, the same mechanism opencode uses: the user opens a URL on any
-// device, enters a short code, and the daemon polls for the tokens.
+// ChatGPT Plus/Pro (via the Codex sign-in), SuperGrok (via the Grok CLI
+// sign-in), the Z.ai GLM Coding Plan and Kimi For Coding. The first two are device-code
+// flows using the official CLIs' public client ids, the same mechanism
+// opencode uses: the user opens a URL on any device, enters a short code,
+// and the daemon polls for the tokens. Z.ai issues no OAuth credential at
+// all, so its plan is presented as a login of the same shape whose one
+// method is pasting a key (zai.go).
 package oauth
 
 import (
@@ -37,6 +40,7 @@ type Tokens struct {
 const (
 	MethodBrowser = "browser" // authorize in a browser; callback to localhost
 	MethodDevice  = "device"  // show a URL and a code; poll (headless)
+	MethodAPIKey  = "apikey"  // the user pastes a key from the provider's console
 )
 
 // Method is one way to sign in to a provider.
@@ -57,6 +61,26 @@ type Pending struct {
 	deviceCode   string // xai
 	deviceAuthID string // openai device
 	browser      *browserLogin
+	key          chan string // apikey: the key the client delivers
+}
+
+// Deliver hands a pasted key to a waiting apikey login. It is how the
+// apikey method completes: there is nothing to poll, so Wait blocks here
+// until a client calls provider.login.key.
+func (p *Pending) Deliver(key string) error {
+	if p == nil || p.key == nil {
+		return errors.New("this login does not take a key")
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return errors.New("the key is empty")
+	}
+	select {
+	case p.key <- key:
+		return nil
+	default:
+		return errors.New("this login already has a key")
+	}
 }
 
 // Close abandons a pending login: the browser method's loopback server is
@@ -99,7 +123,7 @@ func Flows() map[string]Flow {
 		g.DeviceURL, g.TokenURL = strings.TrimRight(v, "/")+"/device/code", strings.TrimRight(v, "/")+"/token"
 		fmt.Fprintf(os.Stderr, "stavlos: STAVLOS_OAUTH_XAI_BASE is set: Grok sign-ins and tokens go to %s\n", strings.TrimRight(v, "/"))
 	}
-	return map[string]Flow{"openai": c, "xai": g}
+	return map[string]Flow{"openai": c, "xai": g, "zai": ZAI(), "kimi": Kimi()}
 }
 
 // ErrDenied is returned when the user rejects the login.

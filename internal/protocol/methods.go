@@ -59,6 +59,7 @@ var (
 	ProviderList       = Method[None, ProviderListResult]{MProviderList}
 	ProviderLoginStart = Method[LoginStartParams, LoginStartResult]{MProviderLoginStart}
 	ProviderLoginWait  = Method[LoginWaitParams, ProviderInfo]{MProviderLoginWait}
+	ProviderLoginKey   = Method[LoginKeyParams, None]{MProviderLoginKey}
 	ProviderDisconnect = Method[ProviderRef, None]{MProviderDisconnect}
 	ModelList          = Method[ModelListParams, ModelListResult]{MModelList}
 

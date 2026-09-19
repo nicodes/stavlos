@@ -10,6 +10,8 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/tools"
 )
 
 // postTurn posts text in the channel chat (to the main agent) and waits for
@@ -22,11 +24,9 @@ func postTurn(t *testing.T, s *Channel, h *fakeHost, text string) {
 	h.waitFor(t, event.TurnEnded, s.Root().ID)
 }
 
-// TestNudgesUntilReplyOrCap: every turn that ends owing the human a reply (for
-// a channel chat post) is
-// followed by a reminder turn, up to maxNudges in a row; the reply stays
-// due, nothing is injected into the system prompt, and a new message resets
-// the count.
+// TestNudgesUntilReplyOrCap: empty reminder-only turns stop after maxNudges;
+// the reply stays due, nothing is injected into the system prompt, and a new
+// request resets the seatbelt so reminders can fire again.
 func TestNudgesUntilReplyOrCap(t *testing.T) {
 	var reminder string
 	fm := &fakeModel{steps: []step{
@@ -96,19 +96,19 @@ func TestReplyNeedsNoReminder(t *testing.T) {
 	}
 }
 
-// TestNoNudgeWhileWaiting: a turn that ends waiting on a child is not
-// nudged; the child's answer wakes the agent, and a turn that then ends
-// without replying is.
-func TestNoNudgeWhileWaiting(t *testing.T) {
+// TestReminderWhileAwaitingChild: owing someone still reminds even while
+// awaiting a child; a live job still suppresses the reminder.
+func TestReminderWhileAwaitingChild(t *testing.T) {
 	release := make(chan struct{})
+	started := make(chan struct{})
 	fm := &fakeModel{
 		steps: []step{
 			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("waiting on scout")),
-			reply(text("got the answer, forgot to reply")),
-			reply(call("c2", "message", `{"to":"user","text":"scout found it","kind":"response"}`)),
+			reply(text("still notes")),
 		},
 		childSteps: []step{func(context.Context, model.Request) (model.Response, error) {
+			close(started)
 			<-release
 			return call("k1", "message", `{"to":"main","text":"found it","kind":"response"}`), nil
 		}},
@@ -116,14 +116,32 @@ func TestNoNudgeWhileWaiting(t *testing.T) {
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	postTurn(t, s, h, "delegate")
-	time.Sleep(50 * time.Millisecond)
-	if n := len(reminders(h, root.ID)); n != 0 || root.Info().Turn != 1 {
-		t.Fatalf("no nudge while waiting on the child: reminders %d turn %d", n, root.Info().Turn)
+	<-started
+	waitUntil(t, h, func() bool { return len(reminders(h, root.ID)) >= 1 })
+	if len(root.Info().Awaiting) == 0 {
+		t.Fatal("expected to still await the child while being reminded")
 	}
 	close(release)
-	waitUntil(t, h, func() bool { return len(h.ofType(event.ChatMessage, root.ID)) == 1 && stateOf(root) == StateIdle })
-	if q := reminders(h, root.ID); !reflect.DeepEqual(q, [][]string{{"user"}}) || root.Info().Turn != 3 {
-		t.Fatalf("reminders %v turn %d", q, root.Info().Turn)
+}
+
+func TestNoReminderWhileJobRuns(t *testing.T) {
+	fm := &fakeModel{steps: []step{
+		reply(call("c1", "shell", `{"command":"sleep 30","background":true}`)),
+		reply(text("notes while the job runs")),
+	}}
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
+	if err := s.SetMode(context.Background(), protocol.ModeYolo); err != nil {
+		t.Fatal(err)
+	}
+	root := s.Root()
+	postTurn(t, s, h, "delegate")
+	waitUntil(t, h, func() bool { return len(root.Info().Jobs) > 0 && stateOf(root) != protocol.AgentRunning })
+	time.Sleep(50 * time.Millisecond)
+	if n := len(reminders(h, root.ID)); n != 0 {
+		t.Fatalf("no reminder while a job runs: reminders %d jobs %d", n, len(root.Info().Jobs))
+	}
+	if len(root.Info().Due) == 0 {
+		t.Fatal("still owes the human")
 	}
 }
 
@@ -209,5 +227,118 @@ func TestDirectMessageNeedsAnExplicitResponse(t *testing.T) {
 	waitUntil(t, h, func() bool { return root.Info().Turn == 1+maxNudges && stateOf(root) == StateIdle })
 	if in := root.Info(); len(in.PendingReplies) != 1 || len(reminders(h, root.ID)) != maxNudges || in.Turn != 1+maxNudges {
 		t.Fatalf("due %v, turn %d, log:\n%s", in.Due, in.Turn, h.dump())
+	}
+}
+
+// TestEmptyReminderSeatbeltThenTools: empty reminder-only turns stop after
+// the seatbelt; a later turn that uses a tool can be reminded again.
+func TestEmptyReminderSeatbeltThenTools(t *testing.T) {
+	release := make(chan struct{})
+	fm := &fakeModel{
+		steps: []step{
+			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(text("notes")),
+			reply(text("empty 1")),
+			reply(text("empty 2")),
+			reply(text("empty 3")),
+			reply(call("c2", "todo", `{"add":[{"text":"keep going","status":"in_progress"}]}`)),
+			reply(text("used a tool, still notes")),
+			reply(text("reminded again")),
+		},
+		childSteps: []step{func(context.Context, model.Request) (model.Response, error) {
+			<-release
+			return call("k1", "message", `{"to":"main","text":"found it","kind":"response"}`), nil
+		}},
+	}
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
+	root := s.Root()
+	postTurn(t, s, h, "delegate")
+	waitUntil(t, h, func() bool { return len(reminders(h, root.ID)) == maxNudges && root.Info().Turn >= 1+maxNudges })
+	time.Sleep(50 * time.Millisecond)
+	if n := len(reminders(h, root.ID)); n != maxNudges {
+		t.Fatalf("seatbelt: reminders %d", n)
+	}
+	close(release)
+	waitUntil(t, h, func() bool { return len(reminders(h, root.ID)) > maxNudges })
+	if n := len(reminders(h, root.ID)); n < maxNudges+1 {
+		t.Fatalf("a tool turn should remind again: reminders %d", n)
+	}
+}
+
+// TestCancelClearsReplyDebtInTurn: cancelling a running child drops its
+// debts and the parent's wait; the child stays alive.
+func TestCancelClearsReplyDebtInTurn(t *testing.T) {
+	started := make(chan struct{})
+	fm := &fakeModel{
+		steps: []step{
+			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(text("waiting")),
+		},
+		childSteps: []step{func(ctx context.Context, _ model.Request) (model.Response, error) {
+			close(started)
+			<-ctx.Done()
+			return text("half"), ctx.Err()
+		}},
+	}
+	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
+	root := s.Root()
+	if err := root.Prompt(context.Background(), "delegate", "human:test"); err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	waitUntil(t, h, func() bool { return len(s.Agents()) == 2 })
+	child := s.Agents()[1]
+	waitUntil(t, h, func() bool { return len(child.Info().PendingReplies) == 1 && len(root.Info().Awaiting) == 1 })
+	if err := s.Cancel(child.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h, func() bool {
+		return len(h.ofType(event.AgentCancelled, child.ID)) == 1 && stateOf(child) != protocol.AgentRunning
+	})
+	if child.Info().State == protocol.AgentKilled || !child.Alive() {
+		t.Fatal("cancel must not kill")
+	}
+	if len(child.Info().PendingReplies) != 0 || len(root.Info().Awaiting) != 0 {
+		t.Fatalf("cancel should drop debt: child due %v parent awaiting %v", child.Info().Due, root.Info().Awaiting)
+	}
+	if n := len(reminders(h, child.ID)); n != 0 {
+		t.Fatalf("cancelled turn must not remind: %d", n)
+	}
+	// the child can take new work
+	if _, err := (orchestrator{s}).Message(root.ID, []string{child.Name()}, "again", tools.KindRequest); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h, func() bool {
+		return len(child.Info().PendingReplies) == 1 || child.Info().Turn > 1 || child.Info().Queued > 0
+	})
+}
+
+// TestCancelClearsReplyDebtIdle: cancelling an idle agent drops its debts.
+func TestCancelClearsReplyDebtIdle(t *testing.T) {
+	fm := &fakeModel{
+		steps: []step{
+			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(text("waiting")),
+		},
+		childSteps: []step{reply(text("notes only"))},
+	}
+	s, h := newTestChannel(t, testConfig{}, fm)
+	root := s.Root()
+	runTurn(t, s, h, "delegate")
+	waitUntil(t, h, func() bool { return len(s.Agents()) == 2 })
+	child := s.Agents()[1]
+	waitUntil(t, h, func() bool { return stateOf(child) == StateIdle && len(child.Info().PendingReplies) == 1 })
+	if len(root.Info().Awaiting) == 0 {
+		t.Fatal("parent should wait on the idle child")
+	}
+	if err := s.Cancel(child.ID); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h, func() bool { return len(h.ofType(event.AgentCancelled, child.ID)) == 1 })
+	if !child.Alive() || child.Info().State == protocol.AgentKilled {
+		t.Fatal("idle cancel must not kill")
+	}
+	if len(child.Info().PendingReplies) != 0 || len(root.Info().Awaiting) != 0 {
+		t.Fatalf("idle cancel should drop debt: child due %v parent awaiting %v", child.Info().Due, root.Info().Awaiting)
 	}
 }
