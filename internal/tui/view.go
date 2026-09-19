@@ -604,9 +604,11 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 
 // sidebarHeader is what precedes the tree: the app name, a blank, the
 // system's tokens and cost (every channel), the selected chat's (the
-// channel's in its chat, the agent's in an agent's chat), a blank, the
-// prompt-cache share of the last hour's calls, Discord status, and a blank; the "channels" title is the body's first row. The tree's
-// first row follows, which is how a click on the sidebar finds its agent.
+// channel's in its chat, the agent's in an agent's chat), a blank, whether
+// the channel's project configuration is trusted, the prompt-cache share of
+// the last hour's calls, Discord status, and a blank; the "channels" title
+// is the body's first row. The tree's first row follows, which is how a
+// click on the sidebar finds its agent.
 func (m Model) sidebarHeader(width int) []string {
 	rows := []string{
 		theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" "),
@@ -702,9 +704,9 @@ const channelGear = "⚙"
 func (m Model) sidebarSystemRow() int   { return 2 + len(m.planUsageRows(sidebarWidth-1, time.Now())) }
 func (m Model) sidebarSelectedRow() int { return m.sidebarSystemRow() + 1 }
 
-// sidebarDiscordRow opens the Discord status/control panel when clicked. An
-// untrusted-project warning and a cache monitor sit above it, each only
-// while it has something to say.
+// sidebarDiscordRow opens the Discord status/control panel when clicked. The
+// project row and a cache monitor sit above it, each only while it has
+// something to say.
 func (m Model) sidebarDiscordRow() int {
 	row := m.sidebarSystemRow() + 3
 	if m.trustRow(sidebarWidth-1) != "" {
@@ -716,7 +718,8 @@ func (m Model) sidebarDiscordRow() int {
 	return row
 }
 
-// sidebarTrustRow is the warning's row, or -1 while the project is trusted.
+// sidebarTrustRow is the project row, or -1 for a directory with no project
+// configuration.
 func (m Model) sidebarTrustRow() int {
 	if m.trustRow(sidebarWidth-1) == "" {
 		return -1
