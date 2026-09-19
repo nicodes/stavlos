@@ -606,53 +606,6 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 // "Channels" title under it.
 func navSection(title string) string { return theme.StyleAccent.Bold(true).Render(title) }
 
-// sidebarHeader is what precedes the tree, in sections:
-//
-//	Stavlos                       ⚙
-//
-//	System               2k · $0.25
-//	@main                1k · $0.20
-//
-//	Clients
-//	● Web UI 127.0.0.1:4999
-//	○ Discord disconnected
-//
-//	Subscriptions                   (only with a plan reading)
-//	ChatGPT 5h ━━━━━━──────  38%
-//	        wk ━━──────────  17%
-//
-//	project trusted                 (each only while it has something to say,
-//	cache 94%                        and the blank under them with them)
-//
-// Everything down to the Clients section is at a fixed row. The "Channels"
-// title is the body's first row. The tree's first row follows, which is how
-// a click on the sidebar finds its agent.
-func (m Model) sidebarHeader(width int) []string {
-	rows := []string{
-		theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" "),
-		"",
-		m.navUsageRow(m.sidebarSystemRow(), width),
-		m.navUsageRow(m.sidebarSelectedRow(), width),
-		"",
-		navSection("Clients"),
-		m.webIndicator(width),
-		m.discordIndicator(width),
-		"",
-	}
-	rows = append(rows, m.planUsageRows(width, clock())...)
-	monitors := len(rows)
-	if trust := m.trustRow(width); trust != "" {
-		rows = append(rows, trust)
-	}
-	if cache := m.cacheRow(width); cache != "" {
-		rows = append(rows, cache)
-	}
-	if len(rows) > monitors {
-		rows = append(rows, "")
-	}
-	return rows
-}
-
 // usageRow is "label        12k · $0.25", grey: the label at the left, the
 // tokens and cost flush with the right edge (like the tree's costs); a
 // label too long for width is cut, never the figures. The figures are
@@ -686,29 +639,30 @@ func usageFigureAt(tokens int, cost float64, width, x int) (usageKind, bool) {
 
 // usageRowFigures is what the nav's usage row at header row y shows: whose
 // usage (system) and its tokens and cost; ok is false for other rows.
-func (m Model) usageRowFigures(y int) (label string, system bool, tokens int, cost float64, ok bool) {
-	switch y {
-	case m.sidebarSystemRow():
+func (m Model) usageRowFigures(id navRowID) (label string, system bool, tokens int, cost float64, ok bool) {
+	switch id {
+	case navSystem:
 		return "System", true, m.systemTokens(), m.systemCost(), true
-	case m.sidebarSelectedRow():
+	case navSelected:
 		if a := m.selectedAgent(); a != nil && !m.superChat {
 			return "@" + a.Name, false, a.Tokens, a.CostUSD, true
 		}
 		return channelLabel(m.channel), false, m.totalTokens(), m.totalCost(), true
+	default:
 	}
 	return "", false, 0, 0, false
 }
 
 // navUsageRow draws the nav's usage row at header row y, its figure in
 // accent while its chart is open and lighter under the pointer.
-func (m Model) navUsageRow(y, width int) string {
-	label, system, tokens, cost, _ := m.usageRowFigures(y)
+func (m Model) navUsageRow(id navRowID, width int) string {
+	label, system, tokens, cost, _ := m.usageRowFigures(id)
 	open := 0
 	if m.focus == focusUsage && (system && m.usage.channel == "" || !system && m.usageOnSelectedChat()) {
 		open = int(m.usage.kind) + 1
 	}
 	hover := 0
-	if m.hover.navRow == y {
+	if m.hover.navID == id {
 		hover = m.hover.navUsage
 	}
 	return usageRow(label, tokens, cost, width, open, hover)
@@ -725,21 +679,16 @@ const channelGear = "⚙"
 // sidebarSystemRow and sidebarSelectedRow are the header's usage rows, right
 // under the title: a click on the tokens figure opens the tokens dialog, on
 // the cost the cost dialog.
-func (m Model) sidebarSystemRow() int   { return 2 }
-func (m Model) sidebarSelectedRow() int { return m.sidebarSystemRow() + 1 }
+func (m Model) sidebarSystemRow() int   { return m.navRowIndex(navSystem) }
+func (m Model) sidebarSelectedRow() int { return m.navRowIndex(navSelected) }
 
 // sidebarDiscordRow opens the Discord status/control panel when clicked: the
 // row under the Web UI's in the Clients section.
-func (m Model) sidebarDiscordRow() int { return sidebarWebRow + 1 }
+func (m Model) sidebarDiscordRow() int { return m.navRowIndex(navDiscord) }
 
 // sidebarTrustRow is the project row, or -1 for a directory with no project
 // configuration.
-func (m Model) sidebarTrustRow() int {
-	if m.trustRow(sidebarWidth-1) == "" {
-		return -1
-	}
-	return navTopRows + len(m.planUsageRows(sidebarWidth-1, clock())) // the first row under the sections
-}
+func (m Model) sidebarTrustRow() int { return m.navRowIndex(navTrust) }
 
 // stripRows is how many tab rows the footer strip draws: the ! ? dirs row
 // while the sidebar is hidden, none while it shows (! and ? sit in the

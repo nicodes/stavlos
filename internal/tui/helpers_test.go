@@ -90,3 +90,9 @@ func markCursorForTest(t *testing.T) {
 	prev := render.SwapHighlight(func(s string, _ int) string { return render.GutterMark + s })
 	t.Cleanup(func() { render.SwapHighlight(prev) })
 }
+
+// navAfterClients is the first header row after the Clients section and its
+// blank: where the Subscriptions section starts when there is a reading, and
+// where the monitors start when there is none. Tests find a row by what it is
+// (navRowIndex), or relative to a section, never by a number.
+func navAfterClients(m Model) int { return m.navRowIndex(navDiscord) + 2 }

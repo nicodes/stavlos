@@ -2160,7 +2160,7 @@ func TestSidebarNav(t *testing.T) {
 		if header != 9 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" ||
 			m.sidebarSystemRow() != 2 || strings.Join(strings.Fields(sb[2]), " ") != "System 2k · $0.25" || strings.Join(strings.Fields(sb[3]), " ") != "@main 1k · $0.20" ||
 			strings.TrimSpace(sb[4]) != "" || strings.TrimSpace(sb[5]) != "Clients" ||
-			sidebarWebRow != 6 || strings.TrimSpace(sb[sidebarWebRow]) != "○ Web UI" || m.sidebarDiscordRow() != 7 || !strings.Contains(sb[m.sidebarDiscordRow()], "Discord checking") ||
+			m.navRowIndex(navWeb) != 6 || strings.TrimSpace(sb[m.navRowIndex(navWeb)]) != "○ Web UI" || m.sidebarDiscordRow() != 7 || !strings.Contains(sb[m.sidebarDiscordRow()], "Discord checking") ||
 			strings.Contains(strings.Join(sb[:9], "\n"), "Subscriptions") ||
 			strings.Contains(strings.Join(sb[:9], "\n"), "! 1/1") || strings.TrimSpace(sb[8]) != "" || !strings.HasPrefix(sb[9], "Channels ") || !strings.Contains(sb[9], " "+newChannelMark+" ") || strings.Contains(sb[9], "↑/↓") ||
 			strings.Contains(strings.Join(sb, "\n"), "waiting") || strings.Contains(strings.Join(sb, "\n"), "need you") {
@@ -3733,15 +3733,15 @@ func TestPlanUsageBars(t *testing.T) {
 		}
 	}
 	// every row of a plan opens that plan's chart
-	if _, ok := m.planAt(navTopRows); ok {
+	if _, ok := m.planAt(navAfterClients(m)); ok {
 		t.Fatal("the Subscriptions title is no plan")
 	}
-	for y, provider := range map[int]string{navTopRows + 1: "openai", navTopRows + 2: "openai", navTopRows + 3: "xai"} {
+	for y, provider := range map[int]string{navAfterClients(m) + 1: "openai", navAfterClients(m) + 2: "openai", navAfterClients(m) + 3: "xai"} {
 		if p, ok := m.planAt(y); !ok || p.Provider != provider {
 			t.Fatalf("row %d belongs to %q, got %q %v", y, provider, p.Provider, ok)
 		}
 	}
-	if _, ok := m.planAt(navTopRows + 4); ok {
+	if _, ok := m.planAt(navAfterClients(m) + 4); ok {
 		t.Fatal("the blank row under the block is no plan")
 	}
 	for minutes, span := range map[int]string{300: "5h", 10080: "wk", 43200: "mo", 1440: "1d", 90: "90m", 0: ""} {
@@ -3752,7 +3752,7 @@ func TestPlanUsageBars(t *testing.T) {
 	header := m.sidebarHeader(w)
 	// the block is the last of the sections: nothing above it moves
 	if m.sidebarSystemRow() != 2 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") ||
-		stripANSI(header[navTopRows]) != "Subscriptions" || len(header) != navTopRows+5 {
+		stripANSI(header[navAfterClients(m)]) != "Subscriptions" || len(header) != navAfterClients(m)+5 {
 		t.Fatalf("the Subscriptions section follows Clients and moves nothing above it:\n%s", stripANSI(strings.Join(header, "\n")))
 	}
 	row := stripANSI(header[m.sidebarSystemRow()])
@@ -3793,7 +3793,7 @@ func TestNavCacheMonitor(t *testing.T) {
 			t.Fatalf("%d/%d: %q", c.cached, c.fresh, row)
 		}
 		header := m.sidebarHeader(w)
-		at := navTopRows // no plan reading here: the monitors come right after the Clients section
+		at := navAfterClients(m) // no plan reading here: the monitors come right after the Clients section
 		if m.sidebarDiscordRow() != discord || stripANSI(header[at]) != stripANSI(row) || header[len(header)-1] != "" || len(header) != at+2 {
 			t.Fatalf("the monitor sits under the sections, a blank after it, and moves nothing above:\n%s", stripANSI(strings.Join(header, "\n")))
 		}
@@ -3931,8 +3931,8 @@ func TestPlanUsageChart(t *testing.T) {
 	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-time.Minute),
 		Windows: []protocol.UsageWindowInfo{{UsedPercent: 40, Minutes: 10080, ResetsAt: now.Add(24 * time.Hour)}}}}
 	m.layout()
-	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: navTopRows + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: navTopRows + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: navAfterClients(m) + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: navAfterClients(m) + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
 	if m.focus != focusUsage || m.usage.kind != usagePlan || m.usage.provider != "openai" || m.usageTitle() != "Plan · ChatGPT" {
 		t.Fatalf("a click on the plan row opens its chart: focus=%v %+v", m.focus, m.usage)
@@ -4021,7 +4021,7 @@ func TestProjectTrustRowInNav(t *testing.T) {
 		if at < 0 || at >= len(header) || stripANSI(header[at]) != stripANSI(row) {
 			t.Fatalf("the row is not where it says:\n%s", stripANSI(strings.Join(header, "\n")))
 		}
-		if m.sidebarDiscordRow() != discord || at != navTopRows {
+		if m.sidebarDiscordRow() != discord || at != navAfterClients(m) {
 			t.Fatalf("the project row sits under the sections and moves nothing above: project %d discord %d", at, m.sidebarDiscordRow())
 		}
 		if cmd := m.sidebarClick(0, at); cmd == nil {

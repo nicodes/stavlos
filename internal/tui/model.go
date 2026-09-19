@@ -290,12 +290,12 @@ type dialogs struct {
 
 // buttonHover is the button under the pointer: at most one of a divider
 // meta part, a divider agent tab (tabOK), or a figure of the nav's usage
-// row navRow (navUsage 1 tokens, 2 cost).
+// row navID (navUsage 1 tokens, 2 cost).
 type buttonHover struct {
 	meta     metaPart
 	tab      focus
 	tabOK    bool
-	navRow   int
+	navID    navRowID // which usage row, not where it is: rows move
 	navUsage int
 }
 
