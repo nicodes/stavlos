@@ -396,7 +396,8 @@ func Defaults() File {
 			toolname.ShellKill:   allow,
 			toolname.Todo:        allow,
 			toolname.AskUser:     allow,
-			toolname.Shell:       ask, // no command is allowed by default: searching is grep and glob
+			toolname.Sheet:       allow, // a sheet is sandboxed when shown and cannot call out (docs/web-ui.md)
+			toolname.Shell:       ask,   // no command is allowed by default: searching is grep and glob
 			toolname.ApplyPatch:  ask,
 			toolname.WebFetch:    ask, // per host: the dialog offers "allow <host> for this channel"
 			toolname.WebSearch:   ask, // allowed once a search backend is configured (see LoadGlobal)
@@ -806,7 +807,7 @@ type roleFile struct {
 // one. The messaging set and
 // ask_user come on top for every agent, shell_kill with shell, and the
 // lifecycle tools with a non-empty spawn list.
-var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.Todo, toolname.WebFetch, toolname.WebSearch}
+var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.Todo, toolname.WebFetch, toolname.WebSearch, toolname.Sheet}
 
 // ReadPreset parses one agents/<name>.md file.
 func ReadPreset(path string) (Preset, error) {

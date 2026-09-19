@@ -36,6 +36,7 @@ type Env struct {
 	Search    SearchConfig     // web_search backend; zero → the tool explains how to configure it
 	PassEnv   []string         // environment variables kept for child processes although their names look like secrets (config env.pass)
 	Sandbox   *sandbox.Spec    // the boundary commands run in; nil runs them unsandboxed
+	Sheets    Sheets           // the channel's sheets; nil when unavailable
 }
 
 // Skill is a loadable skill: its front matter and its body.
@@ -125,7 +126,7 @@ func Builtin() Set {
 		shellTool{}, readTool{}, grepTool{}, globTool{}, patchTool{}, skillTool{},
 		spawnTool{}, messageTool{}, cancelTool{}, statusTool{},
 		shellKillTool{},
-		todoTool{}, askTool{},
+		todoTool{}, askTool{}, sheetTool{},
 		webFetchTool{}, webSearchTool{},
 	} {
 		s[t.Def().Name] = t

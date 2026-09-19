@@ -19,8 +19,14 @@ reads channels, chats and the live stream and posts messages (most of step
 its committed bundle. Turn it on from the nav's **Web UI** row, `/web`, or
 `stavlos web on`.
 
-Not built: sheets (step 2), QR sign-in, the PWA manifest, and answering
-permissions and questions from the browser (step 4). Three things changed
+Sheets (step 2) are built too: the `sheet` tool, `sheet.written` and
+`sheet.deleted` events, `/sheets/<channel>/<id>` served inert, and a tab per
+sheet beside the channel's chat. What changed from the draft is marked in
+the Sheets section.
+
+Not built: a list of sheets in the TUI, QR sign-in, the PWA manifest, and
+answering permissions and questions from the browser (step 4), which is also
+what a sheet submitting through `ask_user` waits on. Three things changed
 from the first draft while building, each marked **Changed** below: the port
 is fixed, the session is a cookie, and the daemon has to be told the name a
 proxy gives it.
@@ -112,29 +118,56 @@ internet, because nothing is meant to be able to reach it from there.
 
 ## Sheets
 
-**Storage.** One file per sheet in the channel's state directory, not in the
-channel's working directory: nobody wants `sheets/` turning up in
-`git status`. That directory joins the channel's working set, so every agent
-in the channel can read and patch what is in it under the usual permission
-rules.
+**Storage.** One file per sheet, `<data>/sheets/<channel>/s<n>.html`, not in
+the channel's working directory: nobody wants `sheets/` turning up in
+`git status`. That directory is part of the working set **for the file tools
+only** (`read`, `grep`, `apply_patch`), so every agent in the channel can read
+and patch what is in it under the usual permission rules. Commands cannot:
+the sandbox hides the whole data directory, and a sheet is no reason to open
+a hole in that.
 
-**The log.** Creating, replacing and deleting a sheet are events, carrying
-the sheet id, its title, the authoring agent and a hash — not the HTML,
-which would bloat the log for no gain. Replay therefore rebuilds the list of
-sheets a channel has, and the TUI can show them without reading the disk.
+**The log.** `sheet.written` (created or replaced) and `sheet.deleted` carry
+the sheet id, its title, the authoring agent, a hash and a size. Replay
+therefore rebuilds the list of sheets a channel has without reading the disk,
+and the hash is what tells a viewer to load the page again. The events do not
+carry the HTML, though the log is not free of it: the tool call that wrote
+the page is in the agent's `assistant.message`, as every tool input is. An
+`apply_patch` that touches a known sheet's file is followed by a
+`sheet.written` with the new hash (or a `sheet.deleted`), so an edit made
+with the ordinary tools reaches the viewers like one made with the sheet
+tool. Ids are never reused.
 
-**Tools.** Because a sheet is a file, the tool surface is small: create,
-list, delete, and hand back the URL. Editing is `read` plus `apply_patch`,
-like any other file. There is no `sheet_edit`.
+**Tools.** Because a sheet is a file, the tool surface is one tool, `sheet`,
+with three actions: `write` (create, or replace the content of the sheet
+whose id is given), `list` and `delete`. Editing is `read` plus
+`apply_patch`, like any other file; there is no `sheet_edit`. **Changed:**
+the tool hands back the file's path, not a URL. A sheet URL is useless to an
+agent, and useless to the human without a session; the human finds the sheet
+as a tab.
 
 **Authorship.** The parent frame draws a bar naming the agent that wrote the
 page. In a tree of agents, "this page is asking for my API key" needs a name
 attached to it.
 
-**Limits.** Creation is silent — it is loopback-only and cannot call out, so
-a prompt for every page would be noise. Two cheap guards instead: a cap on
-how many sheets one channel may hold, so a looping agent cannot write
-thousands, and the author bar above.
+**Limits.** Creation is silent (`sheet` is allowed by default; a role may
+deny it) — a page cannot call out, so a prompt for every page would be noise.
+Cheap guards instead: at most 50 sheets a channel and 2 MiB a page, so a
+looping agent cannot write thousands, and the author bar above.
+
+**What "cannot call out" rests on. Changed:** the draft relied on
+`connect-src 'none'`, which leaves images, navigation and forms open. A sheet
+is served with `sandbox allow-scripts; default-src 'none'; script-src
+'unsafe-inline'; style-src 'unsafe-inline' <our sheet.css>; img-src data:
+blob:; font-src data:; form-action 'none'; base-uri 'none'; frame-ancestors
+'self'`: nothing loads from anywhere but the page itself and our stylesheet,
+so no request can carry data out; no forms, popups or top navigation; and an
+opaque origin, even when the URL is opened in its own tab, so the app's DOM
+and storage are out of reach (the session cookie is HttpOnly besides). The
+app's own CSP holds the frame to `frame-src 'self'`. One thing a CSP cannot
+stop is a document navigating *itself* away when opened in a tab of its own,
+outside the app's frame; a sheet needs a session to be fetched at all, so
+that takes the human pasting a sheet URL into a new tab. Checked in Chromium
+with a page that tries each: parent, cookie, fetch and image all blocked.
 
 **What a sheet is written in.** reindr settled this well and it is worth
 copying wholesale.
@@ -149,12 +182,17 @@ small, models write plain DOM code reliably, and every global on offer is one
 more thing to misuse. If a sheet needs charts, vendor one small library the
 same way the stylesheet is vendored: served, never fetched.
 
-*Tailwind and daisyUI for the CSS*, compiled with **no source scanning** —
-reindr's input file is one line, `@import "tailwindcss" source(none)`, because
-the page is written at runtime by a model and there is nothing to tree-shake
-against. That emits the whole utility set: 374KB, 48KB gzipped, committed and
-served. The server injects it into the frame, so a sheet links nothing and
-`connect-src 'none'` still holds.
+*Tailwind and daisyUI for the CSS*, compiled with **no source scanning**
+(`@import "tailwindcss" source(none)`), because the page is written at runtime
+by a model and there is nothing to tree-shake against. **Changed:** Tailwind 4
+has no "whole utility set" to emit; reindr's 374KB is daisyUI plus the
+utilities its own templates use. Ours (`web/sheet.input.css`) is daisyUI's
+components whole plus an explicit list of utilities (`@source inline(…)`):
+layout with `sm:`/`md:`/`lg:`, spacing, sizing, type, the palette, borders.
+595KB, 72KB gzipped, built with the client, served as `/sheet.css` and linked
+by the server in front of the page's own styles. A class outside the list
+does nothing, so the tool tells agents to put anything unusual in a
+`<style>` block.
 
 This means **two stylesheets, built differently**. The app's Tailwind is
 tree-shaken normally, because we write its source. The sheets' is the full

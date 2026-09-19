@@ -282,6 +282,16 @@ and the daemon remembers whether it was on. The browser client shows every
 channel, its chat and each agent's chat live, and posts messages; permissions
 and questions are shown but still answered in the terminal or Discord.
 
+**Sheets.** Ask an agent for one in plain words ("make a sheet comparing the
+three approaches"): with the `sheet` tool it writes an HTML page, styled with
+the Tailwind and daisyUI classes already in the frame, and the page appears
+as a tab beside that channel's chat, under a bar naming the agent that wrote
+it. Every agent of the channel shares its sheets (at most 50, 2 MiB each);
+they live in Stavlos's data directory, not the repository, agents edit them
+with `read` and `apply_patch` like any file, and a change reloads the tab. A
+sheet runs sandboxed with no network: it cannot reach the app, your session,
+or any server. `sheet: deny` in a role's `tools:` removes the tool.
+
 The daemon serves it on `127.0.0.1:4999` and never listens anywhere else.
 From a phone use `tailscale serve 4999` and list the name it gives under
 `"web": {"hosts": ["box.tailnet.ts.net"]}` in the global `stavlos.json`
@@ -314,7 +324,7 @@ for the bot, configuration and migration from the old standalone bridge.
 
 Implemented: daemon with SQLite event log, one state machine per channel with a goroutine per agent, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend), Grok, Z.ai GLM Coding Plan and Kimi For Coding subscription adapters with browser, device-code and API-key sign-in, models.dev metadata, native search tools, a loopback web UI, and a Linux sandbox for commands and MCP servers.
 
-Not yet: sheets and answering prompts in the web UI, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
+Not yet: answering prompts in the web UI, a list of sheets in the TUI, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
 
 ## Development
 

@@ -21,6 +21,7 @@ const (
 	WebSearch  = "web_search"
 	Todo       = "todo"
 	AskUser    = "ask_user"
+	Sheet      = "sheet"
 
 	Message = "message"
 
