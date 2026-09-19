@@ -51,7 +51,7 @@ func forWeb(e routeEntry) routeEntry { e.scope = scopeWeb; return e }
 
 // route binds a handler to its method.
 func route[P, R any](m protocol.Method[P, R], fn func(ctx context.Context, c *conn, p P) (R, error)) routeEntry {
-	return routeEntry{name: m.Name, h: func(ctx context.Context, c *conn, params json.RawMessage) (any, error) {
+	return routeEntry{name: m.Name, scope: scopeOwner, h: func(ctx context.Context, c *conn, params json.RawMessage) (any, error) {
 		var p P
 		if len(params) > 0 {
 			if err := json.Unmarshal(params, &p); err != nil {
