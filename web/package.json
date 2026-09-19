@@ -4,14 +4,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "test": "vitest run"
+    "build": "tsc --noEmit && npm run build:sheet && vite build",
+    "test": "vitest run",
+    "build:sheet": "tailwindcss -i sheet.input.css -o public/sheet.css --minify"
   },
   "dependencies": {
     "solid-js": "^1.9.0"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.0.0",
     "@tailwindcss/vite": "^4.0.0",
+    "daisyui": "^5.0.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.6.0",
     "vite": "^7.0.0",
