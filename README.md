@@ -271,7 +271,27 @@ stavlos --version              # version, commit and build of this binary
 
 Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and a `stavlos.json` (plus a gitignored `stavlos.local.json`) that takes precedence over the global config once trusted. The `discord` block is global-only; other settings can be overridden by the project. Every agent follows `AGENTS.md` instructions: yours in `~/.config/stavlos/AGENTS.md`, then the repository's from its git root down to the channel directory (a directory's `CLAUDE.md` where it has no `AGENTS.md`), 32 KiB in all, and a subdirectory's with an agent's first read, search or edit there. Editing any of them asks in every mode, and an edit made outside the harness brings the trust prompt back when an agent next starts a turn. The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
 
-## Discord
+## Web UI
+
+A **Web UI** row sits under the Stavlos title at the top of the sidebar:
+`○ Web UI off`, or `● Web UI 127.0.0.1:4999` while it is on. A click on the
+off row turns it on and opens it in a browser tab, already signed in; a click
+while it is on opens its controls (open another tab, disable). `/web
+[on|off|open]` and `stavlos web [status|on|off|open] [--print]` do the same,
+and the daemon remembers whether it was on. The browser client shows every
+channel, its chat and each agent's chat live, and posts messages; permissions
+and questions are shown but still answered in the terminal or Discord.
+
+The daemon serves it on `127.0.0.1:4999` and never listens anywhere else.
+From a phone use `tailscale serve 4999` and list the name it gives under
+`"web": {"hosts": ["box.tailnet.ts.net"]}` in the global `stavlos.json`
+(`"port"` moves the listener); from a laptop, `ssh -L 4999:127.0.0.1:4999
+host`. Sign-in is a one-time code carried in the link's fragment and traded
+for an HttpOnly cookie; disabling the web UI signs every browser out. The
+client is SolidJS over a framework-free TypeScript core in `web/`, built with
+`make web` into a committed bundle, so `go install` needs no Node. See
+[the design](docs/web-ui.md).
+
 
 Use `/discord` in Stavlos for connection status and controls, or
 `/discord connect` to connect using your saved global configuration. A live
@@ -292,9 +312,9 @@ for the bot, configuration and migration from the old standalone bridge.
 
 ## Status
 
-Implemented: daemon with SQLite event log, one state machine per channel with a goroutine per agent, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend), Grok, Z.ai GLM Coding Plan and Kimi For Coding subscription adapters with browser, device-code and API-key sign-in, models.dev metadata, native search tools, and a Linux sandbox for commands and MCP servers.
+Implemented: daemon with SQLite event log, one state machine per channel with a goroutine per agent, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend), Grok, Z.ai GLM Coding Plan and Kimi For Coding subscription adapters with browser, device-code and API-key sign-in, models.dev metadata, native search tools, a loopback web UI, and a Linux sandbox for commands and MCP servers.
 
-Not yet: go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
+Not yet: sheets and answering prompts in the web UI, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
 
 ## Development
 
