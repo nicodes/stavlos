@@ -1,10 +1,15 @@
-// Package registry serves the two providers Stavlos supports, both through
-// the user's own subscription rather than platform API keys (PRD §8.4):
+// Package registry serves the providers Stavlos supports, each through the
+// user's own subscription rather than a platform API key (PRD §8.4):
 //
 //   - openai: ChatGPT Plus/Pro, via the Codex sign-in and backend
 //   - xai:    SuperGrok, via the Grok CLI sign-in and api.x.ai
+//   - zai:    the GLM Coding Plan, via a key from the Z.ai console
+//   - kimi:   Kimi For Coding, via a key from the Kimi Code console
 //
-// Credentials live in the auth store; access tokens are refreshed on demand.
+// Credentials live in the auth store; access tokens are refreshed on
+// demand. The coding plans issue no OAuth credential, so each is bound to
+// a key the user pastes once: still a subscription, still one credential
+// in the same store, with nothing to refresh.
 package registry
 
 import (
@@ -55,16 +60,40 @@ const refreshSkew = 2 * time.Minute
 // xaiBaseURL is the Grok API.
 const xaiBaseURL = "https://api.x.ai/v1"
 
+// zaiBaseURL is the GLM Coding Plan's OpenAI Chat Completions endpoint
+// (docs.z.ai/devpack). The plan's endpoint, not api.z.ai/api/paas/v4,
+// which bills pay-as-you-go credits instead of the subscription.
+const zaiBaseURL = "https://api.z.ai/api/coding/paas/v4"
+
+// kimiBaseURL is Kimi For Coding's OpenAI Chat Completions endpoint. The
+// plan's endpoint, not api.moonshot.ai/v1, which is the pay-as-you-go
+// platform. This is the global one; the China site serves the same plan at
+// api.kimi.com/coding/v1.
+const kimiBaseURL = "https://api.kimi.ai/coding/v1"
+
 // subscription is everything provider-specific about one supported
 // subscription; the rest of the registry is generic over this table.
 type subscription struct {
 	id, name string
 	priority int
-	// allow keeps the catalog models the subscription actually serves.
+	// catalog is the models.dev provider whose models this subscription
+	// serves, when it is not the provider id: a plan is often its own entry
+	// there, listing what the plan includes rather than everything the
+	// vendor sells.
+	catalog string
+	// key marks a subscription bound to a pasted key rather than an OAuth
+	// login: there is no refresh, and the credential holds a key.
+	key bool
+	// allow keeps the catalog models the subscription actually serves. A
+	// plan whose catalog entry is already its own list needs none.
 	allow func(model string) bool
 	// open builds the adapter; src reads (and refreshes) the stored login.
 	open func(r *Registry, src model.TokenSource) model.Provider
 }
+
+// catalogID is the models.dev provider to read this subscription's models
+// from.
+func (s subscription) catalogID() string { return cmp.Or(s.catalog, s.id) }
 
 var subscriptions = []subscription{
 	{
@@ -81,13 +110,26 @@ var subscriptions = []subscription{
 			return chatcompletions.NewWithToken("xai", cmp.Or(r.xaiBaseURL, xaiBaseURL), src)
 		},
 	},
+	{
+		id: "zai", name: "Z.ai Coding Plan", priority: 2, catalog: "zai-coding-plan", key: true,
+		allow: zaiAllowed,
+		open: func(r *Registry, src model.TokenSource) model.Provider {
+			return chatcompletions.NewWithToken("zai", cmp.Or(r.zaiBaseURL, zaiBaseURL), src)
+		},
+	},
+	{
+		id: "kimi", name: "Kimi For Coding", priority: 3, catalog: "kimi-code-plan-global", key: true,
+		open: func(r *Registry, src model.TokenSource) model.Provider {
+			return chatcompletions.NewWithToken("kimi", cmp.Or(r.kimiBaseURL, kimiBaseURL), src)
+		},
+	},
 }
 
-// subscriptionIDs are the providers the catalog is kept for.
-func subscriptionIDs() []string {
+// catalogIDs are the models.dev providers the catalog is kept for.
+func catalogIDs() []string {
 	ids := make([]string, len(subscriptions))
 	for i, s := range subscriptions {
-		ids[i] = s.id
+		ids[i] = s.catalogID()
 	}
 	return ids
 }
@@ -111,6 +153,8 @@ type Registry struct {
 	// endpoints override the real services (tests); read under mu.
 	codexEndpoint string
 	xaiBaseURL    string
+	zaiBaseURL    string
+	kimiBaseURL   string
 
 	mu         sync.Mutex
 	providers  map[string]model.Provider // explicit registrations
@@ -145,10 +189,10 @@ func (r *Registry) WithFlows(f map[string]oauth.Flow) *Registry { r.flows = f; r
 
 // WithEndpoints overrides service URLs (tests). Adapters built for the old
 // endpoints are dropped.
-func (r *Registry) WithEndpoints(codexEndpoint, xaiBaseURL string) *Registry {
+func (r *Registry) WithEndpoints(codexEndpoint, xaiBaseURL, zaiBaseURL, kimiBaseURL string) *Registry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.codexEndpoint, r.xaiBaseURL = codexEndpoint, xaiBaseURL
+	r.codexEndpoint, r.xaiBaseURL, r.zaiBaseURL, r.kimiBaseURL = codexEndpoint, xaiBaseURL, zaiBaseURL, kimiBaseURL
 	r.subs = map[string]model.Provider{}
 	r.opened = map[string]model.Model{}
 	return r
@@ -171,14 +215,14 @@ func (r *Registry) Store() *auth.Store { return r.store }
 // A stale catalog (an old cache, or the embedded copy) is used at once and
 // refreshed in the background, so startup never waits on the network.
 func Default(ctx context.Context, store *auth.Store) (*Registry, error) {
-	cat, stale, err := modelsdev.Load(ctx, subscriptionIDs()...)
+	cat, stale, err := modelsdev.Load(ctx, catalogIDs()...)
 	if err != nil {
 		return nil, err
 	}
 	r := New(cat).WithStore(store)
 	if stale {
 		go func() {
-			if c, err := modelsdev.Refresh(context.WithoutCancel(ctx), subscriptionIDs()...); err == nil {
+			if c, err := modelsdev.Refresh(context.WithoutCancel(ctx), catalogIDs()...); err == nil {
 				r.SetCatalog(c)
 			}
 		}()
@@ -287,7 +331,7 @@ func (r *Registry) Providers() []string {
 func (r *Registry) Flow(provider string) (oauth.Flow, error) {
 	f, ok := r.flows[provider]
 	if !ok {
-		return nil, fmt.Errorf("unknown provider %q: Stavlos supports openai (ChatGPT) and xai (Grok)", provider)
+		return nil, fmt.Errorf("unknown provider %q: Stavlos supports openai (ChatGPT), xai (Grok), zai (GLM Coding Plan) and kimi (Kimi For Coding)", provider)
 	}
 	return f, nil
 }
@@ -297,7 +341,7 @@ func (r *Registry) SaveLogin(provider string, t oauth.Tokens) error {
 	if r.store == nil {
 		return errors.New("no credential store")
 	}
-	if err := r.store.Set(provider, credentialOf(t)); err != nil {
+	if err := r.store.Set(provider, credentialFor(provider, t)); err != nil {
 		return err
 	}
 	r.Invalidate(provider)
@@ -327,18 +371,29 @@ func (r *Registry) Invalidate(provider string) {
 	}
 }
 
-func credentialOf(t oauth.Tokens) auth.Credential {
-	return auth.Credential{Type: "oauth", Access: t.Access, Refresh: t.Refresh, Expires: t.ExpiresAt.UnixMilli(), AccountID: t.AccountID, Email: t.Email}
+// credentialFor is how a completed login is stored: an OAuth pair, or the
+// key a pasted-key subscription is bound to.
+func credentialFor(provider string, t oauth.Tokens) auth.Credential {
+	if s, ok := subscriptionByID(provider); ok && s.key {
+		return auth.Credential{Type: auth.TypeAPIKey, Key: t.Access}
+	}
+	return auth.Credential{Type: auth.TypeOAuth, Access: t.Access, Refresh: t.Refresh, Expires: t.ExpiresAt.UnixMilli(), AccountID: t.AccountID, Email: t.Email}
 }
 
 // credential is a provider's usable login: an OAuth credential with a
-// refresh token.
+// refresh token, or a stored key.
 func (r *Registry) credential(provider string) (auth.Credential, bool) {
 	if r.store == nil {
 		return auth.Credential{}, false
 	}
 	c, ok := r.store.Get(provider)
-	return c, ok && c.Type == "oauth" && c.Refresh != ""
+	if !ok {
+		return auth.Credential{}, false
+	}
+	if c.Type == auth.TypeAPIKey {
+		return c, c.Key != ""
+	}
+	return c, c.Type == auth.TypeOAuth && c.Refresh != ""
 }
 
 // tokenSource returns a TokenSource that refreshes the stored access token
@@ -348,6 +403,9 @@ func (r *Registry) tokenSource(provider string) model.TokenSource {
 		c, ok := r.credential(provider)
 		if !ok {
 			return model.Token{}, fmt.Errorf("provider %q is not connected: run /provider to sign in", provider)
+		}
+		if c.Type == auth.TypeAPIKey {
+			return model.Token{Access: c.Key}, nil // a key is not a session: nothing expires, nothing rotates
 		}
 		expSoon := c.Expires == 0 || time.UnixMilli(c.Expires).Before(time.Now().Add(refreshSkew)) || oauth.Expiring(c.Access, refreshSkew)
 		if !expSoon {
@@ -376,7 +434,7 @@ func (r *Registry) tokenSource(provider string) model.TokenSource {
 		}
 		t.AccountID = cmp.Or(t.AccountID, c.AccountID)
 		t.Email = cmp.Or(t.Email, c.Email)
-		if err := r.store.Set(provider, credentialOf(t)); err != nil {
+		if err := r.store.Set(provider, credentialFor(provider, t)); err != nil {
 			return model.Token{}, err
 		}
 		return model.Token{Access: t.Access, AccountID: t.AccountID}, nil
@@ -475,7 +533,11 @@ func (r *Registry) Resolve(full string) (model.Model, model.Info, error) {
 	}
 	var info model.Info
 	if cat := r.cat.Load(); cat != nil {
-		info, _ = cat.Model(p.Name(), id)
+		key := p.Name()
+		if sub, ok := subscriptionByID(key); ok {
+			key = sub.catalogID()
+		}
+		info, _ = cat.Model(key, id)
 		if name, _, _ := model.Split(full); isSubscription(name) {
 			info = subscriptionInfo(info)
 		}
@@ -577,6 +639,11 @@ func chatGPTAllowed(id string) bool {
 	return major > 5 || (major == 5 && minor > 4)
 }
 
+// zaiAllowed keeps the GLM models of the coding plan. The plan's own
+// models.dev entry already lists only what the plan serves, so everything
+// in it counts.
+func zaiAllowed(id string) bool { return strings.HasPrefix(id, "glm") }
+
 // grokAllowed keeps Grok's chat models; the image and video generators
 // (grok-imagine-*) cannot drive an agent.
 func grokAllowed(id string) bool {
@@ -598,12 +665,15 @@ func (r *Registry) Models(provider string, all bool) []ModelEntry {
 		if _, ok := r.credential(s.id); !ok && !all {
 			continue
 		}
-		for _, id := range cat.Models(s.id) {
-			if !s.allow(id) {
+		// the catalog entry may be the plan's rather than the vendor's, so
+		// the models listed are the ones the subscription actually serves
+		key := s.catalogID()
+		for _, id := range cat.Models(key) {
+			if s.allow != nil && !s.allow(id) {
 				continue
 			}
-			info, _ := cat.Model(s.id, id)
-			out = append(out, ModelEntry{ID: s.id + "/" + id, Provider: s.id, Name: cat.ModelName(s.id, id), Info: subscriptionInfo(info)})
+			info, _ := cat.Model(key, id)
+			out = append(out, ModelEntry{ID: s.id + "/" + id, Provider: s.id, Name: cat.ModelName(key, id), Info: subscriptionInfo(info)})
 		}
 	}
 	return out

@@ -118,14 +118,25 @@ func (a *Agent) queue(ctx context.Context, kind event.InputKind, text, source st
 	return err
 }
 
-// Cancel ends the current turn; the agent survives.
+// Cancel drops this agent's reply-debt and ends the current turn; the agent survives.
 func (a *Agent) Cancel() {
-	a.c.mu.Lock()
+	_ = a.cancel()
+}
+
+func (a *Agent) cancel() error {
+	s := a.c
+	s.mu.Lock()
+	st := a.state()
+	var err error
+	if st != nil && !st.killed {
+		_, err = s.commitLocked(context.Background(), s.event(a.ID, event.AgentCancelled, nil))
+	}
 	c := a.cancelTurn
-	a.c.mu.Unlock()
+	s.mu.Unlock()
 	if c != nil {
 		c()
 	}
+	return err
 }
 
 // --- reading ---
@@ -205,7 +216,7 @@ func (a *Agent) infoLocked() protocol.AgentInfo {
 		Queued: len(st.inbox), CostUSD: st.cost, Tokens: st.tokens,
 		Context: a.ctxTokens, ContextWindow: a.ctxWindow, LastError: st.lastError,
 		Awaiting: st.awaitingIDs(), Due: st.due(), Todos: append([]event.TodoItem(nil), st.todos...),
-		PendingReplies: st.pendingReplies(), AwaitingReplies: a.c.st.awaitingReplies(st),
+		PendingReplies: st.pendingReplies(), AwaitingReplies: st.awaitingReplies(),
 		Nudges: st.nudges, NudgeLimit: nudgeLimit(a.c.cfg.Reminders),
 		MCP: a.mcpInfo(rv.preset.MCP), Jobs: a.jobInfosLocked(),
 	}
