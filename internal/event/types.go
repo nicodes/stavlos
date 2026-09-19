@@ -47,6 +47,9 @@ const (
 
 	TodoChanged Type = "todo.changed" // TodoPayload: the whole list after a change
 
+	SheetWritten Type = "sheet.written" // SheetPayload: an agent created a sheet or replaced its content
+	SheetDeleted Type = "sheet.deleted" // SheetPayload{ID}
+
 	MCPStarted Type = "mcp.started" // MCPStartedPayload
 	MCPFailed  Type = "mcp.failed"  // MCPFailedPayload
 	MCPStopped Type = "mcp.stopped" // MCPRefPayload
@@ -386,4 +389,18 @@ type CompactionPayload struct {
 	Before  int    `json:"before,omitempty"`
 	After   int    `json:"after,omitempty"`
 	Error   string `json:"error,omitempty"`
+}
+
+// --- sheets ---
+
+// SheetPayload describes a sheet, an HTML page an agent wrote for the human
+// (docs/web-ui.md). The page itself is a file in the channel's sheets
+// directory; the log carries what a client lists and a hash, so a viewer
+// knows when to load it again.
+type SheetPayload struct {
+	ID     string `json:"id"`
+	Title  string `json:"title,omitempty"`
+	Author string `json:"author,omitempty"` // the name of the agent that wrote this version
+	Hash   string `json:"hash,omitempty"`   // sha256 of the file, hex
+	Size   int    `json:"size,omitempty"`
 }

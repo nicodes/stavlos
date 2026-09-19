@@ -3,6 +3,8 @@ package web
 import (
 	"bufio"
 	"context"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -37,8 +39,8 @@ func freePort(t *testing.T) int {
 
 func start(t *testing.T, hosts ...string) (*Server, string) {
 	t.Helper()
-	s := New(Options{Port: freePort(t), Hosts: hosts, Serve: echoLines,
-		Assets: fstest.MapFS{"index.html": {Data: []byte("<!doctype html>app")}, "assets/app.js": {Data: []byte("1")}}})
+	s := New(Options{Port: freePort(t), Hosts: hosts, Serve: echoLines, Sheet: testSheet,
+		Assets: fstest.MapFS{"index.html": {Data: []byte("<!doctype html>app")}, "assets/app.js": {Data: []byte("1")}, "sheet.css": {Data: []byte(".btn{}")}}})
 	if err := s.Enable(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -176,5 +178,54 @@ func TestGuessingDropsOutstandingCodes(t *testing.T) {
 	}
 	if res := do(t, "POST", base+"/api/session", map[string]string{"Origin": base}, `{"code":"`+code+`"}`); res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("the code survived %d wrong guesses: %d", maxFailures, res.StatusCode)
+	}
+}
+
+func testSheet(channel, id string) (Sheet, error) {
+	switch {
+	case channel == "c1" && id == "s1":
+		return Sheet{Title: "A <fragment>", HTML: []byte(`<div class="card">hi</div>`)}, nil
+	case channel == "c1" && id == "s2":
+		return Sheet{Title: "doc", HTML: []byte("<!doctype html><html><HEAD lang=x><style>p{}</style></head><body>doc</body></html>")}, nil
+	}
+	return Sheet{}, errors.New("no such sheet")
+}
+
+// TestSheetsAreServedInert: a page an agent wrote needs a session to read,
+// and arrives unable to do anything but draw.
+func TestSheetsAreServedInert(t *testing.T) {
+	s, base := start(t)
+	if res := do(t, "GET", base+"/sheets/c1/s1", nil, ""); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("a sheet without a session: %d", res.StatusCode)
+	}
+	cookie := signIn(t, s, base)
+	auth := map[string]string{"Cookie": cookie.Name + "=" + cookie.Value}
+	res := do(t, "GET", base+"/sheets/c1/s1", auth, "")
+	body, _ := io.ReadAll(res.Body)
+	csp := res.Header.Get("Content-Security-Policy")
+	for _, want := range []string{"sandbox allow-scripts;", "default-src 'none'", "form-action 'none'", "frame-ancestors 'self'"} {
+		if !strings.Contains(csp, want) {
+			t.Fatalf("csp lacks %q: %s", want, csp)
+		}
+	}
+	for _, bad := range []string{"allow-same-origin", "allow-forms", "allow-popups", "allow-top-navigation", "connect-src", "'self' ", "*"} {
+		if strings.Contains(csp, bad) {
+			t.Fatalf("csp allows %q: %s", bad, csp)
+		}
+	}
+	if res.StatusCode != 200 || !strings.Contains(string(body), `href="/sheet.css"`) || !strings.Contains(string(body), `<div class="card">hi</div>`) || !strings.Contains(string(body), "A &lt;fragment&gt;") {
+		t.Fatalf("fragment: %d %s", res.StatusCode, body)
+	}
+	res = do(t, "GET", base+"/sheets/c1/s2", auth, "")
+	body, _ = io.ReadAll(res.Body)
+	if !strings.Contains(string(body), `<HEAD lang=x><meta charset="utf-8">`) || strings.Index(string(body), "sheet.css") > strings.Index(string(body), "<style>") {
+		t.Fatalf("our stylesheet goes first in a document's own head: %s", body)
+	}
+	if res := do(t, "GET", base+"/sheets/c1/nope", auth, ""); res.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown sheet: %d", res.StatusCode)
+	}
+	// the stylesheet is loadable from a sheet's opaque origin
+	if res := do(t, "GET", base+"/sheet.css", nil, ""); res.Header.Get("Cross-Origin-Resource-Policy") != "cross-origin" {
+		t.Fatalf("sheet.css CORP: %q", res.Header.Get("Cross-Origin-Resource-Policy"))
 	}
 }

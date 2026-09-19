@@ -223,6 +223,13 @@ var handlers = routes(
 		return none, s.RemoveDir(ctx, p.Dir)
 	}),
 
+	route(protocol.SheetList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.SheetListResult, error) {
+		s, err := c.d.channel(p.Channel)
+		if err != nil {
+			return protocol.SheetListResult{}, err
+		}
+		return protocol.SheetListResult{Sheets: s.Sheets()}, nil
+	}),
 	route(protocol.AgentTree, func(_ context.Context, c *conn, p protocol.AgentTreeParams) (protocol.AgentTreeResult, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {

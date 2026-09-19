@@ -10,6 +10,7 @@ export interface AppState {
   channels: ChannelInfo[];
   current: string; // channel id, "" before one is chosen
   chat: string; // CHAT or an agent id
+  sheet: string; // the sheet on screen, "" while a chat is
   agents: AgentInfo[];
   view: ChannelView;
   rev: number; // bumped whenever `view` changed in place
@@ -23,7 +24,7 @@ type Listener = (s: AppState) => void;
  * renders; nothing here imports one.
  */
 export class Client {
-  state: AppState = { phase: "loading", signInError: "", channels: [], current: "", chat: CHAT, agents: [], view: emptyChannel(), rev: 0 };
+  state: AppState = { phase: "loading", signInError: "", channels: [], current: "", chat: CHAT, sheet: "", agents: [], view: emptyChannel(), rev: 0 };
   private listeners = new Set<Listener>();
   private rpc: Rpc;
   private subscribed = "";
@@ -115,7 +116,7 @@ export class Client {
     const view = same ? this.state.view : emptyChannel();
     this.subscribed = id;
     localStorage.setItem("channel", id);
-    this.set({ current: id, chat: same ? chat : CHAT, view, agents: same ? this.state.agents : [] });
+    this.set({ current: id, chat: same ? chat : CHAT, sheet: "", view, agents: same ? this.state.agents : [] });
     try {
       await this.rpc.call("subscribe", { channel: id, from: view.seq + 1 });
       await this.refreshTree();
@@ -125,7 +126,12 @@ export class Client {
   }
 
   openChat(chat: string): void {
-    this.set({ chat });
+    this.set({ chat, sheet: "" });
+  }
+
+  /** openSheet shows one of the channel's sheets in place of the chat; "" goes back. */
+  openSheet(id: string): void {
+    this.set({ sheet: id });
   }
 
   private async refreshTree(): Promise<void> {
@@ -145,6 +151,7 @@ export class Client {
       apply(s.view, params.event);
       this.set({ rev: s.rev + 1 });
       const t: string = params.event.type;
+      if (s.sheet && !s.view.sheets.some((sh) => sh.id === s.sheet)) this.set({ sheet: "" }); // the sheet on screen was deleted
       if (t.startsWith("agent.") || t.startsWith("turn.") || t === "input.queued" || t.startsWith("ask.")) {
         clearTimeout(this.treeTimer);
         this.treeTimer = setTimeout(() => void this.refreshTree(), 150);

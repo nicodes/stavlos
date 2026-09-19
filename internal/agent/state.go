@@ -30,10 +30,12 @@ type channelState struct {
 	dirs                         []dirEntry // the working set beyond the channel directory
 	permits                      permits
 	agents                       map[string]*agentState
-	order                        []string            // spawn order
-	names                        map[string]string   // agent name → id; a name is never released
-	requests                     map[string]*request // open requests by id, the one record of who owes whom
-	reqSeq                       int                 // requests opened so far, for arrival order
+	order                        []string               // spawn order
+	names                        map[string]string      // agent name → id; a name is never released
+	requests                     map[string]*request    // open requests by id, the one record of who owes whom
+	reqSeq                       int                    // requests opened so far, for arrival order
+	sheets                       map[string]*sheetState // the pages its agents wrote for the human (sheets.go)
+	sheetSeq                     int                    // sheets created so far: ids are never reused
 }
 
 // agentState is what the log says about one agent.
@@ -74,7 +76,7 @@ type effects struct {
 }
 
 func newChannelState(model, role string) *channelState {
-	return &channelState{model: model, role: role, mode: protocol.ModeAsk, agents: map[string]*agentState{}, names: map[string]string{}, requests: map[string]*request{}}
+	return &channelState{model: model, role: role, mode: protocol.ModeAsk, agents: map[string]*agentState{}, names: map[string]string{}, requests: map[string]*request{}, sheets: map[string]*sheetState{}}
 }
 
 // apply folds one committed event into the state.
@@ -86,6 +88,8 @@ func (cs *channelState) apply(e event.Event, fx *effects) {
 	switch e.Type {
 	case event.ChannelCreated, event.ChannelUpdated, event.ChannelArchived, event.ChannelDirAdded, event.ChannelDirRemoved, event.PermitGranted:
 		cs.applyChannel(e)
+	case event.SheetWritten, event.SheetDeleted:
+		cs.applySheet(e)
 	case event.AgentSpawned:
 		cs.spawned(e)
 	case event.AgentUpdated:

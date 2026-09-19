@@ -53,6 +53,8 @@ var (
 	AgentCompact    = Method[AgentCompactParams, AgentCompactResult]{MAgentCompact}
 	Variants        = Method[VariantsParams, VariantsResult]{MVariants}
 
+	SheetList = Method[ChannelRef, SheetListResult]{MSheetList}
+
 	PromptList  = Method[PromptListParams, PromptListResult]{MPromptList}
 	PromptClaim = Method[PromptClaimParams, None]{MPromptClaim}
 	PromptReply = Method[PromptReplyParams, None]{MPromptReply}

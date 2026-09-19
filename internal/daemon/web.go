@@ -22,7 +22,7 @@ import (
 var webMethods = map[string]bool{
 	protocol.MAttach: true, protocol.MDaemonStatus: true,
 	protocol.MChannelList: true, protocol.MChannelResume: true, protocol.MChannelPost: true,
-	protocol.MAgentTree: true, protocol.MPromptList: true,
+	protocol.MAgentTree: true, protocol.MPromptList: true, protocol.MSheetList: true,
 	protocol.MSubscribe: true, protocol.MUnsubscribe: true, protocol.MReconcile: true,
 	protocol.MUsageSeries: true, protocol.MPlanUsage: true, protocol.MCacheUsage: true,
 }
@@ -38,7 +38,7 @@ func (d *Daemon) webStatePath() string { return filepath.Join(d.DataDir, "web.js
 // startWeb builds the web server from the global configuration and brings it
 // up when it was on the last time the daemon ran.
 func (d *Daemon) startWeb(ctx context.Context) {
-	o := web.Options{Serve: func(ctx context.Context, nc net.Conn) { d.handleConn(ctx, nc, true) }}
+	o := web.Options{Serve: func(ctx context.Context, nc net.Conn) { d.handleConn(ctx, nc, true) }, Sheet: d.webSheet}
 	if cfg, err := config.LoadGlobal(); err == nil && cfg.Web != nil {
 		o.Port, o.Hosts = cfg.Web.Port, cfg.Web.Hosts
 	}
@@ -89,4 +89,17 @@ func (d *Daemon) saveWebState(enabled bool) {
 
 func webRoute(m protocol.Method[protocol.None, protocol.WebStatus]) routeEntry {
 	return route(m, func(_ context.Context, c *conn, _ protocol.None) (protocol.WebStatus, error) { return c.d.Web(m.Name) })
+}
+
+// webSheet hands the web server one sheet's page.
+func (d *Daemon) webSheet(channel, id string) (web.Sheet, error) {
+	s, err := d.channel(channel)
+	if err != nil {
+		return web.Sheet{}, err
+	}
+	info, page, err := s.Sheet(id)
+	if err != nil {
+		return web.Sheet{}, err
+	}
+	return web.Sheet{Title: info.Title, HTML: page}, nil
 }

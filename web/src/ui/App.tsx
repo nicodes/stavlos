@@ -3,6 +3,7 @@ import type { Client } from "../core/client";
 import { Chat } from "./Chat";
 import { Composer } from "./Composer";
 import { Nav } from "./Nav";
+import { SheetFrame, SheetTabs } from "./Sheets";
 import { SignIn } from "./SignIn";
 import { useClient } from "./useClient";
 import { CHAT } from "../core/types";
@@ -48,7 +49,13 @@ export function App(props: { client: Client }) {
               <span class="ml-auto truncate text-dim">{channel()?.dir}</span>
             </header>
             <Show when={channel()} fallback={<div class="grid flex-1 place-items-center text-dim">No channel yet. Create one in the terminal with `stavlos new`.</div>}>
-              <Chat items={state.items} streaming={state.streaming} chatKey={`${state.app.current}/${state.app.chat}`} />
+              <SheetTabs sheets={state.sheets} open={state.app.sheet} chatLabel={state.app.chat === CHAT ? "chat" : `@${state.names[state.app.chat] ?? "agent"}`} onOpen={(id) => props.client.openSheet(id)} />
+              <Show
+                when={state.sheets.find((s) => s.id === state.app.sheet)}
+                fallback={<Chat items={state.items} streaming={state.streaming} chatKey={`${state.app.current}/${state.app.chat}`} />}
+              >
+                {(sheet) => <SheetFrame channel={state.app.current} sheet={sheet()} />}
+              </Show>
               <Composer client={props.client} placeholder={state.app.chat === CHAT ? "Message the channel (@name to address an agent)" : `Message @${state.names[state.app.chat] ?? "agent"}`} />
             </Show>
           </main>

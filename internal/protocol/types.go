@@ -7,6 +7,7 @@ package protocol
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
 )
@@ -62,6 +63,8 @@ const (
 	MProviderLoginKey   = "provider.login.key"   // hand a pasted API key to a login waiting for one
 	MProviderDisconnect = "provider.disconnect"
 	MModelList          = "model.list"
+
+	MSheetList = "sheet.list" // the channel's sheets, oldest first
 
 	MSubscribe   = "subscribe"
 	MUnsubscribe = "unsubscribe"
@@ -260,6 +263,21 @@ type WebStatus struct {
 	URL     string `json:"url"`
 	OpenURL string `json:"open_url,omitempty"`
 	Error   string `json:"error,omitempty"`
+}
+
+// SheetInfo is one sheet of a channel: an HTML page an agent wrote, shown by
+// the web UI in a sandboxed frame.
+type SheetInfo struct {
+	ID      string    `json:"id"`
+	Title   string    `json:"title"`
+	Author  string    `json:"author"` // the agent that wrote the current version
+	Hash    string    `json:"hash"`
+	Size    int       `json:"size"`
+	Updated time.Time `json:"updated"`
+}
+
+type SheetListResult struct {
+	Sheets []SheetInfo `json:"sheets"`
 }
 
 type ChannelInfo struct {

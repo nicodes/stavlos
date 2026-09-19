@@ -74,6 +74,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		finish(res.Output, true, true, false)
 		return
 	}
+	if !res.IsError && c.Name == toolname.ApplyPatch {
+		a.sheetsPatched(d.sub)
+	}
 	if !res.IsError {
 		if note := a.instructionsFor(d.sub, cfg); note != "" {
 			res.Output += "\n\n" + note
@@ -93,7 +96,9 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	if sub.Kind == policy.KindCommand && verb == policy.Allow && !shellcmd.Simple(arg) {
 		verb = policy.Ask
 	}
-	dirs := a.c.dirPaths()
+	// The channel's sheets are part of the working set for the file tools
+	// (never for commands: the sandbox builds its own list).
+	dirs := append(a.c.dirPaths(), a.c.SheetDir())
 	// An edit to the files that steer the harness itself asks whatever
 	// policy says and whatever the mode.
 	control := controlFile(c.Name, sub, a.c.Dir(), dirs)
@@ -261,7 +266,7 @@ func (a *Agent) askOpened(ctx context.Context, info protocol.PromptInfo, callID 
 
 // toolEnv is what a tool gets from this agent for one call.
 func (a *Agent) toolEnv(turn int, c model.Block, rv roleView, cfg *config.Effective) *tools.Env {
-	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a},
+	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
 		MaxOutput: cfg.Compaction.MaxToolOutput, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Sandbox: a.c.sandboxSpec(cfg),
 		Partial: func(out string) {
