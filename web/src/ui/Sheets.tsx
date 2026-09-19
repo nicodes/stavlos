@@ -3,7 +3,7 @@ import type { SheetInfo } from "../core/types";
 
 /** The channel's tabs: its chat, then one per sheet. Hidden while there are no sheets. */
 export function SheetTabs(props: { sheets: SheetInfo[]; open: string; chatLabel: string; onOpen: (id: string) => void }) {
-  const tab = (active: boolean) => ({ "border-accent text-text": active, "border-transparent text-dim hover:text-text": !active });
+  const tab = (active: boolean) => ({ "border-accent text-text": active, "border-transparent text-text/70 hover:text-text": !active });
   return (
     <Show when={props.sheets.length > 0}>
       <div class="flex gap-1 overflow-x-auto border-b border-line px-3" role="tablist">
@@ -13,7 +13,7 @@ export function SheetTabs(props: { sheets: SheetInfo[]; open: string; chatLabel:
         <For each={props.sheets}>
           {(s) => (
             <button role="tab" class="max-w-56 shrink-0 truncate border-b-2 px-3 py-2" classList={tab(props.open === s.id)} onClick={() => props.onOpen(s.id)}>
-              ▤ {s.title}
+              <span class="text-accent">▤</span> {s.title}
             </button>
           )}
         </For>
