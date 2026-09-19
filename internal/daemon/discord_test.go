@@ -20,7 +20,7 @@ func TestAttachIdentityConcurrentWithPromptDelivery(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for range 100 {
-			if _, err := handlers[protocol.MAttach](context.Background(), c, p); err != nil {
+			if _, err := handlers[protocol.MAttach].h(context.Background(), c, p); err != nil {
 				t.Error(err)
 			}
 		}

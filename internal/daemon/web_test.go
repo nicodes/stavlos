@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 
@@ -76,13 +78,19 @@ func TestWebUIIsScopedAndRemembered(t *testing.T) {
 			}
 		}
 	}
-	if r := call(1, protocol.MAttach, protocol.AttachParams{Client: "web", Tier: protocol.TierInteractive}); r.Error != nil {
+	if r := call(1, protocol.MAttach, protocol.AttachParams{Client: "discord", Tier: protocol.TierInteractive}); r.Error != nil {
 		t.Fatalf("attach: %+v", r.Error)
+	}
+	// it asked to be "discord"; a browser is "web", whatever it says
+	for _, cl := range h.d.clientList() {
+		if name, _ := cl.identity(); cl.id != "" && name == "discord" {
+			t.Fatalf("a browser connection attached as %q", name)
+		}
 	}
 	if r := call(2, protocol.MChannelList, protocol.ChannelListParams{}); r.Error != nil {
 		t.Fatalf("channel.list: %+v", r.Error)
 	}
-	for i, m := range []string{protocol.MChannelSetMode, protocol.MPromptReply, protocol.MTrustReply, protocol.MDaemonShutdown, protocol.MWebOpen, protocol.MChannelAddDir, protocol.MProviderLoginStart} {
+	for i, m := range []string{protocol.MChannelSetMode, protocol.MPromptReply, protocol.MTrustReply, protocol.MDaemonShutdown, protocol.MWebOpen, protocol.MChannelAddDir, protocol.MProviderLoginStart, "no.such.method"} {
 		if r := call(10+i, m, struct{}{}); r.Error == nil || r.Error.Code != protocol.ErrForbidden {
 			t.Fatalf("%s from a browser: %+v", m, r.Error)
 		}
@@ -100,4 +108,22 @@ func TestWebUIIsScopedAndRemembered(t *testing.T) {
 		t.Fatal("still listening after disable")
 	}
 	h.close()
+}
+
+// TestWhatABrowserMayCallIsDeclaredOnTheRoute: a method's scope is part of
+// its route. This pins the set, so opening a method to the browser is a
+// change somebody made on purpose, in the one place it can be made.
+func TestWhatABrowserMayCallIsDeclaredOnTheRoute(t *testing.T) {
+	var open []string
+	for name, e := range handlers {
+		if e.scope == scopeWeb {
+			open = append(open, name)
+		}
+	}
+	sort.Strings(open)
+	want := []string{"agent.tree", "attach", "channel.list", "channel.post", "channel.resume", "daemon.status", "plan.usage",
+		"prompt.list", "reconcile", "sheet.list", "subscribe", "unsubscribe", "usage.cache", "usage.series"}
+	if !slices.Equal(open, want) {
+		t.Fatalf("methods open to the web UI:\n got %v\nwant %v", open, want)
+	}
 }

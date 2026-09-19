@@ -23,15 +23,35 @@ import (
 
 type handler func(ctx context.Context, c *conn, params json.RawMessage) (any, error)
 
-// routeEntry is one method's handler.
+// scope is who may call a method. It is declared where the method is routed,
+// so that a method's reach is read beside what it does: there used to be a
+// separate list of what a browser may call, kept in step by hand.
+type scope int
+
+const (
+	// scopeOwner is the default: a client on the daemon's own socket, which
+	// is the user's. Everything that changes what agents may do (modes,
+	// directories, trust, permission answers, providers, configuration,
+	// shutdown) is the owner's alone.
+	scopeOwner scope = iota
+	// scopeWeb may also be called by a browser signed in to the web UI: read
+	// the channels and their streams, and post to a chat.
+	scopeWeb
+)
+
+// routeEntry is one method's handler and who may call it.
 type routeEntry struct {
-	name string
-	h    handler
+	name  string
+	h     handler
+	scope scope
 }
+
+// forWeb opens a method to the web UI.
+func forWeb(e routeEntry) routeEntry { e.scope = scopeWeb; return e }
 
 // route binds a handler to its method.
 func route[P, R any](m protocol.Method[P, R], fn func(ctx context.Context, c *conn, p P) (R, error)) routeEntry {
-	return routeEntry{m.Name, func(ctx context.Context, c *conn, params json.RawMessage) (any, error) {
+	return routeEntry{name: m.Name, h: func(ctx context.Context, c *conn, params json.RawMessage) (any, error) {
 		var p P
 		if len(params) > 0 {
 			if err := json.Unmarshal(params, &p); err != nil {
@@ -108,9 +128,9 @@ var handlers = routes(
 		}
 		return c.d.Discord.Disconnect()
 	}),
-	route(protocol.DaemonStatus, func(_ context.Context, c *conn, _ protocol.None) (protocol.DaemonStatusResult, error) {
+	forWeb(route(protocol.DaemonStatus, func(_ context.Context, c *conn, _ protocol.None) (protocol.DaemonStatusResult, error) {
 		return c.d.Status(), nil
-	}),
+	})),
 	route(protocol.DaemonShutdown, func(_ context.Context, c *conn, _ protocol.None) (protocol.None, error) {
 		name, _ := c.cl.identity()
 		log.Printf("shutdown requested by client %s (%s)", name, c.cl.id)
@@ -119,7 +139,7 @@ var handlers = routes(
 		}
 		return none, nil
 	}),
-	route(protocol.Attach, func(_ context.Context, c *conn, p protocol.AttachParams) (protocol.AttachResult, error) {
+	forWeb(route(protocol.Attach, func(_ context.Context, c *conn, p protocol.AttachParams) (protocol.AttachResult, error) {
 		c.cl.mu.Lock()
 		defer c.cl.mu.Unlock()
 		if p.Tier == protocol.TierFallback {
@@ -128,16 +148,22 @@ var handlers = routes(
 		if p.Client != "" {
 			c.cl.name = p.Client
 		}
+		if c.web {
+			// Who a browser connection is, is the listener's to say: it could
+			// attach as "discord" and have the bridge take its posts for its
+			// own and drop them.
+			c.cl.name = "web"
+		}
 		return protocol.AttachResult{ClientID: c.cl.id, Version: protocol.Version}, nil
-	}),
+	})),
 
-	route(protocol.ChannelList, func(ctx context.Context, c *conn, p protocol.ChannelListParams) (protocol.ChannelListResult, error) {
+	forWeb(route(protocol.ChannelList, func(ctx context.Context, c *conn, p protocol.ChannelListParams) (protocol.ChannelListResult, error) {
 		list, err := c.d.ChannelList(ctx, p.Dir, p.IncludeArchived)
 		if err != nil {
 			return protocol.ChannelListResult{}, internal(err)
 		}
 		return protocol.ChannelListResult{Channels: list}, nil
-	}),
+	})),
 	route(protocol.ChannelCreate, func(ctx context.Context, c *conn, p protocol.ChannelCreateParams) (protocol.ChannelInfo, error) {
 		s, err := c.d.CreateChannel(ctx, p.Dir, p.Model, p.RootAgent, p.Name)
 		if err != nil {
@@ -145,14 +171,14 @@ var handlers = routes(
 		}
 		return s.Info(), nil
 	}),
-	route(protocol.ChannelResume, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.ChannelInfo, error) {
+	forWeb(route(protocol.ChannelResume, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.ChannelInfo, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return protocol.ChannelInfo{}, err
 		}
 		c.d.maybeTrustPrompt(s)
 		return s.Info(), nil
-	}),
+	})),
 	route(protocol.ChannelArchive, func(ctx context.Context, c *conn, p protocol.ChannelRef) (protocol.None, error) {
 		return none, c.d.ArchiveChannel(ctx, p.Channel)
 	}),
@@ -170,7 +196,7 @@ var handlers = routes(
 		c.d.rememberModel(s, p.Model)
 		return none, nil
 	}),
-	route(protocol.ChannelPost, func(ctx context.Context, c *conn, p protocol.ChannelPostParams) (protocol.ChannelPostResult, error) {
+	forWeb(route(protocol.ChannelPost, func(ctx context.Context, c *conn, p protocol.ChannelPostParams) (protocol.ChannelPostResult, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return protocol.ChannelPostResult{}, err
@@ -178,7 +204,7 @@ var handlers = routes(
 		name, _ := c.cl.identity()
 		to, err := s.Post(ctx, p.Text, "human:"+name)
 		return protocol.ChannelPostResult{To: to}, err
-	}),
+	})),
 	route(protocol.ChannelSetRecap, func(ctx context.Context, c *conn, p protocol.ChannelSetRecapParams) (protocol.None, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
@@ -227,20 +253,20 @@ var handlers = routes(
 		return none, s.RemoveDir(ctx, p.Dir)
 	}),
 
-	route(protocol.SheetList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.SheetListResult, error) {
+	forWeb(route(protocol.SheetList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.SheetListResult, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return protocol.SheetListResult{}, err
 		}
 		return protocol.SheetListResult{Sheets: s.Sheets()}, nil
-	}),
-	route(protocol.AgentTree, func(_ context.Context, c *conn, p protocol.AgentTreeParams) (protocol.AgentTreeResult, error) {
+	})),
+	forWeb(route(protocol.AgentTree, func(_ context.Context, c *conn, p protocol.AgentTreeParams) (protocol.AgentTreeResult, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return protocol.AgentTreeResult{}, err
 		}
 		return protocol.AgentTreeResult{Agents: s.Tree()}, nil
-	}),
+	})),
 	route(protocol.AgentSend, func(ctx context.Context, c *conn, p protocol.AgentSendParams) (protocol.None, error) {
 		s, _, err := c.d.agentChannel(p.Agent)
 		if err != nil {
@@ -309,9 +335,9 @@ var handlers = routes(
 		return protocol.VariantsResult{Variants: c.d.Registry.Variants(p.Model)}, nil
 	}),
 
-	route(protocol.PromptList, func(_ context.Context, c *conn, p protocol.PromptListParams) (protocol.PromptListResult, error) {
+	forWeb(route(protocol.PromptList, func(_ context.Context, c *conn, p protocol.PromptListParams) (protocol.PromptListResult, error) {
 		return protocol.PromptListResult{Prompts: c.d.esc.Pending(p.Channel)}, nil
-	}),
+	})),
 	route(protocol.PromptClaim, func(_ context.Context, c *conn, p protocol.PromptClaimParams) (protocol.None, error) {
 		if err := c.d.esc.Claim(p.ID, c.cl.id); err != nil {
 			return none, promptErr(err)
@@ -363,7 +389,7 @@ var handlers = routes(
 		return protocol.ModelListResult{Models: out}, nil
 	}),
 
-	route(protocol.Subscribe, func(ctx context.Context, c *conn, p protocol.SubscribeParams) (protocol.SubscribeResult, error) {
+	forWeb(route(protocol.Subscribe, func(ctx context.Context, c *conn, p protocol.SubscribeParams) (protocol.SubscribeResult, error) {
 		if _, err := c.d.channel(p.Channel); err != nil {
 			return protocol.SubscribeResult{}, err
 		}
@@ -372,14 +398,14 @@ var handlers = routes(
 			return protocol.SubscribeResult{}, internal(err)
 		}
 		return protocol.SubscribeResult{Seq: last}, nil
-	}),
-	route(protocol.Unsubscribe, func(_ context.Context, c *conn, p protocol.SubscribeParams) (protocol.None, error) {
+	})),
+	forWeb(route(protocol.Unsubscribe, func(_ context.Context, c *conn, p protocol.SubscribeParams) (protocol.None, error) {
 		c.cl.mu.Lock()
 		delete(c.cl.subs, p.Channel)
 		c.cl.mu.Unlock()
 		return none, nil
-	}),
-	route(protocol.Reconcile, func(ctx context.Context, c *conn, p protocol.ChannelRef) (protocol.ReconcileResult, error) {
+	})),
+	forWeb(route(protocol.Reconcile, func(ctx context.Context, c *conn, p protocol.ChannelRef) (protocol.ReconcileResult, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
 			return protocol.ReconcileResult{}, err
@@ -389,7 +415,7 @@ var handlers = routes(
 		info.Seq = seq
 		// Every channel's prompts: the permission and questions tabs span channels.
 		return protocol.ReconcileResult{Channel: info, Agents: s.Tree(), Prompts: c.d.esc.Pending(""), Seq: seq}, nil
-	}),
+	})),
 	route(protocol.Presets, func(_ context.Context, c *conn, p protocol.PresetsParams) (protocol.PresetsResult, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
@@ -397,7 +423,7 @@ var handlers = routes(
 		}
 		return protocol.PresetsResult{Presets: s.Presets()}, nil
 	}),
-	route(protocol.UsageSeries, func(ctx context.Context, c *conn, p protocol.UsageSeriesParams) (protocol.UsageSeriesResult, error) {
+	forWeb(route(protocol.UsageSeries, func(ctx context.Context, c *conn, p protocol.UsageSeriesParams) (protocol.UsageSeriesResult, error) {
 		switch {
 		case p.Buckets < 1 || p.Buckets > 1000:
 			return protocol.UsageSeriesResult{}, fmt.Errorf("buckets must be 1–1000, not %d", p.Buckets)
@@ -411,10 +437,10 @@ var handlers = routes(
 			return protocol.UsageSeriesResult{}, internal(err)
 		}
 		return protocol.UsageSeriesResult{From: s.From, To: s.To, Tokens: s.Tokens, Cost: s.Cost}, nil
-	}),
-	route(protocol.PlanUsage, func(_ context.Context, c *conn, _ protocol.None) (protocol.PlanUsageResult, error) {
+	})),
+	forWeb(route(protocol.PlanUsage, func(_ context.Context, c *conn, _ protocol.None) (protocol.PlanUsageResult, error) {
 		return c.d.planUsage(), nil
-	}),
+	})),
 	route(protocol.PlanSeries, func(ctx context.Context, c *conn, p protocol.PlanSeriesParams) (protocol.PlanSeriesResult, error) {
 		if p.Buckets < 1 || p.Buckets > 1000 {
 			return protocol.PlanSeriesResult{}, fmt.Errorf("buckets must be 1–1000, not %d", p.Buckets)
@@ -435,7 +461,7 @@ var handlers = routes(
 		}
 		return protocol.PlanSeriesResult{From: from.UTC(), To: to.UTC(), Percent: c.d.planUsageSeries(p.Provider, from, to, p.Buckets)}, nil
 	}),
-	route(protocol.CacheUsage, func(ctx context.Context, c *conn, p protocol.CacheUsageParams) (protocol.CacheUsageResult, error) {
+	forWeb(route(protocol.CacheUsage, func(ctx context.Context, c *conn, p protocol.CacheUsageParams) (protocol.CacheUsageResult, error) {
 		minutes := cmp.Or(p.Minutes, 60)
 		if minutes < 1 || minutes > 7*24*60 {
 			return protocol.CacheUsageResult{}, fmt.Errorf("minutes must be 1–%d, not %d", 7*24*60, minutes)
@@ -460,7 +486,7 @@ var handlers = routes(
 			return a.Provider < b.Provider
 		})
 		return res, nil
-	}),
+	})),
 	route(protocol.CommandList, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.CommandListResult, error) {
 		return c.d.listCommands(p.Channel)
 	}),
@@ -481,13 +507,13 @@ var handlers = routes(
 
 // routes builds the method table; a method routed twice is a programming
 // error.
-func routes(entries ...routeEntry) map[string]handler {
-	out := map[string]handler{}
+func routes(entries ...routeEntry) map[string]routeEntry {
+	out := map[string]routeEntry{}
 	for _, e := range entries {
 		if _, dup := out[e.name]; dup {
 			panic("method routed twice: " + e.name)
 		}
-		out[e.name] = e.h
+		out[e.name] = e
 	}
 	return out
 }

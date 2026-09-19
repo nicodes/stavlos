@@ -270,14 +270,16 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 	if req.V != protocol.Version {
 		return nil, &protocol.Error{Code: protocol.ErrVersion, Message: fmt.Sprintf("protocol version %d not served; this daemon serves %d", req.V, protocol.Version)}
 	}
-	if c.web && !webMethods[req.Method] {
+	e, ok := handlers[req.Method]
+	if c.web && (!ok || e.scope != scopeWeb) {
+		// (an unknown method is forbidden too: a browser learns nothing about
+		// what exists beyond its reach)
 		return nil, &protocol.Error{Code: protocol.ErrForbidden, Message: req.Method + " is not available to the web UI"}
 	}
-	h, ok := handlers[req.Method]
 	if !ok {
 		return nil, &protocol.Error{Code: protocol.ErrMethodNotFound, Message: "unknown method " + req.Method}
 	}
-	res, err := h(ctx, c, req.Params)
+	res, err := e.h(ctx, c, req.Params)
 	if err != nil {
 		return nil, toProtocolError(err)
 	}
