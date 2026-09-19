@@ -226,6 +226,26 @@ if it cannot be made to fail, the step is dropped.
 
 Sizes are relative: S is an afternoon, M a day or two, L most of a week.
 
+### Status of phases 0 and 1 (pull request `refactor/phase-0-1`)
+
+| Step | State | Notes |
+|---|---|---|
+| 0.1 golden behaviour | **partly** | Done: six whole TUI frames (`internal/tui/testdata/golden`, drawn at a pinned clock) and the model-facing prompt, tools and harness note for a main agent and a child (`internal/agent/testdata/golden`). To do: Discord payloads, CLI output, the web reducer against a real log. |
+| 0.2 test isolation | **done** | `paths` gives any test binary directories under the temp directory; `testutil.Isolate`; the agent and daemon harnesses use it. Injecting directories into `Channel` and the navigation store moves to phase 2. |
+| 0.3 no sleeping tests | to do | Needs the dispatch hook of phase 2.2; the test doubles move with it. |
+| 0.4 the gate | **done** | tidy, `deadcode -test`, `govulncheck`, the complexity ratchet with a baseline of 20 functions, fuzzing, `-race ./...`, and CI. |
+| 0.5 fuzz targets | **done** | Eight targets. Their first seconds found three bugs, fixed here: `web_fetch`'s address guard passed a zoned loopback (`::1%lo`) as public; `textsafe` let non-UTF-8 bytes through; the patch parser accepted a section naming no file. Also a prefix that did not cover its own command. |
+| 0.6 migrations | **done** | Forward migrations with a backup; a log this build cannot read is left untouched and reported; `STAVLOS_RESET_LOG=1` is the only thing that deletes one. |
+| 1.1 mode switch | **done** | A prompt says why it asks (`sticky`, `egress`); the switch answers only what the mode would. Test fails without the fix. |
+| 1.2 permits and control files | **done** | Test fails without the fix. |
+| 1.3 peer identity | **done** | Fails closed; the daemon is a subreaper with a reaper that never takes an exit status from a waiter. |
+| 1.4 lost writes | **done** | A lost `turn.ended` no longer wedges the agent; a tool never runs without its start on the record. |
+| 1.5 recap | **done** | Folded from the log. |
+| 1.6 sheet limits | **done** | Hold for every tool; every read bounded. |
+| 1.7 instructions | **half** | Instructions that appeared after trust are withheld and raise the prompt. The sandbox's half (the read-only guard skips paths that do not exist yet) needs placeholder files in the repository, a visible change: it moves to 3.7. |
+| 1.8 Discord fences | **done** | |
+| 1.9 the log is never deleted | **done** | With 0.6. |
+
 ### Phase 0: lock the behaviour, arm the gate (M)
 
 Nothing else is safe without this, and it is the phase the last plan never
