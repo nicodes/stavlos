@@ -460,25 +460,31 @@ type VariantsResult struct {
 
 // PromptInfo is a pending permission/question/trust prompt.
 type PromptInfo struct {
-	ID             string          `json:"id"`
-	Channel        string          `json:"channel"`
-	Agent          string          `json:"agent,omitempty"`
-	From           string          `json:"from,omitempty"`         // the asking agent\'s name, for a client that does not hold its channel\'s tree
-	Role           string          `json:"role,omitempty"`         // the asking agent's role, including prompts from other channels
-	ChannelName    string          `json:"channel_name,omitempty"` // the channel\'s name, likewise
-	Kind           PromptKind      `json:"kind"`                   // permission | question | trust
-	Tool           string          `json:"tool,omitempty"`
-	Input          json.RawMessage `json:"input,omitempty"`
-	Question       string          `json:"question,omitempty"`
-	Options        []string        `json:"options,omitempty"`
-	ClaimedBy      string          `json:"claimed_by,omitempty"`
-	Escalated      bool            `json:"escalated"` // visible to fallback tier; questions are visible immediately
-	Created        string          `json:"created"`
-	Dir            string          `json:"dir,omitempty"`             // a boundary prompt: the call reaches outside the channel's directories; "allow_always" adds this one
-	Prefix         string          `json:"prefix,omitempty"`          // what "allow_prefix" would remember for this call (a command prefix, a host); "" when the call has none
-	Questions      []Question      `json:"questions,omitempty"`       // one question per prompt; legacy servers may send batches
-	QuestionNumber int             `json:"question_number,omitempty"` // one-based position in the tool call's sequence
-	QuestionTotal  int             `json:"question_total,omitempty"`
+	ID          string          `json:"id"`
+	Channel     string          `json:"channel"`
+	Agent       string          `json:"agent,omitempty"`
+	From        string          `json:"from,omitempty"`         // the asking agent\'s name, for a client that does not hold its channel\'s tree
+	Role        string          `json:"role,omitempty"`         // the asking agent's role, including prompts from other channels
+	ChannelName string          `json:"channel_name,omitempty"` // the channel\'s name, likewise
+	Kind        PromptKind      `json:"kind"`                   // permission | question | trust
+	Tool        string          `json:"tool,omitempty"`
+	Input       json.RawMessage `json:"input,omitempty"`
+	Question    string          `json:"question,omitempty"`
+	Options     []string        `json:"options,omitempty"`
+	ClaimedBy   string          `json:"claimed_by,omitempty"`
+	Escalated   bool            `json:"escalated"` // visible to fallback tier; questions are visible immediately
+	Created     string          `json:"created"`
+	Dir         string          `json:"dir,omitempty"` // a boundary prompt: the call reaches outside the channel's directories; "allow_always" adds this one
+	// Why the call asks, beyond policy, so that whatever answers waiting
+	// prompts in bulk (a mode switch) decides as the agent runtime would:
+	// Sticky is an ask no mode answers (an edit to a file that steers the
+	// harness); Egress sends data off the machine, which auto leaves asking.
+	Sticky         bool       `json:"sticky,omitempty"`
+	Egress         bool       `json:"egress,omitempty"`
+	Prefix         string     `json:"prefix,omitempty"`          // what "allow_prefix" would remember for this call (a command prefix, a host); "" when the call has none
+	Questions      []Question `json:"questions,omitempty"`       // one question per prompt; legacy servers may send batches
+	QuestionNumber int        `json:"question_number,omitempty"` // one-based position in the tool call's sequence
+	QuestionTotal  int        `json:"question_total,omitempty"`
 }
 
 // QuestionPosition is the display position of a question. Older multi-question
