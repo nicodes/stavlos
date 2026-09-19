@@ -459,6 +459,22 @@ func loadGlobalFrom(gdir string) (*Effective, error) {
 	return e, nil
 }
 
+// applyModels takes a layer's models list, which replaces the earlier
+// layer's: it is an order of preference, not a set to add to.
+func (e *Effective) applyModels(ids []string) error {
+	if ids == nil {
+		return nil
+	}
+	e.Models = nil
+	for _, id := range ids {
+		if _, _, err := model.Split(id); err != nil {
+			return fmt.Errorf("models: %w", err)
+		}
+		e.Models = append(e.Models, id)
+	}
+	return nil
+}
+
 // applyGlobalOnly takes the blocks only the global file may carry: the
 // daemon's own services, which a project has no say in.
 func (e *Effective) applyGlobalOnly(f File, layer string) error {
@@ -495,14 +511,8 @@ func (e *Effective) applyFile(f File, layer string) error {
 			e.Plugins = append(e.Plugins, pl)
 		}
 	}
-	if f.Models != nil { // a later layer's list replaces the earlier one: it is an order, not a set
-		e.Models = nil
-		for _, id := range f.Models {
-			if _, _, err := model.Split(id); err != nil {
-				return fmt.Errorf("models: %w", err)
-			}
-			e.Models = append(e.Models, id)
-		}
+	if err := e.applyModels(f.Models); err != nil {
+		return err
 	}
 	if f.Model != "" {
 		e.Model = f.Model
