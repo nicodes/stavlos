@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -248,5 +249,68 @@ func TestChatGPTBrowserFlow(t *testing.T) {
 		t.Fatalf("start after close: %v", err)
 	} else {
 		(&Pending{}).Close() // nil browser: no-op
+	}
+}
+
+// TestZAIKeyLogin: the GLM Coding Plan's login has nothing to poll — Wait
+// blocks until a client delivers the pasted key, and the key becomes the
+// credential.
+func TestZAIKeyLogin(t *testing.T) {
+	z := ZAI()
+	if ms := z.Methods(); len(ms) != 1 || ms[0].ID != MethodAPIKey {
+		t.Fatalf("methods: %+v", ms)
+	}
+	if _, err := z.Start(context.Background(), MethodDevice); err == nil {
+		t.Fatal("z.ai has no device flow")
+	}
+	p, err := z.Start(context.Background(), "")
+	if err != nil || p.Method != MethodAPIKey || p.URL == "" {
+		t.Fatalf("start: %+v %v", p, err)
+	}
+	if err := p.Deliver("  "); err == nil {
+		t.Fatal("an empty key is not a login")
+	}
+	if err := p.Deliver("  zk-1  "); err != nil {
+		t.Fatal(err)
+	}
+	tok, err := z.Wait(context.Background(), p)
+	if err != nil || tok.Access != "zk-1" || tok.Refresh != "" {
+		t.Fatalf("wait: %+v %v", tok, err)
+	}
+	if _, err := z.Refresh(context.Background(), ""); err == nil {
+		t.Fatal("a key is not a session: refreshing it should say so")
+	}
+}
+
+// TestZAIWaitCancels: a login nobody completes ends with its context.
+func TestZAIWaitCancels(t *testing.T) {
+	z := ZAI()
+	p, err := z.Start(context.Background(), MethodAPIKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := z.Wait(ctx, p); !errors.Is(err, context.Canceled) {
+		t.Fatalf("wait: %v", err)
+	}
+}
+
+// TestKeyFlowsAreDistinct: each pasted-key plan points at its own console
+// and identifies itself, so a sign-in cannot quietly store a key for the
+// wrong provider.
+func TestKeyFlowsAreDistinct(t *testing.T) {
+	z, k := ZAI(), Kimi()
+	if z.Provider() != "zai" || k.Provider() != "kimi" || z.console == k.console {
+		t.Fatalf("%s/%s %s %s", z.Provider(), k.Provider(), z.console, k.console)
+	}
+	for _, f := range []*KeyFlow{z, k} {
+		p, err := f.Start(context.Background(), "")
+		if err != nil || p.Provider != f.Provider() || p.Method != MethodAPIKey || p.URL != f.console {
+			t.Fatalf("%s start: %+v %v", f.Provider(), p, err)
+		}
+		if ms := f.Methods(); len(ms) != 1 || !strings.Contains(ms[0].Label, f.Label()) {
+			t.Fatalf("%s methods: %+v", f.Provider(), ms)
+		}
 	}
 }

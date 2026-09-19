@@ -107,6 +107,18 @@ func (c *Catalog) Models(provider string) []string {
 	return out
 }
 
+// covers reports whether the catalog holds every provider asked for. A
+// cache trimmed by an earlier build knows nothing of a provider added
+// since, so it cannot serve this one however recently it was written.
+func (c *Catalog) covers(keep ...string) bool {
+	for _, k := range keep {
+		if _, ok := c.providers[k]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // ModelName returns the display name of a model, or its id.
 func (c *Catalog) ModelName(provider, id string) string {
 	if p, ok := c.providers[provider]; ok {

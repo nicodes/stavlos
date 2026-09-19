@@ -79,3 +79,54 @@ func TestLoadWithoutCache(t *testing.T) {
 		t.Fatal("refresh against a failing server should fail")
 	}
 }
+
+// TestLoadRefetchesForAProviderTheCacheLacks: the cache holds only what the
+// build that wrote it kept, so adding a provider must not be answered from
+// a cache that predates it — otherwise the new subscription offers no
+// models until the cache expires, with nothing to say why.
+func TestLoadRefetchesForAProviderTheCacheLacks(t *testing.T) {
+	const both = `{"openai":{"id":"openai","models":{"gpt-x":{"id":"gpt-x","limit":{"context":1000}}}},
+	               "zai-coding-plan":{"id":"zai-coding-plan","models":{"glm-x":{"id":"glm-x","limit":{"context":2000}}}}}`
+	hits := 0
+	withCache(t, func(w http.ResponseWriter, _ *http.Request) { hits++; _, _ = w.Write([]byte(both)) })
+	path := CachePath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(tiny), 0o644); err != nil { // an older build's cache: openai only
+		t.Fatal(err)
+	}
+	c, stale, err := Load(context.Background(), "openai", "zai-coding-plan")
+	if err != nil || stale || hits != 1 {
+		t.Fatalf("a cache missing a provider is refetched: stale %v err %v hits %d", stale, err, hits)
+	}
+	if len(c.Models("zai-coding-plan")) != 1 {
+		t.Fatalf("the new provider's models: %v", c.Models("zai-coding-plan"))
+	}
+	// and the refetched copy is cached, so the next start is not another fetch
+	c, stale, err = Load(context.Background(), "openai", "zai-coding-plan")
+	if err != nil || stale || hits != 1 || len(c.Models("zai-coding-plan")) != 1 {
+		t.Fatalf("second load: stale %v err %v hits %d", stale, err, hits)
+	}
+}
+
+// TestLoadKeepsAnIncompleteCacheWhenOffline: an incomplete cache still
+// beats the embedded copy when the fetch it triggers fails.
+func TestLoadKeepsAnIncompleteCacheWhenOffline(t *testing.T) {
+	hits := 0
+	withCache(t, func(w http.ResponseWriter, r *http.Request) { hits++; unreachable(w, r) })
+	path := CachePath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(tiny), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, stale, err := Load(context.Background(), "openai", "zai-coding-plan")
+	if err != nil || !stale || hits != 1 {
+		t.Fatalf("offline: stale %v err %v hits %d", stale, err, hits)
+	}
+	if len(c.Models("openai")) != 1 || len(c.Models("zai-coding-plan")) != 0 {
+		t.Fatal("the cache is served as it is, missing provider and all")
+	}
+}

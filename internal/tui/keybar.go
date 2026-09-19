@@ -32,6 +32,9 @@ func listHints(sel ...dialog.Hint) []dialog.Hint {
 func (m Model) keyHints() []dialog.Hint {
 	switch {
 	case m.ov != nil && m.ov.mode == overlayLogin:
+		if m.ov.login.key {
+			return []dialog.Hint{hint("enter", "sign in"), hint("esc", "cancel sign-in")}
+		}
 		h := []dialog.Hint{hint("o", "open in browser"), hint("esc", "cancel sign-in")}
 		if m.ov.login.err != "" {
 			h = append([]dialog.Hint{hint("enter", "retry")}, h...)
