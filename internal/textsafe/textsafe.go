@@ -63,6 +63,12 @@ func scrub(s string, m mode) string {
 			}
 			i += size
 			continue
+		case r == utf8.RuneError && size == 1:
+			// a byte that is no UTF-8: what reaches a terminal or a JSON
+			// encoder must be text, so it becomes the replacement character
+			b.WriteRune(utf8.RuneError)
+			i += size
+			continue
 		case !isControl(r):
 			b.WriteString(s[i : i+size])
 			i += size

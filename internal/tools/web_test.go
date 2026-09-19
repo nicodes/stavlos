@@ -300,3 +300,21 @@ func TestHTMLToMarkdownScales(t *testing.T) {
 		t.Fatalf("len %d head %q", len(md), md[:min(80, len(md))])
 	}
 }
+
+// TestAZonedAddressIsNeverPublic: found by FuzzPublicIP. netip keeps an
+// address's zone in its comparisons, so "::1%lo" is not inside ::1/128 and
+// passed as public: the fetcher would have dialled loopback.
+func TestAZonedAddressIsNeverPublic(t *testing.T) {
+	for _, s := range []string{"::1%lo", "::1%0", "fe80::1%eth0", "::ffff:127.0.0.1%x"} {
+		ip, err := netip.ParseAddr(s)
+		if err != nil {
+			t.Fatalf("%s: %v", s, err)
+		}
+		if publicIP(ip) {
+			t.Errorf("publicIP(%s) is true", s)
+		}
+	}
+	if ip := netip.MustParseAddr("2606:4700:4700::1111"); !publicIP(ip) {
+		t.Errorf("%s should be public", ip)
+	}
+}
