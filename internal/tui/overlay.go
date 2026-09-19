@@ -52,6 +52,7 @@ const (
 	ovNewChannel                       // name a new channel of this directory
 	ovNewChannelDir                    // choose its default directory
 	ovDiscord                          // daemon-wide Discord status and controls
+	ovWeb                              // the daemon's web UI: enable, disable, open
 )
 
 // loginState is what the login mode shows. Before url is set the login is

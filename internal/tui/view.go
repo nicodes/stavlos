@@ -602,7 +602,7 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 	return rows, items
 }
 
-// sidebarHeader is what precedes the tree: the app name, a blank, the
+// sidebarHeader is what precedes the tree: the app name, the Web UI row, a blank, the
 // system's tokens and cost (every channel), the selected chat's (the
 // channel's in its chat, the agent's in an agent's chat), a blank, whether
 // the channel's project configuration is trusted, the prompt-cache share of
@@ -612,6 +612,7 @@ func (m Model) sidebarLines(height int) (rows []string, items []int) {
 func (m Model) sidebarHeader(width int) []string {
 	rows := []string{
 		theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" "),
+		m.webIndicator(width),
 		"",
 	}
 	rows = append(rows, m.planUsageRows(width, time.Now())...)
@@ -701,7 +702,9 @@ const channelGear = "⚙"
 // sidebarSystemRow and sidebarSelectedRow are the header's usage rows,
 // under the plan usage block: a click on the tokens figure opens the tokens
 // dialog, on the cost the cost dialog.
-func (m Model) sidebarSystemRow() int   { return 2 + len(m.planUsageRows(sidebarWidth-1, time.Now())) }
+func (m Model) sidebarSystemRow() int {
+	return navTopRows + len(m.planUsageRows(sidebarWidth-1, time.Now()))
+}
 func (m Model) sidebarSelectedRow() int { return m.sidebarSystemRow() + 1 }
 
 // sidebarDiscordRow opens the Discord status/control panel when clicked. The
