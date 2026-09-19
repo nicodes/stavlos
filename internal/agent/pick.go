@@ -306,11 +306,13 @@ func (t *turnRun) movedOn(err error, modelID string) bool {
 		until = p.until
 	}
 	host.MarkLimited(provider, until)
-	moved, _ := t.a.moveOff(provider, until)
+	moved, soonest := t.a.moveOff(provider, until)
 	if moved {
 		t.moves++
+		return true
 	}
-	return moved
+	t.resumeAt = t.a.parkUntil(soonest, until)
+	return false
 }
 
 // moveOff moves the agent to the harness's choice among its role's models
@@ -338,11 +340,84 @@ func (a *Agent) moveOff(provider string, until time.Time) (bool, time.Time) {
 
 // limitHint is a turn's error text: a refusal for a limit that the harness
 // could not answer by moving says so, since "status 429" alone reads as a
-// fault.
-func limitHint(err error) string {
+// fault, and says whether the agent will carry on by itself.
+func limitHint(err error, resumeAt time.Time) string {
 	var le *model.LimitError
 	if !errors.As(err, &le) {
 		return err.Error()
 	}
-	return err.Error() + " (this model's plan is at its limit, and no other model this agent's role may use is available: list more under models in the role or in stavlos.json, or pick one with /models)"
+	hint := " (this model's plan is at its limit, and no other model this agent's role may use is available: list more under models in the role or in stavlos.json, or pick one with /models"
+	if !resumeAt.IsZero() {
+		hint += "; the agent carries on by itself once a model is back, about " + resumeAt.Local().Format("Mon 15:04")
+	}
+	return err.Error() + hint + ")"
+}
+
+// --- waking an agent that stopped at every plan's limit ---
+
+// maxResumes bounds the wakes in a row that end in another refusal: a plan
+// that never comes back is not asked for ever.
+const maxResumes = 12
+
+// resumeText is what the model is told when it is woken.
+const resumeText = "Your last turn stopped because every model you may use was at its plan's limit. One is available again: carry on from where you stopped. Nothing else has changed, and nobody has written to you since."
+
+// parkUntil is when to wake an agent whose turn is ending with nowhere to
+// move: when the first limited candidate comes back, else when its own
+// provider does; zero when the configuration turns this off or the agent has
+// been woken too many times to no effect.
+func (a *Agent) parkUntil(soonest, own time.Time) time.Time {
+	c := a.c
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.cfg.ResumeAfterLimit || a.state().resumes >= maxResumes {
+		return time.Time{}
+	}
+	if soonest.IsZero() || (!own.IsZero() && own.Before(soonest)) {
+		soonest = own
+	}
+	if soonest.IsZero() {
+		soonest = time.Now().Add(limitedFor)
+	}
+	return soonest
+}
+
+// MaybeResume wakes the agents whose turn stopped at every plan's limit and
+// whose time has come, provided a model really is available now: the wake is
+// an input from the harness, not a message put in the human's mouth, and the
+// turn it starts moves the agent to the available model before it calls.
+func (c *Channel) MaybeResume(ctx context.Context, now time.Time) error {
+	c.mu.Lock()
+	var evs []event.Event
+	for _, id := range c.st.order {
+		st := c.st.agents[id]
+		if st.killed || st.inTurn || st.resumeAt.IsZero() || st.resumeAt.After(now) || st.startsTurn() {
+			continue
+		}
+		if !c.modelAvailableLocked(st, now) {
+			continue // still nothing to run on: look again at the next tick
+		}
+		evs = append(evs, c.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputResume, Text: resumeText}))
+	}
+	if len(evs) == 0 || c.reconfiguring {
+		c.mu.Unlock()
+		return nil
+	}
+	wake, err := c.commitLocked(ctx, evs...)
+	c.mu.Unlock()
+	signal(wake)
+	return err
+}
+
+// modelAvailableLocked reports whether the agent has a model to run on now:
+// one of its role's candidates, or, for a role with nothing to choose from,
+// its own.
+func (c *Channel) modelAvailableLocked(st *agentState, now time.Time) bool {
+	preset := c.roleLocked(st).preset
+	if len(c.candidatesLocked(preset)) > 0 {
+		_, _, ok := c.chooseLocked(preset, "")
+		return ok
+	}
+	provider, _, err := model.Split(st.model)
+	return err == nil && !readPlan(c.host.PlanUsage()[provider], now).limited
 }

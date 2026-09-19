@@ -106,7 +106,7 @@ resets.
     agent moves, and **the same step runs again**: the turn carries on.
 
   At most four moves a turn. With nowhere to go the turn ends with the
-  refusal and what to do about it.
+  refusal, what to do about it, and when the agent will carry on (below).
 - **A model you pick with `/models` stays** until its plan runs out; then it
   moves like any other. There is no pinned state: an agent nobody can move is
   an agent that stops.
@@ -116,6 +116,34 @@ The move is an `agent.updated` with a `reason`, shown in the agent's chat:
 ```
 Model → zai/glm-5.3 · openai is at its limit until 14:10; zai: 12% of its week used with 40% of it gone
 ```
+
+### Nowhere to move: the agent is woken when a model is back
+
+When every model an agent may use is at its limit, its turn ends with an
+error, and used to stay ended until a human wrote to it, however long ago the
+plan had reset. The turn's end now carries a `resume_at`: when the first
+limited candidate comes back (its window's reset, the refusal's
+`Retry-After`, else fifteen minutes). From then the daemon's tick (every 20
+seconds) looks whether a model **really is** available, and only then queues
+an input of kind `resume`:
+
+```
+[from the harness] Your last turn stopped because every model you may use was
+at its plan's limit. One is available again: carry on from where you stopped.
+```
+
+It is the harness's input, drawn as `Resumed · a model is available again`,
+never a message put in the human's mouth, and the turn it starts moves the
+agent to the available model before it calls. Anything that starts a turn in
+the meantime (you writing to it, an answer from another agent) clears the
+wake; cancelling the agent clears it too, since cancel means stop. Twelve
+wakes in a row that end in another refusal stop it, so a plan that never
+comes back is not asked for ever. `"resumeAfterLimit": false` in
+`stavlos.json` turns it off.
+
+This does mean agents restart unattended, at night if that is when a plan
+resets, and spend allowance doing the work they were given. That is the point
+of it, and the reason for the switch.
 
 ## Limits
 

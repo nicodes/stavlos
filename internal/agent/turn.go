@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/config"
 
@@ -92,15 +93,20 @@ func (a *Agent) runTurn(ctx context.Context, turn int) {
 
 // turnRun is one turn in progress.
 type turnRun struct {
-	a     *Agent
-	ctx   context.Context
-	turn  int
-	moves int // models the harness moved the agent to within this turn
+	a        *Agent
+	ctx      context.Context
+	turn     int
+	moves    int       // models the harness moved the agent to within this turn
+	resumeAt time.Time // the turn is ending at every plan's limit: when to wake the agent (movedOn)
 }
 
 // end logs the turn's end.
 func (t *turnRun) end(reason event.TurnReason, errText string) {
-	_ = t.a.record(event.TurnEnded, event.TurnEndedPayload{Turn: t.turn, Reason: reason, Error: errText})
+	p := event.TurnEndedPayload{Turn: t.turn, Reason: reason, Error: errText}
+	if reason == event.ReasonError {
+		p.ResumeAt = t.resumeAt
+	}
+	_ = t.a.record(event.TurnEnded, p)
 	t.a.armMCPIdle()
 }
 
@@ -160,7 +166,7 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 		if cancelled {
 			return event.ReasonCancelled, "", true
 		}
-		return event.ReasonError, limitHint(err), true
+		return event.ReasonError, limitHint(err, t.resumeAt), true
 	}
 	if err := a.record(event.AssistantMessage, msg); err != nil {
 		return event.ReasonError, err.Error(), true

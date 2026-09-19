@@ -226,6 +226,9 @@ func (d *Daemon) recapLoop(ctx context.Context) {
 				if err := c.MaybeRecap(ctx, now); err != nil {
 					log.Printf("recap %s: %v", c.ID, err)
 				}
+				if err := c.MaybeResume(ctx, now); err != nil {
+					log.Printf("resume %s: %v", c.ID, err)
+				}
 			}
 		}
 	}

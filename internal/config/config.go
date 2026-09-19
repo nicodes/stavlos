@@ -44,11 +44,14 @@ type File struct {
 	Policy     map[string]any `json:"policy,omitempty"` // tool → verb | {pattern: verb}
 	Plugins    []string       `json:"plugins,omitempty"`
 	Reminders  *bool          `json:"reminders,omitempty"` // remind an agent that ends a turn owing a reply (default true)
-	Sandbox    *SandboxConfig `json:"sandbox,omitempty"`   // the OS boundary shell commands and MCP servers run in
-	Dirs       []string       `json:"dirs,omitempty"`      // directories every channel works in besides its own (yours, and a trusted project\'s)
-	Hosts      []string       `json:"hosts,omitempty"`     // hosts web_fetch reaches without asking: github.com, *.example.com, or * (yours, and a trusted project\'s)
-	Discord    *Discord       `json:"discord,omitempty"`   // global-only bridge configuration; token references remain unexpanded
-	Web        *Web           `json:"web,omitempty"`       // global-only: the browser listener's port and the names it answers to
+	// wake an agent whose turn stopped because every model it may use was at
+	// its plan's limit, once one is back (default true)
+	ResumeAfterLimit *bool          `json:"resumeAfterLimit,omitempty"`
+	Sandbox          *SandboxConfig `json:"sandbox,omitempty"` // the OS boundary shell commands and MCP servers run in
+	Dirs             []string       `json:"dirs,omitempty"`    // directories every channel works in besides its own (yours, and a trusted project\'s)
+	Hosts            []string       `json:"hosts,omitempty"`   // hosts web_fetch reaches without asking: github.com, *.example.com, or * (yours, and a trusted project\'s)
+	Discord          *Discord       `json:"discord,omitempty"` // global-only bridge configuration; token references remain unexpanded
+	Web              *Web           `json:"web,omitempty"`     // global-only: the browser listener's port and the names it answers to
 }
 
 // Web configures the loopback browser listener (docs/web-ui.md). Whether it
@@ -291,7 +294,10 @@ type Effective struct {
 	// Reminders gives an agent that ends a turn owing a reply one reminder
 	// turn (docs/super-chat.md).
 	Reminders bool
-	Sandbox   struct {
+	// ResumeAfterLimit wakes an agent stopped at every plan's limit once a
+	// model is back (docs/model-selection.md).
+	ResumeAfterLimit bool
+	Sandbox          struct {
 		Enabled, Network bool
 		Writable, Hide   []string // expanded, absolute
 	}
@@ -380,13 +386,14 @@ func Defaults() File {
 	on, network := true, true
 	allow, ask := string(policy.Allow), string(policy.Ask)
 	return File{
-		RootAgent:  "general",
-		Mode:       protocol.ModeAsk,
-		Limits:     &Limits{MaxDepth: 3, MaxAgents: 6},
-		Escalation: &Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: string(policy.Deny)},
-		Compaction: &Compaction{Threshold: 0.8, KeepTokens: 15_000, MaxToolOutput: "32kb"},
-		Reminders:  &on,
-		Sandbox:    &SandboxConfig{Enabled: &on, Network: &network},
+		RootAgent:        "general",
+		Mode:             protocol.ModeAsk,
+		Limits:           &Limits{MaxDepth: 3, MaxAgents: 6},
+		Escalation:       &Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: string(policy.Deny)},
+		Compaction:       &Compaction{Threshold: 0.8, KeepTokens: 15_000, MaxToolOutput: "32kb"},
+		Reminders:        &on,
+		ResumeAfterLimit: &on,
+		Sandbox:          &SandboxConfig{Enabled: &on, Network: &network},
 		Policy: map[string]any{
 			toolname.Read:        allow,
 			toolname.Grep:        allow,
@@ -526,6 +533,9 @@ func (e *Effective) applyFile(f File, layer string) error {
 		e.Mode = f.Mode
 	default:
 		return fmt.Errorf("mode %q: ask, auto or yolo", f.Mode)
+	}
+	if f.ResumeAfterLimit != nil {
+		e.ResumeAfterLimit = *f.ResumeAfterLimit
 	}
 	if f.Reminders != nil {
 		e.Reminders = *f.Reminders

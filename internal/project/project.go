@@ -308,6 +308,8 @@ func InputText(in event.Input, job event.JobFinishedPayload) string {
 			text += "\n\n" + clip.Middle(job.Output, clip.DefaultMax)
 		}
 		return text
+	case event.InputResume:
+		return "[from the harness] " + in.Text
 	case event.InputReminder:
 		if len(in.Requests) > 0 {
 			return "[reminder from the harness] You still owe explicit responses.\n" + PendingReplyText(in.Requests)

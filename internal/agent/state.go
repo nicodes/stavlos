@@ -56,6 +56,9 @@ type agentState struct {
 	jobs     map[string]event.JobStartedPayload // running background jobs
 	asks     map[string]bool                    // prompts put to the human, not yet resolved
 
+	resumeAt time.Time // its turn stopped at every plan's limit: wake it once a model is back, no sooner (zero: not parked)
+	resumes  int       // wakes since a model call last succeeded, so a plan that never comes back is not asked forever
+
 	turnReminderOnly bool // this turn took only reminders (or nothing yet)
 	turnHadTools     bool // this turn started a tool
 	turnSettled      bool // this turn sent an explicit response
@@ -100,6 +103,9 @@ func (cs *channelState) apply(e event.Event, fx *effects) {
 		cs.killed(e.Agent)
 	case event.AgentCancelled:
 		cs.forgetParty(e.Agent)
+		if a != nil {
+			a.resumeAt = time.Time{} // cancel means stop, not stop until a plan resets
+		}
 	case event.InputQueued:
 		if a != nil {
 			cs.queued(a, e, fx)
@@ -245,6 +251,8 @@ func (cs *channelState) queued(a *agentState, e event.Event, fx *effects) {
 				cs.settleReplies(from, a.id, in.ReplyTo)
 			}
 		}
+	case event.InputResume:
+		a.resumes++
 	case event.InputReminder:
 	case event.InputRequest, event.InputPrompt, event.InputSteer, event.InputInfo, event.InputJob:
 	}
@@ -265,6 +273,7 @@ func (a *agentState) applyTurn(e event.Event) {
 		var p event.TurnPayload
 		if e.Decode(&p) == nil {
 			a.turn, a.inTurn, a.lastError = p.Turn, true, ""
+			a.resumeAt = time.Time{}
 			a.turnReminderOnly, a.turnHadTools, a.turnSettled = true, false, false
 		}
 	case event.AssistantMessage:
@@ -275,6 +284,7 @@ func (a *agentState) applyTurn(e event.Event) {
 			// over the local estimate (docs/prompt-caching.md)
 			a.lastContext = p.Usage.InputTokens + p.Usage.CacheReadTokens + p.Usage.CacheWriteTokens + p.Usage.OutputTokens
 			a.cost += p.CostUSD
+			a.resumes = 0 // a model answered
 		}
 	case event.TurnEnded:
 		var p event.TurnEndedPayload
@@ -282,6 +292,7 @@ func (a *agentState) applyTurn(e event.Event) {
 			if p.Reason == event.ReasonError {
 				a.lastError = p.Error
 			}
+			a.resumeAt = p.ResumeAt
 			if (p.Reason == event.ReasonEndTurn || p.Reason == event.ReasonMaxTokens) &&
 				a.turnReminderOnly && !a.turnHadTools && !a.turnSettled {
 				a.nudges++

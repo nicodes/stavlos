@@ -147,7 +147,7 @@ Switching a mode on answers whatever is waiting as that mode would have: yolo al
 One role ships built in, `general`, which can read, edit, run commands and delegate to more `general` agents. Add specialised ones as `agents/<name>.md` in the global or project config; `.stavlos/agents/coder.md` in this repository shows every key:
 
 - `type`: primary, subagent or all
-- `models`: the models good enough for the role, in the order it prefers them, with the variants allowed per model. The harness chooses among them, never the agent that creates the child: it takes the plan with the most allowance about to lapse, and moves a running agent to the next when its model's plan runs out, mid-turn, saying why in its chat. A role that lists none chooses from `"models"` in `stavlos.json`. See [model selection](docs/model-selection.md)
+- `models`: the models good enough for the role, in the order it prefers them, with the variants allowed per model. The harness chooses among them, never the agent that creates the child: it takes the plan with the most allowance about to lapse, and moves a running agent to the next when its model's plan runs out, mid-turn, saying why in its chat; an agent with nowhere to move stops, and is woken when a model is back (`"resumeAfterLimit": false` turns that off). A role that lists none chooses from `"models"` in `stavlos.json`. See [model selection](docs/model-selection.md)
 - `tools`: every tool is available by default; `<tool>: deny` removes one, and policy rules nested under a tool tighten it
 - `spawn`, `max_turns` (unlimited unless set), `color`, `skills`, `mcp` (roles carry no directories: those are the channel's)
 
