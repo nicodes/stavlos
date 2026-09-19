@@ -285,3 +285,39 @@ func TestMidStreamRetry(t *testing.T) {
 		}
 	})
 }
+
+// TestPlanLimitRefusals: a used-up plan is refused in whatever status its
+// provider likes, and every one of them must come out as a model.LimitError,
+// at once, so the agent runtime moves the agent to another model inside the
+// turn. The xAI body is the one a SuperGrok account out of credits got on
+// 2026-09-18: a 403, which ended six turns with an error because only a 429
+// counted.
+func TestPlanLimitRefusals(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status int
+		body   string
+		limit  bool
+		hits   int32
+	}{
+		{"xai out of credits", http.StatusForbidden, `{"code":"personal-team-blocked:spending-limit","error":"You have run out of credits or need a Grok subscription. Add credits at https://grok.com/?_s=usage"}`, true, 1},
+		{"codex usage limit", http.StatusTooManyRequests, `{"error":{"type":"usage_limit_reached","message":"The usage limit has been reached","resets_in_seconds":4000}}`, true, 1},
+		{"a balance that ran out, as a 402", http.StatusPaymentRequired, `{"error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}`, true, 1},
+		{"openai-style quota", http.StatusTooManyRequests, `{"error":{"type":"insufficient_quota","message":"You exceeded your current quota"}}`, true, 1},
+		{"a 403 that means forbidden", http.StatusForbidden, `{"error":{"message":"insufficient permissions for this model"}}`, false, 1},
+		{"a burst: retried, and a limit only once it outlasts the retries", http.StatusTooManyRequests, `{"error":{"type":"rate_limit","message":"slow down"}}`, true, int32(MaxAttempts)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var hits atomic.Int32
+			srv := serve(t, func(w http.ResponseWriter, _ *http.Request) {
+				hits.Add(1)
+				http.Error(w, tc.body, tc.status)
+			})
+			_, err := call(context.Background(), srv.URL, &codec{})
+			var le *model.LimitError
+			if err == nil || errors.As(err, &le) != tc.limit || hits.Load() != tc.hits {
+				t.Fatalf("err %v, a limit: %v (want %v), attempts %d (want %d)", err, errors.As(err, &le), tc.limit, hits.Load(), tc.hits)
+			}
+		})
+	}
+}
