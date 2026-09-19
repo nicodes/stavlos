@@ -40,6 +40,18 @@ const (
 	modeFrame
 )
 
+// writeText writes one rune of ordinary text. A byte that is no UTF-8
+// decodes as the error rune with the byte still in raw: what reaches a
+// terminal or a JSON encoder must be text, so the replacement character is
+// written instead of the byte.
+func writeText(b *strings.Builder, raw string, r rune) {
+	if r == utf8.RuneError && len(raw) == 1 {
+		b.WriteRune(utf8.RuneError)
+		return
+	}
+	b.WriteString(raw)
+}
+
 func scrub(s string, m mode) string {
 	if !strings.ContainsFunc(s, func(r rune) bool { return isControl(r) || isBidi(r) || m == modeVisible && isInvisible(r) }) && utf8.ValidString(s) {
 		return s
@@ -63,14 +75,8 @@ func scrub(s string, m mode) string {
 			}
 			i += size
 			continue
-		case r == utf8.RuneError && size == 1:
-			// a byte that is no UTF-8: what reaches a terminal or a JSON
-			// encoder must be text, so it becomes the replacement character
-			b.WriteRune(utf8.RuneError)
-			i += size
-			continue
 		case !isControl(r):
-			b.WriteString(s[i : i+size])
+			writeText(&b, s[i:i+size], r)
 			i += size
 			continue
 		}

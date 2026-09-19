@@ -81,7 +81,7 @@ func goldenChannel(t *testing.T) Model {
 	ev := func(agent string, typ event.Type, payload any) event.Event {
 		seq++
 		e := mk(seq, agent, typ, payload)
-		e.Channel = "s" // the model's channel: events of another are dropped
+		e.Channel = "s"                                             // the model's channel: events of another are dropped
 		e.Time = goldenNow.Add(time.Duration(seq-20) * time.Minute) // a few minutes apart, all before now
 		return e
 	}
