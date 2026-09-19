@@ -38,6 +38,7 @@ func (d *Daemon) Serve(ctx context.Context, socket string) error {
 	if d.Discord != nil {
 		d.Discord.Start()
 	}
+	d.startWeb(ctx)
 	go func() {
 		<-ctx.Done()
 		ln.Close()
@@ -51,7 +52,7 @@ func (d *Daemon) Serve(ctx context.Context, socket string) error {
 			}
 			return err
 		}
-		go d.handleConn(ctx, conn)
+		go d.handleConn(ctx, conn, false)
 	}
 }
 
@@ -73,6 +74,7 @@ type conn struct {
 	// such a process could answer its own permission prompts or switch its
 	// channel to yolo.
 	ran bool
+	web bool // a browser connection: webMethods only
 }
 
 type outMsg struct {
@@ -96,7 +98,9 @@ const (
 	maxLine     = 4 << 20
 )
 
-func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
+// handleConn serves one connection; web marks one that came through the
+// browser listener, which may call only webMethods.
+func (d *Daemon) handleConn(ctx context.Context, nc net.Conn, web bool) {
 	ran := false
 	if uc, ok := nc.(*net.UnixConn); ok {
 		cred, err := peercred.OfSelf(uc)
@@ -111,7 +115,7 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn) {
 	// mid-login.wait (or mid-anything) takes its work with it.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), done: make(chan struct{}), ran: ran}
+	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), done: make(chan struct{}), ran: ran, web: web}
 	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.enqueue, replay: c.enqueueReplay}
 	d.addClient(c.cl)
 	go c.writer()
@@ -227,6 +231,9 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 	}
 	if req.V != protocol.Version {
 		return nil, &protocol.Error{Code: protocol.ErrVersion, Message: fmt.Sprintf("protocol version %d not served; this daemon serves %d", req.V, protocol.Version)}
+	}
+	if c.web && !webMethods[req.Method] {
+		return nil, &protocol.Error{Code: protocol.ErrForbidden, Message: req.Method + " is not available to the web UI"}
 	}
 	h, ok := handlers[req.Method]
 	if !ok {

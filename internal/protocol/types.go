@@ -21,7 +21,11 @@ const (
 	MDiscordStatus     = "discord.status"
 	MDiscordConnect    = "discord.connect"
 	MDiscordDisconnect = "discord.disconnect"
-	MAttach            = "attach" // declare client name + escalation tier
+	MWebStatus         = "web.status"
+	MWebEnable         = "web.enable"  // start the loopback listener; the result carries a sign-in URL to open
+	MWebDisable        = "web.disable" // stop it and sign every browser out
+	MWebOpen           = "web.open"    // a fresh sign-in URL for a listener already running
+	MAttach            = "attach"      // declare client name + escalation tier
 
 	MChannelList      = "channel.list"
 	MChannelCreate    = "channel.create"
@@ -247,6 +251,15 @@ type DiscordStatus struct {
 	Channels   int    `json:"channels"`
 	Error      string `json:"error,omitempty"`
 	ConfigPath string `json:"config_path"`
+}
+
+// WebStatus describes the daemon's browser listener. OpenURL carries a
+// one-time code in its fragment and is only set by web.enable and web.open.
+type WebStatus struct {
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url"`
+	OpenURL string `json:"open_url,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 type ChannelInfo struct {
