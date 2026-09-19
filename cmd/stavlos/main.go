@@ -391,12 +391,38 @@ const startupWait = 60 * time.Second
 // are waiting for. Under this, the daemon comes up before anyone reads it.
 const startupQuiet = 750 * time.Millisecond
 
+// lockWait is how long a daemon being replaced is given to exit and let go
+// of the data directory.
+const lockWait = 30 * time.Second
+
+// lockGrace is how long a daemon we started is given to take the lock
+// before its absence means it died rather than that it is slow to start.
+const lockGrace = 3 * time.Second
+
+// waitLockFree waits until no daemon holds the data directory.
+func waitLockFree(ctx context.Context, d time.Duration) bool {
+	for start := time.Now(); time.Since(start) < d; time.Sleep(100 * time.Millisecond) {
+		if !daemonHoldsLock() {
+			return true
+		}
+		if ctx.Err() != nil {
+			return false
+		}
+	}
+	return false
+}
+
 // waitForSocket dials until the daemon is listening, saying what it is
 // doing once the wait is long enough to look like a hang: recovery has no
 // output of its own, and silence here reads as a stuck terminal.
 func waitForSocket(ctx context.Context, sock string) (*client.Client, error) {
 	start := time.Now()
 	said := false
+	done := func() {
+		if said {
+			fmt.Fprintln(os.Stderr)
+		}
+	}
 	for time.Since(start) < startupWait {
 		if c, err := client.Dial(sock); err == nil {
 			if said {
@@ -404,18 +430,25 @@ func waitForSocket(ctx context.Context, sock string) (*client.Client, error) {
 			}
 			return c, nil
 		}
+		// A daemon takes the data directory before it recovers anything, so
+		// once the grace period is over an unheld lock means the one we
+		// started is gone: waiting out the whole budget for a dead process
+		// is the difference between a slow start and a hang.
+		if time.Since(start) > lockGrace && !daemonHoldsLock() {
+			done()
+			return nil, fmt.Errorf("the daemon exited while starting; see %s", filepath.Join(paths.DataDir(), "stavlosd.log"))
+		}
 		if !said && time.Since(start) > startupQuiet {
 			fmt.Fprint(os.Stderr, "waiting for the daemon to recover its channels…")
 			said = true
 		}
 		if err := ctx.Err(); err != nil {
+			done()
 			return nil, err
 		}
 		time.Sleep(150 * time.Millisecond)
 	}
-	if said {
-		fmt.Fprintln(os.Stderr)
-	}
+	done()
 	return nil, fmt.Errorf("daemon did not come up at %s after %s; see %s", sock, startupWait, filepath.Join(paths.DataDir(), "stavlosd.log"))
 }
 
@@ -507,12 +540,14 @@ func replaceStale(ctx context.Context, c *client.Client) (*client.Client, error)
 		}
 	}
 	c.Close()
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(sock); err != nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	// Wait for the lock, not for the socket. A daemon shutting down closes
+	// its listener and removes the socket first, then stops its channels,
+	// and only releases the data directory when the process exits. Starting
+	// the replacement while the socket is gone but the lock is still held
+	// gives it ErrAlreadyRunning: it dies at once, nothing ever binds, and
+	// this terminal waits for a daemon that no longer exists.
+	if !waitLockFree(ctx, lockWait) {
+		return nil, fmt.Errorf("the daemon did not let go of %s within %s; stop it and run stavlos again", paths.DataDir(), lockWait)
 	}
 	return restartDaemon(ctx, sock)
 }
