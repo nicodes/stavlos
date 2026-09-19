@@ -481,7 +481,7 @@ func (c *Channel) busyLocked() int {
 // nothing to choose from (a role that lists no models, and none in
 // stavlos.json), the parent's (or the channel's) model is inherited when the
 // role allows it, else the role's default.
-func (c *Channel) resolveModelLocked(spawnArg string, preset config.Preset, parent *agentState) (string, error) {
+func (c *Channel) resolveModelLocked(mk market, spawnArg string, preset config.Preset, parent *agentState) (string, error) {
 	if spawnArg == "" && parent == nil && c.modelChosen {
 		spawnArg = c.st.model
 	}
@@ -491,7 +491,7 @@ func (c *Channel) resolveModelLocked(spawnArg string, preset config.Preset, pare
 		}
 		return spawnArg, nil
 	}
-	if pick, _, ok := c.chooseLocked(preset, ""); ok {
+	if pick, _, ok := mk.choose(preset, c.cfg, ""); ok {
 		return pick.model, nil
 	}
 	inherited := c.st.model
@@ -539,12 +539,13 @@ func fitVariant(p config.Preset, offered []string, id, want string) string {
 // task becomes the child's first input, a request from its parent, logged
 // with the spawn in one transaction.
 func (c *Channel) spawn(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, error) {
+	mk := c.readMarket(c.Config(), modelArg, c.Model()) // before the lock
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.spawnLocked(ctx, parentID, role, label, task, modelArg)
+	return c.spawnLocked(ctx, mk, parentID, role, label, task, modelArg)
 }
 
-func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, error) {
+func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, label, task, modelArg string) (*Agent, error) {
 	if c.reconfiguring {
 		return nil, errors.New("a directory change is in progress")
 	}
@@ -571,7 +572,7 @@ func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 	} else if !preset.CanBePrimary() {
 		return nil, fmt.Errorf("role %q is subagent-only: it cannot be the main agent", role)
 	}
-	modelID, err := c.resolveModelLocked(modelArg, preset, parent)
+	modelID, err := c.resolveModelLocked(mk, modelArg, preset, parent)
 	if err != nil {
 		return nil, err
 	}
@@ -580,14 +581,14 @@ func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 		if modelID == "" {
 			return nil, errors.New(ErrNoModel)
 		}
-		if err := c.host.CheckModel(modelID); err != nil {
-			return nil, err
+		if !mk.usable[modelID] {
+			return nil, fmt.Errorf("model %s cannot be used now: run /providers to sign in to its provider, or /models to pick another", modelID)
 		}
 		if modelID == parent.model {
 			variant = parent.variant // same model: same flavour
 		}
 	}
-	variant = fitVariant(preset, c.host.Variants(modelID), modelID, variant)
+	variant = fitVariant(preset, mk.variants[modelID], modelID, variant)
 	id := NewID("a")
 	name, err := c.st.uniqueName(label, role, id)
 	if err != nil {
@@ -635,6 +636,7 @@ func (c *Channel) canSpawnLocked(p *agentState) (bool, string) {
 
 // SpawnFromClient spawns on behalf of a human (PRD §9).
 func (c *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, task, modelArg string) (string, error) {
+	mk := c.readMarket(c.Config(), modelArg, c.Model()) // before the lock
 	c.mu.Lock()
 	p := c.st.agents[parentID]
 	if p == nil {
@@ -645,7 +647,7 @@ func (c *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, ta
 		c.mu.Unlock()
 		return "", errors.New(why)
 	}
-	a, err := c.spawnLocked(ctx, parentID, role, label, task, modelArg)
+	a, err := c.spawnLocked(ctx, mk, parentID, role, label, task, modelArg)
 	c.mu.Unlock()
 	if err != nil {
 		return "", err

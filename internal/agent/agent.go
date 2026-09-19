@@ -262,10 +262,11 @@ func (a *Agent) SetModel(ctx context.Context, id string) error {
 	if err := a.c.host.CheckModel(id); err != nil {
 		return err
 	}
+	mk := a.c.readMarket(a.c.Config(), id) // before the lock
 	a.c.mu.Lock()
 	st := a.state()
 	p := a.c.roleLocked(st).preset
-	up := changed(st, "", id, fitVariant(p, a.c.host.Variants(id), id, st.variant))
+	up := mk.retarget(st, p, "", id, "")
 	a.c.mu.Unlock()
 	if !p.AllowsModel(id) {
 		return fmt.Errorf("role %s does not allow model %s (allowed: %s)", p.Name, id, modelList(p))
@@ -279,6 +280,7 @@ func (a *Agent) SetModel(ctx context.Context, id string) error {
 // the old role's name.
 func (a *Agent) SetRole(ctx context.Context, role string) error {
 	s := a.c
+	mk := s.readMarket(s.Config(), a.ModelID()) // before the lock
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	preset, ok := s.cfg.Presets[role]
@@ -297,7 +299,8 @@ func (a *Agent) SetRole(ctx context.Context, role string) error {
 			modelID = d
 		}
 	}
-	p := changed(st, role, modelID, fitVariant(preset, s.host.Variants(modelID), modelID, st.variant))
+	// (a role's default model is one of its listed models, which the market looked at)
+	p := mk.retarget(st, preset, role, modelID, "")
 	if st.name == st.role && role != st.role {
 		if name, err := s.st.uniqueName(role, role, a.ID); err == nil {
 			p.Name = event.Str(name)
