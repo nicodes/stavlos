@@ -37,7 +37,12 @@ type decision struct {
 
 // runTool applies policy, escalates if needed, executes, and logs.
 func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs []model.ToolDef, rv roleView, cfg *config.Effective) {
-	_ = a.record(event.ToolStarted, event.ToolStartedPayload{Turn: turn, CallID: c.ID, Name: c.Name})
+	// A tool that runs must have its start on the record: with none, a command
+	// would have run, a file changed, and the log would not say so. The turn
+	// ends at its next step with the write's error (takeMidTurn).
+	if err := a.record(event.ToolStarted, event.ToolStartedPayload{Turn: turn, CallID: c.ID, Name: c.Name}); err != nil {
+		return
+	}
 	finish := func(out string, isErr, cancelled, denied bool) {
 		_ = a.record(event.ToolFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied})
 	}
