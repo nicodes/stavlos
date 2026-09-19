@@ -83,3 +83,59 @@ func TestSheetsAreFilesTheLogKnows(t *testing.T) {
 		t.Fatalf("ids are never reused: %+v %v", ref, err)
 	}
 }
+
+// TestTheFileToolsKeepToASheetsLimits (SEC-N7): the sheets directory is
+// inside the working set for the file tools, so the limits have to hold for
+// them and not only for the sheet tool. apply_patch may edit the file of a
+// sheet that exists; it may not plant another file there, nor grow a sheet
+// past what a sheet may be (the sheet is put back as it was).
+func TestTheFileToolsKeepToASheetsLimits(t *testing.T) {
+	t.Setenv("STAVLOS_DATA_DIR", t.TempDir())
+	var dir string
+	patchJSON := func(p string) string {
+		b, _ := json.Marshal(map[string]string{"patch": p})
+		return string(b)
+	}
+	huge := strings.Repeat("x", maxSheetSize)
+	fm := &fakeModel{steps: []step{
+		reply(call("c1", "sheet", `{"action":"write","title":"Findings","html":"<p>old</p>\n"}`)),
+		func(_ context.Context, req model.Request) (model.Response, error) {
+			out := lastUserText(req)
+			dir = filepath.Dir(strings.Fields(out[strings.Index(out, "File: ")+6:])[0])
+			return call("c2", "apply_patch", patchJSON("*** Begin Patch\n*** Add File: "+dir+"/notes.txt\n+not a sheet\n*** End Patch")), nil
+		},
+		func(context.Context, model.Request) (model.Response, error) {
+			return call("c3", "apply_patch", patchJSON("*** Begin Patch\n*** Add File: "+dir+"/s7.html\n+<p>a sheet nobody created</p>\n*** End Patch")), nil
+		},
+		func(context.Context, model.Request) (model.Response, error) {
+			return call("c4", "apply_patch", patchJSON("*** Begin Patch\n*** Update File: "+dir+"/s1.html\n@@\n-<p>old</p>\n+<p>"+huge+"</p>\n*** End Patch")), nil
+		},
+		func(context.Context, model.Request) (model.Response, error) {
+			return call("c5", "apply_patch", patchJSON("*** Begin Patch\n*** Update File: "+dir+"/s1.html\n@@\n-<p>old</p>\n+<p>new</p>\n*** End Patch")), nil
+		},
+		reply(text("done")),
+	}}
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"apply_patch":"allow"}}`}, fm)
+	runTurn(t, s, h, "go")
+	fin := finished(h, s.Root().ID)
+	if len(fin) != 5 {
+		t.Fatalf("%d tool calls finished\n%s", len(fin), h.dump())
+	}
+	for i, want := range []string{"", "is no sheet", "is no sheet", "a sheet holds at most", ""} {
+		if (want == "") == fin[i].IsError || !strings.Contains(fin[i].Output, want) {
+			t.Errorf("call %d: error=%v %q, want %q", i+1, fin[i].IsError, fin[i].Output[:min(len(fin[i].Output), 160)], want)
+		}
+	}
+	for _, name := range []string{"notes.txt", "s7.html"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			t.Errorf("%s was written into the sheets directory", name)
+		}
+	}
+	_, page, err := s.Sheet("s1")
+	if err != nil || string(page) != "<p>new</p>\n" {
+		t.Fatalf("the sheet after an undone oversize patch and a good one: %v %q", err, page[:min(len(page), 40)])
+	}
+	if got := len(s.Sheets()); got != 1 {
+		t.Fatalf("%d sheets", got)
+	}
+}

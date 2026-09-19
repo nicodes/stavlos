@@ -6,12 +6,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/paths"
@@ -28,8 +30,9 @@ import (
 // write, replace or delete any sheet: last write wins, and the log says who.
 
 const (
-	maxSheets    = 50      // per channel, so a looping agent cannot write thousands
-	maxSheetSize = 2 << 20 // bytes of HTML
+	maxSheets     = 50      // per channel, so a looping agent cannot write thousands
+	maxSheetSize  = 2 << 20 // bytes of HTML
+	maxSheetTitle = 200     // characters: it is drawn on a tab
 )
 
 // sheetState is what the log says about one sheet.
@@ -93,11 +96,74 @@ func (c *Channel) sheetsLocked() []protocol.SheetInfo {
 func (c *Channel) Sheet(id string) (protocol.SheetInfo, []byte, error) {
 	for _, sh := range c.Sheets() {
 		if sh.ID == id {
-			b, err := os.ReadFile(sheetPath(c.SheetDir(), id))
+			b, err := readSheet(sheetPath(c.SheetDir(), id))
 			return sh, b, err
 		}
 	}
 	return protocol.SheetInfo{}, nil, fmt.Errorf("no sheet %q", id)
+}
+
+// readSheet reads a sheet's file, which is never larger than a sheet may be:
+// the file is an agent's, and what reads it serves it to a browser.
+func readSheet(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	b, err := io.ReadAll(io.LimitReader(f, maxSheetSize+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxSheetSize {
+		return nil, fmt.Errorf("%s is larger than a sheet may be (%d bytes)", filepath.Base(path), maxSheetSize)
+	}
+	return b, nil
+}
+
+// guardSheets holds a patch to the limits the sheet tool keeps. Before the
+// patch runs: every path in the sheets directory must be the file of a sheet
+// that exists (sheets are created by the sheet tool, which numbers and caps
+// them); anything else is refused. After it has run: a sheet grown past the
+// size a sheet may be is put back as it was. after is nil when the patch
+// touches no sheet.
+func (a *Agent) guardSheets(sub policy.Subject) (refusal string, after func() string) {
+	if sub.Kind != policy.KindPath {
+		return "", nil
+	}
+	c := a.c
+	dir := tools.ResolvePath("", c.SheetDir())
+	before := map[string][]byte{}
+	for _, v := range sub.Values {
+		p := tools.ResolvePath(c.Dir(), v)
+		if filepath.Dir(p) != dir && !strings.HasPrefix(p, dir+string(filepath.Separator)) {
+			continue
+		}
+		m := sheetFile.FindStringSubmatch(filepath.Base(p))
+		c.mu.Lock()
+		known := m != nil && filepath.Dir(p) == dir && c.st.sheets[m[1]] != nil
+		c.mu.Unlock()
+		if !known {
+			return "Refused: " + v + " is in the channel's sheets directory but is no sheet. Sheets are created with the sheet tool (action write); read and apply_patch edit the file of a sheet that exists.", nil
+		}
+		old, err := readSheet(p)
+		if err != nil {
+			return "Refused: " + err.Error(), nil
+		}
+		before[p] = old
+	}
+	if len(before) == 0 {
+		return "", nil
+	}
+	return "", func() string {
+		for p, old := range before {
+			if st, err := os.Stat(p); err == nil && st.Size() > maxSheetSize {
+				_ = writeFileAtomic(p, old)
+				return fmt.Sprintf("Undone: the patch made %s %d bytes, and a sheet holds at most %d. The sheet is as it was.", filepath.Base(p), st.Size(), maxSheetSize)
+			}
+		}
+		return ""
+	}
 }
 
 type sheetsAPI struct{ a *Agent }
@@ -117,6 +183,9 @@ func (s sheetsAPI) List() []tools.SheetRef {
 func (s sheetsAPI) Write(id, title, html string) (tools.SheetRef, error) {
 	if len(html) > maxSheetSize {
 		return tools.SheetRef{}, fmt.Errorf("the page is %d bytes; a sheet holds at most %d", len(html), maxSheetSize)
+	}
+	if n := utf8.RuneCountInString(title); n > maxSheetTitle {
+		return tools.SheetRef{}, fmt.Errorf("the title is %d characters; a sheet's title holds at most %d", n, maxSheetTitle)
 	}
 	c := s.a.c
 	c.mu.Lock()
@@ -184,7 +253,7 @@ func (a *Agent) sheetsPatched(sub policy.Subject) {
 		if m == nil || filepath.Dir(p) != dir {
 			continue
 		}
-		page, err := os.ReadFile(p)
+		page, err := readSheet(p)
 		c.mu.Lock()
 		switch {
 		case c.st.sheets[m[1]] == nil:
