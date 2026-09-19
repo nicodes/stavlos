@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/nicodes/stavlos/internal/oauth"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/pkg/client"
 )
@@ -87,7 +88,7 @@ func loginFlow(ctx context.Context, c *client.Client, want string) (string, erro
 			}
 		}
 		if chosen.id == "" {
-			return "", fmt.Errorf("unknown provider %q; Stavlos supports openai (ChatGPT) and xai (Grok)", want)
+			return "", fmt.Errorf("unknown provider %q; Stavlos supports openai (ChatGPT), xai (Grok) and zai (GLM Coding Plan)", want)
 		}
 	} else {
 		chosen, err = selectFrom("Sign in with", items)
@@ -113,6 +114,9 @@ func loginFlow(ctx context.Context, c *client.Client, want string) (string, erro
 	if err != nil {
 		return "", err
 	}
+	if start.Method == oauth.MethodAPIKey {
+		return chosen.id, keyLogin(ctx, c, chosen, start)
+	}
 	if start.Code != "" {
 		fmt.Printf("\nOpen this URL on any device:\n\n    %s\n\nand enter the code:\n\n    %s\n\n%s\n", start.URL, start.Code, start.Instructions)
 	} else {
@@ -126,6 +130,28 @@ func loginFlow(ctx context.Context, c *client.Client, want string) (string, erro
 	}
 	fmt.Printf("✓ %s connected (%s)\n", info.Name, info.Account)
 	return chosen.id, nil
+}
+
+// keyLogin finishes a sign-in whose credential is a key the user already
+// has: it is read from the terminal and handed to the waiting login. The
+// browser is not opened — someone pasting a key does not want their window
+// taken — and the key is not echoed back.
+func keyLogin(ctx context.Context, c *client.Client, chosen pick, start protocol.LoginStartResult) error {
+	fmt.Printf("\n%s\n\nCreate a key for your plan at:\n\n    %s\n\n", start.Instructions, start.URL)
+	fmt.Print("Paste the key: ")
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && strings.TrimSpace(line) == "" {
+		return err
+	}
+	if _, err := client.Do(ctx, c, protocol.ProviderLoginKey, protocol.LoginKeyParams{ID: start.ID, Key: strings.TrimSpace(line)}); err != nil {
+		return err
+	}
+	info, err := client.Do(ctx, c, protocol.ProviderLoginWait, protocol.LoginWaitParams{ID: start.ID})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("✓ %s connected\n", info.Name)
+	return nil
 }
 
 // openBrowser makes a best-effort attempt to open url; failures are silent.

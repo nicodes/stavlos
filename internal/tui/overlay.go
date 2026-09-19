@@ -17,6 +17,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/nicodes/stavlos/internal/oauth"
 
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
@@ -58,6 +59,7 @@ const (
 type loginState struct {
 	url, code, instructions string
 	browser                 bool // browser method: no code, the callback lands on this machine
+	key                     bool // apikey method: nothing to poll, the field below takes the key
 	err                     string
 }
 
@@ -93,6 +95,7 @@ const (
 	loginStartText   = "starting sign-in…"
 	loginKeysWaiting = "o: open in browser"
 	loginKeysError   = "enter: retry"
+	loginKeysKey     = "enter: sign in   o: open in browser"
 )
 
 func newOverlay(kind overlayKind, mode overlayMode, title string) *overlay {
@@ -128,9 +131,18 @@ func (o *overlay) switchLogin(name string) {
 	o.login = loginState{}
 }
 
-// setLogin fills in the device-code details and clears any error.
-func (o *overlay) setLogin(url, code, instructions string) {
-	o.login = loginState{url: url, code: code, instructions: instructions, browser: code == ""}
+// setLogin fills in the sign-in details and clears any error. A login
+// whose method is a pasted key takes the key in the overlay's own field,
+// so nothing is polled and the prompt reads as a field, not a wait.
+func (o *overlay) setLogin(url, code, instructions, method string) {
+	isKey := method == oauth.MethodAPIKey
+	o.login = loginState{url: url, code: code, instructions: instructions, browser: !isKey && code == "", key: isKey}
+	if isKey {
+		o.input.Reset()
+		o.input.Prompt = "key: "
+		o.input.EchoMode = textinput.EchoPassword
+		o.input.Focus()
+	}
 }
 
 // setLoginError replaces the waiting line with err.
@@ -223,6 +235,7 @@ func (o *overlay) view(bodyWidth int, spinner string) string {
 	lines := []string{dialog.Title(o.title, inner)}
 	switch o.mode {
 	case overlayLogin:
+		o.input.Width = inner - len([]rune(o.input.Prompt)) - 1
 		lines = append(lines, o.loginLines(inner, spinner)...)
 	case overlayInput:
 		o.input.Width = inner - len([]rune(o.input.Prompt)) - 1
@@ -255,15 +268,18 @@ func (o *overlay) loginLines(inner int, spinner string) []string {
 		)
 	}
 	if l.url != "" {
-		if l.browser {
+		switch {
+		case l.key:
+			out = append(out, "Create a key for your plan at:")
+		case l.browser:
 			out = append(out, "Your browser should open to sign in. If it does not, open:")
-		} else {
+		default:
 			out = append(out, "Open this URL on any device:")
 		}
 		for _, u := range strings.Split(ansi.Hardwrap(l.url, inner-2, true), "\n") {
 			out = append(out, "  "+theme.StyleOvURL.Render(u))
 		}
-		if !l.browser {
+		if !l.browser && !l.key {
 			out = append(out, "and enter the code:")
 			out = append(out, "  "+theme.StyleOvCode.Render(format.Trunc(spacedCode(l.code), inner-2)))
 		}
@@ -277,7 +293,15 @@ func (o *overlay) loginLines(inner int, spinner string) []string {
 		for _, s := range strings.Split(ansi.Wrap(l.err, inner, ""), "\n") {
 			out = append(out, theme.StyleStatusErr.Render(s))
 		}
+		if l.key {
+			out = append(out, "", o.input.View())
+			return append(out, theme.StyleDim.Render(loginKeysKey))
+		}
 		return append(out, theme.StyleDim.Render(loginKeysError))
+	}
+	if l.key {
+		out = append(out, "", o.input.View())
+		return append(out, theme.StyleDim.Render(loginKeysKey))
 	}
 	return append(out,
 		theme.StyleRunning.Render(spinner)+" "+loginWaitingText,
