@@ -11,20 +11,48 @@ Every request of an agent's turn carries `model.Request.CacheKey`, the agent's
 id; a compaction summary uses `<agent id>:compact`, since it shares no prefix
 with the turns.
 
-| provider | routing | also |
-|---|---|---|
-| ChatGPT (Codex backend) | `prompt_cache_key` in the body and the `session-id` header, as the Codex CLI sends them | |
-| xAI (Grok) | the `x-grok-conv-id` header | earlier `reasoning_content` replayed on assistant messages |
+| provider | routing | also | measured |
+|---|---|---|---|
+| ChatGPT (Codex backend) | `prompt_cache_key` in the body and the `session-id` header, as the Codex CLI sends them | | **not yet**: see below |
+| xAI (Grok) | the `x-grok-conv-id` header | earlier `reasoning_content` replayed | 95.6% over 10,145 calls |
+| Z.ai (GLM) | none: it caches a matching prefix with no hint, and documents none | earlier `reasoning_content` replayed | 96.6% over 408 calls |
+| Kimi | `prompt_cache_key` in the body, as kimi-cli sends its session id (`src/kimi_cli/llm.py`) | earlier `reasoning_content` replayed | 99% on a 300k-token conversation, before the key was sent |
 
-Other Chat Completions providers get neither: some reject `reasoning_content`
-in a request.
+Measured from the event log on 2026-09-19 (the share of input tokens served
+from cache, over the preceding 36 hours). Every model of a provider goes
+through the same adapter, so the routing is per provider, not per model.
+
+**ChatGPT's fix has never run.** The routing above landed at 03:13 on
+2026-09-17; the last ChatGPT call in the log is at 00:39 that day, after
+which the plan was used up (that regression is what used it up). The halves
+of a day before read 26.6%, 1.9%, 2.1% and 0.5%. `TestCacheKeyRouting` pins
+that the key and the header are sent; whether the backend honours them is
+still to be seen, and the nav row below will say so within the first few
+hundred thousand tokens of the next ChatGPT work.
+
+What caching cannot help: the **first call after an agent changes provider**
+finds nothing cached (a 296k-token conversation moved to Kimi sent all 296k
+fresh, then 99% cached from the next call). That is the cost of a move, and
+why the harness only moves an agent when its plan runs out
+([model selection](model-selection.md)).
 
 ## Watching it
 
 The nav's `cache N%` row is the share of the last hour's model calls the
 providers served from their caches, across every channel (`usage.cache`, read
 from the event log, never from a provider). Under 70% it turns orange, under
-40% red. A healthy agent's cached tokens climb with its conversation; a share
+40% red.
+
+The figure is the total, but a total is dominated by whichever provider does
+the most work: with Grok serving 1.6 billion cached tokens, ChatGPT at 2%
+would leave it at 96%. So `usage.cache` also splits the figures by provider,
+and the row takes its colour from the **worst** one and names it, once that
+provider has carried 200,000 input tokens in the window (a conversation's
+first call caches nothing, and a few short calls say little):
+
+```
+cache                96% · openai 2%
+``` A healthy agent's cached tokens climb with its conversation; a share
 stuck low is the signature of the 2026-09-16 regression below.
 
 ## Compared with opencode (checked 2026-09-17)
