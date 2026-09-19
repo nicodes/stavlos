@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/httpx"
 	"github.com/nicodes/stavlos/internal/paths"
 )
 
@@ -114,6 +115,9 @@ func writeCache(path string, data []byte) {
 	}
 }
 
+// client bounds itself by the request's context.
+var client = httpx.New(httpx.Options{HeaderTimeout: fetchTimeout})
+
 func fetch(ctx context.Context) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
 	defer cancel()
@@ -123,7 +127,7 @@ func fetch(ctx context.Context) ([]byte, error) {
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "stavlos")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

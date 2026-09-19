@@ -17,6 +17,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nicodes/stavlos/internal/httpx"
 	"log"
 	"net/http"
 	"regexp"
@@ -829,4 +830,4 @@ func (r *Registry) PollAllPlanUsage(ctx context.Context, minAge time.Duration) {
 	}
 }
 
-var quotaHTTP = &http.Client{Timeout: 15 * time.Second}
+var quotaHTTP = httpx.New(httpx.Options{Timeout: 15 * time.Second})

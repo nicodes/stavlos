@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nicodes/stavlos/internal/httpx"
 	"net/http"
 	"sync"
 	"time"
@@ -48,7 +49,7 @@ func Open(ctx context.Context, token, guild string, makeBridge func(API, string)
 	if err != nil {
 		return nil, nil, errors.New("cannot initialize Discord session")
 	}
-	s.Client = &http.Client{Timeout: 20 * time.Second}
+	s.Client = httpx.New(httpx.Options{Timeout: 20 * time.Second})
 	s.MaxRestRetries = 0 // a failed send may already have reached Discord
 	s.Identify.Intents = dg.IntentsGuilds | dg.IntentsGuildMessages | dg.IntentsMessageContent
 	u, err := s.User("@me", dg.WithContext(ctx))
