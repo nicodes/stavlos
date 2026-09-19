@@ -2155,11 +2155,16 @@ func TestSidebarNav(t *testing.T) {
 		m := sidebarNavModel()
 		sb := strings.Split(stripANSI(m.sidebarView(20)), "\n")
 		header := len(m.sidebarHeader(sidebarWidth - 1))
-		if header != 8 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[sidebarWebRow]) != "○ Web UI" || strings.TrimSpace(sb[2]) != "" || strings.Join(strings.Fields(sb[3]), " ") != "System 2k · $0.25" || strings.Join(strings.Fields(sb[4]), " ") != "@main 1k · $0.20" ||
-			strings.TrimSpace(sb[5]) != "" || m.sidebarDiscordRow() != 6 || !strings.Contains(sb[m.sidebarDiscordRow()], "Discord checking") ||
-			strings.Contains(strings.Join(sb[:8], "\n"), "! 1/1") || strings.TrimSpace(sb[7]) != "" || !strings.HasPrefix(sb[8], "Channels ") || !strings.Contains(sb[8], " "+newChannelMark+" ") || strings.Contains(sb[8], "↑/↓") ||
+		// the title, a blank, the usage rows, a blank, the Clients section (its
+		// title, Web UI, Discord), a blank; no Subscriptions section without a reading
+		if header != 9 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" ||
+			m.sidebarSystemRow() != 2 || strings.Join(strings.Fields(sb[2]), " ") != "System 2k · $0.25" || strings.Join(strings.Fields(sb[3]), " ") != "@main 1k · $0.20" ||
+			strings.TrimSpace(sb[4]) != "" || strings.TrimSpace(sb[5]) != "Clients" ||
+			sidebarWebRow != 6 || strings.TrimSpace(sb[sidebarWebRow]) != "○ Web UI" || m.sidebarDiscordRow() != 7 || !strings.Contains(sb[m.sidebarDiscordRow()], "Discord checking") ||
+			strings.Contains(strings.Join(sb[:9], "\n"), "Subscriptions") ||
+			strings.Contains(strings.Join(sb[:9], "\n"), "! 1/1") || strings.TrimSpace(sb[8]) != "" || !strings.HasPrefix(sb[9], "Channels ") || !strings.Contains(sb[9], " "+newChannelMark+" ") || strings.Contains(sb[9], "↑/↓") ||
 			strings.Contains(strings.Join(sb, "\n"), "waiting") || strings.Contains(strings.Join(sb, "\n"), "need you") {
-			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:9], "\n"))
+			t.Fatalf("header (%d rows):\n%s", header, strings.Join(sb[:10], "\n"))
 		}
 		// dirs is the open channel's: out of the tabs the strip walks, behind
 		// the gear at the right edge of the channel's row; → on the row, or a
@@ -3456,7 +3461,7 @@ func TestSidebarUsageRows(t *testing.T) {
 	w := sidebarWidth - 1
 	rows := func() []string {
 		h := m.sidebarHeader(w)
-		return []string{stripANSI(h[navTopRows]), stripANSI(h[navTopRows+1])}
+		return []string{stripANSI(h[m.sidebarSystemRow()]), stripANSI(h[m.sidebarSelectedRow()])}
 	}
 	row := func(label, figures string) string { // the label left, the figures flush right
 		return label + strings.Repeat(" ", w-len([]rune(label))-len([]rune(figures))) + figures
@@ -3698,7 +3703,7 @@ func TestPlanUsageBars(t *testing.T) {
 	m.prompts = nil
 	now := time.Now()
 	w := sidebarWidth - 1
-	if rows := m.planUsageRows(w, now); len(rows) != 0 || m.sidebarSystemRow() != navTopRows {
+	if rows := m.planUsageRows(w, now); len(rows) != 0 || m.sidebarSystemRow() != 2 {
 		t.Fatalf("no reading, no block: %q", rows)
 	}
 	// a row per window, shortest first, the plan's name on the first only
@@ -3713,6 +3718,7 @@ func TestPlanUsageBars(t *testing.T) {
 	rows := m.planUsageRows(w, now)
 	bar := w - len("ChatGPT 5h") - 1 - 1 - 4
 	want := []string{
+		"Subscriptions",
 		"ChatGPT 5h " + strings.Repeat("━", (bar+1)/2) + strings.Repeat("─", bar-(bar+1)/2) + "  50%", // half, rounded up
 		"        wk " + strings.Repeat("─", bar) + "   0%",
 		"Grok    wk " + strings.Repeat("━", bar) + " 100%",
@@ -3722,17 +3728,20 @@ func TestPlanUsageBars(t *testing.T) {
 		t.Fatalf("plan rows: %q", rows)
 	}
 	for i := range want {
-		if got := stripANSI(rows[i]); got != want[i] || (want[i] != "" && ansi.StringWidth(got) != w) {
+		if got := stripANSI(rows[i]); got != want[i] || (i > 0 && want[i] != "" && ansi.StringWidth(got) != w) { // the title is not padded
 			t.Fatalf("row %d: %q, want %q", i, got, want[i])
 		}
 	}
 	// every row of a plan opens that plan's chart
-	for y, provider := range map[int]string{navTopRows: "openai", navTopRows + 1: "openai", navTopRows + 2: "xai"} {
+	if _, ok := m.planAt(navTopRows); ok {
+		t.Fatal("the Subscriptions title is no plan")
+	}
+	for y, provider := range map[int]string{navTopRows + 1: "openai", navTopRows + 2: "openai", navTopRows + 3: "xai"} {
 		if p, ok := m.planAt(y); !ok || p.Provider != provider {
 			t.Fatalf("row %d belongs to %q, got %q %v", y, provider, p.Provider, ok)
 		}
 	}
-	if _, ok := m.planAt(navTopRows + 3); ok {
+	if _, ok := m.planAt(navTopRows + 4); ok {
 		t.Fatal("the blank row under the block is no plan")
 	}
 	for minutes, span := range map[int]string{300: "5h", 10080: "wk", 43200: "mo", 1440: "1d", 90: "90m", 0: ""} {
@@ -3741,8 +3750,10 @@ func TestPlanUsageBars(t *testing.T) {
 		}
 	}
 	header := m.sidebarHeader(w)
-	if m.sidebarSystemRow() != navTopRows+4 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
-		t.Fatalf("the rows under the block move down:\n%s", stripANSI(strings.Join(header, "\n")))
+	// the block is the last of the sections: nothing above it moves
+	if m.sidebarSystemRow() != 2 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") ||
+		stripANSI(header[navTopRows]) != "Subscriptions" || len(header) != navTopRows+5 {
+		t.Fatalf("the Subscriptions section follows Clients and moves nothing above it:\n%s", stripANSI(strings.Join(header, "\n")))
 	}
 	row := stripANSI(header[m.sidebarSystemRow()])
 	x := ansi.StringWidth(row[:strings.LastIndex(row, "$")])
@@ -3782,8 +3793,9 @@ func TestNavCacheMonitor(t *testing.T) {
 			t.Fatalf("%d/%d: %q", c.cached, c.fresh, row)
 		}
 		header := m.sidebarHeader(w)
-		if m.sidebarDiscordRow() != discord+1 || stripANSI(header[m.sidebarDiscordRow()-1]) != stripANSI(row) || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") {
-			t.Fatalf("the monitor sits above Discord:\n%s", stripANSI(strings.Join(header, "\n")))
+		at := navTopRows // no plan reading here: the monitors come right after the Clients section
+		if m.sidebarDiscordRow() != discord || stripANSI(header[at]) != stripANSI(row) || header[len(header)-1] != "" || len(header) != at+2 {
+			t.Fatalf("the monitor sits under the sections, a blank after it, and moves nothing above:\n%s", stripANSI(strings.Join(header, "\n")))
 		}
 	}
 }
@@ -3891,8 +3903,8 @@ func TestPlanUsageChart(t *testing.T) {
 	m.plans = []protocol.PlanUsageInfo{{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-time.Minute),
 		Windows: []protocol.UsageWindowInfo{{UsedPercent: 40, Minutes: 10080, ResetsAt: now.Add(24 * time.Hour)}}}}
 	m.layout()
-	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: navTopRows, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: navTopRows, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
+	nm, _ := m.Update(tea.MouseMsg{X: 3, Y: navTopRows + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	nm, _ = nm.(Model).Update(tea.MouseMsg{X: 3, Y: navTopRows + 1, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	m = nm.(Model)
 	if m.focus != focusUsage || m.usage.kind != usagePlan || m.usage.provider != "openai" || m.usageTitle() != "Plan · ChatGPT" {
 		t.Fatalf("a click on the plan row opens its chart: focus=%v %+v", m.focus, m.usage)
@@ -3981,8 +3993,8 @@ func TestProjectTrustRowInNav(t *testing.T) {
 		if at < 0 || at >= len(header) || stripANSI(header[at]) != stripANSI(row) {
 			t.Fatalf("the row is not where it says:\n%s", stripANSI(strings.Join(header, "\n")))
 		}
-		if m.sidebarDiscordRow() != discord+1 || at >= m.sidebarDiscordRow() {
-			t.Fatalf("the project row sits above Discord: project %d discord %d", at, m.sidebarDiscordRow())
+		if m.sidebarDiscordRow() != discord || at != navTopRows {
+			t.Fatalf("the project row sits under the sections and moves nothing above: project %d discord %d", at, m.sidebarDiscordRow())
 		}
 		if cmd := m.sidebarClick(0, at); cmd == nil {
 			t.Fatalf("pending=%v: a click should do something", c.pending)
