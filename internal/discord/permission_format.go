@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -37,7 +38,16 @@ func escapeMarkdown(text string) string {
 	return strings.NewReplacer("\\", "\\\\", "*", "\\*", "_", "\\_", "`", "\\`").Replace(text)
 }
 
+// permissionCode shows text a model wrote as a code block, which is where
+// the human reads what they are about to approve. The text cannot end the
+// block: a fence inside it would close it, and whatever followed would be
+// drawn as the bot's own words (a second, harmless-looking command; a
+// mention; a link). A zero-width space between the backticks keeps them
+// backticks and stops them being a fence. Control characters and direction
+// overrides are removed for the same reason they are in the terminal: what
+// is approved must be what is seen.
 func permissionCode(language, text string) string {
+	text = strings.ReplaceAll(textsafe.Clean(text), "```", "`\u200b`\u200b`")
 	return "```" + language + "\n" + strings.TrimRight(text, "\n") + "\n```"
 }
 
