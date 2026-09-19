@@ -1,6 +1,7 @@
 package shellcmd
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -150,5 +151,36 @@ func TestCommands(t *testing.T) {
 		if strings.Join(got, "\n") != strings.Join(want, "\n") {
 			t.Errorf("Commands(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// Each of these ran rm under "deny rm -rf *" before the grammar knew
+// keywords, launcher flags, eval, here-strings and same-line variables.
+func TestCommandsSeeThroughWrapping(t *testing.T) {
+	for _, in := range []string{
+		"if true; then rm -rf /; fi",
+		"while true; do rm -rf /; done",
+		"! rm -rf /",
+		"time rm -rf /",
+		"sudo -u root rm -rf /",
+		"sudo -u root -g wheel -- rm -rf /",
+		"nice -n 5 rm -rf /",
+		"timeout -s KILL 5 rm -rf /",
+		"env -u HOME A=b rm -rf /",
+		"eval rm -rf /",
+		`eval "rm -rf /"`,
+		`bash <<< "rm -rf /"`,
+		"a=rm; $a -rf /",
+		"a=rm; ${a} -rf /",
+		`cmd="rm -rf"; $cmd /`,
+		"a=rm && sudo $a -rf /",
+	} {
+		if got := Commands(in); !slices.Contains(got, "rm -rf /") {
+			t.Errorf("Commands(%q) = %q, which misses the rm", in, got)
+		}
+	}
+	// A value nobody can read here is left as written, not guessed at.
+	if got := Commands("a=$(cat x); $a -rf /"); slices.Contains(got, "rm -rf /") {
+		t.Errorf("an unknown value was guessed: %q", got)
 	}
 }
