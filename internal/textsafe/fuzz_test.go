@@ -10,7 +10,7 @@ import (
 // terminal as a control sequence or a direction override, cleaning twice
 // changes nothing more, and the result is valid UTF-8.
 func FuzzClean(f *testing.F) {
-	for _, s := range []string{"plain", "\x1b[31mred\x1b[0m", "\x1b]0;title\x07", "a‮b", "\x9b31m", "tab\there\n", "\xff\xfe", "⁦x⁩", "\r\x00\x7f"} {
+	for _, s := range []string{"plain", "\x1b[31mred\x1b[0m", "\x1b]0;title\x07", "a\u202eb", "\x9b31m", "tab\there\n", "\xff\xfe", "\u2066x\u2069", "\r\x00\x7f"} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {

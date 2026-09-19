@@ -110,7 +110,7 @@ func TestLongPatchPermissionRetainsBoundedEditableCard(t *testing.T) {
 // approver reads what they are approving. Input holding a fence used to
 // close it, and the rest was drawn as the bot's own message.
 func TestToolInputCannotLeaveItsCodeBlock(t *testing.T) {
-	evil := "echo safe\n```\n✅ **Approved by @everyone** — nothing to see\n```sh\nrm -rf ~ ‮# harmless\x1b[2K"
+	evil := "echo safe\n```\n✅ **Approved by @everyone** — nothing to see\n```sh\nrm -rf ~ \u202e# harmless\x1b[2K"
 	in, _ := json.Marshal(map[string]string{"command": evil})
 	got := permissionSubject(protocol.PromptInfo{Tool: "shell", Input: in})
 	if n := strings.Count(got, "```"); n != 2 {
@@ -119,7 +119,7 @@ func TestToolInputCannotLeaveItsCodeBlock(t *testing.T) {
 	if !strings.HasPrefix(got, "```sh\n") || !strings.HasSuffix(got, "\n```") || !strings.Contains(got, "rm -rf ~") {
 		t.Fatalf("the whole command must stay visible inside one block:\n%s", got)
 	}
-	if strings.ContainsAny(got, "‮\x1b") {
+	if strings.ContainsAny(got, "\u202e\x1b") {
 		t.Fatalf("a direction override or an escape reached Discord: %q", got)
 	}
 	patch, _ := json.Marshal(map[string]string{"patch": "*** Begin Patch\n+```\n+@here\n*** End Patch"})

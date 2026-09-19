@@ -66,9 +66,11 @@ rm -f /tmp/stavlos-cyclo.$$
 # for something new for a few seconds each.
 step fuzz
 while read -r pkg name; do
+	printf '%s ' "$name"
 	go test -run '^$' -fuzz "^${name}\$" -fuzztime "${FUZZTIME:-3s}" "$pkg" >/tmp/stavlos-fuzz.$$ 2>&1 || { tail -20 /tmp/stavlos-fuzz.$$; failed+=("fuzz:$name"); }
 done < <(grep -rn --include='*_test.go' -E '^func Fuzz[A-Za-z0-9_]+\(' internal cmd pkg 2>/dev/null |
 	sed -E 's|^([^:]+)/[^/]+:[0-9]+:func (Fuzz[A-Za-z0-9_]+)\(.*|./\1 \2|' | sort -u)
+echo
 rm -f /tmp/stavlos-fuzz.$$
 
 # The web client's bundle is committed (docs/web-ui.md), so a stale one must
