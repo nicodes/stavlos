@@ -306,3 +306,99 @@ func TestFitVariant(t *testing.T) {
 		}
 	}
 }
+
+// TestAgentStoppedAtEveryLimitIsWokenWhenAModelIsBack: with nowhere to move,
+// the turn ends saying when the agent will carry on; nothing wakes it before
+// that, nor while every model is still limited; once one is back the harness
+// queues its own input (not a human's), the agent moves to that model before
+// calling, and the work goes on. Cancel means stop, and the switch turns it
+// all off.
+func TestAgentStoppedAtEveryLimitIsWokenWhenAModelIsBack(t *testing.T) {
+	var calledWith []string
+	refuse := func(_ context.Context, req model.Request) (model.Response, error) {
+		calledWith = append(calledWith, req.Model)
+		return model.Response{}, &model.LimitError{Err: errors.New("status 403: out of credits"), RetryAfter: time.Hour}
+	}
+	fm := &fakeModel{steps: []step{refuse, refuse}}
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","models":["fake/m1","other/m2"]}`}, fm)
+	ctx := context.Background()
+
+	end := runTurn(t, s, h, "do the long job")
+	if end.Reason != event.ReasonError || strings.Join(calledWith, ",") != "m1,m2" {
+		t.Fatalf("both models refuse: %q after %v", end.Reason, calledWith)
+	}
+	if end.ResumeAt.IsZero() || time.Until(end.ResumeAt) < 50*time.Minute || !strings.Contains(end.Error, "carries on by itself") {
+		t.Fatalf("the turn's end does not say when it resumes: %+v", end)
+	}
+	queued := func() int {
+		n := 0
+		for _, e := range h.ofType(event.InputQueued, s.Root().ID) {
+			var in event.Input
+			if e.Decode(&in) == nil && in.Kind == event.InputResume {
+				n++
+			}
+		}
+		return n
+	}
+	// too early, then on time but with every model still limited: nothing
+	if err := s.MaybeResume(ctx, time.Now().Add(10*time.Minute)); err != nil || queued() != 0 {
+		t.Fatalf("woken before its time: %v %d", err, queued())
+	}
+	if err := s.MaybeResume(ctx, end.ResumeAt.Add(time.Minute)); err != nil || queued() != 0 {
+		t.Fatalf("woken with nothing to run on: %v %d", err, queued())
+	}
+	// other/m2's plan comes back
+	h.mu.Lock()
+	h.usage["other"] = model.PlanUsage{}
+	h.mu.Unlock()
+	calledWith = nil
+	fm.mu.Lock()
+	fm.steps = []step{func(_ context.Context, req model.Request) (model.Response, error) {
+		calledWith = append(calledWith, req.Model)
+		if got := lastUserText(req); !strings.Contains(got, "[from the harness]") || !strings.Contains(got, "carry on from where you stopped") {
+			t.Errorf("the model is not told why it woke: %q", got)
+		}
+		return text("finished the long job"), nil
+	}}
+	fm.mu.Unlock()
+	if err := s.MaybeResume(ctx, end.ResumeAt.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	woke := h.waitTurnEnd(t, s.Root().ID, 2)
+	if woke.Reason != event.ReasonEndTurn || strings.Join(calledWith, ",") != "m2" || queued() != 1 {
+		t.Fatalf("resumed turn: %q, calls %v, resume inputs %d", woke.Reason, calledWith, queued())
+	}
+	if got := s.Root().Info().Model; got != "other/m2" {
+		t.Fatalf("it resumed on %q", got)
+	}
+	// nothing more to wake
+	if err := s.MaybeResume(ctx, time.Now().Add(24*time.Hour)); err != nil || queued() != 1 {
+		t.Fatalf("woken twice: %v %d", err, queued())
+	}
+}
+
+func TestCancelAndTheSwitchStopTheWake(t *testing.T) {
+	refuse := fail(&model.LimitError{Err: errors.New("status 429: quota")})
+	ctx := context.Background()
+	t.Run("cancel", func(t *testing.T) {
+		s, h := newTestChannel(t, testConfig{}, &fakeModel{steps: []step{refuse}})
+		end := runTurn(t, s, h, "go")
+		if end.ResumeAt.IsZero() {
+			t.Fatal("not parked")
+		}
+		s.Root().Cancel()
+		if err := s.MaybeResume(ctx, end.ResumeAt.Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(30 * time.Millisecond)
+		if n := len(h.ofType(event.TurnStarted, s.Root().ID)); n != 1 {
+			t.Fatalf("a cancelled agent was woken: %d turns", n)
+		}
+	})
+	t.Run("resumeAfterLimit false", func(t *testing.T) {
+		s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","resumeAfterLimit":false}`}, &fakeModel{steps: []step{refuse}})
+		if end := runTurn(t, s, h, "go"); !end.ResumeAt.IsZero() || strings.Contains(end.Error, "carries on") {
+			t.Fatalf("parked although turned off: %+v", end)
+		}
+	})
+}

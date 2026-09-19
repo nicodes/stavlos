@@ -319,7 +319,7 @@ func isReminder(ev event.Event) bool {
 // joins the conversation, and when the chat shows it.
 func (t *Transcript) queueInput(ev event.Event) {
 	var in event.Input
-	if ev.Decode(&in) == nil && in.ID != "" && in.Kind != event.InputReminder {
+	if ev.Decode(&in) == nil && in.ID != "" && in.Kind != event.InputReminder && in.Kind != event.InputResume {
 		t.inputs[in.ID] = in
 	}
 }
@@ -1236,6 +1236,9 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 	}),
 
 	event.InputQueued: decoded(func(in event.Input) []Line {
+		if in.Kind == event.InputResume { // the harness woke it: a model is back after every plan's limit
+			return []Line{{Kind: LineDim, Glyph: GlyphNudge, Text: titled("Resumed", "a model is available again")}}
+		}
 		if in.Kind != event.InputReminder {
 			return nil // an input draws when the agent takes it (Transcript.applyTaken)
 		}

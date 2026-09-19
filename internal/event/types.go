@@ -169,6 +169,7 @@ const (
 	InputResponse InputKind = "response" // another agent's answer, between turns; it settles the wait on that agent
 	InputJob      InputKind = "job"      // a background job's result (Job), between turns
 	InputReminder InputKind = "reminder" // the harness's reminder of replies still owed (Parties)
+	InputResume   InputKind = "resume"   // the harness's: a model is available again after the turn stopped at every plan's limit
 )
 
 // Input is one entry of an agent's inbox.
@@ -251,6 +252,10 @@ type TurnEndedPayload struct {
 	Turn   int        `json:"turn"`
 	Reason TurnReason `json:"reason"`
 	Error  string     `json:"error,omitempty"`
+	// ResumeAt is set when the turn stopped because every model the agent may
+	// use was at its plan's limit: the harness wakes the agent once one is back,
+	// no sooner than this (docs/model-selection.md).
+	ResumeAt time.Time `json:"resume_at,omitzero"`
 }
 
 // --- asks ---
