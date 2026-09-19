@@ -207,6 +207,11 @@ func (d *Daemon) ProjectChanged(dir string) {
 }
 func (d *Daemon) Variants(id string) []string { return d.Registry.Variants(id) }
 
+func (d *Daemon) PlanUsage() map[string]model.PlanUsage { return d.Registry.PlanUsage() }
+func (d *Daemon) MarkLimited(provider string, until time.Time) {
+	d.Registry.MarkLimited(provider, until)
+}
+
 func (d *Daemon) Prompt(ctx context.Context, info protocol.PromptInfo, opened func()) escalation.Answer {
 	return d.esc.Request(ctx, info, opened)
 }

@@ -44,6 +44,11 @@ type Host interface {
 	// dir changed since its config was loaded: the host loads it again, and
 	// asks for trust again when the hash no longer matches.
 	ProjectChanged(dir string)
+	// PlanUsage is every subscription's plan usage as last read, by provider,
+	// for choosing a model (pick.go); MarkLimited records that a provider
+	// refused a call for a limit, so nothing chooses it until then.
+	PlanUsage() map[string]model.PlanUsage
+	MarkLimited(provider string, until time.Time)
 }
 
 // ErrNoModel is the turn error when an agent has no model to call.
@@ -70,9 +75,10 @@ type Channel struct {
 	stopped       bool
 	reconfiguring bool // a directory transition has gated new turns
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	wg     sync.WaitGroup // agent goroutines and job watchers
+	ctx         context.Context
+	cancel      context.CancelFunc
+	wg          sync.WaitGroup // agent goroutines and job watchers
+	modelChosen bool           // the channel was created with a model a human named (New)
 }
 
 // New creates a channel without logging anything; Start or Recover brings
@@ -82,6 +88,7 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, role string)
 	if role == "" {
 		role = cfg.RootAgent
 	}
+	chosen := modelID != "" // the human named the channel's model: the main agent takes it
 	if modelID == "" {
 		modelID = cfg.Model
 	}
@@ -90,7 +97,7 @@ func New(host Host, id, dir string, cfg *config.Effective, modelID, role string)
 	return &Channel{
 		ID: id, Created: time.Now().UTC(),
 		host: host, tools: tools.Builtin(), cfg: cfg, stamp: trustStamp(cfg),
-		st: st, agents: map[string]*Agent{},
+		st: st, agents: map[string]*Agent{}, modelChosen: chosen,
 		ctx: ctx, cancel: cancel,
 	}
 }
@@ -424,15 +431,25 @@ func (c *Channel) busyLocked() int {
 	return n
 }
 
-// resolveModelLocked implements PRD §8.3 under the role's whitelist: an explicit
-// spawn argument must be allowed; otherwise the parent's (or the channel's)
-// model is inherited when the role allows it, else the role's default.
+// resolveModelLocked is a new agent's model (docs/model-selection.md). A
+// model a human named (a client's spawn, the model a channel was created
+// with) must be one the role allows, and is taken. Otherwise the harness
+// chooses among the role's models by their plans' usage (pick.go). With
+// nothing to choose from (a role that lists no models, and none in
+// stavlos.json), the parent's (or the channel's) model is inherited when the
+// role allows it, else the role's default.
 func (c *Channel) resolveModelLocked(spawnArg string, preset config.Preset, parent *agentState) (string, error) {
+	if spawnArg == "" && parent == nil && c.modelChosen {
+		spawnArg = c.st.model
+	}
 	if spawnArg != "" {
 		if !preset.AllowsModel(spawnArg) {
 			return "", fmt.Errorf("role %s does not allow model %s (allowed: %s)", preset.Name, spawnArg, modelList(preset))
 		}
 		return spawnArg, nil
+	}
+	if pick, _, ok := c.chooseLocked(preset, ""); ok {
+		return pick.model, nil
 	}
 	inherited := c.st.model
 	if parent != nil {

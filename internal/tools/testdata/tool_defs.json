@@ -28,10 +28,6 @@
           "description": "Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the channel gets a suffix (auth-explorer-2); the result says the name it got",
           "type": "string"
         },
-        "model": {
-          "description": "Optional provider/model-id override for this child",
-          "type": "string"
-        },
         "task": {
           "description": "The complete task description; the child has no other context",
           "type": "string"

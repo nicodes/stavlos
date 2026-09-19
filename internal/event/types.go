@@ -152,6 +152,7 @@ type AgentUpdatedPayload struct {
 	Name    *string `json:"name,omitempty"`
 	Model   *string `json:"model,omitempty"`
 	Variant *string `json:"variant,omitempty"` // "" is the provider default
+	Reason  string  `json:"reason,omitempty"`  // why the harness changed the model: its old one's plan ran out
 }
 
 // --- inbox ---
