@@ -102,8 +102,8 @@ func (d *Daemon) subscribe(ctx context.Context, cl *client, channel string, from
 // clientList snapshots the attached clients, so nothing is sent while the
 // daemon's lock is held.
 func (d *Daemon) clientList() []*client {
-	d.mu.RLock()
-	defer d.mu.RUnlock()
+	d.hubMu.RLock()
+	defer d.hubMu.RUnlock()
 	out := make([]*client, 0, len(d.clients))
 	for _, c := range d.clients {
 		out = append(out, c)
@@ -123,15 +123,15 @@ func (d *Daemon) eachSubscribed(channel string, fn func(*client)) {
 }
 
 func (d *Daemon) addClient(c *client) {
-	d.mu.Lock()
+	d.hubMu.Lock()
 	d.clients[c.id] = c
-	d.mu.Unlock()
+	d.hubMu.Unlock()
 }
 
 func (d *Daemon) removeClient(id string) {
-	d.mu.Lock()
+	d.hubMu.Lock()
 	delete(d.clients, id)
-	d.mu.Unlock()
+	d.hubMu.Unlock()
 }
 
 // Status for daemon.status.
