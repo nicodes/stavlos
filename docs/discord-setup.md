@@ -192,18 +192,19 @@ Use Connect to retry after correcting a problem. To reload settings of an
 already-connected integration, disconnect and connect again. Daemon shutdown
 stops Discord but preserves the saved autoconnect preference.
 
-### Migrating from the standalone bridge
+### If you ran the standalone bridge
 
-Stop the old `stavlos-discord` terminal process with Ctrl+C before connecting
-the built-in integration. If you installed its systemd user service, disable it:
+There used to be a separate `stavlos-discord` program with a systemd user
+service. It is gone: the daemon runs the bridge. If the old one is still
+running, stop it (Ctrl+C in its terminal), or disable its service:
 
 ```sh
 systemctl --user disable --now stavlos-discord
 ```
 
 Then use `/discord connect` in Stavlos. Existing Discord channels and prompt
-message mappings are reused. The shared lock prevents two bridges for the same
-server/category. `stavlos-discord` remains a legacy standalone entry point.
+message mappings are reused, and the shared lock refuses a second bridge for
+the same server/category while the old one is alive.
 
 The terminal's channel list is global, but `discord.dirs` still selects which
 channels are mirrored. It matches each channel's own default directory, not

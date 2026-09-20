@@ -48,8 +48,7 @@ socket for channel operations.
 
 `internal/discord` holds the service and routing logic. The executable wires it
 into `daemon.DiscordService`, keeping the core independent of its client
-implementation. The Discord API sits behind an interface for tests. The legacy
-`cmd/stavlos-discord` entry point shares the same lock and prompt index.
+implementation. The Discord API sits behind an interface for tests.
 
 `discord.enabled` defaults to false. Connect validates global settings, saves
 true and starts asynchronously; disconnect saves false and cancels only this
