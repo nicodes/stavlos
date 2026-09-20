@@ -403,16 +403,10 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		return m.onDaemon(msg)
 	case providersMsg, loginStartMsg, loginDoneMsg, rolesMsg, variantsMsg, channelsMsg, switchedMsg, modelsMsg:
 		cmds = append(cmds, m.onListed(msg))
-	case webMsg:
-		cmds = append(cmds, m.onWeb(msg))
-	case webTickMsg:
-		if msg.epoch == m.webEpoch {
-			cmds = append(cmds, webCmd(m.ctx, m.c, "status"))
+	case webMsg, webTickMsg, discordMsg, discordTickMsg, changedMsg:
+		if cmd := m.onService(msg); cmd != nil { // a stale poll asks for nothing
+			cmds = append(cmds, cmd)
 		}
-	case changedMsg:
-		cmds = append(cmds, m.onChanged(msg))
-	case discordMsg:
-		cmds = append(cmds, m.onDiscord(msg))
 	case usageMsg:
 		m.onUsage(msg)
 		m.viewDirty = true
@@ -422,10 +416,6 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		m.onCacheUsage(msg)
 	case configEditorMsg:
 		cmds = append(cmds, m.onConfigEditor(msg))
-	case discordTickMsg:
-		if msg.epoch == m.discordEpoch {
-			cmds = append(cmds, discordCmd(m.ctx, m.c, "status", msg.epoch))
-		}
 	default:
 		// Cursor blink and other component-internal messages.
 		if e := m.cfgEditor; e != nil {
