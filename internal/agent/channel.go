@@ -30,26 +30,49 @@ import (
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// Host is what the daemon provides to channels.
+// Host is what the daemon provides to channels, by concern. A channel holds
+// the whole of it; what takes only a part (the picker reads the models, a
+// test double of the human needs no catalogue) names the part.
 type Host interface {
+	Journal
+	Models
+	Human
+	Project
+}
+
+// Journal is the record and what is sent beside it.
+type Journal interface {
 	// Append logs events in one transaction and returns them numbered.
 	Append(ctx context.Context, evs ...event.Event) ([]event.Event, error)
+	// Stream sends what a model is saying before the event that settles it.
 	Stream(n protocol.StreamNotification)
+}
+
+// Models is the catalogue and the state of the subscriptions behind it.
+type Models interface {
 	Resolve(modelID string) (model.Model, model.Info, error)
 	CheckModel(modelID string) error
 	Variants(modelID string) []string
-	// Prompt asks the human and waits; opened runs once the prompt can be
-	// listed and answered, before any answer is taken.
-	Prompt(ctx context.Context, info protocol.PromptInfo, opened func()) escalation.Answer
-	// ProjectChanged tells the host an instructions file of the project in
-	// dir changed since its config was loaded: the host loads it again, and
-	// asks for trust again when the hash no longer matches.
-	ProjectChanged(dir string)
 	// PlanUsage is every subscription's plan usage as last read, by provider,
 	// for choosing a model (pick.go); MarkLimited records that a provider
 	// refused a call for a limit, so nothing chooses it until then.
 	PlanUsage() map[string]model.PlanUsage
 	MarkLimited(provider string, until time.Time)
+}
+
+// Human is the person at the other end.
+type Human interface {
+	// Prompt asks the human and waits; opened runs once the prompt can be
+	// listed and answered, before any answer is taken.
+	Prompt(ctx context.Context, info protocol.PromptInfo, opened func()) escalation.Answer
+}
+
+// Project is the configuration the channel runs under.
+type Project interface {
+	// ProjectChanged tells the host an instructions file of the project in
+	// dir changed since its config was loaded: the host loads it again, and
+	// asks for trust again when the hash no longer matches.
+	ProjectChanged(dir string)
 }
 
 // ErrNoModel is the turn error when an agent has no model to call.

@@ -239,13 +239,18 @@ type market struct {
 // listed models, the configured pool and default) and any others named.
 // The caller must not hold c.mu.
 func (c *Channel) readMarket(cfg *config.Effective, others ...string) market {
-	mk := market{usable: map[string]bool{}, variants: map[string][]string{}, usage: c.host.PlanUsage(), now: time.Now()}
+	return readMarket(c.host, cfg, others...)
+}
+
+// readMarket needs the models and nothing else of the host.
+func readMarket(host Models, cfg *config.Effective, others ...string) market {
+	mk := market{usable: map[string]bool{}, variants: map[string][]string{}, usage: host.PlanUsage(), now: time.Now()}
 	look := func(id string) {
 		if _, seen := mk.usable[id]; id == "" || seen || strings.ContainsAny(id, "*?[") {
 			return
 		}
-		mk.usable[id] = c.host.CheckModel(id) == nil
-		mk.variants[id] = c.host.Variants(id)
+		mk.usable[id] = host.CheckModel(id) == nil
+		mk.variants[id] = host.Variants(id)
 	}
 	for _, p := range cfg.Presets {
 		for _, m := range p.Models {
