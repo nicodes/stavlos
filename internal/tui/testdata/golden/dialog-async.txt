@@ -1,0 +1,34 @@
+Stavlos                      ⚙  │ › @user: find out why the build is slow                                  16m
+                                │ § Aside I'll time the build first.                                       15m
+System               2k · $0.25 │ $ Shell  go build -x ./... 2>&1 | tail -5                                14m
+@main                1k · $0.20 │ ✗ Shell (by policy)  rm -rf ~/.cache/go-build                            11m
+                                │ ⇄ Model → zai/glm-5.3 · openai is at its limit until 14:10; zai: 12%…     7m
+Clients                         │
+○ Web UI                        │ ⠋ Waiting… · @scout
+○ Discord checking…             │
+                                │
+Channels                     ✚  │
+● #proj · /home/x/Work/proj  ⚙  │
+  ◐ @main (general)       $0.20 │
+    ● @scout (general)    $0.05 │
+                    ╭────────────────────────────────────────────────────────────────────╮
+                    │ Async 1                                                 esc: close │
+                    │                                                                    │
+                    │ waiting on                                                         │
+                    │ ▸ scout (general)  working · $0.05 · 9m00s                         │
+                    │                                                                    │
+                    │ ↑/↓ move · space/enter open chat · ctrl+space input                │
+                    ╰────────────────────────────────────────────────────────────────────╯
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+                                │
+─ main (general) ─ gpt-5.6-terra ─ high ────────────────── async 1 ─ todo 0 ─ mcp 0 ─ Get started /providers ─
+
+ ASK › Ask anything… "Fix a TODO in the codebase"
