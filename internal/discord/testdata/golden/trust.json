@@ -1,0 +1,24 @@
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Trust this project's config",
+          "style": 2,
+          "disabled": false,
+          "custom_id": "sv|p1|allow|",
+          "type": 2
+        },
+        {
+          "label": "Not now",
+          "style": 2,
+          "disabled": false,
+          "custom_id": "sv|p1|skip|",
+          "type": 2
+        }
+      ],
+      "type": 1
+    }
+  ],
+  "content": "❗ **Project configuration trust**\n```text\n\n```"
+}
