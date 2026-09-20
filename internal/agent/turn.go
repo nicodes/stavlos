@@ -117,83 +117,122 @@ func (t *turnRun) end(reason event.TurnReason, errText string) {
 // step is one model call and the tool calls it asks for. It returns
 // done=true with the reason when the turn is over.
 func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
-	a, s := t.a, t.a.c
 	if t.ctx.Err() != nil {
 		return event.ReasonCancelled, "", true
 	}
-	if msg := config.DirectoryError(s.Dir()); msg != "" {
-		return event.ReasonError, msg, true
+	p, errText := t.prepare()
+	if errText != "" {
+		return event.ReasonError, errText, true
 	}
-	if err := t.takeMidTurn(); err != nil {
-		return event.ReasonError, err.Error(), true
-	}
-	a.leaveLimitedModel() // a plan known to be used up is not called just to be refused
-	s.mu.Lock()
-	st, cfg := a.state(), s.cfg
-	rv, modelID, variant := s.roleLocked(st), st.model, st.variant
-	s.mu.Unlock()
-	if modelID == "" {
-		return event.ReasonError, ErrNoModel, true
-	}
-	if !rv.preset.AllowsModel(modelID) || !rv.preset.AllowsVariant(modelID, variant) {
-		return event.ReasonError, "the current model or variant is not allowed by this project's role; use /models or /variants to select one", true
-	}
-	m, info, err := s.host.Resolve(modelID)
+	resp, err := t.call(p)
+	msg := event.AssistantMessagePayload{Turn: t.turn, Blocks: resp.Blocks, StopReason: string(resp.StopReason), Model: p.modelID, Usage: resp.Usage, CostUSD: p.info.Cost(resp.Usage)}
 	if err != nil {
+		return t.onError(err, p, resp, msg)
+	}
+	if err := t.a.record(event.AssistantMessage, msg); err != nil {
 		return event.ReasonError, err.Error(), true
 	}
-	// The role's MCP servers start before the prompt is built (their tools
-	// are part of it); a server that fails is logged and skipped.
-	if len(rv.preset.MCP) > 0 || a.hasMCP() {
-		a.ensureMCP(a.ctx, cfg, rv.preset.MCP)
-	}
-	system, defs := a.buildContext(rv, cfg)
-	history := a.prepareHistory(t.ctx, m, info, system, defs)
-	history = withNote(history, a.stateNote(rv, cfg))
-
-	resp, err := m.Complete(t.ctx, model.Request{Model: bareID(modelID), System: system, Messages: history, Tools: defs, Variant: variant, CacheKey: a.ID},
-		func(d model.Delta) {
-			s.host.Stream(protocol.StreamNotification{Channel: s.ID, Agent: a.ID, Turn: t.turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName, Reset: d.Reset})
-		})
-	msg := event.AssistantMessagePayload{Turn: t.turn, Blocks: resp.Blocks, StopReason: string(resp.StopReason), Model: modelID, Usage: resp.Usage, CostUSD: info.Cost(resp.Usage)}
-	if err != nil && t.ctx.Err() == nil && t.movedOn(err, modelID) {
-		return "", "", false // the same step again, on the model the harness moved the agent to
-	}
-	if err != nil {
-		cancelled := t.ctx.Err() != nil
-		if len(resp.Blocks) > 0 || resp.Usage != (model.Usage{}) {
-			if cancelled {
-				msg.StopReason = "cancelled"
-			}
-			_ = a.record(event.AssistantMessage, msg) // what was produced and paid for stays on the record
-		}
-		if cancelled {
-			return event.ReasonCancelled, "", true
-		}
-		return event.ReasonError, limitHint(err, t.resumeAt), true
-	}
-	if err := a.record(event.AssistantMessage, msg); err != nil {
-		return event.ReasonError, err.Error(), true
-	}
-	var calls []model.Block
-	for _, b := range resp.Blocks {
-		if b.Type == model.BlockToolUse {
-			calls = append(calls, b)
-		}
-	}
-	if len(calls) == 0 {
+	if !t.runTools(p, resp) {
 		if resp.StopReason == model.StopMaxTokens {
 			return event.ReasonMaxTokens, "", true
 		}
 		return event.ReasonEndTurn, "", true
 	}
-	for _, c := range calls {
-		if t.ctx.Err() != nil {
-			break
-		}
-		a.runTool(t.ctx, t.turn, c, defs, rv, cfg)
-	}
 	return "", "", false
+}
+
+// stepPlan is everything one model call is made from, read once: the role and
+// configuration as they were when the step began, the model, and the prompt.
+type stepPlan struct {
+	rv      roleView
+	cfg     *config.Effective
+	modelID string
+	variant string
+	m       model.Model
+	info    model.Info
+	system  string
+	defs    []model.ToolDef
+	history []model.Message
+}
+
+// prepare takes what arrived mid-turn, settles which model the step runs on
+// and builds the prompt. errText is why the turn cannot go on.
+func (t *turnRun) prepare() (p stepPlan, errText string) {
+	a, s := t.a, t.a.c
+	if msg := config.DirectoryError(s.Dir()); msg != "" {
+		return p, msg
+	}
+	if err := t.takeMidTurn(); err != nil {
+		return p, err.Error()
+	}
+	a.leaveLimitedModel() // a plan known to be used up is not called just to be refused
+	s.mu.Lock()
+	st := a.state()
+	p.cfg, p.rv, p.modelID, p.variant = s.cfg, s.roleLocked(st), st.model, st.variant
+	s.mu.Unlock()
+	if p.modelID == "" {
+		return p, ErrNoModel
+	}
+	if !p.rv.preset.AllowsModel(p.modelID) || !p.rv.preset.AllowsVariant(p.modelID, p.variant) {
+		return p, "the current model or variant is not allowed by this project's role; use /models or /variants to select one"
+	}
+	var err error
+	if p.m, p.info, err = s.host.Resolve(p.modelID); err != nil {
+		return p, err.Error()
+	}
+	// The role's MCP servers start before the prompt is built (their tools
+	// are part of it); a server that fails is logged and skipped.
+	if len(p.rv.preset.MCP) > 0 || a.hasMCP() {
+		a.ensureMCP(a.ctx, p.cfg, p.rv.preset.MCP)
+	}
+	p.system, p.defs = a.buildContext(p.rv, p.cfg)
+	p.history = withNote(a.prepareHistory(t.ctx, p.m, p.info, p.system, p.defs), a.stateNote(p.rv, p.cfg))
+	return p, ""
+}
+
+// call makes the model call, streaming what it says to the channel's clients.
+func (t *turnRun) call(p stepPlan) (model.Response, error) {
+	a, s := t.a, t.a.c
+	return p.m.Complete(t.ctx, model.Request{Model: bareID(p.modelID), System: p.system, Messages: p.history, Tools: p.defs, Variant: p.variant, CacheKey: a.ID},
+		func(d model.Delta) {
+			s.host.Stream(protocol.StreamNotification{Channel: s.ID, Agent: a.ID, Turn: t.turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName, Reset: d.Reset})
+		})
+}
+
+// onError is a model call that failed: the step runs again when the harness
+// moved the agent to another model, and otherwise the turn ends, with what
+// was produced and paid for kept on the record.
+func (t *turnRun) onError(err error, p stepPlan, resp model.Response, msg event.AssistantMessagePayload) (event.TurnReason, string, bool) {
+	cancelled := t.ctx.Err() != nil
+	if !cancelled && t.movedOn(err, p.modelID) {
+		return "", "", false // the same step again, on the model the harness moved the agent to
+	}
+	if len(resp.Blocks) > 0 || resp.Usage != (model.Usage{}) {
+		if cancelled {
+			msg.StopReason = "cancelled"
+		}
+		_ = t.a.record(event.AssistantMessage, msg)
+	}
+	if cancelled {
+		return event.ReasonCancelled, "", true
+	}
+	return event.ReasonError, limitHint(err, t.resumeAt), true
+}
+
+// runTools runs the calls a response asks for, in order, and reports whether
+// there were any: a response with none ends the turn.
+func (t *turnRun) runTools(p stepPlan, resp model.Response) bool {
+	any := false
+	for _, b := range resp.Blocks {
+		if b.Type != model.BlockToolUse {
+			continue
+		}
+		any = true
+		if t.ctx.Err() == nil {
+			t.a.runTool(t.ctx, t.turn, b, p.defs, p.rv, p.cfg)
+		}
+	}
+	return any
 }
 
 // takeMidTurn hands the model, at this model call, the inputs that do not

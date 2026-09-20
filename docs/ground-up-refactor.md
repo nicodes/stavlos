@@ -259,7 +259,7 @@ on their own rather than arrive in one diff.
 | 2.2 one commit, one dispatch | **done** | `commitLocked` dispatches its own wakes; `commitFactLocked` folds what happened even when the write fails. |
 | 2.3 runtime state derived | **half** | Which instructions an agent has been given is recorded on `tool.finished` and folded, so a restart does not hand them over again. `compactNext` and the context gauge are still memory only. |
 | 2.4 one system input | **done** | Framed from the rule; the "[harness]" text prefix is gone. |
-| 2.5 turn loop | open | |
+| 2.5 turn loop | **done** | `step` is `prepare() → stepPlan`, `call()`, `onError()`, `runTools()`; the plan is read once a step. Failover stays `movedOn` with its record on the turn. |
 | 2.6 `Host` / `Env` split | open | |
 | 2.7 channel resources | **done** | `Agent.release`. |
 | 3.1 `pathx`, `os.Root` | **half** | `pathx.Rel`/`Within`/`Under` is the one containment test, at all seven sites (the prefix form was wrong for `/`, the `Rel` form for a file named `..x`), with a fuzz target. Tools still do their I/O by path, not through an `os.Root`. |
