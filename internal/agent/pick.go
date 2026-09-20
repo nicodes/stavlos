@@ -252,7 +252,7 @@ func readMarket(host Models, cfg *config.Effective, others ...string) market {
 		mk.usable[id] = host.CheckModel(id) == nil
 		mk.variants[id] = host.Variants(id)
 	}
-	for _, p := range cfg.Presets {
+	for _, p := range cfg.Roles {
 		for _, m := range p.Models {
 			look(m.ID)
 		}
@@ -271,16 +271,16 @@ func readMarket(host Models, cfg *config.Effective, others ...string) market {
 // preferred order: the role's list, or, for a role that lists none (or only
 // patterns), the models stavlos.json lists that the role allows. Only models
 // that can be called now count.
-func (mk market) candidates(preset config.Preset, cfg *config.Effective) []string {
+func (mk market) candidates(def config.Role, cfg *config.Effective) []string {
 	var ids []string
-	for _, m := range preset.Models {
+	for _, m := range def.Models {
 		if !strings.ContainsAny(m.ID, "*?[") {
 			ids = append(ids, m.ID)
 		}
 	}
 	if len(ids) == 0 {
 		for _, id := range cfg.Models {
-			if preset.AllowsModel(id) {
+			if def.AllowsModel(id) {
 				ids = append(ids, id)
 			}
 		}
@@ -297,20 +297,20 @@ func (mk market) candidates(preset config.Preset, cfg *config.Effective) []strin
 // choose is the harness's choice for a role, passing over the provider avoid
 // ("" for none). ok is false when there is nothing to choose from or every
 // candidate is at its limit.
-func (mk market) choose(preset config.Preset, cfg *config.Effective, avoid string) (choice, time.Time, bool) {
-	cands := mk.candidates(preset, cfg)
+func (mk market) choose(def config.Role, cfg *config.Effective, avoid string) (choice, time.Time, bool) {
+	cands := mk.candidates(def, cfg)
 	if len(cands) == 0 {
 		return choice{}, time.Time{}, false
 	}
 	return pickModel(cands, mk.usage, mk.now, avoid)
 }
 
-// available reports whether an agent on modelID under preset has a model to
+// available reports whether an agent on modelID under role has a model to
 // run on now: one of its role's candidates, or, for a role with nothing to
 // choose from, its own.
-func (mk market) available(preset config.Preset, cfg *config.Effective, modelID string) bool {
-	if len(mk.candidates(preset, cfg)) > 0 {
-		_, _, ok := mk.choose(preset, cfg, "")
+func (mk market) available(def config.Role, cfg *config.Effective, modelID string) bool {
+	if len(mk.candidates(def, cfg)) > 0 {
+		_, _, ok := mk.choose(def, cfg, "")
 		return ok
 	}
 	provider, _, err := model.Split(modelID)
@@ -323,8 +323,8 @@ func (mk market) available(preset config.Preset, cfg *config.Effective, modelID 
 // made the move. It was written separately for /models, for a role change and
 // for a move off a limited model, and the third copy is the one that carried
 // a variant to a model that rejects it (#36).
-func (mk market) retarget(st *agentState, preset config.Preset, role, modelID, reason string) event.AgentUpdatedPayload {
-	up := changed(st, role, modelID, fitVariant(preset, mk.variants[modelID], modelID, st.variant))
+func (mk market) retarget(st *agentState, def config.Role, role, modelID, reason string) event.AgentUpdatedPayload {
+	up := changed(st, role, modelID, fitVariant(def, mk.variants[modelID], modelID, st.variant))
 	if up.Model != nil {
 		up.Reason = reason
 	}
@@ -397,8 +397,8 @@ func (a *Agent) moveOff(provider string, until time.Time) (bool, time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	st := a.state()
-	preset := c.roleLocked(st).preset
-	pick, soonest, ok := mk.choose(preset, c.cfg, provider)
+	def := c.roleLocked(st).def
+	pick, soonest, ok := mk.choose(def, c.cfg, provider)
 	if !ok || pick.model == st.model {
 		return false, soonest
 	}
@@ -406,7 +406,7 @@ func (a *Agent) moveOff(provider string, until time.Time) (bool, time.Time) {
 	if !until.IsZero() {
 		reason += " until " + until.Local().Format("15:04")
 	}
-	up := mk.retarget(st, preset, "", pick.model, reason+"; "+pick.why)
+	up := mk.retarget(st, def, "", pick.model, reason+"; "+pick.why)
 	return c.commitLocked(context.Background(), c.event(a.ID, event.AgentUpdated, up)) == nil, soonest
 }
 
@@ -478,7 +478,7 @@ func (c *Channel) MaybeResume(ctx context.Context, now time.Time) error {
 	var evs []event.Event
 	for _, id := range c.st.order {
 		st := c.st.agents[id]
-		if !st.parkedUntil(now) || !mk.available(c.roleLocked(st).preset, c.cfg, st.model) {
+		if !st.parkedUntil(now) || !mk.available(c.roleLocked(st).def, c.cfg, st.model) {
 			continue // not parked, or still nothing to run on: look again at the next tick
 		}
 		evs = append(evs, c.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputResume, Text: resumeText}))

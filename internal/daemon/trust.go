@@ -70,7 +70,7 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 		input, _ := json.Marshal(map[string]any{"dir": dir, "hash": cfg.TrustHash, "files": cfg.TrustFiles})
 		ans := d.esc.Request(context.Background(), protocol.PromptInfo{
 			ID: id, Channel: s.ID, ChannelName: s.Name(), Kind: protocol.PromptTrust, Input: input,
-			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, presets, skills and AGENTS.md.", dir),
+			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, roles, skills and AGENTS.md.", dir),
 			Options:  []string{"trust", "skip"},
 		}, func() { close(opened) }) // published before a caller can change the channel directory
 		d.trustMu.Lock()

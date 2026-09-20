@@ -29,7 +29,7 @@ var commands = []Command{
 	{Name: "/providers", Args: "[openai|xai|zai|kimi]", Desc: "manage providers: sign in with ChatGPT, Grok, the Z.ai Coding Plan or Kimi For Coding (enter) or sign out (ctrl+d); a name jumps to its sign-in", Aliases: []string{"/provider", "/connect", "/login"}, Direct: true},
 	{Name: "/models", Desc: "pick a model: enter sets the selected agent's, ctrl+s the channel default", Aliases: []string{"/model"}, Direct: true},
 	{Name: "/variants", Args: "[name|default]", Desc: "pick a model variant (reasoning effort) for the selected agent; no arg opens a picker", Aliases: []string{"/variant"}, Direct: true},
-	{Name: "/roles", Args: "[name]", Desc: "pick the selected agent's role (preset); a name sets it directly", Aliases: []string{"/role", "/presets"}, Direct: true},
+	{Name: "/roles", Args: "[name]", Desc: "pick the selected agent's role; a name sets it directly", Aliases: []string{"/role", "/presets"}, Direct: true},
 	{Name: "/mode", Desc: "permission mode for the channel: ask, auto (free inside the channel's directories) or yolo", Direct: true},
 	{Name: "/auto", Args: "[on|off]", Desc: "auto mode: approve permissions inside the channel's directories, deny outside (no arg toggles)", Direct: true},
 	{Name: "/yolo", Args: "[on|off]", Desc: "yolo mode: approve every permission, directories included (no arg toggles)", Direct: true},

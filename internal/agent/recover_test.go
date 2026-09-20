@@ -272,8 +272,8 @@ func TestRecoverMissingRoleIsReadOnly(t *testing.T) {
 	if in.Role != "lead" || !strings.Contains(in.LastError, "no longer exists") {
 		t.Fatalf("%+v", in)
 	}
-	if p := r.role().preset; strings.Join(p.Tools, ",") != "read" || len(p.Spawn) != 0 || len(p.MCP) != 0 {
-		t.Fatalf("fallback preset %+v", p)
+	if p := r.role().def; strings.Join(p.Tools, ",") != "read" || len(p.Spawn) != 0 || len(p.MCP) != 0 {
+		t.Fatalf("fallback role %+v", p)
 	}
 	s2.mu.Lock()
 	ok, _ := s2.canSpawnLocked(r.state())

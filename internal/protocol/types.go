@@ -42,7 +42,7 @@ const (
 	MAgentSend       = "agent.send" // Prompt / Steer / Cancel / Kill
 	MAgentSpawn      = "agent.spawn"
 	MAgentSetModel   = "agent.set_model"
-	MAgentSetRole    = "agent.set_role"    // switch an agent's preset in place
+	MAgentSetRole    = "agent.set_role"    // switch an agent's role in place
 	MAgentSetVariant = "agent.set_variant" // switch an agent's model variant (reasoning effort)
 	MAgentCompact    = "agent.compact"     // summarise the agent\'s completed turns now (or at its next turn if busy)
 	MVariants        = "variants"          // variant names a model offers
@@ -66,7 +66,7 @@ const (
 	MSubscribe   = "subscribe"
 	MUnsubscribe = "unsubscribe"
 	MReconcile   = "reconcile"
-	MPresets     = "presets" // archetypes available to a channel
+	MRoles       = "roles" // archetypes available to a channel
 
 	MUsageSeries = "usage.series" // tokens and cost over time: the system's, a channel's or an agent's
 	MPlanUsage   = "plan.usage"   // the signed-in subscriptions' plan usage, as last observed

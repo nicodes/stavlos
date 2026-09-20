@@ -139,10 +139,10 @@ func expandPath(p string) string {
 	return filepath.Clean(p)
 }
 
-// Preset is a role definition from agents/<name>.md (PRD §10.3). The word
-// "role" is what users see; "preset" and "archetype" are the same thing in
-// code and in the log.
-type Preset struct {
+// Role is a role definition from agents/<name>.md (PRD §10.3). "Archetype" is
+// the same thing where a model is spoken to (agent_create's argument); the
+// code and the wire called it "preset" until 2026-09.
+type Role struct {
 	Name        string
 	Description string
 	Type        string      // primary | subagent | all
@@ -181,7 +181,7 @@ var RoleColors = []string{"red", "blue", "green", "yellow", "purple", "orange", 
 
 // AllowsModel reports whether the role's whitelist admits a model id (any
 // model when the list is empty).
-func (p Preset) AllowsModel(id string) bool {
+func (p Role) AllowsModel(id string) bool {
 	if len(p.Models) == 0 {
 		return true
 	}
@@ -189,7 +189,7 @@ func (p Preset) AllowsModel(id string) bool {
 }
 
 // modelSpec finds the whitelist entry matching a model id (glob-aware).
-func (p Preset) modelSpec(id string) *ModelSpec {
+func (p Role) modelSpec(id string) *ModelSpec {
 	for i := range p.Models {
 		if ok, _ := filepath.Match(p.Models[i].ID, id); ok || p.Models[i].ID == id {
 			return &p.Models[i]
@@ -200,7 +200,7 @@ func (p Preset) modelSpec(id string) *ModelSpec {
 
 // DefaultModel is the whitelist's first entry when it is a plain id, else
 // "" (a glob cannot be a default; the caller falls back to inheriting).
-func (p Preset) DefaultModel() string {
+func (p Role) DefaultModel() string {
 	if len(p.Models) == 0 || strings.ContainsAny(p.Models[0].ID, "*?[") {
 		return ""
 	}
@@ -210,7 +210,7 @@ func (p Preset) DefaultModel() string {
 // AllowsVariant reports whether variant v may be used with model id under
 // this role: any when the list is empty or the matching entry lists none.
 // "" (the provider default) is allowed only when the entry lists none.
-func (p Preset) AllowsVariant(id, v string) bool {
+func (p Role) AllowsVariant(id, v string) bool {
 	spec := p.modelSpec(id)
 	if spec == nil || len(spec.Variants) == 0 {
 		return true
@@ -224,7 +224,7 @@ func (p Preset) AllowsVariant(id, v string) bool {
 }
 
 // DefaultVariantList is the variants listed for model id (nil = any).
-func (p Preset) DefaultVariantList(id string) []string {
+func (p Role) DefaultVariantList(id string) []string {
 	if spec := p.modelSpec(id); spec != nil {
 		return spec.Variants
 	}
@@ -232,7 +232,7 @@ func (p Preset) DefaultVariantList(id string) []string {
 }
 
 // DefaultVariant is the first variant listed for model id, "" when none.
-func (p Preset) DefaultVariant(id string) string {
+func (p Role) DefaultVariant(id string) string {
 	if spec := p.modelSpec(id); spec != nil && len(spec.Variants) > 0 {
 		return spec.Variants[0]
 	}
@@ -240,8 +240,8 @@ func (p Preset) DefaultVariant(id string) string {
 }
 
 // CanBePrimary / CanBeSubagent read the type.
-func (p Preset) CanBePrimary() bool  { return p.Type != TypeSubagent }
-func (p Preset) CanBeSubagent() bool { return p.Type != TypePrimary }
+func (p Role) CanBePrimary() bool  { return p.Type != TypeSubagent }
+func (p Role) CanBeSubagent() bool { return p.Type != TypePrimary }
 
 // Skill is a skills/<name>/SKILL.md (PRD §10.4).
 type Skill struct {
@@ -276,7 +276,7 @@ type Effective struct {
 	PassEnv     []string        // environment variables child processes keep although their names look like secrets
 	searchRuled bool            // a layer's policy decided web_search, so a search backend does not allow it
 	Policy      *policy.Layered // every layer's rules merged in order (defaults, global, project, local); roles add overlays that only tighten
-	Presets     map[string]Preset
+	Roles       map[string]Role
 	Skills      map[string]Skill
 	Commands    map[string]Command
 	// Instructions are the AGENTS.md files every agent follows, general
@@ -362,7 +362,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 				}
 			}
 			e.allowSearch()
-			if err := e.loadPresets(snap, filepath.Join(pdir, "agents"), "project"); err != nil {
+			if err := e.loadRoles(snap, filepath.Join(pdir, "agents"), "project"); err != nil {
 				return nil, err
 			}
 			if err := e.loadSkills(snap, filepath.Join(pdir, "skills")); err != nil {
@@ -434,15 +434,15 @@ func LoadGlobal() (*Effective, error) {
 }
 
 func loadGlobalFrom(gdir string) (*Effective, error) {
-	e := &Effective{Presets: map[string]Preset{}, Skills: map[string]Skill{}, MCP: map[string]MCP{}}
+	e := &Effective{Roles: map[string]Role{}, Skills: map[string]Skill{}, MCP: map[string]MCP{}}
 
 	// defaults, then the global layer over them
 	e.Policy = policy.Layer(policy.New())
 	if err := e.applyFile(Defaults(), "defaults"); err != nil {
 		return nil, fmt.Errorf("defaults: %w", err)
 	}
-	for _, p := range builtinPresets() {
-		e.Presets[p.Name] = p
+	for _, p := range builtinRoles() {
+		e.Roles[p.Name] = p
 	}
 
 	// global layer
@@ -455,7 +455,7 @@ func loadGlobalFrom(gdir string) (*Effective, error) {
 	}
 	e.allowSearch()
 	e.Instructions = instructions.Global() // the user's own, trusted like the rest of this layer
-	if err := e.loadPresets(disk{}, filepath.Join(gdir, "agents"), "global"); err != nil {
+	if err := e.loadRoles(disk{}, filepath.Join(gdir, "agents"), "global"); err != nil {
 		return nil, err
 	}
 	if err := e.loadSkills(disk{}, filepath.Join(gdir, "skills")); err != nil {
@@ -737,7 +737,7 @@ func ParsePolicy(m map[string]any) (*policy.Set, error) {
 	return policy.New(rules...), nil
 }
 
-func (e *Effective) loadPresets(src source, dir, layer string) error {
+func (e *Effective) loadRoles(src source, dir, layer string) error {
 	entries, err := src.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -749,7 +749,7 @@ func (e *Effective) loadPresets(src source, dir, layer string) error {
 		if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".md") {
 			continue
 		}
-		p, err := readPreset(src, filepath.Join(dir, ent.Name()))
+		p, err := readRole(src, filepath.Join(dir, ent.Name()))
 		if err != nil {
 			return err
 		}
@@ -757,7 +757,7 @@ func (e *Effective) loadPresets(src source, dir, layer string) error {
 		if err := e.checkTightening(p); err != nil {
 			return err
 		}
-		e.Presets[p.Name] = p
+		e.Roles[p.Name] = p
 	}
 	return nil
 }
@@ -767,8 +767,8 @@ func (e *Effective) loadPresets(src source, dir, layer string) error {
 // layering itself makes such a rule inert whatever this check says; the
 // error exists so the user is not left wondering why the rule did nothing.
 // It samples one argument per pattern, so it catches the plain cases.
-func (e *Effective) checkTightening(p Preset) error {
-	for _, r := range p.PresetPolicy().Rules() {
+func (e *Effective) checkTightening(p Role) error {
+	for _, r := range p.RolePolicy().Rules() {
 		base, _ := e.Policy.Decide(r.Tool, policy.Text(samplePattern(r.Pattern)))
 		if r.Verb.Rank() < base.Rank() {
 			return fmt.Errorf("%s: tools.%s %q: %s loosens the policy (%s); roles may only tighten", p.Source, r.Tool, r.Pattern, r.Verb, base)
@@ -842,26 +842,26 @@ type roleFile struct {
 // lifecycle tools with a non-empty spawn list.
 var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.Todo, toolname.WebFetch, toolname.WebSearch, toolname.Sheet}
 
-// ReadPreset parses one agents/<name>.md file.
-func ReadPreset(path string) (Preset, error) { return readPreset(disk{}, path) }
+// ReadRole parses one agents/<name>.md file.
+func ReadRole(path string) (Role, error) { return readRole(disk{}, path) }
 
-func readPreset(src source, path string) (Preset, error) {
+func readRole(src source, path string) (Role, error) {
 	b, err := src.ReadFile(path)
 	if err != nil {
-		return Preset{}, err
+		return Role{}, err
 	}
 	var f roleFile
 	body, err := frontmatter(string(b), &f)
 	if err != nil {
-		return Preset{}, fmt.Errorf("%s: %w", path, err)
+		return Role{}, fmt.Errorf("%s: %w", path, err)
 	}
-	p := Preset{
+	p := Role{
 		Name: strings.TrimSuffix(filepath.Base(path), ".md"), Description: strings.TrimSpace(f.Description),
 		Type: f.Type, Loop: f.Loop, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color,
 		Body: strings.TrimSpace(body), Source: path,
 	}
-	fail := func(format string, args ...any) (Preset, error) {
-		return Preset{}, fmt.Errorf("%s: "+format, append([]any{path}, args...)...)
+	fail := func(format string, args ...any) (Role, error) {
+		return Role{}, fmt.Errorf("%s: "+format, append([]any{path}, args...)...)
 	}
 	switch {
 	case f.Model != nil:
@@ -1076,9 +1076,9 @@ func parseSize(s string) (int, error) {
 	return n * mult, nil
 }
 
-// PresetPolicy returns the role's tightening rules from the map form of
+// RolePolicy returns the role's tightening rules from the map form of
 // tools:.
-func (p Preset) PresetPolicy() *policy.Set {
+func (p Role) RolePolicy() *policy.Set {
 	m := map[string]any{}
 	for tool, rules := range p.ToolRules {
 		r := map[string]any{}
@@ -1096,11 +1096,11 @@ func (p Preset) PresetPolicy() *policy.Set {
 // toolGroup expands a tools: key to the tool names it gates.
 func toolGroup(name string) []string { return toolname.Expand([]string{name}) }
 
-// builtinPresets is the one role every install starts with. It can do
+// builtinRoles is the one role every install starts with. It can do
 // everything and can delegate to copies of itself; users add specialised
 // roles as <config>/agents/<name>.md or <project>/.stavlos/agents/<name>.md.
-func builtinPresets() []Preset {
-	return []Preset{
+func builtinRoles() []Role {
+	return []Role{
 		{
 			Name: "general", Layer: "builtin", Type: TypeAll,
 			Description: "General-purpose engineer: reads, edits, runs, and delegates",

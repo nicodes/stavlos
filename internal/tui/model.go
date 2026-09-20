@@ -91,7 +91,7 @@ type Model struct {
 	lastRemembered string
 	editors        map[string]editorState
 
-	presets []protocol.PresetInfo
+	roles []protocol.RoleInfo
 
 	input    textarea.Model // grows with the text, up to inputMaxLines
 	sp       spinner.Model

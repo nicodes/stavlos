@@ -62,7 +62,7 @@ type AgentSetModelParams struct {
 }
 type AgentSetRoleParams struct {
 	Agent string `json:"agent"`
-	Role  string `json:"role"` // preset name
+	Role  string `json:"role"` // role name
 }
 type AgentCompactParams struct {
 	Agent string `json:"agent"`
