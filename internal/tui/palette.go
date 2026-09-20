@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -70,7 +71,19 @@ func matchCommands(input string, registry []Command) []Command {
 	}
 	q := strings.ToLower(strings.TrimPrefix(input, "/"))
 	var out []Command
+	// What was typed in full comes first, whatever the palette's order: "/mode"
+	// is also how "/model" starts and "/h" how "/history" does, and enter runs
+	// the first row.
 	for _, c := range registry {
+		if q != "" && (c.Name == "/"+q || slices.Contains(c.Aliases, "/"+q)) {
+			out = append(out, c)
+		}
+	}
+	exact := len(out)
+	for _, c := range registry {
+		if exact > 0 && c.Name == out[0].Name {
+			continue
+		}
 		if strings.HasPrefix(strings.TrimPrefix(c.Name, "/"), q) {
 			out = append(out, c)
 			continue
