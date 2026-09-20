@@ -36,10 +36,7 @@ func (d *Daemon) Serve(ctx context.Context, socket string) error {
 		return err
 	}
 	_ = os.Chmod(socket, 0o600)
-	if d.Discord != nil {
-		d.Discord.Start()
-	}
-	d.startWeb(ctx)
+	d.startServices(ctx)
 	go func() {
 		<-ctx.Done()
 		ln.Close()

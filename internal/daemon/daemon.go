@@ -55,6 +55,7 @@ type Daemon struct {
 	trust        *trustStore
 	lock         *os.File // the data directory's lock, held until Close
 	closeOnce    sync.Once
+	loops        []service // what Main adds to the front doors (services.go)
 
 	streams *streams // stream deltas waiting to be sent together
 
@@ -114,7 +115,7 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 // daemon that only partly started, and to call twice.
 func (d *Daemon) Close() {
 	d.closeOnce.Do(func() {
-		for _, stop := range []func(){d.closeDiscord, d.closeWeb, d.stopChannels, d.closeLog, d.unlock} {
+		for _, stop := range []func(){d.stopServices, d.stopChannels, d.closeLog, d.unlock} {
 			stop()
 		}
 	})
