@@ -78,6 +78,7 @@ func Main(ctx context.Context, o Options) error {
 	sctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	d.Shutdown = cancel
+	d.TreatInProcessAsBridge()
 	if o.Discord != nil {
 		d.Discord = o.Discord(sctx, o.Socket, o.DataDir)
 	}
