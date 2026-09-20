@@ -1350,22 +1350,15 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 	event.AgentUpdated: decoded(func(p event.AgentUpdatedPayload) []Line {
 		var lines []Line
-		if p.Role != nil {
-			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Role", "→ "+*p.Role)})
-		}
-		if p.Model != nil {
-			text := "→ " + *p.Model
-			if p.Reason != "" {
-				text += " · " + p.Reason // the harness moved it: its old model's plan ran out
+		for _, c := range present.AgentChanges(p) {
+			if c.What == "Name" {
+				continue // the tree shows it
 			}
-			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Model", text)})
-		}
-		if p.Variant != nil {
-			v := *p.Variant
-			if v == "" {
-				v = "default"
+			text := "→ " + c.To
+			if c.Why != "" {
+				text += " · " + c.Why // the harness moved it: its old model's plan ran out
 			}
-			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Variant", "→ "+v)})
+			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled(c.What, text)})
 		}
 		return lines
 	}),
