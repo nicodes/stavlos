@@ -263,7 +263,7 @@ on their own rather than arrive in one diff.
 | 2.6 `Host` / `Env` split | open | |
 | 2.7 channel resources | **done** | `Agent.release`. |
 | 3.1 `pathx`, `os.Root` | **half** | `pathx.Rel`/`Within`/`Under` is the one containment test, at all seven sites (the prefix form was wrong for `/`, the `Rel` form for a file named `..x`), with a fuzz target. Tools still do their I/O by path, not through an `os.Root`. |
-| 3.2 pure `Decide` | open | The non-† part still depends on 3.1's parsed paths. |
+| 3.2 pure `Decide` | **half** | `agent.ModeVerdict(mode, sticky, egress, outside)` is the one place a mode's meaning is written: the live decision and the mode switch over waiting prompts both call it (they disagreed about a control-file edit outside the directories under auto). The stages before it (policy, control files, permits, hosts) are still gathered inline in `decide`; permits keyed by principal and the † hidden-path rule are open. |
 | 3.3 shell grammar | **done** | Keywords, launcher flag arity, `eval`, here-strings, same-line literals. A prefix is offered only for words that read back as themselves (found by the fuzzer). |
 | 3.4 trust snapshot | **done** | `config.TakeSnapshot`: one read, bounded, regular files only (a link to one counts); the hash and every project loader use those bytes. The config editor still validates its staged tree from disk. |
 | 3.5 one config writer | **done** | `statefile.WriteAtomic` everywhere but the patch tool (its own semantics) and `init` (a new file). |
