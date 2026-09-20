@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,6 +18,29 @@ func (m *Model) tail() int {
 		return 0
 	}
 	return historyTail
+}
+
+// viewCommand runs the commands that change what is shown and nothing else.
+func (m *Model) viewCommand(name string) tea.Cmd {
+	if name == "/history" {
+		return m.loadHistory()
+	}
+	return m.toggleTree()
+}
+
+// onSubscribed is the reply to subscribe, which arrives once the replay has.
+func (m *Model) onSubscribed(msg subscribedMsg) ([]tea.Cmd, bool) {
+	if !m.accepts(msg.scope) {
+		return nil, false
+	}
+	if msg.err != nil {
+		m.fatal = fmt.Errorf("subscribe: %w", msg.err)
+		return nil, true
+	}
+	if m.historyFrom = msg.first; msg.first > 1 {
+		return []tea.Cmd{m.setStatus("showing recent history · /history loads all of it", false)}, false
+	}
+	return nil, false
 }
 
 // loadHistory is /history: what the replay built is dropped and the channel
