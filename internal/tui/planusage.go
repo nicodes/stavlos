@@ -147,10 +147,11 @@ func (m Model) planUsageRows(width int, now time.Time) []string {
 	if len(list) == 0 {
 		return nil
 	}
-	spanW := 0
+	spanW, resetW := 0, 0
 	for _, r := range list {
 		if !r.header {
 			spanW = max(spanW, ansi.StringWidth(windowSpan(r.window.Minutes)))
+			resetW = max(resetW, ansi.StringWidth(resetLabel(r.window, now)))
 		}
 	}
 	rows := make([]string, 0, len(list)+2)
@@ -162,13 +163,33 @@ func (m Model) planUsageRows(width int, now time.Time) []string {
 		}
 		span := windowSpan(r.window.Minutes)
 		label := planIndent + span + strings.Repeat(" ", spanW-ansi.StringWidth(span))
-		rows = append(rows, planUsageRow(label, windowUsed(r.window, now), width))
+		reset := resetLabel(r.window, now)
+		reset += strings.Repeat(" ", resetW-ansi.StringWidth(reset)) // one width, so every meter ends in the same column
+		rows = append(rows, planUsageRow(label, windowUsed(r.window, now), width, reset))
 	}
 	return append(rows, "")
 }
 
 // planIndent sets a plan's meters in from its name.
 const planIndent = "  "
+
+// resetLabel is when a window starts over, as short as says it: the time
+// today ("14:10"), the day and the time within a week ("Tue 09:00"), the date
+// beyond that ("Oct 3"). Nothing when the provider did not say, or when the
+// reset has passed (the meter reads 0% then, and a past time would mislead).
+func resetLabel(w protocol.UsageWindowInfo, now time.Time) string {
+	if w.ResetsAt.IsZero() || !w.ResetsAt.After(now) {
+		return ""
+	}
+	at := w.ResetsAt.In(now.Location())
+	switch {
+	case at.YearDay() == now.YearDay() && at.Year() == now.Year():
+		return at.Format("15:04")
+	case at.Sub(now) < 7*24*time.Hour:
+		return at.Format("Mon 15:04")
+	}
+	return at.Format("Jan 2")
+}
 
 // windowSpan names a window by its length: "5h", "wk", "mo", "3d"; "" when
 // the provider did not say.
@@ -221,12 +242,16 @@ func windowUsed(w protocol.UsageWindowInfo, now time.Time) float64 {
 	return min(max(w.UsedPercent, 0), 100)
 }
 
-// planUsageRow draws "name ━━━━━━──────  38%": the bar in accent, orange
-// from 70% and red from 90%.
-func planUsageRow(name string, used float64, width int) string {
+// planUsageRow draws "name ━━━━━━──────  38% 14:10": the bar in accent,
+// orange from 70% and red from 90%, then when the window resets (tail, "" for
+// none).
+func planUsageRow(name string, used float64, width int, tail string) string {
 	const pctW = 4
 	name = ansi.Truncate(name, max(1, width*2/3), "…")
-	barW := max(1, width-ansi.StringWidth(name)-1-1-pctW)
+	if tail != "" {
+		tail = " " + tail
+	}
+	barW := max(1, width-ansi.StringWidth(name)-1-1-pctW-ansi.StringWidth(tail))
 	filled := int(math.Round(used / 100 * float64(barW)))
 	bar := theme.StyleAccent
 	switch {
@@ -236,7 +261,7 @@ func planUsageRow(name string, used float64, width int) string {
 		bar = theme.StyleWarn
 	}
 	pct := fmt.Sprintf("%*s", pctW, fmt.Sprintf("%.0f%%", used))
-	return theme.StyleDim.Render(name+" ") + bar.Render(strings.Repeat("━", filled)) + theme.StyleRule.Render(strings.Repeat("─", barW-filled)) + theme.StyleDim.Render(" "+pct)
+	return theme.StyleDim.Render(name+" ") + bar.Render(strings.Repeat("━", filled)) + theme.StyleRule.Render(strings.Repeat("─", barW-filled)) + theme.StyleDim.Render(" "+pct+tail)
 }
 
 // recapCommand is /recap [minutes|off]: how long the channel may go without

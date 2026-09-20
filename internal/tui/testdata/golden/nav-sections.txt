@@ -9,10 +9,10 @@ Clients
 
 Subscriptions
 ChatGPT
-  5h ━━━━━━━━─────────────  38%
-  wk ━━━━━━━━━━━━━━━━━━━━━ 100%
+  5h ━━━━───────  38% 14:00
+  wk ━━━━━━━━━━━ 100% Tue 12:00
 Grok
-  wk ━━━━━━━━━━━━━━━──────  71%
+  wk ━━━━━━━━───  71% Sun 12:00
 
 project                 trusted
 cache           96% · openai 2%
