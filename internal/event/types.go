@@ -187,6 +187,7 @@ type Input struct {
 	Job       string         `json:"job,omitempty"`       // kind job: the job whose result this is
 	Parties   []string       `json:"parties,omitempty"`   // kind reminder: who is owed ("user" or agent ids)
 	Names     []string       `json:"names,omitempty"`     // …and their names
+	Recap     bool           `json:"recap,omitempty"`     // the harness's ask for a status report: it starts the recap clock when folded
 }
 
 // ReplyRequest identifies one response obligation. A broadcast shares an ID,

@@ -1,0 +1,17 @@
+Stavlos                      ⚙
+
+System               2k · $0.25
+#proj                2k · $0.25
+
+Clients
+● Web UI 127.0.0.1:4999
+● Discord connected
+
+Subscriptions
+ChatGPT 5h ━━━━━━─────────  38%
+        wk ━━━━━━━━━━━━━━━ 100%
+Grok    wk ━━━━━━━━━━━────  71%
+
+project                 trusted
+cache           96% · openai 2%
+

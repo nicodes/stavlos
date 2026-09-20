@@ -24,11 +24,28 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 )
 
-// schemaVersion is PRAGMA user_version for the current schema. A file
-// written by any other version is deleted, not converted: stavlos is
-// unreleased, so there is nothing to keep, and dropping tables would leave
-// a file of free pages behind.
-const schemaVersion = 5
+// The schema is versioned by PRAGMA user_version and only ever moves
+// forward: a log is history somebody has, so a file written by an older
+// build is converted, never deleted (docs/ground-up-refactor.md 0.6).
+//
+// baseVersion is the oldest schema a migration path exists from: the one in
+// use when migrations were introduced. migrations[i] converts
+// baseVersion+i to baseVersion+i+1, inside one transaction; a schema change
+// is made by appending to it, never by editing an entry that has shipped.
+const baseVersion = 5
+
+// migration converts the schema one version forward.
+type migration func(tx *sql.Tx) error
+
+var migrations = []migration{}
+
+// schemaVersion is the schema this build reads and writes.
+var schemaVersion = baseVersion + len(migrations)
+
+// ResetEnv, set to 1, lets Open delete a log it cannot read (written by a
+// schema older than baseVersion, or by a newer build) and start an empty
+// one. Nothing else deletes a log.
+const ResetEnv = "STAVLOS_RESET_LOG"
 
 // maxGroup bounds how many queued appends one transaction takes.
 const maxGroup = 256
@@ -82,9 +99,26 @@ func dsn(path string) string {
 }
 
 // openCurrent opens the writer connection on a database at the current
-// schema, deleting a file written by another version first.
+// schema, converting one written by an older build first. A file it cannot
+// read is left alone and reported, unless ResetEnv says to start over.
 func openCurrent(path string) (*sql.DB, error) {
 	for attempt := 0; ; attempt++ {
+		// Looked at read-only first: opening the writer switches the file to
+		// WAL, and a log this build cannot read is to be left exactly as it is.
+		if version, tables, err := peek(path); err != nil {
+			return nil, err
+		} else if tables > 0 && (version < baseVersion || version > schemaVersion) {
+			if os.Getenv(ResetEnv) != "1" || attempt > 0 {
+				return nil, fmt.Errorf("%s was written by schema %d, and this build reads %d to %d: it has been left as it is. Move it aside to keep it, or start once with %s=1 to delete it and begin an empty log",
+					path, version, baseVersion, schemaVersion, ResetEnv)
+			}
+			for _, suffix := range []string{"", "-wal", "-shm"} {
+				if err := os.Remove(path + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return nil, err
+				}
+			}
+			continue
+		}
 		w, err := sql.Open("sqlite", dsn(path))
 		if err != nil {
 			return nil, err
@@ -95,23 +129,68 @@ func openCurrent(path string) (*sql.DB, error) {
 			w.Close()
 			return nil, err
 		}
-		if version == schemaVersion || tables == 0 {
+		switch {
+		case tables == 0, version == schemaVersion:
 			if err := create(w); err != nil {
 				w.Close()
 				return nil, err
 			}
 			return w, nil
+		case version >= baseVersion && version < schemaVersion:
+			if err := migrate(w, path, version); err != nil {
+				w.Close()
+				return nil, fmt.Errorf("%s: converting schema %d to %d: %w (the log is unchanged)", path, version, schemaVersion, err)
+			}
+			return w, nil
 		}
 		w.Close()
-		if attempt > 0 {
-			return nil, fmt.Errorf("%s: schema %d could not be replaced", path, version)
+		return nil, fmt.Errorf("%s: schema %d changed while it was being opened", path, version)
+	}
+}
+
+// peek reads a log's schema version and table count without changing the
+// file; a file that does not exist yet has neither.
+func peek(path string) (version, tables int, err error) {
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return 0, 0, nil
+	}
+	ro, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return 0, 0, err
+	}
+	defer ro.Close()
+	return inspect(ro)
+}
+
+// migrate converts w from version to schemaVersion, one step and one
+// transaction at a time, after keeping a copy of the file as it was: a
+// conversion is the one moment a bug can cost the whole history.
+func migrate(w *sql.DB, path string, version int) error {
+	backup := fmt.Sprintf("%s.v%d.bak", path, version)
+	if _, err := os.Stat(backup); errors.Is(err, os.ErrNotExist) {
+		if _, err := w.Exec(`VACUUM INTO ?`, backup); err != nil {
+			return fmt.Errorf("backup: %w", err)
 		}
-		for _, suffix := range []string{"", "-wal", "-shm"} {
-			if err := os.Remove(path + suffix); err != nil && !errors.Is(err, os.ErrNotExist) {
-				return nil, err
-			}
+		_ = os.Chmod(backup, 0o600)
+	}
+	for v := version; v < schemaVersion; v++ {
+		tx, err := w.Begin()
+		if err != nil {
+			return err
+		}
+		if err := migrations[v-baseVersion](tx); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("step %d to %d: %w", v, v+1, err)
+		}
+		if _, err := tx.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, v+1)); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
 		}
 	}
+	return nil
 }
 
 func inspect(w *sql.DB) (version, tables int, err error) {

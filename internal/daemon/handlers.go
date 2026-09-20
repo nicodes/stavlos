@@ -194,15 +194,18 @@ var handlers = routes(
 		if err := s.SetMode(ctx, p.Mode); err != nil {
 			return none, err
 		}
-		// Anything already waiting is answered as the new mode would have, so
-		// the agents move: yolo allows every permission prompt; auto allows
-		// the ones inside the channel's directories and denies the ones outside.
+		// Anything already waiting is answered as the new mode would have
+		// answered it, so the agents move, and no differently: what the mode
+		// would still ask about keeps waiting. Yolo allows every permission
+		// prompt but an edit to a file that steers the harness; auto allows
+		// the ones inside the channel's directories that send nothing off the
+		// machine, and denies the ones outside.
 		switch p.Mode {
 		case protocol.ModeYolo:
-			c.d.esc.AnswerAll(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "yolo")
+			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "yolo", func(pi protocol.PromptInfo) bool { return !pi.Sticky })
 		case protocol.ModeAuto:
-			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir == "" })
-			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerDeny, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir != "" })
+			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir == "" && !pi.Sticky && !pi.Egress })
+			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerDeny, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir != "" && !pi.Sticky })
 		}
 		return none, nil
 	}),

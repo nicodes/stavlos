@@ -30,12 +30,19 @@ type decision struct {
 	arg      string      // the subject value the verdict is about (a patch's worst path)
 	verb     policy.Verb // allow, ask or deny after every rule has spoken
 	boundary string      // the directory the call reaches outside the working set, "" when inside
+	control  string      // the file that steers the harness this call edits, "" for none: no mode and no permit answers that ask
+	egress   bool        // the call sends data off the machine: auto leaves it asking
 	why      string      // the denial when the harness refuses without a rule (auto outside the directories)
 }
 
 // runTool applies policy, escalates if needed, executes, and logs.
 func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs []model.ToolDef, rv roleView, cfg *config.Effective) {
-	_ = a.record(event.ToolStarted, event.ToolStartedPayload{Turn: turn, CallID: c.ID, Name: c.Name})
+	// A tool that runs must have its start on the record: with none, a command
+	// would have run, a file changed, and the log would not say so. The turn
+	// ends at its next step with the write's error (takeMidTurn).
+	if err := a.record(event.ToolStarted, event.ToolStartedPayload{Turn: turn, CallID: c.ID, Name: c.Name}); err != nil {
+		return
+	}
 	finish := func(out string, isErr, cancelled, denied bool) {
 		_ = a.record(event.ToolFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied})
 	}
@@ -69,7 +76,24 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 			return
 		}
 	}
+	// The sheets directory is inside the working set for the file tools, so
+	// the limits on sheets have to hold for them too, not only for the sheet
+	// tool: a known sheet's file, and no larger than a sheet may be.
+	var sheetsAfter func() string
+	if c.Name == toolname.ApplyPatch {
+		refusal, after := a.guardSheets(d.sub)
+		if refusal != "" {
+			finish(refusal, true, false, true)
+			return
+		}
+		sheetsAfter = after
+	}
 	res := t.Run(turnCtx, c.Input, a.toolEnv(turn, c, rv, cfg))
+	if sheetsAfter != nil && !res.IsError {
+		if undone := sheetsAfter(); undone != "" {
+			res = tools.Result{Output: undone, IsError: true}
+		}
+	}
 	if turnCtx.Err() != nil {
 		finish(res.Output, true, true, false)
 		return
@@ -106,7 +130,9 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 		verb, arg = policy.Ask, control
 	}
 	a.c.mu.Lock()
-	covered := verb == policy.Ask && a.c.st.permits.covers(c.Name, sub)
+	// (never a control-file ask: "always allow" for a path must not become a
+	// standing licence to rewrite what steers the harness)
+	covered := verb == policy.Ask && control == "" && a.c.st.permits.covers(c.Name, sub)
 	mode := a.c.st.mode
 	a.c.mu.Unlock()
 	// What the human allowed for the channel answers an ask, never a deny,
@@ -133,7 +159,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 			}
 		}
 	}
-	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why}
+	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: egress(c.Name, sub)}
 }
 
 // egress reports whether a call sends data out of the machine or to a
@@ -194,7 +220,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	prefix := prefixFor(d.sub.Kind, d.arg)
 	ans := a.ask(turnCtx, protocol.PromptInfo{
 		ID: NewID("p"), Channel: a.c.ID, ChannelName: a.c.Name(), Agent: a.ID, From: rv.name, Role: rv.role, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
-		Question: question, Dir: d.boundary, Prefix: prefix,
+		Question: question, Dir: d.boundary, Prefix: prefix, Sticky: d.control != "", Egress: d.egress,
 	}, c.ID)
 	if ans.Withdrawn {
 		return "", true, false

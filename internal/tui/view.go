@@ -639,7 +639,7 @@ func (m Model) sidebarHeader(width int) []string {
 		m.discordIndicator(width),
 		"",
 	}
-	rows = append(rows, m.planUsageRows(width, time.Now())...)
+	rows = append(rows, m.planUsageRows(width, clock())...)
 	monitors := len(rows)
 	if trust := m.trustRow(width); trust != "" {
 		rows = append(rows, trust)
@@ -738,7 +738,7 @@ func (m Model) sidebarTrustRow() int {
 	if m.trustRow(sidebarWidth-1) == "" {
 		return -1
 	}
-	return navTopRows + len(m.planUsageRows(sidebarWidth-1, time.Now())) // the first row under the sections
+	return navTopRows + len(m.planUsageRows(sidebarWidth-1, clock())) // the first row under the sections
 }
 
 // stripRows is how many tab rows the footer strip draws: the ! ? dirs row
@@ -1122,7 +1122,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		if a := m.selectedAgent(); a != nil {
 			owner, role = a.Name, a.Role
 		}
-		now := time.Now()
+		now := clock()
 		sel := agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), now, width-2)
 		sel = append(sel, jobRows(jobs, owner, role, now, width-2)...)
 		nWait := len(sel)
@@ -1165,7 +1165,7 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 		if len(items) == 0 {
 			return note("  no mcp servers")
 		}
-		rows, _ := mcpRows(items, m.mcpOpen, time.Now(), width-2)
+		rows, _ := mcpRows(items, m.mcpOpen, clock(), width-2)
 		return rowsAt(m.cursorRows(rows), 0, len(rows))
 	case focusDirs:
 		items := m.channelDirs()

@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
@@ -42,7 +41,7 @@ func (m *Model) replyRows(width int) (rows, targets []string, waiting int) {
 	for _, r := range a.AwaitingReplies {
 		add(r)
 	}
-	for _, row := range jobRows(m.runningJobs(), a.Name, a.Role, time.Now(), width) {
+	for _, row := range jobRows(m.runningJobs(), a.Name, a.Role, clock(), width) {
 		rows = append(rows, row)
 		targets = append(targets, "")
 	}

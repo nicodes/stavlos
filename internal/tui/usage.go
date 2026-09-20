@@ -126,7 +126,7 @@ func (m *Model) usageFetch() tea.Cmd {
 	buckets := usageChartWidth(m.width)
 	var from, to time.Time
 	if r := usageRanges[d.rng]; r.d > 0 {
-		to = time.Now()
+		to = clock()
 		from = to.Add(-r.d)
 	}
 	ctx, c := m.ctx, m.c
@@ -278,7 +278,7 @@ func (m Model) usageBody(width int) []string {
 		label = ansi.Truncate(label, usageAxisW, "")
 		lines = append(lines, theme.StyleDim.Render(strings.Repeat(" ", usageAxisW-ansi.StringWidth(label))+label)+" "+theme.StyleAccent.Render(row))
 	}
-	now := time.Now()
+	now := clock()
 	start, end := usageWhen(s.From, now), usageWhen(s.To, now)
 	gap := max(1, usageChartWidth(m.width)-ansi.StringWidth(start)-ansi.StringWidth(end))
 	return append(lines, strings.Repeat(" ", usageAxisW+1)+theme.StyleDim.Render(start+strings.Repeat(" ", gap)+end))

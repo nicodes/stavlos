@@ -81,22 +81,26 @@ func TestWaitLockFree(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	fd := int(f.Fd()) // read once: the releasing goroutine and the test share the file
+	if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		t.Fatal(err)
 	}
 	if waitLockFree(context.Background(), 200*time.Millisecond) {
 		t.Fatal("a held lock is not free")
 	}
+	released := make(chan struct{})
 	go func() {
+		defer close(released)
 		time.Sleep(150 * time.Millisecond)
-		_ = unix.Flock(int(f.Fd()), unix.LOCK_UN)
+		_ = unix.Flock(fd, unix.LOCK_UN)
 	}()
 	if !waitLockFree(context.Background(), 5*time.Second) {
 		t.Fatal("the release should end the wait")
 	}
+	<-released
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+	if err := unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
 		t.Fatal(err)
 	}
 	if waitLockFree(ctx, 5*time.Second) {

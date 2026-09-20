@@ -1,6 +1,7 @@
 package eventlog
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -222,40 +223,103 @@ func TestTrust(t *testing.T) {
 	}
 }
 
-// TestReplacesAnOldLog: a file written by another schema version is
-// deleted and created afresh, not converted or left full of free pages.
-func TestReplacesAnOldLog(t *testing.T) {
+// oldLog writes a database at schema version with a table nobody reads now.
+func oldLog(t *testing.T, version int) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), "old.db")
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`
-CREATE TABLE events (global INTEGER PRIMARY KEY AUTOINCREMENT, session TEXT NOT NULL, seq INTEGER NOT NULL, agent TEXT NOT NULL DEFAULT '', type TEXT NOT NULL, time TEXT NOT NULL, payload BLOB, UNIQUE(session, seq));
-CREATE TABLE sessions (id TEXT PRIMARY KEY, dir TEXT NOT NULL, created TEXT NOT NULL, archived INTEGER NOT NULL DEFAULT 0, title TEXT NOT NULL DEFAULT '');
-INSERT INTO sessions VALUES ('s1', '/w', '2026-09-01T00:00:00Z', 0, 'old');
-PRAGMA user_version = 4;
-`); err != nil {
+	if _, err := db.Exec(fmt.Sprintf(`
+CREATE TABLE sessions (id TEXT PRIMARY KEY, dir TEXT NOT NULL);
+INSERT INTO sessions VALUES ('s1', '/w');
+PRAGMA user_version = %d;`, version)); err != nil {
 		t.Fatal(err)
 	}
 	db.Close()
+	return path
+}
 
+// TestALogItCannotReadIsLeftAlone: a log is history somebody has. One
+// written by a schema with no way forward (older than the first migration,
+// or newer than this build) is reported and left exactly as it is; only an
+// explicit reset deletes it.
+func TestALogItCannotReadIsLeftAlone(t *testing.T) {
+	for _, version := range []int{baseVersion - 1, schemaVersion + 1} {
+		path := oldLog(t, version)
+		before, _ := os.ReadFile(path)
+		if _, err := Open(path, nil); err == nil || !strings.Contains(err.Error(), ResetEnv) {
+			t.Fatalf("schema %d: opened, or the error does not say what to do: %v", version, err)
+		}
+		if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
+			t.Fatalf("schema %d: the file was changed", version)
+		}
+	}
+	path := oldLog(t, baseVersion-1)
+	t.Setenv(ResetEnv, "1")
 	l := open(t, path, nil)
 	defer l.Close()
-	ctx := context.Background()
 	var n int
-	if err := l.r.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'sessions'`).Scan(&n); err != nil || n != 0 {
-		t.Fatalf("the old table is still there: %d %v", n, err)
-	}
-	var version int
-	if err := l.w.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil || version != schemaVersion {
-		t.Fatalf("user_version %d %v", version, err)
+	if err := l.r.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM sqlite_master WHERE name = 'sessions'`).Scan(&n); err != nil || n != 0 {
+		t.Fatalf("reset left the old table: %d %v", n, err)
 	}
 	if e := appendOne(t, l, created("c1", "c1")); e.Seq != 1 || e.Global != 1 {
-		t.Fatalf("append after the replacement %+v", e)
+		t.Fatalf("append after a reset %+v", e)
 	}
-	if _, err := os.Stat(path); err != nil {
-		t.Fatal(err)
+}
+
+// TestAnOlderLogIsConvertedAndKept: a schema change is a migration. The
+// events survive it, a copy of the file as it was is kept beside it, each
+// step runs once, and a step that fails leaves the log at the version it had.
+func TestAnOlderLogIsConvertedAndKept(t *testing.T) {
+	defer func(m []migration, v int) { migrations, schemaVersion = m, v }(migrations, schemaVersion)
+	path := filepath.Join(t.TempDir(), "e.db")
+	l := open(t, path, nil)
+	appendOne(t, l, created("c1", "c1"))
+	appendOne(t, l, prompt("c1", "human:x", "kept"))
+	l.Close()
+
+	ran := 0
+	migrations = []migration{
+		func(tx *sql.Tx) error {
+			ran++
+			_, err := tx.Exec(`ALTER TABLE channels ADD COLUMN note TEXT NOT NULL DEFAULT ''`)
+			return err
+		},
+		func(tx *sql.Tx) error { ran++; _, err := tx.Exec(`UPDATE channels SET note = 'migrated'`); return err },
+	}
+	schemaVersion = baseVersion + len(migrations)
+	l = open(t, path, nil)
+	ctx := context.Background()
+	evs, err := l.Read(ctx, "c1", 1, 0)
+	var note string
+	if err != nil || len(evs) != 2 || l.r.QueryRowContext(ctx, `SELECT note FROM channels WHERE id = 'c1'`).Scan(&note) != nil || note != "migrated" || ran != 2 {
+		t.Fatalf("after converting: %d events, note %q, %d steps, %v", len(evs), note, ran, err)
+	}
+	if e := appendOne(t, l, prompt("c1", "human:x", "after")); e.Seq != 3 {
+		t.Fatalf("append after converting: %+v", e)
+	}
+	l.Close()
+	if _, err := os.Stat(fmt.Sprintf("%s.v%d.bak", path, baseVersion)); err != nil {
+		t.Fatalf("no copy of the log as it was: %v", err)
+	}
+	l = open(t, path, nil) // already current: nothing runs again
+	l.Close()
+	if ran != 2 {
+		t.Fatalf("a migration ran twice: %d", ran)
+	}
+
+	migrations = append(migrations, func(tx *sql.Tx) error { _, _ = tx.Exec(`DELETE FROM events`); return errors.New("boom") })
+	schemaVersion = baseVersion + len(migrations)
+	if _, err := Open(path, nil); err == nil || !strings.Contains(err.Error(), "unchanged") {
+		t.Fatalf("a failing step: %v", err)
+	}
+	migrations, schemaVersion = migrations[:2], baseVersion+2
+	l = open(t, path, nil)
+	defer l.Close()
+	if evs, err := l.Read(ctx, "c1", 1, 0); err != nil || len(evs) != 3 {
+		t.Fatalf("a failed step cost events: %d %v", len(evs), err)
 	}
 }
 

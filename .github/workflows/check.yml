@@ -1,0 +1,35 @@
+# The gate, run for every pull request and every push to main: exactly what
+# scripts/check.sh runs locally (docs/ground-up-refactor.md 0.4).
+name: check
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: ripgrep (the search tools use it when present)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+      - name: web dependencies
+        run: npm ci --no-audit --no-fund
+        working-directory: web
+      - name: gate
+        run: scripts/check.sh
+        env:
+          GOFLAGS: -p=4

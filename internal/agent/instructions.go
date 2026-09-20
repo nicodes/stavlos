@@ -22,9 +22,28 @@ func (a *Agent) instructionsFor(sub policy.Subject, cfg *config.Effective) strin
 	if sub.Kind != policy.KindPath || !cfg.ProjectTrusted {
 		return ""
 	}
+	// Only the instructions the human trusted are followed: the files the
+	// trust hash covered when the project was loaded. One that has appeared
+	// since (a command an agent ran can write sub/AGENTS.md, and every agent
+	// that then touches sub/ would obey it) is withheld, and the host loads
+	// the project again: the hash no longer matches, so the human is asked.
+	trusted := map[string]bool{}
+	for _, f := range cfg.InstructionFiles {
+		trusted[tools.ResolvePath("", f)] = true
+	}
 	var found []instructions.File // read outside the channel's lock
+	untrusted := false
 	for _, v := range sub.Values {
-		found = append(found, instructions.Between(a.c.Dir(), tools.ResolvePath(a.c.Dir(), v))...)
+		for _, f := range instructions.Between(a.c.Dir(), tools.ResolvePath(a.c.Dir(), v)) {
+			if trusted[tools.ResolvePath("", f.Path)] {
+				found = append(found, f)
+			} else {
+				untrusted = true
+			}
+		}
+	}
+	if untrusted {
+		a.c.host.ProjectChanged(a.c.Dir())
 	}
 	if len(found) == 0 {
 		return ""

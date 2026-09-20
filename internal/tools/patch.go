@@ -313,6 +313,11 @@ func parsePatch(text string) ([]patchOp, error) {
 		}
 	}
 	p.flushHunk()
+	for _, op := range p.ops {
+		if op.path == "" {
+			return nil, fmt.Errorf("a %s section names no file", op.kind)
+		}
+	}
 	for i := range p.ops {
 		if p.ops[i].kind == "update" && len(p.ops[i].hunks) == 0 && p.ops[i].moveTo == "" {
 			return nil, fmt.Errorf("update file %s has no hunks", p.ops[i].path)
