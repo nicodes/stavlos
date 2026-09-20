@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/paths"
+	"github.com/nicodes/stavlos/internal/pathx"
 )
 
 // Names are the file names read in each directory, in order: the first one
@@ -141,8 +142,8 @@ func Between(top, p string) []File {
 	if st, err := os.Stat(p); err != nil || !st.IsDir() {
 		d = filepath.Dir(p)
 	}
-	rel, err := filepath.Rel(top, d)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	rel, ok := pathx.Rel(top, d)
+	if !ok || rel == "." {
 		return nil
 	}
 	var out []File

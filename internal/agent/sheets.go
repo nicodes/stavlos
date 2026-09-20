@@ -17,6 +17,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/paths"
+	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/statefile"
@@ -137,7 +138,7 @@ func (a *Agent) guardSheets(sub policy.Subject) (refusal string, after func() st
 	before := map[string][]byte{}
 	for _, v := range sub.Values {
 		p := tools.ResolvePath(c.Dir(), v)
-		if filepath.Dir(p) != dir && !strings.HasPrefix(p, dir+string(filepath.Separator)) {
+		if !pathx.Under(dir, p) {
 			continue
 		}
 		m := sheetFile.FindStringSubmatch(filepath.Base(p))

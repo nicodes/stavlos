@@ -11,6 +11,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/proc"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -100,8 +101,7 @@ func (c *Channel) configDirsLocked() []string {
 func inDirs(dirs []string, p string) bool {
 	p = tools.ResolvePath("", p)
 	for _, d := range dirs {
-		dir := tools.ResolvePath("", d)
-		if p == dir || strings.HasPrefix(p, dir+string(filepath.Separator)) {
+		if pathx.Within(tools.ResolvePath("", d), p) {
 			return true
 		}
 	}
@@ -257,8 +257,7 @@ func bashPathCandidates(cmd, base string) []string {
 		case q != "" && !strings.HasPrefix(q, "-"):
 			// A relative argument that resolves outside the working
 			// directory went through a symlink: judge where it leads.
-			root := tools.ResolvePath(base, "")
-			if real := tools.ResolvePath(base, q); real != root && !strings.HasPrefix(real, root+string(filepath.Separator)) {
+			if real := tools.ResolvePath(base, q); !pathx.Within(tools.ResolvePath(base, ""), real) {
 				add(real)
 			}
 		}
