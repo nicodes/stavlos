@@ -3701,7 +3701,7 @@ func TestNavUsageFiguresHighlight(t *testing.T) {
 func TestPlanUsageBars(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
-	now := time.Now()
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.Local) // a Saturday noon, so the reset labels are known
 	w := sidebarWidth - 1
 	if rows := m.planUsageRows(w, now); len(rows) != 0 || m.sidebarSystemRow() != 2 {
 		t.Fatalf("no reading, no block: %q", rows)
@@ -3716,14 +3716,18 @@ func TestPlanUsageBars(t *testing.T) {
 		{Provider: "zai", Name: "Z.ai Coding Plan", Observed: now}, // signed in, no reading: no row
 	}
 	rows := m.planUsageRows(w, now)
-	bar := w - len("  5h") - 1 - 1 - 4
+	// each meter is followed by when its window resets, padded to one width so
+	// the meters line up: the time today, the day and time this week, and
+	// nothing for a reset that has passed
+	const resetW = len("Sun 12:00")
+	bar := w - len("  5h") - 1 - 1 - 4 - 1 - resetW
 	want := []string{
 		"Subscriptions",
 		"ChatGPT",
-		"  5h " + strings.Repeat("━", (bar+1)/2) + strings.Repeat("─", bar-(bar+1)/2) + "  50%", // half, rounded up
-		"  wk " + strings.Repeat("─", bar) + "   0%",
+		"  5h " + strings.Repeat("━", (bar+1)/2) + strings.Repeat("─", bar-(bar+1)/2) + "  50% 14:00    ", // half, rounded up
+		"  wk " + strings.Repeat("─", bar) + "   0%          ",
 		"Grok",
-		"  wk " + strings.Repeat("━", bar) + " 100%",
+		"  wk " + strings.Repeat("━", bar) + " 100% Sun 12:00",
 		"",
 	}
 	if len(rows) != len(want) {
@@ -3763,6 +3767,15 @@ func TestPlanUsageBars(t *testing.T) {
 	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: m.sidebarSystemRow(), Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	if m = nm.(Model); m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" {
 		t.Fatalf("a click on the moved System cost opens its chart: focus=%v %+v", m.focus, m.usage)
+	}
+	for at, label := range map[time.Duration]string{0: "", -time.Minute: "", 2 * time.Hour: "14:00", 13 * time.Hour: "Sun 01:00", 6 * 24 * time.Hour: "Fri 12:00", 14 * 24 * time.Hour: "Oct 3"} {
+		win := protocol.UsageWindowInfo{ResetsAt: now.Add(at)}
+		if at == 0 {
+			win.ResetsAt = time.Time{} // the provider did not say
+		}
+		if got := resetLabel(win, now); got != label {
+			t.Errorf("a reset %v away reads %q, want %q", at, got, label)
+		}
 	}
 }
 
