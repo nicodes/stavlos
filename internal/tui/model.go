@@ -80,48 +80,27 @@ type Model struct {
 	uiPrefs      // display choices; they survive a switch
 	dialogs      // the open overlay and sign-in
 	promptState  // what waits on the human, in every channel; survives a switch
+	navState     // the sidebar: the other channels, their trees, where its cursor is
+	serviceState // what the daemon reports beside the channels: clients, subscriptions, the cache
+	chatPane     // the transcript's viewport and the mouse over it
+	statusState  // the passing message above the divider
 
-	navChannels    []protocol.ChannelInfo          // all other active channels, across directories
-	plans          []protocol.PlanUsageInfo        // the signed-in subscriptions' plan usage, as last observed (planusage.go)
-	cache          protocol.CacheUsageResult       // the last hour's prompt-cache share, for the nav's monitor
-	visited        map[string]replayed             // channels switched away from: what their replay built, so a return replays only what it missed
-	trees          map[string][]protocol.AgentInfo // other channels' agents, so leaving a channel does not fold its tree
-	treeClosed     map[string]bool                 // channels whose tree the human closed in the nav; switching channels never changes it
-	treeAll        map[string]bool                 // channels whose tree shows its idle agents too (the tree's show all row)
-	selectNext     string                          // agent to select once a switch lands (an agent picked under another channel)
-	dirsNext       bool                            // another channel's gear was chosen: its dirs dialog opens once the switch lands
 	generation     uint64
 	switching      bool
 	rememberViews  bool
 	lastRemembered string
-	discordEpoch   uint64
-	webEpoch       uint64
-	catalogTicks   int                    // counts the 3 s ticks, for what is asked less often than that
-	discordStatus  protocol.DiscordStatus // daemon-wide; retained across channel switches
-	discordKnown   bool
-	webStatus      protocol.WebStatus // daemon-wide, like Discord's
-	webKnown       bool
 	editors        map[string]editorState
 
 	presets []protocol.PresetInfo
 
-	vp       chatViewport
 	input    textarea.Model // grows with the text, up to inputMaxLines
 	sp       spinner.Model
 	spinning bool // a spinner tick is scheduled: it runs only while something animates
 
 	width, height int
-	hoverFocus    bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
-	hoverFrom     focus     // where focus was before hover took it, restored when the mouse leaves the chat
-	sel           selection // mouse text selection (drag to select, release to copy)
-	metaSel       metaPart  // the highlighted part of the meta row while it has focus
-	tabSel        int       // the highlighted tab (index into tabFocuses) while the strip has focus
-	follow        bool      // auto-scroll to bottom
-	viewDirty     bool      // the chat changed (an event, a stream delta, a tick): Update redraws it once, at the end
+	metaSel       metaPart // the highlighted part of the meta row while it has focus
+	tabSel        int      // the highlighted tab (index into tabFocuses) while the strip has focus
 
-	status      string
-	statusErr   bool
-	statusToken int
 	compactTick bool // the compaction animation tick is scheduled (a transcript has a running compaction)
 	treeTimer   bool // a debounced tree refresh is scheduled
 
@@ -129,11 +108,58 @@ type Model struct {
 	focus       focus
 	promptInput textinput.Model // answer field of a question prompt
 	dirInput    textinput.Model // path field of the dirs dialog while adding or editing
-	sbCursor    int
-	sbTop       int // first sidebar body row drawn: the nav scrolls on its own
-	palIdx      int // highlighted row in the "/" command palette
+	palIdx      int             // highlighted row in the "/" command palette
 
 	fatal error
+}
+
+// The Model is these parts. Each is embedded, so a field is still m.field;
+// what the grouping says is which fields change together and who owns them,
+// which a flat struct of ninety did not.
+
+// navState is the sidebar's: every other channel, what is kept of the ones
+// visited, and the cursor.
+type navState struct {
+	navChannels []protocol.ChannelInfo          // all other active channels, across directories
+	visited     map[string]replayed             // channels switched away from: what their replay built, so a return replays only what it missed
+	trees       map[string][]protocol.AgentInfo // other channels' agents, so leaving a channel does not fold its tree
+	treeClosed  map[string]bool                 // channels whose tree the human closed in the nav; switching channels never changes it
+	treeAll     map[string]bool                 // channels whose tree shows its idle agents too (the tree's show all row)
+	selectNext  string                          // agent to select once a switch lands (an agent picked under another channel)
+	dirsNext    bool                            // another channel's gear was chosen: its dirs dialog opens once the switch lands
+	sbCursor    int
+	sbTop       int // first sidebar body row drawn: the nav scrolls on its own
+}
+
+// serviceState is daemon-wide and survives a channel switch: the Clients and
+// Subscriptions sections of the nav draw it.
+type serviceState struct {
+	plans         []protocol.PlanUsageInfo  // the signed-in subscriptions' plan usage, as last observed (planusage.go)
+	cache         protocol.CacheUsageResult // the last hour's prompt-cache share, for the nav's monitor
+	discordEpoch  uint64
+	webEpoch      uint64
+	catalogTicks  int // counts the 3 s ticks, for what is asked less often than that
+	discordStatus protocol.DiscordStatus
+	discordKnown  bool
+	webStatus     protocol.WebStatus
+	webKnown      bool
+}
+
+// chatPane is the transcript on screen.
+type chatPane struct {
+	vp         chatViewport
+	follow     bool      // auto-scroll to bottom
+	viewDirty  bool      // the chat changed (an event, a stream delta, a tick): Update redraws it once, at the end
+	sel        selection // mouse text selection (drag to select, release to copy)
+	hoverFocus bool      // the chat has focus because the mouse is over it (released when the mouse leaves)
+	hoverFrom  focus     // where focus was before hover took it, restored when the mouse leaves the chat
+}
+
+// statusState is the message that passes at the right end of the chat row.
+type statusState struct {
+	status      string
+	statusErr   bool
+	statusToken int
 }
 
 // channelState is everything that belongs to the bound channel. Switching
@@ -338,13 +364,12 @@ func newModel(ctx context.Context, c *client.Client, channelID string) Model {
 		channelState: newChannelState(channelID, protocol.ChannelInfo{}),
 		promptState:  promptState{claimedByUs: map[string]bool{}},
 		uiPrefs:      uiPrefs{hideKeys: true}, // the key bar is off until /help
-		vp:           vp,
+		chatPane:     chatPane{vp: vp, follow: true},
 		input:        ti,
 		promptInput:  pi,
 		dirInput:     di,
 		sp:           sp,
 		spinning:     true, // Init schedules the first tick
-		follow:       true,
 	}
 	m.loading = true // until the reconcile lands
 	return m
