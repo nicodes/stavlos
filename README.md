@@ -74,7 +74,7 @@ The async panel lists both, each outstanding request with its ID, sender and exc
 See [explicit reply tracking](docs/reply-tracking.md).
 
 The divider over the input shows the selected agent's role, model and variant at its left end, and at its right the agent's async, todo and mcp tabs, then how full its context is (`31% · 62k/200k tokens`, orange from 70%); tokens and cost are at the top of the nav, where a click on either opens a chart of it over time.
-Under them comes the **Clients** section (the Web UI and Discord rows), and then, under a **Subscriptions** title, every signed-in subscription shows how much of its allowance is used, a row per window (`ChatGPT 5h`, then `wk` under it, for a plan limited both ways; Grok has the week alone).
+Under them comes the **Clients** section (the Web UI and Discord rows), and then, under a **Subscriptions** title, every signed-in subscription shows how much of its allowance is used, its name on a line of its own and a meter for each window indented under it (`ChatGPT`, then `5h` and `wk`, for a plan limited both ways; Grok has the week alone).
 ChatGPT's comes with the headers of the model calls Stavlos already makes; Z.ai, Kimi and Grok report it only at a usage endpoint, which the daemon asks after a model call to that provider, when you open the plan's chart, and once as it starts, at most every five minutes (the last reading is kept across restarts).
 A click on that row, or `/plan`, charts the plan over time from the readings those calls carried.
 See [plan usage](docs/plan-usage.md).

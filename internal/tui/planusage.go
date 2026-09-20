@@ -105,22 +105,28 @@ func (m *Model) onPlanUsage(msg planUsageMsg) {
 	}
 }
 
-// planRow is one row of the nav's plan usage block: a window of a plan.
+// planRow is one row of the nav's plan usage block: a plan's name, or one of
+// its windows under it.
 type planRow struct {
 	plan   int // index into m.plans
 	window protocol.UsageWindowInfo
-	first  bool // the plan's first row, which carries its name
+	header bool // the row that names the plan; its windows follow
 }
 
-// planRowList is a row for every window of every plan with a reading, the
-// plans in order and each plan's windows shortest first: a plan limited by
+// planRowList is, for every plan with a reading, a row naming it and a row
+// for each of its windows, the plans in order and each plan's windows
+// shortest first: a plan limited by
 // five hours and by the week shows both, since either can be the one that
 // stops the work.
 func (m Model) planRowList() []planRow {
 	var rows []planRow
 	for i, p := range m.plans {
-		for j, w := range p.Windows {
-			rows = append(rows, planRow{plan: i, window: w, first: j == 0})
+		if len(p.Windows) == 0 {
+			continue
+		}
+		rows = append(rows, planRow{plan: i, header: true})
+		for _, w := range p.Windows {
+			rows = append(rows, planRow{plan: i, window: w})
 		}
 	}
 	return rows
@@ -129,38 +135,40 @@ func (m Model) planRowList() []planRow {
 // planUsageRows are the nav's Subscriptions section, width wide:
 //
 //	Subscriptions
-//	ChatGPT 5h ━━━━━━──────  38%
-//	        wk ━━──────────  17%
+//	ChatGPT
+//	  5h ━━━━━━──────────  38%
+//	  wk ━━────────────────  17%
 //
-// the title, a row per window with the plan's name on its first, then a blank
-// row; nothing at all without a reading.
+// the title, then each plan on a line of its own with a meter per window
+// indented under it, then a blank row; nothing at all without a reading. The
+// spans are padded to one width so every meter starts in the same column.
 func (m Model) planUsageRows(width int, now time.Time) []string {
 	list := m.planRowList()
 	if len(list) == 0 {
 		return nil
 	}
-	nameW := 0
-	for _, p := range m.plans {
-		if len(p.Windows) > 0 {
-			nameW = max(nameW, ansi.StringWidth(p.Name))
+	spanW := 0
+	for _, r := range list {
+		if !r.header {
+			spanW = max(spanW, ansi.StringWidth(windowSpan(r.window.Minutes)))
 		}
 	}
-	nameW = min(nameW, max(1, width/3))
 	rows := make([]string, 0, len(list)+2)
 	rows = append(rows, navSection("Subscriptions"))
 	for _, r := range list {
-		name := ""
-		if r.first {
-			name = ansi.Truncate(m.plans[r.plan].Name, nameW, "…")
+		if r.header {
+			rows = append(rows, theme.StyleDim.Render(ansi.Truncate(m.plans[r.plan].Name, width, "…")))
+			continue
 		}
-		label := name + strings.Repeat(" ", nameW-ansi.StringWidth(name))
-		if span := windowSpan(r.window.Minutes); span != "" {
-			label += " " + span
-		}
+		span := windowSpan(r.window.Minutes)
+		label := planIndent + span + strings.Repeat(" ", spanW-ansi.StringWidth(span))
 		rows = append(rows, planUsageRow(label, windowUsed(r.window, now), width))
 	}
 	return append(rows, "")
 }
+
+// planIndent sets a plan's meters in from its name.
+const planIndent = "  "
 
 // windowSpan names a window by its length: "5h", "wk", "mo", "3d"; "" when
 // the provider did not say.

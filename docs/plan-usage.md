@@ -39,8 +39,8 @@ impersonation rather than adding one; the first version of this note declined
 it, and the owner chose to follow opencode-quota.
 
 **Every window is shown.** A plan limited both by five hours and by the week
-gets a row for each in the nav (`ChatGPT 5h`, then `wk` under it), shortest
-first: either can be the one that stops the work. The chart still plots the
+gets a meter for each in the nav, indented under the plan's name (`ChatGPT`,
+then `5h` and `wk`), shortest first: either can be the one that stops the work. The chart still plots the
 most used window.
 
 None of these endpoints is documented, and three have changed shape under
