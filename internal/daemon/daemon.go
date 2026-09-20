@@ -808,13 +808,18 @@ func (d *Daemon) removeClient(id string) {
 // Status for daemon.status.
 func (d *Daemon) Status() protocol.DaemonStatusResult {
 	channels := d.channelList()
-	n := 0
+	n, working := 0, 0
 	for _, s := range channels {
-		n += len(s.Agents())
+		for _, a := range s.Agents() {
+			n++
+			if in := a.Info(); in.State.Busy() || len(in.Jobs) > 0 {
+				working++
+			}
+		}
 	}
 	provs := d.Registry.Providers()
 	sort.Strings(provs)
-	return protocol.DaemonStatusResult{Version: protocol.Version, Build: buildid.ID(), PID: os.Getpid(), DataDir: d.DataDir, Channels: len(channels), Agents: n, Providers: provs}
+	return protocol.DaemonStatusResult{Version: protocol.Version, Build: buildid.ID(), PID: os.Getpid(), DataDir: d.DataDir, Channels: len(channels), Agents: n, Working: working, Providers: provs}
 }
 
 // errTrustChanged: a trust reply carried a hash that no longer matches the

@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -524,12 +525,30 @@ func waitExit(pid int, d time.Duration) bool {
 	return false
 }
 
+// restartEnv replaces a daemon of another build even while agents are working.
+const restartEnv = "STAVLOS_RESTART_DAEMON"
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return strconv.Itoa(n) + " " + many
+}
+
 func replaceStale(ctx context.Context, c *client.Client) (*client.Client, error) {
 	st, err := client.Do(ctx, c, protocol.DaemonStatus, protocol.None{})
 	if err != nil {
 		return nil, nil // very old daemon without status; leave it
 	}
 	if st.Build == buildid.ID() || os.Getenv("STAVLOS_KEEP_DAEMON") != "" {
+		return nil, nil
+	}
+	// A restart ends every turn in progress and loses every running job. A
+	// rebuilt binary is no reason for that: the daemon is replaced when
+	// nothing is working, or when asked to be.
+	if st.Working > 0 && os.Getenv(restartEnv) == "" {
+		fmt.Fprintf(os.Stderr, "daemon build %s differs from this binary (%s), but %s working, so it was left running.\nIt is replaced the next time stavlos starts with nothing in progress; %s=1 replaces it now.\n",
+			short(st.Build), short(buildid.ID()), plural(st.Working, "agent is", "agents are"), restartEnv)
 		return nil, nil
 	}
 	fmt.Fprintf(os.Stderr, "daemon build %s differs from this binary (%s); restarting it\n", short(st.Build), short(buildid.ID()))

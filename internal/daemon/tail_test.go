@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/model/registry"
 	"github.com/nicodes/stavlos/internal/modelsdev"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -89,4 +90,36 @@ func TestAFailedStartReleasesTheDataDirectory(t *testing.T) {
 	}
 	d.Close()
 	d.Close() // twice is once
+}
+
+// daemon.status says how many agents a restart would cut short.
+func TestStatusCountsWhoIsWorking(t *testing.T) {
+	setupConfig(t)
+	release := make(chan struct{})
+	h := newHarness(t, t.TempDir(), &fakeModel{steps: []func(model.Request) model.Response{func(model.Request) model.Response {
+		<-release
+		return text("done")
+	}}})
+	defer h.close()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	s, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := h.d.Status().Working; n != 0 {
+		t.Fatalf("%d working in a channel nobody has spoken to", n)
+	}
+	_ = errOf(rpc.Do(ctx, h.c, protocol.Subscribe, protocol.SubscribeParams{Channel: s.ID}))
+	agents, _ := tree(ctx, h.c, s.ID)
+	root := agents[0].ID
+	if err := errOf(rpc.Do(ctx, h.c, protocol.AgentSend, protocol.AgentSendParams{Agent: root, Kind: protocol.KindPrompt, Text: "go"})); err != nil {
+		t.Fatal(err)
+	}
+	h.waitFor(event.TurnStarted, root)
+	if n := h.d.Status().Working; n != 1 {
+		t.Fatalf("%d working while a turn is open", n)
+	}
+	close(release)
+	h.waitFor(event.TurnEnded, root)
 }
