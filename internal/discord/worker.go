@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"strings"
 	"time"
 
 	dg "github.com/bwmarrin/discordgo"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/present"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -254,10 +254,7 @@ func (w *worker) mirror(ctx context.Context, e event.Event) error {
 			}
 			// The default main recipient is implicit in Discord. Other targets
 			// and multi-recipient messages retain their addressing context.
-			if len(p.To) > 0 && (len(p.To) != 1 || p.To[0] != "main") {
-				p.Text = "@" + strings.Join(p.To, " @") + " " + p.Text
-			}
-			return w.terminalPost(ctx, p.Text)
+			return w.terminalPost(ctx, present.Addressed(present.UnlessOnly(p.To, "main"), p.Text))
 		}
 		return w.say(ctx, p.From, channelMessageText(p.To, p.Text))
 	case event.AgentSpawned:
@@ -272,16 +269,19 @@ func (w *worker) mirror(ctx context.Context, e event.Event) error {
 		if err := e.Decode(&p); err != nil {
 			return err
 		}
-		if p.Name == nil && p.Role == nil {
+		// A name, a role, and a model the harness moved the agent to (with
+		// why): a model or variant the human picked is theirs to know already.
+		text := ""
+		for _, c := range present.AgentChanges(p) {
+			if c.What == "Variant" || c.What == "Model" && c.Why == "" {
+				continue
+			}
+			text += " · " + c.String()
+		}
+		if text == "" {
 			return nil
 		}
-		text := w.agentName(e.Agent) + " updated"
-		if p.Name != nil {
-			text += " · name: " + *p.Name
-		}
-		if p.Role != nil {
-			text += " · role: " + *p.Role
-		}
+		text = w.agentName(e.Agent) + " updated" + text
 		for n := range w.agents {
 			if w.agents[n].ID != e.Agent {
 				continue
