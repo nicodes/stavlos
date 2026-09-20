@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -116,93 +117,106 @@ func (m *Model) command(text string) tea.Cmd {
 	fields := strings.Fields(text)
 	name := strings.ToLower(fields[0])
 	rest := strings.TrimSpace(strings.TrimPrefix(text, fields[0]))
-	agent := m.selectedID()
-
-	needAgent := func() tea.Cmd {
-		if agent == "" {
+	if c, ok := commandNamed(name); ok {
+		run := commandRuns[c.Name]
+		if run.needsAgent && m.selectedID() == "" {
 			return m.setStatus("no agent selected", true)
 		}
-		return nil
-	}
-	if cmd, ok := m.usageCommand(name, rest); ok { // /tokens, /cost, /plan and /recap
-		return cmd
-	}
-
-	if cmd, ok := m.serviceCommand(name, rest); ok { // /discord and /web
-		return cmd
-	}
-
-	switch name {
-	case "/settings", "/config":
-		return m.settingsCommand(rest)
-	case "/help", "/h", "/?":
-		m.hideKeys = !m.hideKeys
-		m.layout()
-		if m.hideKeys {
-			return m.setStatus("key bar hidden (/help shows it)", false)
-		}
-		return m.setStatus("key bar shown (/help hides it)", false)
-	case "/tree", "/history":
-		return m.viewCommand(name)
-	case "/chat":
-		return m.openChat()
-	case "/roles", "/role", "/presets":
-		// The one role dialog: enter switches the selected agent's preset.
-		// A name argument sets it directly.
-		if c := needAgent(); c != nil {
-			return c
-		}
-		if rest == "" {
-			return rolesCmd(m.ctx, m.c, m.requestScope(), false)
-		}
-		return pickRoleCmd(m.ctx, m.c, agent, strings.ToLower(rest))
-	case "/channels", "/resume", "/channel":
-		return channelsCmd(m.ctx, m.c, m.requestScope(), channelsPicker)
-	case "/dir":
-		if rest == "" {
-			return m.openTab(focusDirs)
-		}
-		return setDirCmd(m.ctx, m.c, m.requestScope(), rest)
-	case "/rename":
-		if rest == "" {
-			return m.setStatus("usage: /rename <name>", true)
-		}
-		return renameChannelCmd(m.ctx, m.c, m.channelID, strings.TrimPrefix(rest, "#"))
-	case "/compact":
-		if c := needAgent(); c != nil {
-			return c
-		}
-		return compactCmd(m.ctx, m.c, agent) // the compaction events drive the bar and the result line
-	case "/mode":
-		return m.openMode()
-	case "/yolo", "/auto":
-		return m.toggleMode(name[1:], rest)
-	case "/variants", "/variant":
-		if c := needAgent(); c != nil {
-			return c
-		}
-		return m.openVariants(rest)
-	case "/queue":
-		if c := needAgent(); c != nil {
-			return c
-		}
-		if rest == "" {
-			return m.setStatus("usage: /queue <text>", true)
-		}
-		return sendCmd(m.ctx, m.c, agent, protocol.KindPrompt, rest, "queued for after the current turn")
-	case "/models", "/model":
-		// The one model dialog: enter sets the selected agent's model, ctrl+s the channel default.
-		return modelsCmd(m.ctx, m.c, m.requestScope())
-	case "/providers", "/provider", "/connect", "/login":
-		// The one provider dialog: sign in, re-sign in, sign out. A name
-		// argument jumps straight to that provider's sign-in.
-		return providersCmd(m.ctx, m.c, providersMsg{jump: strings.ToLower(rest)})
+		return run.run(m, name, rest)
 	}
 	if rest != "" {
 		return m.setStatus("custom commands do not take arguments", true)
 	}
+	agent := m.selectedID()
 	if m.superChat {
 		agent = ""
 	}
 	return customCommandRunCmd(m.ctx, m.c, m.requestScope(), strings.TrimPrefix(name, "/"), agent)
+}
+
+// commandNamed finds a built-in command by its name or an alias.
+func commandNamed(name string) (Command, bool) {
+	for _, c := range commands {
+		if c.Name == name || slices.Contains(c.Aliases, name) {
+			return c, true
+		}
+	}
+	return Command{}, false
+}
+
+// commandRun is what a built-in command does. name is what was typed (an
+// alias, or one of two commands that share a run); rest is its argument.
+type commandRun struct {
+	needsAgent bool
+	run        func(m *Model, name, rest string) tea.Cmd
+}
+
+// commandRuns is what each command in the palette does, keyed by its name
+// there: the palette lists a command, this table runs it, and a test holds
+// them to each other. (It is filled in init because the runs reach code that
+// reads the palette, which a package-level initialiser may not.)
+var commandRuns map[string]commandRun
+
+func init() {
+	usage := func(m *Model, name, rest string) tea.Cmd { cmd, _ := m.usageCommand(name, rest); return cmd }
+	service := func(m *Model, name, rest string) tea.Cmd { cmd, _ := m.serviceCommand(name, rest); return cmd }
+	view := func(m *Model, name, _ string) tea.Cmd { return m.viewCommand(name) }
+	mode := func(m *Model, name, rest string) tea.Cmd { return m.toggleMode(name[1:], rest) }
+	commandRuns = map[string]commandRun{
+		"/tokens": {run: usage}, "/cost": {run: usage}, "/plan": {run: usage}, "/recap": {run: usage},
+		"/discord": {run: service}, "/web": {run: service},
+		"/tree": {run: view}, "/history": {run: view},
+		"/yolo": {run: mode}, "/auto": {run: mode},
+		"/settings": {run: func(m *Model, _, rest string) tea.Cmd { return m.settingsCommand(rest) }},
+		"/help": {run: func(m *Model, _, _ string) tea.Cmd {
+			m.hideKeys = !m.hideKeys
+			m.layout()
+			if m.hideKeys {
+				return m.setStatus("key bar hidden (/help shows it)", false)
+			}
+			return m.setStatus("key bar shown (/help hides it)", false)
+		}},
+		"/chat": {run: func(m *Model, _, _ string) tea.Cmd { return m.openChat() }},
+		// The one role dialog: enter switches the selected agent's preset. A
+		// name argument sets it directly.
+		"/roles": {needsAgent: true, run: func(m *Model, _, rest string) tea.Cmd {
+			if rest == "" {
+				return rolesCmd(m.ctx, m.c, m.requestScope(), false)
+			}
+			return pickRoleCmd(m.ctx, m.c, m.selectedID(), strings.ToLower(rest))
+		}},
+		"/channels": {run: func(m *Model, _, _ string) tea.Cmd {
+			return channelsCmd(m.ctx, m.c, m.requestScope(), channelsPicker)
+		}},
+		"/dir": {run: func(m *Model, _, rest string) tea.Cmd {
+			if rest == "" {
+				return m.openTab(focusDirs)
+			}
+			return setDirCmd(m.ctx, m.c, m.requestScope(), rest)
+		}},
+		"/rename": {run: func(m *Model, _, rest string) tea.Cmd {
+			if rest == "" {
+				return m.setStatus("usage: /rename <name>", true)
+			}
+			return renameChannelCmd(m.ctx, m.c, m.channelID, strings.TrimPrefix(rest, "#"))
+		}},
+		// (the compaction events drive the bar and the result line)
+		"/compact":  {needsAgent: true, run: func(m *Model, _, _ string) tea.Cmd { return compactCmd(m.ctx, m.c, m.selectedID()) }},
+		"/mode":     {run: func(m *Model, _, _ string) tea.Cmd { return m.openMode() }},
+		"/variants": {needsAgent: true, run: func(m *Model, _, rest string) tea.Cmd { return m.openVariants(rest) }},
+		"/queue": {needsAgent: true, run: func(m *Model, _, rest string) tea.Cmd {
+			if rest == "" {
+				return m.setStatus("usage: /queue <text>", true)
+			}
+			return sendCmd(m.ctx, m.c, m.selectedID(), protocol.KindPrompt, rest, "queued for after the current turn")
+		}},
+		// The one model dialog: enter sets the selected agent's model, ctrl+s
+		// the channel default.
+		"/models": {run: func(m *Model, _, _ string) tea.Cmd { return modelsCmd(m.ctx, m.c, m.requestScope()) }},
+		// The one provider dialog: sign in, re-sign in, sign out. A name
+		// argument jumps straight to that provider's sign-in.
+		"/providers": {run: func(m *Model, _, rest string) tea.Cmd {
+			return providersCmd(m.ctx, m.c, providersMsg{jump: strings.ToLower(rest)})
+		}},
+	}
 }
