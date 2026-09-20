@@ -37,7 +37,6 @@ func (a *Agent) reportTurnLimit(limit int) {
 	if len(human) > 0 {
 		evs = append(evs, s.event(a.ID, event.ChatMessage, event.ChatPayload{From: st.name, Text: text, Kind: "response", ReplyTo: human, Posts: posts}))
 	}
-	wake, _ := s.commitLocked(context.Background(), evs...)
+	_ = s.commitLocked(context.Background(), evs...)
 	s.mu.Unlock()
-	signal(wake)
 }

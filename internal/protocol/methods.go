@@ -16,6 +16,9 @@ type None struct{}
 // follow from the next.
 type SubscribeResult struct {
 	Seq int64 `json:"seq"`
+	// First is the first seq that was delivered when Tail cut the history
+	// short: events before it exist and were not sent. 0 otherwise.
+	First int64 `json:"first,omitempty"`
 }
 
 // The methods.

@@ -41,44 +41,93 @@ const xaiBilling = "https://cli-chat-proxy.grok.com/v1/billing?format=credits"
 
 const userAgent = "stavlos"
 
+// source is how one provider reports plan usage: where, given the base URL
+// its model calls go to; how the credential is presented; and how the reply
+// reads. A provider is described here once; adding one is adding an entry.
+type source struct {
+	url   func(base *url.URL) string
+	auth  func(h http.Header, tok model.Token)
+	parse func(body []byte, now time.Time) (model.PlanUsage, error)
+}
+
+func bearer(h http.Header, tok model.Token) { h.Set("Authorization", "Bearer "+tok.Access) }
+
+// onHost keeps the base URL's scheme and host and replaces its path: the
+// credential goes only where it already goes.
+func onHost(path string) func(*url.URL) string {
+	return func(base *url.URL) string {
+		u := *base
+		u.Path, u.RawQuery = path, ""
+		return u.String()
+	}
+}
+
+var sources = map[string]source{
+	"openai": {
+		// …/backend-api/codex/responses → …/backend-api/wham/usage
+		url: func(base *url.URL) string {
+			i := strings.Index(base.Path, "/codex/")
+			if i < 0 {
+				return ""
+			}
+			return onHost(base.Path[:i] + "/wham/usage")(base)
+		},
+		auth: func(h http.Header, tok model.Token) {
+			bearer(h, tok)
+			h.Set("originator", "stavlos")
+			if tok.AccountID != "" {
+				h.Set("ChatGPT-Account-Id", tok.AccountID)
+			}
+		},
+		parse: parseOpenAI,
+	},
+	"zai": {
+		url: onHost("/api/monitor/usage/quota/limit"),
+		// the key as it is, the way Z.ai's own plugin sends it
+		auth:  func(h http.Header, tok model.Token) { h.Set("Authorization", tok.Access) },
+		parse: parseZai,
+	},
+	"kimi": {
+		url:   func(base *url.URL) string { return onHost(strings.TrimRight(base.Path, "/") + "/usages")(base) },
+		auth:  bearer,
+		parse: parseKimi,
+	},
+	"xai": {
+		// The one source on a host the model calls do not reach: the Grok
+		// CLI's billing endpoint. A test server stands in for both hosts.
+		url: func(base *url.URL) string {
+			if base.Host != "api.x.ai" {
+				u := *base
+				u.Path, u.RawQuery = "/v1/billing", "format=credits"
+				return u.String()
+			}
+			return xaiBilling
+		},
+		auth: func(h http.Header, tok model.Token) {
+			bearer(h, tok)
+			h.Set("x-grok-client-surface", "grok-build") // the endpoint answers the Grok CLI
+			h.Set("x-grok-client-version", "1.0.0")
+		},
+		parse: parseXai,
+	},
+}
+
 // URL is where provider reports plan usage, given the base URL (or, for
 // ChatGPT, the endpoint) its model calls go to; "" for a provider that has
-// no such place. Deriving it from the base keeps the credential on the host
-// it is already sent to, and lets a test point both at one server.
+// no such place.
 func URL(provider, base string) string {
+	src, ok := sources[provider]
 	u, err := url.Parse(base)
-	if err != nil || u.Host == "" {
+	if !ok || err != nil || u.Host == "" {
 		return ""
 	}
-	switch provider {
-	case "openai": // …/backend-api/codex/responses → …/backend-api/wham/usage
-		i := strings.Index(u.Path, "/codex/")
-		if i < 0 {
-			return ""
-		}
-		u.Path = u.Path[:i] + "/wham/usage"
-	case "zai":
-		u.Path = "/api/monitor/usage/quota/limit"
-	case "kimi":
-		u.Path = strings.TrimRight(u.Path, "/") + "/usages"
-	case "xai":
-		if u.Host != "api.x.ai" {
-			u.Path = "/v1/billing" // a test server stands in for both hosts
-			u.RawQuery = "format=credits"
-			return u.String()
-		}
-		return xaiBilling
-	default:
-		return ""
-	}
-	u.RawQuery = ""
-	return u.String()
+	return src.url(u)
 }
 
 // Fetch reads provider's plan usage from endpoint (see URL) with the
 // credential its model calls use.
 func Fetch(ctx context.Context, c *http.Client, provider, endpoint string, tok model.Token) (model.PlanUsage, error) {
-	parse, ok := parsers[provider]
+	src, ok := sources[provider]
 	if !ok || endpoint == "" {
 		return model.PlanUsage{}, fmt.Errorf("%s reports no plan usage", provider)
 	}
@@ -88,22 +137,7 @@ func Fetch(ctx context.Context, c *http.Client, provider, endpoint string, tok m
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", userAgent)
-	switch provider {
-	case "zai": // the key as it is, the way Z.ai's own plugin sends it
-		req.Header.Set("Authorization", tok.Access)
-	case "openai":
-		req.Header.Set("Authorization", "Bearer "+tok.Access)
-		req.Header.Set("originator", "stavlos")
-		if tok.AccountID != "" {
-			req.Header.Set("ChatGPT-Account-Id", tok.AccountID)
-		}
-	case "xai":
-		req.Header.Set("Authorization", "Bearer "+tok.Access)
-		req.Header.Set("x-grok-client-surface", "grok-build") // the endpoint answers the Grok CLI
-		req.Header.Set("x-grok-client-version", "1.0.0")
-	default:
-		req.Header.Set("Authorization", "Bearer "+tok.Access)
-	}
+	src.auth(req.Header, tok)
 	resp, err := c.Do(req)
 	if err != nil {
 		return model.PlanUsage{}, fmt.Errorf("%s plan usage: %w", provider, redact(err, tok.Access))
@@ -117,7 +151,7 @@ func Fetch(ctx context.Context, c *http.Client, provider, endpoint string, tok m
 		return model.PlanUsage{}, fmt.Errorf("%s plan usage: status %d", provider, resp.StatusCode)
 	}
 	now := time.Now()
-	u, err := parse(body, now)
+	u, err := src.parse(body, now)
 	if err != nil {
 		return model.PlanUsage{}, fmt.Errorf("%s plan usage: %w", provider, err)
 	}
@@ -135,10 +169,6 @@ func span(w model.UsageWindow) int {
 		return int(^uint(0) >> 1)
 	}
 	return w.Minutes
-}
-
-var parsers = map[string]func([]byte, time.Time) (model.PlanUsage, error){
-	"openai": parseOpenAI, "zai": parseZai, "kimi": parseKimi, "xai": parseXai,
 }
 
 func redact(err error, secret string) error {

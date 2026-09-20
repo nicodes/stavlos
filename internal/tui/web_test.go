@@ -10,7 +10,7 @@ import (
 
 func TestWebNavRowStatesAndClick(t *testing.T) {
 	m := channelModel()
-	row := func() string { return stripANSI(m.sidebarHeader(sidebarWidth - 1)[sidebarWebRow]) }
+	row := func() string { return stripANSI(m.sidebarHeader(sidebarWidth - 1)[m.navRowIndex(navWeb)]) }
 	if row() != "○ Web UI" {
 		t.Fatalf("before the first status: %q", row())
 	}
@@ -20,7 +20,7 @@ func TestWebNavRowStatesAndClick(t *testing.T) {
 	}
 	// off: a click turns it on, with no dialog in between
 	m.showTree = true
-	if cmd := m.sidebarClick(2, sidebarWebRow); cmd == nil || m.ov != nil {
+	if cmd := m.sidebarClick(2, m.navRowIndex(navWeb)); cmd == nil || m.ov != nil {
 		t.Fatal("a click on the off row opened a dialog instead of enabling")
 	}
 	m.onWeb(webMsg{action: "on", status: protocol.WebStatus{Enabled: true, URL: "http://127.0.0.1:4999/", OpenURL: "http://127.0.0.1:4999/#code=SECRET"}})
@@ -31,12 +31,28 @@ func TestWebNavRowStatesAndClick(t *testing.T) {
 		t.Fatalf("the one-time code reached the screen: %q", m.status)
 	}
 	// on: a click opens the controls
-	if m.sidebarClick(2, sidebarWebRow); m.ov == nil || m.ov.kind != ovWeb || m.ov.shown[0].id != "open" || m.ov.shown[1].id != "off" {
+	if m.sidebarClick(2, m.navRowIndex(navWeb)); m.ov == nil || m.ov.kind != ovWeb || m.ov.shown[0].id != "open" || m.ov.shown[1].id != "off" {
 		t.Fatalf("controls: %+v", m.ov)
 	}
 	// a failed enable says why and leaves it off
 	m.onWeb(webMsg{action: "on", err: errors.New("listen tcp4 127.0.0.1:4999: bind: address already in use")})
 	if row() != "! Web UI error" || !m.statusErr {
 		t.Fatalf("port taken: %q", row())
+	}
+}
+
+// A pushed change asks once and does not start a second chain of polls: the
+// poll armed before it finds itself stale.
+func TestAPushedChangeKeepsOneChainOfPolls(t *testing.T) {
+	m := channelModel()
+	armedWeb, armedDiscord := webTickMsg{m.webEpoch}, discordTickMsg{m.discordEpoch}
+	if m.onChanged(changedMsg{protocol.ChangedWeb}) == nil || m.onChanged(changedMsg{protocol.ChangedDiscord}) == nil {
+		t.Fatal("a change was not asked about")
+	}
+	if armedWeb.epoch == m.webEpoch || armedDiscord.epoch == m.discordEpoch {
+		t.Fatal("the polls armed before the change are still current")
+	}
+	if m.onChanged(changedMsg{"something newer"}) != nil {
+		t.Fatal("an unknown change was acted on")
 	}
 }

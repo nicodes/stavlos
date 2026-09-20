@@ -2,6 +2,7 @@ package agent
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,9 +19,9 @@ import (
 // directory are in the system prompt already). Only a trusted project's
 // files count, and each is attached once until a compaction summarises the
 // results that carried it.
-func (a *Agent) instructionsFor(sub policy.Subject, cfg *config.Effective) string {
+func (a *Agent) instructionsFor(sub policy.Subject, cfg *config.Effective) (note string, carried []string) {
 	if sub.Kind != policy.KindPath || !cfg.ProjectTrusted {
-		return ""
+		return "", nil
 	}
 	// Only the instructions the human trusted are followed: the files the
 	// trust hash covered when the project was loaded. One that has appeared
@@ -46,22 +47,29 @@ func (a *Agent) instructionsFor(sub policy.Subject, cfg *config.Effective) strin
 		a.c.host.ProjectChanged(a.c.Dir())
 	}
 	if len(found) == 0 {
-		return ""
+		return "", nil
 	}
 	a.c.mu.Lock()
-	var files []instructions.File
-	for _, f := range found {
-		if a.instructed[f.Path] {
-			continue
-		}
+	if a.instructed == nil {
+		// What the log says the agent was given since its last compaction;
+		// after a restart that is all there is, and it is enough. From here
+		// the map also reserves a file for the call that is about to carry
+		// it, so two calls of one step do not both attach it.
+		a.instructed = maps.Clone(a.state().instructed)
 		if a.instructed == nil {
 			a.instructed = map[string]bool{}
 		}
-		a.instructed[f.Path] = true
-		files = append(files, f)
+	}
+	var files []instructions.File
+	for _, f := range found {
+		if !a.instructed[f.Path] {
+			a.instructed[f.Path] = true
+			files = append(files, f)
+			carried = append(carried, f.Path)
+		}
 	}
 	a.c.mu.Unlock()
-	return instructions.Note(files, instructions.Budget)
+	return instructions.Note(files, instructions.Budget), carried
 }
 
 // instructionsStamp is the size and modification time of each file, enough

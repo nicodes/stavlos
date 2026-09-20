@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/nicodes/stavlos/internal/paths"
+	"github.com/nicodes/stavlos/internal/statefile"
 )
 
 var globalWriteMu sync.Mutex
@@ -38,22 +39,7 @@ func SetDiscordEnabled(enabled bool) error {
 	if bytes.Equal(b, out) {
 		return nil
 	}
-	f, err := os.CreateTemp(filepath.Dir(resolved), ".stavlos-config-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	_, err = f.Write(out)
-	if err == nil {
-		err = f.Sync()
-	}
-	if ce := f.Close(); err == nil {
-		err = ce
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), resolved)
+	return statefile.WriteAtomic(resolved, out, 0o600, false) // private whatever it was: it may name a token
 }
 
 func editDiscordEnabled(b []byte, enabled bool) ([]byte, error) {

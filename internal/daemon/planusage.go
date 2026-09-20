@@ -13,6 +13,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/model/registry"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/statefile"
 )
 
 // planUsageFile keeps each provider's latest observed plan usage and a
@@ -73,6 +74,7 @@ func (d *Daemon) loadPlanUsage() {
 	d.Registry.OnPlanUsage(func(provider string, u model.PlanUsage) {
 		d.recordPlanUsage(provider, u)
 		d.savePlanUsage()
+		d.changed(protocol.ChangedPlan)
 	})
 }
 
@@ -172,21 +174,7 @@ func (d *Daemon) savePlanUsage() {
 	if err != nil {
 		return
 	}
-	path := filepath.Join(d.DataDir, planUsageFile)
-	f, err := os.CreateTemp(d.DataDir, ".plan-usage-*")
-	if err != nil {
-		log.Printf("plan usage: %v", err)
-		return
-	}
-	_, werr := f.Write(b)
-	cerr := f.Close()
-	if werr != nil || cerr != nil {
-		os.Remove(f.Name())
-		log.Printf("plan usage: %v", errors.Join(werr, cerr))
-		return
-	}
-	if err := os.Rename(f.Name(), path); err != nil {
-		os.Remove(f.Name())
+	if err := statefile.WriteAtomic(filepath.Join(d.DataDir, planUsageFile), b, 0o600, false); err != nil {
 		log.Printf("plan usage: %v", err)
 	}
 }

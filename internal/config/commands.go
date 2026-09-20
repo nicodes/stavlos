@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -18,12 +17,14 @@ type Command struct {
 
 var commandName = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 
-func ReadCommand(path string) (Command, error) {
+func ReadCommand(path string) (Command, error) { return readCommand(disk{}, path) }
+
+func readCommand(src source, path string) (Command, error) {
 	c := Command{Name: strings.TrimSuffix(filepath.Base(path), ".md"), Source: path}
 	if !commandName.MatchString(c.Name) {
 		return c, fmt.Errorf("%s: command name must use lowercase letters, digits, hyphens or underscores and start with a letter", path)
 	}
-	b, err := os.ReadFile(path)
+	b, err := src.ReadFile(path)
 	if err != nil {
 		return c, err
 	}
@@ -49,8 +50,8 @@ func ReadCommand(path string) (Command, error) {
 	return c, nil
 }
 
-func (e *Effective) loadCommands(dir string) error {
-	entries, err := os.ReadDir(dir)
+func (e *Effective) loadCommands(src source, dir string) error {
+	entries, err := src.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
@@ -64,7 +65,7 @@ func (e *Effective) loadCommands(dir string) error {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
-		c, err := ReadCommand(filepath.Join(dir, entry.Name()))
+		c, err := readCommand(src, filepath.Join(dir, entry.Name()))
 		if err != nil {
 			return err
 		}

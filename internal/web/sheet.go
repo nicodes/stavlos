@@ -30,6 +30,13 @@ func (s *Server) sheet(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not signed in", http.StatusUnauthorized)
 		return
 	}
+	// A browser says what a request is for. A sheet is for the app's frame and
+	// nothing else: not a tab of its own, not a fetch, not another page's
+	// image or script tag. (A client that does not say is not a browser.)
+	if dest := r.Header.Get("Sec-Fetch-Dest"); dest != "" && dest != "iframe" {
+		http.Error(w, "a sheet is shown inside the app", http.StatusForbidden)
+		return
+	}
 	if s.o.Sheet == nil {
 		http.NotFound(w, r)
 		return

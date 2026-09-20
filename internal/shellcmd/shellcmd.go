@@ -12,7 +12,6 @@ import (
 	"path"
 	"slices"
 	"strings"
-	"unicode"
 )
 
 // Prefixes a human may allow for a channel come from an allowlist: a
@@ -204,6 +203,9 @@ func Prefix(cmd string) string {
 		return ""
 	}
 	first := w[0]
+	if !plainWord(first) {
+		return "" // "./my\\ script": a word with a space in it reads back as two
+	}
 	if sub, two := twoWordTools[first]; two {
 		if len(w) < 2 || w[1] == "" || strings.HasPrefix(w[1], "-") || slices.Contains(sub, w[1]) || !plainWord(w[1]) {
 			return ""
@@ -216,12 +218,27 @@ func Prefix(cmd string) string {
 	return ""
 }
 
-// plainWord reports whether w can stand in a prefix a human is offered: no
-// space of any kind and no control character. The shell splits words on
-// blanks only, so "0\f" is one word to it and two to anything that reads the
-// prefix back; such a word is not offered.
+// plainWord reports whether w can stand in a prefix a human is offered and
+// the harness then remembers as text: only characters that mean themselves
+// to a shell and to anything that reads the prefix back. A word with a space,
+// a quote, a backslash or a "$" in it (./my\ script, ./\") is one word when
+// the command is parsed and something else when the prefix is, so a prefix
+// holding one would be offered, remembered, and never match again. Such a
+// command is simply not offered a prefix; it can still be allowed once or for
+// the channel.
 func plainWord(w string) bool {
-	return !strings.ContainsFunc(w, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) })
+	if w == "" {
+		return false
+	}
+	for _, r := range w {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune("._/+-=@:,%", r):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Covers reports whether an allowed prefix covers cmd: cmd is one simple
@@ -248,8 +265,8 @@ func Covers(prefix, cmd string) bool {
 // Commands lists the commands a command line runs, best effort, in the
 // form a rule should judge them: each one's words joined by single spaces,
 // with leading VAR=value assignments and launcher words (sudo, env, nice,
-// timeout 5, …) dropped, the program also by its base name (/bin/rm → rm),
-// and the script of sh -c / bash -c expanded. A deny rule on "rm -rf *"
+// timeout 5, …) and shell keywords (then, do, !) dropped, the program also by its base name (/bin/rm → rm),
+// and the script of sh -c, eval or a here-string expanded. A deny rule on "rm -rf *"
 // thereby also speaks for "cd x && FOO=1 sudo /bin/rm  -rf /". It is a
 // classifier's view, not a shell's: it may find commands that are not
 // there, never fewer than a plain reading shows.
@@ -262,6 +279,9 @@ func Commands(cmd string) []string {
 			out = append(out, s)
 		}
 	}
+	// Assignments made earlier on the line are written back into later
+	// commands, so "a=rm; $a -rf /" is judged as the rm it runs.
+	vars := map[string]string{}
 	var visit func(cmd string, depth int)
 	visit = func(cmd string, depth int) {
 		segs := []string{cmd}
@@ -273,7 +293,8 @@ func Commands(cmd string) []string {
 			if !ok {
 				words = strings.Fields(seg)
 			}
-			words = launched(words)
+			bind(vars, words)
+			words = launched(expand(vars, words))
 			if len(words) == 0 {
 				continue
 			}
@@ -281,8 +302,10 @@ func Commands(cmd string) []string {
 			if base := path.Base(words[0]); base != words[0] {
 				add(strings.Join(append([]string{base}, words[1:]...), " "))
 			}
-			if script := shellScript(words); script != "" && depth < 4 {
-				visit(script, depth+1)
+			if depth < 4 {
+				for _, script := range scripts(words) {
+					visit(script, depth+1)
+				}
 			}
 		}
 	}
@@ -397,64 +420,4 @@ func (sc *segmenter) braceWord() bool {
 	before := sc.i == 0 || sc.rs[sc.i-1] == ' ' || sc.rs[sc.i-1] == '\t'
 	after := sc.i+1 == len(sc.rs) || strings.ContainsRune(" \t;", sc.rs[sc.i+1])
 	return before && after
-}
-
-// launchers run the command that follows them; the value is how many
-// non-flag arguments of their own they take first ("timeout 5 rm").
-var launchers = map[string]int{
-	"sudo": 0, "doas": 0, "env": 0, "nice": 0, "nohup": 0, "time": 0, "command": 0, "exec": 0, "builtin": 0,
-	"setsid": 0, "stdbuf": 0, "ionice": 0, "xargs": 0, "chronic": 0, "unbuffer": 0, "timeout": 1, "chroot": 1,
-}
-
-// launched drops leading assignments and launcher words (with their flags
-// and own arguments) from a command's words.
-func launched(words []string) []string {
-	for len(words) > 0 {
-		w := words[0]
-		if isAssignment(w) {
-			words = words[1:]
-			continue
-		}
-		n, ok := launchers[path.Base(w)]
-		if !ok {
-			return words
-		}
-		words = words[1:]
-		for len(words) > 0 && (strings.HasPrefix(words[0], "-") || isAssignment(words[0])) {
-			words = words[1:]
-		}
-		for ; n > 0 && len(words) > 0; n-- {
-			words = words[1:]
-		}
-	}
-	return words
-}
-
-func isAssignment(w string) bool {
-	eq := strings.IndexByte(w, '=')
-	if eq <= 0 {
-		return false
-	}
-	for i, r := range w[:eq] {
-		if !(r == '_' || r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || i > 0 && r >= '0' && r <= '9') {
-			return false
-		}
-	}
-	return true
-}
-
-// shellScript is the script a shell is asked to run with -c ("" when the
-// command is not a shell given -c).
-func shellScript(words []string) string {
-	switch path.Base(words[0]) {
-	case "sh", "bash", "zsh", "dash", "ksh", "fish":
-	default:
-		return ""
-	}
-	for i := 1; i < len(words); i++ {
-		if w := words[i]; strings.HasPrefix(w, "-") && !strings.HasPrefix(w, "--") && strings.Contains(w, "c") && i+1 < len(words) {
-			return words[i+1]
-		}
-	}
-	return ""
 }

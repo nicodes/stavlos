@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/httpx"
 	"github.com/nicodes/stavlos/internal/paths"
+	"github.com/nicodes/stavlos/internal/statefile"
 )
 
 // URL is the models.dev database endpoint (a variable for tests).
@@ -95,24 +97,11 @@ func writeCache(path string, data []byte) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return
 	}
-	f, err := os.CreateTemp(dir, "models-*.json")
-	if err != nil {
-		return
-	}
-	tmp := f.Name()
-	if _, err := f.Write(data); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(tmp)
-		return
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-	}
+	_ = statefile.WriteAtomic(path, data, 0o600, false) // a cache: the next start fetches again
 }
+
+// client bounds itself by the request's context.
+var client = httpx.New(httpx.Options{HeaderTimeout: fetchTimeout})
 
 func fetch(ctx context.Context) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, fetchTimeout)
@@ -123,7 +112,7 @@ func fetch(ctx context.Context) ([]byte, error) {
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "stavlos")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}

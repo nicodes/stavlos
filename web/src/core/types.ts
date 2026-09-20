@@ -1,6 +1,9 @@
 // The slice of the daemon's wire contract (internal/protocol, internal/event)
 // the browser reads. Nothing in core/ imports a view framework.
 
+import type { EventType } from "./vocabulary.gen";
+export type { EventType, InputKind } from "./vocabulary.gen";
+
 export interface ChannelInfo {
   id: string;
   name: string;
@@ -31,7 +34,9 @@ export interface WireEvent {
   seq: number;
   channel: string;
   agent?: string;
-  type: string;
+  // Generated from the daemon's vocabulary. A daemon newer than this bundle may
+  // send a type that is not in it: the reducer's default branch ignores it.
+  type: EventType;
   time: string;
   payload?: any;
 }

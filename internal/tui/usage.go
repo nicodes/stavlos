@@ -186,9 +186,9 @@ func (m *Model) usageKey(msg tea.KeyMsg) tea.Cmd {
 			m.usage.series, m.usage.percent = nil, nil
 			return m.usageFetch()
 		}
-	case msg.String() == "t" && m.usage.kind != usagePlan:
+	case key.Matches(msg, keys.ShowTokens) && m.usage.kind != usagePlan:
 		m.usage.kind = usageTokens
-	case msg.String() == "c" && m.usage.kind != usagePlan:
+	case key.Matches(msg, keys.ShowCost) && m.usage.kind != usagePlan:
 		m.usage.kind = usageCost
 	}
 	return nil
@@ -333,5 +333,5 @@ func usageBars(values []float64, peak float64, rows int) []string {
 
 // usageDialogHints are the usage dialog's keys.
 func usageDialogHints() []dialog.Hint {
-	return []dialog.Hint{hint("←/→", "range"), hint("t", "tokens"), hint("c", "cost"), hint("ctrl+space", "input"), hint("esc", "close")}
+	return []dialog.Hint{hint(keyLabel(keys.TabLeft, keys.TabRight), "range"), hint(keyLabel(keys.ShowTokens), "tokens"), hint(keyLabel(keys.ShowCost), "cost"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.Clear), "close")}
 }

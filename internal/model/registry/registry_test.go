@@ -2,11 +2,13 @@ package registry
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -435,5 +437,72 @@ func TestPlanNameSurvivesAHeaderReading(t *testing.T) {
 	r.observeUsage("openai", model.PlanUsage{Observed: t0.Add(time.Minute), Windows: []model.UsageWindow{{UsedPercent: 11, Minutes: 300}}})
 	if got := r.PlanUsage()["openai"]; got.Plan != "pro" || got.Windows[0].UsedPercent != 11 {
 		t.Fatalf("%+v", got)
+	}
+}
+
+// TestWhatEachProviderIsSent: the registry's table is the one place a
+// provider is described. For each subscription that speaks Chat Completions,
+// the request carries what that provider's prompt cache needs and nothing a
+// provider would reject: Grok is routed by a header, Kimi by a key in the
+// body, GLM by neither; all three get their earlier reasoning back; only
+// Grok's mini models take a variant.
+func TestWhatEachProviderIsSent(t *testing.T) {
+	type seen struct {
+		header http.Header
+		body   string
+	}
+	var mu sync.Mutex
+	var last seen
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		b, _ := io.ReadAll(req.Body)
+		mu.Lock()
+		last = seen{req.Header.Clone(), string(b)}
+		mu.Unlock()
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":null}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\ndata: [DONE]\n\n"))
+	}))
+	defer srv.Close()
+	r, _, _ := newReg(t)
+	r.WithEndpoints("", srv.URL, srv.URL, srv.URL)
+	for _, p := range []string{"xai", "zai", "kimi"} {
+		if err := r.SaveLogin(p, oauth.Tokens{Access: "tok", Refresh: "r", ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	history := []model.Message{
+		{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "x"}}},
+		{Role: model.RoleAssistant, Blocks: []model.Block{{Type: model.BlockThinking, Text: "let me think"}, {Type: model.BlockText, Text: "y"}}},
+		{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "z"}}},
+	}
+	for _, tc := range []struct {
+		full            string
+		convHeader, key bool
+		variant         bool
+	}{
+		{"xai/grok-4", true, false, false},
+		{"xai/grok-4-mini", true, false, true},
+		{"zai/glm-5.3", false, false, false},
+		{"kimi/k3", false, true, false},
+	} {
+		p, id, err := r.lookup(tc.full)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.full, err)
+		}
+		m, err := p.Open(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := m.Complete(context.Background(), model.Request{Model: id, Messages: history, CacheKey: "agent-1", Variant: "high"}, nil); err != nil {
+			t.Fatalf("%s: %v", tc.full, err)
+		}
+		mu.Lock()
+		got := last
+		mu.Unlock()
+		if (got.header.Get("x-grok-conv-id") == "agent-1") != tc.convHeader ||
+			strings.Contains(got.body, `"prompt_cache_key":"agent-1"`) != tc.key ||
+			strings.Contains(got.body, `"reasoning_effort":"high"`) != tc.variant ||
+			!strings.Contains(got.body, `"reasoning_content":"let me think"`) {
+			t.Errorf("%s: conv header %q, body %s", tc.full, got.header.Get("x-grok-conv-id"), got.body)
+		}
 	}
 }

@@ -22,6 +22,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nicodes/stavlos/internal/statefile"
 )
 
 // Credential types.
@@ -120,20 +122,7 @@ func (s *Store) save(m map[string]Credential) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(dir, ".auth-*.json")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	_, err = f.Write(append(b, '\n'))
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Rename(tmp, s.path)
-	}
-	if err != nil {
-		os.Remove(tmp)
+	if err := statefile.WriteAtomic(s.path, append(b, '\n'), 0o600, false); err != nil {
 		s.cached = nil
 		return err
 	}

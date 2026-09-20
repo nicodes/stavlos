@@ -64,24 +64,29 @@ func permissionSubject(p protocol.PromptInfo) string {
 		if json.Unmarshal(p.Input, &input) == nil && input.Command != nil {
 			return permissionCode("sh", *input.Command)
 		}
-	case toolname.ApplyPatch:
-		return permissionFields(p.Input, "diff", []permissionField{{"patch", ""}})
-	case toolname.WebFetch:
-		return permissionFields(p.Input, "text", []permissionField{{"url", ""}, {"start", "Start"}})
-	case toolname.WebSearch:
-		return permissionFields(p.Input, "text", []permissionField{{"query", ""}, {"n", "Results"}})
-	case toolname.Read:
-		return permissionFields(p.Input, "text", []permissionField{{"path", ""}, {"offset", "First line"}, {"limit", "Line limit"}})
-	case toolname.Grep:
-		return permissionFields(p.Input, "text", []permissionField{{"pattern", "Pattern"}, {"path", "Path"}, {"glob", "File glob"}, {"ignore_case", "Ignore case"}, {"limit", "Match limit"}})
-	case toolname.Glob:
-		return permissionFields(p.Input, "text", []permissionField{{"pattern", "Pattern"}, {"path", "Path"}, {"limit", "Path limit"}})
-	case toolname.Skill:
-		return permissionFields(p.Input, "text", []permissionField{{"name", "Skill"}})
-	case toolname.AgentCancel, toolname.ShellKill:
-		return permissionFields(p.Input, "text", []permissionField{{"id", "Target"}})
+	}
+	if l, ok := permissionLayouts[p.Tool]; ok {
+		return permissionFields(p.Input, l.language, l.fields)
 	}
 	return permissionJSON(p.Input)
+}
+
+// permissionLayouts is how a known tool's input reads in an approval card:
+// its primary argument first and bare (the one present.PrimaryArg names, which
+// a test holds it to), then the others with a label.
+var permissionLayouts = map[string]struct {
+	language string
+	fields   []permissionField
+}{
+	toolname.ApplyPatch:  {"diff", []permissionField{{"patch", ""}}},
+	toolname.WebFetch:    {"text", []permissionField{{"url", ""}, {"start", "Start"}}},
+	toolname.WebSearch:   {"text", []permissionField{{"query", ""}, {"n", "Results"}}},
+	toolname.Read:        {"text", []permissionField{{"path", ""}, {"offset", "First line"}, {"limit", "Line limit"}}},
+	toolname.Grep:        {"text", []permissionField{{"pattern", "Pattern"}, {"path", "Path"}, {"glob", "File glob"}, {"ignore_case", "Ignore case"}, {"limit", "Match limit"}}},
+	toolname.Glob:        {"text", []permissionField{{"pattern", "Pattern"}, {"path", "Path"}, {"limit", "Path limit"}}},
+	toolname.Skill:       {"text", []permissionField{{"name", "Skill"}}},
+	toolname.AgentCancel: {"text", []permissionField{{"id", "Target"}}},
+	toolname.ShellKill:   {"text", []permissionField{{"id", "Target"}}},
 }
 
 func permissionFields(raw json.RawMessage, language string, fields []permissionField) string {

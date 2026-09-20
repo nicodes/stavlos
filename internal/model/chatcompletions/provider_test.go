@@ -52,7 +52,7 @@ func TestCompleteStream(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	p := NewWithToken("test", srv.URL+"/v1/", token("sk-test"))
+	p := NewWithToken("test", srv.URL+"/v1/", token("sk-test"), Traits{})
 	m, err := p.Open("some-model")
 	if err != nil {
 		t.Fatal(err)
@@ -157,7 +157,7 @@ func TestCompleteHTTPError(t *testing.T) {
 		_, _ = io.WriteString(w, `{"error":{"message":"bad key","type":"invalid_request_error"}}`)
 	}))
 	defer srv.Close()
-	m, _ := NewWithToken("x", srv.URL, token("t")).Open("m")
+	m, _ := NewWithToken("x", srv.URL, token("t"), Traits{}).Open("m")
 	_, err := m.Complete(context.Background(), model.Request{Model: "m"}, nil)
 	if err == nil || !strings.Contains(err.Error(), "401") || !strings.Contains(err.Error(), "bad key") {
 		t.Errorf("err = %v", err)
@@ -178,7 +178,7 @@ func TestCompleteCancel(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 
-	m, _ := NewWithToken("x", srv.URL, token("t")).Open("m")
+	m, _ := NewWithToken("x", srv.URL, token("t"), Traits{}).Open("m")
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	var resp model.Response
@@ -244,10 +244,11 @@ func TestGrokCacheRouting(t *testing.T) {
 	}
 	for _, c := range []struct {
 		provider      string
+		traits        Traits
 		wantConv      string
 		wantReasoning any
-	}{{"xai", "agent-1", "let me think"}, {"deepseek", "", nil}} {
-		m, _ := NewWithToken(c.provider, srv.URL, token("tok")).Open("grok-4")
+	}{{"routed by header", Traits{CacheHeader: "x-grok-conv-id", ReplaysReasoning: true}, "agent-1", "let me think"}, {"no traits", Traits{}, "", nil}} {
+		m, _ := NewWithToken(c.provider, srv.URL, token("tok"), c.traits).Open("grok-4")
 		if _, err := m.Complete(context.Background(), model.Request{Model: "grok-4", Messages: history, CacheKey: "agent-1"}, nil); err != nil {
 			t.Fatal(err)
 		}

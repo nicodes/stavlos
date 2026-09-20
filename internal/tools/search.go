@@ -17,6 +17,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
@@ -299,7 +300,7 @@ func walkFiles(ctx context.Context, root, path string, visit func(abs, shown str
 			return nil
 		}
 		shown := p
-		if rel, err := filepath.Rel(root, p); err == nil && rel != ".." && !strings.HasPrefix(rel, "../") {
+		if rel, ok := pathx.Rel(root, p); ok {
 			shown = rel
 		}
 		if !visit(p, shown) {

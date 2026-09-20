@@ -37,7 +37,17 @@ const baseVersion = 5
 // migration converts the schema one version forward.
 type migration func(tx *sql.Tx) error
 
-var migrations = []migration{}
+var migrations = []migration{
+	// 5 → 6: the usage table (usage.go), filled from the model calls already
+	// in the log.
+	func(tx *sql.Tx) error {
+		if _, err := tx.Exec(usageSchema); err != nil {
+			return err
+		}
+		_, err := tx.Exec(usageBackfill)
+		return err
+	},
+}
 
 // schemaVersion is the schema this build reads and writes.
 var schemaVersion = baseVersion + len(migrations)
@@ -227,6 +237,7 @@ CREATE TABLE IF NOT EXISTS trust (
   dir  TEXT PRIMARY KEY,
   hash TEXT NOT NULL
 );
+`+usageSchema+`
 PRAGMA user_version = %d;`, schemaVersion))
 	return err
 }

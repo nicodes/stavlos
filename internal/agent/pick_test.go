@@ -390,7 +390,7 @@ func TestCancelAndTheSwitchStopTheWake(t *testing.T) {
 		if err := s.MaybeResume(ctx, end.ResumeAt.Add(time.Hour)); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(30 * time.Millisecond)
+		settle(t, s, h) // a wake, had there been one, has been taken by now
 		if n := len(h.ofType(event.TurnStarted, s.Root().ID)); n != 1 {
 			t.Fatalf("a cancelled agent was woken: %d turns", n)
 		}

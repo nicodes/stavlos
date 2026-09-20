@@ -3,6 +3,8 @@ package discord
 import (
 	"strings"
 	"unicode/utf16"
+
+	"github.com/nicodes/stavlos/internal/present"
 )
 
 func units(s string) int { return len(utf16.Encode([]rune(s))) }
@@ -104,14 +106,5 @@ func stripBot(text, bot string) string {
 // The human is implicit in the Discord channel, but co-recipients remain
 // visible before an agent-authored message's body.
 func channelMessageText(to []string, text string) string {
-	var recipients []string
-	for _, name := range to {
-		if name != "user" {
-			recipients = append(recipients, "@"+name)
-		}
-	}
-	if len(recipients) > 0 {
-		return strings.Join(recipients, " ") + " " + text
-	}
-	return text
+	return present.Addressed(present.Without(to, "user"), text) // the user is reading it
 }

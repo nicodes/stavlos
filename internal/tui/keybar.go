@@ -17,35 +17,35 @@ func hint(key, desc string) dialog.Hint { return dialog.Hint{Key: key, Desc: des
 // hints but for what space does, so keyHints keeps one case each for the
 // dialogs that differ.
 var listDialogHints = map[focus]func() []dialog.Hint{
-	focusAsync: func() []dialog.Hint { return listHints(hint("space/enter", "open chat")) },
-	focusMCP:   func() []dialog.Hint { return listHints(hint("space/enter", "show/hide tools")) },
+	focusAsync: func() []dialog.Hint { return listHints(hint(keyLabel(keys.Select), "open chat")) },
+	focusMCP:   func() []dialog.Hint { return listHints(hint(keyLabel(keys.Select), "show/hide tools")) },
 	focusTodo:  func() []dialog.Hint { return listHints() },
 }
 
 // listHints is ↑/↓ over a list, whatever select does there, and the keys
 // out of the dialog.
 func listHints(sel ...dialog.Hint) []dialog.Hint {
-	h := append([]dialog.Hint{hint("↑/↓", "move")}, sel...)
-	return append(h, hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit"))
+	h := append([]dialog.Hint{hint(keyLabel(keys.SelUp, keys.SelDown), "move")}, sel...)
+	return append(h, hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.Clear), "close"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.Quit), "quit"))
 }
 
 func (m Model) keyHints() []dialog.Hint {
 	switch {
 	case m.ov != nil && m.ov.mode == overlayLogin:
 		if m.ov.login.key {
-			return []dialog.Hint{hint("enter", "sign in"), hint("esc", "cancel sign-in")}
+			return []dialog.Hint{hint(keyLabel(keys.Submit), "sign in"), hint(keyLabel(keys.Clear), "cancel sign-in")}
 		}
-		h := []dialog.Hint{hint("o", "open in browser"), hint("esc", "cancel sign-in")}
+		h := []dialog.Hint{hint(keyLabel(keys.OvOpen), "open in browser"), hint(keyLabel(keys.Clear), "cancel sign-in")}
 		if m.ov.login.err != "" {
-			h = append([]dialog.Hint{hint("enter", "retry")}, h...)
+			h = append([]dialog.Hint{hint(keyLabel(keys.Submit), "retry")}, h...)
 		}
 		return h
 	case m.ov != nil && m.ov.kind == ovModels:
-		return []dialog.Hint{hint("space/enter", "set for this agent"), hint("ctrl+s", "set channel default"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("ctrl+space", "input"), hint("esc", "close")}
+		return []dialog.Hint{hint(keyLabel(keys.Select), "set for this agent"), hint(keyLabel(keys.OvAlt), "set channel default"), hint(keyLabel(keys.SelUp, keys.SelDown), "move"), hint("type", "filter"), hint(keyLabel(keys.PageUp, keys.PageDown), "page"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.Clear), "close")}
 	case m.ov != nil && m.ov.mode == overlayInput:
-		return []dialog.Hint{hint("enter", "create"), hint("esc", "cancel")}
+		return []dialog.Hint{hint(keyLabel(keys.Submit), "create"), hint(keyLabel(keys.Clear), "cancel")}
 	case m.ov != nil:
-		return []dialog.Hint{hint("space/enter", "select"), hint("↑/↓", "move"), hint("type", "filter"), hint("pgup/pgdn", "page"), hint("ctrl+space", "input"), hint("esc", "close")}
+		return []dialog.Hint{hint(keyLabel(keys.Select), "select"), hint(keyLabel(keys.SelUp, keys.SelDown), "move"), hint("type", "filter"), hint(keyLabel(keys.PageUp, keys.PageDown), "page"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.Clear), "close")}
 	}
 	if h, ok := listDialogHints[m.focus]; ok {
 		return h()
@@ -55,56 +55,56 @@ func (m Model) keyHints() []dialog.Hint {
 		return usageDialogHints()
 	case focusDirs:
 		if m.dirEdit != "" {
-			return []dialog.Hint{hint("enter", "save"), hint("esc", "cancel"), hint("ctrl+c", "quit")}
+			return []dialog.Hint{hint(keyLabel(keys.Submit), "save"), hint(keyLabel(keys.Clear), "cancel"), hint(keyLabel(keys.Quit), "quit")}
 		}
-		return []dialog.Hint{hint("↑/↓", "move"), hint("a", "add directory"), hint("space/enter", "edit"), hint("ctrl+d", "remove"), hint("ctrl+space", "input"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint(keyLabel(keys.SelUp, keys.SelDown), "move"), hint(keyLabel(keys.AddDir), "add directory"), hint(keyLabel(keys.Select), "edit"), hint(keyLabel(keys.OvRemove), "remove"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.Clear), "close"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.Quit), "quit")}
 	case focusSidebar:
-		return []dialog.Hint{hint("↑/↓", "move"), hint("space/enter", "open"), hint("n", "next agent needing you"), hint("←", "fold tree"), hint("→", "channel dirs"), hint("ctrl+space", "input"), hint("tab", "next section"), hint("esc", "back to input"), hint("ctrl+b", "close sidebar"), hint("pgup/pgdn", "scroll"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint(keyLabel(keys.SelUp, keys.SelDown), "move"), hint(keyLabel(keys.Select), "open"), hint(keyLabel(keys.NextWaiting), "next agent needing you"), hint(keyLabel(keys.TabLeft), "fold tree"), hint(keyLabel(keys.TabRight), "channel dirs"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.Clear), "back to input"), hint(keyLabel(keys.ToggleTree), "close sidebar"), hint(keyLabel(keys.PageUp, keys.PageDown), "scroll"), hint(keyLabel(keys.Quit), "quit")}
 	case focusMeta:
-		return []dialog.Hint{hint("←/→", "choose"), hint("space/enter", "open"), hint("ctrl+space", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint(keyLabel(keys.TabLeft, keys.TabRight), "choose"), hint(keyLabel(keys.Select), "open"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.Clear), "back to input"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.Quit), "quit")}
 	case focusTabs:
-		return []dialog.Hint{hint("←/→", "choose"), hint("space/enter", "open"), hint("ctrl+space", "input"), hint("esc", "back to input"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint(keyLabel(keys.TabLeft, keys.TabRight), "choose"), hint(keyLabel(keys.Select), "open"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.Clear), "back to input"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.Quit), "quit")}
 	case focusChat:
-		return []dialog.Hint{hint("↑/↓", "item"), hint("space/enter", "expand/collapse"), hint("pgup/pgdn", "page"), hint("tab", "next section"), hint("ctrl+space", "input"), hint("esc", "input"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint(keyLabel(keys.SelUp, keys.SelDown), "item"), hint(keyLabel(keys.Select), "expand/collapse"), hint(keyLabel(keys.PageUp, keys.PageDown), "page"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.Clear), "input"), hint(keyLabel(keys.Quit), "quit")}
 	case focusQuestions:
 		if m.q.typing {
-			return []dialog.Hint{hint("enter", "save custom answer"), hint("esc", "back to the options"), hint("ctrl+c", "quit")}
+			return []dialog.Hint{hint(keyLabel(keys.Submit), "save custom answer"), hint(keyLabel(keys.Clear), "back to the options"), hint(keyLabel(keys.Quit), "quit")}
 		}
 		if p := m.currentQuestion(); p != nil && p.QuestionNumber > 0 {
-			return []dialog.Hint{hint("↑/↓", "option"), hint("space", "toggle"), hint("enter", "submit answer"), hint("type", "something else"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+			return []dialog.Hint{hint(keyLabel(keys.SelUp, keys.SelDown), "option"), hint("space", "toggle"), hint(keyLabel(keys.Submit), "submit answer"), hint("type", "something else"), hint(keyLabel(keys.Clear), "close"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.Quit), "quit")}
 		}
-		return []dialog.Hint{hint("↑/↓", "option"), hint("space", "toggle"), hint("enter", "confirm · next"), hint("←/→", "question"), hint("type", "something else"), hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint(keyLabel(keys.SelUp, keys.SelDown), "option"), hint("space", "toggle"), hint(keyLabel(keys.Submit), "confirm · next"), hint(keyLabel(keys.TabLeft, keys.TabRight), "question"), hint("type", "something else"), hint(keyLabel(keys.Clear), "close"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.Quit), "quit")}
 	case focusPermission, focusInlinePermission:
 		if p := m.currentPrompt(); p != nil {
 			switch m.permEdit {
 			case "deny":
-				return []dialog.Hint{hint("enter", "deny"), hint("esc", "cancel"), hint("ctrl+c", "quit")}
+				return []dialog.Hint{hint(keyLabel(keys.Submit), "deny"), hint(keyLabel(keys.Clear), "cancel"), hint(keyLabel(keys.Quit), "quit")}
 			case "dir":
-				return []dialog.Hint{hint("enter", "allow + add this directory"), hint("esc", "cancel"), hint("ctrl+c", "quit")}
+				return []dialog.Hint{hint(keyLabel(keys.Submit), "allow + add this directory"), hint(keyLabel(keys.Clear), "cancel"), hint(keyLabel(keys.Quit), "quit")}
 			}
-			return []dialog.Hint{hint("↑/↓", "option"), hint("space/enter", "choose"), hint("ctrl+space", "input"), hint("tab", "next section"), hint("esc", "close"), hint("ctrl+c", "quit")}
+			return []dialog.Hint{hint(keyLabel(keys.SelUp, keys.SelDown), "option"), hint(keyLabel(keys.Select), "choose"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.Clear), "close"), hint(keyLabel(keys.Quit), "quit")}
 		}
-		return []dialog.Hint{hint("esc", "close"), hint("tab", "next section"), hint("ctrl+c", "quit")}
+		return []dialog.Hint{hint(keyLabel(keys.Clear), "close"), hint(keyLabel(keys.NextSection), "next section"), hint(keyLabel(keys.Quit), "quit")}
 	}
 	// Input focus. The tab hint appears only when there is somewhere to go;
 	// a waiting permission already shows in the tab strip, so it is not
 	// repeated here.
 	var tab []dialog.Hint
 	if len(m.focusOrder()) > 1 {
-		tab = []dialog.Hint{hint("tab", "next section")}
+		tab = []dialog.Hint{hint(keyLabel(keys.NextSection), "next section")}
 	}
 	tree := "show sidebar"
 	if m.showTree {
 		tree = "hide sidebar"
 	}
 	if m.isHome() {
-		hs := []dialog.Hint{hint("enter", "send"), hint("ctrl+j", "newline"), hint("↑/↓", "history"), hint("/", "commands")}
+		hs := []dialog.Hint{hint(keyLabel(keys.Submit), "send"), hint("ctrl+j", "newline"), hint(keyLabel(keys.SelUp, keys.SelDown), "history"), hint("/", "commands")}
 		hs = append(hs, tab...)
-		return append(hs, hint("ctrl+n/p", "agents"), hint("ctrl+b", tree), hint("ctrl+c", "quit"))
+		return append(hs, hint(keyLabel(keys.NextAgent, keys.PrevAgent), "agents"), hint(keyLabel(keys.ToggleTree), tree), hint(keyLabel(keys.Quit), "quit"))
 	}
-	hs := []dialog.Hint{hint("enter", "send"), hint("ctrl+j", "newline"), hint("↑/↓", "history"), hint("/", "commands")}
+	hs := []dialog.Hint{hint(keyLabel(keys.Submit), "send"), hint("ctrl+j", "newline"), hint(keyLabel(keys.SelUp, keys.SelDown), "history"), hint("/", "commands")}
 	hs = append(hs, tab...)
-	return append(hs, hint("esc esc", "cancel turn"), hint("ctrl+n/p", "agents"), hint("pgup/pgdn", "scroll"), hint("ctrl+b", tree), hint("ctrl+c", "quit"))
+	return append(hs, hint("esc esc", "cancel turn"), hint(keyLabel(keys.NextAgent, keys.PrevAgent), "agents"), hint(keyLabel(keys.PageUp, keys.PageDown), "scroll"), hint(keyLabel(keys.ToggleTree), tree), hint(keyLabel(keys.Quit), "quit"))
 }
 
 // keyBarLines renders hints as "key desc" cells packed into rows of at
