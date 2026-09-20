@@ -186,9 +186,9 @@ func (m *Model) usageKey(msg tea.KeyMsg) tea.Cmd {
 			m.usage.series, m.usage.percent = nil, nil
 			return m.usageFetch()
 		}
-	case msg.String() == "t" && m.usage.kind != usagePlan:
+	case key.Matches(msg, keys.ShowTokens) && m.usage.kind != usagePlan:
 		m.usage.kind = usageTokens
-	case msg.String() == "c" && m.usage.kind != usagePlan:
+	case key.Matches(msg, keys.ShowCost) && m.usage.kind != usagePlan:
 		m.usage.kind = usageCost
 	}
 	return nil

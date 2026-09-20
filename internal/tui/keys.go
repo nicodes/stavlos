@@ -34,6 +34,30 @@ type keyMap struct {
 	OvAlt    key.Binding // secondary action (models: channel default)
 	OvOpen   key.Binding // login: open the URL in the browser again
 	OvRemove key.Binding // providers: sign out of the selected provider
+
+	// Letters, which act only where no text is being typed.
+	VimUp       key.Binding
+	VimDown     key.Binding
+	NextWaiting key.Binding // the sidebar: the next agent that needs you
+	AddDir      key.Binding // the dirs tab
+	ShowTokens  key.Binding // a usage chart
+	ShowCost    key.Binding
+
+	// The configuration editor (/settings).
+	EdClose   key.Binding
+	EdSave    key.Binding
+	EdConfirm key.Binding
+	EdRaw     key.Binding // switch between the fields and the raw text of a file
+	EdPane    key.Binding // files ↔ editor
+	EdUp      key.Binding
+	EdDown    key.Binding
+	EdPrev    key.Binding // the section to the left
+	EdNext    key.Binding
+	EdOpen    key.Binding
+	EdNew     key.Binding
+	EdRename  key.Binding
+	EdDelete  key.Binding
+	EdReload  key.Binding
 }
 
 var keys = keyMap{
@@ -65,4 +89,26 @@ var keys = keyMap{
 	OvAlt:    key.NewBinding(key.WithKeys("ctrl+s")),
 	OvOpen:   key.NewBinding(key.WithKeys("o", "O")),
 	OvRemove: key.NewBinding(key.WithKeys("ctrl+d")),
+
+	VimUp:       key.NewBinding(key.WithKeys("k")),
+	VimDown:     key.NewBinding(key.WithKeys("j")),
+	NextWaiting: key.NewBinding(key.WithKeys("n")),
+	AddDir:      key.NewBinding(key.WithKeys("a")),
+	ShowTokens:  key.NewBinding(key.WithKeys("t")),
+	ShowCost:    key.NewBinding(key.WithKeys("c")),
+
+	EdClose:   key.NewBinding(key.WithKeys("esc", "ctrl+c")),
+	EdSave:    key.NewBinding(key.WithKeys("ctrl+s")),
+	EdConfirm: key.NewBinding(key.WithKeys("enter")),
+	EdRaw:     key.NewBinding(key.WithKeys("f4")),
+	EdPane:    key.NewBinding(key.WithKeys("tab", "shift+tab")),
+	EdUp:      key.NewBinding(key.WithKeys("up", "k")),
+	EdDown:    key.NewBinding(key.WithKeys("down", "j")),
+	EdPrev:    key.NewBinding(key.WithKeys("left")),
+	EdNext:    key.NewBinding(key.WithKeys("right")),
+	EdOpen:    key.NewBinding(key.WithKeys("enter", " ")),
+	EdNew:     key.NewBinding(key.WithKeys("ctrl+n")),
+	EdRename:  key.NewBinding(key.WithKeys("f2")),
+	EdDelete:  key.NewBinding(key.WithKeys("ctrl+d")),
+	EdReload:  key.NewBinding(key.WithKeys("ctrl+l")),
 }
