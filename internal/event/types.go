@@ -280,6 +280,10 @@ type ToolFinishedPayload struct {
 	IsError   bool   `json:"is_error,omitempty"`
 	Cancelled bool   `json:"cancelled,omitempty"`
 	Denied    bool   `json:"denied,omitempty"`
+	// Instructions are the instructions files whose text the output carries
+	// (a note appended for the directories the call touched), so that which
+	// ones an agent has been given is in the log, not only in memory.
+	Instructions []string `json:"instructions,omitempty"`
 }
 
 // TurnReason says why a turn ended.

@@ -43,8 +43,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	if err := a.record(event.ToolStarted, event.ToolStartedPayload{Turn: turn, CallID: c.ID, Name: c.Name}); err != nil {
 		return
 	}
+	var carried []string // instructions files the output carries
 	finish := func(out string, isErr, cancelled, denied bool) {
-		_ = a.record(event.ToolFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied})
+		_ = a.record(event.ToolFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied, Instructions: carried})
 	}
 	t, ok := a.c.tools[c.Name]
 	if !ok {
@@ -102,8 +103,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		a.sheetsPatched(d.sub)
 	}
 	if !res.IsError {
-		if note := a.instructionsFor(d.sub, cfg); note != "" {
+		if note, files := a.instructionsFor(d.sub, cfg); note != "" {
 			res.Output += "\n\n" + note
+			carried = files
 		}
 	}
 	finish(res.Output, res.IsError, false, false)
