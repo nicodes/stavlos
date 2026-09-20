@@ -12,6 +12,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/shellcmd"
@@ -186,8 +187,8 @@ func controlFile(tool string, sub policy.Subject, base string, dirs []string) st
 	for _, v := range sub.Values {
 		p := tools.ResolvePath(base, v)
 		for _, d := range dirs {
-			rel, err := filepath.Rel(tools.ResolvePath("", d), p)
-			if err != nil {
+			rel, ok := pathx.Rel(tools.ResolvePath("", d), p)
+			if !ok {
 				continue
 			}
 			for _, cf := range controlFiles {
@@ -195,7 +196,7 @@ func controlFile(tool string, sub policy.Subject, base string, dirs []string) st
 					return v
 				}
 			}
-			if !strings.HasPrefix(rel, "..") && slices.Contains(instructions.Names, filepath.Base(rel)) {
+			if slices.Contains(instructions.Names, filepath.Base(rel)) {
 				return v
 			}
 		}

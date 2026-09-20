@@ -262,7 +262,7 @@ on their own rather than arrive in one diff.
 | 2.5 turn loop | open | |
 | 2.6 `Host` / `Env` split | open | |
 | 2.7 channel resources | **done** | `Agent.release`. |
-| 3.1 `pathx`, `os.Root` | open | |
+| 3.1 `pathx`, `os.Root` | **half** | `pathx.Rel`/`Within`/`Under` is the one containment test, at all seven sites (the prefix form was wrong for `/`, the `Rel` form for a file named `..x`), with a fuzz target. Tools still do their I/O by path, not through an `os.Root`. |
 | 3.2 pure `Decide` | open | The non-† part still depends on 3.1's parsed paths. |
 | 3.3 shell grammar | **done** | Keywords, launcher flag arity, `eval`, here-strings, same-line literals. A prefix is offered only for words that read back as themselves (found by the fuzzer). |
 | 3.4 trust snapshot | **done** | `config.TakeSnapshot`: one read, bounded, regular files only (a link to one counts); the hash and every project loader use those bytes. The config editor still validates its staged tree from disk. |
