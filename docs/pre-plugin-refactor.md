@@ -1,5 +1,9 @@
 # Pre-plugin refactor plan (2026-09-17)
 
+> **Superseded on 2026-09-19 by [ground-up-refactor.md](ground-up-refactor.md)**, which
+> re-verified every finding here against the code (all still open, several
+> worse) and carries them forward. Kept for its reasoning and its decisions.
+
 Should the whole project be refactored before [Lua plugins](lua-plugins.md)
 land? **Yes.** Two reasons, both found in the code:
 

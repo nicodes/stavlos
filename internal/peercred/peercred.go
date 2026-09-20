@@ -51,22 +51,32 @@ func OfSelf(c *net.UnixConn) (Cred, error) {
 }
 
 // DescendsFrom reports whether process pid was started, directly or
-// through other processes, by ancestor. It walks parents in /proc; a
-// process that detached itself (reparented to init) no longer descends
-// from anything, which is why the sandbox, not this, keeps agents' processes
-// off the daemon's socket.
-func DescendsFrom(pid, ancestor int) bool {
+// through other processes, by ancestor. It walks parents in /proc.
+//
+// An ancestry that cannot be read is an error, and the caller must treat it
+// as one: the question is asked to keep a process off something, so "I could
+// not tell" is never "no". (It used to be: a peer whose /proc entry vanished
+// mid-walk was taken for a stranger and given every right.)
+//
+// A process that detaches itself (a double fork, its parent gone) is
+// reparented to the nearest subreaper, or to init. The daemon therefore
+// makes itself a subreaper (daemon.Main), so the processes its agents start
+// stay its descendants however they fork.
+func DescendsFrom(pid, ancestor int) (bool, error) {
 	for i := 0; i < 128 && pid > 1; i++ {
 		parent, err := ParentOf(pid)
 		if err != nil {
-			return false
+			return false, fmt.Errorf("the ancestry of process %d cannot be read: %w", pid, err)
 		}
 		if parent == ancestor {
-			return true
+			return true, nil
 		}
 		pid = parent
 	}
-	return false
+	if pid > 1 {
+		return false, fmt.Errorf("the ancestry of process %d is deeper than this walks", pid)
+	}
+	return false, nil
 }
 
 // ParentOf is a process's parent pid, from /proc/<pid>/stat.

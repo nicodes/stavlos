@@ -385,5 +385,5 @@ func (m *Model) placeholder() string {
 	if m.superChat {
 		return "Message the channel · @name addresses an agent, no mention goes to the root"
 	}
-	return placeholders[placeholderIndex(time.Now())]
+	return placeholders[placeholderIndex(clock())]
 }

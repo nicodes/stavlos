@@ -136,7 +136,7 @@ func (m Model) requestScope() requestScope  { return requestScope{m.channelID, m
 func (m Model) accepts(s requestScope) bool { return s.channel == "" || s == m.requestScope() }
 
 func rememberChannelCmd(channel string) tea.Cmd {
-	selected := time.Now()
+	selected := clock()
 	return func() tea.Msg { return resultMsg{err: navigation.Remember(channel, selected)} }
 }
 

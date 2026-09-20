@@ -860,3 +860,44 @@ func TestAutoCompactTriggers(t *testing.T) {
 		t.Fatalf("the kept tail should be short: %d tokens", project.EstimateTokens(hist, "", nil))
 	}
 }
+
+// TestALostTurnEndDoesNotWedgeTheAgent (RT2): when the write of turn.ended
+// fails, the agent used to stay "in a turn" for ever, and an agent in a turn
+// takes no other: every later prompt sat in its inbox until the daemon
+// restarted. It now ends the turn in memory, says why, and takes the next.
+func TestALostTurnEndDoesNotWedgeTheAgent(t *testing.T) {
+	fm := &fakeModel{steps: []step{reply(text("first")), reply(text("second"))}}
+	s, h := newTestChannel(t, testConfig{}, fm)
+	h.mu.Lock()
+	h.failType = event.TurnEnded
+	h.mu.Unlock()
+	if err := s.Root().Prompt(context.Background(), "one", "human:test"); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h, func() bool { return strings.Contains(s.Root().Info().LastError, "could not be logged") })
+	if st := s.Root().Info().State; st == protocol.AgentRunning {
+		t.Fatalf("the agent is still %q after its turn ended", st)
+	}
+	end := runTurn(t, s, h, "two") // the write works again: the agent must take this turn
+	if end.Reason != event.ReasonEndTurn || end.Turn != 2 {
+		t.Fatalf("the next turn: %+v", end)
+	}
+}
+
+// TestAToolDoesNotRunWithoutItsStartOnTheRecord (1C.5): a failed write of
+// tool.started used to be ignored, and the tool ran: a command executed, or
+// a file changed, with nothing in the log to say so.
+func TestAToolDoesNotRunWithoutItsStartOnTheRecord(t *testing.T) {
+	fm := &fakeModel{steps: []step{reply(call("c1", "apply_patch", `{"patch":"*** Begin Patch\n*** Add File: made.txt\n+x\n*** End Patch"}`)), reply(text("done"))}}
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"apply_patch":"allow"}}`}, fm)
+	h.mu.Lock()
+	h.failType = event.ToolStarted
+	h.mu.Unlock()
+	end := runTurn(t, s, h, "make a file")
+	if _, err := os.Stat(filepath.Join(s.Dir(), "made.txt")); err == nil {
+		t.Fatal("the tool ran although its start could not be logged")
+	}
+	if end.Reason != event.ReasonError || !strings.Contains(end.Error, "event log") {
+		t.Fatalf("the turn should end with the log's error: %+v", end)
+	}
+}
