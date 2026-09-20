@@ -20,7 +20,6 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -194,13 +193,6 @@ type Registry struct {
 	usageTracker // what the subscriptions have used, under its own lock (usage.go)
 }
 
-// modelCounts memoises how many models each subscription lists for one
-// catalog, so a provider listing does not walk the catalog every time.
-type modelCounts struct {
-	cat *modelsdev.Catalog
-	n   map[string]int
-}
-
 // New returns a registry backed by cat for model metadata (may be nil).
 func New(cat *modelsdev.Catalog) *Registry {
 	r := &Registry{flows: oauth.Flows(), providers: map[string]model.Provider{}, subs: map[string]model.Provider{}, opened: map[string]model.Model{}, refreshing: map[string]*sync.Mutex{}}
@@ -327,20 +319,6 @@ func (r *Registry) subscriptionStatus(s subscription) Status {
 	return st
 }
 
-// modelCount is len(Models(id, true)), computed once per catalog.
-func (r *Registry) modelCount(id string) int {
-	cat := r.cat.Load()
-	if mc := r.counts.Load(); mc != nil && mc.cat == cat {
-		return mc.n[id]
-	}
-	mc := &modelCounts{cat: cat, n: map[string]int{}}
-	for _, m := range r.Models("", true) {
-		mc.n[m.Provider]++
-	}
-	r.counts.Store(mc)
-	return mc.n[id]
-}
-
 // Providers lists connected provider ids.
 func (r *Registry) Providers() []string {
 	var out []string
@@ -354,120 +332,6 @@ func (r *Registry) Providers() []string {
 
 // --- login ---
 
-// Flow returns the login flow for a provider.
-func (r *Registry) Flow(provider string) (oauth.Flow, error) {
-	f, ok := r.flows[provider]
-	if !ok {
-		return nil, fmt.Errorf("unknown provider %q: Stavlos supports %s", provider, supported())
-	}
-	return f, nil
-}
-
-// SaveLogin stores tokens from a completed login.
-func (r *Registry) SaveLogin(provider string, t oauth.Tokens) error {
-	if r.store == nil {
-		return errors.New("no credential store")
-	}
-	if err := r.store.Set(provider, credentialFor(provider, t)); err != nil {
-		return err
-	}
-	r.Invalidate(provider)
-	return nil
-}
-
-// Disconnect removes a stored login.
-func (r *Registry) Disconnect(provider string) error {
-	if r.store == nil {
-		return errors.New("no credential store")
-	}
-	if err := r.store.Remove(provider); err != nil {
-		return err
-	}
-	r.Invalidate(provider)
-	return nil
-}
-
-// Invalidate drops cached models for a provider.
-func (r *Registry) Invalidate(provider string) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	for k := range r.opened {
-		if strings.HasPrefix(k, provider+"/") {
-			delete(r.opened, k)
-		}
-	}
-}
-
-// credentialFor is how a completed login is stored: an OAuth pair, or the
-// key a pasted-key subscription is bound to.
-func credentialFor(provider string, t oauth.Tokens) auth.Credential {
-	if s, ok := subscriptionByID(provider); ok && s.key {
-		return auth.Credential{Type: auth.TypeAPIKey, Key: t.Access}
-	}
-	return auth.Credential{Type: auth.TypeOAuth, Access: t.Access, Refresh: t.Refresh, Expires: t.ExpiresAt.UnixMilli(), AccountID: t.AccountID, Email: t.Email}
-}
-
-// credential is a provider's usable login: an OAuth credential with a
-// refresh token, or a stored key.
-func (r *Registry) credential(provider string) (auth.Credential, bool) {
-	if r.store == nil {
-		return auth.Credential{}, false
-	}
-	c, ok := r.store.Get(provider)
-	if !ok {
-		return auth.Credential{}, false
-	}
-	if c.Type == auth.TypeAPIKey {
-		return c, c.Key != ""
-	}
-	return c, c.Type == auth.TypeOAuth && c.Refresh != ""
-}
-
-// tokenSource returns a TokenSource that refreshes the stored access token
-// when it is about to expire and persists the rotated pair.
-func (r *Registry) tokenSource(provider string) model.TokenSource {
-	return func(ctx context.Context) (model.Token, error) {
-		c, ok := r.credential(provider)
-		if !ok {
-			return model.Token{}, fmt.Errorf("provider %q is not connected: run /provider to sign in", provider)
-		}
-		if c.Type == auth.TypeAPIKey {
-			return model.Token{Access: c.Key}, nil // a key is not a session: nothing expires, nothing rotates
-		}
-		expSoon := c.Expires == 0 || time.UnixMilli(c.Expires).Before(time.Now().Add(refreshSkew)) || oauth.Expiring(c.Access, refreshSkew)
-		if !expSoon {
-			return model.Token{Access: c.Access, AccountID: c.AccountID}, nil
-		}
-		r.mu.Lock()
-		mu := r.refreshing[provider]
-		if mu == nil {
-			mu = &sync.Mutex{}
-			r.refreshing[provider] = mu
-		}
-		r.mu.Unlock()
-		mu.Lock()
-		defer mu.Unlock()
-		// another caller may have refreshed while we waited
-		if c2, ok := r.store.Get(provider); ok && c2.Access != c.Access && time.UnixMilli(c2.Expires).After(time.Now().Add(refreshSkew)) {
-			return model.Token{Access: c2.Access, AccountID: c2.AccountID}, nil
-		}
-		f, err := r.Flow(provider)
-		if err != nil {
-			return model.Token{}, err
-		}
-		t, err := f.Refresh(ctx, c.Refresh)
-		if err != nil {
-			return model.Token{}, fmt.Errorf("%s session expired; run /provider to sign in again (%v)", provider, err)
-		}
-		t.AccountID = cmp.Or(t.AccountID, c.AccountID)
-		t.Email = cmp.Or(t.Email, c.Email)
-		if err := r.store.Set(provider, credentialFor(provider, t)); err != nil {
-			return model.Token{}, err
-		}
-		return model.Token{Access: t.Access, AccountID: t.AccountID}, nil
-	}
-}
-
 // --- plan usage ---
 
 // SubscriptionName is a subscription's display name ("ChatGPT").
@@ -480,182 +344,9 @@ func SubscriptionName(id string) string {
 
 // --- resolution ---
 
-// Check reports whether full can be resolved right now.
-func (r *Registry) Check(full string) error {
-	_, _, err := r.lookup(full)
-	return err
-}
-
-// Variants lists the variant names a model offers (nil when it has none or
-// the provider is unknown).
-func (r *Registry) Variants(full string) []string {
-	p, id, err := r.lookup(full)
-	if err != nil {
-		return nil
-	}
-	if v, ok := p.(model.Variants); ok {
-		return v.Variants(id)
-	}
-	return nil
-}
-
-// Resolve opens (or returns the cached) model for full and its metadata.
-// Subscription models carry no per-token price, so cost stays zero.
-func (r *Registry) Resolve(full string) (model.Model, model.Info, error) {
-	p, id, err := r.lookup(full)
-	if err != nil {
-		return nil, model.Info{}, err
-	}
-	var info model.Info
-	if cat := r.cat.Load(); cat != nil {
-		key := p.Name()
-		if sub, ok := subscriptionByID(key); ok {
-			key = sub.catalogID()
-		}
-		info, _ = cat.Model(key, id)
-		if name, _, _ := model.Split(full); isSubscription(name) {
-			info = subscriptionInfo(info)
-		}
-	}
-	if c, ok := p.(model.Capable); ok {
-		info.Capabilities = c.Capabilities(id)
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if m, ok := r.opened[full]; ok {
-		return m, info, nil
-	}
-	m, err := p.Open(id)
-	if err != nil {
-		return nil, model.Info{}, fmt.Errorf("model %q: %w", full, err)
-	}
-	if name, _, _ := model.Split(full); isSubscription(name) {
-		m = polledModel{Model: m, after: func() { go r.pollAfterCall(name) }}
-	}
-	r.opened[full] = m
-	return m, info, nil
-}
-
-func (r *Registry) lookup(full string) (model.Provider, string, error) {
-	name, id, err := model.Split(full)
-	if err != nil {
-		return nil, "", err
-	}
-	r.mu.Lock()
-	p, ok := r.providers[name]
-	r.mu.Unlock()
-	if ok {
-		return p, id, nil
-	}
-	s, known := subscriptionByID(name)
-	if !known {
-		return nil, "", fmt.Errorf("unknown provider %q: Stavlos supports %s; run /provider", name, supported())
-	}
-	if _, ok := r.credential(name); !ok {
-		return nil, "", fmt.Errorf("%s is not connected: run /provider to sign in with your %s subscription", s.name, s.name)
-	}
-	return r.adapter(s), id, nil
-}
-
-// adapter is a subscription's provider, built on first use and reused: its
-// token source reads the store on every call, so a login or refresh needs
-// no rebuild.
-func (r *Registry) adapter(s subscription) model.Provider {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	p, ok := r.subs[s.id]
-	if !ok {
-		p = s.open(r, r.tokenSource(s.id))
-		r.subs[s.id] = p
-	}
-	return p
-}
-
-func isSubscription(id string) bool {
-	_, ok := subscriptionByID(id)
-	return ok
-}
-
-// subscriptionInfo is a model's metadata as a subscriber sees it: the
-// subscription pays, so every price is zero.
-func subscriptionInfo(info model.Info) model.Info {
-	info.InputPrice, info.OutputPrice, info.CacheReadPrice, info.CacheWritePrice = 0, 0, 0, 0
-	return info
-}
-
 // --- models ---
 
-// ModelEntry is a catalog model for pickers.
-type ModelEntry struct {
-	ID, Provider, Name string
-	Info               model.Info
-}
-
 var gptVersion = regexp.MustCompile(`^gpt-(\d+)(?:\.(\d+))?`)
-
-// chatGPTAllowed mirrors the models the ChatGPT subscription backend
-// serves (the same list opencode uses).
-func chatGPTAllowed(id string) bool {
-	switch id {
-	case "gpt-5.5", "gpt-5.3-codex-spark", "gpt-5.4", "gpt-5.4-mini":
-		return true
-	case "gpt-5.5-pro", "gpt-5.6":
-		return false
-	}
-	if strings.Contains(id, "-pro") {
-		return false
-	}
-	m := gptVersion.FindStringSubmatch(id)
-	if m == nil {
-		return false
-	}
-	major, _ := strconv.Atoi(m[1])
-	minor := 0
-	if m[2] != "" {
-		minor, _ = strconv.Atoi(m[2])
-	}
-	return major > 5 || (major == 5 && minor > 4)
-}
-
-// zaiAllowed keeps the GLM models of the coding plan. The plan's own
-// models.dev entry already lists only what the plan serves, so everything
-// in it counts.
-func zaiAllowed(id string) bool { return strings.HasPrefix(id, "glm") }
-
-// grokAllowed keeps Grok's chat models; the image and video generators
-// (grok-imagine-*) cannot drive an agent.
-func grokAllowed(id string) bool {
-	return strings.HasPrefix(id, "grok") && !strings.Contains(id, "imagine")
-}
-
-// Models lists models for a provider (all if empty), connected providers
-// only unless all is true. Prices are zero: these are subscriptions.
-func (r *Registry) Models(provider string, all bool) []ModelEntry {
-	cat := r.cat.Load()
-	if cat == nil {
-		return nil
-	}
-	var out []ModelEntry
-	for _, s := range subscriptions {
-		if provider != "" && s.id != provider {
-			continue
-		}
-		if _, ok := r.credential(s.id); !ok && !all {
-			continue
-		}
-		// the catalog entry may be the plan's rather than the vendor's, so
-		// the models listed are the ones the subscription actually serves
-		key := s.catalogID()
-		for _, id := range cat.Models(key) {
-			if s.allow != nil && !s.allow(id) {
-				continue
-			}
-			info, _ := cat.Model(key, id)
-			out = append(out, ModelEntry{ID: s.id + "/" + id, Provider: s.id, Name: cat.ModelName(key, id), Info: subscriptionInfo(info)})
-		}
-	}
-	return out
-}
 
 // --- asking for plan usage ---
 
