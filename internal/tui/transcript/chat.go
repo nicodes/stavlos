@@ -29,6 +29,8 @@ func ChatEvent(typ event.Type) bool {
 	switch typ {
 	case event.AgentSpawned, event.AgentUpdated, event.ChatPosted, event.ChatMessage, event.AgentKilled, event.ChannelUpdated, event.AskRequested, event.AskResolved:
 		return true
+	default:
+		// not a chat event
 	}
 	return false
 }
@@ -97,6 +99,8 @@ func (t *Transcript) applyChat(ev event.Event) {
 		if ev.Decode(&p) == nil {
 			t.reply(ev.Agent, p)
 		}
+	default:
+		// not drawn in the channel chat
 	}
 }
 

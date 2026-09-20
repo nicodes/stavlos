@@ -188,6 +188,8 @@ func (cs *channelState) applyChannel(e event.Event) {
 		if e.Decode(&p) == nil {
 			cs.permits.apply(p)
 		}
+	default:
+		// not a channel event
 	}
 }
 
@@ -347,6 +349,8 @@ func (a *agentState) applyTurn(e event.Event) {
 		a.compacting = true
 	case event.CompactionDone, event.CompactionFailed:
 		a.compacting = false
+	default:
+		// every other event leaves the agent's turn state as it is
 	}
 }
 

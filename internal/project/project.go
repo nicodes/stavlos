@@ -88,6 +88,14 @@ func (b *Builder) Apply(e event.Event) {
 		if e.Decode(&p) == nil {
 			b.compacted(e.Seq, p)
 		}
+		// What never reaches a model's history, by name: a new event type is a
+	// decision here (the exhaustive lint fails until it is made), because a
+	// type this fold misses is something the model is never told.
+	case event.ChannelCreated, event.ChannelUpdated, event.ChannelArchived, event.ChannelDirAdded, event.ChannelDirRemoved,
+		event.ChatPosted, event.ChatMessage, event.AgentSpawned, event.AgentUpdated, event.AgentKilled, event.AgentCancelled,
+		event.TurnStarted, event.ToolStarted, event.AskRequested, event.AskResolved, event.PermitGranted,
+		event.JobStarted, event.JobStopped, event.TodoChanged, event.SheetWritten, event.SheetDeleted,
+		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.CompactionStarted, event.CompactionFailed:
 	}
 }
 

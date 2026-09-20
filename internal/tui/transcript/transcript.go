@@ -292,6 +292,8 @@ func (t *Transcript) Apply(ev event.Event) {
 		if t.applyJob(ev) {
 			return
 		}
+	default:
+		// every other event is not drawn in an agent's chat
 	}
 	lines := CleanLines(EventLines(ev))
 	t.answerGlyph(ev, lines)
@@ -488,6 +490,8 @@ func (t *Transcript) applyCompaction(ev event.Event) bool {
 			t.replaceItem(t.compactItem, []Line{{Kind: LineBlank}, {Kind: LineDim, Text: titled("Compaction interrupted", "")}, {Kind: LineBlank}})
 			t.compactItem = -1
 		}
+	default:
+		// every other event leaves these items as they are
 	}
 	return false
 }
@@ -620,6 +624,8 @@ func (t *Transcript) applyJob(ev event.Event) bool {
 		}
 		t.settleJob(p.ID, ToneError, CleanLines(jobStoppedLines("command", p.Reason)))
 		return true
+	default:
+		// every other event leaves these items as they are
 	}
 	return false
 }
@@ -642,6 +648,8 @@ func (t *Transcript) afterAppend(ev event.Event) {
 		t.stream = nil
 		t.turn = false
 		t.stopRunning()
+	default:
+		// every other event leaves these items as they are
 	}
 }
 
