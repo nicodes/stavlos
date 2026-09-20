@@ -91,6 +91,15 @@ Authentication, both parts of it:
   two minutes and work once; ten wrong guesses drop every outstanding code.
   Sessions live in the daemon's memory: disabling the web UI, or restarting
   the daemon, signs every browser out.
+- **A page key beside the cookie.** A cookie belongs to a host, not to a
+  port: a browser sends ours to anything else served on this machine's
+  loopback (a dev server on `:3000`), and that server could replay it here.
+  The trade of the code also returns a key the page keeps in `localStorage`,
+  which is scoped to the origin, port included, and which no browser sends
+  anywhere by itself. The WebSocket offers it as a subprotocol (a socket
+  cannot set headers) and the daemon wants both. Sheets are served on the
+  cookie alone: a frame's request cannot carry the key, and a sheet can do
+  nothing but draw.
 - **An `Origin` check** on the WebSocket upgrade and on every request that
   changes anything. This is how local daemons get taken over: any page you
   have open can dial `ws://127.0.0.1:…`. Reject any origin that is not ours.

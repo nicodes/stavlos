@@ -3,6 +3,7 @@ package web
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -70,6 +72,21 @@ func do(t *testing.T, method, target string, hdr map[string]string, body string)
 	return res
 }
 
+// pageKeys is what each signed-in test browser keeps in its localStorage.
+var pageKeys sync.Map // cookie value → page key
+
+// socketHeader is what a signed-in page sends to open its socket.
+func socketHeader(origin string, c *http.Cookie) http.Header {
+	h := http.Header{"Origin": {origin}}
+	if c != nil {
+		h.Set("Cookie", c.Name+"="+c.Value)
+		if key, ok := pageKeys.Load(c.Value); ok {
+			h.Set("Sec-WebSocket-Protocol", "stavlos, key."+key.(string))
+		}
+	}
+	return h
+}
+
 func signIn(t *testing.T, s *Server, base string) *http.Cookie {
 	t.Helper()
 	open, err := s.OpenURL()
@@ -79,9 +96,11 @@ func signIn(t *testing.T, s *Server, base string) *http.Cookie {
 	u, _ := url.Parse(open)
 	code := strings.TrimPrefix(u.Fragment, "code=")
 	res := do(t, "POST", base+"/api/session", map[string]string{"Origin": base}, `{"code":"`+code+`"}`)
-	if res.StatusCode != http.StatusNoContent || len(res.Cookies()) != 1 {
-		t.Fatalf("sign-in: %d %v", res.StatusCode, res.Cookies())
+	var body struct{ Key string }
+	if res.StatusCode != http.StatusOK || len(res.Cookies()) != 1 || json.NewDecoder(res.Body).Decode(&body) != nil || body.Key == "" {
+		t.Fatalf("sign-in: %d %v key %q", res.StatusCode, res.Cookies(), body.Key)
 	}
+	pageKeys.Store(res.Cookies()[0].Value, body.Key)
 	// the code is spent
 	if again := do(t, "POST", base+"/api/session", map[string]string{"Origin": base}, `{"code":"`+code+`"}`); again.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("a code worked twice: %d", again.StatusCode)
@@ -106,7 +125,7 @@ func TestHostAndOriginGuards(t *testing.T) {
 	}
 	// a proxy's origin is ours, and its cookie is Secure
 	res := do(t, "POST", base+"/api/session", map[string]string{"Origin": "https://box.tailnet.ts.net"}, `{"code":"`+code+`"}`)
-	if res.StatusCode != http.StatusNoContent {
+	if res.StatusCode != http.StatusOK {
 		t.Fatalf("the configured origin was refused: %d", res.StatusCode)
 	}
 	if c := res.Cookies()[0]; !c.Secure || !c.HttpOnly || c.SameSite != http.SameSiteStrictMode {
@@ -130,11 +149,7 @@ func TestWebSocketNeedsSessionAndCarriesLines(t *testing.T) {
 	s, base := start(t)
 	wsURL := "ws" + strings.TrimPrefix(base, "http") + "/ws"
 	dial := func(origin string, c *http.Cookie) (*websocket.Conn, *http.Response, error) {
-		h := http.Header{"Origin": {origin}}
-		if c != nil {
-			h.Set("Cookie", c.Name+"="+c.Value)
-		}
-		return websocket.DefaultDialer.Dial(wsURL, h)
+		return websocket.DefaultDialer.Dial(wsURL, socketHeader(origin, c))
 	}
 	if _, res, err := dial(base, nil); err == nil || res == nil || res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("no session: %v %v", res, err)
@@ -236,7 +251,7 @@ func TestSigningOutEndsTheSessionsSockets(t *testing.T) {
 	s, base := start(t)
 	wsURL := "ws" + strings.TrimPrefix(base, "http") + "/ws"
 	open := func(c *http.Cookie) *websocket.Conn {
-		conn, _, err := websocket.DefaultDialer.Dial(wsURL, http.Header{"Origin": {base}, "Cookie": {c.Name + "=" + c.Value}})
+		conn, _, err := websocket.DefaultDialer.Dial(wsURL, socketHeader(base, c))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -270,4 +285,29 @@ func TestASheetIsServedOnlyToAFrame(t *testing.T) {
 			t.Errorf("Sec-Fetch-Dest %s: %d, want %d", dest, res.StatusCode, want)
 		}
 	}
+}
+
+// A cookie goes to every port of a host, so another server on this machine's
+// loopback receives it and could replay it here. It is not enough: the socket
+// wants the page key too, which no browser sends anywhere by itself.
+func TestTheCookieAloneOpensNothing(t *testing.T) {
+	s, base := start(t)
+	cookie := signIn(t, s, base)
+	wsURL := "ws" + strings.TrimPrefix(base, "http") + "/ws"
+	stolen := http.Header{"Origin": {base}, "Cookie": {cookie.Name + "=" + cookie.Value}}
+	if _, res, err := websocket.DefaultDialer.Dial(wsURL, stolen); err == nil || res == nil || res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("a socket opened on the cookie alone: %v %v", res, err)
+	}
+	stolen.Set("Sec-WebSocket-Protocol", "stavlos, key.guess")
+	if _, res, err := websocket.DefaultDialer.Dial(wsURL, stolen); err == nil || res == nil || res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("a socket opened on a guessed key: %v %v", res, err)
+	}
+	if res := do(t, "GET", base+"/api/session", map[string]string{"Cookie": cookie.Name + "=" + cookie.Value}, ""); res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("the page was told it is signed in without its key: %d", res.StatusCode)
+	}
+	c, _, err := websocket.DefaultDialer.Dial(wsURL, socketHeader(base, cookie))
+	if err != nil {
+		t.Fatalf("the page itself could not open its socket: %v", err)
+	}
+	c.Close()
 }
