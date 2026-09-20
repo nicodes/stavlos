@@ -31,6 +31,29 @@ const servicePoll = 30 * time.Second
 // changedMsg is the daemon saying a status is stale (protocol.NChanged).
 type changedMsg struct{ what string }
 
+// onService handles what the Clients rows of the nav are told: a status, the
+// poll that asks for one again, and the daemon saying one is stale. A poll
+// from before the last change of epoch is dropped.
+func (m *Model) onService(msg tea.Msg) tea.Cmd {
+	switch msg := msg.(type) {
+	case webMsg:
+		return m.onWeb(msg)
+	case discordMsg:
+		return m.onDiscord(msg)
+	case changedMsg:
+		return m.onChanged(msg)
+	case webTickMsg:
+		if msg.epoch == m.webEpoch {
+			return webCmd(m.ctx, m.c, "status")
+		}
+	case discordTickMsg:
+		if msg.epoch == m.discordEpoch {
+			return discordCmd(m.ctx, m.c, "status", msg.epoch)
+		}
+	}
+	return nil
+}
+
 // onChanged asks once for what changed. Each status reply arms the next
 // poll, so the epoch moves first: the poll already armed finds itself stale
 // and one chain of polls stays one.

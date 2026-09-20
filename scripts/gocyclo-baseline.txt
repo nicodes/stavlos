@@ -17,4 +17,3 @@
 29 tui (*Model).setFocus
 26 tui (Model).sidebarBody
 27 tui (Model).tabBodyRows
-26 tui (*Model).update
