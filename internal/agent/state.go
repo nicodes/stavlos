@@ -129,6 +129,7 @@ func (cs *channelState) apply(e event.Event, fx *effects) {
 	default:
 		if a != nil {
 			a.applyTurn(e)
+			a.applyInstructed(e)
 		}
 	}
 	if a != nil {
@@ -314,16 +315,6 @@ func (a *agentState) applyTurn(e event.Event) {
 	case event.ToolStarted:
 		a.turnHadTools = true
 		a.nudges = 0
-	case event.ToolFinished:
-		var p event.ToolFinishedPayload
-		if e.Decode(&p) == nil && len(p.Instructions) > 0 {
-			if a.instructed == nil {
-				a.instructed = map[string]bool{}
-			}
-			for _, f := range p.Instructions {
-				a.instructed[f] = true
-			}
-		}
 	case event.AskRequested, event.AskResolved:
 		var p struct {
 			ID string `json:"id"`
@@ -356,9 +347,28 @@ func (a *agentState) applyTurn(e event.Event) {
 		a.compacting = true
 	case event.CompactionDone, event.CompactionFailed:
 		a.compacting = false
-		if e.Type == event.CompactionDone {
-			a.instructed = nil // the summary replaced the results that carried them
+	}
+}
+
+// applyInstructed keeps which instructions files the agent has been given:
+// a tool result names the ones it carried, and a compaction's summary
+// replaces the results that carried them, so they are given again.
+func (a *agentState) applyInstructed(e event.Event) {
+	switch e.Type {
+	case event.ToolFinished:
+		var p event.ToolFinishedPayload
+		if e.Decode(&p) != nil || len(p.Instructions) == 0 {
+			return
 		}
+		if a.instructed == nil {
+			a.instructed = map[string]bool{}
+		}
+		for _, f := range p.Instructions {
+			a.instructed[f] = true
+		}
+	case event.CompactionDone:
+		a.instructed = nil
+	default:
 	}
 }
 
