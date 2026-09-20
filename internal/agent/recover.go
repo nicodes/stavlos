@@ -8,6 +8,8 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/project"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -54,7 +56,42 @@ func RecoverPaged(ctx context.Context, host Host, id, dir string, created time.T
 	if err := s.resume(ctx); err != nil {
 		return nil, err
 	}
+	s.restoreGauges()
 	return s, nil
+}
+
+// restoreGauges works out again how full each agent's context is. The
+// figure is measured at a model call and kept in memory, so after a restart
+// every agent read "0%" until it next spoke, which for an idle agent with a
+// full window is exactly when the figure matters. The history is the log's;
+// the estimate leaves out the system prompt and the tools, which the next
+// call adds back.
+func (c *Channel) restoreGauges() {
+	type reading struct {
+		a       *Agent
+		modelID string
+		history []model.Message
+	}
+	c.mu.Lock()
+	var rs []reading
+	for id, a := range c.agents {
+		if st := c.st.agents[id]; st != nil && !st.killed && st.model != "" {
+			rs = append(rs, reading{a, st.model, st.hist.History()})
+		}
+	}
+	c.mu.Unlock()
+	for _, r := range rs {
+		_, info, err := c.host.Resolve(r.modelID) // outside the lock: the catalogue is not the channel's
+		if err != nil || len(r.history) == 0 {
+			continue
+		}
+		est := project.EstimateTokens(r.history, "", nil)
+		c.mu.Lock()
+		if r.a.ctxTokens == 0 {
+			r.a.ctxTokens, r.a.ctxWindow = est, info.ContextWindow
+		}
+		c.mu.Unlock()
+	}
 }
 
 // lostJob is what an agent is told about a job that was running when the
