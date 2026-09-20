@@ -76,7 +76,11 @@ type conn struct {
 	// such a process could answer its own permission prompts or switch its
 	// channel to yolo.
 	ran bool
-	web bool // a browser connection: only what its routes open to it
+	web bool // a browser connection
+	// caller is who is at the other end, fixed by how the connection arrived:
+	// the listener it came through and the process it came from, never by
+	// what it says of itself in attach.
+	caller scope
 
 	queued atomic.Int64 // bytes waiting in out
 
@@ -112,7 +116,10 @@ const (
 // handleConn serves one connection; web marks one that came through the
 // browser listener, which may call only webMethods.
 func (d *Daemon) handleConn(ctx context.Context, nc net.Conn, web bool) {
-	ran := false
+	ran, caller := false, scopeOwner
+	if web {
+		caller = scopeWeb
+	}
 	if uc, ok := nc.(*net.UnixConn); ok {
 		cred, err := peercred.OfSelf(uc)
 		if err != nil {
@@ -120,7 +127,9 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn, web bool) {
 			nc.Close()
 			return
 		}
-		if cred.PID != os.Getpid() {
+		if cred.PID == os.Getpid() {
+			caller = scope(d.inProcess.Load()) // a bridge the daemon runs, which reaches it over its own socket
+		} else {
 			// A peer whose ancestry cannot be read is refused, not waved
 			// through: it may be one of the processes this check exists for.
 			if ran, err = peercred.DescendsFrom(cred.PID, os.Getpid()); err != nil {
@@ -134,7 +143,7 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn, web bool) {
 	// mid-login.wait (or mid-anything) takes its work with it.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), room: make(chan struct{}, 1), done: make(chan struct{}), ran: ran, web: web}
+	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), room: make(chan struct{}, 1), done: make(chan struct{}), ran: ran, web: web, caller: caller}
 	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.enqueue, replay: c.enqueueReplay}
 	d.addClient(c.cl)
 	go c.writer()
@@ -291,10 +300,10 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 		return nil, &protocol.Error{Code: protocol.ErrVersion, Message: fmt.Sprintf("protocol version %d not served; this daemon serves %d", req.V, protocol.Version)}
 	}
 	e, ok := handlers[req.Method]
-	if c.web && (!ok || e.scope != scopeWeb) {
-		// (an unknown method is forbidden too: a browser learns nothing about
+	if c.caller != scopeOwner && (!ok || !e.scope.admits(c.caller)) {
+		// (an unknown method is forbidden too: a caller learns nothing about
 		// what exists beyond its reach)
-		return nil, &protocol.Error{Code: protocol.ErrForbidden, Message: req.Method + " is not available to the web UI"}
+		return nil, &protocol.Error{Code: protocol.ErrForbidden, Message: req.Method + " is not available to " + c.caller.String()}
 	}
 	if !ok {
 		return nil, &protocol.Error{Code: protocol.ErrMethodNotFound, Message: "unknown method " + req.Method}

@@ -127,3 +127,44 @@ func TestWhatABrowserMayCallIsDeclaredOnTheRoute(t *testing.T) {
 		t.Fatalf("methods open to the web UI:\n got %v\nwant %v", open, want)
 	}
 }
+
+// A bridge inside the daemon's process reaches it over the daemon's own
+// socket, and used to be the owner for it. It may do what a person in a chat
+// can do, and the list is declared on the routes.
+func TestWhatABridgeMayCall(t *testing.T) {
+	var open []string
+	for name, e := range handlers {
+		if e.scope == scopeBridge {
+			open = append(open, name)
+		}
+	}
+	sort.Strings(open)
+	if want := []string{"agent.send", "channel.create", "discord.status", "prompt.claim", "prompt.reply"}; !slices.Equal(open, want) {
+		t.Fatalf("methods open to a bridge beyond the web's:\n got %v\nwant %v", open, want)
+	}
+	if !scopeWeb.admits(scopeBridge) || !scopeBridge.admits(scopeOwner) || scopeBridge.admits(scopeWeb) || scopeOwner.admits(scopeBridge) {
+		t.Fatal("the scopes do not nest: owner ⊃ bridge ⊃ web")
+	}
+
+	setupConfig(t)
+	h := newHarness(t, t.TempDir(), &fakeModel{})
+	defer h.close()
+	h.d.TreatInProcessAsBridge() // as the real daemon runs; this test's client is in its process
+	c, err := rpc.Dial(h.sock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	ctx := context.Background()
+	if _, err := rpc.Do(ctx, c, protocol.Attach, protocol.AttachParams{Client: "discord", Tier: protocol.TierFallback}); err != nil {
+		t.Fatalf("a bridge could not attach: %v", err)
+	}
+	s, err := rpc.Do(ctx, c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("a bridge could not start a channel: %v", err)
+	}
+	err = errOf(rpc.Do(ctx, c, protocol.ChannelSetMode, protocol.ChannelSetModeParams{Channel: s.ID, Mode: protocol.ModeYolo}))
+	if err == nil || !strings.Contains(err.Error(), "not available to a bridge") {
+		t.Fatalf("a bridge switched a channel to yolo: %v", err)
+	}
+}

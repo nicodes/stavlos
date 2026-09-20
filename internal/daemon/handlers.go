@@ -36,10 +36,35 @@ const (
 	// directories, trust, permission answers, providers, configuration,
 	// shutdown) is the owner's alone.
 	scopeOwner scope = iota
+	// scopeBridge may also be called by a bridge the daemon runs inside its
+	// own process (Discord): what a person in a chat can do. It answers
+	// prompts, starts channels and speaks to agents; it does not change
+	// modes, directories, trust, providers or configuration, so a bug in a
+	// bridge, or whoever gets to speak through one, cannot either.
+	scopeBridge
 	// scopeWeb may also be called by a browser signed in to the web UI: read
 	// the channels and their streams, and post to a chat.
 	scopeWeb
 )
+
+// A scope admits every caller of a narrower one: the owner calls anything,
+// a bridge what is open to bridges or to the web, a browser the web's alone.
+func (s scope) admits(caller scope) bool { return caller <= s }
+
+func (s scope) String() string {
+	switch s {
+	case scopeBridge:
+		return "a bridge"
+	case scopeWeb:
+		return "the web UI"
+	default:
+		return "this client"
+	}
+}
+
+// TreatInProcessAsBridge makes connections from the daemon's own process
+// bridges; until then they are the owner's.
+func (d *Daemon) TreatInProcessAsBridge() { d.inProcess.Store(int32(scopeBridge)) }
 
 // routeEntry is one method's handler and who may call it.
 type routeEntry struct {
@@ -47,6 +72,9 @@ type routeEntry struct {
 	h     handler
 	scope scope
 }
+
+// forBridge opens a method to an in-process bridge.
+func forBridge(e routeEntry) routeEntry { e.scope = scopeBridge; return e }
 
 // forWeb opens a method to the web UI.
 func forWeb(e routeEntry) routeEntry { e.scope = scopeWeb; return e }
@@ -112,12 +140,12 @@ var none = protocol.None{}
 
 var handlers = routes(
 	webRoute(protocol.WebStatusMethod), webRoute(protocol.WebEnable), webRoute(protocol.WebDisable), webRoute(protocol.WebOpen),
-	route(protocol.DiscordStatusMethod, func(_ context.Context, c *conn, _ protocol.None) (protocol.DiscordStatus, error) {
+	forBridge(route(protocol.DiscordStatusMethod, func(_ context.Context, c *conn, _ protocol.None) (protocol.DiscordStatus, error) {
 		if c.d.Discord == nil {
 			return protocol.DiscordStatus{State: "disconnected", Error: "Discord service is unavailable in this daemon"}, nil
 		}
 		return c.d.Discord.Status(), nil
-	}),
+	})),
 	route(protocol.DiscordConnect, func(_ context.Context, c *conn, _ protocol.None) (protocol.DiscordStatus, error) {
 		if c.d.Discord == nil {
 			return protocol.DiscordStatus{}, errors.New("discord service is unavailable in this daemon")
@@ -166,13 +194,13 @@ var handlers = routes(
 		}
 		return protocol.ChannelListResult{Channels: list}, nil
 	})),
-	route(protocol.ChannelCreate, func(ctx context.Context, c *conn, p protocol.ChannelCreateParams) (protocol.ChannelInfo, error) {
+	forBridge(route(protocol.ChannelCreate, func(ctx context.Context, c *conn, p protocol.ChannelCreateParams) (protocol.ChannelInfo, error) {
 		s, err := c.d.CreateChannel(ctx, p.Dir, p.Model, p.RootAgent, p.Name)
 		if err != nil {
 			return protocol.ChannelInfo{}, err
 		}
 		return s.Info(), nil
-	}),
+	})),
 	forWeb(route(protocol.ChannelResume, func(_ context.Context, c *conn, p protocol.ChannelRef) (protocol.ChannelInfo, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
@@ -267,7 +295,7 @@ var handlers = routes(
 		}
 		return protocol.AgentTreeResult{Agents: s.Tree()}, nil
 	})),
-	route(protocol.AgentSend, func(ctx context.Context, c *conn, p protocol.AgentSendParams) (protocol.None, error) {
+	forBridge(route(protocol.AgentSend, func(ctx context.Context, c *conn, p protocol.AgentSendParams) (protocol.None, error) {
 		s, _, err := c.d.agentChannel(p.Agent)
 		if err != nil {
 			return none, err
@@ -285,7 +313,7 @@ var handlers = routes(
 			return none, s.Kill(p.Agent)
 		}
 		return none, fmt.Errorf("unknown envelope kind %q", p.Kind)
-	}),
+	})),
 	route(protocol.AgentSpawn, func(ctx context.Context, c *conn, p protocol.AgentSpawnParams) (protocol.AgentSpawnResult, error) {
 		s, _, err := c.d.agentChannel(p.Parent)
 		if err != nil {
@@ -338,18 +366,18 @@ var handlers = routes(
 	forWeb(route(protocol.PromptList, func(_ context.Context, c *conn, p protocol.PromptListParams) (protocol.PromptListResult, error) {
 		return protocol.PromptListResult{Prompts: c.d.esc.Pending(p.Channel)}, nil
 	})),
-	route(protocol.PromptClaim, func(_ context.Context, c *conn, p protocol.PromptClaimParams) (protocol.None, error) {
+	forBridge(route(protocol.PromptClaim, func(_ context.Context, c *conn, p protocol.PromptClaimParams) (protocol.None, error) {
 		if err := c.d.esc.Claim(p.ID, c.cl.id); err != nil {
 			return none, promptErr(err)
 		}
 		return none, nil
-	}),
-	route(protocol.PromptReply, func(_ context.Context, c *conn, p protocol.PromptReplyParams) (protocol.None, error) {
+	})),
+	forBridge(route(protocol.PromptReply, func(_ context.Context, c *conn, p protocol.PromptReplyParams) (protocol.None, error) {
 		if err := c.d.esc.Reply(p.ID, c.cl.id, escalation.Answer{Value: p.Answer, Dir: p.Dir, Reason: p.Reason, Answers: p.Answers, Details: p.Details}); err != nil {
 			return none, promptErr(err)
 		}
 		return none, nil
-	}),
+	})),
 
 	route(protocol.TrustStatus, func(_ context.Context, c *conn, p protocol.TrustStatusParams) (protocol.TrustStatusResult, error) {
 		r, err := c.d.TrustStatus(p.Dir)

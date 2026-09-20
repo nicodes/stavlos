@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nicodes/stavlos/internal/agent"
@@ -30,6 +31,11 @@ type Daemon struct {
 	Registry    *registry.Registry
 	DataDir     string
 	Discord     DiscordService // configured before Serve, owned until Close
+	// inProcess (SetInProcess) is what a connection from the daemon's own process may call.
+	// The zero value is everything (a test drives the daemon from inside its
+	// process); the real daemon sets BridgeScope, since the only thing that
+	// connects from inside it is a bridge.
+	inProcess atomic.Int32
 
 	esc *escalation.Manager
 
