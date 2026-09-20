@@ -117,45 +117,73 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	// Policy judges every value of the subject (each path a patch touches)
 	// and the most restrictive decision wins; the prompt names that value.
 	sub := t.Subject(c.Input)
-	verb, arg := cfg.Policy.With(rv.preset.PresetPolicy()).Decide(c.Name, sub)
-	// A command allow rule speaks for one simple command: "cat *" says
-	// nothing about "cat x; rm -rf ~" or "cat x > ~/.bashrc".
-	if sub.Kind == policy.KindCommand && verb == policy.Allow && !shellcmd.Simple(arg) {
-		verb = policy.Ask
-	}
+	ruled, arg := cfg.Policy.With(rv.preset.PresetPolicy()).Decide(c.Name, sub)
 	// The channel's sheets are part of the working set for the file tools
 	// (never for commands: the sandbox builds its own list).
 	dirs := append(a.c.dirPaths(), a.c.SheetDir())
-	// An edit to the files that steer the harness itself asks whatever
-	// policy says and whatever the mode.
 	control := controlFile(c.Name, sub, a.c.Dir(), dirs)
-	if control != "" && verb == policy.Allow {
-		verb, arg = policy.Ask, control
-	}
+	boundary := outsideDir(sub, a.c.Dir(), dirs)
 	a.c.mu.Lock()
-	// (never a control-file ask: "always allow" for a path must not become a
-	// standing licence to rewrite what steers the harness)
-	covered := verb == policy.Ask && control == "" && a.c.st.permits.covers(c.Name, sub)
-	mode := a.c.st.mode
+	f := facts{
+		ruled:     ruled,
+		compound:  sub.Kind == policy.KindCommand && !shellcmd.Simple(arg),
+		control:   control != "",
+		permitted: a.c.st.permits.covers(c.Name, sub) || sub.Kind == policy.KindURL && hostsAllow(cfg.Hosts, sub.Values),
+		mode:      a.c.st.mode,
+		egress:    egress(c.Name, sub),
+		outside:   boundary != "",
+	}
 	a.c.mu.Unlock()
-	// What the human allowed for the channel answers an ask, never a deny,
-	// and so do the hosts stavlos.json lists for a fetch.
-	if covered || verb == policy.Ask && sub.Kind == policy.KindURL && hostsAllow(cfg.Hosts, sub.Values) {
+	verb := judge(f)
+	if f.control && ruled == policy.Allow {
+		arg = control // the prompt names the file that steers the harness
+	}
+	why := ""
+	if ruled == policy.Deny {
+		boundary = "" // the rules refused it: where it reaches is beside the point
+	} else if verb == policy.Deny {
+		why = autoOutside(boundary)
+	}
+	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: f.egress}
+}
+
+// facts is everything the verdict on a call depends on, read once.
+type facts struct {
+	ruled     policy.Verb // what the rules say of the call, the role's tightening included
+	compound  bool        // a command line that is more than one simple command
+	control   bool        // an edit to a file that steers the harness
+	permitted bool        // the human allowed it for the channel, or stavlos.json lists the host
+	mode      string
+	egress    bool // it sends data out
+	outside   bool // it reaches outside the channel's directories
+}
+
+// judge is the verdict for a call before any human is asked, as stages that
+// each only tighten or only loosen, in this order:
+//
+//  1. the rules;
+//  2. what an allow rule cannot speak for: more than one simple command
+//     ("cat *" says nothing about "cat x; rm -rf ~"), and the files that steer
+//     the harness, which ask whatever the rules and the mode say;
+//  3. what answers an ask, never a deny and never a control-file ask: a
+//     standing permit, a listed host;
+//  4. the mode, for what is still asking and for anything that reaches
+//     outside the directories even when the rules allow it.
+//
+// It reads nothing but its argument, so every combination can be tested and
+// a change of mode can be judged again without the call.
+func judge(f facts) policy.Verb {
+	verb := f.ruled
+	if verb == policy.Allow && (f.compound || f.control) {
+		verb = policy.Ask
+	}
+	if verb == policy.Ask && !f.control && f.permitted {
 		verb = policy.Allow
 	}
-	// What is left asking, and any call that reaches outside the working
-	// directories even when policy allows it, is the mode's to judge.
-	boundary, why := "", ""
-	if verb != policy.Deny {
-		boundary = outsideDir(sub, a.c.Dir(), dirs)
-		if verb == policy.Ask || boundary != "" {
-			verb = ModeVerdict(mode, control != "", egress(c.Name, sub), boundary != "")
-		}
-		if verb == policy.Deny {
-			why = autoOutside(boundary)
-		}
+	if verb != policy.Deny && (verb == policy.Ask || f.outside) {
+		verb = ModeVerdict(f.mode, f.control, f.egress, f.outside)
 	}
-	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: egress(c.Name, sub)}
+	return verb
 }
 
 // ModeVerdict is what a permission mode says to a call that would otherwise
