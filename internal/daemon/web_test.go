@@ -52,12 +52,14 @@ func TestWebUIIsScopedAndRemembered(t *testing.T) {
 	req, _ := http.NewRequest("POST", base+"/api/session", strings.NewReader(`{"code":"`+code+`"}`))
 	req.Header.Set("Origin", base)
 	res, err := http.DefaultClient.Do(req)
-	if err != nil || res.StatusCode != http.StatusNoContent {
+	if err != nil || res.StatusCode != http.StatusOK {
 		t.Fatalf("sign-in: %v %v", res, err)
 	}
+	var signedIn struct{ Key string }
+	_ = json.NewDecoder(res.Body).Decode(&signedIn)
 	res.Body.Close()
 	cookie := res.Cookies()[0]
-	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(base, "http")+"/ws", http.Header{"Origin": {base}, "Cookie": {cookie.Name + "=" + cookie.Value}})
+	ws, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(base, "http")+"/ws", http.Header{"Origin": {base}, "Cookie": {cookie.Name + "=" + cookie.Value}, "Sec-WebSocket-Protocol": {"stavlos, key." + signedIn.Key}})
 	if err != nil {
 		t.Fatal(err)
 	}
