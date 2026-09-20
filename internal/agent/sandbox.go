@@ -4,11 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/paths"
+	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/sandbox"
 	"github.com/nicodes/stavlos/internal/tools"
 )
@@ -104,9 +104,8 @@ func buildCaches() []string {
 
 // anyWithin reports whether any of paths is dir or lies beneath it.
 func anyWithin(paths []string, dir string) bool {
-	dir = filepath.Clean(dir)
 	for _, p := range paths {
-		if p == dir || strings.HasPrefix(p, dir+string(filepath.Separator)) {
+		if pathx.Within(dir, p) {
 			return true
 		}
 	}

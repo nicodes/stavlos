@@ -155,6 +155,57 @@ func TestGoldenFrames(t *testing.T) {
 		m.refreshViewport()
 		golden(t, "palette", m.View())
 	})
+	// Every dialog and card, so that a change to how the screen is built (the
+	// sub-models, the keymap) is held to what each of them looked like.
+	draw := func(t *testing.T, name string, prepare func(m *Model)) {
+		t.Run(name, func(t *testing.T) {
+			m := goldenChannel(t)
+			prepare(&m)
+			m.layout()
+			m.refreshViewport()
+			golden(t, name, m.View())
+		})
+	}
+	permission := protocol.PromptInfo{ID: "p1", Channel: "s", Agent: "a", From: "main", Kind: protocol.PromptPermission, Tool: "shell",
+		Input: json.RawMessage(`{"command":"go test ./..."}`), Question: "shell: go test ./...", Prefix: "go test", Created: now.Format(time.RFC3339)}
+	draw(t, "card-permission", func(m *Model) { m.upsertPrompt(permission) })
+	draw(t, "card-boundary", func(m *Model) {
+		p := permission
+		p.ID, p.Prefix, p.Dir, p.Tool, p.Input = "p2", "", "/etc", "read", json.RawMessage(`{"path":"/etc/hosts"}`)
+		p.Question = "read: /etc/hosts"
+		m.upsertPrompt(p)
+	})
+	draw(t, "card-control-file", func(m *Model) {
+		p := permission
+		p.ID, p.Prefix, p.Sticky, p.Tool, p.Input = "p3", "", true, "apply_patch", json.RawMessage(`{"patch":"*** Begin Patch\n*** Update File: AGENTS.md\n@@\n-a\n+b\n*** End Patch"}`)
+		p.Question = "apply_patch: AGENTS.md"
+		m.upsertPrompt(p)
+	})
+	draw(t, "card-question", func(m *Model) {
+		m.upsertPrompt(protocol.PromptInfo{ID: "q1", Channel: "s", Agent: "a", From: "main", Kind: protocol.PromptQuestion, Question: "Which linker?", Created: now.Format(time.RFC3339),
+			QuestionNumber: 1, QuestionTotal: 2, Questions: []event.Question{{Question: "Which linker?", Options: []event.QuestionOption{{Label: "mold", Description: "fastest"}, {Label: "lld"}}}}})
+	})
+	draw(t, "card-trust", func(m *Model) {
+		m.upsertPrompt(protocol.PromptInfo{ID: "t1", Channel: "s", Kind: protocol.PromptTrust, Question: "Trust this project's configuration?", Dir: "", Options: []string{".stavlos/stavlos.json", "AGENTS.md"}, Created: now.Format(time.RFC3339)})
+	})
+	draw(t, "dialog-mode", func(m *Model) { m.openMode() })
+	draw(t, "dialog-discord", func(m *Model) {
+		m.openDiscord("")
+		m.onDiscord(discordMsg{epoch: m.discordEpoch, status: protocol.DiscordStatus{Configured: true, Enabled: true, State: "connected", Bot: "stavlos", GuildName: "home", Channels: 3, ConfigPath: "/home/x/.config/stavlos/stavlos.json"}})
+	})
+	draw(t, "dialog-todo", func(m *Model) {
+		m.agents[0].Todos = []event.TodoItem{{ID: "t1", Text: "Time the build", Status: "done"}, {ID: "t2", Text: "Try another linker", Status: "in_progress"}, {ID: "t3", Text: "Report", Status: "pending"}}
+		m.superChat = false
+		m.openTab(focusTodo)
+	})
+	draw(t, "dialog-async", func(m *Model) {
+		m.superChat = false
+		m.openTab(focusAsync)
+	})
+	draw(t, "dialog-dirs", func(m *Model) { m.openTab(focusDirs) })
+	draw(t, "key-bar", func(m *Model) { m.command("/help") })
+	draw(t, "loading", func(m *Model) { m.loading = true })
+
 	t.Run("a narrow terminal hides the nav", func(t *testing.T) {
 		m := goldenChannel(t)
 		m.width, m.height = 70, 24

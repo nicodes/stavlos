@@ -3,8 +3,6 @@ package config
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +21,7 @@ import (
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/statefile"
 	"github.com/nicodes/stavlos/internal/toolname"
 	"gopkg.in/yaml.v3"
 )
@@ -335,10 +334,12 @@ func Load(dir string, trust Trust) (*Effective, error) {
 
 	// project layer (trust-gated)
 	pdir := paths.ProjectDir(dir)
-	files, hash, err := ProjectHash(dir)
+	// One read: what is hashed for the human is what is loaded below.
+	snap, err := TakeSnapshot(dir)
 	if err != nil {
 		return nil, err
 	}
+	files, hash := snap.Files, snap.Hash
 	if len(files) > 0 {
 		e.TrustHash = hash
 		e.TrustFiles = files
@@ -352,7 +353,7 @@ func Load(dir string, trust Trust) (*Effective, error) {
 			// trust-gated and hashed; they override channel settings, except
 			// global-only bridge configuration. Local wins over project.
 			for _, l := range []struct{ file, layer string }{{"stavlos.json", "project"}, {"stavlos.local.json", "local"}} {
-				f, err := readFile(filepath.Join(pdir, l.file))
+				f, err := readFile(snap, filepath.Join(pdir, l.file))
 				if err != nil {
 					return nil, fmt.Errorf("%s config: %w", l.layer, err)
 				}
@@ -361,17 +362,17 @@ func Load(dir string, trust Trust) (*Effective, error) {
 				}
 			}
 			e.allowSearch()
-			if err := e.loadPresets(filepath.Join(pdir, "agents"), "project"); err != nil {
+			if err := e.loadPresets(snap, filepath.Join(pdir, "agents"), "project"); err != nil {
 				return nil, err
 			}
-			if err := e.loadSkills(filepath.Join(pdir, "skills")); err != nil {
+			if err := e.loadSkills(snap, filepath.Join(pdir, "skills")); err != nil {
 				return nil, err
 			}
-			if err := e.loadCommands(filepath.Join(pdir, "commands")); err != nil {
+			if err := e.loadCommands(snap, filepath.Join(pdir, "commands")); err != nil {
 				return nil, err
 			}
 			e.ProjectTrusted = true
-			e.Instructions = append(e.Instructions, instructions.Chain(dir)...)
+			e.Instructions = append(e.Instructions, snap.chain...)
 		} else {
 			e.TrustPending = true
 		}
@@ -445,7 +446,7 @@ func loadGlobalFrom(gdir string) (*Effective, error) {
 	}
 
 	// global layer
-	gf, err := readFile(filepath.Join(gdir, "stavlos.json"))
+	gf, err := readFile(disk{}, filepath.Join(gdir, "stavlos.json"))
 	if err != nil {
 		return nil, fmt.Errorf("global config: %w", err)
 	}
@@ -454,13 +455,13 @@ func loadGlobalFrom(gdir string) (*Effective, error) {
 	}
 	e.allowSearch()
 	e.Instructions = instructions.Global() // the user's own, trusted like the rest of this layer
-	if err := e.loadPresets(filepath.Join(gdir, "agents"), "global"); err != nil {
+	if err := e.loadPresets(disk{}, filepath.Join(gdir, "agents"), "global"); err != nil {
 		return nil, err
 	}
-	if err := e.loadSkills(filepath.Join(gdir, "skills")); err != nil {
+	if err := e.loadSkills(disk{}, filepath.Join(gdir, "skills")); err != nil {
 		return nil, err
 	}
-	if err := e.loadCommands(filepath.Join(gdir, "commands")); err != nil {
+	if err := e.loadCommands(disk{}, filepath.Join(gdir, "commands")); err != nil {
 		return nil, err
 	}
 	return e, nil
@@ -736,8 +737,8 @@ func ParsePolicy(m map[string]any) (*policy.Set, error) {
 	return policy.New(rules...), nil
 }
 
-func (e *Effective) loadPresets(dir, layer string) error {
-	entries, err := os.ReadDir(dir)
+func (e *Effective) loadPresets(src source, dir, layer string) error {
+	entries, err := src.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
@@ -748,7 +749,7 @@ func (e *Effective) loadPresets(dir, layer string) error {
 		if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".md") {
 			continue
 		}
-		p, err := ReadPreset(filepath.Join(dir, ent.Name()))
+		p, err := readPreset(src, filepath.Join(dir, ent.Name()))
 		if err != nil {
 			return err
 		}
@@ -781,8 +782,8 @@ func samplePattern(p string) string {
 	return strings.NewReplacer("*", "x", "?", "x").Replace(p)
 }
 
-func (e *Effective) loadSkills(dir string) error {
-	entries, err := os.ReadDir(dir)
+func (e *Effective) loadSkills(src source, dir string) error {
+	entries, err := src.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
@@ -794,7 +795,7 @@ func (e *Effective) loadSkills(dir string) error {
 			continue
 		}
 		sf := filepath.Join(dir, ent.Name(), "SKILL.md")
-		b, err := os.ReadFile(sf)
+		b, err := src.ReadFile(sf)
 		if err != nil {
 			continue // no SKILL.md → not a skill
 		}
@@ -842,8 +843,10 @@ type roleFile struct {
 var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.Todo, toolname.WebFetch, toolname.WebSearch, toolname.Sheet}
 
 // ReadPreset parses one agents/<name>.md file.
-func ReadPreset(path string) (Preset, error) {
-	b, err := os.ReadFile(path)
+func ReadPreset(path string) (Preset, error) { return readPreset(disk{}, path) }
+
+func readPreset(src source, path string) (Preset, error) {
+	b, err := src.ReadFile(path)
 	if err != nil {
 		return Preset{}, err
 	}
@@ -1028,9 +1031,9 @@ func frontmatter(s string, v any) (string, error) {
 // readFile parses a stavlos.json (JSONC: comments and trailing commas).
 // Unknown keys are errors: a misspelt "policy" would otherwise vanish, and
 // with it every deny rule under it.
-func readFile(path string) (File, error) {
+func readFile(src source, path string) (File, error) {
 	var f File
-	b, err := os.ReadFile(path)
+	b, err := src.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
 		return f, nil
 	}
@@ -1071,55 +1074,6 @@ func parseSize(s string) (int, error) {
 		return 0, fmt.Errorf("%q: want a size such as 32kb or 1mb", orig)
 	}
 	return n * mult, nil
-}
-
-// ProjectHash lists the trust-gated files of dir (.stavlos/**, and the
-// instructions files agents follow there) and hashes their contents (PRD
-// §10.6).
-func ProjectHash(dir string) ([]string, string, error) {
-	var files []string
-	pdir := paths.ProjectDir(dir)
-	err := filepath.WalkDir(pdir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
-				return nil
-			}
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(dir, p)
-		files = append(files, rel)
-		return nil
-	})
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, "", err
-	}
-	// The instructions agents will follow: the files from the repository
-	// root down to dir, and those below it that reach agents as they work.
-	for _, f := range instructions.Chain(dir) {
-		rel, _ := filepath.Rel(dir, f.Path)
-		files = append(files, rel)
-	}
-	for _, p := range instructions.Nested(dir) {
-		rel, _ := filepath.Rel(dir, p)
-		files = append(files, rel)
-	}
-	if len(files) == 0 {
-		return nil, "", nil
-	}
-	sort.Strings(files)
-	h := sha256.New()
-	for _, f := range files {
-		b, err := os.ReadFile(filepath.Join(dir, f))
-		if err != nil {
-			return nil, "", err
-		}
-		fmt.Fprintf(h, "%s\x00%d\x00", f, len(b))
-		h.Write(b)
-	}
-	return files, hex.EncodeToString(h.Sum(nil))[:32], nil
 }
 
 // PresetPolicy returns the role's tightening rules from the map form of
@@ -1170,24 +1124,25 @@ func SetGlobalModel(modelID string) error {
 	defer globalWriteMu.Unlock()
 	p := filepath.Join(paths.ConfigDir(), "stavlos.json")
 	b, err := os.ReadFile(p)
-	if err != nil {
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+	if errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 			return err
 		}
-		return os.WriteFile(p, []byte(fmt.Sprintf("{\n  \"model\": %q\n}\n", modelID)), 0o600)
+		b = []byte("{}\n")
+	} else if err != nil {
+		return err
 	}
-	s := string(b)
-	re := regexp.MustCompile(`"model"\s*:\s*"[^"]*"`)
-	if re.MatchString(s) {
-		s = re.ReplaceAllString(s, fmt.Sprintf(`"model": %q`, modelID))
-	} else {
-		i := strings.IndexByte(s, '{')
-		if i < 0 {
-			return fmt.Errorf("%s is not a JSON object", p)
-		}
-		s = s[:i+1] + fmt.Sprintf("\n  \"model\": %q,", modelID) + s[i+1:]
+	// One field is set, by the editor that keeps every comment and every
+	// other byte. This used to be a regular expression over the whole file:
+	// it rewrote every "model" key at any depth, comments included, expanded
+	// a "$" in the id, and wrote the result in place, where a crash left
+	// half a configuration.
+	value, _ := json.Marshal(modelID)
+	out, err := EditJSONField(b, []string{"model"}, value)
+	if err != nil {
+		return fmt.Errorf("%s: %w", p, err)
 	}
-	return os.WriteFile(p, []byte(s), 0o600) // it may hold a search key
+	return statefile.WriteAtomic(p, out, 0o600, false) // it may hold a search key
 }
 
 func contains(xs []string, x string) bool {

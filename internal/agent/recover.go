@@ -8,6 +8,8 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/project"
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
@@ -15,14 +17,33 @@ import (
 // live channel runs, folded over every event, then resume. Nothing restarts
 // that was not waiting to: an agent with inputs in its inbox is woken.
 func Recover(ctx context.Context, host Host, id, dir string, created time.Time, cfg *config.Effective, events []event.Event) (*Channel, error) {
-	if len(events) == 0 {
-		return nil, fmt.Errorf("channel %s has no events", id)
-	}
+	return RecoverPaged(ctx, host, id, dir, created, cfg, func(fold func([]event.Event)) error {
+		fold(events)
+		return nil
+	})
+}
+
+// RecoverPaged is Recover for a log read a page at a time: read calls fold
+// with each page in order. The largest channel is tens of megabytes of
+// events, and nothing needs them once they are folded.
+func RecoverPaged(ctx context.Context, host Host, id, dir string, created time.Time, cfg *config.Effective, read func(fold func([]event.Event)) error) (*Channel, error) {
 	s := New(host, id, dir, cfg, "", "")
 	s.Created = created
 	var fx effects
-	for _, e := range events {
-		s.st.apply(e, &fx)
+	folded := 0
+	err := read(func(page []event.Event) {
+		for _, e := range page {
+			s.st.apply(e, &fx)
+		}
+		folded += len(page)
+	})
+	if err != nil {
+		s.cancel()
+		return nil, err
+	}
+	if folded == 0 {
+		s.cancel()
+		return nil, fmt.Errorf("channel %s has no events", id)
 	}
 	for _, aid := range s.st.order {
 		st := s.st.agents[aid]
@@ -35,7 +56,42 @@ func Recover(ctx context.Context, host Host, id, dir string, created time.Time, 
 	if err := s.resume(ctx); err != nil {
 		return nil, err
 	}
+	s.restoreGauges()
 	return s, nil
+}
+
+// restoreGauges works out again how full each agent's context is. The
+// figure is measured at a model call and kept in memory, so after a restart
+// every agent read "0%" until it next spoke, which for an idle agent with a
+// full window is exactly when the figure matters. The history is the log's;
+// the estimate leaves out the system prompt and the tools, which the next
+// call adds back.
+func (c *Channel) restoreGauges() {
+	type reading struct {
+		a       *Agent
+		modelID string
+		history []model.Message
+	}
+	c.mu.Lock()
+	var rs []reading
+	for id, a := range c.agents {
+		if st := c.st.agents[id]; st != nil && !st.killed && st.model != "" {
+			rs = append(rs, reading{a, st.model, st.hist.History()})
+		}
+	}
+	c.mu.Unlock()
+	for _, r := range rs {
+		_, info, err := c.host.Resolve(r.modelID) // outside the lock: the catalogue is not the channel's
+		if err != nil || len(r.history) == 0 {
+			continue
+		}
+		est := project.EstimateTokens(r.history, "", nil)
+		c.mu.Lock()
+		if r.a.ctxTokens == 0 {
+			r.a.ctxTokens, r.a.ctxWindow = est, info.ContextWindow
+		}
+		c.mu.Unlock()
+	}
 }
 
 // lostJob is what an agent is told about a job that was running when the
@@ -69,7 +125,7 @@ func (c *Channel) resume(ctx context.Context) error {
 				c.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputJob, Job: job}))
 		}
 	}
-	wake, err := c.commitLocked(ctx, evs...)
+	err := c.commitLocked(ctx, evs...)
 	if err != nil {
 		c.mu.Unlock()
 		return err
@@ -82,14 +138,13 @@ func (c *Channel) resume(ctx context.Context) error {
 		}
 		a.start()
 		if st.startsTurn() {
-			wake = append(wake, a)
+			a.signal() // what was waiting in its inbox when the daemon stopped
 		}
 	}
 	if c.st.archived {
 		c.cancel()
 	}
 	c.mu.Unlock()
-	signal(wake)
 	return nil
 }
 

@@ -11,21 +11,9 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/statefile"
 	"github.com/nicodes/stavlos/internal/web"
 )
-
-// webMethods is what a browser connection may call: read the channels and
-// their streams, and post to a chat. Everything that changes what agents are
-// allowed to do (modes, directories, trust, permission answers, providers,
-// configuration, shutdown) stays with the socket's clients until the daemon
-// has per-connection scopes (docs/pre-plugin-refactor.md 1A.3).
-var webMethods = map[string]bool{
-	protocol.MAttach: true, protocol.MDaemonStatus: true,
-	protocol.MChannelList: true, protocol.MChannelResume: true, protocol.MChannelPost: true,
-	protocol.MAgentTree: true, protocol.MPromptList: true, protocol.MSheetList: true,
-	protocol.MSubscribe: true, protocol.MUnsubscribe: true, protocol.MReconcile: true,
-	protocol.MUsageSeries: true, protocol.MPlanUsage: true, protocol.MCacheUsage: true,
-}
 
 // webState is whether the human turned the web UI on, kept in the data
 // directory so it comes back with the daemon.
@@ -77,12 +65,15 @@ func (d *Daemon) Web(method string) (protocol.WebStatus, error) {
 		open, err = d.web.OpenURL()
 	}
 	st := d.web.Status()
+	if method == protocol.MWebEnable || method == protocol.MWebDisable {
+		d.changed(protocol.ChangedWeb)
+	}
 	return protocol.WebStatus{Enabled: st.Enabled, URL: st.URL, OpenURL: open, Error: st.Error}, err
 }
 
 func (d *Daemon) saveWebState(enabled bool) {
 	b, _ := json.Marshal(webState{Enabled: enabled})
-	if err := os.WriteFile(d.webStatePath(), b, 0o600); err != nil {
+	if err := statefile.WriteAtomic(d.webStatePath(), b, 0o600, false); err != nil {
 		log.Printf("web: saving state: %v", err)
 	}
 }

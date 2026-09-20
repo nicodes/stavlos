@@ -14,6 +14,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/present"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/toolname"
@@ -291,6 +292,8 @@ func (t *Transcript) Apply(ev event.Event) {
 		if t.applyJob(ev) {
 			return
 		}
+	default:
+		// every other event is not drawn in an agent's chat
 	}
 	lines := CleanLines(EventLines(ev))
 	t.answerGlyph(ev, lines)
@@ -319,7 +322,7 @@ func isReminder(ev event.Event) bool {
 // joins the conversation, and when the chat shows it.
 func (t *Transcript) queueInput(ev event.Event) {
 	var in event.Input
-	if ev.Decode(&in) == nil && in.ID != "" && in.Kind != event.InputReminder && in.Kind != event.InputResume {
+	if ev.Decode(&in) == nil && in.ID != "" && !in.Kind.Rule().Harness { // the harness's own inputs draw as notices when queued
 		t.inputs[in.ID] = in
 	}
 }
@@ -487,6 +490,8 @@ func (t *Transcript) applyCompaction(ev event.Event) bool {
 			t.replaceItem(t.compactItem, []Line{{Kind: LineBlank}, {Kind: LineDim, Text: titled("Compaction interrupted", "")}, {Kind: LineBlank}})
 			t.compactItem = -1
 		}
+	default:
+		// every other event leaves these items as they are
 	}
 	return false
 }
@@ -619,6 +624,8 @@ func (t *Transcript) applyJob(ev event.Event) bool {
 		}
 		t.settleJob(p.ID, ToneError, CleanLines(jobStoppedLines("command", p.Reason)))
 		return true
+	default:
+		// every other event leaves these items as they are
 	}
 	return false
 }
@@ -641,6 +648,8 @@ func (t *Transcript) afterAppend(ev event.Event) {
 		t.stream = nil
 		t.turn = false
 		t.stopRunning()
+	default:
+		// every other event leaves these items as they are
 	}
 }
 
@@ -1341,22 +1350,15 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 
 	event.AgentUpdated: decoded(func(p event.AgentUpdatedPayload) []Line {
 		var lines []Line
-		if p.Role != nil {
-			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Role", "→ "+*p.Role)})
-		}
-		if p.Model != nil {
-			text := "→ " + *p.Model
-			if p.Reason != "" {
-				text += " · " + p.Reason // the harness moved it: its old model's plan ran out
+		for _, c := range present.AgentChanges(p) {
+			if c.What == "Name" {
+				continue // the tree shows it
 			}
-			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Model", text)})
-		}
-		if p.Variant != nil {
-			v := *p.Variant
-			if v == "" {
-				v = "default"
+			text := "→ " + c.To
+			if c.Why != "" {
+				text += " · " + c.Why // the harness moved it: its old model's plan ran out
 			}
-			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled("Variant", "→ "+v)})
+			lines = append(lines, Line{Kind: LineDim, Glyph: GlyphModel, Text: titled(c.What, text)})
 		}
 		return lines
 	}),
@@ -1692,16 +1694,6 @@ func ToolArg(name string, raw json.RawMessage) string {
 		return strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
 	}
 	switch name {
-	case toolname.Shell:
-		return str("command")
-	case toolname.ShellKill:
-		return str("id")
-	case toolname.WebFetch:
-		return str("url")
-	case toolname.WebSearch:
-		return str("query")
-	case toolname.Read:
-		return str("path")
 	case toolname.Grep, toolname.Glob:
 		if p := str("path"); p != "" {
 			return str("pattern") + "  in " + p
@@ -1722,10 +1714,6 @@ func ToolArg(name string, raw json.RawMessage) string {
 		default:
 			return arch
 		}
-	case toolname.AgentCancel, toolname.AgentStatus:
-		return str("id")
-	case toolname.Skill:
-		return str("name")
 	case toolname.AskUser:
 		var a struct {
 			Questions []struct{ Question string }
@@ -1744,6 +1732,9 @@ func ToolArg(name string, raw json.RawMessage) string {
 		return strings.TrimSpace(str("action") + " " + str("id") + " " + str("title"))
 	case toolname.Message:
 		return addressed(messageRecipients(raw), "")
+	}
+	if key := present.PrimaryArg(name); key != "" {
+		return str(key) // the argument that stands for the call, as every client names it
 	}
 	return compactArgs(raw)
 }

@@ -36,10 +36,7 @@ func (d *Daemon) Serve(ctx context.Context, socket string) error {
 		return err
 	}
 	_ = os.Chmod(socket, 0o600)
-	if d.Discord != nil {
-		d.Discord.Start()
-	}
-	d.startWeb(ctx)
+	d.startServices(ctx)
 	go func() {
 		<-ctx.Done()
 		ln.Close()
@@ -76,7 +73,13 @@ type conn struct {
 	// such a process could answer its own permission prompts or switch its
 	// channel to yolo.
 	ran bool
-	web bool // a browser connection: webMethods only
+	web bool // a browser connection
+	// caller is who is at the other end, fixed by how the connection arrived:
+	// the listener it came through and the process it came from, never by
+	// what it says of itself in attach.
+	caller scope
+
+	queued atomic.Int64 // bytes waiting in out
 
 	replaying atomic.Int32 // replays in progress, for the log line when a client is dropped
 }
@@ -92,6 +95,11 @@ type outMsg struct {
 // client is gone for practical purposes.
 var outQueue = 1 << 14 // a variable so a test can make a queue a replay fills
 
+// maxQueueBytes bounds the same queue by what it holds rather than by how
+// many: a tool result is up to 130 KB, so a count alone let one client that
+// stopped reading pin about 2 GB until its write timed out.
+var maxQueueBytes int64 = 64 << 20
+
 // writeTimeout bounds one write to a client (a variable for tests).
 var writeTimeout = 10 * time.Second
 
@@ -105,7 +113,10 @@ const (
 // handleConn serves one connection; web marks one that came through the
 // browser listener, which may call only webMethods.
 func (d *Daemon) handleConn(ctx context.Context, nc net.Conn, web bool) {
-	ran := false
+	ran, caller := false, scopeOwner
+	if web {
+		caller = scopeWeb
+	}
 	if uc, ok := nc.(*net.UnixConn); ok {
 		cred, err := peercred.OfSelf(uc)
 		if err != nil {
@@ -113,7 +124,9 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn, web bool) {
 			nc.Close()
 			return
 		}
-		if cred.PID != os.Getpid() {
+		if cred.PID == os.Getpid() {
+			caller = scope(d.inProcess.Load()) // a bridge the daemon runs, which reaches it over its own socket
+		} else {
 			// A peer whose ancestry cannot be read is refused, not waved
 			// through: it may be one of the processes this check exists for.
 			if ran, err = peercred.DescendsFrom(cred.PID, os.Getpid()); err != nil {
@@ -127,7 +140,7 @@ func (d *Daemon) handleConn(ctx context.Context, nc net.Conn, web bool) {
 	// mid-login.wait (or mid-anything) takes its work with it.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), room: make(chan struct{}, 1), done: make(chan struct{}), ran: ran, web: web}
+	c := &conn{d: d, c: nc, out: make(chan outMsg, outQueue), room: make(chan struct{}, 1), done: make(chan struct{}), ran: ran, web: web, caller: caller}
 	c.cl = &client{id: agent.NewID("c"), name: "anonymous", tier: protocol.TierInteractive, subs: map[string]int64{}, send: c.enqueue, replay: c.enqueueReplay}
 	d.addClient(c.cl)
 	go c.writer()
@@ -168,15 +181,26 @@ func (c *conn) write(v any) {
 // enqueue queues one encoded, newline-terminated message without blocking.
 // The bytes may be shared with other connections and are never modified.
 func (c *conn) enqueue(line []byte, droppable bool) {
-	if droppable && len(c.out) > outQueue/2 {
+	if droppable && (len(c.out) > outQueue/2 || c.queued.Load() > maxQueueBytes/2) {
 		return
 	}
+	full := c.queued.Load()+int64(len(line)) > maxQueueBytes
+	if !full {
+		c.queued.Add(int64(len(line)))
+		select {
+		case c.out <- outMsg{b: line, droppable: droppable}:
+			return
+		case <-c.done:
+			return
+		default:
+			c.queued.Add(-int64(len(line)))
+		}
+	}
 	select {
-	case c.out <- outMsg{b: line, droppable: droppable}:
 	case <-c.done:
 	default:
 		// (the client's name is behind its lock, which a delivery holds here)
-		log.Printf("client %s is not reading: %d messages queued, replaying=%v; dropping it", c.cl.id, len(c.out), c.replaying.Load() > 0)
+		log.Printf("client %s is not reading: %d messages (%d bytes) queued, replaying=%v; dropping it", c.cl.id, len(c.out), c.queued.Load(), c.replaying.Load() > 0)
 		c.close()
 	}
 }
@@ -196,7 +220,7 @@ func (c *conn) enqueue(line []byte, droppable bool) {
 func (c *conn) enqueueReplay(ctx context.Context, line []byte) error {
 	c.replaying.Add(1)
 	defer c.replaying.Add(-1)
-	for len(c.out) >= outQueue/4 {
+	for len(c.out) >= outQueue/4 || c.queued.Load() >= maxQueueBytes/4 {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -212,6 +236,7 @@ func (c *conn) enqueueReplay(ctx context.Context, line []byte) error {
 	case <-c.done:
 		return net.ErrClosed
 	case c.out <- outMsg{b: line}:
+		c.queued.Add(int64(len(line)))
 		return nil
 	}
 }
@@ -223,6 +248,7 @@ func (c *conn) writer() {
 	for {
 		select {
 		case m := <-c.out:
+			c.queued.Add(-int64(len(m.b)))
 			_ = c.c.SetWriteDeadline(time.Now().Add(writeTimeout))
 			_, err := w.Write(m.b)
 			if err == nil && len(c.out) == 0 {
@@ -270,14 +296,16 @@ func (c *conn) dispatch(ctx context.Context, req protocol.Request) (any, *protoc
 	if req.V != protocol.Version {
 		return nil, &protocol.Error{Code: protocol.ErrVersion, Message: fmt.Sprintf("protocol version %d not served; this daemon serves %d", req.V, protocol.Version)}
 	}
-	if c.web && !webMethods[req.Method] {
-		return nil, &protocol.Error{Code: protocol.ErrForbidden, Message: req.Method + " is not available to the web UI"}
+	e, ok := handlers[req.Method]
+	if c.caller != scopeOwner && (!ok || !e.scope.admits(c.caller)) {
+		// (an unknown method is forbidden too: a caller learns nothing about
+		// what exists beyond its reach)
+		return nil, &protocol.Error{Code: protocol.ErrForbidden, Message: req.Method + " is not available to " + c.caller.String()}
 	}
-	h, ok := handlers[req.Method]
 	if !ok {
 		return nil, &protocol.Error{Code: protocol.ErrMethodNotFound, Message: "unknown method " + req.Method}
 	}
-	res, err := h(ctx, c, req.Params)
+	res, err := e.h(ctx, c, req.Params)
 	if err != nil {
 		return nil, toProtocolError(err)
 	}

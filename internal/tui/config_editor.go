@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/charmbracelet/bubbles/key"
 	"path/filepath"
 	"strings"
 
@@ -230,37 +231,36 @@ func (e *configEditor) multiline() bool {
 
 func (m *Model) configEditorKey(msg tea.KeyMsg) tea.Cmd {
 	e := m.cfgEditor
-	key := msg.String()
 	if e.busy {
 		return nil
 	}
 	if e.mode == "discard" {
-		if key == "enter" {
+		if key.Matches(msg, keys.EdConfirm) {
 			return m.closeConfigEditor()
 		}
-		if key == "esc" {
+		if key.Matches(msg, keys.Clear) {
 			e.mode = e.previous
 		}
 		return nil
 	}
-	if key == "esc" || key == "ctrl+c" {
+	if key.Matches(msg, keys.EdClose) {
 		return m.configEditorEscape()
 	}
-	if key == "ctrl+s" {
+	if key.Matches(msg, keys.EdSave) {
 		return m.saveConfigEditor()
 	}
 	if e.mode == "new" || e.mode == "rename" || e.mode == "delete" {
 		return m.configFileOperationKey(msg)
 	}
 	if e.mode == "field" {
-		if key == "enter" {
+		if key.Matches(msg, keys.EdConfirm) {
 			return m.saveConfigEditor()
 		}
 		var cmd tea.Cmd
 		e.input, cmd = e.input.Update(msg)
 		return cmd
 	}
-	if key == "f4" && e.doc != nil {
+	if key.Matches(msg, keys.EdRaw) && e.doc != nil {
 		if e.dirty() {
 			e.status = "Save with Ctrl+S before switching editors."
 			return nil
@@ -276,7 +276,7 @@ func (m *Model) configEditorKey(msg tea.KeyMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if key == "tab" || key == "shift+tab" {
+	if key.Matches(msg, keys.EdPane) {
 		e.pane = 1 - e.pane
 		e.area.Blur()
 		if e.pane == 1 && e.multiline() {
@@ -295,12 +295,12 @@ func (m *Model) configEditorKey(msg tea.KeyMsg) tea.Cmd {
 	if e.doc == nil {
 		return nil
 	}
-	switch key {
-	case "up", "k":
+	switch {
+	case key.Matches(msg, keys.EdUp):
 		e.fieldSel = max(0, e.fieldSel-1)
-	case "down", "j":
+	case key.Matches(msg, keys.EdDown):
 		e.fieldSel = min(len(e.doc.Fields)-1, e.fieldSel+1)
-	case "enter", " ":
+	case key.Matches(msg, keys.EdOpen):
 		return m.openConfigField()
 	}
 	return nil
@@ -332,38 +332,38 @@ func (m *Model) configNavigationKey(msg tea.KeyMsg) tea.Cmd {
 		return nil
 	}
 	files := e.entries()
-	switch msg.String() {
-	case "left", "right":
+	switch {
+	case key.Matches(msg, keys.EdPrev, keys.EdNext):
 		delta := 1
-		if msg.String() == "left" {
+		if key.Matches(msg, keys.EdPrev) {
 			delta = -1
 		}
 		e.section = (e.section + delta + len(configSections)) % len(configSections)
 		e.fileSel = 0
-	case "up", "k":
+	case key.Matches(msg, keys.EdUp):
 		e.fileSel = max(0, e.fileSel-1)
-	case "down", "j":
+	case key.Matches(msg, keys.EdDown):
 		e.fileSel = min(max(0, len(files)-1), e.fileSel+1)
-	case "ctrl+n":
+	case key.Matches(msg, keys.EdNew):
 		e.previous = e.mode
 		e.mode = "new"
 		e.input.SetValue(e.newFilePath())
 		e.input.Placeholder = "relative file path"
 		return e.input.Focus()
-	case "f2", "ctrl+d":
+	case key.Matches(msg, keys.EdRename, keys.EdDelete):
 		e.previous = e.mode
 		file, ok := e.selectedFile()
 		if !ok {
 			return nil
 		}
-		if msg.String() == "ctrl+d" {
+		if key.Matches(msg, keys.EdDelete) {
 			e.mode, e.status = "delete", "Delete "+file.Path+" (including contents if a directory)? Enter confirms."
 			return nil
 		}
 		e.mode = "rename"
 		e.input.SetValue(file.Path)
 		return e.input.Focus()
-	case "enter", " ":
+	case key.Matches(msg, keys.EdOpen):
 		file, ok := e.selectedFile()
 		if !ok {
 			return nil
@@ -373,7 +373,7 @@ func (m *Model) configNavigationKey(msg tea.KeyMsg) tea.Cmd {
 			return nil
 		}
 		return m.readConfigFile(file.Path)
-	case "ctrl+l":
+	case key.Matches(msg, keys.EdReload):
 		e.busy = true
 		return configTreeCmd(m.ctx, m.c, e)
 	}
@@ -396,7 +396,7 @@ func (e *configEditor) newFilePath() string {
 
 func (m *Model) configFileOperationKey(msg tea.KeyMsg) tea.Cmd {
 	e := m.cfgEditor
-	if msg.String() != "enter" {
+	if !key.Matches(msg, keys.EdConfirm) {
 		var cmd tea.Cmd
 		e.input, cmd = e.input.Update(msg)
 		return cmd

@@ -12,6 +12,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/shellcmd"
@@ -43,8 +44,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	if err := a.record(event.ToolStarted, event.ToolStartedPayload{Turn: turn, CallID: c.ID, Name: c.Name}); err != nil {
 		return
 	}
+	var carried []string // instructions files the output carries
 	finish := func(out string, isErr, cancelled, denied bool) {
-		_ = a.record(event.ToolFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied})
+		_ = a.record(event.ToolFinished, event.ToolFinishedPayload{Turn: turn, CallID: c.ID, Name: c.Name, Output: out, IsError: isErr, Cancelled: cancelled, Denied: denied, Instructions: carried})
 	}
 	t, ok := a.c.tools[c.Name]
 	if !ok {
@@ -102,8 +104,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		a.sheetsPatched(d.sub)
 	}
 	if !res.IsError {
-		if note := a.instructionsFor(d.sub, cfg); note != "" {
+		if note, files := a.instructionsFor(d.sub, cfg); note != "" {
 			res.Output += "\n\n" + note
+			carried = files
 		}
 	}
 	finish(res.Output, res.IsError, false, false)
@@ -114,52 +117,98 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	// Policy judges every value of the subject (each path a patch touches)
 	// and the most restrictive decision wins; the prompt names that value.
 	sub := t.Subject(c.Input)
-	verb, arg := cfg.Policy.With(rv.preset.PresetPolicy()).Decide(c.Name, sub)
-	// A command allow rule speaks for one simple command: "cat *" says
-	// nothing about "cat x; rm -rf ~" or "cat x > ~/.bashrc".
-	if sub.Kind == policy.KindCommand && verb == policy.Allow && !shellcmd.Simple(arg) {
-		verb = policy.Ask
-	}
+	ruled, arg := cfg.Policy.With(rv.preset.PresetPolicy()).Decide(c.Name, sub)
 	// The channel's sheets are part of the working set for the file tools
 	// (never for commands: the sandbox builds its own list).
 	dirs := append(a.c.dirPaths(), a.c.SheetDir())
-	// An edit to the files that steer the harness itself asks whatever
-	// policy says and whatever the mode.
 	control := controlFile(c.Name, sub, a.c.Dir(), dirs)
-	if control != "" && verb == policy.Allow {
-		verb, arg = policy.Ask, control
-	}
+	boundary := outsideDir(sub, a.c.Dir(), dirs)
 	a.c.mu.Lock()
-	// (never a control-file ask: "always allow" for a path must not become a
-	// standing licence to rewrite what steers the harness)
-	covered := verb == policy.Ask && control == "" && a.c.st.permits.covers(c.Name, sub)
-	mode := a.c.st.mode
+	f := facts{
+		ruled:     ruled,
+		compound:  sub.Kind == policy.KindCommand && !shellcmd.Simple(arg),
+		control:   control != "",
+		permitted: a.c.st.permits.covers(c.Name, sub) || sub.Kind == policy.KindURL && hostsAllow(cfg.Hosts, sub.Values),
+		mode:      a.c.st.mode,
+		egress:    egress(c.Name, sub),
+		outside:   boundary != "",
+	}
 	a.c.mu.Unlock()
-	// What the human allowed for the channel answers an ask, never a deny,
-	// and so do the hosts stavlos.json lists for a fetch.
-	if covered || verb == policy.Ask && sub.Kind == policy.KindURL && hostsAllow(cfg.Hosts, sub.Values) {
+	verb := judge(f)
+	if f.control && ruled == policy.Allow {
+		arg = control // the prompt names the file that steers the harness
+	}
+	why := ""
+	if ruled == policy.Deny {
+		boundary = "" // the rules refused it: where it reaches is beside the point
+	} else if verb == policy.Deny {
+		why = autoOutside(boundary)
+	}
+	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: f.egress}
+}
+
+// facts is everything the verdict on a call depends on, read once.
+type facts struct {
+	ruled     policy.Verb // what the rules say of the call, the role's tightening included
+	compound  bool        // a command line that is more than one simple command
+	control   bool        // an edit to a file that steers the harness
+	permitted bool        // the human allowed it for the channel, or stavlos.json lists the host
+	mode      string
+	egress    bool // it sends data out
+	outside   bool // it reaches outside the channel's directories
+}
+
+// judge is the verdict for a call before any human is asked, as stages that
+// each only tighten or only loosen, in this order:
+//
+//  1. the rules;
+//  2. what an allow rule cannot speak for: more than one simple command
+//     ("cat *" says nothing about "cat x; rm -rf ~"), and the files that steer
+//     the harness, which ask whatever the rules and the mode say;
+//  3. what answers an ask, never a deny and never a control-file ask: a
+//     standing permit, a listed host;
+//  4. the mode, for what is still asking and for anything that reaches
+//     outside the directories even when the rules allow it.
+//
+// It reads nothing but its argument, so every combination can be tested and
+// a change of mode can be judged again without the call.
+func judge(f facts) policy.Verb {
+	verb := f.ruled
+	if verb == policy.Allow && (f.compound || f.control) {
+		verb = policy.Ask
+	}
+	if verb == policy.Ask && !f.control && f.permitted {
 		verb = policy.Allow
 	}
-	if verb == policy.Ask && control == "" && (mode == protocol.ModeYolo || mode == protocol.ModeAuto && !egress(c.Name, sub)) {
-		verb = policy.Allow // yolo answers every other ask; auto every one that sends nothing out
+	if verb != policy.Deny && (verb == policy.Ask || f.outside) {
+		verb = ModeVerdict(f.mode, f.control, f.egress, f.outside)
 	}
-	// A call that reaches outside the working directories is judged by the
-	// mode even when policy allows it: ask mode asks, auto denies, yolo
-	// allows.
-	boundary, why := "", ""
-	if verb != policy.Deny {
-		if dir := outsideDir(sub, a.c.Dir(), dirs); dir != "" {
-			boundary = dir
-			switch mode {
-			case protocol.ModeYolo:
-			case protocol.ModeAuto:
-				verb, why = policy.Deny, autoOutside(dir)
-			default:
-				verb = policy.Ask
-			}
+	return verb
+}
+
+// ModeVerdict is what a permission mode says to a call that would otherwise
+// ask the human, from the three things a mode cares about: whether the call
+// edits what steers the harness (sticky: only a human answers that, in any
+// mode), whether it sends data out, and whether it reaches outside the
+// channel's directories. Ask leaves it with the human. It is the one place a
+// mode's meaning is written: a call being decided and a prompt already
+// waiting when the mode changes are judged by it alike.
+func ModeVerdict(mode string, sticky, egress, outside bool) policy.Verb {
+	switch mode {
+	case protocol.ModeYolo:
+		if !sticky {
+			return policy.Allow
 		}
+	case protocol.ModeAuto:
+		switch {
+		case outside:
+			return policy.Deny
+		case !sticky && !egress:
+			return policy.Allow
+		}
+	default:
 	}
-	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: egress(c.Name, sub)}
+	return policy.Ask
 }
 
 // egress reports whether a call sends data out of the machine or to a
@@ -184,8 +233,8 @@ func controlFile(tool string, sub policy.Subject, base string, dirs []string) st
 	for _, v := range sub.Values {
 		p := tools.ResolvePath(base, v)
 		for _, d := range dirs {
-			rel, err := filepath.Rel(tools.ResolvePath("", d), p)
-			if err != nil {
+			rel, ok := pathx.Rel(tools.ResolvePath("", d), p)
+			if !ok {
 				continue
 			}
 			for _, cf := range controlFiles {
@@ -193,7 +242,7 @@ func controlFile(tool string, sub policy.Subject, base string, dirs []string) st
 					return v
 				}
 			}
-			if !strings.HasPrefix(rel, "..") && slices.Contains(instructions.Names, filepath.Base(rel)) {
+			if slices.Contains(instructions.Names, filepath.Base(rel)) {
 				return v
 			}
 		}
@@ -286,7 +335,7 @@ func (a *Agent) askOpened(ctx context.Context, info protocol.PromptInfo, callID 
 	case len(ans.Answers) > 0:
 		res.Answer = strings.Join(ans.Answers, " · ")
 	}
-	_ = a.record(event.AskResolved, res)
+	_ = a.recordFact(event.AskResolved, res) // the prompt is closed whether or not the log takes it
 	return ans
 }
 

@@ -414,9 +414,11 @@ func (m *Model) mouseClick(x, y int) tea.Cmd {
 // it is off them.
 func (m *Model) hoverDivider(x, y int) {
 	var h buttonHover
-	if _, _, tokens, cost, ok := m.usageRowFigures(y); ok && m.sidebarVisible() && !m.isHome() && x < sidebarWidth {
-		if kind, on := usageFigureAt(tokens, cost, sidebarWidth-1, x); on {
-			h.navRow, h.navUsage = y, int(kind)+1
+	if row, ok := m.navRowAt(y); ok && m.sidebarVisible() && !m.isHome() && x < sidebarWidth {
+		if _, _, tokens, cost, ok := m.usageRowFigures(row.id); ok {
+			if kind, on := usageFigureAt(tokens, cost, sidebarWidth-1, x); on {
+				h.navID, h.navUsage = row.id, int(kind)+1
+			}
 		}
 	}
 	if !m.isHome() && y == m.rows().rule {

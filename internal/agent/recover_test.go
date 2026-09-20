@@ -132,6 +132,12 @@ func TestRecoverRoundTrip(t *testing.T) {
 		aj, _ := json.MarshalIndent(after, "", " ")
 		t.Fatalf("recovered view differs\nlive:\n%s\nrecovered:\n%s\nlog:\n%s", bj, aj, h.dump())
 	}
+	// how full each agent's context is comes back too, not "0%" until it speaks
+	for _, a := range s2.Agents() {
+		if in := a.Info(); in.Context == 0 || in.ContextWindow == 0 {
+			t.Errorf("%s recovered with a context gauge of %d/%d", in.Name, in.Context, in.ContextWindow)
+		}
+	}
 	if s2.Mode() != mode || s2.Model() != modelID || live(s2) != 2 {
 		t.Fatalf("channel: mode %s model %s live %d", s2.Mode(), s2.Model(), live(s2))
 	}

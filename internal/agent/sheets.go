@@ -17,8 +17,10 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/paths"
+	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/statefile"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -104,13 +106,23 @@ func (c *Channel) Sheet(id string) (protocol.SheetInfo, []byte, error) {
 }
 
 // readSheet reads a sheet's file, which is never larger than a sheet may be:
-// the file is an agent's, and what reads it serves it to a browser.
+// the file is an agent's, and what reads it serves it to a browser. It is
+// opened through the directory as a root, so a file an agent replaced with a
+// link to somewhere else (a key, a token) is refused rather than served.
 func readSheet(path string) ([]byte, error) {
-	f, err := os.Open(path)
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	f, err := root.Open(filepath.Base(path))
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a file", filepath.Base(path))
+	}
 	b, err := io.ReadAll(io.LimitReader(f, maxSheetSize+1))
 	if err != nil {
 		return nil, err
@@ -136,7 +148,7 @@ func (a *Agent) guardSheets(sub policy.Subject) (refusal string, after func() st
 	before := map[string][]byte{}
 	for _, v := range sub.Values {
 		p := tools.ResolvePath(c.Dir(), v)
-		if filepath.Dir(p) != dir && !strings.HasPrefix(p, dir+string(filepath.Separator)) {
+		if !pathx.Under(dir, p) {
 			continue
 		}
 		m := sheetFile.FindStringSubmatch(filepath.Base(p))
@@ -226,13 +238,13 @@ func (s sheetsAPI) Delete(id string) error {
 	if err := os.Remove(sheetPath(c.SheetDir(), id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	_, err := c.commitLocked(context.Background(), c.event(s.a.ID, event.SheetDeleted, event.SheetPayload{ID: id}))
+	err := c.commitLocked(context.Background(), c.event(s.a.ID, event.SheetDeleted, event.SheetPayload{ID: id}))
 	return err
 }
 
 func (c *Channel) sheetWrittenLocked(a *Agent, id, title string, page []byte) error {
 	sum := sha256.Sum256(page)
-	_, err := c.commitLocked(context.Background(), c.event(a.ID, event.SheetWritten,
+	err := c.commitLocked(context.Background(), c.event(a.ID, event.SheetWritten,
 		event.SheetPayload{ID: id, Title: title, Author: a.state().name, Hash: hex.EncodeToString(sum[:]), Size: len(page)}))
 	return err
 }
@@ -258,7 +270,7 @@ func (a *Agent) sheetsPatched(sub policy.Subject) {
 		switch {
 		case c.st.sheets[m[1]] == nil:
 		case errors.Is(err, os.ErrNotExist):
-			_, _ = c.commitLocked(context.Background(), c.event(a.ID, event.SheetDeleted, event.SheetPayload{ID: m[1]}))
+			_ = c.commitLocked(context.Background(), c.event(a.ID, event.SheetDeleted, event.SheetPayload{ID: m[1]}))
 		case err == nil:
 			_ = c.sheetWrittenLocked(a, m[1], "", page)
 		}
@@ -267,19 +279,5 @@ func (a *Agent) sheetsPatched(sub policy.Subject) {
 }
 
 func writeFileAtomic(path string, b []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".sheet-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if _, err = f.Write(b); err == nil {
-		err = f.Chmod(0o600)
-	}
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
+	return statefile.WriteAtomic(path, b, 0o600, false)
 }

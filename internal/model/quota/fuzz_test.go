@@ -20,8 +20,8 @@ func FuzzParsers(f *testing.F) {
 		f.Add([]byte(s))
 	}
 	f.Fuzz(func(t *testing.T, body []byte) {
-		for name, parse := range parsers {
-			u, err := parse(body, time.Unix(1_790_000_000, 0))
+		for name, src := range sources {
+			u, err := src.parse(body, time.Unix(1_790_000_000, 0))
 			if err != nil {
 				continue
 			}

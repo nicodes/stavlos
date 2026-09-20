@@ -17,22 +17,59 @@ import (
 // the nav's Clients section shows whether it is on; a click turns it on and opens it in a
 // browser tab, and a click while it is on opens its controls.
 
-// navTopRows is the nav header's fixed top: the title, a blank, the two usage
-// rows, a blank, the Clients section (its title, the Web UI row, the Discord
-// row) and a blank. The Subscriptions section follows, when there is a plan
-// reading.
-const navTopRows = 9
-
-// sidebarWebRow is the header row of the Web UI indicator, the first of the
-// Clients section.
-const sidebarWebRow = 6
-
 type webMsg struct {
 	status protocol.WebStatus
 	err    error
 	action string
 }
-type webTickMsg struct{}
+type webTickMsg struct{ epoch uint64 }
+
+// servicePoll is how often a status the daemon pushes changes of is asked
+// for anyway, in case a notice was shed from a full queue.
+const servicePoll = 30 * time.Second
+
+// changedMsg is the daemon saying a status is stale (protocol.NChanged).
+type changedMsg struct{ what string }
+
+// onService handles what the Clients rows of the nav are told: a status, the
+// poll that asks for one again, and the daemon saying one is stale. A poll
+// from before the last change of epoch is dropped.
+func (m *Model) onService(msg tea.Msg) tea.Cmd {
+	switch msg := msg.(type) {
+	case webMsg:
+		return m.onWeb(msg)
+	case discordMsg:
+		return m.onDiscord(msg)
+	case changedMsg:
+		return m.onChanged(msg)
+	case webTickMsg:
+		if msg.epoch == m.webEpoch {
+			return webCmd(m.ctx, m.c, "status")
+		}
+	case discordTickMsg:
+		if msg.epoch == m.discordEpoch {
+			return discordCmd(m.ctx, m.c, "status", msg.epoch)
+		}
+	}
+	return nil
+}
+
+// onChanged asks once for what changed. Each status reply arms the next
+// poll, so the epoch moves first: the poll already armed finds itself stale
+// and one chain of polls stays one.
+func (m *Model) onChanged(msg changedMsg) tea.Cmd {
+	switch msg.what {
+	case protocol.ChangedWeb:
+		m.webEpoch++
+		return webCmd(m.ctx, m.c, "status")
+	case protocol.ChangedPlan:
+		return planUsageCmd(m.ctx, m.c) // asked once and answered once: nothing to chain
+	case protocol.ChangedDiscord:
+		m.discordEpoch++
+		return discordCmd(m.ctx, m.c, "status", m.discordEpoch)
+	}
+	return nil
+}
 
 func webCmd(ctx context.Context, c *client.Client, action string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
@@ -129,7 +166,7 @@ func (m *Model) onWeb(msg webMsg) tea.Cmd {
 	}
 	var cmds []tea.Cmd
 	if msg.action == "status" {
-		cmds = append(cmds, tick(5*time.Second, webTickMsg{})) // another client may turn it on or off
+		cmds = append(cmds, tick(servicePoll, webTickMsg{m.webEpoch})) // the daemon says when it changes; this is the net under that
 	}
 	switch {
 	case msg.err != nil && msg.action != "status":

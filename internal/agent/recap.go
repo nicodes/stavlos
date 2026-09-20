@@ -40,7 +40,7 @@ func (c *Channel) SetRecap(ctx context.Context, minutes int) error {
 	if c.st.recap == minutes {
 		return nil
 	}
-	_, err := c.commitLocked(ctx, c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Recap: &minutes}))
+	err := c.commitLocked(ctx, c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Recap: &minutes}))
 	return err
 }
 
@@ -78,11 +78,10 @@ func (c *Channel) MaybeRecap(ctx context.Context, now time.Time) error {
 	// (lastRecap and recapOpen are set by the fold, from this event: state is
 	// only ever what the log says, so a restart finds the recap still open)
 	id := NewID("recap")
-	wake, err := c.commitLocked(ctx, c.event(main, event.InputQueued, event.Input{
+	err := c.commitLocked(ctx, c.event(main, event.InputQueued, event.Input{
 		ID: NewID("i"), RequestID: id, Kind: event.InputPrompt, Text: recapText, To: []string{st.agents[main].name}, From: "", FromName: tools.User, Recap: true,
 	}))
 	c.mu.Unlock()
-	signal(wake)
 	return err
 }
 

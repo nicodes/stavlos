@@ -15,6 +15,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"slices"
 	"sort"
 	"strings"
@@ -29,26 +30,49 @@ import (
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
-// Host is what the daemon provides to channels.
+// Host is what the daemon provides to channels, by concern. A channel holds
+// the whole of it; what takes only a part (the picker reads the models, a
+// test double of the human needs no catalogue) names the part.
 type Host interface {
+	Journal
+	Models
+	Human
+	Project
+}
+
+// Journal is the record and what is sent beside it.
+type Journal interface {
 	// Append logs events in one transaction and returns them numbered.
 	Append(ctx context.Context, evs ...event.Event) ([]event.Event, error)
+	// Stream sends what a model is saying before the event that settles it.
 	Stream(n protocol.StreamNotification)
+}
+
+// Models is the catalogue and the state of the subscriptions behind it.
+type Models interface {
 	Resolve(modelID string) (model.Model, model.Info, error)
 	CheckModel(modelID string) error
 	Variants(modelID string) []string
-	// Prompt asks the human and waits; opened runs once the prompt can be
-	// listed and answered, before any answer is taken.
-	Prompt(ctx context.Context, info protocol.PromptInfo, opened func()) escalation.Answer
-	// ProjectChanged tells the host an instructions file of the project in
-	// dir changed since its config was loaded: the host loads it again, and
-	// asks for trust again when the hash no longer matches.
-	ProjectChanged(dir string)
 	// PlanUsage is every subscription's plan usage as last read, by provider,
 	// for choosing a model (pick.go); MarkLimited records that a provider
 	// refused a call for a limit, so nothing chooses it until then.
 	PlanUsage() map[string]model.PlanUsage
 	MarkLimited(provider string, until time.Time)
+}
+
+// Human is the person at the other end.
+type Human interface {
+	// Prompt asks the human and waits; opened runs once the prompt can be
+	// listed and answered, before any answer is taken.
+	Prompt(ctx context.Context, info protocol.PromptInfo, opened func()) escalation.Answer
+}
+
+// Project is the configuration the channel runs under.
+type Project interface {
+	// ProjectChanged tells the host an instructions file of the project in
+	// dir changed since its config was loaded: the host loads it again, and
+	// asks for trust again when the hash no longer matches.
+	ProjectChanged(dir string)
 }
 
 // ErrNoModel is the turn error when an agent has no model to call.
@@ -111,45 +135,87 @@ func (c *Channel) event(agent string, t event.Type, payload any) event.Event {
 	return e
 }
 
-// commitLocked logs events and applies them. The caller holds c.mu and
-// signals the returned agents once it has released it.
-func (c *Channel) commitLocked(ctx context.Context, evs ...event.Event) ([]*Agent, error) {
+// commitLocked is the one way a channel's state changes: it logs the events,
+// folds them into the state, and does what follows a record. The caller
+// holds c.mu.
+//
+// What follows a record is dispatched here and nowhere else (it used to be
+// the caller's job: sixteen call sites signalled the agents a commit said to
+// wake, and nineteen dropped the list): an agent whose inbox now holds
+// something that starts a turn is woken. Waking is a non-blocking send, so
+// it is safe under the lock, and the agent's goroutine takes the lock itself
+// before it looks at anything.
+//
+// An error means nothing was logged and nothing changed. What the caller
+// does about it is the caller's to decide, but it must decide: a side effect
+// that happens anyway is a side effect with no record.
+func (c *Channel) commitLocked(ctx context.Context, evs ...event.Event) error {
 	if c.stopped {
-		return nil, errStopped
+		return errStopped
 	}
 	if len(evs) == 0 {
-		return nil, nil
+		return nil
 	}
 	out, err := c.host.Append(ctx, evs...)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var fx effects
 	for _, e := range out {
 		c.st.apply(e, &fx)
 	}
-	var wake []*Agent
+	c.dispatchLocked(fx)
+	return nil
+}
+
+// dispatchLocked does what applying events asked of the runtime.
+func (c *Channel) dispatchLocked(fx effects) {
 	for _, id := range fx.wake {
 		if a, ok := c.agents[id]; ok {
-			wake = append(wake, a)
+			a.signal()
 		}
 	}
-	return wake, nil
+}
+
+// commitFactLocked records something that has already happened in the world:
+// a turn ended, a job exited, the human answered. A decision that cannot be
+// recorded must not take effect, which is what commitLocked's error is for;
+// a fact is true whether or not the log took it. So when the write fails the
+// events are folded into the state anyway, the one place state is not what
+// the log says, and the failure is logged loudly. Otherwise the state would
+// go on saying what the world no longer does (an agent in a turn that has
+// ended takes no other; a job that has exited keeps its agent "waiting" and
+// its channel's directory locked), until the daemon restarted. The log is
+// left short of those events, which is what recovery expects of a daemon
+// that stopped at that moment: it closes open turns, asks and jobs itself.
+//
+// A channel that is stopping records nothing and folds nothing: recovery
+// will find things as the log left them.
+func (c *Channel) commitFactLocked(ctx context.Context, evs ...event.Event) error {
+	err := c.commitLocked(ctx, evs...)
+	if err == nil || errors.Is(err, errStopped) {
+		return err
+	}
+	var fx effects
+	now := time.Now().UTC()
+	for _, e := range evs {
+		e.Time = now
+		c.st.apply(e, &fx)
+	}
+	c.dispatchLocked(fx)
+	types := make([]string, len(evs))
+	for i, e := range evs {
+		types[i] = string(e.Type)
+	}
+	log.Printf("channel %s: %s happened but could not be logged: %v", c.ID, strings.Join(types, ", "), err)
+	return err
 }
 
 // commit is commitLocked for a caller that does not hold the lock.
 func (c *Channel) commit(ctx context.Context, evs ...event.Event) error {
 	c.mu.Lock()
-	wake, err := c.commitLocked(ctx, evs...)
-	c.mu.Unlock()
-	signal(wake)
-	return err
-}
-
-func signal(agents []*Agent) {
-	for _, a := range agents {
-		a.signal()
-	}
+	defer c.mu.Unlock()
+	return c.commitLocked(ctx, evs...)
 }
 
 // Start logs the channel's creation under name and spawns its main agent.
@@ -162,7 +228,7 @@ func (c *Channel) Start(ctx context.Context, name string) error {
 		c.mu.Unlock()
 		return fmt.Errorf("root preset %q not found", role)
 	}
-	_, err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.st.dir, Model: modelID, Role: role, Mode: c.cfg.Mode}))
+	err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.st.dir, Model: modelID, Role: role, Mode: c.cfg.Mode}))
 	c.mu.Unlock()
 	if err != nil {
 		return err
@@ -183,7 +249,7 @@ func (c *Channel) Stop() {
 	c.mu.Unlock()
 	c.cancel()
 	for _, a := range agents {
-		a.stopMCP("", false)
+		a.release()
 	}
 	// Model calls, tools and prompts all end with their context; a call that
 	// ignores it must not hold the daemon's shutdown hostage.
@@ -263,7 +329,7 @@ func (c *Channel) SetMode(ctx context.Context, mode string) error {
 	if c.st.mode == mode {
 		return nil
 	}
-	_, err := c.commitLocked(ctx, c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Mode: event.Str(mode)}))
+	err := c.commitLocked(ctx, c.event("", event.ChannelUpdated, event.ChannelUpdatedPayload{Mode: event.Str(mode)}))
 	return err
 }
 
@@ -438,7 +504,7 @@ func (c *Channel) busyLocked() int {
 // nothing to choose from (a role that lists no models, and none in
 // stavlos.json), the parent's (or the channel's) model is inherited when the
 // role allows it, else the role's default.
-func (c *Channel) resolveModelLocked(spawnArg string, preset config.Preset, parent *agentState) (string, error) {
+func (c *Channel) resolveModelLocked(mk market, spawnArg string, preset config.Preset, parent *agentState) (string, error) {
 	if spawnArg == "" && parent == nil && c.modelChosen {
 		spawnArg = c.st.model
 	}
@@ -448,7 +514,7 @@ func (c *Channel) resolveModelLocked(spawnArg string, preset config.Preset, pare
 		}
 		return spawnArg, nil
 	}
-	if pick, _, ok := c.chooseLocked(preset, ""); ok {
+	if pick, _, ok := mk.choose(preset, c.cfg, ""); ok {
 		return pick.model, nil
 	}
 	inherited := c.st.model
@@ -496,61 +562,60 @@ func fitVariant(p config.Preset, offered []string, id, want string) string {
 // task becomes the child's first input, a request from its parent, logged
 // with the spawn in one transaction.
 func (c *Channel) spawn(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, error) {
+	mk := c.readMarket(c.Config(), modelArg, c.Model()) // before the lock
 	c.mu.Lock()
-	a, wake, err := c.spawnLocked(ctx, parentID, role, label, task, modelArg)
-	c.mu.Unlock()
-	signal(wake)
-	return a, err
+	defer c.mu.Unlock()
+	return c.spawnLocked(ctx, mk, parentID, role, label, task, modelArg)
 }
 
-func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, []*Agent, error) {
+func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, label, task, modelArg string) (*Agent, error) {
 	if c.reconfiguring {
-		return nil, nil, errors.New("a directory change is in progress")
+		return nil, errors.New("a directory change is in progress")
 	}
 	preset, ok := c.cfg.Presets[role]
 	if !ok {
-		return nil, nil, fmt.Errorf("unknown archetype %q", role)
+		return nil, fmt.Errorf("unknown archetype %q", role)
 	}
 	var parent *agentState
 	depth := 0
 	if parentID != "" {
 		if reservedNames[normalizeName(label)] {
-			return nil, nil, fmt.Errorf("label %q is reserved: a child's name appears on its messages, so it may not read as the human or the system", label)
+			return nil, fmt.Errorf("label %q is reserved: a child's name appears on its messages, so it may not read as the human or the system", label)
 		}
 		if parent = c.st.agents[parentID]; parent == nil || parent.killed {
-			return nil, nil, fmt.Errorf("parent %q not found", parentID)
+			return nil, fmt.Errorf("parent %q not found", parentID)
 		}
 		depth = parent.depth + 1
 		if pp := c.roleLocked(parent).preset; !contains(pp.Spawn, role) {
-			return nil, nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", pp.Name, role, pp.Spawn)
+			return nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", pp.Name, role, pp.Spawn)
 		}
 		if !preset.CanBeSubagent() {
-			return nil, nil, fmt.Errorf("role %q is primary-only: it cannot be spawned", role)
+			return nil, fmt.Errorf("role %q is primary-only: it cannot be spawned", role)
 		}
 	} else if !preset.CanBePrimary() {
-		return nil, nil, fmt.Errorf("role %q is subagent-only: it cannot be the main agent", role)
+		return nil, fmt.Errorf("role %q is subagent-only: it cannot be the main agent", role)
 	}
-	modelID, err := c.resolveModelLocked(modelArg, preset, parent)
+	modelID, err := c.resolveModelLocked(mk, modelArg, preset, parent)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	variant := ""
 	if parent != nil {
 		if modelID == "" {
-			return nil, nil, errors.New(ErrNoModel)
+			return nil, errors.New(ErrNoModel)
 		}
-		if err := c.host.CheckModel(modelID); err != nil {
-			return nil, nil, err
+		if !mk.usable[modelID] {
+			return nil, fmt.Errorf("model %s cannot be used now: run /providers to sign in to its provider, or /models to pick another", modelID)
 		}
 		if modelID == parent.model {
 			variant = parent.variant // same model: same flavour
 		}
 	}
-	variant = fitVariant(preset, c.host.Variants(modelID), modelID, variant)
+	variant = fitVariant(preset, mk.variants[modelID], modelID, variant)
 	id := NewID("a")
 	name, err := c.st.uniqueName(label, role, id)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	parentCtx := c.ctx
 	if p := c.agents[parentID]; p != nil {
@@ -567,14 +632,15 @@ func (c *Channel) spawnLocked(ctx context.Context, parentID, role, label, task, 
 		}
 		evs = append(evs, c.event(id, event.InputQueued, in))
 	}
-	wake, err := c.commitLocked(ctx, evs...)
-	if err != nil {
+	// (the commit wakes the new agent for its task; its goroutine finds the
+	// signal waiting when it starts)
+	if err := c.commitLocked(ctx, evs...); err != nil {
 		delete(c.agents, id)
 		a.kill()
-		return nil, nil, err
+		return nil, err
 	}
 	a.start()
-	return a, wake, nil
+	return a, nil
 }
 
 // canSpawnLocked reports whether agent p may create a child now.
@@ -593,6 +659,7 @@ func (c *Channel) canSpawnLocked(p *agentState) (bool, string) {
 
 // SpawnFromClient spawns on behalf of a human (PRD §9).
 func (c *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, task, modelArg string) (string, error) {
+	mk := c.readMarket(c.Config(), modelArg, c.Model()) // before the lock
 	c.mu.Lock()
 	p := c.st.agents[parentID]
 	if p == nil {
@@ -603,9 +670,8 @@ func (c *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, ta
 		c.mu.Unlock()
 		return "", errors.New(why)
 	}
-	a, wake, err := c.spawnLocked(ctx, parentID, role, label, task, modelArg)
+	a, err := c.spawnLocked(ctx, mk, parentID, role, label, task, modelArg)
 	c.mu.Unlock()
-	signal(wake)
 	if err != nil {
 		return "", err
 	}
@@ -677,9 +743,8 @@ func (c *Channel) Post(ctx context.Context, text, from string) ([]string, error)
 		evs = append(evs, c.event(a.id, event.InputQueued, event.Input{ID: NewID("i"), RequestID: post, Kind: event.InputSteer, Text: message, Post: post, To: names}))
 	}
 	evs[0] = c.event("", event.ChatPosted, event.ChatPayload{ID: post, RequestID: post, Kind: tools.KindRequest, From: from, Text: message, To: names})
-	wake, err := c.commitLocked(ctx, evs...)
+	err := c.commitLocked(ctx, evs...)
 	c.mu.Unlock()
-	signal(wake)
 	return names, err
 }
 
@@ -713,14 +778,13 @@ func (c *Channel) Kill(agentID string) error {
 		}
 	}
 	walk(agentID)
-	_, err := c.commitLocked(context.Background(), evs...)
+	err := c.commitLocked(context.Background(), evs...)
 	for _, a := range victims {
 		a.jobs = map[string]*jobRun{} // their processes end with the agent's context
 	}
 	c.mu.Unlock()
 	for _, a := range victims {
-		a.kill()
-		a.stopMCP("", false)
+		a.release()
 	}
 	return err
 }

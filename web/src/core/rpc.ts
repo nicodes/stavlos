@@ -1,3 +1,5 @@
+import { currentKey } from "./session";
+
 /** JSON-RPC 2.0 over the daemon's WebSocket: one message per protocol line. */
 
 export const PROTOCOL_VERSION = 1;
@@ -41,7 +43,8 @@ export class Rpc {
 
   private dial(): void {
     const scheme = location.protocol === "https:" ? "wss://" : "ws://";
-    const ws = new WebSocket(scheme + location.host + "/ws");
+    // a socket cannot set headers: the page key rides as an offered subprotocol
+    const ws = new WebSocket(scheme + location.host + "/ws", ["stavlos", "key." + currentKey()]);
     this.ws = ws;
     ws.onopen = async () => {
       try {

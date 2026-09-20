@@ -11,6 +11,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/proc"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -100,8 +101,7 @@ func (c *Channel) configDirsLocked() []string {
 func inDirs(dirs []string, p string) bool {
 	p = tools.ResolvePath("", p)
 	for _, d := range dirs {
-		dir := tools.ResolvePath("", d)
-		if p == dir || strings.HasPrefix(p, dir+string(filepath.Separator)) {
+		if pathx.Within(tools.ResolvePath("", d), p) {
 			return true
 		}
 	}
@@ -118,7 +118,7 @@ func (c *Channel) addDir(ctx context.Context, agent, dir, source string) error {
 	if inDirs(c.dirPathsLocked(), dir) {
 		return nil
 	}
-	_, err := c.commitLocked(ctx, c.event(agent, event.ChannelDirAdded, event.DirPayload{Dir: dir, Source: source}))
+	err := c.commitLocked(ctx, c.event(agent, event.ChannelDirAdded, event.DirPayload{Dir: dir, Source: source}))
 	return err
 }
 
@@ -146,7 +146,7 @@ func (c *Channel) RemoveDir(ctx context.Context, dir string) error {
 	if !slices.ContainsFunc(c.st.dirs, func(e dirEntry) bool { return e.path == dir }) {
 		return fmt.Errorf("%s is not one of the channel's directories", dir)
 	}
-	_, err := c.commitLocked(ctx, c.event("", event.ChannelDirRemoved, event.DirPayload{Dir: dir}))
+	err := c.commitLocked(ctx, c.event("", event.ChannelDirRemoved, event.DirPayload{Dir: dir}))
 	return err
 }
 
@@ -257,8 +257,7 @@ func bashPathCandidates(cmd, base string) []string {
 		case q != "" && !strings.HasPrefix(q, "-"):
 			// A relative argument that resolves outside the working
 			// directory went through a symlink: judge where it leads.
-			root := tools.ResolvePath(base, "")
-			if real := tools.ResolvePath(base, q); real != root && !strings.HasPrefix(real, root+string(filepath.Separator)) {
+			if real := tools.ResolvePath(base, q); !pathx.Within(tools.ResolvePath(base, ""), real) {
 				add(real)
 			}
 		}

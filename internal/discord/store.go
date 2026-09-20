@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/statefile"
 )
 
 type promptMessage struct {
@@ -83,20 +84,5 @@ func (s *promptStore) set(id string, p promptMessage) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.CreateTemp(filepath.Dir(s.path), ".discord-prompts-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	_, err = f.Write(b)
-	if err == nil {
-		err = f.Sync()
-	}
-	if ce := f.Close(); err == nil {
-		err = ce
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), s.path)
+	return statefile.WriteAtomic(s.path, b, 0o600, false)
 }

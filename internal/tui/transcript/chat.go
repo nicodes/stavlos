@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/present"
 	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tui/format"
 )
@@ -29,6 +30,8 @@ func ChatEvent(typ event.Type) bool {
 	switch typ {
 	case event.AgentSpawned, event.AgentUpdated, event.ChatPosted, event.ChatMessage, event.AgentKilled, event.ChannelUpdated, event.AskRequested, event.AskResolved:
 		return true
+	default:
+		// not a chat event
 	}
 	return false
 }
@@ -97,6 +100,8 @@ func (t *Transcript) applyChat(ev event.Event) {
 		if ev.Decode(&p) == nil {
 			t.reply(ev.Agent, p)
 		}
+	default:
+		// not drawn in the channel chat
 	}
 }
 
@@ -203,16 +208,7 @@ func ItemFolds(lines []Line, item int) bool {
 
 // addressed puts the @names a post went to in front of its message, the way
 // it was typed: the message itself never carries them.
-func addressed(to []string, text string) string {
-	if len(to) == 0 {
-		return text
-	}
-	address := "@" + strings.Join(to, " @")
-	if text == "" {
-		return address
-	}
-	return address + " " + text
-}
+func addressed(to []string, text string) string { return present.Addressed(to, text) }
 
 // agentName is how the chat names agent id: its name once spawned, a short
 // id before that.

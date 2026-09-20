@@ -218,6 +218,9 @@ func DecodeNotification(r protocol.Response) (any, error) {
 	case protocol.NPrompt:
 		var n protocol.PromptNotification
 		return n, json.Unmarshal(r.Params, &n)
+	case protocol.NChanged:
+		var n protocol.ChangedNotification
+		return n, json.Unmarshal(r.Params, &n)
 	}
 	return nil, fmt.Errorf("unknown notification %q", r.Method)
 }

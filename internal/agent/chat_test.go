@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
 )
@@ -152,7 +151,7 @@ func TestNoReplyNote(t *testing.T) {
 	waitUntil(t, h, func() bool {
 		return len(inputsOf(h, event.InputInfo, child.ID)) == 1 && stateOf(root) == StateIdle && stateOf(child) == StateIdle
 	})
-	time.Sleep(50 * time.Millisecond) // the note must not start a turn
+	settle(t, s, h) // the note must not start a turn
 	if in := child.Info(); in.Turn != 1 || len(in.Due) != 0 || in.Queued != 1 || len(root.Info().Awaiting) != 0 {
 		t.Fatalf("child %+v root awaiting %v", in, root.Info().Awaiting)
 	}

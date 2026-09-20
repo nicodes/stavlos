@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/statefile"
 )
 
 const editorMaxFile = 4 << 20
@@ -315,7 +316,7 @@ func validateEditorTree(root string, system bool) error {
 		return err
 	}
 	for _, name := range []string{"stavlos.json", "stavlos.local.json"} {
-		f, err := readFile(filepath.Join(root, name))
+		f, err := readFile(disk{}, filepath.Join(root, name))
 		if err != nil {
 			return err
 		}
@@ -324,39 +325,18 @@ func validateEditorTree(root string, system bool) error {
 		}
 	}
 	e.allowSearch()
-	if err := e.loadPresets(filepath.Join(root, "agents"), "project"); err != nil {
+	if err := e.loadPresets(disk{}, filepath.Join(root, "agents"), "project"); err != nil {
 		return err
 	}
-	if err := e.loadSkills(filepath.Join(root, "skills")); err != nil {
+	if err := e.loadSkills(disk{}, filepath.Join(root, "skills")); err != nil {
 		return err
 	}
-	return e.loadCommands(filepath.Join(root, "commands"))
+	return e.loadCommands(disk{}, filepath.Join(root, "commands"))
 }
 
 func atomicConfigWrite(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	mode := fs.FileMode(0o600)
-	if st, err := os.Stat(path); err == nil {
-		mode = st.Mode().Perm()
-	}
-	f, err := os.CreateTemp(filepath.Dir(path), ".stavlos-editor-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	if err = f.Chmod(mode); err == nil {
-		_, err = f.Write(data)
-	}
-	if err == nil {
-		err = f.Sync()
-	}
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), path)
+	return statefile.WriteAtomic(path, data, 0o600, true)
 }

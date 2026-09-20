@@ -116,7 +116,7 @@ func TestDiscordEnabledPreservesConfigSymlink(t *testing.T) {
 		}
 	}()
 	wg.Wait()
-	f, err := readFile(path)
+	f, err := readFile(disk{}, path)
 	if err != nil {
 		t.Fatal(err)
 	}

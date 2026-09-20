@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -43,6 +44,7 @@ var commands = []Command{
 	{Name: "/cost", Args: "[system]", Desc: "chart cost over time: the selected chat's (the channel's, or the agent's), or the system's", Direct: true},
 	{Name: "/recap", Args: "[minutes|off]", Desc: "ask the main agent for a status report after this many minutes without hearing from the channel (no arg reports the setting)", Direct: true},
 	{Name: "/plan", Args: "[provider]", Desc: "chart a subscription's plan usage over time, as its own model calls reported it", Direct: true},
+	{Name: "/history", Desc: "load all of this channel's history (a chat opens with its most recent part)", Direct: true},
 	{Name: "/compact", Desc: "summarise the selected agent's completed turns now to free context (automatic at 80% of the window)", Direct: true},
 	{Name: "/help", Desc: "show or hide the key bar at the bottom (off by default)", Aliases: []string{"/h", "/?"}, Direct: true},
 	{Name: "/settings", Args: "[project|system]", Desc: "edit project or system config files", Aliases: []string{"/config"}, Direct: true},
@@ -69,7 +71,19 @@ func matchCommands(input string, registry []Command) []Command {
 	}
 	q := strings.ToLower(strings.TrimPrefix(input, "/"))
 	var out []Command
+	// What was typed in full comes first, whatever the palette's order: "/mode"
+	// is also how "/model" starts and "/h" how "/history" does, and enter runs
+	// the first row.
 	for _, c := range registry {
+		if q != "" && (c.Name == "/"+q || slices.Contains(c.Aliases, "/"+q)) {
+			out = append(out, c)
+		}
+	}
+	exact := len(out)
+	for _, c := range registry {
+		if exact > 0 && c.Name == out[0].Name {
+			continue
+		}
 		if strings.HasPrefix(strings.TrimPrefix(c.Name, "/"), q) {
 			out = append(out, c)
 			continue

@@ -49,7 +49,10 @@ func (m *Model) onTick(msg tea.Msg) tea.Cmd {
 		if m.focus == focusUsage {
 			cmds = append(cmds, m.usageFetch()) // the open chart keeps up
 		}
-		cmds = append(cmds, planUsageCmd(m.ctx, m.c), cacheUsageCmd(m.ctx, m.c)) // the daemon's own records: no request to a provider
+		cmds = append(cmds, cacheUsageCmd(m.ctx, m.c)) // the daemon's own records: no request to a provider
+		if m.catalogTicks++; m.catalogTicks%10 == 0 {
+			cmds = append(cmds, planUsageCmd(m.ctx, m.c)) // the daemon says when plan usage changes; this is the net under that
+		}
 		for _, s := range m.navChannels {
 			if m.otherTreeShown(s.ID) {
 				cmds = append(cmds, treeCmd(m.ctx, m.c, s.ID))
@@ -117,13 +120,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case reconcileMsg:
 		return m.onReconcile(msg)
 	case subscribedMsg:
-		if !m.accepts(msg.scope) {
-			return nil, false
-		}
-		if msg.err != nil {
-			m.fatal = fmt.Errorf("subscribe: %w", msg.err)
-			return nil, true
-		}
+		return m.onSubscribed(msg)
 	case eventMsg:
 		return []tea.Cmd{m.applyEvent(msg.ev)}, false
 	case streamMsg:
@@ -193,7 +190,7 @@ func (m *Model) onReconcile(msg reconcileMsg) ([]tea.Cmd, bool) {
 		m.upsertPrompt(p)
 	}
 	m.replayTo = msg.res.Seq
-	cmds := []tea.Cmd{subscribeCmd(m.ctx, m.c, m.requestScope(), m.seq+1), channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), rolesCmd(m.ctx, m.c, m.requestScope(), true), customCommandsCmd(m.ctx, m.c, m.requestScope())}
+	cmds := []tea.Cmd{subscribeCmd(m.ctx, m.c, m.requestScope(), m.seq+1, m.tail()), channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), rolesCmd(m.ctx, m.c, m.requestScope(), true), customCommandsCmd(m.ctx, m.c, m.requestScope())}
 	if m.rememberViews && m.lastRemembered != m.channelID {
 		m.lastRemembered = m.channelID
 		cmds = append(cmds, rememberChannelCmd(m.channelID))
@@ -264,6 +261,14 @@ func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	if ev.Channel != "" && ev.Channel != m.channelID {
 		return nil
 	}
+	if m.awaitFirst {
+		// Live events of the subscription /history replaced are still on the
+		// wire ahead of the new replay, which would deliver them again.
+		if ev.Seq != 1 {
+			return nil
+		}
+		m.awaitFirst = false
+	}
 	if ev.Seq > m.seq {
 		m.seq = ev.Seq
 	}
@@ -324,6 +329,8 @@ func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd)
 			(strings.Contains(p.Error, "not connected") || strings.Contains(p.Error, "/provider")) {
 			cmds = append(cmds, m.setStatus("provider not connected — run /providers", true))
 		}
+	default:
+		// every other event has no side effect outside its transcript
 	}
 	return target, cmds
 }
@@ -453,6 +460,8 @@ func (m *Model) followChild(ev event.Event) {
 		m.transcript(parent).ChildState(ev.Agent, protocol.AgentRunning)
 	case event.TurnEnded, event.TurnAborted:
 		m.transcript(parent).ChildState(ev.Agent, protocol.AgentIdle)
+	default:
+		// no side effect
 	}
 }
 
@@ -467,6 +476,8 @@ func changesTree(ev event.Event) bool {
 		event.InputQueued, event.InputTaken, event.ChatMessage, // what an agent waits on or owes changes
 		event.AskRequested, event.AskResolved: // blocked or running
 		return true
+	default:
+		// no side effect
 	}
 	return false
 }

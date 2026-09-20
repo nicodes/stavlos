@@ -26,7 +26,7 @@ type Discord struct {
 func LoadDiscord() (*Discord, error) {
 	globalWriteMu.Lock()
 	defer globalWriteMu.Unlock()
-	f, err := readFile(filepath.Join(paths.ConfigDir(), "stavlos.json"))
+	f, err := readFile(disk{}, filepath.Join(paths.ConfigDir(), "stavlos.json"))
 	return f.Discord, err
 }
 

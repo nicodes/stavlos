@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -84,7 +83,7 @@ func (m *Model) onDiscord(msg discordMsg) tea.Cmd {
 		s.State = "disconnected"
 	}
 	m.discordStatus, m.discordKnown = s, true
-	refresh := tick(2*time.Second, discordTickMsg{epoch: m.discordEpoch})
+	refresh := tick(servicePoll, discordTickMsg{epoch: m.discordEpoch}) // the daemon says when it changes
 	if m.ov == nil || m.ov.kind != ovDiscord {
 		return refresh
 	}

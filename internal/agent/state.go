@@ -45,6 +45,10 @@ type agentState struct {
 	children                               []string
 	killed                                 bool
 
+	// instructed is the instructions files a tool result has carried to the
+	// agent since its last compaction (or the channel last moved).
+	instructed map[string]bool
+
 	turn      int
 	inTurn    bool
 	lastError string // the error that ended the latest turn
@@ -125,6 +129,7 @@ func (cs *channelState) apply(e event.Event, fx *effects) {
 	default:
 		if a != nil {
 			a.applyTurn(e)
+			a.applyInstructed(e)
 		}
 	}
 	if a != nil {
@@ -159,6 +164,9 @@ func (cs *channelState) applyChannel(e event.Event) {
 		}
 		if p.Dir != nil {
 			cs.dir, cs.mode, cs.permits = *p.Dir, protocol.ModeAsk, permits{}
+			for _, ag := range cs.agents {
+				ag.instructed = nil // other directories, other instructions
+			}
 		}
 		if p.Recap != nil {
 			cs.recap = *p.Recap
@@ -180,6 +188,8 @@ func (cs *channelState) applyChannel(e event.Event) {
 		if e.Decode(&p) == nil {
 			cs.permits.apply(p)
 		}
+	default:
+		// not a channel event
 	}
 }
 
@@ -339,6 +349,30 @@ func (a *agentState) applyTurn(e event.Event) {
 		a.compacting = true
 	case event.CompactionDone, event.CompactionFailed:
 		a.compacting = false
+	default:
+		// every other event leaves the agent's turn state as it is
+	}
+}
+
+// applyInstructed keeps which instructions files the agent has been given:
+// a tool result names the ones it carried, and a compaction's summary
+// replaces the results that carried them, so they are given again.
+func (a *agentState) applyInstructed(e event.Event) {
+	switch e.Type {
+	case event.ToolFinished:
+		var p event.ToolFinishedPayload
+		if e.Decode(&p) != nil || len(p.Instructions) == 0 {
+			return
+		}
+		if a.instructed == nil {
+			a.instructed = map[string]bool{}
+		}
+		for _, f := range p.Instructions {
+			a.instructed[f] = true
+		}
+	case event.CompactionDone:
+		a.instructed = nil
+	default:
 	}
 }
 
@@ -371,13 +405,11 @@ func (a *agentState) setTodos(items []event.TodoItem) {
 // --- derived views ---
 
 // wakes reports whether an input of kind starts a turn (info never does).
-func wakes(kind event.InputKind) bool { return kind != event.InputInfo }
+func wakes(kind event.InputKind) bool { return kind.Rule().Wakes }
 
 // midTurn reports whether an input of kind reaches a running turn at its
 // next model call; the others wait for the turn to end.
-func midTurn(kind event.InputKind) bool {
-	return kind == event.InputSteer || kind == event.InputRequest || kind == event.InputInfo
-}
+func midTurn(kind event.InputKind) bool { return kind.Rule().MidTurn }
 
 // startsTurn reports whether the inbox holds anything that starts a turn.
 func (a *agentState) startsTurn() bool {

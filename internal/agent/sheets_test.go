@@ -139,3 +139,25 @@ func TestTheFileToolsKeepToASheetsLimits(t *testing.T) {
 		t.Fatalf("%d sheets", got)
 	}
 }
+
+// A sheet's file replaced by a link out of the sheets directory is refused,
+// not read: what is read there is served to a browser.
+func TestASheetThatIsALinkElsewhereIsNotRead(t *testing.T) {
+	dir := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "id_rsa")
+	if err := os.WriteFile(secret, []byte("PRIVATE KEY"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(dir, "s1.html")); err != nil {
+		t.Skip(err)
+	}
+	if b, err := readSheet(filepath.Join(dir, "s1.html")); err == nil {
+		t.Fatalf("a link out of the sheets directory was read: %q", b)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "s2.html"), []byte("<p>hi</p>"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if b, err := readSheet(filepath.Join(dir, "s2.html")); err != nil || string(b) != "<p>hi</p>" {
+		t.Fatalf("a sheet: %q %v", b, err)
+	}
+}

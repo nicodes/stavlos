@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
@@ -40,7 +39,7 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 	root := s.Root()
 	postTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return root.Info().Turn == 1+maxNudges && stateOf(root) == StateIdle })
-	time.Sleep(50 * time.Millisecond) // nothing follows the cap
+	settle(t, s, h) // nothing follows by itself
 	if in := root.Info(); in.Turn != 1+maxNudges || !reflect.DeepEqual(in.Due, []string{"user"}) {
 		t.Fatalf("turn %d due %v", in.Turn, in.Due)
 	}
@@ -58,7 +57,7 @@ func TestNudgesUntilReplyOrCap(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitUntil(t, h, func() bool { return root.Info().Turn == 2+2*maxNudges && stateOf(root) == StateIdle })
-	time.Sleep(50 * time.Millisecond)
+	settle(t, s, h) // nothing follows by itself
 	if q := reminders(h, root.ID); len(q) != 2*maxNudges || root.Info().Turn != 2+2*maxNudges {
 		t.Fatalf("a new message resets the count: reminders %d turn %d", len(q), root.Info().Turn)
 	}
@@ -75,7 +74,7 @@ func TestNudgeGetsAReply(t *testing.T) {
 	root := s.Root()
 	postTurn(t, s, h, "check it")
 	waitUntil(t, h, func() bool { return len(h.ofType(event.ChatMessage, root.ID)) == 1 && stateOf(root) == StateIdle })
-	time.Sleep(50 * time.Millisecond)
+	settle(t, s, h) // nothing follows by itself
 	if in := root.Info(); in.Turn != 2 || len(in.Due) != 0 || len(reminders(h, root.ID)) != 1 {
 		t.Fatalf("turn %d due %v log:\n%s", in.Turn, in.Due, h.dump())
 	}
@@ -136,7 +135,7 @@ func TestNoReminderWhileJobRuns(t *testing.T) {
 	root := s.Root()
 	postTurn(t, s, h, "delegate")
 	waitUntil(t, h, func() bool { return len(root.Info().Jobs) > 0 && stateOf(root) != protocol.AgentRunning })
-	time.Sleep(50 * time.Millisecond)
+	settle(t, s, h) // nothing follows by itself
 	if n := len(reminders(h, root.ID)); n != 0 {
 		t.Fatalf("no reminder while a job runs: reminders %d jobs %d", n, len(root.Info().Jobs))
 	}
@@ -223,7 +222,7 @@ func TestDirectMessageNeedsAnExplicitResponse(t *testing.T) {
 	s, h := newTestChannel(t, testConfig{reminders: true}, fm)
 	root := s.Root()
 	runTurn(t, s, h, "check it")
-	time.Sleep(50 * time.Millisecond)
+	settle(t, s, h) // nothing follows by itself
 	waitUntil(t, h, func() bool { return root.Info().Turn == 1+maxNudges && stateOf(root) == StateIdle })
 	if in := root.Info(); len(in.PendingReplies) != 1 || len(reminders(h, root.ID)) != maxNudges || in.Turn != 1+maxNudges {
 		t.Fatalf("due %v, turn %d, log:\n%s", in.Due, in.Turn, h.dump())
@@ -254,7 +253,7 @@ func TestEmptyReminderSeatbeltThenTools(t *testing.T) {
 	root := s.Root()
 	postTurn(t, s, h, "delegate")
 	waitUntil(t, h, func() bool { return len(reminders(h, root.ID)) == maxNudges && root.Info().Turn >= 1+maxNudges })
-	time.Sleep(50 * time.Millisecond)
+	settle(t, s, h, root.ID) // nothing follows by itself (the child is held mid-turn)
 	if n := len(reminders(h, root.ID)); n != maxNudges {
 		t.Fatalf("seatbelt: reminders %d", n)
 	}

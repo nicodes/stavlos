@@ -108,7 +108,7 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 			return m.newChannel()
 		}
 		return m.channelSettings(m.sbCursor)
-	case msg.String() == "n": // the next agent that needs you, selected at once
+	case key.Matches(msg, keys.NextWaiting): // the next agent that needs you, selected at once
 		from := -1
 		if r, ok := m.sidebarAt(m.sbCursor); ok && r.kind == sbAgent {
 			from = r.k
@@ -506,23 +506,25 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 		return m.openConfigEditor(true)
 	}
 	cmd := m.setFocus(focusSidebar)
-	if p, ok := m.planAt(y); ok { // a plan's row: its usage over time
-		return tea.Batch(cmd, m.openPlanUsage(p.Provider, p.Name))
-	}
-	if y == m.sidebarTrustRow() { // the project row: ask for trust, or open the config
-		return tea.Batch(cmd, m.trustClick())
-	}
-	if y == sidebarWebRow {
-		return tea.Batch(cmd, m.webClick())
-	}
-	if y == m.sidebarDiscordRow() {
-		return tea.Batch(cmd, m.openDiscord("status"))
-	}
-	if _, system, tokens, cost, ok := m.usageRowFigures(y); ok { // the usage rows: their figures chart tokens or cost over time
-		if kind, on := usageFigureAt(tokens, cost, sidebarWidth-1, x); on {
-			return tea.Batch(cmd, m.openUsage(kind, system))
+	if row, ok := m.navRowAt(y); ok { // a header row: what it is says what a click does
+		switch row.id {
+		case navPlan: // its plan's usage over time
+			p := m.plans[row.plan]
+			return tea.Batch(cmd, m.openPlanUsage(p.Provider, p.Name))
+		case navTrust: // ask for trust, or open the config
+			return tea.Batch(cmd, m.trustClick())
+		case navWeb:
+			return tea.Batch(cmd, m.webClick())
+		case navDiscord:
+			return tea.Batch(cmd, m.openDiscord("status"))
+		case navSystem, navSelected: // their figures chart tokens or cost over time
+			_, system, tokens, cost, _ := m.usageRowFigures(row.id)
+			if kind, on := usageFigureAt(tokens, cost, sidebarWidth-1, x); on {
+				return tea.Batch(cmd, m.openUsage(kind, system))
+			}
+			return cmd
+		default:
 		}
-		return cmd
 	}
 	_, items := m.sidebarLines(m.vp.Height)
 	if y < 0 || y >= len(items) || items[y] < 0 {

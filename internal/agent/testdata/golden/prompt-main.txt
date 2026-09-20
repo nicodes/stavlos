@@ -38,7 +38,7 @@ shell read grep glob apply_patch skill todo web_fetch web_search sheet shell_kil
 
 ## note on the request
 [harness state for this request]
-Agents busy in this channel: 1 of at most 6 (depth 0 of 3).
+Agents busy in this channel: <N> of at most 6 (depth 0 of 3).
 Your todo list: (empty)
 Pending requests:
 - <ID> from @user: "delegate something"

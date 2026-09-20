@@ -6,6 +6,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nicodes/stavlos/internal/present"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/toolname"
 	"github.com/nicodes/stavlos/internal/tui/format"
@@ -227,7 +228,7 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 		}
 	case p.Dir != "":
 		return []permOption{
-			{"allow", "Allow once", ""},
+			{"allow", present.AllowOnce, ""},
 			{"add", "Allow and add " + format.ShortHome(p.Dir), "every agent in the channel can use it"},
 			{"add_other", "Allow and add another directory…", "type the path"},
 			{"deny", "Deny", "with an optional reason"},
@@ -241,17 +242,17 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 		what = "this exact URL"
 	}
 	opts := []permOption{
-		{"allow", "Allow once", ""},
-		{"always", "Allow for this channel", what},
+		{"allow", present.AllowOnce, ""},
+		{"always", present.AllowChannel, what},
 	}
 	if pre := p.Prefix; pre != "" {
 		desc := "every command starting with it"
 		if p.Tool == toolname.WebFetch {
 			desc = "every page on this host"
 		}
-		opts = append(opts, permOption{"prefix", "Allow " + pre + " for this channel", desc})
+		opts = append(opts, permOption{"prefix", present.AllowPrefix(pre), desc})
 	}
-	return append(opts, permOption{"deny", "Deny", "with an optional reason"})
+	return append(opts, permOption{"deny", present.Deny, "with an optional reason"})
 }
 
 // permSelection is the highlighted row for p: the stored one when it

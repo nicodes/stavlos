@@ -88,6 +88,14 @@ func (b *Builder) Apply(e event.Event) {
 		if e.Decode(&p) == nil {
 			b.compacted(e.Seq, p)
 		}
+		// What never reaches a model's history, by name: a new event type is a
+	// decision here (the exhaustive lint fails until it is made), because a
+	// type this fold misses is something the model is never told.
+	case event.ChannelCreated, event.ChannelUpdated, event.ChannelArchived, event.ChannelDirAdded, event.ChannelDirRemoved,
+		event.ChatPosted, event.ChatMessage, event.AgentSpawned, event.AgentUpdated, event.AgentKilled, event.AgentCancelled,
+		event.TurnStarted, event.ToolStarted, event.AskRequested, event.AskResolved, event.PermitGranted,
+		event.JobStarted, event.JobStopped, event.TodoChanged, event.SheetWritten, event.SheetDeleted,
+		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.CompactionStarted, event.CompactionFailed:
 	}
 }
 
@@ -278,6 +286,12 @@ func (b *Builder) result(seq int64, bl model.Block) {
 func InputText(in event.Input, job event.JobFinishedPayload) string {
 	switch in.Kind {
 	case event.InputRequest, event.InputResponse, event.InputInfo:
+		if in.FromName == "" && in.From == "" {
+			// nobody sent it: the harness is telling the agent something (its
+			// channel's directory changed). It used to read "[message from
+			// agent , no reply needed…", an agent with no name.
+			return "[from the harness] " + in.Text
+		}
 		needs := ""
 		switch in.Kind {
 		case event.InputInfo:

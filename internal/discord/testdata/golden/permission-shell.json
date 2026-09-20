@@ -1,0 +1,45 @@
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "Allow once",
+          "style": 2,
+          "disabled": false,
+          "custom_id": "sv|p1|allow|",
+          "type": 2
+        },
+        {
+          "label": "Allow for this channel",
+          "style": 2,
+          "disabled": false,
+          "custom_id": "sv|p1|always|",
+          "type": 2
+        },
+        {
+          "label": "Allow go test for this channel",
+          "style": 2,
+          "disabled": false,
+          "custom_id": "sv|p1|prefix|",
+          "type": 2
+        },
+        {
+          "label": "Deny",
+          "style": 2,
+          "disabled": false,
+          "custom_id": "sv|p1|deny-now|",
+          "type": 2
+        },
+        {
+          "label": "Deny with reason",
+          "style": 2,
+          "disabled": false,
+          "custom_id": "sv|p1|deny|",
+          "type": 2
+        }
+      ],
+      "type": 1
+    }
+  ],
+  "content": "❗ **Shell**\n```sh\ngo test ./...\n```"
+}

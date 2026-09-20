@@ -6,11 +6,14 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/nicodes/stavlos/internal/model"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
 )
@@ -281,14 +284,15 @@ func TestAnOlderLogIsConvertedAndKept(t *testing.T) {
 	l.Close()
 
 	ran := 0
-	migrations = []migration{
+	shipped := len(migrations) // two more steps after the ones that have shipped
+	migrations = append(slices.Clone(migrations),
 		func(tx *sql.Tx) error {
 			ran++
 			_, err := tx.Exec(`ALTER TABLE channels ADD COLUMN note TEXT NOT NULL DEFAULT ''`)
 			return err
 		},
 		func(tx *sql.Tx) error { ran++; _, err := tx.Exec(`UPDATE channels SET note = 'migrated'`); return err },
-	}
+	)
 	schemaVersion = baseVersion + len(migrations)
 	l = open(t, path, nil)
 	ctx := context.Background()
@@ -301,7 +305,7 @@ func TestAnOlderLogIsConvertedAndKept(t *testing.T) {
 		t.Fatalf("append after converting: %+v", e)
 	}
 	l.Close()
-	if _, err := os.Stat(fmt.Sprintf("%s.v%d.bak", path, baseVersion)); err != nil {
+	if _, err := os.Stat(fmt.Sprintf("%s.v%d.bak", path, baseVersion+shipped)); err != nil {
 		t.Fatalf("no copy of the log as it was: %v", err)
 	}
 	l = open(t, path, nil) // already current: nothing runs again
@@ -315,7 +319,7 @@ func TestAnOlderLogIsConvertedAndKept(t *testing.T) {
 	if _, err := Open(path, nil); err == nil || !strings.Contains(err.Error(), "unchanged") {
 		t.Fatalf("a failing step: %v", err)
 	}
-	migrations, schemaVersion = migrations[:2], baseVersion+2
+	migrations, schemaVersion = migrations[:shipped+2], baseVersion+shipped+2
 	l = open(t, path, nil)
 	defer l.Close()
 	if evs, err := l.Read(ctx, "c1", 1, 0); err != nil || len(evs) != 3 {
@@ -331,5 +335,48 @@ func TestAppendAfterClose(t *testing.T) {
 	}
 	if _, err := l.Append(context.Background(), prompt("c", "agent:x", "2")); !errors.Is(err, ErrClosed) {
 		t.Fatalf("append after close: %v", err)
+	}
+}
+
+// TestUsageIsBackfilledFromAnOlderLog: schema 6 adds the usage table. A log
+// written before it (the owner's held 23,000 model calls) gets its rows from
+// the calls already there, so the charts and the cache share read the same
+// after the migration as they did from the payloads before it.
+func TestUsageIsBackfilledFromAnOlderLog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "e.db")
+	l := open(t, path, nil)
+	appendOne(t, l, created("c1", "c1"))
+	for i, m := range []string{"xai/grok-4.6", "openai/gpt-5.6", "xai/grok-4.6"} {
+		appendOne(t, l, event.Event{Channel: "c1", Agent: "a1", Type: event.AssistantMessage, Time: time.Now().Add(time.Duration(i-10) * time.Minute),
+			Payload: event.MustPayload(event.AssistantMessagePayload{Model: m, CostUSD: 0.5, Usage: model.Usage{InputTokens: 100, OutputTokens: 10, CacheReadTokens: 900}})})
+	}
+	l.Close()
+	// make it a schema 5 log: no usage table
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DROP TABLE usage; PRAGMA user_version = 5;`); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	l = open(t, path, nil)
+	defer l.Close()
+	ctx := context.Background()
+	fresh, cached, err := l.CacheUsage(ctx, time.Now().Add(-time.Hour))
+	by, err2 := l.CacheUsageByProvider(ctx, time.Now().Add(-time.Hour))
+	if err != nil || err2 != nil || fresh != 300 || cached != 2700 || by["xai"] != [2]int64{200, 1800} || by["openai"] != [2]int64{100, 900} {
+		t.Fatalf("backfilled cache usage: %d %d %v (%v %v)", fresh, cached, by, err, err2)
+	}
+	s, err := l.Usage(ctx, UsageQuery{Channel: "c1", Agent: "a1", Buckets: 1})
+	if err != nil || s.Tokens[0] != 330 || s.Cost[0] != 1.5 {
+		t.Fatalf("backfilled series: %+v %v", s, err)
+	}
+	// and a call appended now lands in it too
+	appendOne(t, l, event.Event{Channel: "c1", Agent: "a1", Type: event.AssistantMessage, Time: time.Now(),
+		Payload: event.MustPayload(event.AssistantMessagePayload{Model: "zai/glm-5.3", Usage: model.Usage{InputTokens: 7, CacheReadTokens: 3}})})
+	if by, _ := l.CacheUsageByProvider(ctx, time.Now().Add(-time.Hour)); by["zai"] != [2]int64{7, 3} {
+		t.Fatalf("a new call: %v", by)
 	}
 }

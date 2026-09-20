@@ -220,11 +220,58 @@ func spanName(minutes int) string {
 	return fmt.Sprintf("%d minutes", minutes)
 }
 
-// candidatesLocked are the models the harness may choose from for a role, in
+// market is everything a choice of model needs from outside the channel: for
+// each model that could be chosen, whether it can be called now and which
+// variants it takes, and every provider's plan usage. It is read before the
+// channel's lock is taken, never under it: asking the host means the model
+// registry's lock and a look at the credential store, and the channel's lock
+// used to be held across that for every candidate, on every tick, for every
+// parked agent. With the market in hand every choice below is a pure
+// function of its arguments.
+type market struct {
+	usable   map[string]bool // model → it can be called now (its provider is signed in)
+	variants map[string][]string
+	usage    map[string]model.PlanUsage
+	now      time.Time
+}
+
+// readMarket asks the host about every model cfg could lead to (each role's
+// listed models, the configured pool and default) and any others named.
+// The caller must not hold c.mu.
+func (c *Channel) readMarket(cfg *config.Effective, others ...string) market {
+	return readMarket(c.host, cfg, others...)
+}
+
+// readMarket needs the models and nothing else of the host.
+func readMarket(host Models, cfg *config.Effective, others ...string) market {
+	mk := market{usable: map[string]bool{}, variants: map[string][]string{}, usage: host.PlanUsage(), now: time.Now()}
+	look := func(id string) {
+		if _, seen := mk.usable[id]; id == "" || seen || strings.ContainsAny(id, "*?[") {
+			return
+		}
+		mk.usable[id] = host.CheckModel(id) == nil
+		mk.variants[id] = host.Variants(id)
+	}
+	for _, p := range cfg.Presets {
+		for _, m := range p.Models {
+			look(m.ID)
+		}
+	}
+	for _, id := range cfg.Models {
+		look(id)
+	}
+	look(cfg.Model)
+	for _, id := range others {
+		look(id)
+	}
+	return mk
+}
+
+// candidates are the models the harness may choose from for a role, in
 // preferred order: the role's list, or, for a role that lists none (or only
 // patterns), the models stavlos.json lists that the role allows. Only models
-// that can be called now (their provider signed in) count.
-func (c *Channel) candidatesLocked(preset config.Preset) []string {
+// that can be called now count.
+func (mk market) candidates(preset config.Preset, cfg *config.Effective) []string {
 	var ids []string
 	for _, m := range preset.Models {
 		if !strings.ContainsAny(m.ID, "*?[") {
@@ -232,7 +279,7 @@ func (c *Channel) candidatesLocked(preset config.Preset) []string {
 		}
 	}
 	if len(ids) == 0 {
-		for _, id := range c.cfg.Models {
+		for _, id := range cfg.Models {
 			if preset.AllowsModel(id) {
 				ids = append(ids, id)
 			}
@@ -240,22 +287,48 @@ func (c *Channel) candidatesLocked(preset config.Preset) []string {
 	}
 	out := ids[:0:0]
 	for _, id := range ids {
-		if c.host.CheckModel(id) == nil {
+		if mk.usable[id] {
 			out = append(out, id)
 		}
 	}
 	return out
 }
 
-// chooseLocked is the harness's choice for a role, passing over the provider
-// avoid ("" for none). ok is false when there is nothing to choose from or
-// every candidate is at its limit.
-func (c *Channel) chooseLocked(preset config.Preset, avoid string) (choice, time.Time, bool) {
-	cands := c.candidatesLocked(preset)
+// choose is the harness's choice for a role, passing over the provider avoid
+// ("" for none). ok is false when there is nothing to choose from or every
+// candidate is at its limit.
+func (mk market) choose(preset config.Preset, cfg *config.Effective, avoid string) (choice, time.Time, bool) {
+	cands := mk.candidates(preset, cfg)
 	if len(cands) == 0 {
 		return choice{}, time.Time{}, false
 	}
-	return pickModel(cands, c.host.PlanUsage(), time.Now(), avoid)
+	return pickModel(cands, mk.usage, mk.now, avoid)
+}
+
+// available reports whether an agent on modelID under preset has a model to
+// run on now: one of its role's candidates, or, for a role with nothing to
+// choose from, its own.
+func (mk market) available(preset config.Preset, cfg *config.Effective, modelID string) bool {
+	if len(mk.candidates(preset, cfg)) > 0 {
+		_, _, ok := mk.choose(preset, cfg, "")
+		return ok
+	}
+	provider, _, err := model.Split(modelID)
+	return err == nil && !readPlan(mk.usage[provider], mk.now).limited
+}
+
+// retarget is the one way an agent's role or model changes: the update that
+// moves st to role ("" for unchanged) and modelID, with the variant fitted to
+// what the role allows and the model takes, and the reason when the harness
+// made the move. It was written separately for /models, for a role change and
+// for a move off a limited model, and the third copy is the one that carried
+// a variant to a model that rejects it (#36).
+func (mk market) retarget(st *agentState, preset config.Preset, role, modelID, reason string) event.AgentUpdatedPayload {
+	up := changed(st, role, modelID, fitVariant(preset, mk.variants[modelID], modelID, st.variant))
+	if up.Model != nil {
+		up.Reason = reason
+	}
+	return up
 }
 
 // --- a running agent whose model's plan runs out ---
@@ -320,11 +393,12 @@ func (t *turnRun) movedOn(err error, modelID string) bool {
 // when the first limited candidate comes back, if there is nowhere to go.
 func (a *Agent) moveOff(provider string, until time.Time) (bool, time.Time) {
 	c := a.c
+	mk := c.readMarket(c.Config()) // before the lock
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	st := a.state()
 	preset := c.roleLocked(st).preset
-	pick, soonest, ok := c.chooseLocked(preset, provider)
+	pick, soonest, ok := mk.choose(preset, c.cfg, provider)
 	if !ok || pick.model == st.model {
 		return false, soonest
 	}
@@ -332,10 +406,8 @@ func (a *Agent) moveOff(provider string, until time.Time) (bool, time.Time) {
 	if !until.IsZero() {
 		reason += " until " + until.Local().Format("15:04")
 	}
-	up := changed(st, "", pick.model, fitVariant(preset, c.host.Variants(pick.model), pick.model, st.variant))
-	up.Reason = reason + "; " + pick.why
-	_, err := c.commitLocked(context.Background(), c.event(a.ID, event.AgentUpdated, up))
-	return err == nil, soonest
+	up := mk.retarget(st, preset, "", pick.model, reason+"; "+pick.why)
+	return c.commitLocked(context.Background(), c.event(a.ID, event.AgentUpdated, up)) == nil, soonest
 }
 
 // limitHint is a turn's error text: a refusal for a limit that the harness
@@ -388,36 +460,34 @@ func (a *Agent) parkUntil(soonest, own time.Time) time.Time {
 // turn it starts moves the agent to the available model before it calls.
 func (c *Channel) MaybeResume(ctx context.Context, now time.Time) error {
 	c.mu.Lock()
+	due := false
+	for _, st := range c.st.agents {
+		due = due || st.parkedUntil(now)
+	}
+	cfg := c.cfg
+	c.mu.Unlock()
+	if !due {
+		return nil // the usual case, and it costs the host nothing
+	}
+	mk := c.readMarket(cfg)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.reconfiguring {
+		return nil
+	}
 	var evs []event.Event
 	for _, id := range c.st.order {
 		st := c.st.agents[id]
-		if st.killed || st.inTurn || st.resumeAt.IsZero() || st.resumeAt.After(now) || st.startsTurn() {
-			continue
-		}
-		if !c.modelAvailableLocked(st, now) {
-			continue // still nothing to run on: look again at the next tick
+		if !st.parkedUntil(now) || !mk.available(c.roleLocked(st).preset, c.cfg, st.model) {
+			continue // not parked, or still nothing to run on: look again at the next tick
 		}
 		evs = append(evs, c.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputResume, Text: resumeText}))
 	}
-	if len(evs) == 0 || c.reconfiguring {
-		c.mu.Unlock()
-		return nil
-	}
-	wake, err := c.commitLocked(ctx, evs...)
-	c.mu.Unlock()
-	signal(wake)
-	return err
+	return c.commitLocked(ctx, evs...)
 }
 
-// modelAvailableLocked reports whether the agent has a model to run on now:
-// one of its role's candidates, or, for a role with nothing to choose from,
-// its own.
-func (c *Channel) modelAvailableLocked(st *agentState, now time.Time) bool {
-	preset := c.roleLocked(st).preset
-	if len(c.candidatesLocked(preset)) > 0 {
-		_, _, ok := c.chooseLocked(preset, "")
-		return ok
-	}
-	provider, _, err := model.Split(st.model)
-	return err == nil && !readPlan(c.host.PlanUsage()[provider], now).limited
+// parkedUntil reports whether the agent stopped at every plan's limit and its
+// time to be woken has come.
+func (a *agentState) parkedUntil(now time.Time) bool {
+	return !a.killed && !a.inTurn && !a.resumeAt.IsZero() && !a.resumeAt.After(now) && !a.startsTurn()
 }

@@ -41,11 +41,15 @@ func index(ctx context.Context, tx *sql.Tx, e event.Event) error {
 	case event.ChannelArchived:
 		_, err := tx.ExecContext(ctx, `UPDATE channels SET archived = 1 WHERE id = ?`, e.Channel)
 		return err
+	case event.AssistantMessage:
+		return indexUsage(ctx, tx, e)
 	case event.ChatPosted, event.InputQueued:
 		if title := titleOf(e); title != "" {
 			_, err := tx.ExecContext(ctx, `UPDATE channels SET title = ? WHERE id = ? AND title = ''`, title, e.Channel)
 			return err
 		}
+	default:
+		// every other event changes nothing the index keeps
 	}
 	return nil
 }
@@ -67,6 +71,8 @@ func titleOf(e event.Event) string {
 			return "" // an agent's input, or a post (titled by its chat.posted)
 		}
 		text = in.Text
+	default:
+		// every other event changes nothing the channel table keeps
 	}
 	t := strings.TrimSpace(text)
 	if i := strings.IndexByte(t, '\n'); i >= 0 {

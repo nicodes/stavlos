@@ -23,19 +23,19 @@ func (m *client) Complete(ctx context.Context, req model.Request, onDelta func(m
 		return model.Response{}, fmt.Errorf("%s: %w", m.p.name, err)
 	}
 	header := m.p.header
-	if req.CacheKey != "" && m.p.xai() {
+	if req.CacheKey != "" && m.p.traits.CacheHeader != "" {
 		// xAI routes a conversation to the server holding its cached prefix
 		// by x-grok-conv-id (docs.x.ai prompt caching)
 		header = func(ctx context.Context, h http.Header) error {
 			if err := m.p.header(ctx, h); err != nil {
 				return err
 			}
-			h.Set("x-grok-conv-id", req.CacheKey)
+			h.Set(m.p.traits.CacheHeader, req.CacheKey)
 			return nil
 		}
 	}
 	return stream.Complete(ctx, stream.Request{
-		Name: m.p.name, Client: m.p.http, URL: m.p.baseURL + "/chat/completions", Body: body, Header: header,
+		Name: m.p.name, Client: m.p.http, URL: m.p.baseURL + "/chat/completions", Body: body, Header: header, IsLimit: m.p.traits.IsLimit,
 	}, onDelta, func(d func(model.Delta)) stream.Codec { return newAccumulator(d) })
 }
 
@@ -46,13 +46,13 @@ func (p *provider) buildBody(id string, req model.Request) ([]byte, error) {
 	}
 	cr := chatRequest{
 		Model:         id,
-		Messages:      toMessages(req.System, req.Messages, p.replaysReasoning()),
+		Messages:      toMessages(req.System, req.Messages, p.traits.ReplaysReasoning),
 		Tools:         toTools(req.Tools),
 		Stream:        true,
 		StreamOptions: &streamOptions{IncludeUsage: true},
 	}
 	cr.MaxTokens = maxTokens
-	if p.name == "kimi" {
+	if p.traits.CacheKeyField {
 		cr.PromptCacheKey = req.CacheKey
 	}
 	// Only a variant this model takes is sent. The agent runtime fits the

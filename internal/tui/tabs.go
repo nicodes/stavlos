@@ -285,7 +285,7 @@ func (m *Model) dirsKey(msg tea.KeyMsg) tea.Cmd {
 	case key.Matches(msg, keys.OvClose):
 		return m.closeDialog()
 	case stepCursor(msg, &m.agCursor, n, true):
-	case msg.String() == "a":
+	case key.Matches(msg, keys.AddDir):
 		m.dirEdit = "add"
 		m.dirInput.SetValue("")
 		m.dirInput.Placeholder = "path (absolute, ~, or relative to the channel directory)"

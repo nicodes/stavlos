@@ -45,6 +45,7 @@ type (
 	subscribedMsg struct {
 		err   error
 		scope requestScope
+		first int64 // the first seq sent when the history was cut to a tail
 	}
 	treeMsg struct {
 		channel string
@@ -147,11 +148,17 @@ func reconcileCmd(ctx context.Context, c *client.Client, scope requestScope) tea
 	})
 }
 
-func subscribeCmd(ctx context.Context, c *client.Client, scope requestScope, from int64) tea.Cmd {
+// historyTail is how much of a channel's history a chat opens with. A chat
+// opens at its end, and the largest channel has tens of thousands of events
+// (59 MB) before it; /history fetches the rest.
+const historyTail = 3000
+
+func subscribeCmd(ctx context.Context, c *client.Client, scope requestScope, from int64, tail int) tea.Cmd {
 	// Subscription includes the entire history replay, not just an RPC round
 	// trip. Its lifetime is the TUI's context, rather than the short call timeout.
 	return func() tea.Msg {
-		return subscribedMsg{err: call(ctx, c, protocol.Subscribe, protocol.SubscribeParams{Channel: scope.channel, From: from}), scope: scope}
+		res, err := client.Do(ctx, c, protocol.Subscribe, protocol.SubscribeParams{Channel: scope.channel, From: from, Tail: tail})
+		return subscribedMsg{err: err, scope: scope, first: res.First}
 	}
 }
 
@@ -556,6 +563,8 @@ func notificationBatch(first protocol.Response, pending <-chan protocol.Response
 				batch = append(batch, streamMsg{n})
 			case protocol.PromptNotification:
 				batch = append(batch, promptMsg{n})
+			case protocol.ChangedNotification:
+				batch = append(batch, changedMsg{n.What})
 			}
 		}
 		if i == 127 {
