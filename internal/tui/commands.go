@@ -272,15 +272,15 @@ func modelsCmd(ctx context.Context, c *client.Client, scope requestScope) tea.Cm
 // and tint role names.
 type rolesMsg struct {
 	scope requestScope
-	roles []protocol.PresetInfo
+	roles []protocol.RoleInfo
 	err   error
 	quiet bool
 }
 
 func rolesCmd(ctx context.Context, c *client.Client, scope requestScope, quiet bool) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
-		res, err := client.Do(ctx, c, protocol.Presets, protocol.PresetsParams{Channel: scope.channel})
-		return rolesMsg{roles: res.Presets, err: err, quiet: quiet, scope: scope}
+		res, err := client.Do(ctx, c, protocol.Roles, protocol.RolesParams{Channel: scope.channel})
+		return rolesMsg{roles: res.Roles, err: err, quiet: quiet, scope: scope}
 	})
 }
 

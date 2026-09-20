@@ -157,11 +157,11 @@ func sortedKeys[V any](m map[string]V) []string {
 	return out
 }
 
-// missingRolePreset stands in for a role that no longer exists in config:
+// missingRoleRole stands in for a role that no longer exists in config:
 // read-only, no delegation, no MCP, so a restart or a config reload never
 // hands an agent more than its role gave it.
-func missingRolePreset(name string) config.Preset {
-	return config.Preset{
+func missingRole(name string) config.Role {
+	return config.Role{
 		Name: name, Description: "(role no longer exists)", Type: config.TypeAll, Layer: "builtin", Loop: "default",
 		Tools: []string{toolname.Read},
 		Body:  "Your role's definition is gone from the configuration. You can only read files until the human picks a role with /role; say so if asked to do more.",

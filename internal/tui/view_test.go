@@ -2436,7 +2436,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 		{ID: "root", Name: "main", Role: "lead", Model: "openai/gpt-5", Awaiting: []string{"c1"}},
 		{ID: "c1", Parent: "root", Name: "scout", Role: "reviewer", Model: "openai/gpt-5", Variant: "high"},
 	}
-	m.presets = []protocol.PresetInfo{
+	m.roles = []protocol.RoleInfo{
 		{Name: "general", Description: "does it all", Type: "all", Spawn: []string{"general"}},
 		{Name: "lead", Description: "runs the show", Type: "primary", Color: "blue"},
 		{Name: "reviewer", Description: "reviews", Type: "subagent", Color: "cyan", Models: []protocol.ModelSpec{{ID: "openai/gpt-5", Variants: []string{"medium", "high"}}, {ID: "xai/*"}}},
@@ -2450,14 +2450,14 @@ func TestRoleAwareDialogs(t *testing.T) {
 	}
 	// /roles for the main agent: primary and all roles, not subagent ones
 	m.selected = 0
-	m.onRoles(rolesMsg{roles: m.presets})
+	m.onRoles(rolesMsg{roles: m.roles})
 	if got := strings.Join(names(m.ov), ","); got != "general,lead" {
 		t.Fatalf("roles for main: %s", got)
 	}
 	m.closeOverlay()
 	// …and for a subagent: subagent and all roles, not primary ones
 	m.selected = 1
-	m.onRoles(rolesMsg{roles: m.presets})
+	m.onRoles(rolesMsg{roles: m.roles})
 	if got := strings.Join(names(m.ov), ","); got != "general,reviewer" {
 		t.Fatalf("roles for a child: %s", got)
 	}

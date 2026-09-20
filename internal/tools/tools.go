@@ -31,7 +31,7 @@ type Env struct {
 	Partial   func(string)     // receives streamed partial output (shell); may be nil
 	MaxOutput int              // truncate tool output beyond this many bytes (0 = 32k)
 	Jobs      Jobs             // the agent's background jobs; nil if unavailable
-	Todo      Todos            // the agent's todo list; nil if the preset does not include "todo"
+	Todo      Todos            // the agent's todo list; nil if the role does not include "todo"
 	Ask       Asker            // presents all questions immediately and waits; nil in tests without a runtime
 	Search    SearchConfig     // web_search backend; zero → the tool explains how to configure it
 	PassEnv   []string         // environment variables kept for child processes although their names look like secrets (config env.pass)
@@ -136,14 +136,14 @@ func Builtin() Set {
 	return s
 }
 
-// The tool groups a preset's list implies live in toolname; these names
+// The tool groups a role's list implies live in toolname; these names
 // stay for the agent package's prompt assembly.
 var (
 	OrchestrationNames = toolname.Orchestration // implied by a non-empty spawn list
 	MessagingNames     = toolname.Messaging     // every agent may message any other, or the human, and see the tree
 	AsyncNames         = toolname.Async         // every agent that has shell
 	AskNames           = toolname.Ask           // every agent: asking the human is never a role choice
-	TodoNames          = toolname.Todo          // implied by "todo" in a preset's tool list
+	TodoNames          = toolname.Todo          // implied by "todo" in a role's tool list
 )
 
 func errf(format string, a ...any) Result {

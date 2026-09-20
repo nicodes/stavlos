@@ -242,5 +242,5 @@ func (o orchestrator) Archetypes(agent string) []string {
 	if !ok {
 		return nil
 	}
-	return append([]string(nil), s.roleLocked(a).preset.Spawn...)
+	return append([]string(nil), s.roleLocked(a).def.Spawn...)
 }

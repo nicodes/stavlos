@@ -195,7 +195,7 @@ func (a *Agent) Name() string {
 // roleView is what one step needs to know about the agent's role and place,
 // read once under the lock so a step sees one consistent role.
 type roleView struct {
-	preset     config.Preset
+	def        config.Role
 	missing    bool // the role is gone from config: the agent runs read-only
 	role, name string
 	parentName string
@@ -206,11 +206,11 @@ type roleView struct {
 // exists is replaced by a read-only stand-in: recovery and a config reload
 // never widen what an agent may do.
 func (c *Channel) roleLocked(a *agentState) roleView {
-	p, ok := c.cfg.Presets[a.role]
+	p, ok := c.cfg.Roles[a.role]
 	if !ok {
-		p = missingRolePreset(a.role)
+		p = missingRole(a.role)
 	}
-	rv := roleView{preset: p, missing: !ok, role: a.role, name: a.name, turn: a.turn}
+	rv := roleView{def: p, missing: !ok, role: a.role, name: a.name, turn: a.turn}
 	if par := c.st.agents[a.parent]; par != nil {
 		rv.parentName = par.name
 	}
@@ -241,7 +241,7 @@ func (a *Agent) infoLocked() protocol.AgentInfo {
 		Awaiting: st.awaitingIDs(), Due: st.due(), Todos: append([]event.TodoItem(nil), st.todos...),
 		PendingReplies: st.pendingReplies(), AwaitingReplies: st.awaitingReplies(),
 		Nudges: st.nudges, NudgeLimit: nudgeLimit(a.c.cfg.Reminders),
-		MCP: a.mcpInfo(rv.preset.MCP), Jobs: a.jobInfosLocked(),
+		MCP: a.mcpInfo(rv.def.MCP), Jobs: a.jobInfosLocked(),
 	}
 	if rv.missing && info.LastError == "" {
 		info.LastError = missingRoleError(st.role)
@@ -261,7 +261,7 @@ func (a *Agent) SetVariant(ctx context.Context, v string) error {
 	if v != "" && !contains(a.c.host.Variants(modelID), v) {
 		return fmt.Errorf("unknown variant %q for %s (see /variants)", v, modelID)
 	}
-	if p := a.role().preset; !p.AllowsVariant(modelID, v) {
+	if p := a.role().def; !p.AllowsVariant(modelID, v) {
 		return fmt.Errorf("role %s does not allow variant %q for %s (allowed: %s)", p.Name, v, modelID, strings.Join(p.DefaultVariantList(modelID), ", "))
 	}
 	return a.update(ctx, event.AgentUpdatedPayload{Variant: event.Str(v)})
@@ -276,7 +276,7 @@ func (a *Agent) SetModel(ctx context.Context, id string) error {
 	mk := a.c.readMarket(a.c.Config(), id) // before the lock
 	a.c.mu.Lock()
 	st := a.state()
-	p := a.c.roleLocked(st).preset
+	p := a.c.roleLocked(st).def
 	up := mk.retarget(st, p, "", id, "")
 	a.c.mu.Unlock()
 	if !p.AllowsModel(id) {
@@ -294,24 +294,24 @@ func (a *Agent) SetRole(ctx context.Context, role string) error {
 	mk := s.readMarket(s.Config(), a.ModelID()) // before the lock
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	preset, ok := s.cfg.Presets[role]
+	def, ok := s.cfg.Roles[role]
 	switch {
 	case !ok:
 		return fmt.Errorf("unknown role %q (see /roles)", role)
-	case a.Parent == "" && !preset.CanBePrimary():
+	case a.Parent == "" && !def.CanBePrimary():
 		return fmt.Errorf("role %q is subagent-only: the main agent cannot take it", role)
-	case a.Parent != "" && !preset.CanBeSubagent():
+	case a.Parent != "" && !def.CanBeSubagent():
 		return fmt.Errorf("role %q is primary-only: a subagent cannot take it", role)
 	}
 	st := a.state()
 	modelID := st.model
-	if !preset.AllowsModel(modelID) {
-		if d := preset.DefaultModel(); d != "" {
+	if !def.AllowsModel(modelID) {
+		if d := def.DefaultModel(); d != "" {
 			modelID = d
 		}
 	}
 	// (a role's default model is one of its listed models, which the market looked at)
-	p := mk.retarget(st, preset, role, modelID, "")
+	p := mk.retarget(st, def, role, modelID, "")
 	if st.name == st.role && role != st.role {
 		if name, err := s.st.uniqueName(role, role, a.ID); err == nil {
 			p.Name = event.Str(name)

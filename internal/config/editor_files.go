@@ -325,7 +325,7 @@ func validateEditorTree(root string, system bool) error {
 		}
 	}
 	e.allowSearch()
-	if err := e.loadPresets(disk{}, filepath.Join(root, "agents"), "project"); err != nil {
+	if err := e.loadRoles(disk{}, filepath.Join(root, "agents"), "project"); err != nil {
 		return err
 	}
 	if err := e.loadSkills(disk{}, filepath.Join(root, "skills")); err != nil {

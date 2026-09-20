@@ -6,10 +6,10 @@ import (
 
 // Roles, providers, models and usage: what there is to choose from and what it cost.
 
-type PresetsParams struct {
+type RolesParams struct {
 	Channel string `json:"channel"`
 }
-type PresetInfo struct {
+type RoleInfo struct {
 	Name        string      `json:"name"`
 	Description string      `json:"description"`
 	Type        string      `json:"type"`             // primary | subagent | all
@@ -25,8 +25,8 @@ type ModelSpec struct {
 	ID       string   `json:"id"`
 	Variants []string `json:"variants,omitempty"`
 }
-type PresetsResult struct {
-	Presets []PresetInfo `json:"presets"`
+type RolesResult struct {
+	Roles []RoleInfo `json:"roles"`
 }
 
 // ProviderInfo describes one provider known to the daemon (PRD §8).

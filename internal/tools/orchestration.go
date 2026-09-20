@@ -41,7 +41,7 @@ func (spawnTool) Def() model.ToolDef {
 }
 
 type spawnInput struct {
-	Archetype string `json:"archetype" desc:"Preset name of the child (see the list in your instructions)" req:"true"`
+	Archetype string `json:"archetype" desc:"Role name of the child (see the list in your instructions)" req:"true"`
 	Label     string `json:"label" desc:"Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the channel gets a suffix (auth-explorer-2); the result says the name it got" req:"true"`
 	Task      string `json:"task" desc:"The complete task description; the child has no other context" req:"true"`
 }

@@ -80,7 +80,7 @@ var (
 	Subscribe   = Method[SubscribeParams, SubscribeResult]{MSubscribe}
 	Unsubscribe = Method[SubscribeParams, None]{MUnsubscribe}
 	Reconcile   = Method[ChannelRef, ReconcileResult]{MReconcile}
-	Presets     = Method[PresetsParams, PresetsResult]{MPresets}
+	Roles       = Method[RolesParams, RolesResult]{MRoles}
 )
 
 // UsageSeriesParams picks whose usage to chart: every channel's (no

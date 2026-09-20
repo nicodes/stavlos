@@ -79,9 +79,9 @@ func (a *Agent) runTurn(ctx context.Context, turn int) {
 	}()
 	// A subagent past its role's turn limit does not run: the turn ends at
 	// once and every agent waiting on it is told, so nobody waits forever.
-	if rv := a.role(); a.Parent != "" && rv.preset.MaxTurns > 0 && turn > rv.preset.MaxTurns {
-		t.end(event.ReasonError, fmt.Sprintf("turn limit reached: %s may take at most %d turns", rv.name, rv.preset.MaxTurns))
-		a.reportTurnLimit(rv.preset.MaxTurns)
+	if rv := a.role(); a.Parent != "" && rv.def.MaxTurns > 0 && turn > rv.def.MaxTurns {
+		t.end(event.ReasonError, fmt.Sprintf("turn limit reached: %s may take at most %d turns", rv.name, rv.def.MaxTurns))
+		a.reportTurnLimit(rv.def.MaxTurns)
 		return
 	}
 	for {
@@ -173,7 +173,7 @@ func (t *turnRun) prepare() (p stepPlan, errText string) {
 	if p.modelID == "" {
 		return p, ErrNoModel
 	}
-	if !p.rv.preset.AllowsModel(p.modelID) || !p.rv.preset.AllowsVariant(p.modelID, p.variant) {
+	if !p.rv.def.AllowsModel(p.modelID) || !p.rv.def.AllowsVariant(p.modelID, p.variant) {
 		return p, "the current model or variant is not allowed by this project's role; use /models or /variants to select one"
 	}
 	var err error
@@ -182,8 +182,8 @@ func (t *turnRun) prepare() (p stepPlan, errText string) {
 	}
 	// The role's MCP servers start before the prompt is built (their tools
 	// are part of it); a server that fails is logged and skipped.
-	if len(p.rv.preset.MCP) > 0 || a.hasMCP() {
-		a.ensureMCP(a.ctx, p.cfg, p.rv.preset.MCP)
+	if len(p.rv.def.MCP) > 0 || a.hasMCP() {
+		a.ensureMCP(a.ctx, p.cfg, p.rv.def.MCP)
 	}
 	p.system, p.defs = a.buildContext(p.rv, p.cfg)
 	p.history = withNote(a.prepareHistory(t.ctx, p.m, p.info, p.system, p.defs), a.stateNote(p.rv, p.cfg))

@@ -40,9 +40,9 @@ func TestAProjectIsLoadedFromTheBytesThatWereHashed(t *testing.T) {
 	write(".stavlos/skills/deploy/SKILL.md", "---\ndescription: deploys\n---\nSWAPPED")
 	write("AGENTS.md", "SWAPPED")
 
-	e := &Effective{Presets: map[string]Preset{}, Skills: map[string]Skill{}}
+	e := &Effective{Roles: map[string]Role{}, Skills: map[string]Skill{}}
 	pdir := filepath.Join(dir, ".stavlos")
-	if err := e.loadPresets(snap, filepath.Join(pdir, "agents"), "project"); err != nil {
+	if err := e.loadRoles(snap, filepath.Join(pdir, "agents"), "project"); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.loadSkills(snap, filepath.Join(pdir, "skills")); err != nil {
@@ -51,7 +51,7 @@ func TestAProjectIsLoadedFromTheBytesThatWereHashed(t *testing.T) {
 	if err := e.loadCommands(snap, filepath.Join(pdir, "commands")); err != nil {
 		t.Fatal(err)
 	}
-	if got := e.Presets["reviewer"].Body; got != "hashed body" {
+	if got := e.Roles["reviewer"].Body; got != "hashed body" {
 		t.Errorf("role body %q", got)
 	}
 	if got := e.Skills["deploy"].Body; got != "hashed skill" {
@@ -70,8 +70,8 @@ func TestAProjectIsLoadedFromTheBytesThatWereHashed(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, hash, _ := ProjectHash(dir)
-	if full.TrustHash != hash || !full.ProjectTrusted || full.Presets["reviewer"].Body != "SWAPPED" {
-		t.Errorf("load: hash %q vs %q, trusted %v, body %q", full.TrustHash, hash, full.ProjectTrusted, full.Presets["reviewer"].Body)
+	if full.TrustHash != hash || !full.ProjectTrusted || full.Roles["reviewer"].Body != "SWAPPED" {
+		t.Errorf("load: hash %q vs %q, trusted %v, body %q", full.TrustHash, hash, full.ProjectTrusted, full.Roles["reviewer"].Body)
 	}
 }
 
