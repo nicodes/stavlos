@@ -59,7 +59,7 @@ func TestStaleResponsesCannotReplaceCurrentChannel(t *testing.T) {
 		reconcileMsg{scope: old, res: protocol.ReconcileResult{Channel: protocol.ChannelInfo{ID: a, Name: "stale", Dir: "/wrong"}}},
 		reconcileMsg{scope: old, err: errors.New("old failed request")},
 		subscribedMsg{scope: old, err: errors.New("old subscribe failed")},
-		rolesMsg{scope: old, roles: []protocol.PresetInfo{{Name: "wrong-project-role"}}, quiet: true},
+		rolesMsg{scope: old, roles: []protocol.RoleInfo{{Name: "wrong-project-role"}}, quiet: true},
 		variantsMsg{scope: old, model: "wrong-model"},
 		modelsMsg{scope: old, models: []protocol.ModelInfo{{ID: "wrong-model"}}},
 		channelsMsg{scope: old, purpose: channelsPicker, channels: []protocol.ChannelInfo{{ID: "other"}}},
@@ -67,7 +67,7 @@ func TestStaleResponsesCannotReplaceCurrentChannel(t *testing.T) {
 		next, _ := m.Update(msg)
 		m = next.(Model)
 	}
-	if m.channel.Name != "current" || m.channel.Dir != "/a" || m.fatal != nil || len(m.presets) != 0 || m.ov != nil {
+	if m.channel.Name != "current" || m.channel.Dir != "/a" || m.fatal != nil || len(m.roles) != 0 || m.ov != nil {
 		t.Fatalf("stale response applied: %+v", m.channel)
 	}
 }

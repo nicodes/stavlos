@@ -19,7 +19,7 @@ import (
 // todoAPIFor is the list for a tool env, nil when the role does not
 // include "todo" (the tool then says it is unavailable).
 func (a *Agent) todoAPIFor(rv roleView) tools.Todos {
-	if contains(rv.preset.Tools, toolname.Todo) {
+	if contains(rv.def.Tools, toolname.Todo) {
 		return todosAPI{a: a}
 	}
 	return nil

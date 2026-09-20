@@ -224,9 +224,9 @@ func (c *Channel) commit(ctx context.Context, evs ...event.Event) error {
 func (c *Channel) Start(ctx context.Context, name string) error {
 	c.mu.Lock()
 	role, modelID := c.st.role, c.st.model
-	if _, ok := c.cfg.Presets[role]; !ok {
+	if _, ok := c.cfg.Roles[role]; !ok {
 		c.mu.Unlock()
-		return fmt.Errorf("root preset %q not found", role)
+		return fmt.Errorf("root role %q not found", role)
 	}
 	err := c.commitLocked(ctx, c.event("", event.ChannelCreated, event.ChannelCreatedPayload{Name: name, Dir: c.st.dir, Model: modelID, Role: role, Mode: c.cfg.Mode}))
 	c.mu.Unlock()
@@ -470,12 +470,12 @@ func (c *Channel) Info() protocol.ChannelInfo {
 	}
 }
 
-// Presets lists the roles available to the channel.
-func (c *Channel) Presets() []protocol.PresetInfo {
+// Roles lists the roles available to the channel.
+func (c *Channel) Roles() []protocol.RoleInfo {
 	cfg := c.Config()
-	var out []protocol.PresetInfo
-	for _, p := range cfg.Presets {
-		info := protocol.PresetInfo{Name: p.Name, Description: p.Description, Type: p.Type, Spawn: p.Spawn, Color: p.Color, MaxTurns: p.MaxTurns}
+	var out []protocol.RoleInfo
+	for _, p := range cfg.Roles {
+		info := protocol.RoleInfo{Name: p.Name, Description: p.Description, Type: p.Type, Spawn: p.Spawn, Color: p.Color, MaxTurns: p.MaxTurns}
 		for _, m := range p.Models {
 			info.Models = append(info.Models, protocol.ModelSpec{ID: m.ID, Variants: m.Variants})
 		}
@@ -504,34 +504,34 @@ func (c *Channel) busyLocked() int {
 // nothing to choose from (a role that lists no models, and none in
 // stavlos.json), the parent's (or the channel's) model is inherited when the
 // role allows it, else the role's default.
-func (c *Channel) resolveModelLocked(mk market, spawnArg string, preset config.Preset, parent *agentState) (string, error) {
+func (c *Channel) resolveModelLocked(mk market, spawnArg string, def config.Role, parent *agentState) (string, error) {
 	if spawnArg == "" && parent == nil && c.modelChosen {
 		spawnArg = c.st.model
 	}
 	if spawnArg != "" {
-		if !preset.AllowsModel(spawnArg) {
-			return "", fmt.Errorf("role %s does not allow model %s (allowed: %s)", preset.Name, spawnArg, modelList(preset))
+		if !def.AllowsModel(spawnArg) {
+			return "", fmt.Errorf("role %s does not allow model %s (allowed: %s)", def.Name, spawnArg, modelList(def))
 		}
 		return spawnArg, nil
 	}
-	if pick, _, ok := mk.choose(preset, c.cfg, ""); ok {
+	if pick, _, ok := mk.choose(def, c.cfg, ""); ok {
 		return pick.model, nil
 	}
 	inherited := c.st.model
 	if parent != nil {
 		inherited = parent.model
 	}
-	if inherited != "" && preset.AllowsModel(inherited) {
+	if inherited != "" && def.AllowsModel(inherited) {
 		return inherited, nil
 	}
-	if d := preset.DefaultModel(); d != "" {
+	if d := def.DefaultModel(); d != "" {
 		return d, nil
 	}
 	return inherited, nil
 }
 
 // modelList names a role's allowed models for error messages.
-func modelList(p config.Preset) string {
+func modelList(p config.Role) string {
 	ids := make([]string, 0, len(p.Models))
 	for _, m := range p.Models {
 		ids = append(ids, m.ID)
@@ -547,7 +547,7 @@ func modelList(p config.Preset) string {
 // alone cannot answer: an entry that lists no variants allows any, and a
 // variant is a provider's word ("medium" means nothing to a model that has
 // no reasoning effort, which rejects the field).
-func fitVariant(p config.Preset, offered []string, id, want string) string {
+func fitVariant(p config.Role, offered []string, id, want string) string {
 	fits := func(v string) bool { return p.AllowsVariant(id, v) && (v == "" || contains(offered, v)) }
 	if fits(want) {
 		return want
@@ -572,7 +572,7 @@ func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, la
 	if c.reconfiguring {
 		return nil, errors.New("a directory change is in progress")
 	}
-	preset, ok := c.cfg.Presets[role]
+	def, ok := c.cfg.Roles[role]
 	if !ok {
 		return nil, fmt.Errorf("unknown archetype %q", role)
 	}
@@ -586,16 +586,16 @@ func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, la
 			return nil, fmt.Errorf("parent %q not found", parentID)
 		}
 		depth = parent.depth + 1
-		if pp := c.roleLocked(parent).preset; !contains(pp.Spawn, role) {
+		if pp := c.roleLocked(parent).def; !contains(pp.Spawn, role) {
 			return nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", pp.Name, role, pp.Spawn)
 		}
-		if !preset.CanBeSubagent() {
+		if !def.CanBeSubagent() {
 			return nil, fmt.Errorf("role %q is primary-only: it cannot be spawned", role)
 		}
-	} else if !preset.CanBePrimary() {
+	} else if !def.CanBePrimary() {
 		return nil, fmt.Errorf("role %q is subagent-only: it cannot be the main agent", role)
 	}
-	modelID, err := c.resolveModelLocked(mk, modelArg, preset, parent)
+	modelID, err := c.resolveModelLocked(mk, modelArg, def, parent)
 	if err != nil {
 		return nil, err
 	}
@@ -611,7 +611,7 @@ func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, la
 			variant = parent.variant // same model: same flavour
 		}
 	}
-	variant = fitVariant(preset, mk.variants[modelID], modelID, variant)
+	variant = fitVariant(def, mk.variants[modelID], modelID, variant)
 	id := NewID("a")
 	name, err := c.st.uniqueName(label, role, id)
 	if err != nil {
@@ -651,7 +651,7 @@ func (c *Channel) canSpawnLocked(p *agentState) (bool, string) {
 	if c.busyLocked() >= c.cfg.Limits.MaxAgents {
 		return false, fmt.Sprintf("max busy agents %d reached (idle children do not count)", c.cfg.Limits.MaxAgents)
 	}
-	if len(c.roleLocked(p).preset.Spawn) == 0 {
+	if len(c.roleLocked(p).def.Spawn) == 0 {
 		return false, "this archetype cannot spawn"
 	}
 	return true, ""

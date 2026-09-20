@@ -68,7 +68,7 @@ func prefixKey(cfg *config.Effective, rv roleView, dirs []string, mdefs []model.
 // writePreamble is the role's body and the agent's situation: where it
 // works, who it is, the project's instructions and skills.
 func (a *Agent) writePreamble(sb *strings.Builder, rv roleView, cfg *config.Effective, dirs []string) {
-	sb.WriteString(rv.preset.Body)
+	sb.WriteString(rv.def.Body)
 	sb.WriteString("\n\n")
 	fmt.Fprintf(sb, "Working directory: %s\n", a.c.Dir())
 	if len(dirs) > 1 {
@@ -99,7 +99,7 @@ func (a *Agent) writePreamble(sb *strings.Builder, rv roleView, cfg *config.Effe
 // toolNames is the list of tools the agent is offered, with the prompt
 // sections that explain each group written as it is added.
 func (a *Agent) toolNames(sb *strings.Builder, rv roleView) []string {
-	names := toolname.Expand(rv.preset.Tools)
+	names := toolname.Expand(rv.def.Tools)
 	if contains(names, toolname.Shell) {
 		names = append(names, tools.AsyncNames...)
 	}
@@ -121,8 +121,8 @@ func (a *Agent) toolNames(sb *strings.Builder, rv roleView) []string {
 	}
 	if canOrchestrate(rv) {
 		sb.WriteString("\n# Delegation\nYou may create child agents with agent_create. Archetypes available to you:\n")
-		for _, arch := range rv.preset.Spawn {
-			if p, ok := a.c.Config().Presets[arch]; ok {
+		for _, arch := range rv.def.Spawn {
+			if p, ok := a.c.Config().Roles[arch]; ok {
 				fmt.Fprintf(sb, "- %s: %s\n", arch, p.Description)
 			}
 		}
@@ -140,7 +140,7 @@ func (a *Agent) stateNote(rv roleView, cfg *config.Effective) string {
 	defer s.mu.Unlock()
 	st := a.state()
 	var lines []string
-	if limit := rv.preset.MaxTurns; a.Parent != "" && limit > 0 {
+	if limit := rv.def.MaxTurns; a.Parent != "" && limit > 0 {
 		lines = append(lines, fmt.Sprintf("This is turn %d of at most %d: answer with message (kind response) before the limit; after it your turns end at once and the agents waiting on you are told you ran out.", st.turn, limit))
 	}
 	if canOrchestrate(rv) {
@@ -150,7 +150,7 @@ func (a *Agent) stateNote(rv roleView, cfg *config.Effective) string {
 			lines = append(lines, fmt.Sprintf("You cannot create agents right now (%s): do the work yourself.", why))
 		}
 	}
-	if contains(rv.preset.Tools, toolname.Todo) {
+	if contains(rv.def.Tools, toolname.Todo) {
 		todo := "Your todo list: (empty)"
 		if len(st.todos) > 0 {
 			var sb strings.Builder
@@ -192,7 +192,7 @@ func (a *Agent) toolDefs(names []string) []model.ToolDef {
 // skills are the skills the role lists that config defines.
 func skills(cfg *config.Effective, rv roleView) map[string]tools.Skill {
 	out := map[string]tools.Skill{}
-	for _, name := range rv.preset.Skills {
+	for _, name := range rv.def.Skills {
 		if sk, ok := cfg.Skills[name]; ok {
 			out[name] = tools.Skill{Name: sk.Name, Description: sk.Description, Body: sk.Body, Dir: sk.Dir}
 		}
@@ -201,4 +201,4 @@ func skills(cfg *config.Effective, rv roleView) map[string]tools.Skill {
 }
 
 // canOrchestrate reports whether the delegation tools are offered.
-func canOrchestrate(rv roleView) bool { return len(rv.preset.Spawn) > 0 }
+func canOrchestrate(rv roleView) bool { return len(rv.def.Spawn) > 0 }

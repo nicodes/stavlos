@@ -1,5 +1,5 @@
 // Package toolname is the one list of built-in tool names. Every package
-// that names a tool — the tool itself, the default policy, the presets,
+// that names a tool — the tool itself, the default policy, the roles,
 // the turn loop's prompt sections, the prefix logic, the TUI's glyphs and
 // argument pickers — spells it from here, so adding or renaming a tool is
 // one edit and a typo is a compile error.

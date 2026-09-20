@@ -52,7 +52,7 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		if msg.err == nil {
-			m.presets = msg.roles
+			m.roles = msg.roles
 		}
 		if !msg.quiet {
 			return m.onRoles(msg)
@@ -555,7 +555,7 @@ func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
 // roleHint is a role's one-line summary in the /roles picker: its
 // description, then its mode when restricted, its default model when it
 // has a whitelist, and what it spawns.
-func roleHint(r protocol.PresetInfo) string {
+func roleHint(r protocol.RoleInfo) string {
 	hint := r.Description
 	if r.Type != "" && r.Type != "all" {
 		hint += "  · " + r.Type
@@ -574,10 +574,10 @@ func roleHint(r protocol.PresetInfo) string {
 }
 
 // roleInfo finds a cached role by name.
-func (m *Model) roleInfo(name string) *protocol.PresetInfo {
-	for i := range m.presets {
-		if m.presets[i].Name == name {
-			return &m.presets[i]
+func (m *Model) roleInfo(name string) *protocol.RoleInfo {
+	for i := range m.roles {
+		if m.roles[i].Name == name {
+			return &m.roles[i]
 		}
 	}
 	return nil
@@ -615,7 +615,7 @@ func (m *Model) whoKey() string {
 }
 
 // selectedRole is the selected agent's role, nil when unknown.
-func (m *Model) selectedRole() *protocol.PresetInfo {
+func (m *Model) selectedRole() *protocol.RoleInfo {
 	if a := m.selectedAgent(); a != nil {
 		return m.roleInfo(a.Role)
 	}
@@ -625,7 +625,7 @@ func (m *Model) selectedRole() *protocol.PresetInfo {
 // roleTints maps every cached role to its colour name ("" for none).
 func (m *Model) roleTints() map[string]string {
 	out := map[string]string{}
-	for _, r := range m.presets {
+	for _, r := range m.roles {
 		if r.Color != "" {
 			out[r.Name] = r.Color
 		}
@@ -635,7 +635,7 @@ func (m *Model) roleTints() map[string]string {
 
 // roleModelSpec is the whitelist entry of role r that admits model id
 // (glob-aware), nil when r has no whitelist or none matches.
-func roleModelSpec(r *protocol.PresetInfo, id string) *protocol.ModelSpec {
+func roleModelSpec(r *protocol.RoleInfo, id string) *protocol.ModelSpec {
 	if r == nil {
 		return nil
 	}
@@ -648,7 +648,7 @@ func roleModelSpec(r *protocol.PresetInfo, id string) *protocol.ModelSpec {
 }
 
 // roleAllowsModel: any model without a whitelist, else a matching entry.
-func roleAllowsModel(r *protocol.PresetInfo, id string) bool {
+func roleAllowsModel(r *protocol.RoleInfo, id string) bool {
 	return r == nil || len(r.Models) == 0 || roleModelSpec(r, id) != nil
 }
 
@@ -741,7 +741,7 @@ func (m *Model) bindChannel(info protocol.ChannelInfo) tea.Cmd {
 	m.generation++
 	m.channelState = newChannelState(info.ID, info)
 	m.editorState = m.editors[info.ID]
-	m.presets = nil
+	m.roles = nil
 	m.ov = nil
 	m.restore(info.ID)
 	delete(m.trees, info.ID) // its agents are live again
