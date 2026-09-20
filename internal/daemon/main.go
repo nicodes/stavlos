@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/nicodes/stavlos/internal/auth"
 	"github.com/nicodes/stavlos/internal/buildid"
@@ -82,12 +81,7 @@ func Main(ctx context.Context, o Options) error {
 	if o.Discord != nil {
 		d.Discord = o.Discord(sctx, o.Socket, o.DataDir)
 	}
-	// The subscriptions that report plan usage nowhere but a usage endpoint
-	// are asked once now, then only as they are used (docs/plan-usage.md).
-	reg.EnablePlanPolling()
-	go reg.PollAllPlanUsage(sctx, 0)
-	go d.recapLoop(sctx)
-	d.watchDiscord(sctx, time.Second)
+	d.runLoops()
 	lvl, why := sandbox.Probe()
 	log.Printf("stavlosd %s listening on %s (%d providers, sandbox %s)", buildid.ID(), o.Socket, len(reg.Providers()), lvl)
 	if why != nil {
