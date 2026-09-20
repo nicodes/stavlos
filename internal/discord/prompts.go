@@ -9,6 +9,7 @@ import (
 
 	dg "github.com/bwmarrin/discordgo"
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/present"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -32,16 +33,16 @@ func promptView(p protocol.PromptInfo, clientID string) (string, []dg.MessageCom
 	switch p.Kind {
 	case protocol.PromptPermission:
 		text = permissionHeading(p)
-		buttons = append(buttons, button(p.ID, "allow", "Allow once", disabled))
+		buttons = append(buttons, button(p.ID, "allow", present.AllowOnce, disabled))
 		if p.Dir != "" {
-			buttons = append(buttons, button(p.ID, "always", "Allow and add directory", disabled))
+			buttons = append(buttons, button(p.ID, "always", present.AllowAddDir, disabled))
 		} else {
-			buttons = append(buttons, button(p.ID, "always", "Allow in this channel", disabled))
+			buttons = append(buttons, button(p.ID, "always", present.AllowChannel, disabled))
 			if p.Prefix != "" {
-				buttons = append(buttons, button(p.ID, "prefix", "Allow "+p.Prefix+" in this channel", disabled))
+				buttons = append(buttons, button(p.ID, "prefix", present.AllowPrefix(p.Prefix), disabled))
 			}
 		}
-		buttons = append(buttons, button(p.ID, "deny-now", "Deny", disabled), button(p.ID, "deny", "Deny with reason", disabled))
+		buttons = append(buttons, button(p.ID, "deny-now", present.Deny, disabled), button(p.ID, "deny", "Deny with reason", disabled))
 	case protocol.PromptQuestion:
 		return questionPrompt(p, newDraft(p), clientID)
 	case protocol.PromptTrust:

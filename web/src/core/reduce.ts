@@ -1,4 +1,5 @@
 import { CHAT, type Item, type SheetInfo, type StreamDelta, type WireEvent } from "./types";
+import { primaryArg } from "./vocabulary.gen";
 
 /**
  * A channel as the browser sees it: a fold of its events, the counterpart of
@@ -31,12 +32,14 @@ function touch(v: ChannelView, chat: string): void {
   v.revs[chat] = (v.revs[chat] ?? 0) + 1;
 }
 
-function compact(input: unknown): string {
+/** What stands for a tool call in one line: its primary argument, by the daemon's table. */
+function compact(input: unknown, tool = ""): string {
   if (input == null) return "";
   if (typeof input === "object") {
     const o = input as Record<string, unknown>;
-    for (const k of ["command", "path", "url", "query", "pattern"]) if (typeof o[k] === "string") return o[k] as string;
-    if (typeof o.patch === "string") return (o.patch as string).split("\n").slice(0, 3).join("\n");
+    const key = primaryArg[tool];
+    if (key === "patch" && typeof o.patch === "string") return o.patch.split("\n").slice(0, 3).join("\n");
+    if (key && typeof o[key] === "string") return o[key] as string;
   }
   return JSON.stringify(input);
 }
@@ -81,7 +84,7 @@ export function apply(v: ChannelView, e: WireEvent): void {
       (p.blocks ?? []).forEach((b: any, i: number) => {
         if (b.type === "text" && b.text?.trim()) push(v, agent, { key: `${key}.${i}`, kind: "note", time: e.time, text: b.text });
         if (b.type === "tool_use") {
-          const at = push(v, agent, { key: `${key}.${i}`, kind: "tool", time: e.time, name: b.name, input: compact(b.input), state: "running" });
+          const at = push(v, agent, { key: `${key}.${i}`, kind: "tool", time: e.time, name: b.name, input: compact(b.input, b.name), state: "running" });
           v.tools[b.id] = [agent, at];
         }
       });
@@ -107,7 +110,7 @@ export function apply(v: ChannelView, e: WireEvent): void {
       delete v.streaming[agent];
       break;
     case "ask.requested": {
-      const detail = p.kind === "question" ? "" : compact(p.input);
+      const detail = p.kind === "question" ? "" : compact(p.input, p.tool);
       const item = (): Item => ({ key, kind: "ask", time: e.time, from: p.from || name(), askKind: p.kind, question: p.question ?? "", detail });
       v.asks[p.id] = [[CHAT, push(v, CHAT, item())], [agent, push(v, agent, item())]];
       break;
