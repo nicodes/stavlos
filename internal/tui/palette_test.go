@@ -80,3 +80,20 @@ func TestPaletteKeys(t *testing.T) {
 		t.Fatal("esc should clear the input and close the palette")
 	}
 }
+
+// What was typed in full runs, not whatever it happens to be a prefix of.
+func TestAnExactCommandComesFirst(t *testing.T) {
+	for typed, want := range map[string]string{"/mode": "/mode", "/model": "/models", "/h": "/help", "/hi": "/history", "/mo": "/models", "/role": "/roles"} {
+		got := paletteMatches(typed)
+		if len(got) == 0 || got[0].Name != want {
+			t.Errorf("%s: first match %v, want %s", typed, got, want)
+		}
+		seen := map[string]bool{}
+		for _, c := range got {
+			if seen[c.Name] {
+				t.Errorf("%s: %s is listed twice", typed, c.Name)
+			}
+			seen[c.Name] = true
+		}
+	}
+}
