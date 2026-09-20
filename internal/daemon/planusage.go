@@ -74,6 +74,7 @@ func (d *Daemon) loadPlanUsage() {
 	d.Registry.OnPlanUsage(func(provider string, u model.PlanUsage) {
 		d.recordPlanUsage(provider, u)
 		d.savePlanUsage()
+		d.changed(protocol.ChangedPlan)
 	})
 }
 
