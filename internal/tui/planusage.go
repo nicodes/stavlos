@@ -273,6 +273,26 @@ func (m Model) trustRow(width int) string {
 	return theme.StyleDim.Render(label+strings.Repeat(" ", gap)) + st.Render(figure)
 }
 
+// sandboxRow says what bounds the selected channel's commands when it is
+// less than everything: a full sandbox is the normal case and says nothing.
+// It used to be one line in the daemon's log.
+func (m Model) sandboxRow(width int) string {
+	figure, st := "", theme.StyleWarn
+	switch m.channel.Sandbox {
+	case "landlock":
+		figure = "partial" // writes and network bounded; nothing hidden, no private /tmp
+	case "none":
+		figure, st = "none · asks", theme.StyleError
+	case "off":
+		figure = "off"
+	default:
+		return "" // full, or a daemon that does not say
+	}
+	const label = "sandbox"
+	gap := max(1, width-ansi.StringWidth(label)-ansi.StringWidth(figure))
+	return theme.StyleDim.Render(label+strings.Repeat(" ", gap)) + st.Render(figure)
+}
+
 // trustClick is what the project row does: untrusted, it asks for the
 // decision again, since that is the only thing worth doing about it;
 // trusted, it opens the configuration the row is reporting on.
