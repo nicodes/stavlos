@@ -3,12 +3,14 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/pathx"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/sandbox"
 	"github.com/nicodes/stavlos/internal/tools"
 )
@@ -58,6 +60,18 @@ func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 	if err := os.MkdirAll(tmp, 0o700); err == nil {
 		spec.Tmp, spec.PrivateTmp = tmp, !anyWithin(dirs, os.TempDir())
 	}
+	spec.Hidden = hiddenPaths(cfg, dirs)
+	return spec
+}
+
+// hiddenPaths is what no agent may reach, whatever the mode: the harness's
+// own data, configuration and socket, the user's runtime directory, and the
+// credential stores in the home directory, with what stavlos.json adds. The
+// sandbox mounts nothing over them for commands, and the file tools are
+// refused them (permission.go): a list that bound only the shell was a list
+// an agent could read its way round. A hidden path that holds a working
+// directory is left out, since hiding it would take the directory along.
+func hiddenPaths(cfg *config.Effective, dirs []string) []string {
 	home, _ := os.UserHomeDir()
 	hidden := []string{paths.ConfigDir(), paths.DataDir(), paths.CacheDir(), paths.Socket(), filepath.Join("/run/user", itoa(os.Getuid()))}
 	if rt := os.Getenv("XDG_RUNTIME_DIR"); rt != "" {
@@ -66,13 +80,39 @@ func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 	for _, h := range sandboxHiddenHome {
 		hidden = append(hidden, filepath.Join(home, h))
 	}
+	var out []string
 	for _, h := range append(hidden, cfg.Sandbox.Hide...) {
-		// A hidden path that holds a working directory would take it along.
 		if !anyWithin(dirs, h) {
-			spec.Hidden = append(spec.Hidden, h)
+			out = append(out, h)
 		}
 	}
-	return spec
+	return out
+}
+
+// hiddenFrom is the hidden path a file tool's subject reaches into, or "".
+// What the channel itself keeps under the harness's directories stays open
+// to it: its sheets and its scratch directory.
+func (c *Channel) hiddenFrom(sub policy.Subject, cfg *config.Effective) string {
+	if sub.Kind != policy.KindPath {
+		return ""
+	}
+	var dirs []string
+	for _, d := range c.dirPaths() {
+		dirs = append(dirs, tools.ResolvePath("", d))
+	}
+	own := []string{tools.ResolvePath("", c.SheetDir()), tools.ResolvePath("", filepath.Join(paths.CacheDir(), "tmp", c.ID))}
+	for _, v := range sub.Values {
+		p := tools.ResolvePath(c.Dir(), v)
+		if slices.ContainsFunc(own, func(o string) bool { return pathx.Within(o, p) }) {
+			continue
+		}
+		for _, h := range hiddenPaths(cfg, dirs) {
+			if pathx.Within(tools.ResolvePath("", h), p) {
+				return h
+			}
+		}
+	}
+	return ""
 }
 
 // buildCaches are the per-user directories build tools write as they work,
