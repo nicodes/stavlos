@@ -265,7 +265,7 @@ on their own rather than arrive in one diff.
 | 3.1 `pathx`, `os.Root` | open | |
 | 3.2 pure `Decide` | open | The non-† part still depends on 3.1's parsed paths. |
 | 3.3 shell grammar | **done** | Keywords, launcher flag arity, `eval`, here-strings, same-line literals. A prefix is offered only for words that read back as themselves (found by the fuzzer). |
-| 3.4 trust snapshot | open | |
+| 3.4 trust snapshot | **done** | `config.TakeSnapshot`: one read, bounded, regular files only (a link to one counts); the hash and every project loader use those bytes. The config editor still validates its staged tree from disk. |
 | 3.5 one config writer | **done** | `statefile.WriteAtomic` everywhere but the patch tool (its own semantics) and `init` (a new file). |
 | 3.6 who may call what | **half** | Scope is on the route and dispatch enforces it; a web connection cannot name itself. The owner token and the `internal` scope for the Discord bridge are open. |
 | 3.7 sandbox level | open | † |
@@ -278,7 +278,8 @@ on their own rather than arrive in one diff.
 | 5.3 lanes in bytes | **half** | The queue is bounded at 64 MB; separate lanes wait for 5.2, which removes pushed history. |
 | 5.4 dispatcher | **half** | An event nobody watches is not encoded. Encoding still runs on the writer. |
 | 5.5 usage table | **done** | Migration 5 to 6, checked against a copy of the real log: identical totals. |
-| 5.6 to 5.9 | open | |
+| 5.6 push, not poll | **half** | A `changed` notification for the web UI and Discord; their polls drop from 2 s and 5 s to a 30 s net. Plan usage, the channel list and the browser still poll. |
+| 5.7 to 5.9 | open | |
 | 6.5 nav rows | **done** | Rows by id; no row arithmetic in the tests. |
 | 6.1 to 6.4, 6.6, 6.7 | open | |
 | 7 | open | |
