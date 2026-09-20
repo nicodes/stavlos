@@ -116,6 +116,10 @@ func (d *Daemon) Close() {
 	}
 }
 
+// recoverPage is how many events of a channel are in memory at once while it
+// is folded at start.
+const recoverPage = 2048
+
 func (d *Daemon) recover(ctx context.Context) error {
 	rows, err := d.Log.Channels(ctx)
 	if err != nil {
@@ -125,10 +129,6 @@ func (d *Daemon) recover(ctx context.Context) error {
 		if r.Archived {
 			continue
 		}
-		evs, err := d.Log.Read(ctx, r.ID, 1, 0)
-		if err != nil {
-			return err
-		}
 		cfg, err := config.Load(r.Dir, d.trust)
 		if err != nil {
 			log.Printf("channel %s: config: %v (using the global configuration)", r.ID, err)
@@ -137,7 +137,16 @@ func (d *Daemon) recover(ctx context.Context) error {
 			}
 			cfg.Dir = r.Dir
 		}
-		s, err := agent.Recover(ctx, d, r.ID, r.Dir, r.Created, cfg, evs)
+		s, err := agent.RecoverPaged(ctx, d, r.ID, r.Dir, r.Created, cfg, func(fold func([]event.Event)) error {
+			for from := int64(1); ; {
+				page, err := d.Log.Read(ctx, r.ID, from, recoverPage)
+				if err != nil || len(page) == 0 {
+					return err
+				}
+				fold(page)
+				from = page[len(page)-1].Seq + 1
+			}
+		})
 		if err != nil {
 			log.Printf("channel %s: recover: %v", r.ID, err)
 			continue
