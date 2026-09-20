@@ -241,11 +241,13 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 	case toolname.WebFetch:
 		what = "this exact URL"
 	}
-	opts := []permOption{
-		{"allow", present.AllowOnce, ""},
-		{"always", present.AllowChannel, what},
+	opts := []permOption{{"allow", present.AllowOnce, ""}}
+	if !p.Sticky {
+		// (a sticky ask is answered by a human every time: a standing allow
+		// would be offered and then not honoured)
+		opts = append(opts, permOption{"always", present.AllowChannel, what})
 	}
-	if pre := p.Prefix; pre != "" {
+	if pre := p.Prefix; pre != "" && !p.Sticky {
 		desc := "every command starting with it"
 		if p.Tool == toolname.WebFetch {
 			desc = "every page on this host"

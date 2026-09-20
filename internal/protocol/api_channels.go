@@ -3,27 +3,31 @@ package protocol
 // Channels: what a client is told of one, and what it may ask of it.
 
 type ChannelInfo struct {
-	ID           string       `json:"id"`
-	Name         string       `json:"name"` // unique across the daemon, shown as #name
-	Dir          string       `json:"dir"`
-	DirError     string       `json:"dir_error,omitempty"` // directory unavailable; history remains accessible
-	Model        string       `json:"model"`
-	RootAgent    string       `json:"root_agent"`
-	Created      string       `json:"created"`
-	Archived     bool         `json:"archived"`
-	Seq          int64        `json:"seq"` // latest per-channel sequence
-	Live         int          `json:"live_agents"`
-	CostUSD      float64      `json:"cost_usd"`
-	Tokens       int          `json:"tokens"` // input + output tokens every agent of the channel has used
-	TrustPending bool         `json:"trust_pending"`
-	TrustFiles   int          `json:"trust_files,omitempty"` // files the project layer's trust hash covers; 0 when the directory has no project configuration
-	Mode         string       `json:"mode"`                  // permission mode: ask | auto | yolo
-	Recap        int          `json:"recap,omitempty"`       // minutes of silence before a recap is asked for; 0 is off
-	State        ChannelState `json:"state,omitempty"`       // working (an agent runs) | waiting (one expects an answer) | idle; "" for a channel not in memory
-	Title        string       `json:"title,omitempty"`       // the first human prompt, for pickers
-	Dirs         []DirInfo    `json:"dirs,omitempty"`        // the working directories every agent shares, the channel directory first
-	Permissions  int          `json:"permissions,omitempty"` // permission and trust prompts waiting on the human (channel.list)
-	Questions    int          `json:"questions,omitempty"`   // questions waiting on the human (channel.list)
+	ID           string  `json:"id"`
+	Name         string  `json:"name"` // unique across the daemon, shown as #name
+	Dir          string  `json:"dir"`
+	DirError     string  `json:"dir_error,omitempty"` // directory unavailable; history remains accessible
+	Model        string  `json:"model"`
+	RootAgent    string  `json:"root_agent"`
+	Created      string  `json:"created"`
+	Archived     bool    `json:"archived"`
+	Seq          int64   `json:"seq"` // latest per-channel sequence
+	Live         int     `json:"live_agents"`
+	CostUSD      float64 `json:"cost_usd"`
+	Tokens       int     `json:"tokens"` // input + output tokens every agent of the channel has used
+	TrustPending bool    `json:"trust_pending"`
+	// Sandbox is what bounds this channel's commands: "full", "landlock"
+	// (writes and network bounded, nothing hidden), "none" (the kernel offers
+	// nothing: every command asks) or "off" (turned off in stavlos.json).
+	Sandbox     string       `json:"sandbox,omitempty"`
+	TrustFiles  int          `json:"trust_files,omitempty"` // files the project layer's trust hash covers; 0 when the directory has no project configuration
+	Mode        string       `json:"mode"`                  // permission mode: ask | auto | yolo
+	Recap       int          `json:"recap,omitempty"`       // minutes of silence before a recap is asked for; 0 is off
+	State       ChannelState `json:"state,omitempty"`       // working (an agent runs) | waiting (one expects an answer) | idle; "" for a channel not in memory
+	Title       string       `json:"title,omitempty"`       // the first human prompt, for pickers
+	Dirs        []DirInfo    `json:"dirs,omitempty"`        // the working directories every agent shares, the channel directory first
+	Permissions int          `json:"permissions,omitempty"` // permission and trust prompts waiting on the human (channel.list)
+	Questions   int          `json:"questions,omitempty"`   // questions waiting on the human (channel.list)
 }
 
 type ChannelListParams struct {

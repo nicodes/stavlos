@@ -7,10 +7,10 @@ Clients                         │ ! @main: Permission: Patch
 ○ Web UI                        │   ± AGENTS.md
 ○ Discord checking…             │
                                 │   ▸ ● Allow once
-Channels                     ✚  │     ○ Allow for this channel  this exact call
-! #proj · /home/x/Work/proj  ⚙  │     ○ Deny  with an optional reason                                      now
-  ! @main (general)       $0.20 │
-    ● @scout (general)    $0.05 │ ⠋ Hoofing it… · @main
+Channels                     ✚  │     ○ Deny  with an optional reason                                      now
+! #proj · /home/x/Work/proj  ⚙  │
+  ! @main (general)       $0.20 │ ⠋ Hoofing it… · @main
+    ● @scout (general)    $0.05 │
                                 │
                                 │
                                 │
