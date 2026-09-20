@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/model/registry"
+	"github.com/nicodes/stavlos/internal/modelsdev"
 	"github.com/nicodes/stavlos/internal/protocol"
 	rpc "github.com/nicodes/stavlos/pkg/client"
 )
@@ -67,4 +69,24 @@ func TestSubscribeWithATailSendsTheEndOfTheHistory(t *testing.T) {
 		t.Fatalf("continuing from 50: first %d, %v", res.First, err)
 	}
 	sent(50)
+}
+
+// A daemon that fails to start gives the data directory back: the next one
+// can take it without waiting for this process to end.
+func TestAFailedStartReleasesTheDataDirectory(t *testing.T) {
+	setupConfig(t)
+	dir := t.TempDir()
+	cat, _ := modelsdev.Parse([]byte(`{"fake":{"id":"fake","env":[],"models":{}}}`))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // recovery's first query fails: a start that gets past the lock and the log, then stops
+	if d, err := New(ctx, dir, registry.New(cat)); err == nil {
+		d.Close()
+		t.Skip("a cancelled context did not stop this start")
+	}
+	d, err := New(context.Background(), dir, registry.New(cat))
+	if err != nil {
+		t.Fatalf("the directory a failed start had locked: %v", err)
+	}
+	d.Close()
+	d.Close() // twice is once
 }
