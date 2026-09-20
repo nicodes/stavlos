@@ -82,6 +82,7 @@ func TestVocabularyIsPinned(t *testing.T) {
 	slices.Sort(words)
 	got := strings.Join(words, "\n") + "\n"
 	const path = "testdata/vocabulary.txt"
+	checkTypeScript(t, words)
 	if *update {
 		if err := os.MkdirAll("testdata", 0o755); err != nil {
 			t.Fatal(err)
@@ -108,4 +109,33 @@ func TestVocabularyIsPinned(t *testing.T) {
 		t.Fatalf("words removed or renamed: %v. Logs already hold them: add a migration to internal/eventlog, then run with -update.", gone)
 	}
 	t.Fatalf("the vocabulary grew: run with -update to pin it.")
+}
+
+// tsPath is the vocabulary as the browser's reducer sees it. It is written
+// from the same words, so a switch over event types there is checked by the
+// TypeScript compiler against what the daemon can send: a new event type
+// fails the web build until the reducer handles it or lists it as ignored.
+const tsPath = "../../web/src/core/vocabulary.gen.ts"
+
+func checkTypeScript(t *testing.T, words []string) {
+	t.Helper()
+	unions := map[string][]string{}
+	for _, w := range words {
+		kind, word, _ := strings.Cut(w, " ")
+		unions[kind] = append(unions[kind], strconv.Quote(word))
+	}
+	var b strings.Builder
+	b.WriteString("// Code generated from internal/event/types.go; DO NOT EDIT.\n// go test ./internal/event -run TestVocabularyIsPinned -update\n")
+	for _, u := range []struct{ kind, name string }{{"Type", "EventType"}, {"InputKind", "InputKind"}, {"TurnReason", "TurnReason"}, {"AskOutcome", "AskOutcome"}, {"TodoStatus", "TodoStatus"}} {
+		b.WriteString("\nexport type " + u.name + " =\n  | " + strings.Join(unions[u.kind], "\n  | ") + ";\n")
+	}
+	if *update {
+		if err := os.WriteFile(tsPath, []byte(b.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if have, err := os.ReadFile(tsPath); err != nil || string(have) != b.String() {
+		t.Fatalf("%s is stale (%v): run with -update, then rebuild the web client", tsPath, err)
+	}
 }

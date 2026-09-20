@@ -135,6 +135,32 @@ export function apply(v: ChannelView, e: WireEvent): void {
     case "compaction.done":
       push(v, agent, { key, kind: "notice", time: e.time, text: "context compacted" });
       break;
+    // What the browser does not draw, by name: a type missing from both lists
+    // fails the build, so a new event is a decision here, not an accident.
+    case "agent.cancelled":
+    case "channel.archived":
+    case "channel.created":
+    case "channel.dir_added":
+    case "channel.dir_removed":
+    case "channel.updated":
+    case "compaction.failed":
+    case "compaction.started":
+    case "input.taken":
+    case "job.finished":
+    case "job.started":
+    case "job.stopped":
+    case "mcp.failed":
+    case "mcp.started":
+    case "mcp.stopped":
+    case "permit.granted":
+    case "todo.changed":
+    case "tool.started":
+    case "turn.started":
+      break;
+    default: {
+      const unhandled: never = e.type; // a compile error names the type nobody decided about
+      void unhandled; // at run time: a daemon newer than this bundle
+    }
   }
 }
 
