@@ -33,6 +33,7 @@ type decision struct {
 	boundary string      // the directory the call reaches outside the working set, "" when inside
 	control  string      // the file that steers the harness this call edits, "" for none: no mode and no permit answers that ask
 	egress   bool        // the call sends data off the machine: auto leaves it asking
+	bare     bool        // a command with no sandbox under it: asked every time, like a control file
 	why      string      // the denial when the harness refuses without a rule (auto outside the directories)
 }
 
@@ -127,6 +128,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	a.c.mu.Lock()
 	f := facts{
 		hidden:    hidden != "",
+		bare:      sub.Kind == policy.KindCommand && unsandboxed(cfg),
 		ruled:     ruled,
 		compound:  sub.Kind == policy.KindCommand && !shellcmd.Simple(arg),
 		control:   control != "",
@@ -148,11 +150,12 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	} else if verb == policy.Deny {
 		why = autoOutside(boundary)
 	}
-	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: f.egress}
+	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: f.egress, bare: f.bare}
 }
 
 // facts is everything the verdict on a call depends on, read once.
 type facts struct {
+	bare      bool        // a command, where the sandbox is wanted and the kernel offers none
 	hidden    bool        // a file tool reaching into what no agent may (sandbox.go hiddenPaths)
 	ruled     policy.Verb // what the rules say of the call, the role's tightening included
 	compound  bool        // a command line that is more than one simple command
@@ -182,8 +185,17 @@ func judge(f facts) policy.Verb {
 		return policy.Deny // before the rules: no rule, permit or mode opens these
 	}
 	verb := f.ruled
-	if verb == policy.Allow && (f.compound || f.control) {
+	if verb == policy.Allow && (f.compound || f.control || f.bare) {
 		verb = policy.Ask
+	}
+	if verb == policy.Ask && f.bare {
+		// Nothing stands between this command and the machine: no permit and
+		// no mode answers for the human, who turns the sandbox off in
+		// stavlos.json if that is what they want.
+		if f.outside && f.mode == protocol.ModeAuto {
+			return policy.Deny
+		}
+		return policy.Ask
 	}
 	if verb == policy.Ask && !f.control && f.permitted {
 		verb = policy.Allow
@@ -275,9 +287,13 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	// The prefix a client may offer to allow is the daemon's to derive from
 	// the call itself; the prompt carries it for display.
 	prefix := prefixFor(d.sub.Kind, d.arg)
+	if d.bare {
+		question += " · no sandbox on this system: the command runs with your full access"
+		prefix = "" // a standing allow would not be honoured: nothing to offer
+	}
 	ans := a.ask(turnCtx, protocol.PromptInfo{
 		ID: NewID("p"), Channel: a.c.ID, ChannelName: a.c.Name(), Agent: a.ID, From: rv.name, Role: rv.role, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
-		Question: question, Dir: d.boundary, Prefix: prefix, Sticky: d.control != "", Egress: d.egress,
+		Question: question, Dir: d.boundary, Prefix: prefix, Sticky: d.control != "" || d.bare, Egress: d.egress,
 	}, c.ID)
 	if ans.Withdrawn {
 		return "", true, false

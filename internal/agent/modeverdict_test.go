@@ -52,6 +52,12 @@ func TestJudgeKeepsItsPromises(t *testing.T) {
 										t.Errorf("%+v: a hidden path was opened", hid)
 									}
 								}
+								if bare := f; ruled != policy.Deny {
+									bare.bare = true
+									if judge(bare) == policy.Allow {
+										t.Errorf("%+v: a command ran with no sandbox and nobody asked", bare)
+									}
+								}
 								switch {
 								case ruled == policy.Deny && got != policy.Deny:
 									t.Errorf("%+v: a deny was loosened to %s", f, got)

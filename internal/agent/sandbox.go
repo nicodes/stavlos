@@ -64,6 +64,23 @@ func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 	return spec
 }
 
+// sandboxLevel is what bounds a channel's commands, as clients are told it.
+func sandboxLevel(cfg *config.Effective) string {
+	if !cfg.Sandbox.Enabled {
+		return "off"
+	}
+	lvl, _ := probeSandbox()
+	return lvl.String()
+}
+
+// probeSandbox is sandbox.Probe, a variable so a test can be a kernel that
+// offers nothing.
+var probeSandbox = sandbox.Probe
+
+// unsandboxed reports that the sandbox is wanted and the kernel offers none
+// of it: a command would run with nothing between it and the machine.
+func unsandboxed(cfg *config.Effective) bool { return sandboxLevel(cfg) == "none" }
+
 // hiddenPaths is what no agent may reach, whatever the mode: the harness's
 // own data, configuration and socket, the user's runtime directory, and the
 // credential stores in the home directory, with what stavlos.json adds. The

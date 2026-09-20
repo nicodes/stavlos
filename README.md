@@ -253,6 +253,8 @@ Every command and MCP server runs with a scrubbed environment, without `STAVLOS_
 It may write only beneath the channel's directories, a scratch directory of the channel mounted as `/tmp`, and the caches build tools fill.
 The files that steer the harness or run code later stay read-only: `.git/hooks`, `.git/config`, `.stavlos`, `.envrc`, and every `AGENTS.md` or `CLAUDE.md` the project's trust covers.
 It cannot see Stavlos's own config, data, cache or socket, your runtime directory (where the D-Bus and agent sockets live), or credential stores such as `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh` and `~/.netrc`.
+The file tools (`read`, `grep`, `glob`, `apply_patch`) are refused those same paths in every mode, yolo included, and whatever a rule allows: a list that bound only commands was one an agent could read its way round. The channel's own sheets and scratch directory stay open to it.
+When the level is less than full the nav says so under `project`: `sandbox partial` (writes and the network are bounded, nothing is hidden), `sandbox off` (you turned it off), or `sandbox none · asks` when the kernel offers nothing. In that last case every command asks, whatever the mode, a rule or an earlier "allow for this channel" says, because it would run with your full access; turn the sandbox off in `stavlos.json` if that is what you want.
 Configure it in `stavlos.json` (yours, or a trusted project's, which takes precedence): `"sandbox": {"network": false, "writable": ["~/.m2"], "hide": ["~/private"]}`, or `"enabled": false` to turn it off.
 The build caches stay writable, so a command can still poison one.
 

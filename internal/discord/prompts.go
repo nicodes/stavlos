@@ -36,7 +36,7 @@ func promptView(p protocol.PromptInfo, clientID string) (string, []dg.MessageCom
 		buttons = append(buttons, button(p.ID, "allow", present.AllowOnce, disabled))
 		if p.Dir != "" {
 			buttons = append(buttons, button(p.ID, "always", present.AllowAddDir, disabled))
-		} else {
+		} else if !p.Sticky { // a sticky ask is a human's every time: no standing allow to offer
 			buttons = append(buttons, button(p.ID, "always", present.AllowChannel, disabled))
 			if p.Prefix != "" {
 				buttons = append(buttons, button(p.ID, "prefix", present.AllowPrefix(p.Prefix), disabled))

@@ -7,6 +7,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
+	"github.com/nicodes/stavlos/internal/sandbox"
 )
 
 // What the sandbox hides from commands, the file tools are refused too, in
@@ -30,5 +31,23 @@ func TestFileToolsAreRefusedWhatIsHidden(t *testing.T) {
 	}
 	if s.hiddenFrom(policy.Command("cat ~/.ssh/id_ed25519"), cfg) != "" {
 		t.Error("a command is the sandbox's to bound, not this check's")
+	}
+}
+
+// A kernel that offers no sandbox makes commands bare, unless the human
+// turned the sandbox off themselves: that is a choice, not a surprise.
+func TestNoSandboxIsBareOnlyWhenItWasWanted(t *testing.T) {
+	prev := probeSandbox
+	probeSandbox = func() (sandbox.Level, error) { return sandbox.None, nil }
+	defer func() { probeSandbox = prev }()
+	s, _ := newTestChannel(t, testConfig{}, &fakeModel{})
+	cfg := *s.Config()
+	cfg.Sandbox.Enabled = true
+	if !unsandboxed(&cfg) || sandboxLevel(&cfg) != "none" {
+		t.Fatal("a wanted sandbox the kernel cannot give was not reported")
+	}
+	cfg.Sandbox.Enabled = false
+	if unsandboxed(&cfg) || sandboxLevel(&cfg) != "off" {
+		t.Fatal("a sandbox the human turned off was treated as missing")
 	}
 }

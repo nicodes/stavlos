@@ -31,6 +31,7 @@ const (
 	navSubscriptionsTitle
 	navPlan // one window of a plan; plan says which
 	navTrust
+	navSandbox
 	navCache
 )
 
@@ -85,6 +86,9 @@ func (m Model) navHeader(width int) []navRow {
 	monitors := len(rows)
 	if trust := m.trustRow(width); trust != "" {
 		rows = append(rows, navRow{id: navTrust, text: trust})
+	}
+	if sb := m.sandboxRow(width); sb != "" {
+		rows = append(rows, navRow{id: navSandbox, text: sb})
 	}
 	if cache := m.cacheRow(width); cache != "" {
 		rows = append(rows, navRow{id: navCache, text: cache})
