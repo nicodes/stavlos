@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -226,6 +227,36 @@ func waitUntil(t *testing.T, h *fakeHost, cond func() bool) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("condition never held\n%s", h.dump())
+}
+
+// quiet reports that nothing in the channel will happen by itself: no agent
+// is in a turn or closing one (the reminder a turn's end may queue is
+// written before cancelTurn is cleared), none has an input that starts a
+// turn, and no wake is waiting to be taken. It is the deterministic form of
+// "sleep a while and see that nothing followed": once it holds, only
+// something from outside (a post, a job finishing, a clock) moves the channel.
+func (c *Channel) quiet(only ...string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for id, a := range c.agents {
+		if len(only) > 0 && !slices.Contains(only, id) {
+			continue // (an agent a test holds mid-turn on purpose)
+		}
+		st := c.st.agents[id]
+		if st == nil || st.killed {
+			continue
+		}
+		if st.inTurn || a.cancelTurn != nil || st.startsTurn() || len(a.wake) > 0 || st.compacting || a.maintenance > 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// settle waits until the channel is quiet, or only the agents named.
+func settle(t *testing.T, s *Channel, h *fakeHost, only ...string) {
+	t.Helper()
+	waitUntil(t, h, func() bool { return s.quiet(only...) })
 }
 
 func (h *fakeHost) dump() string {
