@@ -123,8 +123,10 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	dirs := append(a.c.dirPaths(), a.c.SheetDir())
 	control := controlFile(c.Name, sub, a.c.Dir(), dirs)
 	boundary := outsideDir(sub, a.c.Dir(), dirs)
+	hidden := a.c.hiddenFrom(sub, cfg)
 	a.c.mu.Lock()
 	f := facts{
+		hidden:    hidden != "",
 		ruled:     ruled,
 		compound:  sub.Kind == policy.KindCommand && !shellcmd.Simple(arg),
 		control:   control != "",
@@ -139,7 +141,9 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 		arg = control // the prompt names the file that steers the harness
 	}
 	why := ""
-	if ruled == policy.Deny {
+	if hidden != "" {
+		boundary, why = "", hidden+" is hidden from agents in every mode: it holds credentials or Stavlos's own state. Ask the human for what you need from it."
+	} else if ruled == policy.Deny {
 		boundary = "" // the rules refused it: where it reaches is beside the point
 	} else if verb == policy.Deny {
 		why = autoOutside(boundary)
@@ -149,6 +153,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 
 // facts is everything the verdict on a call depends on, read once.
 type facts struct {
+	hidden    bool        // a file tool reaching into what no agent may (sandbox.go hiddenPaths)
 	ruled     policy.Verb // what the rules say of the call, the role's tightening included
 	compound  bool        // a command line that is more than one simple command
 	control   bool        // an edit to a file that steers the harness
@@ -173,6 +178,9 @@ type facts struct {
 // It reads nothing but its argument, so every combination can be tested and
 // a change of mode can be judged again without the call.
 func judge(f facts) policy.Verb {
+	if f.hidden {
+		return policy.Deny // before the rules: no rule, permit or mode opens these
+	}
 	verb := f.ruled
 	if verb == policy.Allow && (f.compound || f.control) {
 		verb = policy.Ask

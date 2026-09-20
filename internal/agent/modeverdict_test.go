@@ -44,8 +44,14 @@ func TestJudgeKeepsItsPromises(t *testing.T) {
 					for _, permitted := range bools {
 						for _, egress := range bools {
 							for _, outside := range bools {
-								f := facts{ruled, compound, control, permitted, mode, egress, outside}
+								f := facts{ruled: ruled, compound: compound, control: control, permitted: permitted, mode: mode, egress: egress, outside: outside}
 								got := judge(f)
+								if hid := f; true {
+									hid.hidden = true
+									if judge(hid) != policy.Deny {
+										t.Errorf("%+v: a hidden path was opened", hid)
+									}
+								}
 								switch {
 								case ruled == policy.Deny && got != policy.Deny:
 									t.Errorf("%+v: a deny was loosened to %s", f, got)
