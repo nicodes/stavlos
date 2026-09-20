@@ -1,5 +1,5 @@
 import { CHAT, type Item, type SheetInfo, type StreamDelta, type WireEvent } from "./types";
-import { primaryArg } from "./vocabulary.gen";
+import { primaryArg } from "./tools.gen";
 
 /**
  * A channel as the browser sees it: a fold of its events, the counterpart of

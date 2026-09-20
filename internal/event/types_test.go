@@ -5,14 +5,11 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"maps"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/nicodes/stavlos/internal/present"
 )
 
 var update = flag.Bool("update", false, "rewrite testdata/vocabulary.txt")
@@ -132,14 +129,6 @@ func checkTypeScript(t *testing.T, words []string) {
 	for _, u := range []struct{ kind, name string }{{"Type", "EventType"}, {"InputKind", "InputKind"}, {"TurnReason", "TurnReason"}, {"AskOutcome", "AskOutcome"}, {"TodoStatus", "TodoStatus"}} {
 		b.WriteString("\nexport type " + u.name + " =\n  | " + strings.Join(unions[u.kind], "\n  | ") + ";\n")
 	}
-	// which argument stands for a tool call (internal/present)
-	args := present.PrimaryArgs()
-	tools := slices.Sorted(maps.Keys(args))
-	b.WriteString("\nexport const primaryArg: Record<string, string> = {\n")
-	for _, tool := range tools {
-		b.WriteString("  " + tool + ": " + strconv.Quote(args[tool]) + ",\n")
-	}
-	b.WriteString("};\n")
 	if *update {
 		if err := os.WriteFile(tsPath, []byte(b.String()), 0o644); err != nil {
 			t.Fatal(err)
