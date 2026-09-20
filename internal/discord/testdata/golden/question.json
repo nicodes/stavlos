@@ -1,0 +1,62 @@
+{
+  "components": [
+    {
+      "components": [
+        {
+          "label": "mold — fastest",
+          "style": 2,
+          "disabled": false,
+          "emoji": {
+            "name": "⬜"
+          },
+          "custom_id": "sv|p1|toggle|0.0",
+          "type": 2
+        }
+      ],
+      "type": 1
+    },
+    {
+      "components": [
+        {
+          "label": "lld",
+          "style": 2,
+          "disabled": false,
+          "emoji": {
+            "name": "⬜"
+          },
+          "custom_id": "sv|p1|toggle|0.1",
+          "type": 2
+        }
+      ],
+      "type": 1
+    },
+    {
+      "components": [
+        {
+          "label": "Custom answer",
+          "style": 2,
+          "disabled": false,
+          "emoji": {
+            "name": "⬜"
+          },
+          "custom_id": "sv|p1|text|0",
+          "type": 2
+        }
+      ],
+      "type": 1
+    },
+    {
+      "components": [
+        {
+          "label": "Submit answer",
+          "style": 1,
+          "disabled": false,
+          "custom_id": "sv|p1|submit|0",
+          "type": 2
+        }
+      ],
+      "type": 1
+    }
+  ],
+  "content": "❓ **Which linker?**"
+}
