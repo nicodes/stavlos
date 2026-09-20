@@ -58,9 +58,9 @@ func (m *Model) chatKey(msg tea.KeyMsg) tea.Cmd {
 	switch {
 	case key.Matches(msg, keys.Clear):
 		return m.setFocus(focusInput)
-	case key.Matches(msg, keys.SelUp), msg.String() == "k":
+	case key.Matches(msg, keys.SelUp, keys.VimUp):
 		m.moveCursor(-1)
-	case key.Matches(msg, keys.SelDown), msg.String() == "j":
+	case key.Matches(msg, keys.SelDown, keys.VimDown):
 		m.moveCursor(1)
 	case key.Matches(msg, keys.PageUp):
 		m.moveCursor(-chatPage)

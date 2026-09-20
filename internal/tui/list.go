@@ -18,8 +18,8 @@ func wrapIndex(i, n int) int { return (i%n + n) % n }
 // with letters, k and j move it too (lists with no text field taking the
 // keys). It reports whether the key was a move, even over no rows.
 func stepCursor(msg tea.KeyMsg, cur *int, n int, letters bool) bool {
-	up := key.Matches(msg, keys.SelUp) || letters && msg.String() == "k"
-	down := key.Matches(msg, keys.SelDown) || letters && msg.String() == "j"
+	up := key.Matches(msg, keys.SelUp) || letters && key.Matches(msg, keys.VimUp)
+	down := key.Matches(msg, keys.SelDown) || letters && key.Matches(msg, keys.VimDown)
 	if !up && !down {
 		return false
 	}

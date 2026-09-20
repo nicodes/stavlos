@@ -108,7 +108,7 @@ func (m *Model) sidebarKey(msg tea.KeyMsg) tea.Cmd {
 			return m.newChannel()
 		}
 		return m.channelSettings(m.sbCursor)
-	case msg.String() == "n": // the next agent that needs you, selected at once
+	case key.Matches(msg, keys.NextWaiting): // the next agent that needs you, selected at once
 		from := -1
 		if r, ok := m.sidebarAt(m.sbCursor); ok && r.kind == sbAgent {
 			from = r.k
