@@ -17,8 +17,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nicodes/stavlos/internal/httpx"
-	"log"
 	"net/http"
 	"regexp"
 	"sort"
@@ -32,7 +30,6 @@ import (
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/model/chatcompletions"
 	"github.com/nicodes/stavlos/internal/model/codex"
-	"github.com/nicodes/stavlos/internal/model/quota"
 	"github.com/nicodes/stavlos/internal/model/stream"
 	"github.com/nicodes/stavlos/internal/modelsdev"
 	"github.com/nicodes/stavlos/internal/oauth"
@@ -194,11 +191,7 @@ type Registry struct {
 	opened     map[string]model.Model    // keyed by full "provider/id"
 	refreshing map[string]*sync.Mutex    // single-flight refresh per provider
 
-	usageMu sync.Mutex
-	usage   map[string]model.PlanUsage               // provider → latest observed plan usage
-	onUsage func(provider string, u model.PlanUsage) // nil for none
-	polls   bool                                     // ask the providers that report usage nowhere else (EnablePlanPolling)
-	polled  map[string]time.Time                     // provider → when it was last asked, answered or not
+	usageTracker // what the subscriptions have used, under its own lock (usage.go)
 }
 
 // modelCounts memoises how many models each subscription lists for one
@@ -477,80 +470,6 @@ func (r *Registry) tokenSource(provider string) model.TokenSource {
 
 // --- plan usage ---
 
-// observeUsage keeps provider's latest plan usage, as a call's response
-// reported it, and hands it to the usage hook.
-func (r *Registry) observeUsage(provider string, u model.PlanUsage) {
-	r.usageMu.Lock()
-	if r.usage == nil {
-		r.usage = map[string]model.PlanUsage{}
-	}
-	if old, ok := r.usage[provider]; ok {
-		if old.Observed.After(u.Observed) {
-			r.usageMu.Unlock()
-			return // an older response finished last
-		}
-		u.Plan = cmp.Or(u.Plan, old.Plan) // a call's headers carry no plan name; the usage endpoint does
-		if u.LimitedUntil.IsZero() {
-			u.LimitedUntil = old.LimitedUntil // a refusal outlasts the readings that follow it
-		}
-	}
-	r.usage[provider] = u
-	hook := r.onUsage
-	r.usageMu.Unlock()
-	if hook != nil {
-		hook(provider, u)
-	}
-}
-
-// MarkLimited records that provider refused a model call for a limit, so
-// the agents choosing a model pass it over until then. The reading itself is
-// left as it was.
-func (r *Registry) MarkLimited(provider string, until time.Time) {
-	r.usageMu.Lock()
-	if r.usage == nil {
-		r.usage = map[string]model.PlanUsage{}
-	}
-	u := r.usage[provider]
-	if until.After(u.LimitedUntil) {
-		u.LimitedUntil = until
-		r.usage[provider] = u
-	}
-	r.usageMu.Unlock()
-}
-
-// SeedPlanUsage restores a provider's usage as last observed (by an earlier
-// daemon), unless a newer reading is already kept.
-func (r *Registry) SeedPlanUsage(provider string, u model.PlanUsage) {
-	r.usageMu.Lock()
-	defer r.usageMu.Unlock()
-	if r.usage == nil {
-		r.usage = map[string]model.PlanUsage{}
-	}
-	if old, ok := r.usage[provider]; !ok || u.Observed.After(old.Observed) {
-		r.usage[provider] = u
-	}
-}
-
-// OnPlanUsage sets the hook every newly observed plan usage is handed to
-// (the daemon keeps it on disk); it runs on the calling agent's goroutine.
-func (r *Registry) OnPlanUsage(hook func(provider string, u model.PlanUsage)) {
-	r.usageMu.Lock()
-	defer r.usageMu.Unlock()
-	r.onUsage = hook
-}
-
-// PlanUsage is every provider's latest observed plan usage, keyed by
-// provider id.
-func (r *Registry) PlanUsage() map[string]model.PlanUsage {
-	r.usageMu.Lock()
-	defer r.usageMu.Unlock()
-	out := make(map[string]model.PlanUsage, len(r.usage))
-	for k, v := range r.usage {
-		out[k] = v
-	}
-	return out
-}
-
 // SubscriptionName is a subscription's display name ("ChatGPT").
 func SubscriptionName(id string) string {
 	if s, ok := subscriptionByID(id); ok {
@@ -749,85 +668,3 @@ func (r *Registry) Models(provider string, all bool) []ModelEntry {
 
 // planPollEvery is the least time between two questions to one provider.
 const planPollEvery = 5 * time.Minute
-
-// EnablePlanPolling turns the questions on. They are off until the daemon
-// says so, so a test that points a subscription at its own server is never
-// asked for a usage page it does not serve.
-func (r *Registry) EnablePlanPolling() {
-	r.usageMu.Lock()
-	r.polls = true
-	r.usageMu.Unlock()
-}
-
-// polledModel asks for its provider's plan usage after each call.
-type polledModel struct {
-	model.Model
-	after func()
-}
-
-func (m polledModel) Complete(ctx context.Context, req model.Request, onDelta func(model.Delta)) (model.Response, error) {
-	resp, err := m.Model.Complete(ctx, req, onDelta)
-	m.after()
-	return resp, err
-}
-
-func (r *Registry) pollAfterCall(provider string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	if err := r.PollPlanUsage(ctx, provider, planPollEvery); err != nil {
-		log.Printf("%v", err)
-	}
-}
-
-// PollPlanUsage asks provider for its plan usage unless it was asked less
-// than minAge ago, and keeps the answer like a reading a model call carried.
-// It is a no-op for a provider that is not signed in or has nowhere to ask.
-func (r *Registry) PollPlanUsage(ctx context.Context, provider string, minAge time.Duration) error {
-	r.usageMu.Lock()
-	on := r.polls
-	r.usageMu.Unlock()
-	if !on {
-		return nil
-	}
-	r.mu.Lock()
-	base := map[string]string{
-		"openai": cmp.Or(r.codexEndpoint, codex.DefaultEndpoint), "xai": cmp.Or(r.xaiBaseURL, xaiBaseURL),
-		"zai": cmp.Or(r.zaiBaseURL, zaiBaseURL), "kimi": cmp.Or(r.kimiBaseURL, kimiBaseURL),
-	}[provider]
-	r.mu.Unlock()
-	endpoint := quota.URL(provider, base)
-	if st, ok := r.Status(provider); endpoint == "" || !ok || !st.Connected {
-		return nil
-	}
-	r.usageMu.Lock()
-	if time.Since(r.polled[provider]) < minAge {
-		r.usageMu.Unlock()
-		return nil
-	}
-	if r.polled == nil {
-		r.polled = map[string]time.Time{}
-	}
-	r.polled[provider] = time.Now() // a failure waits its turn too: no retry storm against a vendor
-	r.usageMu.Unlock()
-	tok, err := r.tokenSource(provider)(ctx)
-	if err != nil {
-		return fmt.Errorf("%s plan usage: %w", provider, err)
-	}
-	u, err := quota.Fetch(ctx, quotaHTTP, provider, endpoint, tok)
-	if err != nil {
-		return err
-	}
-	r.observeUsage(provider, u)
-	return nil
-}
-
-// PollAllPlanUsage asks every signed-in subscription (PollPlanUsage).
-func (r *Registry) PollAllPlanUsage(ctx context.Context, minAge time.Duration) {
-	for _, s := range subscriptions {
-		if err := r.PollPlanUsage(ctx, s.id, minAge); err != nil {
-			log.Printf("%v", err)
-		}
-	}
-}
-
-var quotaHTTP = httpx.New(httpx.Options{Timeout: 15 * time.Second})
