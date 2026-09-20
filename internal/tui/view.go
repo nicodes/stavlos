@@ -334,13 +334,8 @@ func (m Model) View() string {
 	} else {
 		main = m.channelView(f, m.width)
 	}
-	if m.cfgEditor != nil {
-		main = dialog.Composite(main, m.width, mainH, m.cfgEditor.view(m.width, mainH))
-	} else if m.ov != nil {
-		m.ov.hints = m.keyHints() // the dialog's own keys, shown whatever the key bar setting
-		main = dialog.Composite(main, m.width, mainH, m.ov.view(m.width, m.sp.View()))
-	} else if isTab(m.focus) {
-		main = dialog.Composite(main, m.width, mainH, m.tabDialog(m.width))
+	if p := (&m).pane(); p != nil {
+		main = dialog.Composite(main, m.width, mainH, p.view(m, m.width, mainH))
 	}
 	frame := main
 	if kb > 0 {
