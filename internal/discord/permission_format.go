@@ -143,7 +143,7 @@ func trustText(p protocol.PromptInfo) string {
 	if data.Dir != "" {
 		head += " · " + escapeMarkdown(data.Dir)
 	}
-	text := head + "\nProject configuration can define MCP servers, policy, presets, skills and AGENTS.md."
+	text := head + "\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md."
 	if len(data.Files) > 0 {
 		text += "\nConfiguration files:\n" + permissionCode("text", strings.Join(data.Files, "\n"))
 	}

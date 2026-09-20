@@ -21,7 +21,7 @@
     "schema": {
       "properties": {
         "archetype": {
-          "description": "Preset name of the child (see the list in your instructions)",
+          "description": "Role name of the child (see the list in your instructions)",
           "type": "string"
         },
         "label": {

@@ -665,7 +665,7 @@ func TestChildLabels(t *testing.T) {
 }
 
 // TestRoleSwitchDuringTurn: /role while a turn runs is a write to the
-// preset from another goroutine; each step reads one consistent view, and
+// role from another goroutine; each step reads one consistent view, and
 // the race detector must stay quiet.
 func TestRoleSwitchDuringTurn(t *testing.T) {
 	gate := make(chan struct{})

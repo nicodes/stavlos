@@ -288,7 +288,7 @@ func TestVariantDoesNotFollowAnAgentToAModelThatRejectsIt(t *testing.T) {
 // in #36 would have broken: an agent arriving with no variant still gets the
 // role's default for its model.
 func TestFitVariant(t *testing.T) {
-	role := config.Preset{Models: []config.ModelSpec{{ID: "a/efforts", Variants: []string{"medium", "high"}}, {ID: "b/any"}, {ID: "c/odd", Variants: []string{"turbo"}}}}
+	role := config.Role{Models: []config.ModelSpec{{ID: "a/efforts", Variants: []string{"medium", "high"}}, {ID: "b/any"}, {ID: "c/odd", Variants: []string{"turbo"}}}}
 	efforts := []string{"low", "medium", "high"}
 	for _, tc := range []struct {
 		name, id, want, got string

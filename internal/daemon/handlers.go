@@ -454,12 +454,12 @@ var handlers = routes(
 		// Every channel's prompts: the permission and questions tabs span channels.
 		return protocol.ReconcileResult{Channel: info, Agents: s.Tree(), Prompts: c.d.esc.Pending(""), Seq: seq}, nil
 	})),
-	route(protocol.Presets, func(_ context.Context, c *conn, p protocol.PresetsParams) (protocol.PresetsResult, error) {
+	route(protocol.Roles, func(_ context.Context, c *conn, p protocol.RolesParams) (protocol.RolesResult, error) {
 		s, err := c.d.channel(p.Channel)
 		if err != nil {
-			return protocol.PresetsResult{}, err
+			return protocol.RolesResult{}, err
 		}
-		return protocol.PresetsResult{Presets: s.Presets()}, nil
+		return protocol.RolesResult{Roles: s.Roles()}, nil
 	}),
 	forWeb(route(protocol.UsageSeries, func(ctx context.Context, c *conn, p protocol.UsageSeriesParams) (protocol.UsageSeriesResult, error) {
 		switch {

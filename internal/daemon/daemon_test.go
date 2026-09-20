@@ -746,9 +746,9 @@ func TestShellKillStopsJob(t *testing.T) {
 	}
 }
 
-func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
+func TestSetRoleSwitchesRoleInPlace(t *testing.T) {
 	setupConfig(t)
-	// Only "general" ships built in; a user preset comes from agents/<name>.md.
+	// Only "general" ships built in; a user role comes from agents/<name>.md.
 	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
 	_ = os.MkdirAll(agentsDir, 0o755)
 	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools:\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
@@ -757,13 +757,13 @@ func TestSetRoleSwitchesPresetInPlace(t *testing.T) {
 	fm.steps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
 			if !strings.Contains(req.System, "senior software engineer") {
-				t.Errorf("turn 1 should use the coder preset: %.80q", req.System)
+				t.Errorf("turn 1 should use the coder role: %.80q", req.System)
 			}
 			return text("hi from coder")
 		},
 		func(req model.Request) model.Response {
 			if !strings.Contains(req.System, "read-only code explorer") {
-				t.Errorf("turn 2 should use the explorer preset: %.80q", req.System)
+				t.Errorf("turn 2 should use the explorer role: %.80q", req.System)
 			}
 			for _, d := range req.Tools {
 				if d.Name == "apply_patch" || d.Name == "agent_create" {
@@ -1205,15 +1205,15 @@ func TestChannelListTitles(t *testing.T) {
 	}
 }
 
-// TestRecoveredAgentWithMissingPresetFallsBack: a channel whose root was
-// created under a preset that no longer exists resumes as the configured
-// root preset, with its full tool set.
-func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
+// TestRecoveredAgentWithMissingRoleFallsBack: a channel whose root was
+// created under a role that no longer exists resumes as the configured
+// root role, with its full tool set.
+func TestRecoveredAgentWithMissingRoleFallsBack(t *testing.T) {
 	setupConfig(t)
 	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
 	_ = os.MkdirAll(agentsDir, 0o755)
-	presetFile := filepath.Join(agentsDir, "coder.md")
-	os.WriteFile(presetFile, []byte("---\ndescription: Old coder\ntools:\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are the old coder.\n"), 0o644)
+	roleFile := filepath.Join(agentsDir, "coder.md")
+	os.WriteFile(roleFile, []byte("---\ndescription: Old coder\ntools:\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are the old coder.\n"), 0o644)
 	work := t.TempDir()
 	data := t.TempDir()
 	fm := &fakeModel{}
@@ -1228,7 +1228,7 @@ func TestRecoveredAgentWithMissingPresetFallsBack(t *testing.T) {
 		t.Fatalf("root should start as coder: %+v", agents[0])
 	}
 	h.close()
-	os.Remove(presetFile) // the preset disappears (as coder did when general replaced it)
+	os.Remove(roleFile) // the role disappears (as coder did when general replaced it)
 
 	fm2 := &fakeModel{}
 	var offered []string

@@ -45,7 +45,7 @@ const (
 	ovProviders     overlayKind = iota // pick a provider
 	ovMethods                          // pick a login method (providers with more than one)
 	ovModels                           // pick a model
-	ovRoles                            // pick a role (preset) for the selected agent
+	ovRoles                            // pick a role (role) for the selected agent
 	ovVariants                         // pick a model variant (reasoning effort) for the selected agent
 	ovChannels                         // pick a channel of this directory to resume
 	ovMode                             // pick the channel's permission mode (ask | auto | yolo)

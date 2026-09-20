@@ -118,7 +118,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	// Policy judges every value of the subject (each path a patch touches)
 	// and the most restrictive decision wins; the prompt names that value.
 	sub := t.Subject(c.Input)
-	ruled, arg := cfg.Policy.With(rv.preset.PresetPolicy()).Decide(c.Name, sub)
+	ruled, arg := cfg.Policy.With(rv.def.RolePolicy()).Decide(c.Name, sub)
 	// The channel's sheets are part of the working set for the file tools
 	// (never for commands: the sandbox builds its own list).
 	dirs := append(a.c.dirPaths(), a.c.SheetDir())

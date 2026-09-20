@@ -177,7 +177,7 @@ func init() {
 			return m.setStatus("key bar shown (/help hides it)", false)
 		}},
 		"/chat": {run: func(m *Model, _, _ string) tea.Cmd { return m.openChat() }},
-		// The one role dialog: enter switches the selected agent's preset. A
+		// The one role dialog: enter switches the selected agent's role. A
 		// name argument sets it directly.
 		"/roles": {needsAgent: true, run: func(m *Model, _, rest string) tea.Cmd {
 			if rest == "" {

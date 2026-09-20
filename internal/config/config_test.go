@@ -39,8 +39,8 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if !e.TrustPending || e.TrustHash == "" || len(e.TrustFiles) != 3 {
 		t.Fatalf("trust: pending=%v hash=%q files=%v", e.TrustPending, e.TrustHash, e.TrustFiles)
 	}
-	if _, ok := e.Presets["reviewer"]; ok {
-		t.Fatal("untrusted preset loaded")
+	if _, ok := e.Roles["reviewer"]; ok {
+		t.Fatal("untrusted role loaded")
 	}
 	if len(e.Instructions) != 0 || e.ProjectTrusted {
 		t.Fatal("untrusted AGENTS.md loaded")
@@ -59,9 +59,9 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if e.Model != "anthropic/claude-sonnet-5" || e.RootAgent != "general" {
 		t.Fatalf("model %q root %q", e.Model, e.RootAgent)
 	}
-	p, ok := e.Presets["reviewer"]
+	p, ok := e.Roles["reviewer"]
 	if !ok || len(p.Models) != 1 || p.Models[0].ID != "openai/gpt-5-mini" || p.Body != "You review." || p.Layer != "project" || p.Type != TypeAll {
-		t.Fatalf("preset %+v", p)
+		t.Fatalf("role %+v", p)
 	}
 	if len(e.Instructions) != 1 || e.Instructions[0].Text != "Use light models." || !e.ProjectTrusted || len(e.InstructionFiles) != 1 {
 		t.Fatalf("AGENTS.md: %+v %v", e.Instructions, e.InstructionFiles)
@@ -72,7 +72,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	if verb(e.Policy, "shell", "curl x") != policy.Deny {
 		t.Fatal("project tighten lost")
 	}
-	if _, ok := e.Presets["general"]; !ok {
+	if _, ok := e.Roles["general"]; !ok {
 		t.Fatal("builtin missing")
 	}
 
@@ -129,7 +129,7 @@ func TestReadRoleFile(t *testing.T) {
 		os.WriteFile(path, []byte(body), 0o644)
 		return path
 	}
-	p, err := ReadPreset(write("reviewer", `---
+	p, err := ReadRole(write("reviewer", `---
 description: Reviews a diff
 type: subagent
 models:
@@ -162,7 +162,7 @@ You review.
 	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,apply_patch,skill,todo,web_search,sheet" { // everything but the removed web_fetch
 		t.Fatalf("tools %v", p.Tools)
 	}
-	pol := p.PresetPolicy()
+	pol := p.RolePolicy()
 	if verb(pol, "shell", "git push origin") != policy.Deny || verb(pol, "shell", "ls") != policy.Ask || verb(pol, "read", "x") != policy.Allow {
 		t.Fatalf("rules %+v", pol.Rules())
 	}
@@ -180,13 +180,13 @@ You review.
 		t.Fatal("mode")
 	}
 	// a glob entry admits its models but is no default
-	g, _ := ReadPreset(write("any", "---\ndescription: d\nmodels: [openai/*]\n---\nbody"))
+	g, _ := ReadRole(write("any", "---\ndescription: d\nmodels: [openai/*]\n---\nbody"))
 	if !g.AllowsModel("openai/gpt-5") || g.AllowsModel("xai/grok") || g.DefaultModel() != "" {
 		t.Fatalf("glob %+v", g.Models)
 	}
 	// minimal: description and body; everything else inherits
-	m, err := ReadPreset(write("explainer", "---\ndescription: Explains code\n---\nYou explain."))
-	if err != nil || m.Type != TypeAll || len(m.Models) != 0 || strings.Join(m.Tools, ",") != strings.Join(RoleTools, ",") || m.PresetPolicy().Rules() != nil {
+	m, err := ReadRole(write("explainer", "---\ndescription: Explains code\n---\nYou explain."))
+	if err != nil || m.Type != TypeAll || len(m.Models) != 0 || strings.Join(m.Tools, ",") != strings.Join(RoleTools, ",") || m.RolePolicy().Rules() != nil {
 		t.Fatalf("minimal %+v %v", m, err)
 	}
 	// errors name the problem
@@ -203,11 +203,11 @@ You review.
 		"nomsg":    "---\ndescription: d\ntools:\n  message: deny\n---\nx",
 		"nokill":   "---\ndescription: d\ntools:\n  shell_kill: deny\n---\nx",
 	} {
-		if _, err := ReadPreset(write(name, body)); err == nil {
+		if _, err := ReadRole(write(name, body)); err == nil {
 			t.Errorf("%s should fail to parse", name)
 		}
 	}
-	if _, err := ReadPreset(write("oldmodel", "---\ndescription: d\nmodel: x\n---\nx")); err == nil || !strings.Contains(err.Error(), "models:") {
+	if _, err := ReadRole(write("oldmodel", "---\ndescription: d\nmodel: x\n---\nx")); err == nil || !strings.Contains(err.Error(), "models:") {
 		t.Fatalf("the model: error should point at models: %v", err)
 	}
 }
@@ -227,23 +227,23 @@ func TestRoleRulesOnlyTighten(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Presets["loose"].Type != TypeAll {
-		t.Fatalf("%+v", e.Presets["loose"])
+	if e.Roles["loose"].Type != TypeAll {
+		t.Fatalf("%+v", e.Roles["loose"])
 	}
 }
 
 // The repository's own example role must keep parsing: it is what the
 // docs point users at.
 func TestExampleCoderRoleParses(t *testing.T) {
-	p, err := ReadPreset(filepath.Join("..", "..", ".stavlos", "agents", "coder.md"))
+	p, err := ReadRole(filepath.Join("..", "..", ".stavlos", "agents", "coder.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.Name != "coder" || p.Type != TypeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
 		t.Fatalf("%+v", p)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,apply_patch,skill,todo,web_fetch,sheet" || verb(p.PresetPolicy(), "shell", "git push origin main") != policy.Deny || verb(p.PresetPolicy(), "web_fetch", "https://x.slack.com/y") != policy.Deny {
-		t.Fatalf("tools %v rules %+v", p.Tools, p.PresetPolicy().Rules())
+	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,apply_patch,skill,todo,web_fetch,sheet" || verb(p.RolePolicy(), "shell", "git push origin main") != policy.Deny || verb(p.RolePolicy(), "web_fetch", "https://x.slack.com/y") != policy.Deny {
+		t.Fatalf("tools %v rules %+v", p.Tools, p.RolePolicy().Rules())
 	}
 }
 
@@ -384,18 +384,18 @@ func TestWebSearchAsksUntilConfigured(t *testing.T) {
 func TestRoleToolsAreRemovedNotListed(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "reviewer.md")
 	os.WriteFile(path, []byte("---\ndescription: d\ntools:\n  apply_patch: deny\n  todo: deny\n  shell:\n    \"*\": deny\n  mcp__github__merge: deny\n  message:\n    user: deny\n---\nx"), 0o644)
-	p, err := ReadPreset(path)
+	p, err := ReadRole(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Join(p.Tools, ","); got != "shell,read,grep,glob,skill,web_fetch,web_search,sheet" {
 		t.Fatalf("tools %s", got)
 	}
-	pol := p.PresetPolicy()
+	pol := p.RolePolicy()
 	if verb(pol, "shell", "ls") != policy.Deny || verb(pol, "mcp__github__merge", "") != policy.Deny || verb(pol, "message", "user") != policy.Deny {
 		t.Fatalf("rules %+v", pol.Rules())
 	}
-	if _, err := ReadPreset(writeRole(t, "---\ndescription: d\ntools: [read]\n---\nx")); err == nil || !strings.Contains(err.Error(), "deny removes one") {
+	if _, err := ReadRole(writeRole(t, "---\ndescription: d\ntools: [read]\n---\nx")); err == nil || !strings.Contains(err.Error(), "deny removes one") {
 		t.Fatalf("the list form should point at the new form: %v", err)
 	}
 }
@@ -415,7 +415,7 @@ func TestRoleDirsRemoved(t *testing.T) {
 	if err := os.WriteFile(path, []byte("---\ndescription: Leads\ndirs: [../shared]\n---\nYou lead.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ReadPreset(path); err == nil || !strings.Contains(err.Error(), "dirs: was removed") {
+	if _, err := ReadRole(path); err == nil || !strings.Contains(err.Error(), "dirs: was removed") {
 		t.Fatalf("err %v", err)
 	}
 }
