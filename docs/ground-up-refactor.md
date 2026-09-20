@@ -255,7 +255,7 @@ on their own rather than arrive in one diff.
 
 | Step | State | Notes |
 |---|---|---|
-| 2.1 event registry | **half** | Input kinds declare their rule (`event.InputRule`) and a test pins the vocabulary. Event types are not yet registered with payload and origin. |
+| 2.1 event registry | **done, as a lint** | Input kinds declare their rule (`event.InputRule`); a test pins the vocabulary and generates the browser's types from it. The `exhaustive` lint no longer exempts `event.Type`: the fold that builds what a model is told names every type it ignores, the browser's reducer does the same, and the thirteen other partial switches say `default:` and what it means. A table of payload types per event was not built: nothing would read it, and the dead-code gate is right to refuse that. |
 | 2.2 one commit, one dispatch | **done** | `commitLocked` dispatches its own wakes; `commitFactLocked` folds what happened even when the write fails. |
 | 2.3 runtime state derived | **done** | Which instructions an agent has been given is recorded on `tool.finished` and folded; how full its context is is worked out again from the log at recovery, where every agent used to read 0% until it next spoke. `compactNext` (a `/compact` that arrived mid-turn) stays in memory on purpose: a restart aborts that turn, and the request with it is the honest outcome. |
 | 2.4 one system input | **done** | Framed from the rule; the "[harness]" text prefix is gone. |

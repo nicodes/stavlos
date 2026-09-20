@@ -453,6 +453,8 @@ func takenIn(evs []event.Event, agent string) []takenInput {
 			for _, id := range p.IDs {
 				out = append(out, takenInput{queued[id], p.Turn})
 			}
+		default:
+			// not counted
 		}
 	}
 	return out

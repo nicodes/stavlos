@@ -329,6 +329,8 @@ func (m *Model) eventSideEffects(ev event.Event) (target string, cmds []tea.Cmd)
 			(strings.Contains(p.Error, "not connected") || strings.Contains(p.Error, "/provider")) {
 			cmds = append(cmds, m.setStatus("provider not connected — run /providers", true))
 		}
+	default:
+		// every other event has no side effect outside its transcript
 	}
 	return target, cmds
 }
@@ -458,6 +460,8 @@ func (m *Model) followChild(ev event.Event) {
 		m.transcript(parent).ChildState(ev.Agent, protocol.AgentRunning)
 	case event.TurnEnded, event.TurnAborted:
 		m.transcript(parent).ChildState(ev.Agent, protocol.AgentIdle)
+	default:
+		// no side effect
 	}
 }
 
@@ -472,6 +476,8 @@ func changesTree(ev event.Event) bool {
 		event.InputQueued, event.InputTaken, event.ChatMessage, // what an agent waits on or owes changes
 		event.AskRequested, event.AskResolved: // blocked or running
 		return true
+	default:
+		// no side effect
 	}
 	return false
 }

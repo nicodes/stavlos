@@ -24,7 +24,7 @@ go vet ./... || failed+=(vet)
 
 step exhaustive
 go tool exhaustive -default-signifies-exhaustive \
-	-ignore-enum-types '(event\.Type|yaml\.v3\.Kind|html\.NodeType|model\.BlockType|tui\.[A-Za-z]+|transcript\.[A-Za-z]+)$' \
+	-ignore-enum-types '(yaml\.v3\.Kind|html\.NodeType|model\.BlockType|tui\.[A-Za-z]+|transcript\.[A-Za-z]+)$' \
 	./... || failed+=(exhaustive)
 
 step staticcheck
