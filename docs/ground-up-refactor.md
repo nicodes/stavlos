@@ -274,7 +274,7 @@ on their own rather than arrive in one diff.
 | 4.1, 4.3, 4.4 providers | **done** | `chatcompletions.Traits`, the quota source table, the `market` snapshot and `retarget`, `IsLimit` out of the transport. |
 | 4.2 registry split | open | |
 | 5.1 lazy channels | open | |
-| 5.2 snapshot and pages | open | |
+| 5.2 snapshot and pages | **done** for the TUI | `subscribe{tail}`: a chat opens with its last 3,000 events and `reconcile` is the snapshot; `/history` replays the rest. Checked on a real 28,773-event channel: the TUI folds and draws from any mid-stream start. The browser and Discord still take everything. |
 | 5.3 lanes in bytes | **half** | The queue is bounded at 64 MB; separate lanes wait for 5.2, which removes pushed history. |
 | 5.4 dispatcher | **half** | An event nobody watches is not encoded. Encoding still runs on the writer. |
 | 5.5 usage table | **done** | Migration 5 to 6, checked against a copy of the real log: identical totals. |
