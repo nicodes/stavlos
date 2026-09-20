@@ -48,9 +48,17 @@ type Daemon struct {
 	nameMu   sync.Mutex // serialises choosing and checking channel names
 	editorMu sync.Mutex // serialises config edits through validation and reload
 
-	mu           sync.RWMutex
-	channels     map[string]*agent.Channel
-	clients      map[string]*client
+	// One lock for each thing the daemon keeps, none held across a call into
+	// a channel or any I/O. They were one: a commit's delivery to clients, a
+	// channel lookup and a trust prompt all waited on each other, and a
+	// channel call made under it could close a loop with the log's writer.
+	mu       sync.RWMutex // channels
+	channels map[string]*agent.Channel
+
+	hubMu   sync.RWMutex // clients (hub.go)
+	clients map[string]*client
+
+	trustMu      sync.RWMutex      // trustPrompts (trust.go)
 	trustPrompts map[string]string // dir → prompt id
 	trust        *trustStore
 	lock         *os.File // the data directory's lock, held until Close

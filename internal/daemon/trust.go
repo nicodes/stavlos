@@ -57,14 +57,14 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 	if !cfg.TrustPending {
 		return
 	}
-	d.mu.Lock()
+	d.trustMu.Lock()
 	if _, busy := d.trustPrompts[dir]; busy {
-		d.mu.Unlock()
+		d.trustMu.Unlock()
 		return
 	}
 	id := agent.NewID("t")
 	d.trustPrompts[dir] = id
-	d.mu.Unlock()
+	d.trustMu.Unlock()
 	opened := make(chan struct{})
 	go func() {
 		input, _ := json.Marshal(map[string]any{"dir": dir, "hash": cfg.TrustHash, "files": cfg.TrustFiles})
@@ -73,9 +73,9 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, presets, skills and AGENTS.md.", dir),
 			Options:  []string{"trust", "skip"},
 		}, func() { close(opened) }) // published before a caller can change the channel directory
-		d.mu.Lock()
+		d.trustMu.Lock()
 		delete(d.trustPrompts, dir)
-		d.mu.Unlock()
+		d.trustMu.Unlock()
 		if ans.Value == protocol.AnswerAllow || ans.Value == protocol.AnswerAllowAlways {
 			_ = d.Trust(context.Background(), dir, cfg.TrustHash, true)
 		}
@@ -106,9 +106,9 @@ func (d *Daemon) Trust(ctx context.Context, dir, hash string, trust bool) error 
 		}
 	}
 	// resolve any open trust prompt for this dir
-	d.mu.RLock()
+	d.trustMu.RLock()
 	pid := d.trustPrompts[dir]
-	d.mu.RUnlock()
+	d.trustMu.RUnlock()
 	if pid != "" {
 		ans := protocol.AnswerDeny
 		if trust {
@@ -121,14 +121,12 @@ func (d *Daemon) Trust(ctx context.Context, dir, hash string, trust bool) error 
 	if !trust {
 		return nil
 	}
-	d.mu.RLock()
 	var ss []*agent.Channel
-	for _, s := range d.channels {
+	for _, s := range d.channelList() { // (a channel is never called with a daemon lock held)
 		if s.Dir() == dir {
 			ss = append(ss, s)
 		}
 	}
-	d.mu.RUnlock()
 	for _, s := range ss {
 		cfg, err := config.Load(dir, d.trust)
 		if err != nil {
