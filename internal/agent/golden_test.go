@@ -44,6 +44,8 @@ func goldenText(t *testing.T, name, got string) {
 	}
 }
 
+var busyCount = regexp.MustCompile(`Agents busy in this channel: \d+ of`)
+
 func TestGoldenPrompt(t *testing.T) {
 	fm := &fakeModel{
 		steps:      []step{reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look around"}`)), reply(text("delegated"))},
@@ -65,6 +67,10 @@ func TestGoldenPrompt(t *testing.T) {
 				note = b.Text
 			}
 		}
+		// How many agents are busy when a child's note is built is one or two
+		// by whether its parent's turn has ended yet: a race the prompt does
+		// not care about and a golden file must not record.
+		note = busyCount.ReplaceAllString(note, "Agents busy in this channel: <N> of")
 		text := randomID.ReplaceAllString(scrub.Replace("## system\n"+req.System+"\n\n## tools\n"+strings.Join(names, " ")+"\n\n## note on the request\n"+note+"\n"), "<ID>")
 		if strings.Contains(req.System, "You are a subagent") {
 			child = text
