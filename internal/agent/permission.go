@@ -143,26 +143,44 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	if covered || verb == policy.Ask && sub.Kind == policy.KindURL && hostsAllow(cfg.Hosts, sub.Values) {
 		verb = policy.Allow
 	}
-	if verb == policy.Ask && control == "" && (mode == protocol.ModeYolo || mode == protocol.ModeAuto && !egress(c.Name, sub)) {
-		verb = policy.Allow // yolo answers every other ask; auto every one that sends nothing out
-	}
-	// A call that reaches outside the working directories is judged by the
-	// mode even when policy allows it: ask mode asks, auto denies, yolo
-	// allows.
+	// What is left asking, and any call that reaches outside the working
+	// directories even when policy allows it, is the mode's to judge.
 	boundary, why := "", ""
 	if verb != policy.Deny {
-		if dir := outsideDir(sub, a.c.Dir(), dirs); dir != "" {
-			boundary = dir
-			switch mode {
-			case protocol.ModeYolo:
-			case protocol.ModeAuto:
-				verb, why = policy.Deny, autoOutside(dir)
-			default:
-				verb = policy.Ask
-			}
+		boundary = outsideDir(sub, a.c.Dir(), dirs)
+		if verb == policy.Ask || boundary != "" {
+			verb = ModeVerdict(mode, control != "", egress(c.Name, sub), boundary != "")
+		}
+		if verb == policy.Deny {
+			why = autoOutside(boundary)
 		}
 	}
 	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: egress(c.Name, sub)}
+}
+
+// ModeVerdict is what a permission mode says to a call that would otherwise
+// ask the human, from the three things a mode cares about: whether the call
+// edits what steers the harness (sticky: only a human answers that, in any
+// mode), whether it sends data out, and whether it reaches outside the
+// channel's directories. Ask leaves it with the human. It is the one place a
+// mode's meaning is written: a call being decided and a prompt already
+// waiting when the mode changes are judged by it alike.
+func ModeVerdict(mode string, sticky, egress, outside bool) policy.Verb {
+	switch mode {
+	case protocol.ModeYolo:
+		if !sticky {
+			return policy.Allow
+		}
+	case protocol.ModeAuto:
+		switch {
+		case outside:
+			return policy.Deny
+		case !sticky && !egress:
+			return policy.Allow
+		}
+	default:
+	}
+	return policy.Ask
 }
 
 // egress reports whether a call sends data out of the machine or to a

@@ -10,8 +10,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/agent"
 	"github.com/nicodes/stavlos/internal/escalation"
 	"github.com/nicodes/stavlos/internal/eventlog"
+	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -226,12 +228,10 @@ var handlers = routes(
 		// prompt but an edit to a file that steers the harness; auto allows
 		// the ones inside the channel's directories that send nothing off the
 		// machine, and denies the ones outside.
-		switch p.Mode {
-		case protocol.ModeYolo:
-			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "yolo", func(pi protocol.PromptInfo) bool { return !pi.Sticky })
-		case protocol.ModeAuto:
-			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerAllow, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir == "" && !pi.Sticky && !pi.Egress })
-			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, protocol.AnswerDeny, "auto", func(pi protocol.PromptInfo) bool { return pi.Dir != "" && !pi.Sticky })
+		for answer, verb := range map[string]policy.Verb{protocol.AnswerAllow: policy.Allow, protocol.AnswerDeny: policy.Deny} {
+			c.d.esc.AnswerWhere(s.ID, protocol.PromptPermission, answer, p.Mode, func(pi protocol.PromptInfo) bool {
+				return agent.ModeVerdict(p.Mode, pi.Sticky, pi.Egress, pi.Dir != "") == verb
+			})
 		}
 		return none, nil
 	}),
