@@ -556,6 +556,8 @@ func notificationBatch(first protocol.Response, pending <-chan protocol.Response
 				batch = append(batch, streamMsg{n})
 			case protocol.PromptNotification:
 				batch = append(batch, promptMsg{n})
+			case protocol.ChangedNotification:
+				batch = append(batch, changedMsg{n.What})
 			}
 		}
 		if i == 127 {

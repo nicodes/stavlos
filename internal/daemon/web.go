@@ -65,6 +65,9 @@ func (d *Daemon) Web(method string) (protocol.WebStatus, error) {
 		open, err = d.web.OpenURL()
 	}
 	st := d.web.Status()
+	if method == protocol.MWebEnable || method == protocol.MWebDisable {
+		d.changed(protocol.ChangedWeb)
+	}
 	return protocol.WebStatus{Enabled: st.Enabled, URL: st.URL, OpenURL: open, Error: st.Error}, err
 }
 
