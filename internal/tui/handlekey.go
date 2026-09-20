@@ -44,24 +44,19 @@ func (m *Model) escCancel() tea.Cmd {
 }
 
 func (m *Model) handleKey(msg tea.KeyMsg) tea.Cmd {
-	if m.cfgEditor != nil {
-		return m.configEditorKey(msg)
+	if p := m.pane(); p != nil { // what is drawn over the chat hears the key first
+		if cmd, handled := p.key(m, msg); handled {
+			return cmd
+		}
 	}
 	if key.Matches(msg, keys.Quit) {
 		return m.ctrlC()
 	}
 	m.quitArmed = time.Time{} // any other key disarms the two-step quit
-	// ctrl+space goes back to typing from anywhere, an overlay or a dialog's
-	// text field included; space and enter both select, open and toggle
-	// outside one.
+	// ctrl+space goes back to typing from anywhere, a dialog's text field
+	// included; space and enter both select, open and toggle outside one.
 	if key.Matches(msg, keys.FocusInput) {
-		if m.ov != nil {
-			return m.closeOverlayToInput() // the overlay closes with nothing picked
-		}
 		return m.setFocus(focusInput)
-	}
-	if m.ov != nil {
-		return m.overlayKey(msg)
 	}
 	if !key.Matches(msg, keys.Clear) {
 		m.cancelArmed = time.Time{} // any other key disarms the two-step cancel

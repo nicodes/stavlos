@@ -8,7 +8,6 @@
 26 render Transcript
 26 textsafe scrub
 28 tui (*Model).configEditorKey
-26 tui (*Model).handleKey
 30 tui (*Model).inputKey
 29 tui (Model).keyHints
 29 tui (*Model).onDaemon
