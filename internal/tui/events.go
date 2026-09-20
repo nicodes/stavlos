@@ -117,16 +117,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case reconcileMsg:
 		return m.onReconcile(msg)
 	case subscribedMsg:
-		if !m.accepts(msg.scope) {
-			return nil, false
-		}
-		if msg.err != nil {
-			m.fatal = fmt.Errorf("subscribe: %w", msg.err)
-			return nil, true
-		}
-		if m.historyFrom = msg.first; msg.first > 1 {
-			return []tea.Cmd{m.setStatus("showing recent history · /history loads all of it", false)}, false
-		}
+		return m.onSubscribed(msg)
 	case eventMsg:
 		return []tea.Cmd{m.applyEvent(msg.ev)}, false
 	case streamMsg:

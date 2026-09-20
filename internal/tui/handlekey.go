@@ -142,10 +142,8 @@ func (m *Model) command(text string) tea.Cmd {
 			return m.setStatus("key bar hidden (/help shows it)", false)
 		}
 		return m.setStatus("key bar shown (/help hides it)", false)
-	case "/tree":
-		return m.toggleTree()
-	case "/history":
-		return m.loadHistory()
+	case "/tree", "/history":
+		return m.viewCommand(name)
 	case "/chat":
 		return m.openChat()
 	case "/roles", "/role", "/presets":
