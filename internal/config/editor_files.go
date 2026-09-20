@@ -316,7 +316,7 @@ func validateEditorTree(root string, system bool) error {
 		return err
 	}
 	for _, name := range []string{"stavlos.json", "stavlos.local.json"} {
-		f, err := readFile(filepath.Join(root, name))
+		f, err := readFile(disk{}, filepath.Join(root, name))
 		if err != nil {
 			return err
 		}
@@ -325,13 +325,13 @@ func validateEditorTree(root string, system bool) error {
 		}
 	}
 	e.allowSearch()
-	if err := e.loadPresets(filepath.Join(root, "agents"), "project"); err != nil {
+	if err := e.loadPresets(disk{}, filepath.Join(root, "agents"), "project"); err != nil {
 		return err
 	}
-	if err := e.loadSkills(filepath.Join(root, "skills")); err != nil {
+	if err := e.loadSkills(disk{}, filepath.Join(root, "skills")); err != nil {
 		return err
 	}
-	return e.loadCommands(filepath.Join(root, "commands"))
+	return e.loadCommands(disk{}, filepath.Join(root, "commands"))
 }
 
 func atomicConfigWrite(path string, data []byte) error {
