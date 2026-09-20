@@ -14,6 +14,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/present"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/toolname"
@@ -1692,16 +1693,6 @@ func ToolArg(name string, raw json.RawMessage) string {
 		return strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
 	}
 	switch name {
-	case toolname.Shell:
-		return str("command")
-	case toolname.ShellKill:
-		return str("id")
-	case toolname.WebFetch:
-		return str("url")
-	case toolname.WebSearch:
-		return str("query")
-	case toolname.Read:
-		return str("path")
 	case toolname.Grep, toolname.Glob:
 		if p := str("path"); p != "" {
 			return str("pattern") + "  in " + p
@@ -1722,10 +1713,6 @@ func ToolArg(name string, raw json.RawMessage) string {
 		default:
 			return arch
 		}
-	case toolname.AgentCancel, toolname.AgentStatus:
-		return str("id")
-	case toolname.Skill:
-		return str("name")
 	case toolname.AskUser:
 		var a struct {
 			Questions []struct{ Question string }
@@ -1744,6 +1731,9 @@ func ToolArg(name string, raw json.RawMessage) string {
 		return strings.TrimSpace(str("action") + " " + str("id") + " " + str("title"))
 	case toolname.Message:
 		return addressed(messageRecipients(raw), "")
+	}
+	if key := present.PrimaryArg(name); key != "" {
+		return str(key) // the argument that stands for the call, as every client names it
 	}
 	return compactArgs(raw)
 }
