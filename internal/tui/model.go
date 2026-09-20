@@ -412,9 +412,10 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case tea.KeyMsg:
 		cmds = append(cmds, m.handleKey(msg))
 	case tea.MouseMsg:
-		if m.cfgEditor != nil {
+		if p := m.pane(); p != nil && p.wholeScreen() {
 			if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
-				cmds = append(cmds, m.configEditorMouse(msg.X, msg.Y))
+				cmd, _ := p.click(m, msg.X, msg.Y)
+				cmds = append(cmds, cmd)
 			}
 			return cmds, false
 		}

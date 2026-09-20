@@ -42,11 +42,15 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			// A dialog (an overlay or the tab dialog) is hit-tested in
 			// screen coordinates first; the tab dialog lets a miss fall
 			// through to whatever is under the pointer, an overlay does not.
-			cmd, hit := m.dialogClick(msg.X, msg.Y)
-			if hit {
-				return cmd
+			p := m.pane()
+			var cmd tea.Cmd
+			if p != nil {
+				var hit bool
+				if cmd, hit = p.click(m, msg.X, msg.Y); hit {
+					return cmd
+				}
 			}
-			if m.ov != nil {
+			if p != nil && p.swallows() {
 				if !m.dividerButtonAt(msg.X, msg.Y) {
 					return cmd
 				}
@@ -68,8 +72,8 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		return tea.Batch(copyCmd(text), m.setStatus(fmt.Sprintf("copied %d characters", len([]rune(text))), false))
 	case msg.Action == tea.MouseActionMotion:
 		m.hoverDivider(msg.X, msg.Y)
-		if m.ov != nil || isTab(m.focus) {
-			m.dialogHover(msg.X, msg.Y) // a dialog owns hover; the chat behind it is left alone
+		if p := m.pane(); p != nil {
+			p.hover(m, msg.X, msg.Y) // a pane owns hover; the chat behind it is left alone
 			return nil
 		}
 		if !inMain {
@@ -78,40 +82,6 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 		return m.mouseHover(cx, msg.Y)
 	}
 	return nil
-}
-
-// dialogClick is a click while a dialog is open, in screen coordinates: on
-// an overlay row it selects and submits; on a tab dialog row it moves the
-// cursor (and, for agents, selects the agent like enter). hit reports
-// whether the click landed on something.
-func (m *Model) dialogClick(x, y int) (tea.Cmd, bool) {
-	if m.ov != nil {
-		if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), m.sp.View()); ok {
-			m.ov.cursor = idx
-			return m.overlaySubmit(false), true
-		}
-		return nil, false
-	}
-	if !isTab(m.focus) {
-		return nil, false
-	}
-	if h := m.tabDialogHit(x, y); h.rowOK {
-		return m.pickTabRow(h.row, true), true
-	}
-	return nil, false
-}
-
-// dialogHover moves a dialog's cursor to the row under the pointer.
-func (m *Model) dialogHover(x, y int) {
-	if m.ov != nil {
-		if idx, ok := m.ov.itemAt(x, y, m.width, m.bodyHeight(), m.sp.View()); ok {
-			m.ov.cursor = idx
-		}
-		return
-	}
-	if h := m.tabDialogHit(x, y); h.rowOK {
-		m.pickTabRow(h.row, false)
-	}
 }
 
 // mainX maps a screen column to the chat column for the rows the sidebar
