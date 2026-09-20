@@ -1,6 +1,10 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import (
+	"strings"
+
+	"github.com/charmbracelet/bubbles/key"
+)
 
 // keyMap holds every binding the TUI understands. Keys handled by the
 // textinput (editing) are not listed.
@@ -61,41 +65,41 @@ type keyMap struct {
 }
 
 var keys = keyMap{
-	Quit:        key.NewBinding(key.WithKeys("ctrl+c")),
-	NextSection: key.NewBinding(key.WithKeys("tab")),
+	Quit:        key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "")),
+	NextSection: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "")),
 	PrevSection: key.NewBinding(key.WithKeys("shift+tab")),
-	TabLeft:     key.NewBinding(key.WithKeys("left")),
-	TabRight:    key.NewBinding(key.WithKeys("right")),
-	NextAgent:   key.NewBinding(key.WithKeys("ctrl+n")),
-	PrevAgent:   key.NewBinding(key.WithKeys("ctrl+p")),
-	SelUp:       key.NewBinding(key.WithKeys("up")),
-	SelDown:     key.NewBinding(key.WithKeys("down")),
-	PageUp:      key.NewBinding(key.WithKeys("pgup")),
-	PageDown:    key.NewBinding(key.WithKeys("pgdown")),
+	TabLeft:     key.NewBinding(key.WithKeys("left"), key.WithHelp("←", "")),
+	TabRight:    key.NewBinding(key.WithKeys("right"), key.WithHelp("→", "")),
+	NextAgent:   key.NewBinding(key.WithKeys("ctrl+n"), key.WithHelp("ctrl+n", "")),
+	PrevAgent:   key.NewBinding(key.WithKeys("ctrl+p"), key.WithHelp("ctrl+p", "")),
+	SelUp:       key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "")),
+	SelDown:     key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "")),
+	PageUp:      key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "")),
+	PageDown:    key.NewBinding(key.WithKeys("pgdown"), key.WithHelp("pgdn", "")),
 	Top:         key.NewBinding(key.WithKeys("ctrl+home")),
 	Bottom:      key.NewBinding(key.WithKeys("ctrl+end")),
 	ChatTop:     key.NewBinding(key.WithKeys("home", "ctrl+home")),
 	ChatBottom:  key.NewBinding(key.WithKeys("end", "ctrl+end")),
-	Submit:      key.NewBinding(key.WithKeys("enter")),
-	Select:      key.NewBinding(key.WithKeys(" ", "enter")), // space and enter: select, open, toggle — outside text fields
-	Clear:       key.NewBinding(key.WithKeys("esc")),
-	ToggleTree:  key.NewBinding(key.WithKeys("ctrl+b")),
-	FocusInput:  key.NewBinding(key.WithKeys("ctrl+@", "ctrl+space")), // ctrl+space reaches a program as ctrl+@
+	Submit:      key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "")),
+	Select:      key.NewBinding(key.WithKeys(" ", "enter"), key.WithHelp("space/enter", "")), // space and enter: select, open, toggle — outside text fields
+	Clear:       key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "")),
+	ToggleTree:  key.NewBinding(key.WithKeys("ctrl+b"), key.WithHelp("ctrl+b", "")),
+	FocusInput:  key.NewBinding(key.WithKeys("ctrl+@", "ctrl+space"), key.WithHelp("ctrl+space", "")), // ctrl+space reaches a program as ctrl+@
 
 	OvUp:     key.NewBinding(key.WithKeys("up", "ctrl+p")),
 	OvDown:   key.NewBinding(key.WithKeys("down", "ctrl+n")),
 	OvSelect: key.NewBinding(key.WithKeys("enter")),
 	OvClose:  key.NewBinding(key.WithKeys("esc")),
-	OvAlt:    key.NewBinding(key.WithKeys("ctrl+s")),
-	OvOpen:   key.NewBinding(key.WithKeys("o", "O")),
-	OvRemove: key.NewBinding(key.WithKeys("ctrl+d")),
+	OvAlt:    key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "")),
+	OvOpen:   key.NewBinding(key.WithKeys("o", "O"), key.WithHelp("o", "")),
+	OvRemove: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "")),
 
 	VimUp:       key.NewBinding(key.WithKeys("k")),
 	VimDown:     key.NewBinding(key.WithKeys("j")),
-	NextWaiting: key.NewBinding(key.WithKeys("n")),
-	AddDir:      key.NewBinding(key.WithKeys("a")),
-	ShowTokens:  key.NewBinding(key.WithKeys("t")),
-	ShowCost:    key.NewBinding(key.WithKeys("c")),
+	NextWaiting: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "")),
+	AddDir:      key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "")),
+	ShowTokens:  key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "")),
+	ShowCost:    key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "")),
 
 	EdClose:   key.NewBinding(key.WithKeys("esc", "ctrl+c")),
 	EdSave:    key.NewBinding(key.WithKeys("ctrl+s")),
@@ -111,4 +115,24 @@ var keys = keyMap{
 	EdRename:  key.NewBinding(key.WithKeys("f2")),
 	EdDelete:  key.NewBinding(key.WithKeys("ctrl+d")),
 	EdReload:  key.NewBinding(key.WithKeys("ctrl+l")),
+}
+
+// keyLabel is how a binding reads in a legend: what keys.go says its key is
+// called, so the legend cannot name a key the binding no longer has. Several
+// bindings read as one ("↑/↓"), and a shared prefix is said once
+// ("ctrl+n/p").
+func keyLabel(bs ...key.Binding) string {
+	out := ""
+	for i, b := range bs {
+		l := b.Help().Key
+		if i == 0 {
+			out = l
+			continue
+		}
+		if at := strings.LastIndex(out, "+"); at >= 0 && strings.HasPrefix(l, out[:at+1]) {
+			l = l[at+1:]
+		}
+		out += "/" + l
+	}
+	return out
 }

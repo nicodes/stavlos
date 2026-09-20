@@ -333,5 +333,5 @@ func usageBars(values []float64, peak float64, rows int) []string {
 
 // usageDialogHints are the usage dialog's keys.
 func usageDialogHints() []dialog.Hint {
-	return []dialog.Hint{hint("←/→", "range"), hint("t", "tokens"), hint("c", "cost"), hint("ctrl+space", "input"), hint("esc", "close")}
+	return []dialog.Hint{hint(keyLabel(keys.TabLeft, keys.TabRight), "range"), hint(keyLabel(keys.ShowTokens), "tokens"), hint(keyLabel(keys.ShowCost), "cost"), hint(keyLabel(keys.FocusInput), "input"), hint(keyLabel(keys.Clear), "close")}
 }
