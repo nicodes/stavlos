@@ -56,3 +56,21 @@ func TestAPushedChangeKeepsOneChainOfPolls(t *testing.T) {
 		t.Fatal("an unknown change was acted on")
 	}
 }
+
+// The nav says what bounds the channel's commands only when it is less than
+// a full sandbox.
+func TestTheNavSaysWhenTheSandboxIsNotFull(t *testing.T) {
+	m := channelModel()
+	has := func() string {
+		if i := m.navRowIndex(navSandbox); i >= 0 {
+			return stripANSI(m.sidebarHeader(sidebarWidth - 1)[i])
+		}
+		return ""
+	}
+	for level, want := range map[string]string{"": "", "full": "", "landlock": "partial", "none": "none · asks", "off": "off"} {
+		m.channel.Sandbox = level
+		if got := has(); (want == "") != (got == "") || !strings.Contains(got, want) {
+			t.Errorf("sandbox %q: row %q, want it to say %q", level, got, want)
+		}
+	}
+}
