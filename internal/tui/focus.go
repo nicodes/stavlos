@@ -195,7 +195,7 @@ func (m *Model) setFocus(f focus) tea.Cmd {
 // ensureFocus falls back to the input when the focused section is gone
 // (prompt answered, sidebar hidden, transcript empty).
 func (m *Model) ensureFocus() tea.Cmd {
-	if m.cfgEditor != nil {
+	if p := m.pane(); p != nil && p.wholeScreen() {
 		return nil
 	}
 	if m.focus == focusInlinePermission && m.inlinePermission() != nil {
