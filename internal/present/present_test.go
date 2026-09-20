@@ -1,7 +1,12 @@
 package present
 
 import (
+	"flag"
+	"maps"
+	"os"
 	"slices"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/nicodes/stavlos/internal/event"
@@ -46,5 +51,31 @@ func TestEveryToolWithAPrimaryArgumentIsKnown(t *testing.T) {
 		if key == "" || PrimaryArg(tool) != key {
 			t.Errorf("%s: %q", tool, key)
 		}
+	}
+}
+
+var update = flag.Bool("update", false, "rewrite the browser's copy of the tool table")
+
+// The browser's copy of which argument stands for a tool call is written from
+// the table here, so its one-line summaries are the terminal's and Discord's.
+//
+//	go test ./internal/present -update
+func TestTheBrowsersToolTableIsCurrent(t *testing.T) {
+	const path = "../../web/src/core/tools.gen.ts"
+	args := PrimaryArgs()
+	var b strings.Builder
+	b.WriteString("// Code generated from internal/present; DO NOT EDIT.\n// go test ./internal/present -update\n\nexport const primaryArg: Record<string, string> = {\n")
+	for _, tool := range slices.Sorted(maps.Keys(args)) {
+		b.WriteString("  " + tool + ": " + strconv.Quote(args[tool]) + ",\n")
+	}
+	b.WriteString("};\n")
+	if *update {
+		if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	if have, err := os.ReadFile(path); err != nil || string(have) != b.String() {
+		t.Fatalf("%s is stale (%v): run with -update, then rebuild the web client", path, err)
 	}
 }
