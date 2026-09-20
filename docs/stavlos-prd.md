@@ -71,7 +71,7 @@ flowchart TD
     end
 
     DAEMON --> MCP["MCP servers<br/><i>tools, out of process</i>"]
-    DAEMON --> PLUG["Model plugins<br/><i>go-plugin over gRPC</i>"]
+    DAEMON --> PLUG["Model adapters<br/><i>in-tree: Codex, Chat Completions</i>"]
     DAEMON --> CFG["Config files<br/><i>presets · skills · policy</i>"]
 ```
 
@@ -109,9 +109,10 @@ Every model call's `assistant.message` carries its usage: input, output, and cac
 |---|---|---|
 | Frontends | Protocol clients (any language) | Stable |
 | Tools | MCP servers | Stable |
-| Model adapters | `go-plugin` (gRPC) | Provisional |
-| Agent loop | Go interface, `go-plugin` later | Unstable |
-| Store | Go interface, `go-plugin` later | Unstable |
+| Model adapters | in-tree, one row of traits per Chat Completions provider | Provisional |
+| Agent loop | Go interface | Unstable |
+| Store | Go interface | Unstable |
+| Hooks and small tools | embedded Lua ([planned](lua-plugins.md)) | Planned |
 | Skills | `SKILL.md` files | Stable |
 | Agent presets | YAML + markdown | Stable |
 | Policy | Declarative config | Stable |
@@ -367,14 +368,16 @@ Instead: **consume the metadata, implement the protocols.** `models.dev/api.json
 
 ### 8.2 Shipped adapters
 
-Stavlos serves two providers, both through the user's own subscription rather than platform API keys:
+Stavlos serves four providers, each through the user's own subscription rather than platform API keys:
 
 | Provider | Sign-in | Wire protocol |
 |---|---|---|
 | `openai` (ChatGPT Plus/Pro) | Codex sign-in at `auth.openai.com`: browser (PKCE, callback on `localhost:1455`) by default, or headless device code (needs "Device code authorization for Codex" enabled in ChatGPT's Security settings) | OpenAI Responses API at the Codex backend (`chatgpt.com/backend-api/codex/responses`), bearer token plus account-id header |
 | `xai` (SuperGrok) | Grok CLI device-code login at `auth.x.ai` (RFC 8628) | Chat Completions at `api.x.ai/v1` with a bearer token |
+| `zai` (Z.ai Coding Plan) | an API key from the plan's console | Chat Completions at the coding-plan endpoint |
+| `kimi` (Kimi For Coding) | an API key from the plan's console | Chat Completions at the Kimi coding endpoint |
 
-Both use the official CLIs' public client ids, the same arrangement opencode uses. The Chat Completions adapter behind Grok is generic enough for other compatible providers. `Model` is an interface; other providers are meant to arrive as `go-plugin` binaries (§11, post-v1).
+The two sign-ins use the official CLIs' public client ids, the same arrangement opencode uses. One Chat Completions adapter serves Grok, Z.ai and Kimi; what differs between them (cache routing, reasoning replay, variants, how a used-up plan says so, where usage is read) is a row of traits in the registry's table, so another compatible provider is a row, not an adapter. How much of each plan is used, and how the harness chooses and changes models by it, is in [plan usage](plan-usage.md) and [model selection](model-selection.md).
 
 ### 8.3 Resolution
 
@@ -434,7 +437,7 @@ flowchart LR
     G -- overrides --> P -- overrides --> L --> E
 ```
 
-Three layers with one layout. Global is yours and trusted. Project is the team's, committed, and untrusted until confirmed. Local is your per-project overrides, gitignored and trusted. Config keys merge key-by-key; presets and skills override name-by-name.
+Three layers of files with one layout, over the defaults built into the binary (which `stavlos init` writes out, so the file shows where each setting lives). Global is yours and trusted. Project is the team's, committed, and untrusted until confirmed. Local is your per-project overrides, gitignored and trusted. Config keys merge key-by-key; presets and skills override name-by-name.
 
 ### 10.1 Layout
 
@@ -639,9 +642,9 @@ Load order is the `plugins` array first, then the local directory. A local build
 **Child processes.** Every process an agent starts — a shell command, a background job, an MCP server — goes through `internal/proc`: `bash -c` in its own process group (a kill takes the children), a two-second wait for pipes after exit, the last 256 KB of output kept, and the daemon's environment scrubbed: `STAVLOS_*` and any variable whose name matches `API_KEY`, `APIKEY`, `SECRET`, `TOKEN`, `PASSWORD`, `PASSWD`, `CREDENTIAL` or `PRIVATE_KEY` are dropped, so a command the model runs cannot read them back into the transcript. `"env": {"pass": ["GITHUB_TOKEN"]}` in `stavlos.json` keeps named variables; an MCP definition's `env` adds what that server needs. The shell tool starts the process and hands it to the runtime when it outlives the wait window (or at once with `background: true`); the runtime owns kill, reap and report from then on.
 
 
-Agents run commands directly against the channel's working directory. The daemon does not create worktrees or containers and does not enforce isolation.
+Agents run commands against the channel's working directory. The daemon does not create worktrees or containers: which copy of a project an agent works in is left to the user and the model, and a preset or skill can tell an agent to make a worktree first.
 
-This is a scope decision, not an oversight. Isolation strategies vary — git worktrees, containers, VMs, nothing — and the right one depends on the project. Stavlos leaves it to the user and the model: a preset or skill can instruct an agent to create a worktree before touching files, and policy can deny writes outside a given path. Daemon-enforced sandboxing is on the roadmap and will be designed so that policy remains unchanged when it lands; the policy schema is therefore safe to mark stable now.
+What a command may reach is enforced, on Linux, by the kernel as well as by policy. The processes agents start (shell commands and MCP servers) run in a private user and mount namespace in which the harness's own data, configuration, socket and credentials are hidden, control files are read-only and `/tmp` is the command's own; Landlock then allows writes only beneath the channel's directories, a scratch directory and caches, and no TCP when the network is off. What the system cannot provide is dropped in that order (no user namespaces: nothing hidden; no Landlock: no sandbox), the daemon logs which level it found as it starts, and `"sandbox": {"enabled": false}` turns it off. Policy is unchanged by it: the sandbox makes what the permission checks conclude from a command's text true of what the command can do.
 
 ---
 
@@ -664,21 +667,21 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - The daemon (`stavlos daemon`) with event log, scheduler, agent tree, projector (cancelled-turn repair, compaction)
 - Protocol (server + Go client) and the protocol specification document
 - Bubble Tea TUI
-- Codex (ChatGPT) and Grok adapters, models.dev metadata
+- Codex (ChatGPT) and Chat Completions (Grok, Z.ai, Kimi) adapters, models.dev metadata, plan-usage meters and harness-chosen models
 - MCP client
-- Three-layer configuration with trust gate; skills, presets, declarative policy
+- Layered configuration (built-in defaults, global, project, local) with a trust gate on the project's; skills, presets, declarative policy
 - Built-in tools: `grep` and `glob` (read-only search over contents and file paths, judged by path like `read` and allowed by default; they run ripgrep with an argument list they build, or walk the tree), `shell` (the one command tool; no command is allowed by default, since "read-only" commands such as `find -exec` or `rg --pre` run programs; a command outliving the wait window continues as a background job, and every command runs in the sandbox) and `shell_kill`, `web_fetch` and `web_search` (§6.5), `todo` (a per-agent plan, for presets that list `todo`), `read`, `apply_patch` (the Codex patch grammar: add, update with context-anchored hunks, delete, move; several files per patch, applied atomically), `skill`, the conversation set every agent has (`message`, `agent_status`), `ask_user` (one to four questions to the human, each its text and one to four options; every question is a checklist with multiple selections and an optional custom answer, so the model never adds an "Other"; all questions open immediately as independent prompts answerable in any order, never fall to the headless default and are unaffected by permission modes; the tool waits for all answers and returns "question → answer" lines in original question order, picks joined with ", "), and the lifecycle set for presets that spawn (`agent_create`, `agent_cancel`)
 - Usage accounting: per-call usage on `assistant.message`, per-agent and per-channel aggregates
 - Subscription sign-in for ChatGPT and Grok (device-code flows, token refresh), credential store, `/providers` and `/models` in the TUI, `stavlos auth login|list|logout`
 - Depth and per-channel fan-out limits
 - Escalation policy with headless default
 
+- The Discord bridge (§7.3), the loopback web UI with sheets ([web UI](web-ui.md)), and a command sandbox (Landlock and a network namespace where the kernel has them)
+
 **Out (roadmap):**
 
-- Discord service (§7.3)
-- `go-plugin` model seam, `stavlos plugin install` and its lockfile (§11)
+- Lua plugins for hooks and small tools ([design](lua-plugins.md)); the `go-plugin` design in §11 is kept for reference only
 - Channel fork and archive in the TUI (the protocol and daemon support both)
-- `go-plugin` for `Loop` and `Store`
 - Project-level plugins
 - Starlark policy
 - Pre-execution tool-call rewriting hooks
