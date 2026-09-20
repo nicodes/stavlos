@@ -1,8 +1,9 @@
 package protocol
 
 import (
-	"github.com/nicodes/stavlos/internal/event"
 	"strings"
+
+	"github.com/nicodes/stavlos/internal/event"
 )
 
 // PermissionResult describes the recorded decision without inferring an allow
