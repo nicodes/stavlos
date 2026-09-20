@@ -5,42 +5,14 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/nicodes/stavlos/internal/config"
 	"golang.org/x/sys/unix"
 )
 
-// RunStandalone retains the standalone entry point, sharing its lock and
-// prompt-message index with the daemon-managed service.
-func RunStandalone(ctx context.Context, cfg config.Discord, socket, data string) error {
-	backoff := 5 * time.Second
-	for ctx.Err() == nil {
-		started := time.Now()
-		err := runBridge(ctx, cfg, socket, data, nil)
-		if ctx.Err() != nil {
-			return nil
-		}
-		if errors.Is(err, errBridgeRunning) {
-			return err
-		}
-		log.Printf("discord: %v; retrying", err)
-		if time.Since(started) > 30*time.Second {
-			backoff = 5 * time.Second
-		}
-		select {
-		case <-ctx.Done():
-		case <-time.After(backoff):
-		}
-		backoff = min(5*time.Minute, backoff*2)
-	}
-	return nil
-}
-
-var errBridgeRunning = errors.New("a Discord bridge is already running for this server/category; stop the standalone stavlos-discord process or service first")
+var errBridgeRunning = errors.New("a Discord bridge is already running for this server/category (an old standalone stavlos-discord process or service? stop it first)")
 
 func runBridge(ctx context.Context, cfg config.Discord, socket, data string, publish func(*Bridge)) error {
 	state, lock, err := lockBridge(data, cfg)
