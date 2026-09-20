@@ -283,7 +283,7 @@ on their own rather than arrive in one diff.
 | 6.5 nav rows | **done** | Rows by id; no row arithmetic in the tests. |
 | 6.3 TypeScript from Go | **done** for names | `web/src/core/vocabulary.gen.ts` is written by the test that pins the vocabulary; the reducer's switch is exhaustive (`never`), with the 19 types the browser does not draw listed by name, so a new event type fails the web build until somebody decides. Payloads are still `any`. |
 | 6.1, 6.2, 6.4, 6.6, 6.7 | open | |
-| 7 | open | |
+| 7 | **part** | The README's long paragraphs are one sentence to a line (32 paragraphs; the longest line was 2,423 characters), so two edits to one paragraph stop colliding; the rendered page is word for word the same. Left alone because they are visible or the user's call: the `plugins` config key and `stavlos plugin` stub (Lua plugins are planned), `KindPlugin` (the tests' provider), `IDToken` (in use), the standalone `stavlos-discord` binary (D5), the vocabulary rename, the PRD rewrite, a LICENSE. |
 
 ### Phase 0: lock the behaviour, arm the gate (M)
 
