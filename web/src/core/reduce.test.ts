@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { apply, emptyChannel, stream } from "./reduce";
-import { CHAT, type WireEvent } from "./types";
+import { CHAT, type EventType, type WireEvent } from "./types";
 
 let seq = 0;
-const ev = (type: string, agent: string, payload: any): WireEvent => ({ seq: ++seq, channel: "c1", agent, type, time: "2026-09-18T00:00:00Z", payload });
+const ev = (type: EventType, agent: string, payload: any): WireEvent => ({ seq: ++seq, channel: "c1", agent, type, time: "2026-09-18T00:00:00Z", payload });
 
 describe("reduce", () => {
   it("folds a turn into the channel chat and the agent's chat", () => {
@@ -68,5 +68,14 @@ describe("reduce", () => {
     expect(v.chats[CHAT].filter((i) => i.kind === "notice")).toHaveLength(2);
     apply(v, ev("sheet.deleted", "a1", { id: "s1" }));
     expect(v.sheets.map((s) => s.id)).toEqual(["s2"]);
+  });
+});
+
+describe("a daemon newer than this bundle", () => {
+  it("ignores an event type it has never heard of", () => {
+    const v = emptyChannel();
+    apply(v, { seq: 1, channel: "c1", agent: "a", type: "something.new" as EventType, time: "2026-09-18T00:00:00Z", payload: {} });
+    expect(v.seq).toBe(1);
+    expect(v.chats[CHAT]).toEqual([]);
   });
 });
