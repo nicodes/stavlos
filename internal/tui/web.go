@@ -62,6 +62,8 @@ func (m *Model) onChanged(msg changedMsg) tea.Cmd {
 	case protocol.ChangedWeb:
 		m.webEpoch++
 		return webCmd(m.ctx, m.c, "status")
+	case protocol.ChangedPlan:
+		return planUsageCmd(m.ctx, m.c) // asked once and answered once: nothing to chain
 	case protocol.ChangedDiscord:
 		m.discordEpoch++
 		return discordCmd(m.ctx, m.c, "status", m.discordEpoch)

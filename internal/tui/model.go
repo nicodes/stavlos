@@ -96,6 +96,7 @@ type Model struct {
 	lastRemembered string
 	discordEpoch   uint64
 	webEpoch       uint64
+	catalogTicks   int                    // counts the 3 s ticks, for what is asked less often than that
 	discordStatus  protocol.DiscordStatus // daemon-wide; retained across channel switches
 	discordKnown   bool
 	webStatus      protocol.WebStatus // daemon-wide, like Discord's

@@ -94,6 +94,7 @@ type ChangedNotification struct {
 const (
 	ChangedWeb     = "web"
 	ChangedDiscord = "discord"
+	ChangedPlan    = "plan" // a subscription's plan usage, or the limit it is known to be at
 )
 
 // Tier is a client's escalation tier (PRD §7.4).
