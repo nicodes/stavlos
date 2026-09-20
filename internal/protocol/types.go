@@ -248,12 +248,15 @@ type AttachResult struct {
 }
 
 type DaemonStatusResult struct {
-	Version   int      `json:"version"`
-	Build     string   `json:"build"` // buildid.ID() of the daemon binary
-	PID       int      `json:"pid"`
-	DataDir   string   `json:"data_dir"`
-	Channels  int      `json:"channels"`
-	Agents    int      `json:"agents"`
+	Version  int    `json:"version"`
+	Build    string `json:"build"` // buildid.ID() of the daemon binary
+	PID      int    `json:"pid"`
+	DataDir  string `json:"data_dir"`
+	Channels int    `json:"channels"`
+	Agents   int    `json:"agents"`
+	// Working is how many agents are in a turn or have a job running: what a
+	// restart of the daemon would cut short.
+	Working   int      `json:"working"`
 	Providers []string `json:"providers"`
 }
 
