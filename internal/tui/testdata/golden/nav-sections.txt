@@ -8,9 +8,11 @@ Clients
 ● Discord connected
 
 Subscriptions
-ChatGPT 5h ━━━━━━─────────  38%
-        wk ━━━━━━━━━━━━━━━ 100%
-Grok    wk ━━━━━━━━━━━────  71%
+ChatGPT
+  5h ━━━━━━━━─────────────  38%
+  wk ━━━━━━━━━━━━━━━━━━━━━ 100%
+Grok
+  wk ━━━━━━━━━━━━━━━──────  71%
 
 project                 trusted
 cache           96% · openai 2%
