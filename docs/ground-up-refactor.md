@@ -273,7 +273,7 @@ on their own rather than arrive in one diff.
 | 3.9 HTTP client | **done** | `httpx.New`, redirects stay on the host asked. |
 | 4.1, 4.3, 4.4 providers | **done** | `chatcompletions.Traits`, the quota source table, the `market` snapshot and `retarget`, `IsLimit` out of the transport. |
 | 4.2 registry split | open | |
-| 5.1 lazy channels | open | |
+| 5.1 lazy channels | **decided against, by measurement** | Reading all of a copy of the real log (124,190 events, 186 MB, 26 channels) takes 0.55 s; folding it is of the same order. A lazy channel has to be woken, resumed, recapped and mirrored while unloaded, which needs a second index kept in step with the fold: a standing risk to save about a second per start. What was costly was memory (a whole channel decoded at once, 410 MB allocated over a start): channels are now folded 2,048 events at a time (`agent.RecoverPaged`). Revisit when a start passes a few seconds; archiving a channel already takes it out of the start. |
 | 5.2 snapshot and pages | **done** for the TUI | `subscribe{tail}`: a chat opens with its last 3,000 events and `reconcile` is the snapshot; `/history` replays the rest. Checked on a real 28,773-event channel: the TUI folds and draws from any mid-stream start. The browser and Discord still take everything. |
 | 5.3 lanes in bytes | **half** | The queue is bounded at 64 MB; separate lanes wait for 5.2, which removes pushed history. |
 | 5.4 dispatcher | **half** | An event nobody watches is not encoded. Encoding still runs on the writer. |

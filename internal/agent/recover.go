@@ -15,14 +15,33 @@ import (
 // live channel runs, folded over every event, then resume. Nothing restarts
 // that was not waiting to: an agent with inputs in its inbox is woken.
 func Recover(ctx context.Context, host Host, id, dir string, created time.Time, cfg *config.Effective, events []event.Event) (*Channel, error) {
-	if len(events) == 0 {
-		return nil, fmt.Errorf("channel %s has no events", id)
-	}
+	return RecoverPaged(ctx, host, id, dir, created, cfg, func(fold func([]event.Event)) error {
+		fold(events)
+		return nil
+	})
+}
+
+// RecoverPaged is Recover for a log read a page at a time: read calls fold
+// with each page in order. The largest channel is tens of megabytes of
+// events, and nothing needs them once they are folded.
+func RecoverPaged(ctx context.Context, host Host, id, dir string, created time.Time, cfg *config.Effective, read func(fold func([]event.Event)) error) (*Channel, error) {
 	s := New(host, id, dir, cfg, "", "")
 	s.Created = created
 	var fx effects
-	for _, e := range events {
-		s.st.apply(e, &fx)
+	folded := 0
+	err := read(func(page []event.Event) {
+		for _, e := range page {
+			s.st.apply(e, &fx)
+		}
+		folded += len(page)
+	})
+	if err != nil {
+		s.cancel()
+		return nil, err
+	}
+	if folded == 0 {
+		s.cancel()
+		return nil, fmt.Errorf("channel %s has no events", id)
 	}
 	for _, aid := range s.st.order {
 		st := s.st.agents[aid]
