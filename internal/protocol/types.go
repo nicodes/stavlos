@@ -80,6 +80,20 @@ const (
 	NEvent  = "event"
 	NStream = "stream"
 	NPrompt = "prompt"
+	// NChanged says that something a client shows beside its channels is no
+	// longer what it was last told, so it asks again once instead of asking
+	// every few seconds for ever.
+	NChanged = "changed"
+)
+
+// ChangedNotification names what changed: one of the Changed* values.
+type ChangedNotification struct {
+	What string `json:"what"`
+}
+
+const (
+	ChangedWeb     = "web"
+	ChangedDiscord = "discord"
 )
 
 // Tier is a client's escalation tier (PRD §7.4).

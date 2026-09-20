@@ -40,3 +40,19 @@ func TestWebNavRowStatesAndClick(t *testing.T) {
 		t.Fatalf("port taken: %q", row())
 	}
 }
+
+// A pushed change asks once and does not start a second chain of polls: the
+// poll armed before it finds itself stale.
+func TestAPushedChangeKeepsOneChainOfPolls(t *testing.T) {
+	m := channelModel()
+	armedWeb, armedDiscord := webTickMsg{m.webEpoch}, discordTickMsg{m.discordEpoch}
+	if m.onChanged(changedMsg{protocol.ChangedWeb}) == nil || m.onChanged(changedMsg{protocol.ChangedDiscord}) == nil {
+		t.Fatal("a change was not asked about")
+	}
+	if armedWeb.epoch == m.webEpoch || armedDiscord.epoch == m.discordEpoch {
+		t.Fatal("the polls armed before the change are still current")
+	}
+	if m.onChanged(changedMsg{"something newer"}) != nil {
+		t.Fatal("an unknown change was acted on")
+	}
+}

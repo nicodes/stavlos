@@ -95,6 +95,7 @@ type Model struct {
 	rememberViews  bool
 	lastRemembered string
 	discordEpoch   uint64
+	webEpoch       uint64
 	discordStatus  protocol.DiscordStatus // daemon-wide; retained across channel switches
 	discordKnown   bool
 	webStatus      protocol.WebStatus // daemon-wide, like Discord's
@@ -405,7 +406,11 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 	case webMsg:
 		cmds = append(cmds, m.onWeb(msg))
 	case webTickMsg:
-		cmds = append(cmds, webCmd(m.ctx, m.c, "status"))
+		if msg.epoch == m.webEpoch {
+			cmds = append(cmds, webCmd(m.ctx, m.c, "status"))
+		}
+	case changedMsg:
+		cmds = append(cmds, m.onChanged(msg))
 	case discordMsg:
 		cmds = append(cmds, m.onDiscord(msg))
 	case usageMsg:

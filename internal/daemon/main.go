@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/auth"
 	"github.com/nicodes/stavlos/internal/buildid"
@@ -85,6 +86,7 @@ func Main(ctx context.Context, o Options) error {
 	reg.EnablePlanPolling()
 	go reg.PollAllPlanUsage(sctx, 0)
 	go d.recapLoop(sctx)
+	d.watchDiscord(sctx, time.Second)
 	lvl, why := sandbox.Probe()
 	log.Printf("stavlosd %s listening on %s (%d providers, sandbox %s)", buildid.ID(), o.Socket, len(reg.Providers()), lvl)
 	if why != nil {

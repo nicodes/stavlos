@@ -22,7 +22,29 @@ type webMsg struct {
 	err    error
 	action string
 }
-type webTickMsg struct{}
+type webTickMsg struct{ epoch uint64 }
+
+// servicePoll is how often a status the daemon pushes changes of is asked
+// for anyway, in case a notice was shed from a full queue.
+const servicePoll = 30 * time.Second
+
+// changedMsg is the daemon saying a status is stale (protocol.NChanged).
+type changedMsg struct{ what string }
+
+// onChanged asks once for what changed. Each status reply arms the next
+// poll, so the epoch moves first: the poll already armed finds itself stale
+// and one chain of polls stays one.
+func (m *Model) onChanged(msg changedMsg) tea.Cmd {
+	switch msg.what {
+	case protocol.ChangedWeb:
+		m.webEpoch++
+		return webCmd(m.ctx, m.c, "status")
+	case protocol.ChangedDiscord:
+		m.discordEpoch++
+		return discordCmd(m.ctx, m.c, "status", m.discordEpoch)
+	}
+	return nil
+}
 
 func webCmd(ctx context.Context, c *client.Client, action string) tea.Cmd {
 	return rpcCmd(ctx, func(ctx context.Context) tea.Msg {
@@ -119,7 +141,7 @@ func (m *Model) onWeb(msg webMsg) tea.Cmd {
 	}
 	var cmds []tea.Cmd
 	if msg.action == "status" {
-		cmds = append(cmds, tick(5*time.Second, webTickMsg{})) // another client may turn it on or off
+		cmds = append(cmds, tick(servicePoll, webTickMsg{m.webEpoch})) // the daemon says when it changes; this is the net under that
 	}
 	switch {
 	case msg.err != nil && msg.action != "status":
