@@ -106,13 +106,23 @@ func (c *Channel) Sheet(id string) (protocol.SheetInfo, []byte, error) {
 }
 
 // readSheet reads a sheet's file, which is never larger than a sheet may be:
-// the file is an agent's, and what reads it serves it to a browser.
+// the file is an agent's, and what reads it serves it to a browser. It is
+// opened through the directory as a root, so a file an agent replaced with a
+// link to somewhere else (a key, a token) is refused rather than served.
 func readSheet(path string) ([]byte, error) {
-	f, err := os.Open(path)
+	root, err := os.OpenRoot(filepath.Dir(path))
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	f, err := root.Open(filepath.Base(path))
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
+	if st, err := f.Stat(); err != nil || !st.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s is not a file", filepath.Base(path))
+	}
 	b, err := io.ReadAll(io.LimitReader(f, maxSheetSize+1))
 	if err != nil {
 		return nil, err
