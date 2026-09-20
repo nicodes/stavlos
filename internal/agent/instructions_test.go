@@ -198,3 +198,46 @@ func TestInstructionsThatAppearedAfterTrustAreWithheld(t *testing.T) {
 		t.Fatalf("the project was not loaded again, so nobody is asked: %v", changed)
 	}
 }
+
+// TestInstructionsAreNotRepeatedAfterARestart: which files an agent has been
+// given is in the log (tool.finished names them), so a recovered agent is not
+// handed the same note again.
+func TestInstructionsAreNotRepeatedAfterARestart(t *testing.T) {
+	cfg, work := loadTestConfig(t, testConfig{})
+	for name, body := range map[string]string{"svc/AGENTS.md": "Keep handlers thin.", "svc/a.go": "package svc", "svc/b.go": "package svc"} {
+		p := filepath.Join(work, name)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg.ProjectTrusted = true
+	cfg.InstructionFiles = append(cfg.InstructionFiles, filepath.Join(work, "svc/AGENTS.md"))
+	h := newFakeHost(&fakeModel{steps: []step{reply(call("r1", "read", `{"path":"svc/a.go"}`)), reply(text("done"))}})
+	s := New(h, "s1", work, cfg, "", "")
+	if err := s.Start(context.Background(), "test"); err != nil {
+		t.Fatal(err)
+	}
+	runTurn(t, s, h, "look at svc")
+	s.Stop()
+
+	var second string
+	h2 := newFakeHost(&fakeModel{steps: []step{
+		reply(call("r2", "read", `{"path":"svc/b.go"}`)),
+		func(_ context.Context, req model.Request) (model.Response, error) {
+			second = lastUserText(req)
+			return text("done"), nil
+		},
+	}})
+	s2, err := Recover(context.Background(), h2, s.ID, s.Dir(), s.Created, cfg, h.all())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s2.Stop)
+	runTurn(t, s2, h2, "and b")
+	if second == "" || strings.Contains(second, "Keep handlers thin.") {
+		t.Fatalf("after a restart the read carried the instructions again (or never ran):\n%s", second)
+	}
+}

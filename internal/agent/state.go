@@ -45,6 +45,10 @@ type agentState struct {
 	children                               []string
 	killed                                 bool
 
+	// instructed is the instructions files a tool result has carried to the
+	// agent since its last compaction (or the channel last moved).
+	instructed map[string]bool
+
 	turn      int
 	inTurn    bool
 	lastError string // the error that ended the latest turn
@@ -159,6 +163,9 @@ func (cs *channelState) applyChannel(e event.Event) {
 		}
 		if p.Dir != nil {
 			cs.dir, cs.mode, cs.permits = *p.Dir, protocol.ModeAsk, permits{}
+			for _, ag := range cs.agents {
+				ag.instructed = nil // other directories, other instructions
+			}
 		}
 		if p.Recap != nil {
 			cs.recap = *p.Recap
@@ -307,6 +314,16 @@ func (a *agentState) applyTurn(e event.Event) {
 	case event.ToolStarted:
 		a.turnHadTools = true
 		a.nudges = 0
+	case event.ToolFinished:
+		var p event.ToolFinishedPayload
+		if e.Decode(&p) == nil && len(p.Instructions) > 0 {
+			if a.instructed == nil {
+				a.instructed = map[string]bool{}
+			}
+			for _, f := range p.Instructions {
+				a.instructed[f] = true
+			}
+		}
 	case event.AskRequested, event.AskResolved:
 		var p struct {
 			ID string `json:"id"`
@@ -339,6 +356,9 @@ func (a *agentState) applyTurn(e event.Event) {
 		a.compacting = true
 	case event.CompactionDone, event.CompactionFailed:
 		a.compacting = false
+		if e.Type == event.CompactionDone {
+			a.instructed = nil // the summary replaced the results that carried them
+		}
 	}
 }
 

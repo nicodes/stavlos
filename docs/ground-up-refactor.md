@@ -257,7 +257,7 @@ on their own rather than arrive in one diff.
 |---|---|---|
 | 2.1 event registry | **half** | Input kinds declare their rule (`event.InputRule`) and a test pins the vocabulary. Event types are not yet registered with payload and origin. |
 | 2.2 one commit, one dispatch | **done** | `commitLocked` dispatches its own wakes; `commitFactLocked` folds what happened even when the write fails. |
-| 2.3 runtime state derived | open | |
+| 2.3 runtime state derived | **half** | Which instructions an agent has been given is recorded on `tool.finished` and folded, so a restart does not hand them over again. `compactNext` and the context gauge are still memory only. |
 | 2.4 one system input | **done** | Framed from the rule; the "[harness]" text prefix is gone. |
 | 2.5 turn loop | open | |
 | 2.6 `Host` / `Env` split | open | |
