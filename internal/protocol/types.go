@@ -554,6 +554,11 @@ type TrustReplyParams struct {
 type SubscribeParams struct {
 	Channel string `json:"channel"`
 	From    int64  `json:"from"` // first per-channel seq to deliver (0 = from start)
+	// Tail, for a subscription from the start, delivers only the channel's
+	// last Tail events: what a client needs to draw a chat that opens at its
+	// end. The agents and prompts come from reconcile, not from history. 0
+	// delivers everything.
+	Tail int `json:"tail,omitempty"`
 }
 
 // ReconcileResult is the authoritative snapshot (PRD §9).

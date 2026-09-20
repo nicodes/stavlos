@@ -155,6 +155,9 @@ type channelState struct {
 	seq         int64
 	loading     bool  // replaying events up to replayTo
 	replayTo    int64 // seq from reconcile
+	historyFrom int64 // the first seq replayed when the history was cut to a tail (0 = all of it is here)
+	wholeLog    bool  // /history: replay everything
+	awaitFirst  bool  // /history dropped what was replayed: events are ignored until the new replay's first
 	reconciled  bool  // the first reconcile landed
 
 	dirEdit string          // "" | "add" | the path being replaced
@@ -199,6 +202,7 @@ type replayed struct {
 	parentOf    map[string]string
 	transcripts map[string]*transcript.Transcript
 	seq         int64
+	historyFrom int64
 	left        time.Time
 }
 
@@ -224,7 +228,7 @@ func (m *Model) stash() {
 		}
 		delete(m.visited, oldest)
 	}
-	m.visited[m.channelID] = replayed{m.spawned, m.parentOf, m.transcripts, m.seq, clock()}
+	m.visited[m.channelID] = replayed{m.spawned, m.parentOf, m.transcripts, m.seq, m.historyFrom, clock()}
 	m.keepTree(m.channelID, m.agents)
 }
 
@@ -266,7 +270,7 @@ func (m *Model) restore(id string) {
 		return
 	}
 	delete(m.visited, id)
-	m.spawned, m.parentOf, m.transcripts, m.seq = r.spawned, r.parentOf, r.transcripts, r.seq
+	m.spawned, m.parentOf, m.transcripts, m.seq, m.historyFrom = r.spawned, r.parentOf, r.transcripts, r.seq, r.historyFrom
 	for _, t := range m.transcripts {
 		t.ApplyStream(protocol.StreamNotification{Reset: true})
 	}

@@ -393,11 +393,21 @@ var handlers = routes(
 		if _, err := c.d.channel(p.Channel); err != nil {
 			return protocol.SubscribeResult{}, err
 		}
-		last, err := c.d.subscribe(ctx, c.cl, p.Channel, p.From)
+		from, first := p.From, int64(0)
+		if p.Tail > 0 && from <= 1 {
+			head, err := c.d.Log.LastSeq(ctx, p.Channel)
+			if err != nil {
+				return protocol.SubscribeResult{}, internal(err)
+			}
+			if start := head - int64(p.Tail) + 1; start > 1 {
+				from, first = start, start
+			}
+		}
+		last, err := c.d.subscribe(ctx, c.cl, p.Channel, from)
 		if err != nil {
 			return protocol.SubscribeResult{}, internal(err)
 		}
-		return protocol.SubscribeResult{Seq: last}, nil
+		return protocol.SubscribeResult{Seq: last, First: first}, nil
 	})),
 	forWeb(route(protocol.Unsubscribe, func(_ context.Context, c *conn, p protocol.SubscribeParams) (protocol.None, error) {
 		c.cl.mu.Lock()

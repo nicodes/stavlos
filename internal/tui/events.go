@@ -124,6 +124,9 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 			m.fatal = fmt.Errorf("subscribe: %w", msg.err)
 			return nil, true
 		}
+		if m.historyFrom = msg.first; msg.first > 1 {
+			return []tea.Cmd{m.setStatus("showing recent history · /history loads all of it", false)}, false
+		}
 	case eventMsg:
 		return []tea.Cmd{m.applyEvent(msg.ev)}, false
 	case streamMsg:
@@ -193,7 +196,7 @@ func (m *Model) onReconcile(msg reconcileMsg) ([]tea.Cmd, bool) {
 		m.upsertPrompt(p)
 	}
 	m.replayTo = msg.res.Seq
-	cmds := []tea.Cmd{subscribeCmd(m.ctx, m.c, m.requestScope(), m.seq+1), channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), rolesCmd(m.ctx, m.c, m.requestScope(), true), customCommandsCmd(m.ctx, m.c, m.requestScope())}
+	cmds := []tea.Cmd{subscribeCmd(m.ctx, m.c, m.requestScope(), m.seq+1, m.tail()), channelsCmd(m.ctx, m.c, m.requestScope(), channelsNav), rolesCmd(m.ctx, m.c, m.requestScope(), true), customCommandsCmd(m.ctx, m.c, m.requestScope())}
 	if m.rememberViews && m.lastRemembered != m.channelID {
 		m.lastRemembered = m.channelID
 		cmds = append(cmds, rememberChannelCmd(m.channelID))
@@ -263,6 +266,14 @@ func (m *Model) caughtUp() []tea.Cmd {
 func (m *Model) applyEvent(ev event.Event) tea.Cmd {
 	if ev.Channel != "" && ev.Channel != m.channelID {
 		return nil
+	}
+	if m.awaitFirst {
+		// Live events of the subscription /history replaced are still on the
+		// wire ahead of the new replay, which would deliver them again.
+		if ev.Seq != 1 {
+			return nil
+		}
+		m.awaitFirst = false
 	}
 	if ev.Seq > m.seq {
 		m.seq = ev.Seq
