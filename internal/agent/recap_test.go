@@ -110,7 +110,7 @@ func TestAnOpenRecapSurvivesARestart(t *testing.T) {
 	if err := r.MaybeRecap(ctx, later.Add(10*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(30 * time.Millisecond)
+	settle(t, r, rh)
 	if n := len(recapInputs(rh, r.Root().ID)); n != 0 {
 		t.Fatalf("the restarted daemon asked for a recap that was already open: %d new asks", n)
 	}
