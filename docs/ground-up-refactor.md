@@ -257,7 +257,7 @@ on their own rather than arrive in one diff.
 |---|---|---|
 | 2.1 event registry | **half** | Input kinds declare their rule (`event.InputRule`) and a test pins the vocabulary. Event types are not yet registered with payload and origin. |
 | 2.2 one commit, one dispatch | **done** | `commitLocked` dispatches its own wakes; `commitFactLocked` folds what happened even when the write fails. |
-| 2.3 runtime state derived | **half** | Which instructions an agent has been given is recorded on `tool.finished` and folded, so a restart does not hand them over again. `compactNext` and the context gauge are still memory only. |
+| 2.3 runtime state derived | **done** | Which instructions an agent has been given is recorded on `tool.finished` and folded; how full its context is is worked out again from the log at recovery, where every agent used to read 0% until it next spoke. `compactNext` (a `/compact` that arrived mid-turn) stays in memory on purpose: a restart aborts that turn, and the request with it is the honest outcome. |
 | 2.4 one system input | **done** | Framed from the rule; the "[harness]" text prefix is gone. |
 | 2.5 turn loop | **done** | `step` is `prepare() → stepPlan`, `call()`, `onError()`, `runTools()`; the plan is read once a step. Failover stays `movedOn` with its record on the turn. |
 | 2.6 `Host` / `Env` split | **half** | `Host` is `Journal`, `Models`, `Human` and `Project`; the picker takes `Models` alone. `tools.Env` still mixes per-call data with capabilities where nil means unavailable. |
