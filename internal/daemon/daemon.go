@@ -54,6 +54,7 @@ type Daemon struct {
 	trustPrompts map[string]string // dir → prompt id
 	trust        *trustStore
 	lock         *os.File // the data directory's lock, held until Close
+	closeOnce    sync.Once
 
 	streams *streams // stream deltas waiting to be sent together
 
@@ -78,6 +79,14 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 		return nil, err
 	}
 	d.Log = lg
+	// From here a failure gives back what was taken: the lock and the log used
+	// to stay held by a daemon that never started, until the process ended.
+	ok := false
+	defer func() {
+		if !ok {
+			d.Close()
+		}
+	}()
 	d.trust = &trustStore{log: lg}
 	if err := d.trust.load(ctx); err != nil {
 		return nil, err
@@ -94,23 +103,50 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 	if err := d.recover(ctx); err != nil {
 		return nil, err
 	}
+	ok = true
 	return d, nil
 }
 
-// Close stops channels and the log and releases the data directory.
+// Close stops what the daemon runs, in the order that lets each part finish
+// with what it depends on still there: the clients' front doors (so nothing
+// new arrives), then the channels (whose last events need the log), then the
+// log, then the lock that says the data directory is in use. It is safe on a
+// daemon that only partly started, and to call twice.
 func (d *Daemon) Close() {
+	d.closeOnce.Do(func() {
+		for _, stop := range []func(){d.closeDiscord, d.closeWeb, d.stopChannels, d.closeLog, d.unlock} {
+			stop()
+		}
+	})
+}
+
+func (d *Daemon) closeDiscord() {
 	if d.Discord != nil {
 		d.Discord.Close()
 	}
+}
+
+func (d *Daemon) closeWeb() {
 	d.webMu.Lock()
+	defer d.webMu.Unlock()
 	if d.web != nil {
 		d.web.Disable() // the listener only; whether it is on stays as the human left it
 	}
-	d.webMu.Unlock()
+}
+
+func (d *Daemon) stopChannels() {
 	for _, s := range d.channelList() {
 		s.Stop()
 	}
-	d.Log.Close()
+}
+
+func (d *Daemon) closeLog() {
+	if d.Log != nil {
+		d.Log.Close()
+	}
+}
+
+func (d *Daemon) unlock() {
 	if d.lock != nil {
 		d.lock.Close() // releases the flock
 	}

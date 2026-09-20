@@ -279,7 +279,8 @@ on their own rather than arrive in one diff.
 | 5.4 dispatcher | **half** | An event nobody watches is not encoded. Encoding still runs on the writer. |
 | 5.5 usage table | **done** | Migration 5 to 6, checked against a copy of the real log: identical totals. |
 | 5.6 push, not poll | **half** | A `changed` notification for the web UI and Discord; their polls drop from 2 s and 5 s to a 30 s net. Plan usage, the channel list and the browser still poll. |
-| 5.7 to 5.9 | open | |
+| 5.7 `Service` registry | **part** | `Daemon.Close` is an ordered list run once (front doors, channels, log, lock), and a start that fails runs it: a daemon that got past the lock and then failed kept the data directory locked and the log open until the process ended. Discord, the web server and the plan poller still start in their own ways. |
+| 5.8, 5.9 | open | |
 | 6.5 nav rows | **done** | Rows by id; no row arithmetic in the tests. |
 | 6.3 TypeScript from Go | **done** for names | `web/src/core/vocabulary.gen.ts` is written by the test that pins the vocabulary; the reducer's switch is exhaustive (`never`), with the 19 types the browser does not draw listed by name, so a new event type fails the web build until somebody decides. Payloads are still `any`. |
 | 6.1 `present` | **started** | The package exists and holds what was said three ways: the answers to a permission prompt (Discord said "in this channel", the terminal "for this channel") and the argument that stands for a tool call (a switch in the TUI, a field list in Discord, a guess at keys in the browser; now one table, generated into the browser's types, with a test holding Discord's cards to it). Events folding into neutral `Item`s, which 6.2 and 6.7 build on, is open. |
