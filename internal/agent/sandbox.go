@@ -69,8 +69,14 @@ func sandboxLevel(cfg *config.Effective) string {
 	if !cfg.Sandbox.Enabled {
 		return "off"
 	}
-	lvl, _ := probeSandbox()
-	return lvl.String()
+	switch lvl, _ := probeSandbox(); lvl {
+	case sandbox.Full:
+		return "full"
+	case sandbox.Landlock:
+		return "limited" // writes and the network are bounded; nothing is hidden
+	default:
+		return "none"
+	}
 }
 
 // probeSandbox is sandbox.Probe, a variable so a test can be a kernel that

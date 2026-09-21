@@ -279,8 +279,8 @@ func (m Model) trustRow(width int) string {
 func (m Model) sandboxRow(width int) string {
 	figure, st := "", theme.StyleWarn
 	switch m.channel.Sandbox {
-	case "landlock":
-		figure = "partial" // writes and network bounded; nothing hidden, no private /tmp
+	case "limited":
+		figure = "limited" // writes and the network are bounded; nothing is hidden (a click says why, and the fix)
 	case "none":
 		figure, st = "none · asks", theme.StyleError
 	case "off":

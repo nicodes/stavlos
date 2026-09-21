@@ -30,6 +30,8 @@ var (
 	DiscordDisconnect   = Method[None, DiscordStatus]{MDiscordDisconnect}
 	WebStatusMethod     = Method[None, WebStatus]{MWebStatus}
 	WebEnable           = Method[None, WebStatus]{MWebEnable}
+	SandboxStatusMethod = Method[None, SandboxStatus]{MSandboxStatus}
+	SandboxSet          = Method[SandboxSetParams, SandboxStatus]{MSandboxSet}
 	WebDisable          = Method[None, WebStatus]{MWebDisable}
 	WebOpen             = Method[None, WebStatus]{MWebOpen}
 	Attach              = Method[AttachParams, AttachResult]{MAttach}

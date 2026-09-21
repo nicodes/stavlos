@@ -143,6 +143,8 @@ type serviceState struct {
 	discordKnown  bool
 	webStatus     protocol.WebStatus
 	webKnown      bool
+	sandboxStatus protocol.SandboxStatus // what bounds commands on this machine (sandbox.go)
+	sandboxKnown  bool
 }
 
 // chatPane is the transcript on screen.
@@ -434,7 +436,7 @@ func (m *Model) update(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		return m.onDaemon(msg)
 	case providersMsg, loginStartMsg, loginDoneMsg, rolesMsg, variantsMsg, channelsMsg, switchedMsg, modelsMsg:
 		cmds = append(cmds, m.onListed(msg))
-	case webMsg, webTickMsg, discordMsg, discordTickMsg, changedMsg:
+	case webMsg, webTickMsg, discordMsg, discordTickMsg, changedMsg, sandboxMsg:
 		if cmd := m.onService(msg); cmd != nil { // a stale poll asks for nothing
 			cmds = append(cmds, cmd)
 		}

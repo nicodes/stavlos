@@ -16,7 +16,7 @@ type ChannelInfo struct {
 	CostUSD      float64 `json:"cost_usd"`
 	Tokens       int     `json:"tokens"` // input + output tokens every agent of the channel has used
 	TrustPending bool    `json:"trust_pending"`
-	// Sandbox is what bounds this channel's commands: "full", "landlock"
+	// Sandbox is what bounds this channel's commands: "full", "limited"
 	// (writes and network bounded, nothing hidden), "none" (the kernel offers
 	// nothing: every command asks) or "off" (turned off in stavlos.json).
 	Sandbox     string       `json:"sandbox,omitempty"`

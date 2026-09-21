@@ -42,6 +42,8 @@ func (m *Model) onService(msg tea.Msg) tea.Cmd {
 		return m.onDiscord(msg)
 	case changedMsg:
 		return m.onChanged(msg)
+	case sandboxMsg:
+		return m.onSandbox(msg)
 	case webTickMsg:
 		if msg.epoch == m.webEpoch {
 			return webCmd(m.ctx, m.c, "status")

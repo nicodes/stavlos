@@ -1119,7 +1119,20 @@ Report what you changed and what you verified.`,
 // SetGlobalModel writes "model" into the global stavlos.json, creating the
 // file if needed and replacing an existing "model" entry otherwise. Comments
 // and other keys are preserved.
+// SetGlobalSandbox turns the command sandbox on or off in the global
+// stavlos.json, one field, every other byte kept.
+func SetGlobalSandbox(enabled bool) error {
+	value, _ := json.Marshal(enabled)
+	return setGlobalField([]string{"sandbox", "enabled"}, value)
+}
+
 func SetGlobalModel(modelID string) error {
+	value, _ := json.Marshal(modelID)
+	return setGlobalField([]string{"model"}, value)
+}
+
+// setGlobalField sets one field of the global stavlos.json.
+func setGlobalField(path []string, value []byte) error {
 	globalWriteMu.Lock()
 	defer globalWriteMu.Unlock()
 	p := filepath.Join(paths.ConfigDir(), "stavlos.json")
@@ -1137,8 +1150,7 @@ func SetGlobalModel(modelID string) error {
 	// it rewrote every "model" key at any depth, comments included, expanded
 	// a "$" in the id, and wrote the result in place, where a crash left
 	// half a configuration.
-	value, _ := json.Marshal(modelID)
-	out, err := EditJSONField(b, []string{"model"}, value)
+	out, err := EditJSONField(b, path, value)
 	if err != nil {
 		return fmt.Errorf("%s: %w", p, err)
 	}
