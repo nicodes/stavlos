@@ -160,7 +160,8 @@ func init() {
 	commandRuns = map[string]commandRun{
 		"/tokens": {run: usage}, "/cost": {run: usage}, "/plan": {run: usage}, "/recap": {run: usage},
 		"/discord": {run: service}, "/web": {run: service},
-		"/tree": {run: view}, "/history": {run: view},
+		"/sandbox": {run: func(m *Model, _, rest string) tea.Cmd { return m.openSandbox(rest) }},
+		"/tree":    {run: view}, "/history": {run: view},
 		"/yolo": {run: mode}, "/auto": {run: mode},
 		"/settings": {run: func(m *Model, _, rest string) tea.Cmd { return m.settingsCommand(rest) }},
 		"/help": {run: func(m *Model, _, _ string) tea.Cmd {

@@ -513,6 +513,8 @@ func (m *Model) sidebarClick(x, y int) tea.Cmd {
 			return tea.Batch(cmd, m.openPlanUsage(p.Provider, p.Name))
 		case navTrust: // ask for trust, or open the config
 			return tea.Batch(cmd, m.trustClick())
+		case navSandbox: // what is missing, and the switch
+			return tea.Batch(cmd, m.openSandbox(""))
 		case navWeb:
 			return tea.Batch(cmd, m.webClick())
 		case navDiscord:
