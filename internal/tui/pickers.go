@@ -266,12 +266,8 @@ func (m *Model) cancelLogin() tea.Cmd {
 func (m *Model) overlaySubmit(alt bool) tea.Cmd {
 	o := m.ov
 	switch o.kind {
-	case ovDiscord:
-		return m.submitDiscord()
-	case ovWeb:
-		return m.submitWeb()
-	case ovSandbox:
-		return m.submitSandbox()
+	case ovDiscord, ovWeb, ovSandbox:
+		return m.submitService(o.kind)
 	case ovProviders:
 		it := o.selected()
 		if it == nil {
