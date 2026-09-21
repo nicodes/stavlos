@@ -2,10 +2,14 @@ package sandbox
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"os/signal"
 	"runtime"
 	"strings"
+	"syscall"
 	"unsafe"
 
 	"golang.org/x/sys/unix"
@@ -37,9 +41,12 @@ func helper() int {
 	args = args[1:]
 	env := make([]string, 0, len(os.Environ()))
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, specEnv+"=") {
+		if !strings.HasPrefix(kv, specEnv+"=") && !strings.HasPrefix(kv, stageEnv+"=") {
 			env = append(env, kv)
 		}
+	}
+	if w.Mounts && os.Getenv(stageEnv) == "" {
+		return enterNamespaces()
 	}
 	writable := w.Writable
 	if w.Mounts {
@@ -73,6 +80,56 @@ func helper() int {
 	}
 	err := unix.Exec(args[0], args, env)
 	return fail("exec %s: %v", args[0], err)
+}
+
+// stageEnv marks the copy of the helper that is already inside the user and
+// mount namespaces.
+const stageEnv = "STAVLOS_SANDBOX_STAGE"
+
+// enterNamespaces runs this helper again inside a new user and mount
+// namespace and stands in for it: same arguments, same files, the same
+// process group (so what stops the command stops both), and its exit status.
+// Were this copy to die first, the kernel kills the other.
+func enterNamespaces() int {
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "stavlos sandbox: %v\n", err)
+		return 126
+	}
+	uid, gid := os.Getuid(), os.Getgid()
+	cmd := exec.Command(self)
+	cmd.Args = os.Args
+	cmd.Env = append(os.Environ(), stageEnv+"=2")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Cloneflags:                 syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS,
+		UidMappings:                []syscall.SysProcIDMap{{ContainerID: uid, HostID: uid, Size: 1}},
+		GidMappings:                []syscall.SysProcIDMap{{ContainerID: gid, HostID: gid, Size: 1}},
+		GidMappingsEnableSetgroups: false,
+		// The helper keeps its user identity, so executing it would drop the
+		// namespace's capabilities; an ambient CAP_SYS_ADMIN carries the one
+		// it needs to mount, and the helper clears it before the command.
+		AmbientCaps: []uintptr{unix.CAP_SYS_ADMIN},
+		Pdeathsig:   syscall.SIGKILL,
+	}
+	// Signals meant for the command reach it through the process group; this
+	// copy only has to outlive it to report how it ended. They are caught, not
+	// ignored: an ignored signal stays ignored across exec, and the command
+	// would inherit a SIGTERM it could never be stopped with.
+	signal.Notify(make(chan os.Signal, 8), syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGQUIT)
+	err = cmd.Run()
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+		return 0
+	case errors.As(err, &exit):
+		if ws, ok := exit.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+			return 128 + int(ws.Signal())
+		}
+		return exit.ExitCode()
+	}
+	fmt.Fprintf(os.Stderr, "stavlos sandbox: user namespaces unavailable: %v\n", err)
+	return 126
 }
 
 // setEnv replaces or adds one variable.
