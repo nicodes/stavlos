@@ -22,7 +22,6 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
-
 )
 
 // helperArg0 is the helper's argv[0]: a process started with it runs the
