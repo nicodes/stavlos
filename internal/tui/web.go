@@ -122,6 +122,18 @@ func (m *Model) webClick() tea.Cmd {
 	return m.openWeb("on")
 }
 
+// submitService is enter in the dialog of something the daemon runs.
+func (m *Model) submitService(kind overlayKind) tea.Cmd {
+	switch kind {
+	case ovDiscord:
+		return m.submitDiscord()
+	case ovSandbox:
+		return m.submitSandbox()
+	default:
+		return m.submitWeb()
+	}
+}
+
 func (m *Model) submitWeb() tea.Cmd {
 	if it := m.ov.selected(); it != nil {
 		switch it.id {
