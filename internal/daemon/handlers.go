@@ -139,6 +139,12 @@ func promptErr(err error) error {
 var none = protocol.None{}
 
 var handlers = routes(
+	route(protocol.SandboxStatusMethod, func(context.Context, *conn, protocol.None) (protocol.SandboxStatus, error) {
+		return sandboxStatus()
+	}),
+	route(protocol.SandboxSet, func(_ context.Context, c *conn, p protocol.SandboxSetParams) (protocol.SandboxStatus, error) {
+		return c.d.SetSandbox(p.Enabled)
+	}),
 	webRoute(protocol.WebStatusMethod), webRoute(protocol.WebEnable), webRoute(protocol.WebDisable), webRoute(protocol.WebOpen),
 	forBridge(route(protocol.DiscordStatusMethod, func(_ context.Context, c *conn, _ protocol.None) (protocol.DiscordStatus, error) {
 		if c.d.Discord == nil {

@@ -67,10 +67,44 @@ func TestTheNavSaysWhenTheSandboxIsNotFull(t *testing.T) {
 		}
 		return ""
 	}
-	for level, want := range map[string]string{"": "", "full": "", "landlock": "partial", "none": "none · asks", "off": "off"} {
+	for level, want := range map[string]string{"": "", "full": "", "limited": "limited", "none": "none · asks", "off": "off"} {
 		m.channel.Sandbox = level
 		if got := has(); (want == "") != (got == "") || !strings.Contains(got, want) {
 			t.Errorf("sandbox %q: row %q, want it to say %q", level, got, want)
 		}
+	}
+}
+
+// The sandbox dialog: a full sandbox offers only the switch; a limited one
+// says what is missing, why, and the fix; off offers turning it on.
+func TestTheSandboxDialog(t *testing.T) {
+	m := channelModel()
+	m.openSandbox("")
+	ids := func() string {
+		var out []string
+		for _, it := range m.ov.shown {
+			out = append(out, it.id)
+		}
+		return strings.Join(out, " ")
+	}
+	m.onSandbox(sandboxMsg{status: protocol.SandboxStatus{Enabled: true, Level: "full"}})
+	if m.ov == nil || m.ov.kind != ovSandbox || ids() != "off" || m.ov.title != "Sandbox · on" {
+		t.Fatalf("full: %q %q", m.ov.title, ids())
+	}
+	m.onSandbox(sandboxMsg{status: protocol.SandboxStatus{Enabled: true, Level: "limited", Missing: []string{"a", "b"}, Why: "blocked", Fix: "sudo sysctl -w x=1"}})
+	if ids() != "info info info fix off" || m.ov.title != "Sandbox · on · limited" {
+		t.Fatalf("limited: %q %q", m.ov.title, ids())
+	}
+	m.onSandbox(sandboxMsg{status: protocol.SandboxStatus{Enabled: false, Level: "full"}})
+	if ids() != "on" || m.ov.title != "Sandbox · off" {
+		t.Fatalf("off: %q %q", m.ov.title, ids())
+	}
+	if m.openSandbox("sideways") == nil || m.openSandbox("off") == nil {
+		t.Fatal("/sandbox off asks the daemon; anything else says how it is used")
+	}
+	// the nav's row opens it
+	m.ov, m.channel.Sandbox, m.showTree = nil, "limited", true
+	if m.sidebarClick(2, m.navRowIndex(navSandbox)); m.ov == nil || m.ov.kind != ovSandbox {
+		t.Fatal("a click on the nav's sandbox row did not open the dialog")
 	}
 }
