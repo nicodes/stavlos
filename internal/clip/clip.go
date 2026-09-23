@@ -9,7 +9,7 @@ import (
 )
 
 // DefaultMax is the size text is clipped to when no limit is given.
-const DefaultMax = 32 * 1024
+const DefaultMax = 50 * 1024
 
 // Middle keeps the first two thirds and the last third of s within max
 // bytes (0 means DefaultMax), with a note of how much was dropped between.

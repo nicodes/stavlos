@@ -373,3 +373,26 @@ func TestUntilChangedLoop(t *testing.T) {
 		t.Fatalf("loop: %v\n%s", err, out)
 	}
 }
+
+// A truncated output is kept whole where the agent can read it, and the
+// result says where.
+func TestATruncatedOutputIsKeptWhole(t *testing.T) {
+	dir := t.TempDir()
+	env := &Env{MaxOutput: 1000, Overflow: filepath.Join(dir, "out")}
+	long := strings.Repeat("line of output\n", 200)
+	got := env.Clip(long)
+	if !strings.Contains(got, "bytes truncated") || !strings.Contains(got, "is at "+filepath.Join(dir, "out")) {
+		t.Fatalf("clip: %q", got[len(got)-200:])
+	}
+	path := got[strings.Index(got, "is at ")+6:]
+	path = path[:strings.Index(path, ":")]
+	if b, err := os.ReadFile(path); err != nil || string(b) != long {
+		t.Fatalf("the whole output was not kept at %s: %v", path, err)
+	}
+	if short := env.Clip("short"); short != "short" {
+		t.Fatalf("a short output was touched: %q", short)
+	}
+	if got := (&Env{MaxOutput: 1000}).Clip(long); strings.Contains(got, "is at") {
+		t.Fatal("with nowhere to keep it, the result names a file")
+	}
+}

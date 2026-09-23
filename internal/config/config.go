@@ -86,7 +86,7 @@ type Escalation struct {
 
 type Compaction struct {
 	Threshold     float64 `json:"threshold,omitempty"`
-	MaxTokens     int     `json:"maxTokens,omitempty"`   // compact once a history passes this many tokens, whatever the window; default 150000, -1 = the window alone
+	MaxTokens     int     `json:"maxTokens,omitempty"`   // compact once a history passes this many tokens, whatever the window; 0 = the window alone
 	ClearTokens   int     `json:"clearTokens,omitempty"` // old tool results are cleared from the history once newer ones hold this many tokens; default 40000, -1 = never
 	KeepTokens    int     `json:"keepTokens,omitempty"`  // how much recent conversation a compaction keeps beside the summary
 	MaxToolOutput string  `json:"maxToolOutput,omitempty"`
@@ -397,7 +397,7 @@ func Defaults() File {
 		Mode:             protocol.ModeAsk,
 		Limits:           &Limits{MaxDepth: 3, MaxAgents: 6, MaxCallsPerTurn: 200},
 		Escalation:       &Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: string(policy.Deny)},
-		Compaction:       &Compaction{Threshold: 0.8, MaxTokens: 150_000, ClearTokens: 40_000, KeepTokens: 15_000, MaxToolOutput: "32kb"},
+		Compaction:       &Compaction{Threshold: 0.9, ClearTokens: 40_000, KeepTokens: 15_000, MaxToolOutput: "50kb"},
 		Reminders:        &on,
 		ResumeAfterLimit: &on,
 		Sandbox:          &SandboxConfig{Enabled: &on, Network: &network},
@@ -663,14 +663,11 @@ func (e *Effective) applyCompaction(c *Compaction) error {
 		}
 		e.Compaction.Threshold = c.Threshold
 	}
-	// A budget in tokens, not a share of the window: a model that offers a
-	// million tokens is a reason to allow that many, not to carry them on
-	// every call (docs/token-efficiency.md).
 	if c.MaxTokens != 0 {
-		if c.MaxTokens < 1000 && c.MaxTokens != -1 {
-			return fmt.Errorf("compaction.maxTokens %d: a token count of at least 1000, or -1 for the window alone", c.MaxTokens)
+		if c.MaxTokens < 1000 {
+			return fmt.Errorf("compaction.maxTokens %d: a token count of at least 1000, or 0 for the window alone", c.MaxTokens)
 		}
-		e.Compaction.MaxTokens = max(c.MaxTokens, 0)
+		e.Compaction.MaxTokens = c.MaxTokens
 	}
 	if c.ClearTokens != 0 {
 		if c.ClearTokens < 1000 && c.ClearTokens != -1 {

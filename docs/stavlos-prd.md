@@ -478,7 +478,7 @@ JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Ever
 
   "limits":     { "maxDepth": 3, "maxAgents": 6 },
   "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
-  "compaction": { "threshold": 0.8, "maxToolOutput": "32kb" },
+  "compaction": { "threshold": 0.9, "maxToolOutput": "50kb" },
   "search": { "provider": "brave", "apiKey": "${env:BRAVE_API_KEY}" },   // web_search backend: brave | tavily | exa
   "hosts": ["github.com", "*.golang.org"],   // hosts web_fetch reaches without asking; "*" is every host (a trusted project's add to yours)
   "dirs": ["~/Work/shared", "/tmp"],   // directories every channel works in besides its own (a trusted project's add to yours)

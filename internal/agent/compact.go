@@ -30,18 +30,18 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 	s.mu.Unlock()
 	// Old tool results go first: lossless, free, and most of what a history
 	// holds. Compaction below is for what is left.
-	project.ClearOld(history, cc.ClearTokens, conversationTools)
+	project.ClearOld(history, cc.ClearTokens, project.ClearMinimum, conversationTools)
 	est := project.EstimateTokens(history, system, defs)
 	// the provider's own count of the last call, when it is larger than the
 	// estimate: the estimate drifts, and the backend's number is what fills
 	// the window
 	size := max(est, last)
-	full := info.ContextWindow > 0 && size > int(float64(info.ContextWindow)*cc.Threshold)
+	full := info.ContextWindow > 0 && size > int(float64(usableWindow(info))*cc.Threshold)
 	over := cc.MaxTokens > 0 && size > cc.MaxTokens
 	if !running && (wanted || full || over) {
 		if err := a.compact(turnCtx, m, info, wanted); err == nil {
 			history = a.history()
-			project.ClearOld(history, cc.ClearTokens, conversationTools)
+			project.ClearOld(history, cc.ClearTokens, project.ClearMinimum, conversationTools)
 			est = project.EstimateTokens(history, system, defs)
 		}
 	}
@@ -50,6 +50,21 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 	s.mu.Unlock()
 	return history
 }
+
+// usableWindow is the part of a model's window a history may fill: the
+// window less what the reply needs, as OpenCode reserves min(20k, the max
+// output) and Codex takes 95% then compacts at 90% of that. The threshold
+// applies to this, so the window is a ceiling and not a target.
+func usableWindow(info model.Info) int {
+	reserve := min(reserveOutput, info.ContextWindow/10)
+	if info.MaxOutput > 0 {
+		reserve = min(reserve, info.MaxOutput)
+	}
+	return info.ContextWindow - reserve
+}
+
+// reserveOutput is the most of a window kept free for the reply.
+const reserveOutput = 20_000
 
 // conversationTools are the tools whose results are the conversation, never
 // cleared: they cannot be asked for again.

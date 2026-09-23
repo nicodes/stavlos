@@ -449,3 +449,19 @@ func TestAMoveToAnotherProviderCompactsFirst(t *testing.T) {
 		}
 	}
 }
+
+// The window is a ceiling: what the reply needs is reserved first, and the
+// threshold applies to the rest.
+func TestUsableWindow(t *testing.T) {
+	for _, c := range []struct {
+		window, out, want int
+	}{
+		{1_000_000, 65_536, 980_000}, // Kimi, GLM: 20k reserved
+		{200_000, 8_192, 191_808},    // a small output limit reserves less
+		{100_000, 0, 90_000},         // no output limit known: a tenth
+	} {
+		if got := usableWindow(model.Info{ContextWindow: c.window, MaxOutput: c.out}); got != c.want {
+			t.Errorf("usableWindow(%d, %d) = %d, want %d", c.window, c.out, got, c.want)
+		}
+	}
+}

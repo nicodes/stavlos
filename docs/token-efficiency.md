@@ -174,9 +174,9 @@ should return **1–2 k tokens** to its parent. Stavlos does this by design
 
 In order of tokens saved per hour of work. All six are built (the pull request that follows this document); what each turned out to be is noted under it.
 
-### 3.1 Compact at a fixed budget — done
+### 3.1 Compact at a fixed budget — changed after reading the code
 
-`compaction.maxTokens` defaults to 150,000 (`-1` for the window alone).
+Neither OpenCode nor Codex uses a flat number: OpenCode compacts at the model's input limit minus a reserve of `min(20k, max output)` ([overflow.ts](https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/session/overflow.ts)), Codex at `min(config, 90% of the window)` after taking 95% of the catalogue's window ([openai_models.rs](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/openai_models.rs)). Both keep the window as the ceiling and rely on something else to keep histories small. Stavlos now does the same: `compaction.threshold` defaults to 0.9 of the window less the reply's reserve (`usableWindow`), and `compaction.maxTokens` is an opt-in budget, off by default. What keeps histories small is 3.2.
 
 Set `"compaction": {"maxTokens": 150000}` in `stavlos.json` now: it exists and
 is honoured. Then make it the default in `config.Defaults()`, with the window
@@ -187,7 +187,7 @@ faster, better calls.
 
 ### 3.2 Clear old tool results before summarising — done
 
-`project.ClearOld`, on every step, keeps the newest `compaction.clearTokens` (40,000) of tool results and turns older ones into a note; `agent_create`, `message` and `ask_user` results are never cleared.
+`project.ClearOld`, on every step, is OpenCode's `prune` ([compaction.ts](https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/session/compaction.ts)): it keeps the newest `compaction.clearTokens` (40,000, OpenCode's `PRUNE_PROTECT`) of tool results and turns older ones into a note, never touches the two most recent turns, never clears `agent_create`, `message` or `ask_user` results, and does nothing unless at least 20,000 tokens would go (`PRUNE_MINIMUM`), since a small clearing still costs the prompt cache.
 
 A `clearOld` step in `prepareHistory`, before the compaction check: tool
 results older than the last N tokens of tool output (OpenCode's 40 k is a
@@ -236,7 +236,7 @@ every token is fresh, and a summary is a tenth of the size. Proposed in
 [model selection](model-selection.md); this log puts a number on it: 24.5 M
 fresh tokens, 12% of all fresh input.
 
-### 3.6 Smaller — `todo` and the truncation note done; reminders on a cleared history and the unchanged-read answer not (3.2 makes both nearly free)
+### 3.6 Smaller — done: `todo` answers with the change; a tool output over 50 KB (OpenCode's `MAX_BYTES`) is cut in the middle and kept whole in the channel's scratch directory, which the result names, so the next call reads the part that matters. Not done: reminders on a cleared history and the unchanged-read answer (3.2 makes both nearly free)
 
 - **`todo` returns the change**, not the list ("t3 → done; 2 of 5 done"); the
   list is in the harness note already.

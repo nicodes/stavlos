@@ -12,6 +12,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -366,7 +367,7 @@ func (a *Agent) askOpened(ctx context.Context, info protocol.PromptInfo, callID 
 // toolEnv is what a tool gets from this agent for one call.
 func (a *Agent) toolEnv(turn int, c model.Block, rv roleView, cfg *config.Effective) *tools.Env {
 	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
-		MaxOutput: cfg.Compaction.MaxToolOutput, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
+		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: filepath.Join(paths.CacheDir(), "tmp", a.c.ID, "output"), Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Sandbox: a.c.sandboxSpec(cfg),
 		Partial: func(out string) {
 			a.c.host.Stream(protocol.StreamNotification{Channel: a.c.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: out})
