@@ -157,9 +157,11 @@ should return **1–2 k tokens** to its parent. Stavlos does this by design
 
 ## 3. What to change
 
-In order of tokens saved per hour of work. Each is its own pull request.
+In order of tokens saved per hour of work. All six are built (the pull request that follows this document); what each turned out to be is noted under it.
 
-### 3.1 Compact at a fixed budget (a setting change today, a default tomorrow)
+### 3.1 Compact at a fixed budget — done
+
+`compaction.maxTokens` defaults to 150,000 (`-1` for the window alone).
 
 Set `"compaction": {"maxTokens": 150000}` in `stavlos.json` now: it exists and
 is honoured. Then make it the default in `config.Defaults()`, with the window
@@ -168,7 +170,9 @@ bedrock numbers: the eight agents that averaged 300–450 k per call would
 average under 150 k, which is roughly **half of all input tokens** gone, and
 faster, better calls.
 
-### 3.2 Clear old tool results before summarising
+### 3.2 Clear old tool results before summarising — done
+
+`project.ClearOld`, on every step, keeps the newest `compaction.clearTokens` (40,000) of tool results and turns older ones into a note; `agent_create`, `message` and `ask_user` results are never cleared.
 
 A `clearOld` step in `prepareHistory`, before the compaction check: tool
 results older than the last N tokens of tool output (OpenCode's 40 k is a
@@ -180,7 +184,9 @@ on every step, so the context stays flat between compactions instead of
 sawtoothing. `agent_create`, `message` and `ask_user` results are never
 cleared: they are the conversation. With 3.1 this makes compaction rare.
 
-### 3.3 A way to wait, and a cap on a turn
+### 3.3 A way to wait, and a cap on a turn — done
+
+The wait is an argument of `shell`, `until_changed: true`, not a new tool: the policy already judges the command, and the job is shown as the command the agent gave. `limits.maxCallsPerTurn` defaults to 200.
 
 - **`wait`**: a tool (or a `shell` argument, `until_changed: true`) that runs a
   command in the background until its output changes or it exits 0, with a
@@ -192,7 +198,9 @@ cleared: they are the conversation. With 3.1 this makes compaction rare.
   calls in one turn") and the agent's next input explains what to do
   instead. Turn 6 above would have cost 200 calls, not 1,054.
 
-### 3.4 `agent_status` that costs nothing to call and is rarely called
+### 3.4 `agent_status` that costs nothing to call and is rarely called — done
+
+One line per agent; the prompt says a child's answer wakes you. The "unchanged" short answer was not built: the line is short already.
 
 - Output becomes one line per agent: name, state, turn, and the first 80
   characters of what it owes or awaits. The full request text is what
@@ -203,7 +211,9 @@ cleared: they are the conversation. With 3.1 this makes compaction rare.
   running, the result is the same as last time and the harness says so in
   ten tokens ("unchanged: scout is running, turn 3").
 
-### 3.5 Compact before a model move
+### 3.5 Compact before a model move — done
+
+A move sets `compactNext` when the history is over 50k tokens; the next step compacts before calling the new provider.
 
 When `retarget` moves an agent to another provider, compact first when the
 history is over, say, 50 k tokens: the new provider has none of it cached, so
@@ -211,7 +221,7 @@ every token is fresh, and a summary is a tenth of the size. Proposed in
 [model selection](model-selection.md); this log puts a number on it: 24.5 M
 fresh tokens, 12% of all fresh input.
 
-### 3.6 Smaller
+### 3.6 Smaller — `todo` and the truncation note done; reminders on a cleared history and the unchanged-read answer not (3.2 makes both nearly free)
 
 - **`todo` returns the change**, not the list ("t3 → done; 2 of 5 done"); the
   list is in the harness note already.
