@@ -96,7 +96,7 @@ func (grepTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if err != nil {
 		return errf("%v", err)
 	}
-	return matchList(lines, more, limit, "matching lines", env.MaxOutput)
+	return matchList(lines, more, limit, "matching lines", env)
 }
 
 // walkGrep is grep without ripgrep.
@@ -187,7 +187,7 @@ func (globTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		return errf("%v", err)
 	}
 	sort.Strings(paths)
-	return matchList(paths, more, limit, "paths", env.MaxOutput)
+	return matchList(paths, more, limit, "paths", env)
 }
 
 // --- shared ---
@@ -207,7 +207,7 @@ func clampLimit(n, def, max int) int {
 	return min(n, max)
 }
 
-func matchList(lines []string, more bool, limit int, what string, maxOutput int) Result {
+func matchList(lines []string, more bool, limit int, what string, env *Env) Result {
 	if len(lines) == 0 {
 		return Result{Output: "no matches"}
 	}
@@ -215,7 +215,7 @@ func matchList(lines []string, more bool, limit int, what string, maxOutput int)
 	if more {
 		out += fmt.Sprintf("\n… (stopped at %d %s; narrow the pattern or the path, or raise limit)", limit, what)
 	}
-	return Result{Output: clip.Middle(out, maxOutput)}
+	return Result{Output: env.Clip(out)}
 }
 
 // runRG runs ripgrep in dir with the given arguments on path ("" for dir

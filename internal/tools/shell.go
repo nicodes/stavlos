@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/proc"
@@ -102,12 +101,12 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	defer wait.Stop()
 	select {
 	case <-job.Done():
-		return shellResult(job, env.MaxOutput)
+		return shellResult(job, env)
 	case <-ctx.Done():
 		// cancelled by the turn; the loop marks the call cancelled, we return partial output
 		job.Kill()
 		<-job.Done()
-		return Result{Output: clip.Middle(job.Output(), env.MaxOutput), IsError: true}
+		return Result{Output: env.Clip(job.Output()), IsError: true}
 	case <-wait.C:
 	}
 	if env.Jobs == nil { // no job runtime (tests, restricted agents): keep waiting, kill at the timeout
@@ -115,15 +114,15 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		defer deadline.Stop()
 		select {
 		case <-job.Done():
-			return shellResult(job, env.MaxOutput)
+			return shellResult(job, env)
 		case <-ctx.Done():
 			job.Kill()
 			<-job.Done()
-			return Result{Output: clip.Middle(job.Output(), env.MaxOutput), IsError: true}
+			return Result{Output: env.Clip(job.Output()), IsError: true}
 		case <-deadline.C:
 			job.Kill()
 			<-job.Done()
-			return Result{Output: clip.Middle(job.Output(), env.MaxOutput) + fmt.Sprintf("\n[killed after %ds timeout]", a.Timeout), IsError: true}
+			return Result{Output: env.Clip(job.Output()) + fmt.Sprintf("\n[killed after %ds timeout]", a.Timeout), IsError: true}
 		}
 	}
 	job.Detach() // the call that wanted the stream is over
@@ -134,7 +133,7 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		return errf("%v", err)
 	}
 	msg := fmt.Sprintf("still running after %ds; continuing as job %s. You will be woken with its exit code and output when it exits (shell_kill %s stops it).", a.Wait, id, id)
-	if out := clip.Middle(job.Output(), env.MaxOutput); strings.TrimSpace(out) != "" {
+	if out := env.Clip(job.Output()); strings.TrimSpace(out) != "" {
 		msg += "\n\noutput so far:\n" + out
 	}
 	return Result{Output: msg}
@@ -163,8 +162,8 @@ done`
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
 // shellResult is the inline result of a command that exited in time.
-func shellResult(job *proc.Job, maxOutput int) Result {
-	text := clip.Middle(job.Output(), maxOutput)
+func shellResult(job *proc.Job, env *Env) Result {
+	text := env.Clip(job.Output())
 	if err := job.Err(); err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
 			return Result{Output: text + fmt.Sprintf("\n[exit status %d]", ee.ExitCode()), IsError: true}
