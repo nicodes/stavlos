@@ -25,9 +25,20 @@ work from 2026-09-18 to 2026-09-23.
 | Tool calls | 30,824: shell 13,272 · read 5,117 · agent_status 3,080 · todo 2,642 · message 2,191 · glob 1,597 · grep 1,571 · apply_patch 797 |
 | Log bytes | tool.finished 52 MB, assistant.message 44 MB |
 
-Caching works: 96% of input was a cache read, and the four providers were
-audited for it in [prompt caching](prompt-caching.md). What follows is about
-the other axis: **how much is sent at all**. A cached token is cheaper, not
+Caching works, and this channel never ran without it: the cache routing fix
+landed on 2026-09-17, before the channel's first call, and every day of it ran
+at 94–97% cache reads on every provider ([prompt caching](prompt-caching.md)).
+What follows is about the other axis, which caching leaves alone: **how much is
+sent at all**. It did not improve over the five days; it got worse:
+
+| Day (UTC) | Calls | Calls over 300 k tokens | Largest call |
+|---|---|---|---|
+| 09-18 | 6,560 | 879 | 400 k |
+| 09-19 | 6,444 | 2,210 | 689 k |
+| 09-20 | 4,553 | 1,716 | 840 k |
+| 09-21 | 2,291 | 909 | 728 k |
+| 09-22 | 1,762 | 523 | 838 k |
+ A cached token is cheaper, not
 free: it counts against the plan's allowance, it makes every call slower, and
 past a few hundred thousand tokens it makes the model worse (§2).
 
@@ -50,11 +61,12 @@ Codex CLI caps its effective window at 272 k on a 1 M model for exactly this
 reason (§2). Stavlos already has the setting (`compaction.maxTokens`); it is
 off by default.
 
-### Finding 2: one turn spent 5.8 hours polling a pull request
+### Finding 2: one turn spent two hours polling a pull request
 
 Agent `a481d640a2a`, turn 6: **1,054 model calls**, 602 of them
-`gh pr view 244 --json …` about 35 seconds apart, from 01:59 to 07:50. That
-one turn re-sent its context 1,054 times: 405 M cached tokens to watch CI.
+`gh pr view 244 --json …` about 7 seconds apart, from 00:02 to 02:09 on
+2026-09-19. That one turn re-sent its context 1,054 times: 405 M cached tokens
+to watch CI.
 Three more turns ran 230–367 calls of the same shape (poll, sleep, poll).
 The 250 `from pathlib import Path` and 460 `set -euo pipefail` heads in the
 command list are the same loops, written as scripts.
@@ -84,9 +96,12 @@ agent reads it again — the same "context snowballing" Codex users report
 
 127 `agent.updated` events moved agents between providers as plans ran out
 ("zai is at its limit; kimi: 9% of its month used"). **94 calls had no cache
-read at all and over 50 k fresh tokens**: 24.5 M fresh tokens, which is 12% of
-all fresh input, from re-sending a full context to a provider that had never
-seen it. [Compact-before-switch](model-selection.md) was proposed for this and
+read at all and over 50 k fresh tokens**: 24.5 M fresh tokens, 12% of all fresh
+input. Not all of it is moves: 65 of the 94 fell on 09-18 and 09-20, the days
+the daemon was reinstalled several times, and a restart empties every
+provider's cache too. The share that is moves is smaller than this number;
+compacting before one is still right, since the new provider has nothing of
+the history cached. [Compact-before-switch](model-selection.md) was proposed for this and
 not built.
 
 ### Smaller findings
