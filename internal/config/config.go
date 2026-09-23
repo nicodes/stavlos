@@ -72,6 +72,10 @@ type SandboxConfig struct {
 type Limits struct {
 	MaxDepth  int `json:"maxDepth,omitempty"`
 	MaxAgents int `json:"maxAgents,omitempty"`
+	// MaxCallsPerTurn ends a turn that has made this many model calls: a
+	// turn that polls something every half minute never ends by itself, and
+	// every call carries the whole history. -1 for no cap.
+	MaxCallsPerTurn int `json:"maxCallsPerTurn,omitempty"`
 }
 
 type Escalation struct {
@@ -82,8 +86,9 @@ type Escalation struct {
 
 type Compaction struct {
 	Threshold     float64 `json:"threshold,omitempty"`
-	MaxTokens     int     `json:"maxTokens,omitempty"`  // compact once a history passes this many tokens, whatever the window; 0 = off
-	KeepTokens    int     `json:"keepTokens,omitempty"` // how much recent conversation a compaction keeps beside the summary
+	MaxTokens     int     `json:"maxTokens,omitempty"`   // compact once a history passes this many tokens, whatever the window; 0 = the window alone
+	ClearTokens   int     `json:"clearTokens,omitempty"` // old tool results are cleared from the history once newer ones hold this many tokens; default 40000, -1 = never
+	KeepTokens    int     `json:"keepTokens,omitempty"`  // how much recent conversation a compaction keeps beside the summary
 	MaxToolOutput string  `json:"maxToolOutput,omitempty"`
 }
 
@@ -266,6 +271,7 @@ type Effective struct {
 	Compaction struct {
 		Threshold     float64
 		MaxTokens     int
+		ClearTokens   int
 		KeepTokens    int
 		MaxToolOutput int
 	}
@@ -389,9 +395,9 @@ func Defaults() File {
 	return File{
 		RootAgent:        "general",
 		Mode:             protocol.ModeAsk,
-		Limits:           &Limits{MaxDepth: 3, MaxAgents: 6},
+		Limits:           &Limits{MaxDepth: 3, MaxAgents: 6, MaxCallsPerTurn: 200},
 		Escalation:       &Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: string(policy.Deny)},
-		Compaction:       &Compaction{Threshold: 0.8, KeepTokens: 15_000, MaxToolOutput: "32kb"},
+		Compaction:       &Compaction{Threshold: 0.9, ClearTokens: 40_000, KeepTokens: 15_000, MaxToolOutput: "50kb"},
 		Reminders:        &on,
 		ResumeAfterLimit: &on,
 		Sandbox:          &SandboxConfig{Enabled: &on, Network: &network},
@@ -607,6 +613,12 @@ func (e *Effective) applyLimits(l *Limits) error {
 	if l.MaxDepth > 0 {
 		e.Limits.MaxDepth = l.MaxDepth
 	}
+	if l.MaxCallsPerTurn != 0 {
+		if l.MaxCallsPerTurn < 10 && l.MaxCallsPerTurn != -1 {
+			return errors.New("limits.maxCallsPerTurn: at least 10, or -1 for no cap")
+		}
+		e.Limits.MaxCallsPerTurn = max(l.MaxCallsPerTurn, 0)
+	}
 	if l.MaxAgents > 0 {
 		e.Limits.MaxAgents = l.MaxAgents
 	}
@@ -653,9 +665,15 @@ func (e *Effective) applyCompaction(c *Compaction) error {
 	}
 	if c.MaxTokens != 0 {
 		if c.MaxTokens < 1000 {
-			return fmt.Errorf("compaction.maxTokens %d: a token count of at least 1000, or 0 for none", c.MaxTokens)
+			return fmt.Errorf("compaction.maxTokens %d: a token count of at least 1000, or 0 for the window alone", c.MaxTokens)
 		}
 		e.Compaction.MaxTokens = c.MaxTokens
+	}
+	if c.ClearTokens != 0 {
+		if c.ClearTokens < 1000 && c.ClearTokens != -1 {
+			return fmt.Errorf("compaction.clearTokens %d: a token count of at least 1000, or -1 for never", c.ClearTokens)
+		}
+		e.Compaction.ClearTokens = max(c.ClearTokens, 0)
 	}
 	if c.KeepTokens != 0 {
 		if c.KeepTokens < 1000 {

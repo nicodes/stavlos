@@ -15,7 +15,6 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
@@ -377,7 +376,7 @@ func (t mcpTool) Run(ctx context.Context, in json.RawMessage, env *tools.Env) to
 	if err != nil {
 		return tools.Result{Output: fmt.Sprintf("%s: %v", t.name, err), IsError: true}
 	}
-	return tools.Result{Output: clip.Middle(mcpResultText(res), env.MaxOutput), IsError: res.IsError}
+	return tools.Result{Output: env.Clip(mcpResultText(res)), IsError: res.IsError}
 }
 
 // mcpResultText flattens a tool result: text blocks as they are, other

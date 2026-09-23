@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/toolname"
@@ -118,7 +117,7 @@ func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if sb.Len() == 0 {
 		return Result{Output: "(empty file)"}
 	}
-	return Result{Output: clip.Middle(sb.String(), env.MaxOutput)}
+	return Result{Output: env.Clip(sb.String())}
 }
 
 func pathArg(in json.RawMessage) string {

@@ -4,11 +4,16 @@ package tools
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/nicodes/stavlos/internal/event"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/nicodes/stavlos/internal/clip"
+	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -29,7 +34,8 @@ type Env struct {
 	Agent     string           // caller agent id
 	Orch      Orchestrator     // nil if the agent cannot orchestrate
 	Partial   func(string)     // receives streamed partial output (shell); may be nil
-	MaxOutput int              // truncate tool output beyond this many bytes (0 = 32k)
+	MaxOutput int              // truncate tool output beyond this many bytes (0 = clip.DefaultMax)
+	Overflow  string           // a directory the whole of a truncated output is kept in for the agent to read ("" = not kept)
 	Jobs      Jobs             // the agent's background jobs; nil if unavailable
 	Todo      Todos            // the agent's todo list; nil if the role does not include "todo"
 	Ask       Asker            // presents all questions immediately and waits; nil in tests without a runtime
@@ -155,4 +161,31 @@ func decode(input json.RawMessage, v any) error {
 		return nil
 	}
 	return json.Unmarshal(input, v)
+}
+
+// Clip bounds a tool result. What is cut is not lost: the whole output is
+// written under env.Overflow and the result says where, so the next call is
+// a read of the part that matters and not the same command again. (OpenCode
+// does the same at 2,000 lines or 50 KB.)
+func (env *Env) Clip(s string) string {
+	max := env.MaxOutput
+	if max <= 0 {
+		max = clip.DefaultMax
+	}
+	if len(s) <= max {
+		return s
+	}
+	out := clip.Middle(s, max)
+	if env.Overflow == "" {
+		return out
+	}
+	if err := os.MkdirAll(env.Overflow, 0o700); err != nil {
+		return out
+	}
+	sum := sha256.Sum256([]byte(s))
+	path := filepath.Join(env.Overflow, hex.EncodeToString(sum[:8])+".txt")
+	if err := os.WriteFile(path, []byte(s), 0o600); err != nil {
+		return out
+	}
+	return out + fmt.Sprintf("\n[the whole output, %d bytes, is at %s: read it with an offset, or grep it]", len(s), path)
 }
