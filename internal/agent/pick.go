@@ -358,6 +358,10 @@ func (a *Agent) leaveLimitedModel() {
 	}
 }
 
+// compactBeforeMove is the history size past which a move to another
+// provider compacts first.
+const compactBeforeMove = 50_000
+
 // movedOn answers a model call refused for a limit: the provider is marked
 // so nothing else chooses it, and the agent moves to the next model its role
 // allows. It reports whether the step should run again.
@@ -382,6 +386,15 @@ func (t *turnRun) movedOn(err error, modelID string) bool {
 	moved, soonest := t.a.moveOff(provider, until)
 	if moved {
 		t.moves++
+		// The new provider has none of this history cached: every token is
+		// fresh there. A summary is a tenth of the size, so the step that
+		// follows compacts first when there is enough to be worth it (one
+		// channel re-sent 24.5 M tokens uncached this way).
+		t.a.c.mu.Lock()
+		if t.a.ctxTokens > compactBeforeMove {
+			t.a.compactNext = true
+		}
+		t.a.c.mu.Unlock()
 		return true
 	}
 	t.resumeAt = t.a.parkUntil(soonest, until)

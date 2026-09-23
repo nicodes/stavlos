@@ -118,10 +118,25 @@ func (todoTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if err != nil {
 		return errf("%v", err)
 	}
+	// What changed, and the count: the whole list comes with every request
+	// already, and echoing it here cost one channel 3.9 MB of context.
 	var b strings.Builder
-	b.WriteString("todo list:")
+	done := 0
 	for _, it := range items {
-		fmt.Fprintf(&b, "\n- %s [%s] %s", it.ID, it.Status, it.Text)
+		if it.Status == event.TodoDone {
+			done++
+		}
 	}
+	for _, it := range items[max(0, len(items)-len(add)):] {
+		fmt.Fprintf(&b, "added %s [%s] %s\n", it.ID, it.Status, it.Text)
+	}
+	for _, u := range a.Update {
+		for _, it := range items {
+			if it.ID == u.ID {
+				fmt.Fprintf(&b, "%s → %s\n", it.ID, it.Status)
+			}
+		}
+	}
+	fmt.Fprintf(&b, "%d of %d done", done, len(items))
 	return Result{Output: b.String()}
 }

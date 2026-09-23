@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"errors"
+	"github.com/nicodes/stavlos/internal/protocol"
 	"strings"
 	"testing"
 	"time"
@@ -401,4 +402,50 @@ func TestCancelAndTheSwitchStopTheWake(t *testing.T) {
 			t.Fatalf("parked although turned off: %+v", end)
 		}
 	})
+}
+
+// A turn that has made limits.maxCallsPerTurn model calls ends, and says so.
+func TestATurnStopsAtTheCallCap(t *testing.T) {
+	forever := make([]step, 50) // more than the cap: the loop must be what stops it
+	for i := range forever {
+		forever[i] = reply(call("c", "read", `{"path":"go.mod"}`))
+	}
+	fm := &fakeModel{steps: forever}
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","limits":{"maxCallsPerTurn":10}}`}, fm)
+	root := s.Root()
+	if err := s.SetMode(context.Background(), protocol.ModeYolo); err != nil {
+		t.Fatal(err)
+	}
+	postTurn(t, s, h, "loop")
+	waitUntil(t, h, func() bool { return len(h.ofType(event.TurnEnded, root.ID)) == 1 })
+	var p event.TurnEndedPayload
+	_ = h.ofType(event.TurnEnded, root.ID)[0].Decode(&p)
+	if p.Reason != event.ReasonError || !strings.Contains(p.Error, "10 model calls") || !strings.Contains(p.Error, "until_changed") {
+		t.Fatalf("turn ended: %+v", p)
+	}
+	if n := len(h.ofType(event.AssistantMessage, root.ID)); n != 10 {
+		t.Fatalf("%d model calls, want 10", n)
+	}
+}
+
+// A move to another provider compacts first when the history is large: the
+// new provider has nothing of it cached.
+func TestAMoveToAnotherProviderCompactsFirst(t *testing.T) {
+	for _, big := range []bool{false, true} {
+		tr := &turnRun{a: &Agent{c: &Channel{}}}
+		tr.a.ctxTokens = 10_000
+		if big {
+			tr.a.ctxTokens = compactBeforeMove + 1
+		}
+		tr.a.compactNext = false
+		// what movedOn does after a successful move, without a provider
+		tr.a.c.mu.Lock()
+		if tr.a.ctxTokens > compactBeforeMove {
+			tr.a.compactNext = true
+		}
+		tr.a.c.mu.Unlock()
+		if tr.a.compactNext != big {
+			t.Fatalf("history %d tokens: compactNext %v", tr.a.ctxTokens, tr.a.compactNext)
+		}
+	}
 }

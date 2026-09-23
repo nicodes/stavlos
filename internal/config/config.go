@@ -72,6 +72,10 @@ type SandboxConfig struct {
 type Limits struct {
 	MaxDepth  int `json:"maxDepth,omitempty"`
 	MaxAgents int `json:"maxAgents,omitempty"`
+	// MaxCallsPerTurn ends a turn that has made this many model calls: a
+	// turn that polls something every half minute never ends by itself, and
+	// every call carries the whole history. -1 for no cap.
+	MaxCallsPerTurn int `json:"maxCallsPerTurn,omitempty"`
 }
 
 type Escalation struct {
@@ -391,7 +395,7 @@ func Defaults() File {
 	return File{
 		RootAgent:        "general",
 		Mode:             protocol.ModeAsk,
-		Limits:           &Limits{MaxDepth: 3, MaxAgents: 6},
+		Limits:           &Limits{MaxDepth: 3, MaxAgents: 6, MaxCallsPerTurn: 200},
 		Escalation:       &Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: string(policy.Deny)},
 		Compaction:       &Compaction{Threshold: 0.8, MaxTokens: 150_000, ClearTokens: 40_000, KeepTokens: 15_000, MaxToolOutput: "32kb"},
 		Reminders:        &on,
@@ -608,6 +612,12 @@ func (e *Effective) applyLimits(l *Limits) error {
 	}
 	if l.MaxDepth > 0 {
 		e.Limits.MaxDepth = l.MaxDepth
+	}
+	if l.MaxCallsPerTurn != 0 {
+		if l.MaxCallsPerTurn < 10 && l.MaxCallsPerTurn != -1 {
+			return errors.New("limits.maxCallsPerTurn: at least 10, or -1 for no cap")
+		}
+		e.Limits.MaxCallsPerTurn = max(l.MaxCallsPerTurn, 0)
 	}
 	if l.MaxAgents > 0 {
 		e.Limits.MaxAgents = l.MaxAgents

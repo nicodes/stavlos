@@ -85,6 +85,14 @@ func (a *Agent) runTurn(ctx context.Context, turn int) {
 		return
 	}
 	for {
+		if cap := a.c.Config().Limits.MaxCallsPerTurn; cap > 0 && t.calls >= cap {
+			// A turn that never ends by itself is a turn that is waiting for
+			// something the wrong way. The human sees why it stopped, and
+			// the agent is told how to wait next time.
+			t.end(event.ReasonError, fmt.Sprintf("stopped after %d model calls in one turn (limits.maxCallsPerTurn). To wait for something, run the command with until_changed: true, or end the turn: a job or a child wakes you.", cap))
+			a.endReplies(event.ReasonError)
+			return
+		}
 		if reason, errText, done := t.step(); done {
 			t.end(reason, errText)
 			a.endReplies(reason)
@@ -99,6 +107,7 @@ type turnRun struct {
 	ctx      context.Context
 	turn     int
 	moves    int       // models the harness moved the agent to within this turn
+	calls    int       // model calls made in this turn (limits.maxCallsPerTurn)
 	resumeAt time.Time // the turn is ending at every plan's limit: when to wake the agent (movedOn)
 }
 
@@ -125,6 +134,7 @@ func (t *turnRun) step() (reason event.TurnReason, errText string, done bool) {
 		return event.ReasonError, errText, true
 	}
 	resp, err := t.call(p)
+	t.calls++
 	msg := event.AssistantMessagePayload{Turn: t.turn, Blocks: resp.Blocks, StopReason: string(resp.StopReason), Model: p.modelID, Usage: resp.Usage, CostUSD: p.info.Cost(resp.Usage)}
 	if err != nil {
 		return t.onError(err, p, resp, msg)
