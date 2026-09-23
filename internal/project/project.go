@@ -446,3 +446,49 @@ func truncate(s string, n int) string {
 	}
 	return s[:n] + "…"
 }
+
+// ClearedNote is what stands where a tool result was: the call is still on
+// record, and the model can make it again.
+const ClearedNote = "[output cleared to save context: run the tool again if you need it]"
+
+// ClearOld replaces the bodies of tool results older than the most recent
+// keep tokens' worth of tool results with ClearedNote, and returns how many
+// tokens it cleared. Tool results are what fills a history (in one channel of
+// 21,846 calls they were 52 of 96 MB of the log), and once the model has
+// read one it rarely needs the bytes again: a file can be read again, a
+// command run again. The tool_use block stays, so the model knows what it
+// did. Results of the tools that are the conversation itself (a child's
+// answer, a message, the human's reply to a question) are never cleared:
+// they cannot be asked for again. The log is untouched; this is the
+// projection only, so it costs no model call and runs on every step
+// (docs/token-efficiency.md, 3.2).
+func ClearOld(msgs []model.Message, keep int, keepTools map[string]bool) int {
+	if keep <= 0 {
+		return 0
+	}
+	tool := map[string]string{} // tool_use id → tool name
+	for _, m := range msgs {
+		for _, b := range m.Blocks {
+			if b.Type == model.BlockToolUse {
+				tool[b.ID] = b.Name
+			}
+		}
+	}
+	recent, cleared := 0, 0
+	for i := len(msgs) - 1; i >= 0; i-- {
+		for j := len(msgs[i].Blocks) - 1; j >= 0; j-- {
+			b := &msgs[i].Blocks[j]
+			if b.Type != model.BlockToolResult || keepTools[tool[b.ToolUseID]] || b.Content == ClearedNote {
+				continue
+			}
+			n := len(b.Content) / 4
+			if recent < keep {
+				recent += n
+				continue
+			}
+			cleared += n
+			b.Content = ClearedNote
+		}
+	}
+	return cleared
+}

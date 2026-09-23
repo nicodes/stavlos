@@ -9,6 +9,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/project"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // prepareHistory is the history a model call carries: compacted first when
@@ -27,6 +28,9 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 	cc := s.cfg.Compaction
 	last := st.lastContext
 	s.mu.Unlock()
+	// Old tool results go first: lossless, free, and most of what a history
+	// holds. Compaction below is for what is left.
+	project.ClearOld(history, cc.ClearTokens, conversationTools)
 	est := project.EstimateTokens(history, system, defs)
 	// the provider's own count of the last call, when it is larger than the
 	// estimate: the estimate drifts, and the backend's number is what fills
@@ -37,6 +41,7 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 	if !running && (wanted || full || over) {
 		if err := a.compact(turnCtx, m, info, wanted); err == nil {
 			history = a.history()
+			project.ClearOld(history, cc.ClearTokens, conversationTools)
 			est = project.EstimateTokens(history, system, defs)
 		}
 	}
@@ -45,6 +50,10 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 	s.mu.Unlock()
 	return history
 }
+
+// conversationTools are the tools whose results are the conversation, never
+// cleared: they cannot be asked for again.
+var conversationTools = map[string]bool{toolname.AgentCreate: true, toolname.Message: true, toolname.AskUser: true}
 
 // summaryInputMax bounds the transcript a summariser reads. Tool results
 // are already cut to their first 800 characters (project.Transcript), so a
