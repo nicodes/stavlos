@@ -42,7 +42,7 @@
     }
   },
   {
-    "description": "State, turn count, and cost of one agent, or of every agent in the channel (the whole tree, parents before children; your own row is marked).",
+    "description": "One line per agent: state, turn count, cost, and what it owes or awaits, for one agent or the whole tree (parents before children; you are marked). Not for waiting: a child's answer wakes you by itself, so asking whether it is done yet learns nothing.",
     "name": "agent_status",
     "schema": {
       "properties": {
@@ -282,6 +282,10 @@
         "timeout": {
           "description": "Seconds before a background job is killed (default 3600, max 7200)",
           "type": "integer"
+        },
+        "until_changed": {
+          "description": "Wait for a change: run the command again with a growing pause (30s to 5min) until its output or exit status changes, then wake me once with the result. Use this to wait for CI, a review or a download instead of asking again yourself.",
+          "type": "boolean"
         },
         "wait": {
           "description": "Seconds to wait for the command before it continues as a background job (default 15, max 300)",
