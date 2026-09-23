@@ -35,6 +35,7 @@ var commands = []Command{
 	{Name: "/yolo", Args: "[on|off]", Desc: "yolo mode: approve every permission, directories included (no arg toggles)", Direct: true},
 	{Name: "/channels", Desc: "pick any channel across your working directories", Aliases: []string{"/resume", "/channel"}, Direct: true},
 	{Name: "/dir", Desc: "set this channel's default directory (or open its directories)", Direct: true},
+	{Name: "/sandbox", Args: "[on|off]", Desc: "the command sandbox: what bounds what agents run, what this machine cannot do, and the switch", Direct: true},
 	{Name: "/web", Desc: "Web UI: enable, disable or open it in a browser tab", Direct: true},
 	{Name: "/discord", Desc: "Discord status and connect/disconnect controls", Direct: true},
 	{Name: "/rename", Args: "<name>", Desc: "rename this channel (#name, unique across the daemon)", Direct: true},

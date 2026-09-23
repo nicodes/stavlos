@@ -20,10 +20,12 @@ const (
 	MDiscordConnect    = "discord.connect"
 	MDiscordDisconnect = "discord.disconnect"
 	MWebStatus         = "web.status"
-	MWebEnable         = "web.enable"  // start the loopback listener; the result carries a sign-in URL to open
-	MWebDisable        = "web.disable" // stop it and sign every browser out
-	MWebOpen           = "web.open"    // a fresh sign-in URL for a listener already running
-	MAttach            = "attach"      // declare client name + escalation tier
+	MWebEnable         = "web.enable"     // start the loopback listener; the result carries a sign-in URL to open
+	MWebDisable        = "web.disable"    // stop it and sign every browser out
+	MWebOpen           = "web.open"       // a fresh sign-in URL for a listener already running
+	MSandboxStatus     = "sandbox.status" // what bounds commands on this machine, and what is missing
+	MSandboxSet        = "sandbox.set"    // turn the command sandbox on or off (the global setting)
+	MAttach            = "attach"         // declare client name + escalation tier
 
 	MChannelList      = "channel.list"
 	MChannelCreate    = "channel.create"

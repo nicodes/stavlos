@@ -45,7 +45,7 @@ const (
 	ovProviders     overlayKind = iota // pick a provider
 	ovMethods                          // pick a login method (providers with more than one)
 	ovModels                           // pick a model
-	ovRoles                            // pick a role (role) for the selected agent
+	ovRoles                            // pick a role for the selected agent
 	ovVariants                         // pick a model variant (reasoning effort) for the selected agent
 	ovChannels                         // pick a channel of this directory to resume
 	ovMode                             // pick the channel's permission mode (ask | auto | yolo)
@@ -53,6 +53,7 @@ const (
 	ovNewChannelDir                    // choose its default directory
 	ovDiscord                          // daemon-wide Discord status and controls
 	ovWeb                              // the daemon's web UI: enable, disable, open
+	ovSandbox                          // the command sandbox: what it is, what is missing, on and off
 )
 
 // loginState is what the login mode shows. Before url is set the login is
