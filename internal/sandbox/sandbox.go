@@ -22,8 +22,6 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
-
-	"golang.org/x/sys/unix"
 )
 
 // helperArg0 is the helper's argv[0]: a process started with it runs the
@@ -147,16 +145,13 @@ func wrap(cmd *exec.Cmd, w wire) error {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
-	if w.Mounts {
-		uid, gid := os.Getuid(), os.Getgid()
-		cmd.SysProcAttr.Cloneflags |= syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS
-		cmd.SysProcAttr.UidMappings = []syscall.SysProcIDMap{{ContainerID: uid, HostID: uid, Size: 1}}
-		cmd.SysProcAttr.GidMappings = []syscall.SysProcIDMap{{ContainerID: gid, HostID: gid, Size: 1}}
-		cmd.SysProcAttr.GidMappingsEnableSetgroups = false
-		// The helper keeps its user identity, so executing it would drop the
-		// namespace's capabilities; an ambient CAP_SYS_ADMIN carries the one
-		// it needs to mount, and the helper clears it before the command.
-		cmd.SysProcAttr.AmbientCaps = []uintptr{unix.CAP_SYS_ADMIN}
-	}
+	// The namespaces are not made here. The daemon is not dumpable (so that
+	// nothing of its user's can read its memory), and the kernel gives the
+	// /proc files of such a process's child to root: the uid map a user
+	// namespace needs could not be written, the probe failed with "permission
+	// denied", and the real daemon only ever had the Landlock level while every
+	// test, being dumpable, had the full one. Executing the helper makes a
+	// process dumpable again, so the helper makes the namespaces for a second
+	// copy of itself (helper.go, enterNamespaces).
 	return nil
 }
