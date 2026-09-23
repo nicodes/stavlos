@@ -26,11 +26,6 @@ func needOrch(env *Env) *Result {
 	return nil
 }
 
-func jsonOut(v any) Result {
-	b, _ := json.MarshalIndent(v, "", "  ")
-	return Result{Output: string(b)}
-}
-
 // --- spawn ---
 
 type spawnTool struct{}
