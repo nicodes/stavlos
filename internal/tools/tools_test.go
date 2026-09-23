@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -196,7 +197,7 @@ func TestTodoTool(t *testing.T) {
 	}
 	f := &fakeTodos{}
 	env := &Env{Todo: f}
-	if r := run(env, `{"add":[{"text":"  Run the tests "},{"text":"Fix the bug"}]}`); r.IsError || len(f.items) != 2 || f.items[0].Text != "Run the tests" || !strings.Contains(r.Output, "- t2 [pending] Fix the bug") {
+	if r := run(env, `{"add":[{"text":"  Run the tests "},{"text":"Fix the bug"}]}`); r.IsError || len(f.items) != 2 || f.items[0].Text != "Run the tests" || !strings.Contains(r.Output, "added t2 [pending] Fix the bug") || !strings.Contains(r.Output, "0 of 2 done") {
 		t.Fatalf("add: %+v %+v", r, f.items)
 	}
 	for in, want := range map[string]string{
@@ -213,7 +214,7 @@ func TestTodoTool(t *testing.T) {
 		}
 	}
 	r := run(env, `{"update":[{"id":"t1","status":"in_progress","text":"Run all the tests"}],"add":[{"text":"Ship it"}]}`)
-	if r.IsError || f.items[0].Status != "in_progress" || f.items[0].Text != "Run all the tests" || len(f.items) != 3 || !strings.Contains(r.Output, "- t3 [pending] Ship it") {
+	if r.IsError || f.items[0].Status != "in_progress" || f.items[0].Text != "Run all the tests" || len(f.items) != 3 || !strings.Contains(r.Output, "added t3 [pending] Ship it") || !strings.Contains(r.Output, "t1 → in_progress") {
 		t.Fatalf("update and add: %+v %+v", r, f.items)
 	}
 	// the plan and its first in_progress step are one call
@@ -325,5 +326,50 @@ func TestRecipient(t *testing.T) {
 		if got := Recipient(in); got != want {
 			t.Errorf("Recipient(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// until_changed is one background job that runs the command again until its
+// output changes, and reports the change once.
+func TestShellUntilChanged(t *testing.T) {
+	ctx := context.Background()
+	mon := &fakeJobs{}
+	dir := t.TempDir()
+	env := &Env{Dir: dir, Jobs: mon}
+	sh := Builtin()["shell"]
+	flag := filepath.Join(dir, "flag")
+	r := sh.Run(ctx, json.RawMessage(`{"command":"cat flag 2>/dev/null || echo none","until_changed":true}`), env)
+	if r.IsError || !strings.Contains(r.Output, "waiting as job m1") || len(mon.adopted) != 1 {
+		t.Fatalf("start: %+v adopted=%d", r, len(mon.adopted))
+	}
+	if mon.specs[0] != "cat flag 2>/dev/null || echo none" {
+		t.Fatalf("the job is shown as the command the agent gave, not the loop round it: %q", mon.specs[0])
+	}
+	job := mon.adopted[0]
+	select {
+	case <-job.Done():
+		t.Fatalf("the job ended with nothing changed: %q", job.Output())
+	case <-time.After(300 * time.Millisecond):
+	}
+	job.Kill() // the loop's first pause is 30 s; the shape is what is checked here
+	<-job.Done()
+	if r := sh.Run(ctx, json.RawMessage(`{"command":"true","until_changed":true}`), &Env{Dir: dir}); !r.IsError || !strings.Contains(r.Output, "not available") {
+		t.Fatalf("without a job runtime: %+v", r)
+	}
+	_ = flag
+}
+
+// The wait loop itself, run directly with a short pause, ends when the
+// output changes and says what it was.
+func TestUntilChangedLoop(t *testing.T) {
+	dir := t.TempDir()
+	script := strings.Replace(untilChanged("cat "+filepath.Join(dir, "f")+" 2>/dev/null || echo none", true), `sleep "$__pause"`, `sleep 0.2`, 1)
+	go func() {
+		time.Sleep(400 * time.Millisecond)
+		_ = os.WriteFile(filepath.Join(dir, "f"), []byte("ready"), 0o644)
+	}()
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "ready") || !strings.Contains(string(out), "[changed: exit status 0, was 0]") {
+		t.Fatalf("loop: %v\n%s", err, out)
 	}
 }

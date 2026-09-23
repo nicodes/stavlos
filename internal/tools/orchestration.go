@@ -179,7 +179,7 @@ func (cancelTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 type statusTool struct{}
 
 func (statusTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AgentStatus, Description: "State, turn count, and cost of one agent, or of every agent in the channel (the whole tree, parents before children; your own row is marked).",
+	return model.ToolDef{Name: toolname.AgentStatus, Description: "One line per agent: state, turn count, cost, and what it owes or awaits, for one agent or the whole tree (parents before children; you are marked). Not for waiting: a child's answer wakes you by itself, so asking whether it is done yet learns nothing.",
 		Schema: schemaOf(statusInput{})}
 }
 
@@ -196,5 +196,46 @@ func (statusTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 	if err != nil {
 		return errf("%v", err)
 	}
-	return jsonOut(st)
+	return Result{Output: statusLines(st)}
+}
+
+// statusLines is a status as lines, one per agent: what a parent needs to
+// decide something, and not the full text of every request, which is what
+// message delivered and the log holds. One channel's parents called this
+// 3,080 times, 2.4 MB of JSON, mostly to ask whether a child was done yet.
+func statusLines(st []ChildStatus) string {
+	var b strings.Builder
+	for _, s := range st {
+		you := ""
+		if s.You {
+			you = " (you)"
+		}
+		fmt.Fprintf(&b, "%s%s [%s] %s · turn %d · $%.2f", s.Name, you, s.ID, s.State, s.Turn, s.CostUSD)
+		if len(s.PendingReplies) > 0 {
+			fmt.Fprintf(&b, " · owes %d reply", len(s.PendingReplies))
+			if len(s.PendingReplies) > 1 {
+				b.WriteString("s")
+			}
+			for _, r := range s.PendingReplies {
+				fmt.Fprintf(&b, " (%s from %s: %s)", r.ID, r.FromName, excerpt(r.Text, 80))
+			}
+		}
+		if len(s.AwaitingReplies) > 0 {
+			var from []string
+			for _, r := range s.AwaitingReplies {
+				from = append(from, r.FromName)
+			}
+			fmt.Fprintf(&b, " · awaits %s", strings.Join(from, ", "))
+		}
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func excerpt(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
 }

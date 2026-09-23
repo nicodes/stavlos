@@ -21,7 +21,9 @@ func Middle(s string, max int) string {
 		return s
 	}
 	head := max * 2 / 3
-	return Head(s, head) + fmt.Sprintf("\n\n… [%d bytes truncated] …\n\n", len(s)-max) + Tail(s, max-head)
+	// The note says how to get at the rest, so the next call is targeted,
+	// not the same call again.
+	return Head(s, head) + fmt.Sprintf("\n\n… [%d bytes truncated: narrow the command (grep, head, tail, a smaller range) or read with an offset for the part you need] …\n\n", len(s)-max) + Tail(s, max-head)
 }
 
 // Head is at most the first n bytes of s, cut on a rune boundary.

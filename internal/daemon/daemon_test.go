@@ -862,8 +862,7 @@ func TestAgentsMessageAcrossTheChannel(t *testing.T) {
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			flat := strings.Join(strings.Fields(last.Content), "") // the tool pretty-prints its JSON
-			if last.IsError || !strings.Contains(flat, `"name":"main"`) || !strings.Contains(flat, `"you":true`) || !strings.Contains(flat, `"parent":"`+rootID+`"`) {
+			if last.IsError || !strings.HasPrefix(last.Content, "main [") || !strings.Contains(last.Content, "scout (you) [") || !strings.Contains(last.Content, rootID) {
 				t.Errorf("agent_status should list the whole tree with the caller marked: %+v", last)
 			}
 			return call("k4", "message", `{"to":"main","text":"asked"}`)
@@ -1406,7 +1405,7 @@ func TestTodoListLogsProjectsAndRecovers(t *testing.T) {
 		func(model.Request) model.Response { return call("c4", "todo", `{"add":[{"text":"Run the tests"}]}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if !strings.Contains(last.Content, "- t3 [pending] Run the tests") {
+			if !strings.Contains(last.Content, "added t3 [pending] Run the tests") {
 				t.Errorf("ids should continue after recovery: %+v", last)
 			}
 			return text("ok")
