@@ -3701,12 +3701,12 @@ func TestNavUsageFiguresHighlight(t *testing.T) {
 func TestPlanUsageBars(t *testing.T) {
 	m := sidebarNavModel()
 	m.prompts = nil
-	now := time.Now()
+	now := time.Date(2026, 9, 19, 12, 0, 0, 0, time.Local) // a Saturday noon, so the reset labels are known
 	w := sidebarWidth - 1
 	if rows := m.planUsageRows(w, now); len(rows) != 0 || m.sidebarSystemRow() != 2 {
 		t.Fatalf("no reading, no block: %q", rows)
 	}
-	// a row per window, shortest first, the plan's name on the first only
+	// the plan's name on a row of its own, then a row per window under it, shortest first
 	m.plans = []protocol.PlanUsageInfo{
 		{Provider: "openai", Name: "ChatGPT", Observed: now.Add(-5 * time.Minute), Windows: []protocol.UsageWindowInfo{
 			{UsedPercent: 50, Minutes: 300, ResetsAt: now.Add(2 * time.Hour)},
@@ -3716,19 +3716,25 @@ func TestPlanUsageBars(t *testing.T) {
 		{Provider: "zai", Name: "Z.ai Coding Plan", Observed: now}, // signed in, no reading: no row
 	}
 	rows := m.planUsageRows(w, now)
-	bar := w - len("ChatGPT 5h") - 1 - 1 - 4
+	// each meter is followed by when its window resets, padded to one width so
+	// the meters line up: the time today, the day and time this week, and
+	// nothing for a reset that has passed
+	const resetW = len("Sun 12:00")
+	bar := w - len("  5h") - 1 - 1 - 4 - 1 - resetW
 	want := []string{
 		"Subscriptions",
-		"ChatGPT 5h " + strings.Repeat("━", (bar+1)/2) + strings.Repeat("─", bar-(bar+1)/2) + "  50%", // half, rounded up
-		"        wk " + strings.Repeat("─", bar) + "   0%",
-		"Grok    wk " + strings.Repeat("━", bar) + " 100%",
+		"ChatGPT",
+		"  5h " + strings.Repeat("━", (bar+1)/2) + strings.Repeat("─", bar-(bar+1)/2) + "  50% 14:00    ", // half, rounded up
+		"  wk " + strings.Repeat("─", bar) + "   0%          ",
+		"Grok",
+		"  wk " + strings.Repeat("━", bar) + " 100% Sun 12:00",
 		"",
 	}
 	if len(rows) != len(want) {
 		t.Fatalf("plan rows: %q", rows)
 	}
 	for i := range want {
-		if got := stripANSI(rows[i]); got != want[i] || (i > 0 && want[i] != "" && ansi.StringWidth(got) != w) { // the title is not padded
+		if got := stripANSI(rows[i]); got != want[i] || (strings.HasPrefix(want[i], "  ") && ansi.StringWidth(got) != w) { // a meter fills the row; a name does not
 			t.Fatalf("row %d: %q, want %q", i, got, want[i])
 		}
 	}
@@ -3736,12 +3742,12 @@ func TestPlanUsageBars(t *testing.T) {
 	if _, ok := m.planAt(navAfterClients(m)); ok {
 		t.Fatal("the Subscriptions title is no plan")
 	}
-	for y, provider := range map[int]string{navAfterClients(m) + 1: "openai", navAfterClients(m) + 2: "openai", navAfterClients(m) + 3: "xai"} {
+	for y, provider := range map[int]string{navAfterClients(m) + 1: "openai", navAfterClients(m) + 2: "openai", navAfterClients(m) + 3: "openai", navAfterClients(m) + 4: "xai", navAfterClients(m) + 5: "xai"} {
 		if p, ok := m.planAt(y); !ok || p.Provider != provider {
 			t.Fatalf("row %d belongs to %q, got %q %v", y, provider, p.Provider, ok)
 		}
 	}
-	if _, ok := m.planAt(navAfterClients(m) + 4); ok {
+	if _, ok := m.planAt(navAfterClients(m) + 6); ok {
 		t.Fatal("the blank row under the block is no plan")
 	}
 	for minutes, span := range map[int]string{300: "5h", 10080: "wk", 43200: "mo", 1440: "1d", 90: "90m", 0: ""} {
@@ -3752,7 +3758,7 @@ func TestPlanUsageBars(t *testing.T) {
 	header := m.sidebarHeader(w)
 	// the block is the last of the sections: nothing above it moves
 	if m.sidebarSystemRow() != 2 || !strings.HasPrefix(stripANSI(header[m.sidebarSystemRow()]), "System") || !strings.Contains(stripANSI(header[m.sidebarDiscordRow()]), "Discord") ||
-		stripANSI(header[navAfterClients(m)]) != "Subscriptions" || len(header) != navAfterClients(m)+5 {
+		stripANSI(header[navAfterClients(m)]) != "Subscriptions" || len(header) != navAfterClients(m)+7 {
 		t.Fatalf("the Subscriptions section follows Clients and moves nothing above it:\n%s", stripANSI(strings.Join(header, "\n")))
 	}
 	row := stripANSI(header[m.sidebarSystemRow()])
@@ -3761,6 +3767,15 @@ func TestPlanUsageBars(t *testing.T) {
 	nm, _ = nm.(Model).Update(tea.MouseMsg{X: x, Y: m.sidebarSystemRow(), Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft})
 	if m = nm.(Model); m.focus != focusUsage || m.usage.kind != usageCost || m.usage.channel != "" {
 		t.Fatalf("a click on the moved System cost opens its chart: focus=%v %+v", m.focus, m.usage)
+	}
+	for at, label := range map[time.Duration]string{0: "", -time.Minute: "", 2 * time.Hour: "14:00", 13 * time.Hour: "Sun 01:00", 6 * 24 * time.Hour: "Fri 12:00", 14 * 24 * time.Hour: "Oct 3"} {
+		win := protocol.UsageWindowInfo{ResetsAt: now.Add(at)}
+		if at == 0 {
+			win.ResetsAt = time.Time{} // the provider did not say
+		}
+		if got := resetLabel(win, now); got != label {
+			t.Errorf("a reset %v away reads %q, want %q", at, got, label)
+		}
 	}
 }
 
