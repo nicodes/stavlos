@@ -58,10 +58,3 @@ func TestClearOldKeepsTheRecentAndTheConversation(t *testing.T) {
 		t.Fatalf("cleared %d below the minimum", n)
 	}
 }
-
-func short(s string) string {
-	if len(s) > 12 {
-		return s[:12] + "…"
-	}
-	return s
-}
