@@ -39,10 +39,8 @@ func TestFileToolsAreRefusedWhatIsHidden(t *testing.T) {
 // A kernel that offers no sandbox makes commands bare, unless the human
 // turned the sandbox off themselves: that is a choice, not a surprise.
 func TestNoSandboxIsBareOnlyWhenItWasWanted(t *testing.T) {
-	prev := probeSandbox
-	probeSandbox = func() (sandbox.Level, error) { return sandbox.None, nil }
-	defer func() { probeSandbox = prev }()
 	s, _ := newTestChannel(t, testConfig{}, &fakeModel{})
+	ProbeSandbox = func() (sandbox.Level, error) { return sandbox.None, nil }
 	cfg := *s.Config()
 	cfg.Sandbox.Enabled = true
 	if !unsandboxed(&cfg) || sandboxLevel(&cfg) != "none" {
@@ -55,12 +53,12 @@ func TestNoSandboxIsBareOnlyWhenItWasWanted(t *testing.T) {
 	// The limited level hides nothing: a command can have a session service
 	// start a process for it outside the sandbox, so it is bare too, and
 	// the prompt says why.
-	probeSandbox = func() (sandbox.Level, error) { return sandbox.Landlock, nil }
+	ProbeSandbox = func() (sandbox.Level, error) { return sandbox.Landlock, nil }
 	cfg.Sandbox.Enabled = true
 	if !unsandboxed(&cfg) || sandboxLevel(&cfg) != "limited" || !strings.Contains(bareWhy(&cfg), "hides nothing") {
 		t.Fatalf("limited: unsandboxed=%v level=%s why=%q", unsandboxed(&cfg), sandboxLevel(&cfg), bareWhy(&cfg))
 	}
-	probeSandbox = func() (sandbox.Level, error) { return sandbox.Full, nil }
+	ProbeSandbox = func() (sandbox.Level, error) { return sandbox.Full, nil }
 	if unsandboxed(&cfg) {
 		t.Fatal("a full sandbox was treated as bare")
 	}
