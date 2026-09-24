@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
@@ -17,7 +16,16 @@ import (
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
-func resolve(env *Env, p string) string { return ResolvePath(env.Dir, p) }
+// resolve is the filesystem path a model-supplied path means: the one the
+// policy judged (env.Judged) when it judged this call, else ResolvePath now.
+// A tool that resolved again would follow a link swapped in since the
+// judgement; the judged path, opened through its root, refuses it instead.
+func resolve(env *Env, p string) string {
+	if j, ok := env.Judged[p]; ok {
+		return j
+	}
+	return ResolvePath(env.Dir, p)
+}
 
 // ResolvePath is the one way a model-supplied path becomes a filesystem
 // path: absolute against root, cleaned, and with symlinks resolved on the
@@ -99,7 +107,7 @@ func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
-	f, err := os.Open(resolve(env, a.Path))
+	f, err := env.openRead(resolve(env, a.Path))
 	if err != nil {
 		return errf("%v", err)
 	}

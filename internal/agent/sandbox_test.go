@@ -3,6 +3,8 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/nicodes/stavlos/internal/paths"
@@ -49,5 +51,27 @@ func TestNoSandboxIsBareOnlyWhenItWasWanted(t *testing.T) {
 	cfg.Sandbox.Enabled = false
 	if unsandboxed(&cfg) || sandboxLevel(&cfg) != "off" {
 		t.Fatal("a sandbox the human turned off was treated as missing")
+	}
+	// The limited level hides nothing: a command can have a session service
+	// start a process for it outside the sandbox, so it is bare too, and
+	// the prompt says why.
+	probeSandbox = func() (sandbox.Level, error) { return sandbox.Landlock, nil }
+	cfg.Sandbox.Enabled = true
+	if !unsandboxed(&cfg) || sandboxLevel(&cfg) != "limited" || !strings.Contains(bareWhy(&cfg), "hides nothing") {
+		t.Fatalf("limited: unsandboxed=%v level=%s why=%q", unsandboxed(&cfg), sandboxLevel(&cfg), bareWhy(&cfg))
+	}
+	probeSandbox = func() (sandbox.Level, error) { return sandbox.Full, nil }
+	if unsandboxed(&cfg) {
+		t.Fatal("a full sandbox was treated as bare")
+	}
+}
+
+// TestHiddenPathsCoverOtherToolsAndBrowsers: what a command could read and
+// send out in one step is hidden, not only the classic key stores.
+func TestHiddenPathsCoverOtherToolsAndBrowsers(t *testing.T) {
+	for _, want := range []string{".claude", ".codex", ".mozilla", ".config/google-chrome", ".bash_history", ".pgpass", ".vault-token"} {
+		if !slices.Contains(sandboxHiddenHome, want) {
+			t.Errorf("%s is not hidden", want)
+		}
 	}
 }
