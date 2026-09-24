@@ -10,6 +10,7 @@ func TestFormat(t *testing.T) {
 	now := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
 	for _, c := range []struct{ got, want string }{
 		{Tokens(950), "950"}, {Tokens(1499), "1k"}, {Tokens(12_400), "12k"}, {Tokens(1_000_000), "1m"}, {Tokens(1_250_000), "1.2m"},
+		{Who("main", "coder"), "main (coder)"}, {Who("main", ""), "main"},
 		{Cost(0.5), "0.50"}, {Cost(0.1234), "0.1234"}, {Cost(0.123), "0.123"}, {Cost(2), "2.00"},
 		{Elapsed(9 * time.Second), "9s"}, {Elapsed(65 * time.Second), "1m05s"}, {Elapsed(62 * time.Minute), "1h02m"},
 		{ShortID("0123456789"), "01234567"}, {ShortID("abc"), "abc"},
