@@ -123,7 +123,7 @@ func New(ctx context.Context, dataDir string, reg *registry.Registry) (*Daemon, 
 // daemon that only partly started, and to call twice.
 func (d *Daemon) Close() {
 	d.closeOnce.Do(func() {
-		for _, stop := range []func(){d.stopServices, d.stopChannels, d.closeLog, d.unlock} {
+		for _, stop := range []func(){d.stopServices, d.withdrawAllTrustPrompts, d.stopChannels, d.closeLog, d.unlock} {
 			stop()
 		}
 	})
@@ -142,6 +142,10 @@ func (d *Daemon) closeWeb() {
 		d.web.Disable() // the listener only; whether it is on stays as the human left it
 	}
 }
+
+// withdrawAllTrustPrompts ends every open trust prompt at shutdown, so no
+// Request goroutine outlives the daemon.
+func (d *Daemon) withdrawAllTrustPrompts() { d.withdrawTrustPrompts("", "shutdown") }
 
 func (d *Daemon) stopChannels() {
 	for _, s := range d.channelList() {

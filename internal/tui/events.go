@@ -106,14 +106,14 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		return []tea.Cmd{m.onCustomCommands(msg)}, false
 	case customCommandRunMsg:
 		if m.accepts(msg.scope) && msg.err != nil {
-			return []tea.Cmd{m.setStatus(msg.err.Error(), true)}, false
+			return []tea.Cmd{m.setStatus("could not run the command: "+msg.err.Error(), true)}, false
 		}
 	case directoryMsg:
 		if !m.accepts(msg.scope) {
 			return nil, false
 		}
 		if msg.err != nil {
-			return []tea.Cmd{m.setStatus(msg.err.Error(), true)}, false
+			return []tea.Cmd{m.setStatus("could not change the directory: "+msg.err.Error(), true)}, false
 		}
 		m.generation++
 		return []tea.Cmd{reconcileCmd(m.ctx, m.c, m.requestScope()), m.setStatus("default directory updated", false)}, false
@@ -134,7 +134,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 		return []tea.Cmd{m.applyPromptNotification(msg.n)}, false
 	case disconnectedMsg:
 		m.fatal = msg.err
-		m.status, m.statusErr = "daemon disconnected", true
+		m.status, m.statusErr = "the daemon closed the connection", true
 		return nil, true
 	case treeMsg:
 		if msg.channel != "" && msg.channel != m.channelID {
@@ -146,7 +146,7 @@ func (m *Model) onDaemon(msg tea.Msg) (cmds []tea.Cmd, quit bool) {
 			return nil, false
 		}
 		if msg.err != nil {
-			return []tea.Cmd{m.setStatus("tree: "+msg.err.Error(), true)}, false
+			return []tea.Cmd{m.setStatus("could not load the agent tree: "+msg.err.Error(), true)}, false
 		}
 		m.setAgents(msg.agents)
 		if m.sidebarVisible() {
@@ -170,7 +170,7 @@ func (m *Model) onReconcile(msg reconcileMsg) ([]tea.Cmd, bool) {
 		return nil, false
 	}
 	if msg.err != nil {
-		m.fatal = fmt.Errorf("reconcile: %w", msg.err)
+		m.fatal = fmt.Errorf("could not load the channel from the daemon: %w", msg.err)
 		return nil, true
 	}
 	if m.reconciled && msg.res.Seq < m.seq {
@@ -218,7 +218,7 @@ func (m *Model) onPromptReply(msg promptReplyMsg) tea.Cmd {
 		return m.setStatus("claimed by another client", true)
 	default:
 		delete(m.claimedByUs, msg.id)
-		return m.setStatus("prompt: "+msg.err.Error(), true)
+		return m.setStatus("could not answer the prompt: "+msg.err.Error(), true)
 	}
 	return nil
 }

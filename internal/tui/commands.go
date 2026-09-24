@@ -538,7 +538,7 @@ func forwardNotifications(ctx context.Context, c *client.Client, p *tea.Program)
 		case <-ctx.Done():
 			return
 		case <-c.Closed():
-			p.Send(disconnectedMsg{errors.New("daemon disconnected")})
+			p.Send(disconnectedMsg{errors.New("the daemon closed the connection")})
 			return
 		case r := <-c.Notifications:
 			p.Send(notificationBatch(r, c.Notifications))

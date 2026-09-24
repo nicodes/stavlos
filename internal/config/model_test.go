@@ -77,3 +77,38 @@ func TestSetGlobalModelTouchesOneFieldAndNothingElse(t *testing.T) {
 		t.Fatalf("a fresh config: %v %+v", err, cfg)
 	}
 }
+
+// TestSetGlobalFieldPreservesConfigSymlink: a stavlos.json that is a symlink
+// (to a dotfiles checkout, say) stays one after a field is set, and the
+// target holds the change. The field writer used to rename a regular file
+// over the link.
+func TestSetGlobalFieldPreservesConfigSymlink(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("STAVLOS_CONFIG_DIR", dir)
+	target := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(target, []byte("{\n  // kept\n  \"rootAgent\": \"coder\"\n}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "stavlos.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGlobalModel("a/b"); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetGlobalSandbox(false); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.Readlink(link); err != nil || got != target {
+		t.Fatalf("stavlos.json is no longer a symlink to %s: %q %v", target, got, err)
+	}
+	b, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"// kept", `"model": "a/b"`, `"enabled": false`, `"rootAgent": "coder"`} {
+		if !strings.Contains(string(b), want) {
+			t.Fatalf("target lacks %s:\n%s", want, b)
+		}
+	}
+}
