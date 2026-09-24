@@ -81,6 +81,9 @@ func (grepTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	limit := clampLimit(a.Limit, grepDefaultLimit, grepMaxLimit)
 	var lines []string
 	var more bool
+	if err := env.check(resolve(env, a.Path)); err != nil {
+		return errf("%v", err)
+	}
 	if rgBinary != "" {
 		args := []string{"--line-number", "--no-heading", "--with-filename", "--max-columns", fmt.Sprint(grepMaxLine), "--max-columns-preview"}
 		if a.IgnoreCase {
@@ -104,11 +107,11 @@ func walkGrep(ctx context.Context, env *Env, a grepInput, re *regexp.Regexp, lim
 	match := globMatcher(a.Glob)
 	var lines []string
 	more := false
-	err := walkFiles(ctx, env.Dir, a.Path, func(abs, shown string) bool {
+	err := walkFiles(ctx, env, a.Path, func(abs, shown string) bool {
 		if !match(shown) {
 			return true
 		}
-		f, err := os.Open(abs)
+		f, err := env.openRead(abs)
 		if err != nil {
 			return true
 		}
@@ -172,7 +175,7 @@ func (globTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		paths, more, err = runRG(ctx, env.Dir, []string{"--files", "--glob", a.Pattern}, a.Path, limit)
 	} else {
 		match := globMatcher(a.Pattern)
-		err = walkFiles(ctx, env.Dir, a.Path, func(_, shown string) bool {
+		err = walkFiles(ctx, env, a.Path, func(_, shown string) bool {
 			if match(shown) {
 				if len(paths) == limit {
 					more = true
@@ -273,8 +276,12 @@ func runRG(ctx context.Context, dir string, args []string, path string, limit in
 // files over walkMaxFileSize, in lexical order. shown is the path as the
 // result prints it: relative to root when inside it. visit returns false
 // to stop.
-func walkFiles(ctx context.Context, root, path string, visit func(abs, shown string) bool) error {
-	start := ResolvePath(root, path)
+func walkFiles(ctx context.Context, env *Env, path string, visit func(abs, shown string) bool) error {
+	root := env.Dir
+	start := resolve(env, path)
+	if err := env.check(start); err != nil {
+		return err
+	}
 	if _, err := os.Stat(start); err != nil {
 		return err
 	}

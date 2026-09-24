@@ -413,7 +413,7 @@ func (t *Transcript) holdSpawn(ev event.Event) bool {
 			return false
 		}
 		t.spawnHeld, t.spawnParent = ev, p.Parent
-		t.spawnAs = fmt.Sprintf("%s (%s)", p.Name, p.Role)
+		t.spawnAs = format.Who(p.Name, p.Role)
 		if p.Model != "" {
 			t.spawnAs += " · " + p.Model
 		}
@@ -1803,10 +1803,11 @@ func titleCase(s string) string {
 	return strings.ToUpper(string(r[0])) + string(r[1:])
 }
 
-// SplitModel splits "provider/model-id" into the short id and the provider.
+// SplitModel splits "provider/model-id" into the short id and the provider;
+// an id with no provider is returned whole.
 func SplitModel(id string) (short, provider string) {
-	if i := strings.IndexByte(id, '/'); i >= 0 {
-		return id[i+1:], id[:i]
+	if provider, short, err := model.Split(id); err == nil {
+		return short, provider
 	}
 	return id, ""
 }

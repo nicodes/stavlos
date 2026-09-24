@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
+	"net"
+	"syscall"
 	"time"
 
 	dg "github.com/bwmarrin/discordgo"
@@ -114,7 +117,7 @@ func (w *worker) execute(t work) error {
 			return w.updateQuestionCard(id, err)
 		}
 		if err != nil {
-			text = "Could not complete action: " + err.Error()
+			text = plainError(err)
 			components = nil
 		}
 		feedback, stop := context.WithTimeout(w.ctx, 5*time.Second)
@@ -123,6 +126,25 @@ func (w *worker) execute(t work) error {
 	default:
 		return w.refresh(ctx)
 	}
+}
+
+// plainError is what a Discord user reads when an action fails. Daemon
+// errors quote internal ids and transport errors read like a stack trace;
+// neither belongs in a channel. The raw error goes to the daemon log.
+func plainError(err error) string {
+	var pe *protocol.Error
+	var ne net.Error
+	switch {
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &ne) && ne.Timeout():
+		return "The daemon did not answer in time. Try again."
+	case errors.Is(err, net.ErrClosed), errors.Is(err, syscall.ECONNREFUSED), errors.Is(err, syscall.ENOENT),
+		errors.Is(err, syscall.EPIPE), errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return "The daemon is not running."
+	case errors.As(err, &pe) && pe.Code == protocol.ErrNotFound:
+		return "That channel or agent no longer exists."
+	}
+	log.Printf("discord: action failed: %v", err)
+	return "Could not complete the action."
 }
 
 // updateQuestionCard keeps edits and validation errors on the original card.

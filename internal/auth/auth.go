@@ -90,6 +90,11 @@ func (s *Store) load() (map[string]Credential, error) {
 	if s.cached != nil && st.ModTime().Equal(s.modTime) && st.Size() == s.size {
 		return s.cached, nil
 	}
+	// The file is written 0600; one put in place by hand, or restored from
+	// a backup, may not be. Tightened here rather than trusted.
+	if st.Mode().Perm()&0o077 != 0 {
+		_ = os.Chmod(s.path, 0o600)
+	}
 	b, err := os.ReadFile(s.path)
 	if err != nil {
 		return nil, err

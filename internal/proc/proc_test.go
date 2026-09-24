@@ -27,7 +27,10 @@ func TestEnvScrub(t *testing.T) {
 	t.Setenv("NPM_CONFIG__AUTH", "x")
 	t.Setenv("GOOGLE_API_KEY", "x")
 	t.Setenv("GIT_AUTHOR_NAME", "me")
-	env := Env([]string{"GITHUB_TOKEN"}, "EXTRA=1")
+	t.Setenv("GOPROXY", "https://user:token@proxy.example/,direct") // a credential in a URL: the name gives nothing away
+	t.Setenv("GOFLAGS", "-mod=mod")
+	t.Setenv("UV_INDEX_URL", "https://u:p@pypi.example/simple") // passed by name: kept, credential and all
+	env := Env([]string{"GITHUB_TOKEN", "UV_INDEX_URL"}, "EXTRA=1")
 	has := func(name string) bool {
 		for _, kv := range env {
 			if strings.HasPrefix(kv, name+"=") {
@@ -36,12 +39,12 @@ func TestEnvScrub(t *testing.T) {
 		}
 		return false
 	}
-	for _, gone := range []string{"OPENAI_API_KEY", "MY_APIKEY", "AWS_SECRET_ACCESS_KEY", "AWS_CHANNEL_TOKEN", "DB_PASSWORD", "http_passwd", "GOOGLE_APPLICATION_CREDENTIALS", "SSH_PRIVATE_KEY", "STAVLOS_WEB_ALLOW_LOCAL", "TOKENIZER_PARALLELISM", "SSH_AUTH_SOCK", "DBUS_SESSION_BUS_ADDRESS", "MY_ODD_CREDS", "NPM_CONFIG__AUTH", "GOOGLE_API_KEY"} {
+	for _, gone := range []string{"OPENAI_API_KEY", "MY_APIKEY", "AWS_SECRET_ACCESS_KEY", "AWS_CHANNEL_TOKEN", "DB_PASSWORD", "http_passwd", "GOOGLE_APPLICATION_CREDENTIALS", "SSH_PRIVATE_KEY", "STAVLOS_WEB_ALLOW_LOCAL", "TOKENIZER_PARALLELISM", "SSH_AUTH_SOCK", "DBUS_SESSION_BUS_ADDRESS", "MY_ODD_CREDS", "NPM_CONFIG__AUTH", "GOOGLE_API_KEY", "GOPROXY"} {
 		if has(gone) {
 			t.Errorf("%s should be scrubbed", gone)
 		}
 	}
-	for _, kept := range []string{"GITHUB_TOKEN", "GOPATH", "PATH", "EXTRA", "GIT_AUTHOR_NAME"} {
+	for _, kept := range []string{"GITHUB_TOKEN", "GOPATH", "GOFLAGS", "PATH", "EXTRA", "GIT_AUTHOR_NAME", "UV_INDEX_URL"} {
 		if !has(kept) {
 			t.Errorf("%s should be kept", kept)
 		}

@@ -15,6 +15,10 @@ func withComponents(cfg *dg.RequestConfig) {
 	cfg.Request.URL.RawQuery = q.Encode()
 }
 
+// cardFlags marks a prompt card: Components V2 layout, and no link unfurls
+// for the agent text it carries.
+const cardFlags = dg.MessageFlagsIsComponentsV2 | suppressEmbeds
+
 func (g *gateway) applicationID() string {
 	if g.app != "" {
 		return g.app
@@ -33,7 +37,7 @@ func (g *gateway) SendQuestion(ctx context.Context, channel, agent, text string,
 		return "", "", errors.New("question webhook is not owned by this Discord application")
 	}
 	id, err := g.executeWebhook(ctx, channel, "stavlos", &dg.WebhookParams{
-		Username: clip(agent, 80), Flags: dg.MessageFlagsIsComponentsV2, Components: cardComponents(text, components),
+		Username: clip(agent, 80), Flags: cardFlags, Components: cardComponents(text, components),
 		AllowedMentions: &dg.MessageAllowedMentions{Parse: []dg.AllowedMentionType{}},
 	})
 	return id, h.ID, err
@@ -102,7 +106,7 @@ func (g *gateway) editCard(ctx context.Context, endpoint, bucket, text string, c
 		Embeds          []*dg.MessageEmbed         `json:"embeds"`
 		Components      []dg.MessageComponent      `json:"components"`
 		AllowedMentions *dg.MessageAllowedMentions `json:"allowed_mentions"`
-	}{Flags: dg.MessageFlagsIsComponentsV2, Components: cardComponents(text, controls), AllowedMentions: &dg.MessageAllowedMentions{Parse: []dg.AllowedMentionType{}}}
+	}{Flags: cardFlags, Components: cardComponents(text, controls), AllowedMentions: &dg.MessageAllowedMentions{Parse: []dg.AllowedMentionType{}}}
 	opts = append(opts, dg.WithContext(ctx))
 	_, err := g.s.RequestWithBucketID("PATCH", endpoint, payload, bucket, opts...)
 	return apiError(err)

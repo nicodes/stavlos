@@ -34,6 +34,14 @@ var sandboxReadOnly = append([]string{".git/hooks", ".git/config", ".stavlos", "
 var sandboxHiddenHome = []string{
 	".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker", ".netrc", ".git-credentials", ".pypirc", ".npmrc",
 	".cargo/credentials.toml", ".config/gh", ".config/hub", ".config/gcloud", ".password-store", ".local/share/keyrings",
+	// other tools' tokens and databases: what a command could read and send
+	// out in one step, since reads are otherwise unrestricted
+	".pgpass", ".my.cnf", ".vault-token", ".terraform.d", ".config/rclone", ".config/doctl", ".config/hcloud",
+	".claude", ".codex", ".gemini", ".config/github-copilot", ".opencode", ".config/opencode", ".kimi-code", ".grok",
+	// browser profiles hold cookies and saved passwords
+	".mozilla", ".config/google-chrome", ".config/chromium", ".config/BraveSoftware", ".config/microsoft-edge", ".config/vivaldi",
+	// shell histories hold whatever was typed, keys included
+	".bash_history", ".zsh_history", ".local/share/fish/fish_history", ".python_history", ".node_repl_history", ".psql_history", ".mysql_history",
 }
 
 // sandboxSpec is the boundary for the channel's commands under cfg, nil
@@ -64,12 +72,23 @@ func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 	return spec
 }
 
+// fileRoots are the directories the file tools open through a root
+// (tools.Env.Roots): the working set, the channel's sheets and its scratch
+// directory, resolved as the policy resolves them.
+func (c *Channel) fileRoots() []string {
+	var out []string
+	for _, d := range c.dirPaths() {
+		out = append(out, tools.ResolvePath("", d))
+	}
+	return append(out, tools.ResolvePath("", c.SheetDir()), tools.ResolvePath("", filepath.Join(paths.CacheDir(), "tmp", c.ID)))
+}
+
 // sandboxLevel is what bounds a channel's commands, as clients are told it.
 func sandboxLevel(cfg *config.Effective) string {
 	if !cfg.Sandbox.Enabled {
 		return "off"
 	}
-	switch lvl, _ := probeSandbox(); lvl {
+	switch lvl, _ := ProbeSandbox(); lvl {
 	case sandbox.Full:
 		return "full"
 	case sandbox.Landlock:
@@ -79,13 +98,34 @@ func sandboxLevel(cfg *config.Effective) string {
 	}
 }
 
-// probeSandbox is sandbox.Probe, a variable so a test can be a kernel that
-// offers nothing.
-var probeSandbox = sandbox.Probe
+// ProbeSandbox is sandbox.Probe, a variable so a test can be a kernel that
+// offers nothing, or everything: what commands ask about must not depend
+// on the machine the tests run on (a CI runner without user namespaces is
+// "limited", where every command asks). Commands still run at the level
+// the kernel really offers (sandbox.Wrap probes for itself).
+var ProbeSandbox = sandbox.Probe
 
-// unsandboxed reports that the sandbox is wanted and the kernel offers none
-// of it: a command would run with nothing between it and the machine.
-func unsandboxed(cfg *config.Effective) bool { return sandboxLevel(cfg) == "none" }
+// unsandboxed reports that the sandbox is wanted and the kernel offers
+// less than the whole of it, so a command is asked about every time. With
+// none, a command runs with nothing between it and the machine. With the
+// limited level nothing is hidden either: the user's runtime directory is
+// in reach, and a command can ask a service there (D-Bus, systemd-run,
+// tmux) to start a process for it, outside the sandbox and outside the
+// socket's ancestry check, which then speaks to the daemon as the owner.
+// The prompt says which.
+func unsandboxed(cfg *config.Effective) bool {
+	lvl := sandboxLevel(cfg)
+	return lvl == "none" || lvl == "limited"
+}
+
+// bareWhy is what the permission prompt says of a command the sandbox
+// cannot hold.
+func bareWhy(cfg *config.Effective) string {
+	if sandboxLevel(cfg) == "limited" {
+		return "the sandbox on this system hides nothing: the command can reach your session's services and Stavlos's socket"
+	}
+	return "no sandbox on this system: the command runs with your full access"
+}
 
 // hiddenPaths is what no agent may reach, whatever the mode: the harness's
 // own data, configuration and socket, the user's runtime directory, and the

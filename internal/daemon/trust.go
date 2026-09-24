@@ -70,7 +70,7 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 		input, _ := json.Marshal(map[string]any{"dir": dir, "hash": cfg.TrustHash, "files": cfg.TrustFiles})
 		ans := d.esc.Request(context.Background(), protocol.PromptInfo{
 			ID: id, Channel: s.ID, ChannelName: s.Name(), Kind: protocol.PromptTrust, Input: input,
-			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers, policy, roles, skills and AGENTS.md.", dir),
+			Question: fmt.Sprintf("Trust the project configuration in %s? It can define MCP servers (with ${env:…} values from the daemon's environment), policy, roles, skills and AGENTS.md, and it can change the sandbox, the hosts fetched without asking and the environment variables passed to commands.", dir),
 			Options:  []string{"trust", "skip"},
 		}, func() { close(opened) }) // published before a caller can change the channel directory
 		d.trustMu.Lock()
@@ -81,6 +81,31 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 		}
 	}()
 	<-opened
+}
+
+// withdrawTrustPrompts settles the open trust prompts of one channel (every
+// channel when id is empty) as declined: the channel moved directory, was
+// archived, or the daemon is closing, and a prompt nobody can answer any
+// more would otherwise sit in the list, and its goroutine in memory, for
+// ever. A trust prompt has no answer timer (trust.go, escalation.Request).
+func (d *Daemon) withdrawTrustPrompts(id, reason string) {
+	if id != "" {
+		for _, p := range d.esc.Pending(id) {
+			if p.Kind == protocol.PromptTrust {
+				_ = d.esc.Resolve(p.ID, reason, escalation.Answer{Value: protocol.AnswerDeny})
+			}
+		}
+		return
+	}
+	d.trustMu.RLock()
+	ids := make([]string, 0, len(d.trustPrompts))
+	for _, pid := range d.trustPrompts {
+		ids = append(ids, pid)
+	}
+	d.trustMu.RUnlock()
+	for _, pid := range ids {
+		_ = d.esc.Resolve(pid, reason, escalation.Answer{Value: protocol.AnswerDeny})
+	}
 }
 
 // Trust records a decision and reloads config for channels in dir. The

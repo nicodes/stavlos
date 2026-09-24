@@ -37,6 +37,20 @@ func TestStoreRoundTrip(t *testing.T) {
 	}
 }
 
+// TestStoreTightensALooseFile: a credentials file put in place with wider
+// permissions is chmod 0600 on load.
+func TestStoreTightensALooseFile(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "auth.json")
+	_ = os.WriteFile(p, []byte(`{"openai":{"type":"oauth","access":"a"}}`), 0o644)
+	s := Open(p)
+	if _, ok := s.Get("openai"); !ok {
+		t.Fatal("credential not read")
+	}
+	if st, err := os.Stat(p); err != nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("perm %v %v", st.Mode(), err)
+	}
+}
+
 // TestStoreSeesOtherWriters: the in-memory copy is dropped when another
 // process rewrites the file, and no temporary files are left behind.
 func TestStoreSeesOtherWriters(t *testing.T) {

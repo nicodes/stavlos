@@ -238,13 +238,15 @@ func (s sheetsAPI) Delete(id string) error {
 	if err := os.Remove(sheetPath(c.SheetDir(), id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	err := c.commitLocked(context.Background(), c.event(s.a.ID, event.SheetDeleted, event.SheetPayload{ID: id}))
-	return err
+	// the file is gone whether or not the log takes it
+	return c.commitFactLocked(context.Background(), c.event(s.a.ID, event.SheetDeleted, event.SheetPayload{ID: id}))
 }
 
+// sheetWrittenLocked records a page that is already on disk: the list of
+// sheets follows the directory even when the log write fails.
 func (c *Channel) sheetWrittenLocked(a *Agent, id, title string, page []byte) error {
 	sum := sha256.Sum256(page)
-	err := c.commitLocked(context.Background(), c.event(a.ID, event.SheetWritten,
+	err := c.commitFactLocked(context.Background(), c.event(a.ID, event.SheetWritten,
 		event.SheetPayload{ID: id, Title: title, Author: a.state().name, Hash: hex.EncodeToString(sum[:]), Size: len(page)}))
 	return err
 }
@@ -270,7 +272,7 @@ func (a *Agent) sheetsPatched(sub policy.Subject) {
 		switch {
 		case c.st.sheets[m[1]] == nil:
 		case errors.Is(err, os.ErrNotExist):
-			_ = c.commitLocked(context.Background(), c.event(a.ID, event.SheetDeleted, event.SheetPayload{ID: m[1]}))
+			_ = c.commitFactLocked(context.Background(), c.event(a.ID, event.SheetDeleted, event.SheetPayload{ID: m[1]}))
 		case err == nil:
 			_ = c.sheetWrittenLocked(a, m[1], "", page)
 		}
