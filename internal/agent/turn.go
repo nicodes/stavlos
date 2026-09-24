@@ -108,14 +108,15 @@ type turnRun struct {
 	turn     int
 	moves    int       // models the harness moved the agent to within this turn
 	calls    int       // model calls made in this turn (limits.maxCallsPerTurn)
-	resumeAt time.Time // the turn is ending at every plan's limit: when to wake the agent (movedOn)
+	resumeAt time.Time // the turn is ending at every plan's limit, or at a passing fault: when to wake the agent (movedOn, parkAfterFault)
+	resume   string    // why: event.ResumeLimit or event.ResumeFault
 }
 
 // end logs the turn's end.
 func (t *turnRun) end(reason event.TurnReason, errText string) {
 	p := event.TurnEndedPayload{Turn: t.turn, Reason: reason, Error: errText}
 	if reason == event.ReasonError {
-		p.ResumeAt = t.resumeAt
+		p.ResumeAt, p.Resume = t.resumeAt, t.resume
 	}
 	if err := t.a.recordFact(event.TurnEnded, p); err != nil && !errors.Is(err, errStopped) {
 		t.a.turnEndLost(err)
@@ -217,6 +218,9 @@ func (t *turnRun) onError(err error, p stepPlan, resp model.Response, msg event.
 	if !cancelled && t.movedOn(err, p.modelID) {
 		return "", "", false // the same step again, on the model the harness moved the agent to
 	}
+	if at := t.a.parkAfterFault(err); !cancelled && t.resumeAt.IsZero() && !at.IsZero() {
+		t.resumeAt, t.resume = at, event.ResumeFault
+	}
 	if len(resp.Blocks) > 0 || resp.Usage != (model.Usage{}) {
 		if cancelled {
 			msg.StopReason = "cancelled"
@@ -226,7 +230,7 @@ func (t *turnRun) onError(err error, p stepPlan, resp model.Response, msg event.
 	if cancelled {
 		return event.ReasonCancelled, "", true
 	}
-	return event.ReasonError, limitHint(err, t.resumeAt), true
+	return event.ReasonError, resumeHint(err, t.resumeAt), true
 }
 
 // runTools runs the calls a response asks for, in order, and reports whether

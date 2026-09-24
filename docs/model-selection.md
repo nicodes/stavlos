@@ -145,6 +145,34 @@ This does mean agents restart unattended, at night if that is when a plan
 resets, and spend allowance doing the work they were given. That is the point
 of it, and the reason for the switch.
 
+### A passing fault: the agent is woken after a pause (2026-09-24)
+
+A limit is not the only thing that ended turns and left agents stopped. A
+connection reset by the provider's edge mid-stream (`codex: read tcp …:
+connection reset by peer`, a whole VPS's worth of agents at once) and a
+model refusing inside the stream (`xai: stream error: The model is currently
+at capacity due to high demand. Please try again in a few minutes`) both
+ended the turn with the error, and the agent stayed there until someone
+wrote to it.
+
+Two layers now answer this. The call itself (`internal/model/stream`)
+retries a stream that breaks off, or that the provider fails for a fault
+of its own (`Transient` matches "at capacity", "overloaded", "try again",
+"server error", "connection reset" and the like), up to three times with a
+jittered doubling backoff, tool call in flight or not: nothing is on the
+record until a call completes, so a retry duplicates nothing, and a `Reset`
+delta tells clients to drop what streamed. A call still failing after that,
+and a pre-stream transport or 5xx failure past its own retries, comes back
+as a `model.TransientError`.
+
+The agent runtime parks on that error the way it parks on a limit: the
+turn's end carries `resume_at` and `resume: "fault"`, the pause starts at 30
+seconds and doubles per wake in a row (a minute, two, four, …, ten at most),
+the tick wakes the agent with a note that a fault, not a limit, stopped it,
+and the count resets once a model answers. The same twelve-wake seatbelt
+and the same `"resumeAfterLimit": false` switch apply. A final error (a bad
+request, a refused tool) parks nothing.
+
 ## Limits
 
 - Readings refresh at most every five minutes, so agents created together can
