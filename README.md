@@ -196,7 +196,7 @@ Permission prompts show the command (or path) with the asking agent after it, th
 - A plain permission offers "Allow once", "Allow for this channel" (this exact call), "Allow `<prefix>` for this channel" for a simple shell command, and "Deny", which opens a row for an optional reason the agent reads.
   The prefix is the first word, or two for git, go, npm, cargo, make, docker and the like: `go test` then covers every `go test …` that is not chained, piped or redirected.
   It is never offered for wrappers such as `bash`, `env`, `sudo` or `python`.
-- A boundary prompt, for a call outside the channel's directories, offers "Allow once", "Allow and add <dir>", "Allow and add another directory…" and "Deny". "Allow and add" adds the directory to the channel's set, for every agent: the whole git checkout when the path is inside one, else the path's directory.
+- A boundary prompt, for a call outside the channel's directories, offers "Allow once", "Allow and add <dir>", "Allow and add another directory…" and "Deny". "Allow and add" adds the directory to the channel's set, for every agent: the whole git checkout when the path is inside one, else the path's directory; for a file straight under your home directory or `/`, the file alone, never the directory.
 - The trust prompt for a project's `.stavlos/` offers "Trust this project's config" or "Not now".
 - A repeat prompt comes when an agent makes the same call, with the same arguments, three times in a row, even one the rules allow: a model polling a file or a command re-sends its whole context every time (OpenCode asks at the same count).
   It offers "Allow once" and "Deny"; a deny tells the agent what it repeated, and the count starts over at every turn and after every answer.
@@ -251,15 +251,16 @@ There is no wait tool.
 No command is allowed by default: each asks until you allow it once, for the channel, or by prefix, or with a rule in `stavlos.json`.
 A call waits up to 15 seconds; a command still running then continues as a background job (the call returns its id and the output so far), and `background: true` skips the wait for servers.
 A job's exit wakes its agent the same way a response does, and `shell_kill` stops a job.
-Every command and MCP server runs with a scrubbed environment, without `STAVLOS_*` or any variable whose name looks like a credential, so list what a build really needs under `"env": {"pass": ["GITHUB_TOKEN"]}` in `stavlos.json`.
+Every command and MCP server runs with a scrubbed environment, without `STAVLOS_*`, any variable whose name looks like a credential, or one whose value carries a user and password in a URL (`GOPROXY=https://u:token@…`), so list what a build really needs under `"env": {"pass": ["GITHUB_TOKEN"]}` in `stavlos.json`.
 
 **The sandbox.** On Linux every command and MCP server runs inside a boundary the kernel enforces (Landlock, plus a user and mount namespace where the kernel allows them; the daemon log names the level).
 It may write only beneath the channel's directories, a scratch directory of the channel mounted as `/tmp`, and the caches build tools fill.
 The files that steer the harness or run code later stay read-only: `.git/hooks`, `.git/config`, `.stavlos`, `.envrc`, and every `AGENTS.md` or `CLAUDE.md` the project's trust covers.
-It cannot see Stavlos's own config, data, cache or socket, your runtime directory (where the D-Bus and agent sockets live), or credential stores such as `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh` and `~/.netrc`.
+They are also stamped before every command and compared after it, at every level: a command that changes one anyway (by renaming its parent out from under the mount, or where there is no mount) has that said in its result, for the agent and for you, and the daemon log records it. Review such a change before git or a shell runs it.
+It cannot see Stavlos's own config, data, cache or socket, your runtime directory (where the D-Bus and agent sockets live), or credential stores such as `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh` and `~/.netrc`, nor other tools' tokens (`~/.claude`, `~/.codex`, `~/.pgpass`, `~/.vault-token`, …), browser profiles or shell histories, which a command could otherwise read and send out in one step, since reads are not restricted otherwise.
 The file tools (`read`, `grep`, `glob`, `apply_patch`) are refused those same paths in every mode, yolo included, and whatever a rule allows: a list that bound only commands was one an agent could read its way round. The channel's own sheets and scratch directory stay open to it.
 `/sandbox` shows what bounds commands on this machine and is the switch: `/sandbox off` and `/sandbox on` set `sandbox.enabled` in your `stavlos.json` and take effect with the next command. Only you can flip it: an agent cannot call it, and the file tools are refused the configuration directory.
-The nav says nothing while the sandbox is on and whole. `sandbox off` is your choice. `sandbox limited` is the machine's: writes and the network are bounded but nothing is hidden, because the system will not let an unprivileged process make a user namespace (Ubuntu 24.04 and later by default, most containers, a hardened kernel); a click on the row says what is missing, why, and the command that mends it where there is one. `sandbox none · asks` means the kernel offers nothing at all: every command asks, whatever the mode, a rule or an earlier "allow for this channel" says, because it would run with your full access.
+The nav says nothing while the sandbox is on and whole. `sandbox off` is your choice. `sandbox limited` is the machine's: writes and the network are bounded but nothing is hidden, because the system will not let an unprivileged process make a user namespace (Ubuntu 24.04 and later by default, most containers, a hardened kernel); a click on the row says what is missing, why, and the command that mends it where there is one. `sandbox none · asks` means the kernel offers nothing at all: every command asks, whatever the mode, a rule or an earlier "allow for this channel" says, because it would run with your full access. `sandbox limited` asks the same way, because with nothing hidden a command can ask a service in your runtime directory (D-Bus, `systemd-run --user`, tmux) to start a process for it outside the sandbox, which could then speak to the daemon as you. On a kernel older than Linux 6.12 (Landlock ABI 6) the sandbox cannot scope abstract Unix sockets, and older than 6.7 (ABI 4) it cannot restrict TCP; the row says so. UDP, and so DNS, is never restricted.
 Configure it in `stavlos.json` (yours, or a trusted project's, which takes precedence): `"sandbox": {"network": false, "writable": ["~/.m2"], "hide": ["~/private"]}`, or `"enabled": false` to turn it off.
 The build caches stay writable, so a command can still poison one.
 
@@ -275,7 +276,7 @@ The build caches stay writable, so a command can still poison one.
   It asks until you configure a backend (its keyless fallback is a third party you never chose) and is allowed once you have.
 
 Auto mode still asks before fetching from a host that is not listed, since a fetch sends a request off the machine, and before a search while no backend is configured; yolo asks for neither.
-Everything fetched is handed to the model as untrusted data.
+Everything fetched is handed to the model as untrusted data, and so is every MCP tool's result.
 
 **Plan.** One `todo` tool keeps a per-agent list (a call adds steps, each free to start at any status, updates others by id, or both, and returns the list, so planning the work and starting its first step is one call) that is logged, projected into the system prompt at every call (so it survives compaction) and shown to you in the todo tab.
 
@@ -381,6 +382,7 @@ stavlos --version              # version, commit and build of this binary
 
 Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and a `stavlos.json` (plus a gitignored `stavlos.local.json`) that takes precedence over the global config once trusted.
 The `discord` block is global-only; other settings can be overridden by the project.
+A few settings worth knowing by name: `rootAgent` is the role a new channel's root agent takes (`general` unless you say otherwise); `limits.maxDepth` and `limits.maxAgents` bound how deep and how wide a channel's agent tree may grow (3 and 6); and `escalation.claimTimeout`, `escalation.answerTimeout` and `escalation.default` say how long a prompt waits for a client to claim it and for an answer, and whether one nobody answers is allowed or denied (30s, 3m, deny). The whole file is in [docs/stavlos-prd.md](docs/stavlos-prd.md) §10.2.
 Every agent follows `AGENTS.md` instructions: yours in `~/.config/stavlos/AGENTS.md`, then the repository's from its git root down to the channel directory (a directory's `CLAUDE.md` where it has no `AGENTS.md`), 32 KiB in all, and a subdirectory's with an agent's first read, search or edit there.
 Editing any of them asks in every mode, and an edit made outside the harness brings the trust prompt back when an agent next starts a turn.
 The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.
@@ -403,8 +405,13 @@ as a tab beside that channel's chat, under a bar naming the agent that wrote
 it. Every agent of the channel shares its sheets (at most 50, 2 MiB each);
 they live in Stavlos's data directory, not the repository, agents edit them
 with `read` and `apply_patch` like any file, and a change reloads the tab. A
-sheet runs sandboxed with no network: it cannot reach the app, your session,
-or any server. `sheet: deny` in a role's `tools:` removes the tool.
+sheet runs sandboxed with no network: it cannot fetch, reach the app or your
+session, or load anything from a server. What no browser policy stops is a
+page navigating itself to a URL of its own when you open its tab, which could
+carry data out, so writing a sheet asks like a fetch does ("Allow for this
+channel" covers the rest), and `"sheet": "allow"` under `policy` in
+`stavlos.json` makes it silent. `sheet: deny` in a role's `tools:` removes the
+tool.
 
 The daemon serves it on `127.0.0.1:4999` and never listens anywhere else.
 From a phone use `tailscale serve 4999` and list the name it gives under

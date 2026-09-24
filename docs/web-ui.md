@@ -97,9 +97,13 @@ Authentication, both parts of it:
   The trade of the code also returns a key the page keeps in `localStorage`,
   which is scoped to the origin, port included, and which no browser sends
   anywhere by itself. The WebSocket offers it as a subprotocol (a socket
-  cannot set headers) and the daemon wants both. Sheets are served on the
-  cookie alone: a frame's request cannot carry the key, and a sheet can do
-  nothing but draw.
+  cannot set headers) and the daemon wants both. A frame's request cannot
+  carry the key either, so a sheet's URL carries a token made from it for
+  that one sheet: HMAC-SHA256 over the channel and sheet id, keyed with the
+  SHA-256 of the page key (which is all the daemon keeps of it). The page
+  computes it, a sheet learns only its own, and a server that received the
+  cookie alone cannot make one (2026-09-24; before that sheets were served
+  on the cookie alone).
 - **An `Origin` check** on the WebSocket upgrade and on every request that
   changes anything. This is how local daemons get taken over: any page you
   have open can dial `ws://127.0.0.1:…`. Reject any origin that is not ours.

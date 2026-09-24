@@ -174,13 +174,19 @@ func outsideDir(sub policy.Subject, base string, dirs []string) string {
 // grantDir is the directory a boundary prompt offers to add for a path:
 // the git checkout containing it when there is one (the repository is the
 // unit people think in), else the path itself when it is a directory, else
-// its parent. A checkout rooted at the home directory does not count.
+// its parent. A checkout rooted at the home directory does not count, and
+// neither the home directory nor / is ever offered for a file in it: the
+// offer is the file alone (the working set may hold files), since a home
+// directory added to the set is writable to every command from then on.
 func grantDir(p string) string {
 	base := p
 	if st, err := os.Stat(p); err != nil || !st.IsDir() {
 		base = filepath.Dir(p)
 	}
 	home, _ := os.UserHomeDir()
+	if base != p && (base == home || base == "/") {
+		return p
+	}
 	for d := base; ; d = filepath.Dir(d) {
 		if _, err := os.Stat(filepath.Join(d, ".git")); err == nil {
 			if d == home || d == "/" {

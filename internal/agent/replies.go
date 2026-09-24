@@ -183,6 +183,8 @@ func (a *Agent) endReplies(reason event.TurnReason) {
 	for _, request := range requests {
 		parties = append(parties, request.From)
 	}
+	// A reminder the log refuses is simply not sent: it is a nudge, not a
+	// fact, and the next turn end asks again (up to maxNudges).
 	_ = s.commitLocked(context.Background(), s.event(a.ID, event.InputQueued,
 		event.Input{ID: NewID("i"), Kind: event.InputReminder, Parties: parties, Names: s.partyNamesLocked(parties), Requests: requests}))
 	s.mu.Unlock()

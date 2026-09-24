@@ -177,12 +177,17 @@ func Env(pass []string, extra ...string) []string {
 		if !ok {
 			continue
 		}
-		if keep[name] || Passes(name) {
+		if keep[name] || Passes(name) && !urlCredential(kv[len(name)+1:]) {
 			out = append(out, kv)
 		}
 	}
 	return append(out, extra...)
 }
+
+// urlCredential reports a value that carries a user and password in a URL
+// (GOPROXY=https://user:token@proxy/, PIP_INDEX_URL, UV_INDEX_URL): a
+// credential the name does not give away. env.pass still lets it through.
+var urlCredential = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*://[^/@\s]+:[^/@\s]+@`).MatchString
 
 // Passes reports whether a variable reaches child processes on its own:
 // allowlisted, not the harness's own (STAVLOS_*), and not named like a

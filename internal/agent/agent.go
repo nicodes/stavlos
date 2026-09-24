@@ -28,17 +28,18 @@ type Agent struct {
 	wake chan struct{}
 
 	// Guarded by c.mu.
-	cancelTurn  context.CancelFunc
-	jobs        map[string]*jobRun
-	compactNext bool // /compact arrived mid-turn: compact before the next model call
-	ctxTokens   int  // estimated size of the last model call
-	ctxWindow   int
-	logErr      error // a failed log write: the turn ends at its next step
-	maintenance int   // manual compaction, including its preparation and cleanup
-	prefix      promptPrefix
-	instructed  map[string]bool     // instructions files a tool result has carried since the last compaction
-	repeat      repeatCall          // the last tool call of this turn, counted (permission.go repeated)
-	reads       map[string]readSeen // read calls whose result is in the context, by input (reads.go)
+	cancelTurn    context.CancelFunc
+	jobs          map[string]*jobRun
+	compactNext   bool // /compact arrived mid-turn: compact before the next model call
+	ctxTokens     int  // estimated size of the last model call
+	ctxWindow     int
+	logErr        error // a failed log write: the turn ends at its next step
+	maintenance   int   // manual compaction, including its preparation and cleanup
+	prefix        promptPrefix
+	instructed    map[string]bool     // instructions files a tool result has carried since the last compaction
+	repeat        repeatCall          // the last tool call of this turn, counted (permission.go repeated)
+	reads         map[string]readSeen // read calls whose result is in the context, by input (reads.go)
+	controlBefore controlStamp        // the control files as the running shell command found them, for a job it leaves behind (control.go)
 
 	mcp mcpSet // under its own lock, never held while taking c.mu
 }
@@ -129,7 +130,7 @@ func (a *Agent) queue(ctx context.Context, kind event.InputKind, text, source st
 	st := a.state()
 	if st.killed {
 		s.mu.Unlock()
-		return fmt.Errorf("agent %s is killed", a.ID)
+		return fmt.Errorf("agent %s is killed", st.name)
 	}
 	in := event.Input{ID: NewID("i"), Kind: kind, Text: text}
 	in.RequestID = in.ID
@@ -362,7 +363,7 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 		return "", errors.New("a directory change is in progress")
 	case st.killed:
 		s.mu.Unlock()
-		return "", fmt.Errorf("agent %s is killed", a.ID)
+		return "", fmt.Errorf("agent %s is killed", st.name)
 	case st.inTurn:
 		a.compactNext = true
 		s.mu.Unlock()

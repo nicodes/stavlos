@@ -94,6 +94,8 @@ func Probe() (Level, error) {
 		if err := run(wire{Probe: true}); err == nil {
 			probe.level = Landlock
 			return
+		} else {
+			probe.err = fmt.Errorf("%v; landlock alone: %v", probe.err, err)
 		}
 		probe.level = None
 	})

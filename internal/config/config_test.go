@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -294,7 +295,7 @@ func TestRepositoryLayersTakePrecedence(t *testing.T) {
 	if verb(e.Policy, "shell", "rm x") != policy.Allow || verb(e.Policy, "shell", "ls -la") != policy.Deny || verb(e.Policy, "shell", "ls") != policy.Allow {
 		t.Fatal("the local layer's rules take precedence")
 	}
-	if e.Limits.MaxAgents != 30 || !contains(e.PassEnv, "GITHUB_TOKEN") || e.Search.Provider != "brave" || !contains(e.Plugins, "x") || e.Escalation.Default != policy.Allow || e.Sandbox.Enabled {
+	if e.Limits.MaxAgents != 30 || !slices.Contains(e.PassEnv, "GITHUB_TOKEN") || e.Search.Provider != "brave" || !slices.Contains(e.Plugins, "x") || e.Escalation.Default != policy.Allow || e.Sandbox.Enabled {
 		t.Fatalf("a project sets what the global file can: limits %+v env %v search %q plugins %v default %s sandbox %v", e.Limits, e.PassEnv, e.Search.Provider, e.Plugins, e.Escalation.Default, e.Sandbox.Enabled)
 	}
 	if verb(e.Policy, "web_search", "q") != policy.Allow {

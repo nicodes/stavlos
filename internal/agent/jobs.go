@@ -23,6 +23,7 @@ type jobRun struct {
 	id, command string
 	handle      tools.Job
 	cancel      context.CancelFunc
+	before      controlStamp // the control files as the command found them (control.go)
 }
 
 // jobsAPI is the tools.Jobs of one agent.
@@ -45,9 +46,9 @@ func (j jobsAPI) Has(id string) bool {
 func (a *Agent) adoptJob(command string, job tools.Job, timeout time.Duration) (string, error) {
 	s := a.c
 	s.mu.Lock()
-	if a.state().killed {
+	if st := a.state(); st.killed {
 		s.mu.Unlock()
-		return "", fmt.Errorf("agent %s is killed", a.ID)
+		return "", fmt.Errorf("agent %s is killed", st.name)
 	}
 	id := NewID("m")
 	if err := s.commitLocked(context.Background(), s.event(a.ID, event.JobStarted, event.JobStartedPayload{ID: id, Command: command})); err != nil {
@@ -55,7 +56,7 @@ func (a *Agent) adoptJob(command string, job tools.Job, timeout time.Duration) (
 		return "", err
 	}
 	ctx, cancel := context.WithCancel(a.ctx)
-	run := &jobRun{id: id, command: command, handle: job, cancel: cancel}
+	run := &jobRun{id: id, command: command, handle: job, cancel: cancel, before: a.controlBefore}
 	a.jobs[id] = run
 	s.wg.Add(1)
 	s.mu.Unlock()
@@ -78,6 +79,9 @@ func (a *Agent) watchJob(ctx context.Context, run *jobRun, timeout time.Duration
 		case <-run.handle.Done():
 			res := event.JobFinishedPayload{ID: run.id, Output: a.clipJob(run.handle.Output())}
 			summarizeExit(&res, run.handle.Err(), killed, timeout)
+			if note := a.c.controlNote(run.before, a.c.Config()); note != "" {
+				res.Output += "\n\n" + note
+			}
 			a.finishJob(run, res)
 			return
 		case <-ctx.Done():

@@ -34,7 +34,7 @@ func (m *Model) onSubscribed(msg subscribedMsg) ([]tea.Cmd, bool) {
 		return nil, false
 	}
 	if msg.err != nil {
-		m.fatal = fmt.Errorf("subscribe: %w", msg.err)
+		m.fatal = fmt.Errorf("could not load the channel's history: %w", msg.err)
 		return nil, true
 	}
 	if m.historyFrom = msg.first; msg.first > 1 {

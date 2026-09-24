@@ -18,6 +18,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/sandbox"
 	"github.com/nicodes/stavlos/internal/testutil"
 )
 
@@ -391,6 +392,11 @@ func loadTestConfig(t *testing.T, tc testConfig) (*config.Effective, string) {
 // newTestChannel starts a channel on a fake host; the root agent is idle.
 func newTestChannel(t *testing.T, tc testConfig, fm *fakeModel) (*Channel, *fakeHost) {
 	t.Helper()
+	// Tests see a kernel that offers the whole sandbox, whatever the machine
+	// offers: a "limited" runner would make every command ask.
+	prev := ProbeSandbox
+	ProbeSandbox = func() (sandbox.Level, error) { return sandbox.Full, nil }
+	t.Cleanup(func() { ProbeSandbox = prev })
 	cfg, work := loadTestConfig(t, tc)
 	h := newFakeHost(fm)
 	s := New(h, "s1", work, cfg, "", "")

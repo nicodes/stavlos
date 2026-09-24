@@ -21,7 +21,6 @@ import (
 	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
-	"github.com/nicodes/stavlos/internal/statefile"
 	"github.com/nicodes/stavlos/internal/toolname"
 	"gopkg.in/yaml.v3"
 )
@@ -150,9 +149,8 @@ func expandPath(p string) string {
 type Role struct {
 	Name        string
 	Description string
-	Type        string      // primary | subagent | all
-	Models      []ModelSpec // model whitelist, first is the default; empty = any, inherit
-	Loop        string
+	Type        string                       // primary | subagent | all
+	Models      []ModelSpec                  // model whitelist, first is the default; empty = any, inherit
 	Tools       []string                     // the tools it offers: RoleTools minus the ones tools: removes (todo stands for the group)
 	ToolRules   map[string]map[string]string // tool → pattern → verb, from the map form of tools:
 	Skills      []string
@@ -413,8 +411,8 @@ func Defaults() File {
 			toolname.ShellKill:   allow,
 			toolname.Todo:        allow,
 			toolname.AskUser:     allow,
-			toolname.Sheet:       allow, // a sheet is sandboxed when shown and cannot call out (docs/web-ui.md)
-			toolname.Shell:       ask,   // no command is allowed by default: searching is grep and glob
+			toolname.Sheet:       ask, // a sheet cannot fetch, but a page can navigate itself to a URL of its own when opened: it asks, and "allow for this channel" covers the rest (docs/web-ui.md)
+			toolname.Shell:       ask, // no command is allowed by default: searching is grep and glob
 			toolname.ApplyPatch:  ask,
 			toolname.WebFetch:    ask, // per host: the dialog offers "allow <host> for this channel"
 			toolname.WebSearch:   ask, // allowed once a search backend is configured (see LoadGlobal)
@@ -521,7 +519,7 @@ func (e *Effective) applyFile(f File, layer string) error {
 		e.searchRuled = true // a layer decided web_search itself: a search backend does not allow it
 	}
 	for _, pl := range f.Plugins {
-		if !contains(e.Plugins, pl) {
+		if !slices.Contains(e.Plugins, pl) {
 			e.Plugins = append(e.Plugins, pl)
 		}
 	}
@@ -588,7 +586,7 @@ func (e *Effective) applyFile(f File, layer string) error {
 	}
 	if f.Env != nil {
 		for _, n := range f.Env.Pass {
-			if !contains(e.PassEnv, n) {
+			if !slices.Contains(e.PassEnv, n) {
 				e.PassEnv = append(e.PassEnv, n)
 			}
 		}
@@ -839,7 +837,6 @@ type roleFile struct {
 	Description string    `yaml:"description"`
 	Type        string    `yaml:"type"`
 	Models      yaml.Node `yaml:"models"`
-	Loop        string    `yaml:"loop"`
 	Tools       yaml.Node `yaml:"tools"`
 	Skills      []string  `yaml:"skills"`
 	MCP         []string  `yaml:"mcp"`
@@ -852,6 +849,7 @@ type roleFile struct {
 	Hidden *bool          `yaml:"hidden"`
 	Mode   *string        `yaml:"mode"`
 	Dirs   []string       `yaml:"dirs"`
+	Loop   *string        `yaml:"loop"`
 }
 
 // RoleTools are the tools every role offers unless its tools: key removes
@@ -875,7 +873,7 @@ func readRole(src source, path string) (Role, error) {
 	}
 	p := Role{
 		Name: strings.TrimSuffix(filepath.Base(path), ".md"), Description: strings.TrimSpace(f.Description),
-		Type: f.Type, Loop: f.Loop, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color,
+		Type: f.Type, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color,
 		Body: strings.TrimSpace(body), Source: path,
 	}
 	fail := func(format string, args ...any) (Role, error) {
@@ -892,6 +890,8 @@ func readRole(src source, path string) (Role, error) {
 		return fail("mode: is now type: (primary, subagent or all), so it does not read like the permission mode")
 	case f.Dirs != nil:
 		return fail("dirs: was removed: working directories belong to the channel (the dirs tab, or \"Allow and add\" on a boundary prompt)")
+	case f.Loop != nil:
+		return fail("loop: was removed: there is one agent loop")
 	case p.Description == "":
 		return fail("description: is required")
 	case p.MaxTurns < 0:
@@ -904,11 +904,8 @@ func readRole(src source, path string) (Role, error) {
 	default:
 		return fail("type: %q must be primary, subagent or all", p.Type)
 	}
-	if p.Color != "" && !contains(RoleColors, p.Color) {
+	if p.Color != "" && !slices.Contains(RoleColors, p.Color) {
 		return fail("color: %q must be one of %s", p.Color, strings.Join(RoleColors, ", "))
-	}
-	if p.Loop == "" {
-		p.Loop = "default"
 	}
 	if p.Models, err = parseModels(&f.Models); err != nil {
 		return fail("models: %v", err)
@@ -967,7 +964,7 @@ func parseTools(n *yaml.Node) ([]string, map[string]map[string]string, error) {
 			switch {
 			case val.Kind == yaml.ScalarNode && (val.Tag == "!!null" || val.Value == ""):
 				// listed with no rule: available under the layered policy
-			case val.Kind == yaml.ScalarNode && policy.Verb(val.Value) == policy.Deny && contains(RoleTools, name):
+			case val.Kind == yaml.ScalarNode && policy.Verb(val.Value) == policy.Deny && slices.Contains(RoleTools, name):
 				removed[name] = true
 			case val.Kind == yaml.ScalarNode && policy.Verb(val.Value) == policy.Deny && keptTool(name) != "":
 				return nil, nil, fmt.Errorf("%s: %s", name, keptTool(name))
@@ -1018,31 +1015,41 @@ func keptTool(name string) string {
 
 // frontmatter splits "---\nyaml\n---\nbody" and decodes the yaml into v.
 func frontmatter(s string, v any) (string, error) {
-	s = strings.TrimPrefix(s, "\uFEFF")
-	if !strings.HasPrefix(s, "---") {
-		return s, nil
-	}
-	rest := s[3:]
-	rest = strings.TrimLeft(rest, " \t\r")
-	if !strings.HasPrefix(rest, "\n") {
-		return s, nil
-	}
-	rest = rest[1:]
-	end := strings.Index(rest, "\n---")
-	if end < 0 {
-		return "", errors.New("unterminated frontmatter")
-	}
-	fm := rest[:end]
-	body := rest[end+4:]
-	if i := strings.IndexByte(body, '\n'); i >= 0 {
-		body = body[i+1:]
-	} else {
-		body = ""
+	fm, body, err := markdownParts(s)
+	if err != nil {
+		return "", err
 	}
 	if err := yaml.Unmarshal([]byte(fm), v); err != nil {
 		return "", err
 	}
 	return body, nil
+}
+
+// markdownParts splits a markdown file into its frontmatter (the yaml
+// between the "---" lines, "" when there is none) and its body. A byte
+// order mark is dropped and CRLF line ends read as LF; either "---" may
+// carry trailing blanks. Content with no opening "---" is all body.
+func markdownParts(content string) (meta, body string, err error) {
+	s := strings.ReplaceAll(strings.TrimPrefix(content, "\uFEFF"), "\r\n", "\n")
+	rest, ok := strings.CutPrefix(s, "---")
+	if !ok {
+		return "", s, nil
+	}
+	if rest = strings.TrimLeft(rest, " \t\r"); !strings.HasPrefix(rest, "\n") {
+		return "", s, nil
+	}
+	rest = rest[1:]
+	end := strings.Index(rest, "\n---")
+	if end < 0 {
+		return "", "", errors.New("unterminated frontmatter")
+	}
+	meta, body = rest[:end], rest[end+4:]
+	if i := strings.IndexByte(body, '\n'); i >= 0 {
+		body = body[i+1:] // the rest of the closing line, blanks or not
+	} else {
+		body = ""
+	}
+	return meta, body, nil
 }
 
 // readFile reads a JSONC file; a missing file is an empty File.
@@ -1103,16 +1110,11 @@ func (p Role) RolePolicy() *policy.Set {
 		for pat, verb := range rules {
 			r[pat] = verb
 		}
-		for _, t := range toolGroup(tool) {
-			m[t] = r
-		}
+		m[tool] = r
 	}
 	set, _ := ParsePolicy(m) // verbs were checked when the role file was read
 	return set
 }
-
-// toolGroup expands a tools: key to the tool names it gates.
-func toolGroup(name string) []string { return toolname.Expand([]string{name}) }
 
 // builtinRoles is the one role every install starts with. It can do
 // everything and can delegate to copies of itself; users add specialised
@@ -1124,7 +1126,6 @@ func builtinRoles() []Role {
 			Description: "General-purpose engineer: reads, edits, runs, and delegates",
 			Tools:       append([]string(nil), RoleTools...),
 			Spawn:       []string{"general"},
-			Loop:        "default",
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
 Work carefully: read before you edit, prefer small targeted changes, and run the project's tests or build after changing code.
 Find files with glob, search their contents with grep, read them with read, and edit with apply_patch; shell is for building, testing and running things, and every command asks the human unless the channel's mode answers for them. A slow command such as a test suite continues as a background job on its own; start servers with background: true.
@@ -1134,9 +1135,6 @@ Report what you changed and what you verified.`,
 	}
 }
 
-// SetGlobalModel writes "model" into the global stavlos.json, creating the
-// file if needed and replacing an existing "model" entry otherwise. Comments
-// and other keys are preserved.
 // SetGlobalSandbox turns the command sandbox on or off in the global
 // stavlos.json, one field, every other byte kept.
 func SetGlobalSandbox(enabled bool) error {
@@ -1144,6 +1142,9 @@ func SetGlobalSandbox(enabled bool) error {
 	return setGlobalField([]string{"sandbox", "enabled"}, value)
 }
 
+// SetGlobalModel writes "model" into the global stavlos.json, creating the
+// file if needed and replacing an existing "model" entry otherwise. Comments
+// and other keys are preserved.
 func SetGlobalModel(modelID string) error {
 	value, _ := json.Marshal(modelID)
 	return setGlobalField([]string{"model"}, value)
@@ -1151,35 +1152,16 @@ func SetGlobalModel(modelID string) error {
 
 // setGlobalField sets one field of the global stavlos.json.
 func setGlobalField(path []string, value []byte) error {
-	globalWriteMu.Lock()
-	defer globalWriteMu.Unlock()
-	p := filepath.Join(paths.ConfigDir(), "stavlos.json")
-	b, err := os.ReadFile(p)
-	if errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
-			return err
+	return editGlobalConfig(true, func(b []byte) ([]byte, error) {
+		// One field is set, by the editor that keeps every comment and every
+		// other byte. This used to be a regular expression over the whole file:
+		// it rewrote every "model" key at any depth, comments included, expanded
+		// a "$" in the id, and wrote the result in place, where a crash left
+		// half a configuration.
+		out, err := EditJSONField(b, path, value)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", filepath.Join(paths.ConfigDir(), "stavlos.json"), err)
 		}
-		b = []byte("{}\n")
-	} else if err != nil {
-		return err
-	}
-	// One field is set, by the editor that keeps every comment and every
-	// other byte. This used to be a regular expression over the whole file:
-	// it rewrote every "model" key at any depth, comments included, expanded
-	// a "$" in the id, and wrote the result in place, where a crash left
-	// half a configuration.
-	out, err := EditJSONField(b, path, value)
-	if err != nil {
-		return fmt.Errorf("%s: %w", p, err)
-	}
-	return statefile.WriteAtomic(p, out, 0o600, false) // it may hold a search key
-}
-
-func contains(xs []string, x string) bool {
-	for _, v := range xs {
-		if v == x {
-			return true
-		}
-	}
-	return false
+		return out, nil
+	})
 }
