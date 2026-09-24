@@ -2,6 +2,8 @@ package agent
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -80,5 +82,26 @@ func TestJobOutputIsClippedLikeAToolResult(t *testing.T) {
 	out := s.Root().clipJob(strings.Repeat("x", 5000))
 	if len(out) > 2048+400 || !strings.Contains(out, "the whole output, 5000 bytes, is at") {
 		t.Fatalf("clipped job output (%d bytes): %.200s", len(out), out)
+	}
+}
+
+// TestReadAgainIsAnsweredFromTheContext: a second read of an unchanged file
+// is a one-line note naming the call that holds the content; an edit in
+// between makes it a full read again.
+func TestReadAgainIsAnsweredFromTheContext(t *testing.T) {
+	fm := &fakeModel{steps: []step{readCall("c1", "f.txt"), readCall("c2", "f.txt"), reply(text("done"))}}
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1"}`}, fm)
+	_ = os.WriteFile(filepath.Join(s.Dir(), "f.txt"), []byte("hello\n"), 0o644)
+	runTurn(t, s, h, "read it")
+	fin := finished(h, s.Root().ID)
+	if len(fin) != 2 || fin[0].Output != "hello\n" || fin[1].Output != "[unchanged since your read c1: its content is still in your context]" {
+		t.Fatalf("%+v", fin)
+	}
+	fm.steps = append(fm.steps, readCall("c3", "f.txt"), reply(text("done")))
+	_ = os.WriteFile(filepath.Join(s.Dir(), "f.txt"), []byte("changed\n"), 0o644)
+	runTurn(t, s, h, "read it again")
+	fin = finished(h, s.Root().ID)
+	if fin[len(fin)-1].Output != "changed\n" {
+		t.Fatalf("an edited file was not read in full: %q", fin[len(fin)-1].Output)
 	}
 }

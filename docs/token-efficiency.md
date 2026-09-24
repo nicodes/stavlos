@@ -240,6 +240,12 @@ fresh tokens, 12% of all fresh input.
 
 Three more, from reading OpenCode's and Codex's code beside this one: a job's output that wakes the agent and a `web_fetch` page now go through the same clip as every other tool result (both had their own bound, but not the configured one, and a job's saved nothing); and the third identical call in a row asks the human, as OpenCode's doom-loop check does (`repeatLimit` in `permission.go`), so a poll loop is caught at 3 calls, not at the 200-call cap.
 
+### 3.5c Later still (2026-09-24)
+
+From the same reading. `read` returns lines without numbers: apply_patch anchors on text, so the `%6d\t` prefix was about 5,000 tokens on a 2,000-line read that nothing used (Codex reads through the shell, unnumbered). A file whose head holds a NUL byte or is not UTF-8 is named, not dumped. A read the agent makes again, of a file whose content has not changed, is answered with `[unchanged since your read c12: its content is still in your context]` for as long as that result is in the projection: `ClearOld` reports the ids it clears and the agent forgets those reads, and a compaction forgets them all (finding 4: 29% of reads). The five largest tool descriptions (sheet, message, todo, shell, ask_user) were cut to what the schema and the system prompt do not already say: the tool definitions went from 14.8 KB to 12.7 KB. Overflow files under the cache are deleted after seven days (OpenCode's retention), which nothing did before.
+
+Not done: OpenAI's `/responses/compact`. Its result is a `compaction` item whose summary is `encrypted_content`, readable only by the same backend; Stavlos moves an agent between providers when a plan runs out and shows the summary in the chat, so an opaque one would strand the agent on ChatGPT and blank the transcript. The client-side summary stays.
+
 ### 3.6 Smaller — done: `todo` answers with the change; a tool output over 50 KB (OpenCode's `MAX_BYTES`) is cut in the middle and kept whole in the channel's scratch directory, which the result names, so the next call reads the part that matters. Not done: reminders on a cleared history and the unchanged-read answer (3.2 makes both nearly free)
 
 - **`todo` returns the change**, not the list ("t3 → done; 2 of 5 done"); the

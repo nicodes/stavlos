@@ -35,7 +35,7 @@ func TestClearOldKeepsTheRecentAndTheConversation(t *testing.T) {
 	// r5 and r4 are in the two most recent turns: untouchable. Of the rest,
 	// the newest 1,500 tokens' worth (r3, and r2 up to the budget) stays; r1
 	// goes; m1 is the conversation and stays.
-	if n := ClearOld(msgs, 1500, 500, keep); n != 1000 {
+	if n, _ := ClearOld(msgs, 1500, 500, keep); n != 1000 {
 		t.Fatalf("cleared %d tokens, want the one oldest read (1000)", n)
 	}
 	for i, want := range map[int]bool{2: true, 4: false, 6: false, 8: false, 11: false, 14: false} {
@@ -46,15 +46,15 @@ func TestClearOldKeepsTheRecentAndTheConversation(t *testing.T) {
 	if msgs[1].Blocks[0].Type != model.BlockToolUse {
 		t.Fatal("the tool_use record was touched")
 	}
-	if n := ClearOld(msgs, 1500, 500, keep); n != 0 {
+	if n, _ := ClearOld(msgs, 1500, 500, keep); n != 0 {
 		t.Fatalf("a second pass cleared %d more", n)
 	}
-	if n := ClearOld(msgs, 0, 0, keep); n != 0 {
+	if n, _ := ClearOld(msgs, 0, 0, keep); n != 0 {
 		t.Fatal("keep 0 means never")
 	}
 	// too little to be worth a cache miss is left alone
 	fresh := []model.Message{user("a"), use("x1", "read"), result("x1"), user("b"), user("c")}
-	if n := ClearOld(fresh, 100, 5000, keep); n != 0 || fresh[2].Blocks[0].Content != big {
+	if n, _ := ClearOld(fresh, 100, 5000, keep); n != 0 || fresh[2].Blocks[0].Content != big {
 		t.Fatalf("cleared %d below the minimum", n)
 	}
 }

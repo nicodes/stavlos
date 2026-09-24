@@ -216,7 +216,7 @@ func TestBoundaryPrompt(t *testing.T) {
 		t.Fatalf("boundary prompt: %+v", p)
 	}
 	fin := finished(h, s.Root().ID)
-	if len(fin) != 2 || fin[0].Denied || fin[1].Denied || !strings.Contains(fin[1].Output, "secret") {
+	if len(fin) != 2 || fin[0].Denied || fin[1].Denied || !strings.Contains(fin[0].Output, "secret") {
 		t.Fatalf("%+v", fin)
 	}
 	var dirs []string

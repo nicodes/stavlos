@@ -36,8 +36,9 @@ type Agent struct {
 	logErr      error // a failed log write: the turn ends at its next step
 	maintenance int   // manual compaction, including its preparation and cleanup
 	prefix      promptPrefix
-	instructed  map[string]bool // instructions files a tool result has carried since the last compaction
-	repeat      repeatCall      // the last tool call of this turn, counted (permission.go repeated)
+	instructed  map[string]bool     // instructions files a tool result has carried since the last compaction
+	repeat      repeatCall          // the last tool call of this turn, counted (permission.go repeated)
+	reads       map[string]readSeen // read calls whose result is in the context, by input (reads.go)
 
 	mcp mcpSet // under its own lock, never held while taking c.mu
 }

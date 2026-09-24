@@ -61,6 +61,7 @@ func (d *Daemon) runLoops() {
 			go d.Registry.PollAllPlanUsage(ctx, 0)
 		}},
 		{name: "recap", start: func(ctx context.Context) { go d.recapLoop(ctx) }},
+		{name: "overflow sweep", start: func(ctx context.Context) { go sweepOverflow(ctx) }},
 		{name: "discord status", start: func(ctx context.Context) { d.watchDiscord(ctx, time.Second) }},
 	}
 }

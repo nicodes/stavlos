@@ -71,7 +71,7 @@
     }
   },
   {
-    "description": "Ask the human one to four short questions when several valid approaches exist and guessing would waste work: which backend, which of two designs, whether to keep going. Each question has its text and one to four options with a label and a one-line description; put the option you would pick first. Every question is a checklist: the human may pick several options and always has a last entry for typing something else, so never add an 'Other' or 'all of the above' option. All questions are shown immediately and can be answered in any order; the turn waits until all have been answered and receives answers in the original question order. Do not ask what you can find out yourself, and do not ask more than once for the same thing.",
+    "description": "Ask the human one to four short questions when guessing between valid approaches would waste work. Each has one to four options (label and one-line description), your pick first; the human may choose several and can always type something else, so never add an 'Other'. The turn waits for every answer. Do not ask what you can find out yourself.",
     "name": "ask_user",
     "schema": {
       "properties": {
@@ -178,7 +178,7 @@
     }
   },
   {
-    "description": "Send text to one or more recipients in this channel using the to array. Every recipient sees the full recipient list. All targets and reply references are validated before delivery. request (the default) creates an independent request ID for the agents addressed; each owes its own explicit response. response requires reply_to containing the pending request IDs it answers, and to must contain their senders. One response may answer several requests, including repeated requests from one sender. Only those IDs are cleared; sending another request or info/no_reply never clears a debt. info (alias no_reply) needs no reply and does not wake idle agents. Human-facing messages without explicit response references are updates; use ask_user for questions to the human. Human prompts and steers carry request IDs too. agent_status exposes pending_replies and awaiting_replies with IDs and excerpts.",
+    "description": "Send text to agents and/or user (to is an array; every recipient sees it). kind request (the default) opens a request each agent addressed must answer. kind response answers the request IDs in reply_to, with their senders in to, and settles only those; the human's prompts carry request IDs to answer the same way. kind info needs no reply and wakes nobody. Ask the human questions with ask_user, not message.",
     "name": "message",
     "schema": {
       "properties": {
@@ -215,7 +215,7 @@
     }
   },
   {
-    "description": "Read a file. Returns numbered lines. Use offset/limit for large files.",
+    "description": "Read a text file. offset and limit are line numbers, for large files; the result says how to continue.",
     "name": "read",
     "schema": {
       "properties": {
@@ -239,7 +239,7 @@
     }
   },
   {
-    "description": "Sheets are HTML pages you write for the human, shown as tabs beside the channel's chat in the web UI: a report, a comparison table, a diagram, a small interactive tool. Use one when a page communicates better than chat text; keep chat for conversation. action write creates a sheet (give a title) or replaces the content of the sheet whose id you pass; list shows the channel's sheets; delete removes one. A sheet is a file: the result names its path, and read and apply_patch edit it like any other file, which is cheaper than rewriting a long page. The page runs in a sandboxed frame with no network: it cannot fetch, load images or scripts from URLs, submit forms or open links, so inline everything (scripts in \u003cscript\u003e, images as data: URIs or inline SVG) and keep it self-contained, with vanilla JavaScript and no framework. The frame already includes daisyUI's component classes (btn, card, badge, alert, stats, tabs, table, collapse, modal, navbar, steps, progress and the rest) on a dark theme, with its semantic colours (primary, secondary, accent, info, success, warning, error, base-100/200/300, base-content), and the common Tailwind CSS 4 utilities: flex and grid layout with sm:/md:/lg: variants, spacing, sizing, typography, the colour palette, borders, rounding and shadows. Prefer those classes over your own CSS or an inlined component library, so sheets look like each other; an arbitrary value (w-[37px]) or a rarer utility is not there, so put anything unusual in a \u003cstyle\u003e block. Every agent of the channel shares the sheets, and the human sees which agent wrote a page. After writing a sheet, tell the human its title with message.",
+    "description": "An HTML page for the human, shown as a tab beside the chat in the web UI: a report, a comparison table, a diagram, a small interactive tool, when a page says it better than chat text. action write creates a sheet (give a title) or replaces the content of the sheet whose id you pass; list and delete manage them. A sheet is a file the result names: edit it with read and apply_patch rather than rewriting it. The page runs in a sandboxed frame with no network, so inline every script, style and image (data: URI or SVG) and use vanilla JavaScript. daisyUI's component classes (btn, card, badge, alert, stats, tabs, table, modal…) on a dark theme and the common Tailwind CSS 4 utilities (flex/grid with sm:/md:/lg:, spacing, typography, colours, borders) are already loaded: prefer them, and put anything unusual, such as an arbitrary value, in a \u003cstyle\u003e block. Then tell the human the title with message.",
     "name": "sheet",
     "schema": {
       "properties": {
@@ -267,7 +267,7 @@
     }
   },
   {
-    "description": "Run a shell command in the working directory and return its combined output. Use it to build, test and run things; find and search files with glob and grep instead, which never need the human's approval inside the working directories. A command still running after the wait window (default 15 seconds) continues as a background job: you get its id and the output so far, and when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. For servers, watchers and anything you know is slow, set background to true to skip the wait. If nothing more can be done until a job finishes, end your turn.",
+    "description": "Run a shell command in the working directory and return its output. Build, test and run with it; search with grep and glob, which need no approval. A command still running after the wait (15 seconds by default) becomes a background job: you get its id and the output so far, and its exit wakes you with the rest between turns. Set background for servers and anything slow. With nothing to do until a job ends, end your turn.",
     "name": "shell",
     "schema": {
       "properties": {
@@ -331,7 +331,7 @@
     }
   },
   {
-    "description": "Your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep the list honest by id. Keep exactly one item in_progress while you work; mark an item done the moment it is finished and verified, never before; cancel steps you drop; add a new item for a blocker instead of marking the blocked step done. One call carries every change you have: post the plan and start its first step together, and finish one step and start the next in the same call, never two. Updates apply before the additions, and the whole list comes back with its ids. Skip the list for single-step or trivial requests.",
+    "description": "Your plan, shown to the human. For work of three or more steps: add short imperative steps up front, keep exactly one in_progress, mark a step done only once verified, cancel steps you drop, and add an item for a blocker. Put every change of a moment in one call (updates apply before additions): post the plan and start its first step together, finish one step and start the next together. Skip it for trivial requests.",
     "name": "todo",
     "schema": {
       "properties": {
