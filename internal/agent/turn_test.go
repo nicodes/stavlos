@@ -498,8 +498,14 @@ func TestDelegation(t *testing.T) {
 }
 
 // TestSubagentTurnLimit pins reportTurnLimit: a child past max_turns ends
-// at once and its asker is told.
+// at once and its asker is told, even when the log refuses the report
+// (the asker used to wait for ever).
 func TestSubagentTurnLimit(t *testing.T) {
+	t.Run("logged", func(t *testing.T) { subagentTurnLimit(t, false) })
+	t.Run("report lost", func(t *testing.T) { subagentTurnLimit(t, true) })
+}
+
+func subagentTurnLimit(t *testing.T, lostReport bool) {
 	fm := &fakeModel{
 		steps: []step{
 			reply(call("c1", "agent_create", `{"archetype":"limited","label":"lim","task":"work"}`)),
@@ -524,6 +530,13 @@ func TestSubagentTurnLimit(t *testing.T) {
 	waitUntil(t, h, func() bool { return stateOf(child) == StateIdle && child.Info().Turn == 1 }) // turn 1: the model did not answer
 	// Nudge it: turn 2 is past the limit, so it ends at once and reports.
 	_ = child.Prompt(context.Background(), "answer please", "agent:"+root.ID) // a request: the root waits on it
+	if lostReport {
+		// The next input.queued is the report to the root: the request
+		// above is already logged, and nothing else is queued before it.
+		h.mu.Lock()
+		h.failType = event.InputQueued
+		h.mu.Unlock()
+	}
 	end := h.waitTurnEnd(t, child.ID, 2)
 	if end.Turn != 2 || end.Reason != "error" || !strings.Contains(end.Error, "turn limit") {
 		t.Fatalf("%+v", end)

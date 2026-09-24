@@ -37,6 +37,8 @@ func (a *Agent) reportTurnLimit(limit int) {
 	if len(human) > 0 {
 		evs = append(evs, s.event(a.ID, event.ChatMessage, event.ChatPayload{From: st.name, Text: text, Kind: "response", ReplyTo: human, Posts: posts}))
 	}
-	_ = s.commitLocked(context.Background(), evs...)
+	// The limit is reached whether or not the log takes the news: the
+	// askers are told in memory all the same, or they wait for ever.
+	_ = s.commitFactLocked(context.Background(), evs...)
 	s.mu.Unlock()
 }
