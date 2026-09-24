@@ -59,6 +59,21 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		return
 	}
 	d := a.decide(c, t, rv, cfg)
+	// A call the rules let through silently still asks when it is the same
+	// call, arguments and all, for the third time running: a model polling
+	// a file or a command in a loop re-sends its whole context every time,
+	// and nobody would have heard of it before the turn's cap.
+	if d.verb == policy.Allow && a.repeated(c) {
+		denial, withdrawn, allowed := a.askRepeat(turnCtx, c, rv)
+		switch {
+		case withdrawn:
+			finish("", true, true, false)
+			return
+		case !allowed:
+			finish(denial, true, false, true)
+			return
+		}
+	}
 	switch d.verb {
 	case policy.Allow:
 		// runs below
@@ -324,6 +339,70 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	return "", false, true
 }
 
+// repeatLimit is how many times in a row the same call runs before a human
+// is asked (OpenCode's DOOM_LOOP_THRESHOLD).
+const repeatLimit = 3
+
+// repeated counts a call against the one before it and reports the one
+// that reaches repeatLimit, except in yolo mode, which asks nothing. The
+// count starts over at every turn and after every prompt.
+func (a *Agent) repeated(c model.Block) bool {
+	key := c.Name + "\x00" + string(c.Input)
+	a.c.mu.Lock()
+	defer a.c.mu.Unlock()
+	if a.repeat.key == key {
+		a.repeat.n++
+	} else {
+		a.repeat = repeatCall{key: key, n: 1}
+	}
+	if a.repeat.n < repeatLimit || a.c.st.mode == protocol.ModeYolo {
+		return false
+	}
+	a.repeat.n = 0
+	return true
+}
+
+// repeatCall is the last tool call and how many times running it was made.
+type repeatCall struct {
+	key string
+	n   int
+}
+
+// askRepeat puts a repeated call to the human. The prompt is sticky: there
+// is no standing allow for "the same thing again".
+func (a *Agent) askRepeat(turnCtx context.Context, c model.Block, rv roleView) (denial string, withdrawn, allowed bool) {
+	question := fmt.Sprintf("%s has made the same %s call, with the same arguments, %d times in a row", rv.name, c.Name, repeatLimit)
+	ans := a.ask(turnCtx, protocol.PromptInfo{
+		ID: NewID("p"), Channel: a.c.ID, ChannelName: a.c.Name(), Agent: a.ID, From: rv.name, Role: rv.role, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
+		Question: question, Sticky: true,
+	}, c.ID)
+	switch {
+	case ans.Withdrawn:
+		return "", true, false
+	case ans.Value == protocol.AnswerAllow, ans.Value == protocol.AnswerAllowAlways, ans.Value == protocol.AnswerAllowPrefix:
+		return "", false, true
+	}
+	denial = fmt.Sprintf("Denied: this is the same %s call, with the same arguments, for the %d%s time in a row. Do something different, or end the turn and let a job or a message wake you.", c.Name, repeatLimit, ordinal(repeatLimit))
+	if ans.Defaulted {
+		denial = "Denied: nobody answered the prompt and the headless default is deny. " + denial
+	} else if r := strings.TrimSpace(ans.Reason); r != "" {
+		denial += " The user says: " + r
+	}
+	return denial, false, false
+}
+
+func ordinal(n int) string {
+	switch n {
+	case 1:
+		return "st"
+	case 2:
+		return "nd"
+	case 3:
+		return "rd"
+	}
+	return "th"
+}
+
 // denialText is what the agent is told when a prompt ends in no.
 func denialText(ans escalation.Answer, d decision) string {
 	switch {
@@ -367,12 +446,15 @@ func (a *Agent) askOpened(ctx context.Context, info protocol.PromptInfo, callID 
 // toolEnv is what a tool gets from this agent for one call.
 func (a *Agent) toolEnv(turn int, c model.Block, rv roleView, cfg *config.Effective) *tools.Env {
 	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
-		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: filepath.Join(paths.CacheDir(), "tmp", a.c.ID, "output"), Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
+		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir(), Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Sandbox: a.c.sandboxSpec(cfg),
 		Partial: func(out string) {
 			a.c.host.Stream(protocol.StreamNotification{Channel: a.c.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: out})
 		}}
 }
+
+// overflowDir is where a tool output over the cap is kept whole.
+func (a *Agent) overflowDir() string { return filepath.Join(paths.CacheDir(), "tmp", a.c.ID, "output") }
 
 func hasDef(defs []model.ToolDef, name string) bool {
 	for _, d := range defs {

@@ -37,6 +37,7 @@ type Agent struct {
 	maintenance int   // manual compaction, including its preparation and cleanup
 	prefix      promptPrefix
 	instructed  map[string]bool // instructions files a tool result has carried since the last compaction
+	repeat      repeatCall      // the last tool call of this turn, counted (permission.go repeated)
 
 	mcp mcpSet // under its own lock, never held while taking c.mu
 }

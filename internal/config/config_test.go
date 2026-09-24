@@ -320,6 +320,7 @@ func TestConfigValidation(t *testing.T) {
 		`{"escalation":{"default":"maybe"}}`:                 `escalation.default "maybe"`,
 		`{"escalation":{"answerTimeout":"soon"}}`:            `escalation.answerTimeout "soon"`,
 		`{"compaction":{"threshold":1.5}}`:                   `compaction.threshold 1.5`,
+		`{"compaction":{"maxTokens":500}}`:                   `compaction.maxTokens 500`,
 		`{"compaction":{"maxToolOutput":"lots"}}`:            `compaction.maxToolOutput`,
 		`{"search":{"provider":"bing","apiKey":"${env:X}"}}`: `search.provider "bing"`,
 	}
@@ -334,7 +335,7 @@ func TestConfigValidation(t *testing.T) {
   // comments and trailing commas are fine
   "$schema": "x",
   "escalation": {"claimTimeout": "10s", "default": "allow"},
-  "compaction": {"threshold": 0.5, "maxToolOutput": "64kb"},
+  "compaction": {"threshold": 0.5, "maxTokens": -1, "maxToolOutput": "64kb"},
   "search": {"provider": "Brave", "apiKey": "${env:STAVLOS_TEST_KEY}"},
   "policy": {"shell": {"rm *": "deny"}, "read": "allow"},
 }`), 0o644)
@@ -343,7 +344,7 @@ func TestConfigValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if e.Escalation.ClaimTimeout != 10*time.Second || e.Escalation.Default != policy.Allow || e.Compaction.Threshold != 0.5 || e.Compaction.MaxToolOutput != 64*1024 || e.Search.Provider != "brave" || e.Search.APIKey != "k" || verb(e.Policy, "shell", "rm -rf x") != policy.Deny {
+	if e.Escalation.ClaimTimeout != 10*time.Second || e.Escalation.Default != policy.Allow || e.Compaction.Threshold != 0.5 || e.Compaction.MaxTokens != 0 || e.Compaction.MaxToolOutput != 64*1024 || e.Search.Provider != "brave" || e.Search.APIKey != "k" || verb(e.Policy, "shell", "rm -rf x") != policy.Deny {
 		t.Fatalf("%+v", e)
 	}
 	if n, err := parseSize("1mb"); err != nil || n != 1<<20 {

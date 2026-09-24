@@ -56,7 +56,7 @@ func (a *Agent) beginTurn() (int, context.Context, bool) {
 		return 0, nil, false
 	}
 	ctx, cancel := context.WithCancel(a.ctx)
-	a.cancelTurn, a.logErr = cancel, nil
+	a.cancelTurn, a.logErr, a.repeat = cancel, nil, repeatCall{}
 	return turn, ctx, true
 }
 
