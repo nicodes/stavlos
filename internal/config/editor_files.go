@@ -14,7 +14,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/nicodes/stavlos/internal/protocol"
-	"github.com/nicodes/stavlos/internal/statefile"
 )
 
 const editorMaxFile = 4 << 20
@@ -335,8 +334,5 @@ func validateEditorTree(root string, system bool) error {
 }
 
 func atomicConfigWrite(path string, data []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	return statefile.WriteAtomic(path, data, 0o600, true)
+	return writeConfigFile(path, data, 0o600, true)
 }
