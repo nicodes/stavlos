@@ -58,42 +58,10 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		finish(fmt.Sprintf("unknown tool %q", c.Name), true, false, false)
 		return
 	}
-	d := a.decide(c, t, rv, cfg)
-	// A call the rules let through silently still asks when it is the same
-	// call, arguments and all, for the third time running: a model polling
-	// a file or a command in a loop re-sends its whole context every time,
-	// and nobody would have heard of it before the turn's cap.
-	if d.verb == policy.Allow && a.repeated(c) {
-		denial, withdrawn, allowed := a.askRepeat(turnCtx, c, rv)
-		switch {
-		case withdrawn:
-			finish("", true, true, false)
-			return
-		case !allowed:
-			finish(denial, true, false, true)
-			return
-		}
-	}
-	switch d.verb {
-	case policy.Allow:
-		// runs below
-	case policy.Deny:
-		why := d.why
-		if why == "" {
-			why = "Denied by policy: " + c.Name + " " + d.arg
-		}
-		finish(why, true, false, true)
+	d, no := a.admit(turnCtx, c, t, rv, cfg)
+	if no != nil {
+		finish(no.out, true, no.cancelled, no.denied)
 		return
-	case policy.Ask:
-		denial, withdrawn, allowed := a.escalate(turnCtx, c, d, rv)
-		switch {
-		case withdrawn:
-			finish("", true, true, false)
-			return
-		case !allowed:
-			finish(denial, true, false, true)
-			return
-		}
 	}
 	// The sheets directory is inside the working set for the file tools, so
 	// the limits on sheets have to hold for them too, not only for the sheet
@@ -120,6 +88,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	if !res.IsError && c.Name == toolname.ApplyPatch {
 		a.sheetsPatched(d.sub)
 	}
+	if !res.IsError && c.Name == toolname.Read {
+		res.Output = a.dedupRead(c, res.Output)
+	}
 	if !res.IsError {
 		if note, files := a.instructionsFor(d.sub, cfg); note != "" {
 			res.Output += "\n\n" + note
@@ -127,6 +98,58 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		}
 	}
 	finish(res.Output, res.IsError, false, false)
+}
+
+// refusal is why a call did not run: what the model is told, and whether
+// the prompt was withdrawn or the call denied.
+type refusal struct {
+	out       string
+	cancelled bool
+	denied    bool
+}
+
+// admit is everything between a call and its run: the verdict, the repeat
+// check, and the human where either asks. It returns the decision the run
+// needs, or the refusal.
+func (a *Agent) admit(turnCtx context.Context, c model.Block, t tools.Tool, rv roleView, cfg *config.Effective) (decision, *refusal) {
+	d := a.decide(c, t, rv, cfg)
+	// A call the rules let through silently still asks when it is the same
+	// call, arguments and all, for the third time running: a model polling
+	// a file or a command in a loop re-sends its whole context every time,
+	// and nobody would have heard of it before the turn's cap.
+	if d.verb == policy.Allow && a.repeated(c) {
+		denial, withdrawn, allowed := a.askRepeat(turnCtx, c, rv)
+		if no := refused(denial, withdrawn, allowed); no != nil {
+			return d, no
+		}
+	}
+	switch d.verb {
+	case policy.Allow:
+		// runs
+	case policy.Deny:
+		why := d.why
+		if why == "" {
+			why = "Denied by policy: " + c.Name + " " + d.arg
+		}
+		return d, &refusal{out: why, denied: true}
+	case policy.Ask:
+		denial, withdrawn, allowed := a.escalate(turnCtx, c, d, rv)
+		if no := refused(denial, withdrawn, allowed); no != nil {
+			return d, no
+		}
+	}
+	return d, nil
+}
+
+// refused turns a prompt's outcome into a refusal, or nil for a yes.
+func refused(denial string, withdrawn, allowed bool) *refusal {
+	switch {
+	case withdrawn:
+		return &refusal{cancelled: true}
+	case !allowed:
+		return &refusal{out: denial, denied: true}
+	}
+	return nil
 }
 
 // decide is the verdict for a call before any human is asked.

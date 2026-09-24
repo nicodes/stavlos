@@ -59,7 +59,7 @@ func validTodoStatus(s string) bool {
 type todoTool struct{}
 
 func (todoTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Todo, Description: "Your todo list, the plan the human sees beside your chat. Use it for work with three or more steps: add the steps up front, short and imperative, then keep the list honest by id. Keep exactly one item in_progress while you work; mark an item done the moment it is finished and verified, never before; cancel steps you drop; add a new item for a blocker instead of marking the blocked step done. One call carries every change you have: post the plan and start its first step together, and finish one step and start the next in the same call, never two. Updates apply before the additions, and the whole list comes back with its ids. Skip the list for single-step or trivial requests.",
+	return model.ToolDef{Name: toolname.Todo, Description: "Your plan, shown to the human. For work of three or more steps: add short imperative steps up front, keep exactly one in_progress, mark a step done only once verified, cancel steps you drop, and add an item for a blocker. Put every change of a moment in one call (updates apply before additions): post the plan and start its first step together, finish one step and start the next together. Skip it for trivial requests.",
 		Schema: schemaOf(todoInput{})}
 }
 

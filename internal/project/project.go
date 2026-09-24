@@ -456,7 +456,9 @@ const ClearMinimum = 20_000
 
 // ClearOld replaces the bodies of tool results older than the most recent
 // keep tokens' worth of tool results with ClearedNote, and returns how many
-// tokens it cleared. Tool results are what fills a history (in one channel of
+// tokens it cleared and the ids of the calls whose results went (a read the
+// model made again is answered from the context only while its result is
+// still there: agent.dedupRead). Tool results are what fills a history (in one channel of
 // 21,846 calls they were 52 of 96 MB of the log), and once the model has
 // read one it rarely needs the bytes again: a file can be read again, a
 // command run again. The tool_use block stays, so the model knows what it
@@ -469,9 +471,9 @@ const ClearMinimum = 20_000
 // clearing that frees little still costs the prompt cache. The log is
 // untouched; this is the projection only, so it costs no model call and runs
 // on every step (docs/token-efficiency.md, 3.2).
-func ClearOld(msgs []model.Message, keep, minimum int, keepTools map[string]bool) int {
+func ClearOld(msgs []model.Message, keep, minimum int, keepTools map[string]bool) (int, []string) {
 	if keep <= 0 {
-		return 0
+		return 0, nil
 	}
 	tool := map[string]string{} // tool_use id → tool name
 	for _, m := range msgs {
@@ -507,12 +509,14 @@ func ClearOld(msgs []model.Message, keep, minimum int, keepTools map[string]bool
 		}
 	}
 	if cleared < minimum {
-		return 0
+		return 0, nil
 	}
+	ids := make([]string, 0, len(clear))
 	for _, b := range clear {
 		b.Content = ClearedNote
+		ids = append(ids, b.ToolUseID)
 	}
-	return cleared
+	return cleared, ids
 }
 
 func onlyResults(blocks []model.Block) bool {

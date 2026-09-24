@@ -2,12 +2,15 @@ package tools
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/nicodes/stavlos/internal/model"
 	"github.com/nicodes/stavlos/internal/policy"
@@ -53,7 +56,7 @@ func ResolvePath(root, p string) string {
 type readTool struct{}
 
 func (readTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Read, Description: "Read a file. Returns numbered lines. Use offset/limit for large files.",
+	return model.ToolDef{Name: toolname.Read, Description: "Read a text file. offset and limit are line numbers, for large files; the result says how to continue.",
 		Schema: schemaOf(readInput{})}
 }
 
@@ -71,6 +74,26 @@ type readInput struct {
 }
 
 func (readTool) Subject(in json.RawMessage) policy.Subject { return policy.Path(pathArg(in)) }
+
+// binaryProbe is how much of a file's head decides whether it is text.
+const binaryProbe = 8 << 10
+
+// isBinary says whether a file's head is something other than text: a NUL
+// byte, or bytes that are not UTF-8 (a rune cut at the probe's end is not
+// held against it).
+func isBinary(head []byte) bool {
+	if bytes.IndexByte(head, 0) >= 0 {
+		return true
+	}
+	for len(head) > 0 && !utf8.Valid(head) {
+		if len(head) < 4 || utf8.Valid(head[:len(head)-1]) {
+			head = head[:len(head)-1]
+			continue
+		}
+		return true
+	}
+	return false
+}
 func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	var a readInput
 	if err := decode(in, &a); err != nil {
@@ -94,8 +117,19 @@ func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if budget <= 0 {
 		budget = 32 * 1024
 	}
+	// A file that is not text is named, not dumped: 50 KB of an image or a
+	// binary in the context says nothing and costs the same as a source
+	// file (OpenCode hands images over as images; Codex resizes them).
+	br := bufio.NewReaderSize(f, 1<<20)
+	if head, _ := br.Peek(binaryProbe); isBinary(head) {
+		size := int64(-1)
+		if st, err := f.Stat(); err == nil {
+			size = st.Size()
+		}
+		return errf("%s is not a text file (%s, %d bytes): read cannot show it", a.Path, http.DetectContentType(head), size)
+	}
 	var sb strings.Builder
-	sc := bufio.NewScanner(f)
+	sc := bufio.NewScanner(br)
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
 	n := 0
 	for sc.Scan() {
@@ -109,7 +143,11 @@ func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 			sb.WriteString(fmt.Sprintf("… (more lines; continue with offset=%d)\n", n))
 			break
 		}
-		fmt.Fprintf(&sb, "%6d\t%s\n", n, sc.Text())
+		// Lines carry no numbers: apply_patch anchors on the text, and a
+		// number on every line of a 2,000-line read is about 5,000 tokens
+		// the model never uses (Codex reads through the shell, unnumbered).
+		sb.WriteString(sc.Text())
+		sb.WriteByte('\n')
 	}
 	if err := sc.Err(); err != nil {
 		return errf("%v", err)

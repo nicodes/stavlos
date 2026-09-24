@@ -29,7 +29,7 @@ const (
 )
 
 func (shellTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Shell, Description: "Run a shell command in the working directory and return its combined output. Use it to build, test and run things; find and search files with glob and grep instead, which never need the human's approval inside the working directories. A command still running after the wait window (default 15 seconds) continues as a background job: you get its id and the output so far, and when it exits you are woken with its exit code and output as a new message, between turns, never mid-turn. For servers, watchers and anything you know is slow, set background to true to skip the wait. If nothing more can be done until a job finishes, end your turn.",
+	return model.ToolDef{Name: toolname.Shell, Description: "Run a shell command in the working directory and return its output. Build, test and run with it; search with grep and glob, which need no approval. A command still running after the wait (15 seconds by default) becomes a background job: you get its id and the output so far, and its exit wakes you with the rest between turns. Set background for servers and anything slow. With nothing to do until a job ends, end your turn.",
 		Schema: schemaOf(shellInput{})}
 }
 
