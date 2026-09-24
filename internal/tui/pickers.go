@@ -68,7 +68,7 @@ func (m *Model) onListed(msg tea.Msg) tea.Cmd {
 		m.switching = false
 		if msg.err != nil {
 			m.dirsNext = false
-			return m.setStatus("channel: "+msg.err.Error(), true)
+			return m.setStatus("could not switch channel: "+msg.err.Error(), true)
 		}
 		fromNav, hovered := m.focus == focusSidebar, m.hoverFocus
 		cmd := m.bindChannel(cleanChannel(msg.info))
@@ -474,7 +474,7 @@ func (m *Model) onProviders(msg providersMsg) tea.Cmd {
 		if msg.refresh {
 			return nil
 		}
-		return m.setStatus("providers: "+msg.err.Error(), true)
+		return m.setStatus("could not list the providers: "+msg.err.Error(), true)
 	}
 	m.providers = msg.res.Providers
 	if msg.refresh {
@@ -526,7 +526,7 @@ func (m *Model) overlayRemove() tea.Cmd {
 
 func (m *Model) onRoles(msg rolesMsg) tea.Cmd {
 	if msg.err != nil {
-		return m.setStatus("roles: "+msg.err.Error(), true)
+		return m.setStatus("could not list the roles: "+msg.err.Error(), true)
 	}
 	label := m.agentLabel(m.selectedID())
 	o := newOverlay(ovRoles, overlayList, "Change role of "+label)
@@ -653,7 +653,7 @@ func roleAllowsModel(r *protocol.RoleInfo, id string) bool {
 // onChannels opens the global /channels picker with paths and first prompts.
 func (m *Model) onChannels(msg channelsMsg) tea.Cmd {
 	if msg.err != nil {
-		return m.setStatus("channels: "+msg.err.Error(), true)
+		return m.setStatus("could not list the channels: "+msg.err.Error(), true)
 	}
 	o := newOverlay(ovChannels, overlayList, "All channels")
 	sortChannels(msg.channels)
@@ -783,7 +783,7 @@ func (m *Model) openVariants(arg string) tea.Cmd {
 // variant the model offers, the one in force marked.
 func (m *Model) onVariants(msg variantsMsg) tea.Cmd {
 	if msg.err != nil {
-		return m.setStatus("variants: "+msg.err.Error(), true)
+		return m.setStatus("could not list the model's variants: "+msg.err.Error(), true)
 	}
 	label := m.agentLabel(m.selectedID())
 	o := newOverlay(ovVariants, overlayList, "Variant for "+label+" · "+msg.model)
@@ -818,7 +818,7 @@ func (m *Model) onVariants(msg variantsMsg) tea.Cmd {
 
 func (m *Model) onModels(msg modelsMsg) tea.Cmd {
 	if msg.err != nil {
-		return m.setStatus("models: "+msg.err.Error(), true)
+		return m.setStatus("could not list the models: "+msg.err.Error(), true)
 	}
 	o := newOverlay(ovModels, overlayList, "Select a model")
 	if len(msg.models) == 0 {

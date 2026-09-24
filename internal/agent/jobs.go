@@ -45,9 +45,9 @@ func (j jobsAPI) Has(id string) bool {
 func (a *Agent) adoptJob(command string, job tools.Job, timeout time.Duration) (string, error) {
 	s := a.c
 	s.mu.Lock()
-	if a.state().killed {
+	if st := a.state(); st.killed {
 		s.mu.Unlock()
-		return "", fmt.Errorf("agent %s is killed", a.ID)
+		return "", fmt.Errorf("agent %s is killed", st.name)
 	}
 	id := NewID("m")
 	if err := s.commitLocked(context.Background(), s.event(a.ID, event.JobStarted, event.JobStartedPayload{ID: id, Command: command})); err != nil {

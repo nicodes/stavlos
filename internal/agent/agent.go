@@ -129,7 +129,7 @@ func (a *Agent) queue(ctx context.Context, kind event.InputKind, text, source st
 	st := a.state()
 	if st.killed {
 		s.mu.Unlock()
-		return fmt.Errorf("agent %s is killed", a.ID)
+		return fmt.Errorf("agent %s is killed", st.name)
 	}
 	in := event.Input{ID: NewID("i"), Kind: kind, Text: text}
 	in.RequestID = in.ID
@@ -362,7 +362,7 @@ func (a *Agent) Compact(ctx context.Context) (string, error) {
 		return "", errors.New("a directory change is in progress")
 	case st.killed:
 		s.mu.Unlock()
-		return "", fmt.Errorf("agent %s is killed", a.ID)
+		return "", fmt.Errorf("agent %s is killed", st.name)
 	case st.inTurn:
 		a.compactNext = true
 		s.mu.Unlock()
