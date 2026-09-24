@@ -438,7 +438,7 @@ for the bot, configuration and migration from the old standalone bridge.
 
 Implemented: daemon with SQLite event log, one state machine per channel with a goroutine per agent, projector (cancelled-turn repair, restart recovery, compaction), built-in and orchestration tools, three-layer config with trust gate, declarative policy, escalation with claim tiers and headless default, usage accounting, JSON-RPC protocol over a Unix socket with offset replay, Go client, an opencode-style Bubble Tea TUI, ChatGPT (Codex backend), Grok, Z.ai GLM Coding Plan and Kimi For Coding subscription adapters with browser, device-code and API-key sign-in, models.dev metadata, native search tools, a loopback web UI, and a Linux sandbox for commands and MCP servers.
 
-Not yet: answering prompts in the web UI, a list of sheets in the TUI, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
+Not yet: language-server diagnostics in edit results (docs/token-efficiency.md), answering prompts in the web UI, a list of sheets in the TUI, go-plugin model seam, `stavlos plugin install`, remote (HTTP) MCP servers, channel fork, a sandbox outside Linux.
 
 ## Development
 
