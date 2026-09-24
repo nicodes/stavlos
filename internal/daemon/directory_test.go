@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nicodes/stavlos/internal/config"
 	"github.com/nicodes/stavlos/internal/event"
@@ -187,5 +188,49 @@ func TestDirectoryChangeReplacesTrustPrompt(t *testing.T) {
 	ps := h.d.esc.Pending(ch.ID)
 	if len(ps) != 1 || ps[0].ID == oldPrompts[0].ID {
 		t.Fatalf("stale trust prompt: %+v", ps)
+	}
+}
+
+// TestArchiveWithdrawsTrustPrompt: a trust prompt has no answer timer, so
+// archiving its channel must end it, or it stays in prompt.list and its
+// goroutine in memory for the life of the daemon.
+func TestArchiveWithdrawsTrustPrompt(t *testing.T) {
+	setupConfig(t)
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, ".stavlos"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := newHarness(t, t.TempDir(), &fakeModel{})
+	defer h.close()
+	ctx := context.Background()
+	ch, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ps := h.pending(ch.ID); len(ps) != 1 || ps[0].Kind != protocol.PromptTrust {
+		t.Fatalf("trust prompt not published: %+v", ps)
+	}
+	if _, err := rpc.Do(ctx, h.c, protocol.ChannelArchive, protocol.ChannelRef{Channel: ch.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if ps := h.d.esc.Pending(ch.ID); len(ps) != 0 {
+		t.Fatalf("archived channel still has a prompt: %+v", ps)
+	}
+	// The Request goroutine removes the dir from trustPrompts as it ends.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		h.d.trustMu.RLock()
+		_, open := h.d.trustPrompts[dir]
+		h.d.trustMu.RUnlock()
+		if !open {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("trust prompt goroutine did not end after archive")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
