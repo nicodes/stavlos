@@ -5,41 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
 	"strconv"
-	"sync"
-
-	"github.com/nicodes/stavlos/internal/paths"
-	"github.com/nicodes/stavlos/internal/statefile"
 )
-
-var globalWriteMu sync.Mutex
 
 // SetDiscordEnabled changes just the global enabled value, preserving JSONC
 // comments, credentials, formatting and other settings. Replacement is atomic.
 func SetDiscordEnabled(enabled bool) error {
-	globalWriteMu.Lock()
-	defer globalWriteMu.Unlock()
-	path := filepath.Join(paths.ConfigDir(), "stavlos.json")
-	resolved, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		if !enabled && errors.Is(err, os.ErrNotExist) {
-			return nil
-		}
-		return err
-	}
-	b, err := os.ReadFile(resolved)
-	if err != nil {
-		return err
-	}
-	out, err := editDiscordEnabled(b, enabled)
-	if err != nil {
-		return err
-	}
-	if bytes.Equal(b, out) {
+	err := editGlobalConfig(false, func(b []byte) ([]byte, error) {
+		return editDiscordEnabled(b, enabled)
+	})
+	if !enabled && errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
-	return statefile.WriteAtomic(resolved, out, 0o600, false) // private whatever it was: it may name a token
+	return err
 }
 
 func editDiscordEnabled(b []byte, enabled bool) ([]byte, error) {
