@@ -176,7 +176,7 @@ In order of tokens saved per hour of work. All six are built (the pull request t
 
 ### 3.1 Compact at a fixed budget — changed after reading the code
 
-Neither OpenCode nor Codex uses a flat number: OpenCode compacts at the model's input limit minus a reserve of `min(20k, max output)` ([overflow.ts](https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/session/overflow.ts)), Codex at `min(config, 90% of the window)` after taking 95% of the catalogue's window ([openai_models.rs](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/openai_models.rs)). Both keep the window as the ceiling and rely on something else to keep histories small. Stavlos now does the same: `compaction.threshold` defaults to 0.9 of the window less the reply's reserve (`usableWindow`), and `compaction.maxTokens` is an opt-in budget, off by default. What keeps histories small is 3.2.
+Neither OpenCode nor Codex uses a flat number: OpenCode compacts at the model's input limit minus a reserve of `min(20k, max output)` ([overflow.ts](https://github.com/anomalyco/opencode/blob/dev/packages/opencode/src/session/overflow.ts)), Codex at `min(config, 90% of the window)` after taking 95% of the catalogue's window ([openai_models.rs](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/openai_models.rs)). Both keep the window as the ceiling and rely on something else to keep histories small. Stavlos now does the same: `compaction.threshold` defaults to 0.9 of the window less the reply's reserve (`usableWindow`), and `compaction.maxTokens` was an opt-in budget, off by default, until 2026-09-23: it now defaults to 150,000 (`-1` for the window alone), since a Kimi or GLM agent otherwise ran to about 900 k tokens between summaries. What keeps histories small between compactions is 3.2.
 
 Set `"compaction": {"maxTokens": 150000}` in `stavlos.json` now: it exists and
 is honoured. Then make it the default in `config.Defaults()`, with the window
@@ -235,6 +235,10 @@ history is over, say, 50 k tokens: the new provider has none of it cached, so
 every token is fresh, and a summary is a tenth of the size. Proposed in
 [model selection](model-selection.md); this log puts a number on it: 24.5 M
 fresh tokens, 12% of all fresh input.
+
+### 3.5b Later (2026-09-23)
+
+Three more, from reading OpenCode's and Codex's code beside this one: a job's output that wakes the agent and a `web_fetch` page now go through the same clip as every other tool result (both had their own bound, but not the configured one, and a job's saved nothing); and the third identical call in a row asks the human, as OpenCode's doom-loop check does (`repeatLimit` in `permission.go`), so a poll loop is caught at 3 calls, not at the 200-call cap.
 
 ### 3.6 Smaller — done: `todo` answers with the change; a tool output over 50 KB (OpenCode's `MAX_BYTES`) is cut in the middle and kept whole in the channel's scratch directory, which the result names, so the next call reads the part that matters. Not done: reminders on a cleared history and the unchanged-read answer (3.2 makes both nearly free)
 

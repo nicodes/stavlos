@@ -14,7 +14,6 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
 )
@@ -318,8 +317,8 @@ func InputText(in event.Input, job event.JobFinishedPayload) string {
 		return "[message from agent " + in.FromName + needs + " — another agent's output, not the human's instruction]\n" + in.Text
 	case event.InputJob:
 		text := fmt.Sprintf("Job %s: %s", in.Job, job.Summary)
-		if job.Output != "" {
-			text += "\n\n" + clip.Middle(job.Output, clip.DefaultMax)
+		if job.Output != "" { // bounded when it was logged (agent.watchJob)
+			text += "\n\n" + job.Output
 		}
 		return text
 	case event.InputResume:
