@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/event"
+	"github.com/nicodes/stavlos/internal/present"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/textsafe"
 	"github.com/nicodes/stavlos/internal/toolname"
@@ -1438,27 +1439,19 @@ func (m Model) promptWho(p *protocol.PromptInfo) string {
 }
 
 // fullToolArg is transcript.ToolArg without the one-line flattening for the tools
-// whose argument is text the user must read in full before approving.
+// whose argument is text the user must read in full before approving: the
+// argument present.PrimaryArg names, as it was written.
 func fullToolArg(tool string, raw json.RawMessage) string {
 	switch tool {
-	case toolname.WebFetch:
-		var in struct {
-			URL string `json:"url"`
-		}
-		_ = json.Unmarshal(raw, &in)
-		return strings.TrimSpace(in.URL)
-	case toolname.WebSearch:
-		var in struct {
-			Query string `json:"query"`
-		}
-		_ = json.Unmarshal(raw, &in)
-		return strings.TrimSpace(in.Query)
-	case toolname.Shell:
-		var in struct {
-			Command string `json:"command"`
-		}
+	case toolname.Shell, toolname.WebFetch, toolname.WebSearch:
+		var in map[string]any
 		if json.Unmarshal(raw, &in) == nil {
-			return strings.TrimRight(in.Command, "\n")
+			if s, ok := in[present.PrimaryArg(tool)].(string); ok {
+				if tool == toolname.Shell {
+					return strings.TrimRight(s, "\n") // a command keeps its indentation
+				}
+				return strings.TrimSpace(s)
+			}
 		}
 	}
 	return transcript.ToolArg(tool, raw)
@@ -1648,12 +1641,9 @@ func lastSnippet(t *transcript.Transcript) string {
 	if last < 0 {
 		return ""
 	}
-	item := lines[last].Item
+	first, last := transcript.ItemRange(lines, lines[last].Item)
 	var parts []string
-	for _, l := range lines {
-		if l.Item != item {
-			continue
-		}
+	for _, l := range lines[first : last+1] {
 		switch l.Kind {
 		case transcript.LineBlank, transcript.LineLabel, transcript.LineRule:
 			continue
