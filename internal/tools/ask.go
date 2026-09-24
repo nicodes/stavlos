@@ -24,7 +24,7 @@ const (
 )
 
 func (askTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AskUser, Description: "Ask the human one to four short questions when several valid approaches exist and guessing would waste work: which backend, which of two designs, whether to keep going. Each question has its text and one to four options with a label and a one-line description; put the option you would pick first. Every question is a checklist: the human may pick several options and always has a last entry for typing something else, so never add an 'Other' or 'all of the above' option. All questions are shown immediately and can be answered in any order; the turn waits until all have been answered and receives answers in the original question order. Do not ask what you can find out yourself, and do not ask more than once for the same thing.",
+	return model.ToolDef{Name: toolname.AskUser, Description: "Ask the human one to four short questions when guessing between valid approaches would waste work. Each has one to four options (label and one-line description), your pick first; the human may choose several and can always type something else, so never add an 'Other'. The turn waits for every answer. Do not ask what you can find out yourself.",
 		Schema: schemaOf(askInput{})}
 }
 

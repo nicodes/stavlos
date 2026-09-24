@@ -38,7 +38,7 @@ func TestFileToolsAndShell(t *testing.T) {
 		}
 	}
 	r = ts["read"].Run(ctx, json.RawMessage(`{"path":"a/b.txt"}`), env)
-	if !strings.Contains(r.Output, "2\tthere") {
+	if !strings.Contains(r.Output, "there") || strings.Contains(r.Output, "2\t") {
 		t.Fatal(r.Output)
 	}
 	var partial strings.Builder

@@ -76,7 +76,7 @@ func (a *Agent) watchJob(ctx context.Context, run *jobRun, timeout time.Duration
 	for {
 		select {
 		case <-run.handle.Done():
-			res := event.JobFinishedPayload{ID: run.id, Output: run.handle.Output()}
+			res := event.JobFinishedPayload{ID: run.id, Output: a.clipJob(run.handle.Output())}
 			summarizeExit(&res, run.handle.Err(), killed, timeout)
 			a.finishJob(run, res)
 			return
@@ -89,6 +89,16 @@ func (a *Agent) watchJob(ctx context.Context, run *jobRun, timeout time.Duration
 			run.handle.Kill()
 		}
 	}
+}
+
+// clipJob bounds a job's output as the shell tool bounds an inline result:
+// the same cap, the whole output kept in the channel's scratch directory and
+// named, so a build log the agent is woken with costs what a tool result
+// costs and the rest is a read away.
+func (a *Agent) clipJob(out string) string {
+	cfg := a.c.Config()
+	env := &tools.Env{MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir()}
+	return env.Clip(out)
 }
 
 // finishJob logs a job's result with its input in one transaction, unless
