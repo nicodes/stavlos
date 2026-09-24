@@ -24,10 +24,10 @@ func EditorFields(path, content string) []protocol.ConfigField {
 	var specs []protocol.ConfigField
 	switch {
 	case strings.HasPrefix(path, "agents/") && strings.HasSuffix(path, ".md"):
-		for _, key := range []string{"description", "type", "models", "loop", "tools", "skills", "mcp", "spawn", "max_turns", "color"} {
+		for _, key := range []string{"description", "type", "models", "tools", "skills", "mcp", "spawn", "max_turns", "color"} {
 			kind := "json"
 			switch key {
-			case "description", "type", "loop", "color":
+			case "description", "type", "color":
 				kind = "string"
 			case "max_turns":
 				kind = "number"
@@ -226,19 +226,4 @@ func EditConfigField(path, content string, field []string, value json.RawMessage
 		meta = b.String()
 	}
 	return "---\n" + strings.TrimRight(meta, "\r\n") + "\n---\n" + body, nil
-}
-
-func markdownParts(content string) (string, string, error) {
-	normal := strings.ReplaceAll(strings.TrimPrefix(content, "\uFEFF"), "\r\n", "\n")
-	if !strings.HasPrefix(normal, "---\n") {
-		return "", content, nil
-	}
-	end := strings.Index(normal[4:], "\n---")
-	if end < 0 {
-		return "", "", fmt.Errorf("unterminated frontmatter")
-	}
-	end += 4
-	body := normal[end+4:]
-	body = strings.TrimPrefix(body, "\n")
-	return normal[4:end], body, nil
 }
