@@ -381,6 +381,7 @@ stavlos --version              # version, commit and build of this binary
 
 Put a `.stavlos/` directory in a repository to add roles (`agents/<name>.md`), skills (`skills/<name>/SKILL.md`), MCP definitions, and a `stavlos.json` (plus a gitignored `stavlos.local.json`) that takes precedence over the global config once trusted.
 The `discord` block is global-only; other settings can be overridden by the project.
+A few settings worth knowing by name: `rootAgent` is the role a new channel's root agent takes (`general` unless you say otherwise); `limits.maxDepth` and `limits.maxAgents` bound how deep and how wide a channel's agent tree may grow (3 and 6); and `escalation.claimTimeout`, `escalation.answerTimeout` and `escalation.default` say how long a prompt waits for a client to claim it and for an answer, and whether one nobody answers is allowed or denied (30s, 3m, deny). The whole file is in [docs/stavlos-prd.md](docs/stavlos-prd.md) §10.2.
 Every agent follows `AGENTS.md` instructions: yours in `~/.config/stavlos/AGENTS.md`, then the repository's from its git root down to the channel directory (a directory's `CLAUDE.md` where it has no `AGENTS.md`), 32 KiB in all, and a subdirectory's with an agent's first read, search or edit there.
 Editing any of them asks in every mode, and an edit made outside the harness brings the trust prompt back when an agent next starts a turn.
 The whole layer is untrusted until you confirm it once per content hash, from the TUI prompt or `stavlos trust`.

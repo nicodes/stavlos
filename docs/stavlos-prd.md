@@ -1,8 +1,8 @@
 # Stavlos — Product Requirements Document
 
-**Status:** Draft v0.4
+**Status:** Draft v0.5
 **Scope:** v1
-**Last updated:** 2026-09-12
+**Last updated:** 2026-09-24
 
 ---
 
@@ -18,8 +18,8 @@ The thesis in one sentence: **an agent is a long-lived actor you can talk to, no
 
 - Hosted or multi-tenant operation. Stavlos is local-first.
 - IDE extensions.
-- A web UI. The protocol permits one; we don't ship one.
-- Sandboxing enforced by the daemon (see §12).
+- A hosted web UI. The loopback web UI shipped (`127.0.0.1:4999`, never anywhere else; [web UI](web-ui.md) and the README's *Web UI* section); nothing serves it beyond the machine.
+- Sandboxing beyond what the kernel offers. The Linux sandbox shipped (Landlock, plus namespaces where allowed; §12 and the README's *The sandbox* paragraph); other systems get the string-matching policy alone.
 - Project-level plugins. Plugins are global (see §11).
 - Autonomous unattended operation without an explicit permission policy.
 
@@ -476,9 +476,9 @@ JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Ever
   "rootAgent": "general",                 // role a new channel's root uses
   "mode": "ask",                          // permission mode a new channel starts in: ask | auto | yolo (a trusted project's overrides the global one)
 
-  "limits":     { "maxDepth": 3, "maxAgents": 6 },
+  "limits":     { "maxDepth": 3, "maxAgents": 6, "maxCallsPerTurn": 200 },   // maxCallsPerTurn ends a turn after that many model calls; -1 for no cap
   "escalation": { "claimTimeout": "30s", "answerTimeout": "3m", "default": "deny" },
-  "compaction": { "threshold": 0.9, "maxToolOutput": "50kb" },
+  "compaction": { "threshold": 0.9, "maxTokens": 150000, "clearTokens": 40000, "keepTokens": 15000, "maxToolOutput": "50kb" },   // maxTokens: compact past this many tokens whatever the window; clearTokens: old tool results go once newer ones hold this many; keepTokens: recent conversation kept beside the summary
   "search": { "provider": "brave", "apiKey": "${env:BRAVE_API_KEY}" },   // web_search backend: brave | tavily | exa
   "hosts": ["github.com", "*.golang.org"],   // hosts web_fetch reaches without asking; "*" is every host (a trusted project's add to yours)
   "dirs": ["~/Work/shared", "/tmp"],   // directories every channel works in besides its own (a trusted project's add to yours)
@@ -490,7 +490,7 @@ JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Ever
       "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": { "GITHUB_TOKEN": "${env:GITHUB_TOKEN}" }   // references only, never literals
     },
-    "docs": { "url": "https://mcp.example.com/sse" }
+    "docs": { "url": "https://mcp.example.com/sse" }   // parsed, not yet supported: only stdio servers run in v1
   },
 
   // Keyed by tool, then by argument pattern. Most specific match wins.
@@ -504,7 +504,7 @@ JSONC. A `$schema` key is accepted and ignored; no schema is published yet. Ever
     "mcp__github__get_*": "allow"
   },
 
-  // Any layer: a trusted project's add to yours (§11).
+  // Any layer: a trusted project's add to yours. Parsed and kept in the trust hash, and otherwise ignored: nothing loads plugins yet (§11, and the Lua direction in lua-plugins.md).
   "plugins": ["github.com/acme/stavlos-bedrock@v1.2.0"]
 }
 ```
@@ -542,15 +542,15 @@ You are a careful reviewer…
 
 **Models and variants.** The whitelist bounds `/models` and `agent.set_model` for any agent in the role. A child inherits its parent's model when the list allows it, otherwise it starts on the list's first plain entry; its variant is inherited only when that model's entry allows it, otherwise it takes the entry's first variant (or the provider default when the entry lists none). `/variants` and `agent.set_variant` are bounded the same way, and switching model or role re-fits the variant. All of it is enforced in the daemon, so a client cannot bypass it.
 
-**Tools and rules.** Every role has every built-in tool (`shell`, `read`, `apply_patch`, `skill`, `todo`, `web_fetch`, `web_search`) unless `tools` removes it: a bare `deny` (`web_fetch: deny`) takes the tool away, so the model is never offered it. Adding a role therefore never means re-listing the tools it should keep. Any other verb, or a map of patterns under a tool, is a rule on a tool the role keeps (patterns are the same prefix globs as `stavlos.json`); rules on `todo` cover `todo`. The list form of earlier versions is a load error, since it meant the opposite. Roles only tighten the layered policy (allow → ask → deny): the role's rules are one more overlay (§13), so a looser entry can never take effect; the plain cases of such an entry are reported as a configuration error at load rather than silently ignored. `message`, `agent_status` and `ask_user` cannot be removed, `shell_kill` comes with `shell`, and `agent_create`/`agent_cancel` with `spawn`; a rule on one of them only re-gates it.
+**Tools and rules.** Every role has every built-in tool (`shell`, `read`, `grep`, `glob`, `apply_patch`, `skill`, `todo`, `web_fetch`, `web_search`, `sheet`) unless `tools` removes it: a bare `deny` (`web_fetch: deny`) takes the tool away, so the model is never offered it. Adding a role therefore never means re-listing the tools it should keep. Any other verb, or a map of patterns under a tool, is a rule on a tool the role keeps (patterns are the same prefix globs as `stavlos.json`); rules on `todo` cover `todo`. The list form of earlier versions is a load error, since it meant the opposite. Roles only tighten the layered policy (allow → ask → deny): the role's rules are one more overlay (§13), so a looser entry can never take effect; the plain cases of such an entry are reported as a configuration error at load rather than silently ignored. `message`, `agent_status` and `ask_user` cannot be removed, `shell_kill` comes with `shell`, and `agent_create`/`agent_cancel` with `spawn`; a rule on one of them only re-gates it.
 
-**Working directories.** The channel has one working set, shared by every agent: the channel directory, the directories `stavlos.json` lists under `dirs` (yours for every channel, a trusted project's for its channels, any path), plus whatever the human adds. Roles carry no directories (a `dirs:` key is a load error) and `agent_create` grants none: one set is what a person can keep track of across many agents and repositories, the same reason the permission mode is per channel. A `read`, `apply_patch` or `shell` call that reaches outside the set asks first even when policy allows the tool: the prompt names the directory — the git checkout containing the path when there is one (one answer then covers a whole repository; a checkout rooted at the home directory does not count), else the path's own directory — "Allow once" allows, "Allow and add" allows and adds that directory to the channel, "Allow and add another directory…" takes an edited path (`dir` on `prompt.reply`) (logged as `channel.dir_added` on the asking agent, replayed on restart), `/yolo` answers it like any ask and auto mode denies it. For shell the paths are found by inspecting the command line — absolute and `~` arguments, `cd` and redirect targets, `--flag=path` values — which catches the model's ordinary behaviour and nothing adversarial; a kernel sandbox (bubblewrap, Seatbelt) is the roadmap item that would turn this list into a boundary, with the set as its writable roots. The TUI's `dirs n` tab, on the channel's row of the tab strip, lists the directories with their source (channel, config, human) and edits the set: `a` adds a path, enter replaces the highlighted one, ctrl+d removes it (`channel.add_dir` / `channel.remove_dir`, logged as `channel.dir_added` / `channel.dir_removed`; the channel directory and the config directories cannot be changed there); `ChannelInfo.dirs` carries the set.
+**Working directories.** The channel has one working set, shared by every agent: the channel directory, the directories `stavlos.json` lists under `dirs` (yours for every channel, a trusted project's for its channels, any path), plus whatever the human adds. Roles carry no directories (a `dirs:` key is a load error) and `agent_create` grants none: one set is what a person can keep track of across many agents and repositories, the same reason the permission mode is per channel. A `read`, `apply_patch` or `shell` call that reaches outside the set asks first even when policy allows the tool: the prompt names the directory — the git checkout containing the path when there is one (one answer then covers a whole repository; a checkout rooted at the home directory does not count), else the path's own directory — "Allow once" allows, "Allow and add" allows and adds that directory to the channel, "Allow and add another directory…" takes an edited path (`dir` on `prompt.reply`) (logged as `channel.dir_added` on the asking agent, replayed on restart), `/yolo` answers it like any ask and auto mode denies it. For shell the paths are found by inspecting the command line — absolute and `~` arguments, `cd` and redirect targets, `--flag=path` values — which catches the model's ordinary behaviour and nothing adversarial; on Linux the sandbox (Landlock, §12; the README's *The sandbox* paragraph) turns this list into a boundary, with the set as its writable roots, and elsewhere it stays a list. The TUI's `dirs n` tab, on the channel's row of the tab strip, lists the directories with their source (channel, config, human) and edits the set: `a` adds a path, enter replaces the highlighted one, ctrl+d removes it (`channel.add_dir` / `channel.remove_dir`, logged as `channel.dir_added` / `channel.dir_removed`; the channel directory and the config directories cannot be changed there); `ChannelInfo.dirs` carries the set.
 
 **Permission answers.** Every permission dialog is the subject — the command or path, with the asking agent after it — over a hard-coded single-select list; there are no letter hotkeys. A plain permission: `Allow once` (`allow`), `Allow for this channel` (`allow_always`: this exact tool call, keyed on the policy argument), `Allow <prefix> for this channel` (`allow_prefix`; the daemon derives the prefix from the call when it raises the prompt and shows it as the prompt's `prefix`, so a client displays it rather than computing or sending one; offered for shell when the command is simple — `internal/shellcmd` tokenises it like a POSIX shell and refuses any unquoted `;`, `|`, `&`, newline, redirection, parentheses, backtick or `$(` — and the prefix is its first word, or two for git, go, npm, npx, cargo, make, docker, kubectl, pip, yarn, pnpm and bun when the second word is not a flag (a flag-first two-word tool, an environment assignment, and wrappers or interpreters such as `bash`, `env`, `sudo`, `xargs`, `python` get no prefix at all); the channel then approves every simple command of that tool whose first words are the prefix's, word for word), and `Deny` (`deny` with an optional `reason`). A boundary prompt: `Allow once`, `Allow and add <dir>` (`allow_always`, which also remembers the call), `Allow and add another directory…` (`allow_always` with `dir`), `Deny`. Trust: `Trust this project's config` or `Not now`, answered by prompt id like every other prompt (`trust.reply`, which the CLI uses, names a directory and the hash the client was shown; the daemon normalises the path and recomputes the hash from disk, and refuses a stale one). Remembered allows and prefixes live in the channel, not in config: each is logged as `permit.granted` and replayed on recovery, so a daemon restart does not ask again, and they end when the channel does. They answer a policy `ask` only: a `deny` rule holds whatever the human allowed earlier.
 
 **Turn limit.** A subagent whose role sets `max_turns` is told, in its system prompt, which turn it is on and that it must answer before the limit. A turn past the limit ends at once with an error, and every agent still waiting on it receives an answer saying so, so nobody waits forever.
 
-Only one role ships built in: `general`, a general-purpose engineer with shell, read, apply_patch, skill and todo that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised roles — explorers, testers, reviewers — are the user's to add, one file each; the repository carries `.stavlos/agents/coder.md` as a worked example. The lifecycle tools (`agent_create`, `agent_cancel`) are implied by a non-empty `spawn` list; `message` and `agent_status` every agent has. Roles are the hub — skills, MCP servers and policy are referenced *by* roles, not parallel to them. Role creation must be as frictionless as skill creation, or users will reach for skills when a role is correct. Rejected: `hidden` (a spawnable but invisible role is a footgun; `type` and spawn lists cover every case), `temperature` (variants cover what the providers here expose), `memory` and `hooks` (roadmap).
+Only one role ships built in: `general`, a general-purpose engineer with every built-in tool (shell, read, grep, glob, apply_patch, skill, todo, web_fetch, web_search, sheet) that may spawn further `general` agents (the depth and agent-count limits bound the tree). Specialised roles — explorers, testers, reviewers — are the user's to add, one file each; the repository carries `.stavlos/agents/coder.md` as a worked example. The lifecycle tools (`agent_create`, `agent_cancel`) are implied by a non-empty `spawn` list; `message` and `agent_status` every agent has. Roles are the hub — skills, MCP servers and policy are referenced *by* roles, not parallel to them. Role creation must be as frictionless as skill creation, or users will reach for skills when a role is correct. Rejected: `hidden` (a spawnable but invisible role is a footgun; `type` and spawn lists cover every case), `temperature` (variants cover what the providers here expose), `memory` and `hooks` (roadmap).
 
 ### 10.4 Skills — `skills/<name>/SKILL.md`
 
@@ -686,8 +686,6 @@ There is also no hook for *rewriting* a tool call before it executes (escaping a
 - Starlark policy
 - Pre-execution tool-call rewriting hooks
 - WASM tools
-- Web UI
-- Daemon-enforced sandboxing
 - Global (cross-channel) agent and cost caps
 - Per-project credential scoping
 - Multi-machine daemons (TCP transport for the protocol)
