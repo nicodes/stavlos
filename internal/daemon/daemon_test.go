@@ -23,6 +23,7 @@ import (
 	"github.com/nicodes/stavlos/internal/model/registry"
 	"github.com/nicodes/stavlos/internal/modelsdev"
 	"github.com/nicodes/stavlos/internal/protocol"
+	"github.com/nicodes/stavlos/internal/sandbox"
 	"github.com/nicodes/stavlos/internal/testutil"
 	rpc "github.com/nicodes/stavlos/pkg/client"
 )
@@ -1608,6 +1609,8 @@ func TestMain(m *testing.M) {
 		dialAndReport(sock)
 		return
 	}
+	// what commands ask about must not depend on the runner's kernel
+	agent.ProbeSandbox = func() (sandbox.Level, error) { return sandbox.Full, nil }
 	os.Exit(m.Run())
 }
 

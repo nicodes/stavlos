@@ -88,7 +88,7 @@ func sandboxLevel(cfg *config.Effective) string {
 	if !cfg.Sandbox.Enabled {
 		return "off"
 	}
-	switch lvl, _ := probeSandbox(); lvl {
+	switch lvl, _ := ProbeSandbox(); lvl {
 	case sandbox.Full:
 		return "full"
 	case sandbox.Landlock:
@@ -98,9 +98,12 @@ func sandboxLevel(cfg *config.Effective) string {
 	}
 }
 
-// probeSandbox is sandbox.Probe, a variable so a test can be a kernel that
-// offers nothing.
-var probeSandbox = sandbox.Probe
+// ProbeSandbox is sandbox.Probe, a variable so a test can be a kernel that
+// offers nothing, or everything: what commands ask about must not depend
+// on the machine the tests run on (a CI runner without user namespaces is
+// "limited", where every command asks). Commands still run at the level
+// the kernel really offers (sandbox.Wrap probes for itself).
+var ProbeSandbox = sandbox.Probe
 
 // unsandboxed reports that the sandbox is wanted and the kernel offers
 // less than the whole of it, so a command is asked about every time. With
