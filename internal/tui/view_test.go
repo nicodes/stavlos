@@ -230,7 +230,7 @@ func TestAgentRows(t *testing.T) {
 	if got := awaitedOf(agents, "g1"); len(got) != 1 || got[0].ID != "root" {
 		t.Fatalf("awaited of g1: %+v", got)
 	}
-	rows := agentRows(awaitedOf(agents, "root"), spawned, map[string]string{"c1": "Running the tests now, hold on while I look through all of it"}, nil, now, 100)
+	rows := asyncAgentRows(awaitedOf(agents, "root"), spawned, map[string]string{"c1": "Running the tests now, hold on while I look through all of it"}, nil, now, 100)
 	if len(rows) != 2 {
 		t.Fatalf("rows %d: %q", len(rows), rows)
 	}
@@ -243,7 +243,7 @@ func TestAgentRows(t *testing.T) {
 	if !strings.Contains(rows[1], "tester") || !strings.Contains(rows[1], "3s") || strings.Contains(rows[1], "turn") {
 		t.Fatalf("%q", rows[1])
 	}
-	if rows := agentRows(awaitedOf(agents, "c2"), spawned, nil, nil, now, 100); len(rows) != 0 {
+	if rows := asyncAgentRows(awaitedOf(agents, "c2"), spawned, nil, nil, now, 100); len(rows) != 0 {
 		t.Fatalf("c2 waits on nobody: %q", rows)
 	}
 	if got := format.Elapsed(3725 * time.Second); got != "1h02m" {
@@ -2494,7 +2494,7 @@ func TestRoleAwareDialogs(t *testing.T) {
 	if roleStyle("cyan").GetForeground() == roleStyle("").GetForeground() {
 		t.Fatal("cyan should tint")
 	}
-	rows := agentRows(awaitedOf(m.agents, "root"), nil, nil, m.roleTints(), time.Now(), 100)
+	rows := asyncAgentRows(awaitedOf(m.agents, "root"), nil, nil, m.roleTints(), time.Now(), 100)
 	if len(rows) != 1 || !strings.Contains(stripANSI(rows[0]), "scout (reviewer)") {
 		t.Fatalf("rows %q", rows)
 	}

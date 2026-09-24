@@ -413,7 +413,7 @@ func (t *Transcript) holdSpawn(ev event.Event) bool {
 			return false
 		}
 		t.spawnHeld, t.spawnParent = ev, p.Parent
-		t.spawnAs = fmt.Sprintf("%s (%s)", p.Name, p.Role)
+		t.spawnAs = format.Who(p.Name, p.Role)
 		if p.Model != "" {
 			t.spawnAs += " · " + p.Model
 		}
