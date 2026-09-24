@@ -4,6 +4,7 @@ package discord
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/nicodes/stavlos/internal/httpx"
@@ -33,12 +34,17 @@ type API interface {
 
 type gateway struct {
 	s        *dg.Session
-	mu       sync.Mutex
+	mu       sync.Mutex // guards the caches only, never a Discord request
 	hooks    map[string]*dg.Webhook
+	filling  map[string]chan struct{} // mu; webhook lookups in flight, closed when stored
 	bot      string
 	app      string
 	profiles map[string]cachedProfile // mu; cached per guild/user
 }
+
+// suppressEmbeds keeps Discord from unfurling links in agent and transcript
+// text: a URL an agent writes must not be fetched without a permission prompt.
+const suppressEmbeds = dg.MessageFlagsSuppressEmbeds
 
 var errMissing = errors.New("discord message no longer exists")
 
@@ -75,7 +81,7 @@ func Open(ctx context.Context, token, guild string, makeBridge func(API, string)
 	s.AddHandler(func(_ *dg.Session, _ *dg.Disconnect) { b.gatewayState(false) })
 	s.AddHandler(func(_ *dg.Session, m *dg.MessageCreate) { b.Message(m) })
 	s.AddHandler(func(_ *dg.Session, i *dg.InteractionCreate) { b.Interaction(i) })
-	app, err := s.Application("@me")
+	app, err := application(ctx, s)
 	if err != nil {
 		return nil, nil, apiError(err)
 	}
@@ -89,6 +95,20 @@ func Open(ctx context.Context, token, guild string, makeBridge func(API, string)
 		return nil, nil, err
 	}
 	return b, closeGateway, nil
+}
+
+// application is Session.Application("@me") with a context: discordgo's own
+// method takes no request options, so it would outlive a cancelled Open.
+func application(ctx context.Context, s *dg.Session) (*dg.Application, error) {
+	body, err := s.RequestWithBucketID(http.MethodGet, dg.EndpointOAuth2Application("@me"), nil, dg.EndpointOAuth2Application(""), dg.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+	var app dg.Application
+	if err := json.Unmarshal(body, &app); err != nil {
+		return nil, err
+	}
+	return &app, nil
 }
 
 // apiError intentionally excludes request URLs and bodies, which can include
@@ -125,28 +145,63 @@ func (g *gateway) Rename(ctx context.Context, id, name string) error {
 	_, err := g.s.ChannelEdit(id, &dg.ChannelEdit{Name: name}, dg.WithContext(ctx))
 	return apiError(err)
 }
+
+// hook returns the bot's webhook for a channel, creating it once. Only the
+// cache is read or written under the lock: a slow lookup for one channel must
+// not stall posts to every other channel. A per-key guard makes concurrent
+// misses share one lookup rather than create duplicate webhooks.
 func (g *gateway) hook(ctx context.Context, channel, name string) (*dg.Webhook, error) {
-	g.mu.Lock()
-	defer g.mu.Unlock()
 	key := channel + ":" + name
-	if h := g.hooks[key]; h != nil {
-		return h, nil
+	var wait chan struct{}
+	for {
+		g.mu.Lock()
+		if h := g.hooks[key]; h != nil {
+			g.mu.Unlock()
+			return h, nil
+		}
+		inFlight := g.filling[key]
+		if inFlight == nil {
+			wait = make(chan struct{})
+			if g.filling == nil {
+				g.filling = map[string]chan struct{}{}
+			}
+			g.filling[key] = wait
+			g.mu.Unlock()
+			break
+		}
+		g.mu.Unlock()
+		select {
+		case <-inFlight:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
+	h, err := g.lookupHook(ctx, channel, name)
+	g.mu.Lock()
+	if err == nil {
+		g.hooks[key] = h
+	}
+	delete(g.filling, key)
+	close(wait)
+	g.mu.Unlock()
+	return h, err
+}
+
+func (g *gateway) lookupHook(ctx context.Context, channel, name string) (*dg.Webhook, error) {
 	hooks, err := g.s.ChannelWebhooks(channel, dg.WithContext(ctx))
 	if err != nil {
 		return nil, apiError(err)
 	}
 	for _, h := range hooks {
 		if h.Name == name && h.User != nil && h.User.ID == g.bot {
-			g.hooks[key] = h
 			return h, nil
 		}
 	}
 	h, err := g.s.WebhookCreate(channel, name, "", dg.WithContext(ctx))
-	if err == nil {
-		g.hooks[key] = h
+	if err != nil {
+		return nil, apiError(err)
 	}
-	return h, apiError(err)
+	return h, nil
 }
 func (g *gateway) OwnWebhook(ctx context.Context, channel, id string) bool {
 	// Only agent speech is addressable by replying. Human terminal posts use
@@ -158,7 +213,7 @@ func (g *gateway) Send(ctx context.Context, channel, user, text string, componen
 	if user != "" {
 		return g.sendWebhook(ctx, channel, "stavlos", user, "", text, components)
 	}
-	m, err := g.s.ChannelMessageSendComplex(channel, &dg.MessageSend{Content: text, Components: components,
+	m, err := g.s.ChannelMessageSendComplex(channel, &dg.MessageSend{Content: text, Components: components, Flags: suppressEmbeds,
 		AllowedMentions: &dg.MessageAllowedMentions{Parse: []dg.AllowedMentionType{}}}, dg.WithContext(ctx))
 	if err != nil {
 		return "", apiError(err)
@@ -168,7 +223,7 @@ func (g *gateway) Send(ctx context.Context, channel, user, text string, componen
 
 func (g *gateway) sendWebhook(ctx context.Context, channel, hook, name, avatar, text string, components []dg.MessageComponent) (string, error) {
 	return g.executeWebhook(ctx, channel, hook, &dg.WebhookParams{
-		Username: clip(name, 80), AvatarURL: avatar, Content: text, Components: components,
+		Username: clip(name, 80), AvatarURL: avatar, Content: text, Components: components, Flags: suppressEmbeds,
 		AllowedMentions: &dg.MessageAllowedMentions{Parse: []dg.AllowedMentionType{}},
 	})
 }

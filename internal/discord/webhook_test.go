@@ -42,7 +42,7 @@ func TestQuestionWebhookIdentityComponentsAndReconnect(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 				t.Fatal(err)
 			}
-			if p.Username != "scout" || p.Content != nil || p.Flags != dg.MessageFlagsIsComponentsV2 || len(p.Components) != 7 || p.AllowedMentions == nil || len(p.AllowedMentions.Parse) != 0 {
+			if p.Username != "scout" || p.Content != nil || p.Flags != cardFlags || len(p.Components) != 7 || p.AllowedMentions == nil || len(p.AllowedMentions.Parse) != 0 {
 				t.Fatalf("question payload: %+v", p)
 			}
 			assertCardText(t, p.Components[0], "❓ **Which?**")
@@ -62,7 +62,7 @@ func TestQuestionWebhookIdentityComponentsAndReconnect(t *testing.T) {
 			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 				t.Fatal(err)
 			}
-			if p.Components == nil || p.AllowedMentions == nil || len(p.AllowedMentions.Parse) != 0 || p.Flags != dg.MessageFlagsIsComponentsV2 || string(p.Content) != "null" || string(p.Embeds) != "null" {
+			if p.Components == nil || p.AllowedMentions == nil || len(p.AllowedMentions.Parse) != 0 || p.Flags != cardFlags || string(p.Content) != "null" || string(p.Embeds) != "null" {
 				t.Fatal("edit did not preserve explicit components/mention policy")
 			}
 			want, n := "updated", 7
@@ -178,7 +178,7 @@ func TestLegacyBotCardAndInteractionFeedbackUseV2(t *testing.T) {
 		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 			t.Fatal(err)
 		}
-		if r.Method != "PATCH" || p.Flags != dg.MessageFlagsIsComponentsV2 || string(p.Content) != "null" || len(p.Components) != 1 {
+		if r.Method != "PATCH" || p.Flags != cardFlags || string(p.Content) != "null" || len(p.Components) != 1 {
 			t.Fatal("legacy card/feedback did not retain V2 format")
 		}
 		assertCardText(t, p.Components[0], "updated")
