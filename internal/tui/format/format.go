@@ -37,6 +37,15 @@ func Tokens(n int) string {
 	return strconv.Itoa(n)
 }
 
+// Who names an agent the way every view does: "name (role)", or just
+// the name when the role is unknown.
+func Who(name, role string) string {
+	if role == "" {
+		return name
+	}
+	return name + " (" + role + ")"
+}
+
 // Cost renders a dollar amount with two to four decimals.
 func Cost(v float64) string {
 	s := strconv.FormatFloat(v, 'f', 4, 64)

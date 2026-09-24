@@ -221,11 +221,7 @@ func metaLineSpans(label, role, model, variant string, queued int, modeTag strin
 		part(metaMode, modeTag, modeTagStyle(modeTag))
 		sep()
 	}
-	name := label
-	if role != "" {
-		name = fmt.Sprintf("%s (%s)", label, role)
-	}
-	part(metaRole, name, theme.StyleDim)
+	part(metaRole, format.Who(label, role), theme.StyleDim)
 	sep()
 	if model == "" {
 		part(metaModel, "no model — /models", theme.StyleWarn)
@@ -879,8 +875,7 @@ func (m Model) agentRows(agents []protocol.AgentInfo, selected string, width int
 		}
 		// The right column: the cost (dim), with a space before it.
 		right, rightW := "", 0
-		if a.CostUSD > 0 {
-			c := "$" + format.Cost(a.CostUSD)
+		if c := costTag(a.CostUSD); c != "" {
 			right, rightW = theme.StyleDim.Render(c), len([]rune(c))
 		}
 		// indent + dot + " " is two columns plus the indent; the text gets
@@ -892,7 +887,7 @@ func (m Model) agentRows(agents []protocol.AgentInfo, selected string, width int
 		if avail < 4 {
 			avail = 4
 		}
-		text := fmt.Sprintf("@%s (%s)", a.Name, a.Role) // an agent reads @name, as it is addressed
+		text := "@" + format.Who(a.Name, a.Role) // an agent reads @name, as it is addressed
 		if agentOutcome(a) == "error" {
 			text += " · error"
 		}
@@ -1067,13 +1062,13 @@ func (m Model) tabBodyRows(width int) ([]string, []int) {
 			owner, role = a.Name, a.Role
 		}
 		now := clock()
-		sel := agentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), now, width-2)
+		sel := asyncAgentRows(waiting, m.spawned, m.lastLines(), m.roleTints(), now, width-2)
 		sel = append(sel, jobRows(jobs, owner, role, now, width-2)...)
 		nWait := len(sel)
 		if human {
 			sel = append(sel, "  "+theme.StyleBold.Render("you")+"  "+theme.StyleDim.Render("the channel chat"))
 		}
-		sel = append(sel, agentRows(owed, m.spawned, m.lastLines(), m.roleTints(), now, width-2)...)
+		sel = append(sel, asyncAgentRows(owed, m.spawned, m.lastLines(), m.roleTints(), now, width-2)...)
 		if len(sel) == 0 {
 			return note("  not waiting on anything, and no replies due")
 		}
@@ -1407,13 +1402,17 @@ func (m Model) agentWhoLabel(id string) string {
 		return ""
 	}
 	if i := m.findAgent(id); i >= 0 {
-		a := m.agents[i]
-		if a.Role != "" {
-			return fmt.Sprintf("%s (%s)", a.Name, a.Role)
-		}
-		return a.Name
+		return format.Who(m.agents[i].Name, m.agents[i].Role)
 	}
 	return id
+}
+
+// costTag is an agent's spend for a row, "$0.12", or "" when it has none.
+func costTag(usd float64) string {
+	if usd <= 0 {
+		return ""
+	}
+	return "$" + format.Cost(usd)
 }
 
 // promptWho names who a prompt waits for: "label (role)" for an agent of this
@@ -1425,7 +1424,7 @@ func (m Model) promptWho(p *protocol.PromptInfo) string {
 		parts = append(parts, who)
 	} else if p.From != "" {
 		if p.Role != "" {
-			parts = append(parts, p.From+" ("+p.Role+")")
+			parts = append(parts, format.Who(p.From, p.Role))
 		} else {
 			parts = append(parts, "@"+p.From)
 		}
@@ -1585,27 +1584,26 @@ func roleStyle(name string) lipgloss.Style {
 	return lipgloss.NewStyle()
 }
 
-// agentRows renders the agents tab's rows, one per agent passed (the
-// awaited set, see awaitedOf).
+// asyncAgentRows renders the async dialog's agent rows, one per agent
+// passed (the awaited set, see awaitedOf); the tree's rows are agentRows.
 // last maps an agent id to a snippet of the latest line in its chat; it
 // sits between the name and the meta, like the job on an async row.
 // tint maps a role name to its colour name; a tinted role colours its
 // "label (role)" text.
-func agentRows(agents []protocol.AgentInfo, spawned map[string]time.Time, last map[string]string, tint map[string]string, now time.Time, width int) []string {
+func asyncAgentRows(agents []protocol.AgentInfo, spawned map[string]time.Time, last map[string]string, tint map[string]string, now time.Time, width int) []string {
 	var rows []string
 	for _, a := range agents {
 		var meta []string // the state first when it says something (working, waiting, error), then cost and age
 		if o := agentOutcome(a); o != "idle" && o != "complete" {
 			meta = append(meta, o)
 		}
-		if a.CostUSD > 0 {
-			meta = append(meta, "$"+format.Cost(a.CostUSD))
+		if c := costTag(a.CostUSD); c != "" {
+			meta = append(meta, c)
 		}
 		if t, ok := spawned[a.ID]; ok && !t.IsZero() {
 			meta = append(meta, format.Elapsed(now.Sub(t)))
 		}
-		text := fmt.Sprintf("%s (%s)", a.Name, a.Role)
-		row := "  " + roleStyle(tint[a.Role]).Bold(true).Render(text)
+		row := "  " + roleStyle(tint[a.Role]).Bold(true).Render(format.Who(a.Name, a.Role))
 		if s := last[a.ID]; s != "" {
 			row += "  " + format.Trunc(s, snippetChars)
 		}
@@ -1683,10 +1681,7 @@ func lastSnippet(t *transcript.Transcript) string {
 func jobRows(jobs []protocol.JobInfo, owner, ownerRole string, now time.Time, width int) []string {
 	var rows []string
 	for _, mo := range jobs {
-		who := owner
-		if ownerRole != "" {
-			who = fmt.Sprintf("%s (%s)", owner, ownerRole)
-		}
+		who := format.Who(owner, ownerRole)
 		label := mo.Label
 		if who != "" {
 			label = theme.StyleBold.Render(who) + "  " + mo.Label
