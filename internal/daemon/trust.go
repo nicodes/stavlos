@@ -83,6 +83,31 @@ func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
 	<-opened
 }
 
+// withdrawTrustPrompts settles the open trust prompts of one channel (every
+// channel when id is empty) as declined: the channel moved directory, was
+// archived, or the daemon is closing, and a prompt nobody can answer any
+// more would otherwise sit in the list, and its goroutine in memory, for
+// ever. A trust prompt has no answer timer (trust.go, escalation.Request).
+func (d *Daemon) withdrawTrustPrompts(id, reason string) {
+	if id != "" {
+		for _, p := range d.esc.Pending(id) {
+			if p.Kind == protocol.PromptTrust {
+				_ = d.esc.Resolve(p.ID, reason, escalation.Answer{Value: protocol.AnswerDeny})
+			}
+		}
+		return
+	}
+	d.trustMu.RLock()
+	ids := make([]string, 0, len(d.trustPrompts))
+	for _, pid := range d.trustPrompts {
+		ids = append(ids, pid)
+	}
+	d.trustMu.RUnlock()
+	for _, pid := range ids {
+		_ = d.esc.Resolve(pid, reason, escalation.Answer{Value: protocol.AnswerDeny})
+	}
+}
+
 // Trust records a decision and reloads config for channels in dir. The
 // directory is normalised and the hash recomputed from what is on disk:
 // a client says which directory it means and whether it trusts what it

@@ -9,7 +9,6 @@ import (
 
 	"github.com/nicodes/stavlos/internal/agent"
 	"github.com/nicodes/stavlos/internal/config"
-	"github.com/nicodes/stavlos/internal/escalation"
 	"github.com/nicodes/stavlos/internal/protocol"
 )
 
@@ -96,23 +95,24 @@ func (d *Daemon) SetChannelDir(ctx context.Context, id, dir string) (protocol.Ch
 		return protocol.ChannelInfo{}, err
 	}
 	if old != s.Dir() {
-		for _, p := range d.esc.Pending(id) {
-			if p.Kind == protocol.PromptTrust {
-				_ = d.esc.Resolve(p.ID, "directory-change", escalation.Answer{Value: protocol.AnswerDeny})
-			}
-		}
+		d.withdrawTrustPrompts(id, "directory-change")
 	}
 	d.maybeTrustPrompt(s)
 	return s.Info(), nil
 }
 
-// ArchiveChannel archives a channel.
+// ArchiveChannel archives a channel. Its trust prompt, if one is open, is
+// withdrawn: nobody will answer it for a channel that is gone from the list.
 func (d *Daemon) ArchiveChannel(ctx context.Context, id string) error {
 	s, err := d.channel(id)
 	if err != nil {
 		return err
 	}
-	return s.Archive(ctx)
+	if err := s.Archive(ctx); err != nil {
+		return err
+	}
+	d.withdrawTrustPrompts(id, "archived")
+	return nil
 }
 
 // RenameChannel gives a channel another name: normalised like an agent's
