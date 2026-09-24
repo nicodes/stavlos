@@ -2,9 +2,12 @@ package tools
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -119,6 +122,7 @@ type stagedFile struct {
 type overlay struct {
 	files map[string]*stagedFile
 	order []string // first-touch order, for writing
+	env   *Env
 }
 
 // file is a path's state, read from disk on first touch.
@@ -127,16 +131,19 @@ func (o *overlay) file(abs, shown string) (*stagedFile, error) {
 		return f, nil
 	}
 	f := &stagedFile{path: abs, mode: 0o644}
-	switch fi, err := os.Stat(abs); {
+	switch r, err := o.env.openRead(abs); {
 	case errors.Is(err, fs.ErrNotExist):
 	case err != nil:
+		if strings.HasSuffix(err.Error(), " is a directory") {
+			return nil, fmt.Errorf("%s is a directory", shown)
+		}
 		return nil, fmt.Errorf("%s: %v", shown, err)
-	case fi.IsDir():
-		return nil, fmt.Errorf("%s is a directory", shown)
 	default:
-		b, err := os.ReadFile(abs)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %v", shown, err)
+		b, rerr := io.ReadAll(r)
+		fi, serr := r.Stat()
+		r.Close()
+		if rerr != nil || serr != nil {
+			return nil, fmt.Errorf("%s: %v", shown, errors.Join(rerr, serr))
 		}
 		f.exists, f.had, f.content, f.prev, f.mode = true, true, string(b), b, fi.Mode().Perm()
 	}
@@ -148,7 +155,7 @@ func (o *overlay) file(abs, shown string) (*stagedFile, error) {
 // stagePatch applies every section to the overlay, so a failure leaves
 // nothing half-applied.
 func stagePatch(ops []patchOp, env *Env) (*overlay, error) {
-	o := &overlay{files: map[string]*stagedFile{}}
+	o := &overlay{files: map[string]*stagedFile{}, env: env}
 	for _, op := range ops {
 		f, err := o.file(resolve(env, op.path), op.path)
 		if err != nil {
@@ -208,9 +215,9 @@ func (o *overlay) write() error {
 	rollback := func() {
 		for i := len(done) - 1; i >= 0; i-- {
 			if f := done[i]; f.had {
-				_ = writeAtomic(f.path, f.prev, f.mode)
+				_ = writeAtomic(o.env, f.path, f.prev, f.mode)
 			} else {
-				_ = os.Remove(f.path)
+				_ = o.env.remove(f.path)
 			}
 		}
 	}
@@ -219,7 +226,7 @@ func (o *overlay) write() error {
 		if !f.exists || f.had && f.content == string(f.prev) {
 			continue
 		}
-		if err := writeAtomic(f.path, []byte(f.content), f.mode); err != nil {
+		if err := writeAtomic(o.env, f.path, []byte(f.content), f.mode); err != nil {
 			rollback()
 			return err
 		}
@@ -227,7 +234,7 @@ func (o *overlay) write() error {
 	}
 	for _, abs := range o.order {
 		if f := o.files[abs]; f.had && !f.exists {
-			if err := os.Remove(f.path); err != nil {
+			if err := o.env.remove(f.path); err != nil {
 				return fmt.Errorf("%v (the other changes were applied)", err)
 			}
 		}
@@ -237,8 +244,50 @@ func (o *overlay) write() error {
 
 // writeAtomic writes a file through a temporary file created beside it
 // (O_EXCL, a random name: a link planted at a guessable name is never
-// followed) and renamed into place.
-func writeAtomic(path string, content []byte, mode os.FileMode) error {
+// followed) and renamed into place. Beneath a root every step goes through
+// the root, so a directory on the way swapped for a link out of the
+// working set fails the write instead of landing it elsewhere.
+func writeAtomic(env *Env, path string, content []byte, mode os.FileMode) error {
+	root, rel, in, err := env.at(path)
+	if err != nil {
+		return err
+	}
+	if !in {
+		return writeAtomicPlain(path, content, mode)
+	}
+	defer root.Close()
+	if dir := filepath.Dir(rel); dir != "." {
+		if err := root.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	var rnd [8]byte
+	if _, err := rand.Read(rnd[:]); err != nil {
+		return err
+	}
+	tmp := filepath.Join(filepath.Dir(rel), "."+filepath.Base(rel)+".stavlos-"+hex.EncodeToString(rnd[:]))
+	f, err := root.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(content)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		err = root.Chmod(tmp, mode)
+	}
+	if err == nil {
+		err = root.Rename(tmp, rel)
+	}
+	if err != nil {
+		_ = root.Remove(tmp)
+	}
+	return err
+}
+
+// writeAtomicPlain is writeAtomic for a path under no root.
+func writeAtomicPlain(path string, content []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

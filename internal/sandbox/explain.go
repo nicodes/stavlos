@@ -23,11 +23,19 @@ func Explain() Report {
 	}
 	switch lvl {
 	case Full:
+		// Landlock grows by ABI version; what an older kernel cannot do is
+		// said rather than assumed (helper.go restrict).
+		if v := abi(); v < 6 {
+			r.Missing = append(r.Missing, "Commands can connect to abstract Unix sockets outside the sandbox (an X server, a session bus): Landlock 6 (Linux 6.12) scopes them.")
+			if v < 4 {
+				r.Missing = append(r.Missing, "The network setting is not enforced: Landlock 4 (Linux 6.7) restricts TCP.")
+			}
+		}
 	case Landlock:
 		r.Missing = []string{
 			"Commands can read your credentials (~/.ssh, ~/.aws, ~/.config/gh, …) and Stavlos's own files: nothing is hidden from them.",
-			"Commands can edit the files that steer agents or run code later (.git/hooks, .stavlos, AGENTS.md).",
-			"Commands share the system's /tmp.",
+			"Commands can edit the files that steer agents or run code later (.git/hooks, .stavlos, AGENTS.md); a change is reported in the result.",
+			"Commands share the system's /tmp and your runtime directory: a service there (D-Bus, systemd-run, tmux) can start a process for them outside the sandbox, so every command asks first.",
 		}
 		r.Fix = usernsFix()
 	case None:

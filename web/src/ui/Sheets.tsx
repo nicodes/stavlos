@@ -1,4 +1,5 @@
-import { For, Show } from "solid-js";
+import { For, Show, createResource } from "solid-js";
+import { sheetToken } from "../core/session";
 import type { SheetInfo } from "../core/types";
 
 /** The channel's tabs: its chat, then one per sheet. Hidden while there are no sheets. */
@@ -30,6 +31,7 @@ export function SheetTabs(props: { sheets: SheetInfo[]; open: string; chatLabel:
  * changes it.
  */
 export function SheetFrame(props: { channel: string; sheet: SheetInfo }) {
+  const [token] = createResource(() => [props.channel, props.sheet.id] as const, ([channel, id]) => sheetToken(channel, id));
   return (
     <div class="flex min-h-0 flex-1 flex-col">
       <div class="flex items-center gap-2 border-b border-line bg-panel px-4 py-1 text-dim">
@@ -37,13 +39,17 @@ export function SheetFrame(props: { channel: string; sheet: SheetInfo }) {
           written by <span class="text-text">@{props.sheet.author || "an agent"}</span> · a page from an agent, not from Stavlos: never type a password or key into it
         </span>
       </div>
-      <iframe
-        class="min-h-0 w-full flex-1 border-0 bg-ink"
-        title={props.sheet.title}
-        sandbox="allow-scripts"
-        referrerpolicy="no-referrer"
-        src={`/sheets/${encodeURIComponent(props.channel)}/${encodeURIComponent(props.sheet.id)}?h=${props.sheet.hash.slice(0, 16)}`}
-      />
+      <Show when={token()}>
+        {(t) => (
+          <iframe
+            class="min-h-0 w-full flex-1 border-0 bg-ink"
+            title={props.sheet.title}
+            sandbox="allow-scripts"
+            referrerpolicy="no-referrer"
+            src={`/sheets/${encodeURIComponent(props.channel)}/${encodeURIComponent(props.sheet.id)}?h=${props.sheet.hash.slice(0, 16)}&t=${t()}`}
+          />
+        )}
+      </Show>
     </div>
   );
 }

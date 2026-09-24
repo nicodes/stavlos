@@ -33,7 +33,7 @@ func TestSheetsAreFilesTheLogKnows(t *testing.T) {
 		reply(call("c5", "sheet", `{"action":"write","id":"s9","html":"<p>nope</p>"}`)),
 		reply(text("done")),
 	}}
-	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"apply_patch":"allow"}}`}, fm)
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"apply_patch":"allow","sheet":"allow"}}`}, fm)
 	runTurn(t, s, h, "make a sheet")
 
 	if h.promptCount() != 0 {
@@ -115,7 +115,7 @@ func TestTheFileToolsKeepToASheetsLimits(t *testing.T) {
 		},
 		reply(text("done")),
 	}}
-	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"apply_patch":"allow"}}`}, fm)
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"apply_patch":"allow","sheet":"allow"}}`}, fm)
 	runTurn(t, s, h, "go")
 	fin := finished(h, s.Root().ID)
 	if len(fin) != 5 {

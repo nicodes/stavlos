@@ -15,6 +15,7 @@ import (
 	"github.com/nicodes/stavlos/internal/clip"
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/sandbox"
@@ -43,6 +44,90 @@ type Env struct {
 	PassEnv   []string         // environment variables kept for child processes although their names look like secrets (config env.pass)
 	Sandbox   *sandbox.Spec    // the boundary commands run in; nil runs them unsandboxed
 	Sheets    Sheets           // the channel's sheets; nil when unavailable
+	// Roots are the directories the file tools open through a root
+	// (os.OpenRoot): the working set, the sheets and the scratch directory,
+	// resolved. The policy judges a path with its links resolved; a link
+	// swapped in between that check and the open would otherwise be
+	// followed to wherever it leads (a key, the daemon's own files). Opened
+	// through the root, a link that leaves it is refused instead. A path
+	// under no root (one the human allowed outside the working set) is
+	// opened as it is.
+	Roots []string
+	// Judged maps each path of the call, as the model wrote it, to the
+	// filesystem path the policy judged (ResolvePath at decision time).
+	Judged map[string]string
+}
+
+// at finds the root a resolved path lies beneath, opened, with the path
+// relative to it. in is false for a path under no root.
+func (env *Env) at(abs string) (root *os.Root, rel string, in bool, err error) {
+	for _, r := range env.Roots {
+		if rel, ok := pathx.Rel(r, abs); ok {
+			root, err := os.OpenRoot(r)
+			return root, rel, true, err
+		}
+	}
+	return nil, "", false, nil
+}
+
+// openRead opens a regular file for reading, through its root where it has
+// one.
+func (env *Env) openRead(abs string) (*os.File, error) {
+	root, rel, in, err := env.at(abs)
+	if err != nil {
+		return nil, err
+	}
+	var f *os.File
+	if in {
+		defer root.Close()
+		f, err = root.Open(rel)
+	} else {
+		f, err = os.Open(abs)
+	}
+	if err != nil {
+		return nil, err
+	}
+	st, err := f.Stat()
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	if st.IsDir() {
+		f.Close()
+		return nil, fmt.Errorf("%s is a directory", abs)
+	}
+	if !st.Mode().IsRegular() {
+		f.Close()
+		return nil, fmt.Errorf("%s is not a regular file", abs)
+	}
+	return f, nil
+}
+
+// check confirms that a judged path beneath a root still resolves inside
+// it, for a tool that hands the path to a program (ripgrep) or a walk
+// rather than opening it itself: a link swapped in since the judgement is
+// refused here instead of followed there.
+func (env *Env) check(abs string) error {
+	root, rel, in, err := env.at(abs)
+	if err != nil || !in {
+		return err
+	}
+	defer root.Close()
+	_, err = root.Stat(rel)
+	return err
+}
+
+// remove deletes a file, through its root where it has one.
+func (env *Env) remove(abs string) error {
+	root, rel, in, err := env.at(abs)
+	if err != nil {
+		return err
+	}
+	if !in {
+		return os.Remove(abs)
+	}
+	defer root.Close()
+	return root.Remove(rel)
 }
 
 // Skill is a loadable skill: its front matter and its body.

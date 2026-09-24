@@ -74,6 +74,10 @@ func TestGrantDir(t *testing.T) {
 		filepath.Join(root, "plain", "sub"):                 filepath.Join(root, "plain", "sub"),     // a directory: itself
 		filepath.Join(root, "plain", "missing", "g.txt"):    filepath.Join(root, "plain", "missing"), // a path that does not exist yet: its parent
 	}
+	// never the home directory or / for a file in it: the file alone
+	home, _ := os.UserHomeDir()
+	cases[filepath.Join(home, "stavlos-grantdir-test-missing")] = filepath.Join(home, "stavlos-grantdir-test-missing")
+	cases["/stavlos-grantdir-test-missing"] = "/stavlos-grantdir-test-missing"
 	for p, want := range cases {
 		if got := grantDir(p); got != want {
 			t.Errorf("%s: got %s want %s", p, got, want)

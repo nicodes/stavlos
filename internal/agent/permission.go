@@ -34,7 +34,8 @@ type decision struct {
 	boundary string      // the directory the call reaches outside the working set, "" when inside
 	control  string      // the file that steers the harness this call edits, "" for none: no mode and no permit answers that ask
 	egress   bool        // the call sends data off the machine: auto leaves it asking
-	bare     bool        // a command with no sandbox under it: asked every time, like a control file
+	bare     bool        // a command the sandbox cannot hold: asked every time, like a control file
+	bareWhy  string      // what the prompt says of it
 	why      string      // the denial when the harness refuses without a rule (auto outside the directories)
 }
 
@@ -75,7 +76,23 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		}
 		sheetsAfter = after
 	}
-	res := t.Run(turnCtx, c.Input, a.toolEnv(turn, c, rv, cfg))
+	// The files that steer the harness or run code later are stamped
+	// before a command and compared after it: the sandbox makes them
+	// read-only where the kernel allows, and this says so where it does
+	// not, or where a rename got round the mount (control.go).
+	var before controlStamp
+	if c.Name == toolname.Shell {
+		before = a.c.stampControl(cfg)
+		a.c.mu.Lock()
+		a.controlBefore = before
+		a.c.mu.Unlock()
+	}
+	res := t.Run(turnCtx, c.Input, a.toolEnv(turn, c, d.sub, rv, cfg))
+	if before != nil {
+		if note := a.c.controlNote(before, cfg); note != "" {
+			res.Output += "\n\n" + note
+		}
+	}
 	if sheetsAfter != nil && !res.IsError {
 		if undone := sheetsAfter(); undone != "" {
 			res = tools.Result{Output: undone, IsError: true}
@@ -189,7 +206,11 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	} else if verb == policy.Deny {
 		why = autoOutside(boundary)
 	}
-	return decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: f.egress, bare: f.bare}
+	d := decision{sub: sub, arg: arg, verb: verb, boundary: boundary, why: why, control: control, egress: f.egress, bare: f.bare}
+	if f.bare {
+		d.bareWhy = bareWhy(cfg)
+	}
+	return d
 }
 
 // facts is everything the verdict on a call depends on, read once.
@@ -327,7 +348,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	// the call itself; the prompt carries it for display.
 	prefix := prefixFor(d.sub.Kind, d.arg)
 	if d.bare {
-		question += " · no sandbox on this system: the command runs with your full access"
+		question += " · " + d.bareWhy
 		prefix = "" // a standing allow would not be honoured: nothing to offer
 	}
 	ans := a.ask(turnCtx, protocol.PromptInfo{
@@ -467,9 +488,16 @@ func (a *Agent) askOpened(ctx context.Context, info protocol.PromptInfo, callID 
 }
 
 // toolEnv is what a tool gets from this agent for one call.
-func (a *Agent) toolEnv(turn int, c model.Block, rv roleView, cfg *config.Effective) *tools.Env {
+func (a *Agent) toolEnv(turn int, c model.Block, sub policy.Subject, rv roleView, cfg *config.Effective) *tools.Env {
+	var judged map[string]string
+	if sub.Kind == policy.KindPath {
+		judged = map[string]string{}
+		for _, v := range sub.Values {
+			judged[v] = tools.ResolvePath(a.c.Dir(), v)
+		}
+	}
 	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
-		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir(), Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
+		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir(), Roots: a.c.fileRoots(), Judged: judged, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Sandbox: a.c.sandboxSpec(cfg),
 		Partial: func(out string) {
 			a.c.host.Stream(protocol.StreamNotification{Channel: a.c.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: out})

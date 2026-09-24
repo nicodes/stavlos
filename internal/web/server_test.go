@@ -3,6 +3,7 @@ package web
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"io"
@@ -197,6 +198,20 @@ func TestGuessingDropsOutstandingCodes(t *testing.T) {
 	}
 }
 
+// sheetURL is a sheet's address with the token the page computes from its
+// page key (web/src/core/session.ts sheetToken).
+func sheetURL(base string, cookie *http.Cookie, channel, id string) string {
+	key, _ := pageKeys.Load(cookie.Value)
+	return base + "/sheets/" + channel + "/" + id + "?t=" + sheetToken(sha256.Sum256([]byte(key.(string))), channel, id)
+}
+
+// The client's test pins the same vector (session.test.ts).
+func TestSheetTokenVector(t *testing.T) {
+	if got := sheetToken(sha256.Sum256([]byte("page-key")), "c1", "s1"); got != "804f0abb02ac34a100da02a8251ea369465f5aad7153f1f47d1d39375e9e393c" {
+		t.Fatalf("vector: %s", got)
+	}
+}
+
 func testSheet(channel, id string) (Sheet, error) {
 	switch {
 	case channel == "c1" && id == "s1":
@@ -216,7 +231,14 @@ func TestSheetsAreServedInert(t *testing.T) {
 	}
 	cookie := signIn(t, s, base)
 	auth := map[string]string{"Cookie": cookie.Name + "=" + cookie.Value}
-	res := do(t, "GET", base+"/sheets/c1/s1", auth, "")
+	// the cookie alone (another loopback server replaying it) opens no sheet
+	if res := do(t, "GET", base+"/sheets/c1/s1", auth, ""); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("a sheet on the cookie alone: %d", res.StatusCode)
+	}
+	if res := do(t, "GET", sheetURL(base, cookie, "c1", "s1")+"x", auth, ""); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("a sheet on a wrong token: %d", res.StatusCode)
+	}
+	res := do(t, "GET", sheetURL(base, cookie, "c1", "s1"), auth, "")
 	body, _ := io.ReadAll(res.Body)
 	csp := res.Header.Get("Content-Security-Policy")
 	for _, want := range []string{"sandbox allow-scripts;", "default-src 'none'", "form-action 'none'", "frame-ancestors 'self'"} {
@@ -232,12 +254,12 @@ func TestSheetsAreServedInert(t *testing.T) {
 	if res.StatusCode != 200 || !strings.Contains(string(body), `href="/sheet.css"`) || !strings.Contains(string(body), `<div class="card">hi</div>`) || !strings.Contains(string(body), "A &lt;fragment&gt;") {
 		t.Fatalf("fragment: %d %s", res.StatusCode, body)
 	}
-	res = do(t, "GET", base+"/sheets/c1/s2", auth, "")
+	res = do(t, "GET", sheetURL(base, cookie, "c1", "s2"), auth, "")
 	body, _ = io.ReadAll(res.Body)
 	if !strings.Contains(string(body), `<HEAD lang=x><meta charset="utf-8">`) || strings.Index(string(body), "sheet.css") > strings.Index(string(body), "<style>") {
 		t.Fatalf("our stylesheet goes first in a document's own head: %s", body)
 	}
-	if res := do(t, "GET", base+"/sheets/c1/nope", auth, ""); res.StatusCode != http.StatusNotFound {
+	if res := do(t, "GET", sheetURL(base, cookie, "c1", "nope"), auth, ""); res.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown sheet: %d", res.StatusCode)
 	}
 	// the stylesheet is loadable from a sheet's opaque origin
@@ -280,7 +302,7 @@ func TestASheetIsServedOnlyToAFrame(t *testing.T) {
 	s, base := start(t)
 	cookie := signIn(t, s, base)
 	for dest, want := range map[string]int{"iframe": 200, "document": 403, "empty": 403, "script": 403, "image": 403} {
-		res := do(t, "GET", base+"/sheets/c1/s1", map[string]string{"Cookie": cookie.Name + "=" + cookie.Value, "Sec-Fetch-Dest": dest}, "")
+		res := do(t, "GET", sheetURL(base, cookie, "c1", "s1"), map[string]string{"Cookie": cookie.Name + "=" + cookie.Value, "Sec-Fetch-Dest": dest}, "")
 		if res.StatusCode != want {
 			t.Errorf("Sec-Fetch-Dest %s: %d, want %d", dest, res.StatusCode, want)
 		}
