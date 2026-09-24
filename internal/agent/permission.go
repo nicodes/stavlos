@@ -58,27 +58,10 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		finish(fmt.Sprintf("unknown tool %q", c.Name), true, false, false)
 		return
 	}
-	d := a.decide(c, t, rv, cfg)
-	switch d.verb {
-	case policy.Allow:
-		// runs below
-	case policy.Deny:
-		why := d.why
-		if why == "" {
-			why = "Denied by policy: " + c.Name + " " + d.arg
-		}
-		finish(why, true, false, true)
+	d, no := a.admit(turnCtx, c, t, rv, cfg)
+	if no != nil {
+		finish(no.out, true, no.cancelled, no.denied)
 		return
-	case policy.Ask:
-		denial, withdrawn, allowed := a.escalate(turnCtx, c, d, rv)
-		switch {
-		case withdrawn:
-			finish("", true, true, false)
-			return
-		case !allowed:
-			finish(denial, true, false, true)
-			return
-		}
 	}
 	// The sheets directory is inside the working set for the file tools, so
 	// the limits on sheets have to hold for them too, not only for the sheet
@@ -105,6 +88,9 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 	if !res.IsError && c.Name == toolname.ApplyPatch {
 		a.sheetsPatched(d.sub)
 	}
+	if !res.IsError && c.Name == toolname.Read {
+		res.Output = a.dedupRead(c, res.Output)
+	}
 	if !res.IsError {
 		if note, files := a.instructionsFor(d.sub, cfg); note != "" {
 			res.Output += "\n\n" + note
@@ -112,6 +98,58 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		}
 	}
 	finish(res.Output, res.IsError, false, false)
+}
+
+// refusal is why a call did not run: what the model is told, and whether
+// the prompt was withdrawn or the call denied.
+type refusal struct {
+	out       string
+	cancelled bool
+	denied    bool
+}
+
+// admit is everything between a call and its run: the verdict, the repeat
+// check, and the human where either asks. It returns the decision the run
+// needs, or the refusal.
+func (a *Agent) admit(turnCtx context.Context, c model.Block, t tools.Tool, rv roleView, cfg *config.Effective) (decision, *refusal) {
+	d := a.decide(c, t, rv, cfg)
+	// A call the rules let through silently still asks when it is the same
+	// call, arguments and all, for the third time running: a model polling
+	// a file or a command in a loop re-sends its whole context every time,
+	// and nobody would have heard of it before the turn's cap.
+	if d.verb == policy.Allow && a.repeated(c) {
+		denial, withdrawn, allowed := a.askRepeat(turnCtx, c, rv)
+		if no := refused(denial, withdrawn, allowed); no != nil {
+			return d, no
+		}
+	}
+	switch d.verb {
+	case policy.Allow:
+		// runs
+	case policy.Deny:
+		why := d.why
+		if why == "" {
+			why = "Denied by policy: " + c.Name + " " + d.arg
+		}
+		return d, &refusal{out: why, denied: true}
+	case policy.Ask:
+		denial, withdrawn, allowed := a.escalate(turnCtx, c, d, rv)
+		if no := refused(denial, withdrawn, allowed); no != nil {
+			return d, no
+		}
+	}
+	return d, nil
+}
+
+// refused turns a prompt's outcome into a refusal, or nil for a yes.
+func refused(denial string, withdrawn, allowed bool) *refusal {
+	switch {
+	case withdrawn:
+		return &refusal{cancelled: true}
+	case !allowed:
+		return &refusal{out: denial, denied: true}
+	}
+	return nil
 }
 
 // decide is the verdict for a call before any human is asked.
@@ -324,6 +362,70 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	return "", false, true
 }
 
+// repeatLimit is how many times in a row the same call runs before a human
+// is asked (OpenCode's DOOM_LOOP_THRESHOLD).
+const repeatLimit = 3
+
+// repeated counts a call against the one before it and reports the one
+// that reaches repeatLimit, except in yolo mode, which asks nothing. The
+// count starts over at every turn and after every prompt.
+func (a *Agent) repeated(c model.Block) bool {
+	key := c.Name + "\x00" + string(c.Input)
+	a.c.mu.Lock()
+	defer a.c.mu.Unlock()
+	if a.repeat.key == key {
+		a.repeat.n++
+	} else {
+		a.repeat = repeatCall{key: key, n: 1}
+	}
+	if a.repeat.n < repeatLimit || a.c.st.mode == protocol.ModeYolo {
+		return false
+	}
+	a.repeat.n = 0
+	return true
+}
+
+// repeatCall is the last tool call and how many times running it was made.
+type repeatCall struct {
+	key string
+	n   int
+}
+
+// askRepeat puts a repeated call to the human. The prompt is sticky: there
+// is no standing allow for "the same thing again".
+func (a *Agent) askRepeat(turnCtx context.Context, c model.Block, rv roleView) (denial string, withdrawn, allowed bool) {
+	question := fmt.Sprintf("%s has made the same %s call, with the same arguments, %d times in a row", rv.name, c.Name, repeatLimit)
+	ans := a.ask(turnCtx, protocol.PromptInfo{
+		ID: NewID("p"), Channel: a.c.ID, ChannelName: a.c.Name(), Agent: a.ID, From: rv.name, Role: rv.role, Kind: protocol.PromptPermission, Tool: c.Name, Input: c.Input,
+		Question: question, Sticky: true,
+	}, c.ID)
+	switch {
+	case ans.Withdrawn:
+		return "", true, false
+	case ans.Value == protocol.AnswerAllow, ans.Value == protocol.AnswerAllowAlways, ans.Value == protocol.AnswerAllowPrefix:
+		return "", false, true
+	}
+	denial = fmt.Sprintf("Denied: this is the same %s call, with the same arguments, for the %d%s time in a row. Do something different, or end the turn and let a job or a message wake you.", c.Name, repeatLimit, ordinal(repeatLimit))
+	if ans.Defaulted {
+		denial = "Denied: nobody answered the prompt and the headless default is deny. " + denial
+	} else if r := strings.TrimSpace(ans.Reason); r != "" {
+		denial += " The user says: " + r
+	}
+	return denial, false, false
+}
+
+func ordinal(n int) string {
+	switch n {
+	case 1:
+		return "st"
+	case 2:
+		return "nd"
+	case 3:
+		return "rd"
+	}
+	return "th"
+}
+
 // denialText is what the agent is told when a prompt ends in no.
 func denialText(ans escalation.Answer, d decision) string {
 	switch {
@@ -367,12 +469,15 @@ func (a *Agent) askOpened(ctx context.Context, info protocol.PromptInfo, callID 
 // toolEnv is what a tool gets from this agent for one call.
 func (a *Agent) toolEnv(turn int, c model.Block, rv roleView, cfg *config.Effective) *tools.Env {
 	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
-		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: filepath.Join(paths.CacheDir(), "tmp", a.c.ID, "output"), Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
+		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir(), Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Sandbox: a.c.sandboxSpec(cfg),
 		Partial: func(out string) {
 			a.c.host.Stream(protocol.StreamNotification{Channel: a.c.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: out})
 		}}
 }
+
+// overflowDir is where a tool output over the cap is kept whole.
+func (a *Agent) overflowDir() string { return filepath.Join(paths.CacheDir(), "tmp", a.c.ID, "output") }
 
 func hasDef(defs []model.ToolDef, name string) bool {
 	for _, d := range defs {

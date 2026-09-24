@@ -90,7 +90,7 @@ const (
 type messageTool struct{}
 
 func (messageTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Message, Description: "Send text to one or more recipients in this channel using the to array. Every recipient sees the full recipient list. All targets and reply references are validated before delivery. request (the default) creates an independent request ID for the agents addressed; each owes its own explicit response. response requires reply_to containing the pending request IDs it answers, and to must contain their senders. One response may answer several requests, including repeated requests from one sender. Only those IDs are cleared; sending another request or info/no_reply never clears a debt. info (alias no_reply) needs no reply and does not wake idle agents. Human-facing messages without explicit response references are updates; use ask_user for questions to the human. Human prompts and steers carry request IDs too. agent_status exposes pending_replies and awaiting_replies with IDs and excerpts.",
+	return model.ToolDef{Name: toolname.Message, Description: "Send text to agents and/or user (to is an array; every recipient sees it). kind request (the default) opens a request each agent addressed must answer. kind response answers the request IDs in reply_to, with their senders in to, and settles only those; the human's prompts carry request IDs to answer the same way. kind info needs no reply and wakes nobody. Ask the human questions with ask_user, not message.",
 		Schema: schemaOf(messageInput{})}
 }
 

@@ -30,7 +30,7 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 	s.mu.Unlock()
 	// Old tool results go first: lossless, free, and most of what a history
 	// holds. Compaction below is for what is left.
-	project.ClearOld(history, cc.ClearTokens, project.ClearMinimum, conversationTools)
+	_, gone := project.ClearOld(history, cc.ClearTokens, project.ClearMinimum, conversationTools)
 	est := project.EstimateTokens(history, system, defs)
 	// the provider's own count of the last call, when it is larger than the
 	// estimate: the estimate drifts, and the backend's number is what fills
@@ -41,12 +41,13 @@ func (a *Agent) prepareHistory(turnCtx context.Context, m model.Model, info mode
 	if !running && (wanted || full || over) {
 		if err := a.compact(turnCtx, m, info, wanted); err == nil {
 			history = a.history()
-			project.ClearOld(history, cc.ClearTokens, project.ClearMinimum, conversationTools)
+			_, gone = project.ClearOld(history, cc.ClearTokens, project.ClearMinimum, conversationTools)
 			est = project.EstimateTokens(history, system, defs)
 		}
 	}
 	s.mu.Lock()
 	a.ctxTokens, a.ctxWindow = est, info.ContextWindow
+	a.forgetReads(gone)
 	s.mu.Unlock()
 	return history
 }
@@ -127,6 +128,7 @@ func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all
 	}
 	a.c.mu.Lock()
 	a.instructed = nil // the summary replaced the results that carried them: they are attached again
+	a.reads = nil      // and the reads: a file is read in full again
 	a.c.mu.Unlock()
 	return nil
 }
