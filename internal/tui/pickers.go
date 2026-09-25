@@ -217,6 +217,10 @@ func (m *Model) loginKey(msg tea.KeyMsg) tea.Cmd {
 		return m.cancelLogin()
 	case key.Matches(msg, keys.OvOpen) && !o.login.key: // "o" is a character to type in the field
 		return openBrowserCmd(o.login.url)
+	case key.Matches(msg, keys.OvCopy) && !o.login.key && o.login.url != "": // same: "c" is typed into the field
+		// A wrapped URL in a box is the one thing here that cannot be
+		// selected with the mouse without picking up the border.
+		return tea.Batch(copyCmd(o.login.url), m.setStatus("copied the sign-in URL", false))
 	case key.Matches(msg, keys.OvSelect):
 		if o.login.key {
 			return m.submitLoginKey()

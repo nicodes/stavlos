@@ -1,9 +1,11 @@
 package tui
 
 import (
-	"github.com/nicodes/stavlos/internal/oauth"
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/nicodes/stavlos/internal/oauth"
 
 	"github.com/nicodes/stavlos/internal/protocol"
 	"github.com/nicodes/stavlos/internal/tui/dialog"
@@ -297,5 +299,37 @@ func TestLoginOverlayTakesAKey(t *testing.T) {
 		t.Fatalf("the key should not be echoed:\n%s", v)
 	case !strings.Contains(v, "enter: sign in"):
 		t.Fatalf("no hint:\n%s", v)
+	}
+}
+
+// TestLoginOverlayCopiesTheURL: c puts the sign-in URL on the clipboard and
+// says so, because the URL is wrapped inside a box where a mouse selection
+// picks up the border too. While a key is being typed, c is just a letter.
+func TestLoginOverlayCopiesTheURL(t *testing.T) {
+	const url = "https://auth.example/oauth/authorize?code=abc123&state=xyz"
+	c := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}}
+
+	m := channelModel()
+	m.ov = newOverlay(ovProviders, overlayLogin, "")
+	m.ov.switchLogin("ChatGPT")
+	m.ov.setLogin(url, "", "Complete the sign-in in your browser.", "")
+	if cmd := m.loginKey(c); cmd == nil {
+		t.Fatal("c did not copy the URL")
+	}
+	if !strings.Contains(m.status, "copied") {
+		t.Fatalf("the copy is not reported: %q", m.status)
+	}
+	if !strings.Contains(strings.Join(m.ov.loginLines(60, "⠋"), "\n"), "c: copy URL") {
+		t.Error("the hints do not offer the copy")
+	}
+
+	// A pasted-key sign-in has a text field: c belongs to it.
+	m2 := channelModel()
+	m2.ov = newOverlay(ovProviders, overlayLogin, "")
+	m2.ov.setLogin("https://z.ai/manage-apikey/apikey-list", "", "Paste it here.", oauth.MethodAPIKey)
+	m2.status = ""
+	m2.loginKey(c)
+	if strings.Contains(m2.status, "copied") {
+		t.Error("c was taken as a command while typing a key")
 	}
 }
