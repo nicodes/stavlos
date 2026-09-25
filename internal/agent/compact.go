@@ -88,6 +88,7 @@ func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all
 		s.mu.Unlock()
 		return errors.New("a compaction is already running")
 	}
+	a.notes = nil // a summary replaces the messages the sent notes were placed in
 	keep := s.cfg.Compaction.KeepTokens
 	if all {
 		keep = 0 // /compact summarises every turn that ended
