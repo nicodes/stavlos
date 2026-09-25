@@ -196,7 +196,15 @@ func (t *turnRun) prepare() (p stepPlan, errText string) {
 		a.ensureMCP(a.ctx, p.cfg, p.rv.def.MCP)
 	}
 	p.system, p.defs = a.buildContext(p.rv, p.cfg)
-	p.history = withNote(a.prepareHistory(t.ctx, p.m, p.info, p.system, p.defs), a.stateNote(p.rv, p.cfg))
+	history := a.prepareHistory(t.ctx, p.m, p.info, p.system, p.defs)
+	s.mu.Lock()
+	prior := a.notes
+	s.mu.Unlock()
+	var notes []sentNote
+	p.history, notes = withNotes(history, prior, a.stateNote(p.rv, p.cfg))
+	s.mu.Lock()
+	a.notes = notes
+	s.mu.Unlock()
 	return p, ""
 }
 
@@ -269,21 +277,91 @@ func (t *turnRun) takeMidTurn() error {
 	return err
 }
 
-// withNote appends the per-call state note to the last user message, so it
-// sits after everything a provider can cache.
-func withNote(history []model.Message, note string) []model.Message {
-	if len(history) == 0 || history[len(history)-1].Role != model.RoleUser {
-		history = append(history, model.Message{Role: model.RoleUser})
+// sentNote is a state note a previous call already sent: its text and where
+// it sat, so the next call can put it back in the same place. The position
+// is a message index and a block index within that message, both counted in
+// the history as it was sent (replayed notes included), because a message
+// goes on collecting blocks after a note was written into it.
+type sentNote struct {
+	msg       int
+	block     int
+	synthetic bool // it had no user message to attach to, so it made one
+	text      string
+}
+
+// withNotes builds the history for one call: the notes earlier calls already
+// sent, put back where they were, then this call's note at the end.
+//
+// The notes have to be replayed rather than dropped. A provider that caches a
+// conversation stores the prefix at the end of a request and reuses it only
+// for a later request that extends that one. A note that is last in call N
+// and absent from call N+1 makes N+1 a divergence rather than an extension,
+// so nothing after the system prompt can be reused: measured against the
+// ChatGPT Codex backend, that is a 6% cache hit where replaying the notes
+// gives 100%. Providers that match prefixes loosely (xAI) do not care either
+// way, and replaying costs them only the notes' own tokens.
+//
+// Replaying is best-effort. Compaction and cleared tool results rewrite the
+// history the notes were placed in, and once a position no longer holds what
+// it did, the chain is broken whatever we do: the notes are dropped and the
+// next call starts a fresh one.
+func withNotes(history []model.Message, prior []sentNote, note string) ([]model.Message, []sentNote) {
+	out, kept := history, make([]sentNote, 0, len(prior)+1)
+	for _, n := range prior {
+		next, ok := applyNote(out, n)
+		if !ok { // the history moved under it: this chain is over
+			out, kept = history, kept[:0]
+			break
+		}
+		out, kept = next, append(kept, n)
 	}
-	if note == "" && len(history[len(history)-1].Blocks) > 0 {
-		return history
+	n := sentNote{msg: len(out) - 1, text: note}
+	if len(out) == 0 || out[len(out)-1].Role != model.RoleUser {
+		n.msg, n.synthetic = len(out), true
+	} else {
+		if note == "" && len(out[len(out)-1].Blocks) > 0 {
+			return out, kept // nothing to say and something already there
+		}
+		n.block = len(out[n.msg].Blocks)
 	}
 	if note == "" {
-		note = "(continue)"
+		n.text = "(continue)"
 	}
-	last := &history[len(history)-1]
-	last.Blocks = append(append([]model.Block(nil), last.Blocks...), model.Block{Type: model.BlockText, Text: note})
-	return history
+	out, ok := applyNote(out, n)
+	if !ok {
+		return history, nil
+	}
+	return out, append(kept, n)
+}
+
+// applyNote puts one note back into a history, reporting whether the place it
+// belongs still looks the way it did when the note was written.
+func applyNote(history []model.Message, n sentNote) ([]model.Message, bool) {
+	block := model.Block{Type: model.BlockText, Text: n.text}
+	if n.synthetic {
+		if n.msg < 0 || n.msg > len(history) {
+			return history, false
+		}
+		out := make([]model.Message, 0, len(history)+1)
+		out = append(out, history[:n.msg]...)
+		out = append(out, model.Message{Role: model.RoleUser, Blocks: []model.Block{block}})
+		return append(out, history[n.msg:]...), true
+	}
+	if n.msg < 0 || n.msg >= len(history) || history[n.msg].Role != model.RoleUser {
+		return history, false
+	}
+	blocks := history[n.msg].Blocks
+	if n.block < 0 || n.block > len(blocks) {
+		return history, false
+	}
+	grown := make([]model.Block, 0, len(blocks)+1)
+	grown = append(grown, blocks[:n.block]...)
+	grown = append(grown, block)
+	grown = append(grown, blocks[n.block:]...)
+	out := make([]model.Message, len(history))
+	copy(out, history)
+	out[n.msg].Blocks = grown
+	return out, true
 }
 
 func bareID(full string) string {

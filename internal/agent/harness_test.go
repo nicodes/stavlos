@@ -345,10 +345,14 @@ func lastUserText(req model.Request) string {
 	if len(bs) == 0 {
 		return ""
 	}
-	b := bs[len(bs)-1]
-	if strings.HasPrefix(b.Text, "[harness state") && len(bs) > 1 {
-		b = bs[len(bs)-2] // the per-request state note rides after the last input
+	// The per-request state notes ride after the last input, and earlier
+	// calls' notes are replayed so each request extends the last, so there
+	// may be several of them.
+	i := len(bs) - 1
+	for i > 0 && strings.HasPrefix(bs[i].Text, "[harness state") {
+		i--
 	}
+	b := bs[i]
 	return b.Text + b.Content
 }
 

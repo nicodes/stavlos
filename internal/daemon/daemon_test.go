@@ -87,20 +87,26 @@ func (f *fakeModel) Complete(ctx context.Context, req model.Request, onDelta fun
 
 // withoutNote drops the per-request harness state note the runtime appends
 // to the last user message, so steps inspect the history itself.
+// Every note is taken out, not just the newest: earlier calls' notes are
+// replayed in place so each request extends the last one (agent.withNotes),
+// and a step that read a stale one would answer the wrong request.
 func withoutNote(msgs []model.Message) ([]model.Message, string) {
-	if len(msgs) == 0 {
-		return msgs, ""
-	}
-	last := msgs[len(msgs)-1]
-	n := len(last.Blocks)
-	if n == 0 || !strings.HasPrefix(last.Blocks[n-1].Text, "[harness state") {
-		return msgs, ""
-	}
-	note := last.Blocks[n-1].Text
-	out := append([]model.Message(nil), msgs...)
-	out[len(out)-1].Blocks = last.Blocks[:n-1]
-	if n == 1 {
-		out = out[:len(out)-1]
+	var note string
+	out := make([]model.Message, 0, len(msgs))
+	for _, m := range msgs {
+		kept := make([]model.Block, 0, len(m.Blocks))
+		for _, b := range m.Blocks {
+			if strings.HasPrefix(b.Text, "[harness state") {
+				note = b.Text // the last one seen is this call's
+				continue
+			}
+			kept = append(kept, b)
+		}
+		if len(kept) == 0 && len(m.Blocks) > 0 {
+			continue // the note was all it held
+		}
+		m.Blocks = kept
+		out = append(out, m)
 	}
 	return out, note
 }

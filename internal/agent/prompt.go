@@ -18,7 +18,9 @@ import (
 // They are built once per change of those and reused call after call, so a
 // provider's prompt cache keeps matching. What changes between calls (the
 // turn budget, how many agents are busy, the todo list) is stateNote,
-// appended to the end of each request.
+// appended to the end of each request — and kept there by later requests,
+// which replay the notes they already sent so each request extends the last
+// one rather than diverging from it (turn.go withNotes).
 
 // promptPrefix is an agent's cached system prompt and tools.
 type promptPrefix struct {
