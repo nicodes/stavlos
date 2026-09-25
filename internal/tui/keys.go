@@ -37,6 +37,7 @@ type keyMap struct {
 	OvClose  key.Binding
 	OvAlt    key.Binding // secondary action (models: channel default)
 	OvOpen   key.Binding // login: open the URL in the browser again
+	OvCopy   key.Binding // login: copy the URL to the clipboard
 	OvRemove key.Binding // providers: sign out of the selected provider
 
 	// Letters, which act only where no text is being typed.
@@ -92,6 +93,7 @@ var keys = keyMap{
 	OvClose:  key.NewBinding(key.WithKeys("esc")),
 	OvAlt:    key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "")),
 	OvOpen:   key.NewBinding(key.WithKeys("o", "O"), key.WithHelp("o", "")),
+	OvCopy:   key.NewBinding(key.WithKeys("c", "C"), key.WithHelp("c", "")),
 	OvRemove: key.NewBinding(key.WithKeys("ctrl+d"), key.WithHelp("ctrl+d", "")),
 
 	VimUp:       key.NewBinding(key.WithKeys("k")),

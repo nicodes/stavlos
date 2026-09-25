@@ -95,7 +95,7 @@ type overlay struct {
 const (
 	loginWaitingText = "waiting for you to finish signing in…"
 	loginStartText   = "starting sign-in…"
-	loginKeysWaiting = "o: open in browser"
+	loginKeysWaiting = "o: open in browser   c: copy URL"
 	loginKeysError   = "enter: retry"
 	loginKeysKey     = "enter: sign in   o: open in browser"
 )
