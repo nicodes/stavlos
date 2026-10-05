@@ -397,7 +397,7 @@ func (t *turnRun) movedOn(err error, modelID string) bool {
 		t.a.c.mu.Unlock()
 		return true
 	}
-	t.resumeAt = t.a.parkUntil(soonest, until)
+	t.resumeAt, t.resume = t.a.parkUntil(soonest, until), event.ResumeLimit
 	return false
 }
 
@@ -423,19 +423,61 @@ func (a *Agent) moveOff(provider string, until time.Time) (bool, time.Time) {
 	return c.commitLocked(context.Background(), c.event(a.ID, event.AgentUpdated, up)) == nil, soonest
 }
 
-// limitHint is a turn's error text: a refusal for a limit that the harness
+// resumeHint is a turn's error text: a refusal for a limit that the harness
 // could not answer by moving says so, since "status 429" alone reads as a
-// fault, and says whether the agent will carry on by itself.
-func limitHint(err error, resumeAt time.Time) string {
+// fault, and a passing fault says that it passes; both say whether the
+// agent will carry on by itself.
+func resumeHint(err error, resumeAt time.Time) string {
 	var le *model.LimitError
-	if !errors.As(err, &le) {
-		return err.Error()
+	var te *model.TransientError
+	switch {
+	case errors.As(err, &le):
+		hint := " (this model's plan is at its limit, and no other model this agent's role may use is available: list more under models in the role or in stavlos.json, or pick one with /models"
+		if !resumeAt.IsZero() {
+			hint += "; the agent carries on by itself once a model is back, about " + resumeAt.Local().Format("Mon 15:04")
+		}
+		return err.Error() + hint + ")"
+	case errors.As(err, &te):
+		hint := " (a passing fault at the provider, already retried"
+		if !resumeAt.IsZero() {
+			hint += "; the agent tries again by itself in about " + fmtDuration(time.Until(resumeAt).Round(time.Second))
+		}
+		return err.Error() + hint + ")"
 	}
-	hint := " (this model's plan is at its limit, and no other model this agent's role may use is available: list more under models in the role or in stavlos.json, or pick one with /models"
-	if !resumeAt.IsZero() {
-		hint += "; the agent carries on by itself once a model is back, about " + resumeAt.Local().Format("Mon 15:04")
+	return err.Error()
+}
+
+// --- waking an agent that stopped at a passing fault ---
+
+// A dropped stream or a model at capacity has been retried by the stream
+// layer already (stream.MidStreamRetries) and is still failing: the fault
+// outlasts seconds. The agent is parked and woken with a growing pause
+// (faultBackoff, doubling per wake in a row, at most faultBackoffMax) up to
+// maxResumes times, the same seatbelt a plan that never comes back has.
+// Before this an agent whose stream was reset once too often, or that met
+// "The model is currently at capacity due to high demand", stayed stopped
+// with the error until someone wrote to it.
+const (
+	faultBackoff    = 30 * time.Second
+	faultBackoffMax = 10 * time.Minute
+)
+
+// parkAfterFault is when to wake an agent whose turn is ending at a passing
+// fault, zero for any other error, when the configuration turns resuming
+// off, or after too many wakes in a row that ended the same way.
+func (a *Agent) parkAfterFault(err error) time.Time {
+	var te *model.TransientError
+	if !errors.As(err, &te) {
+		return time.Time{}
 	}
-	return err.Error() + hint + ")"
+	c := a.c
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := a.state().resumes
+	if !c.cfg.ResumeAfterLimit || n >= maxResumes {
+		return time.Time{}
+	}
+	return time.Now().Add(min(faultBackoff<<min(n, 10), faultBackoffMax))
 }
 
 // --- waking an agent that stopped at every plan's limit ---
@@ -444,8 +486,13 @@ func limitHint(err error, resumeAt time.Time) string {
 // that never comes back is not asked for ever.
 const maxResumes = 12
 
-// resumeText is what the model is told when it is woken.
-const resumeText = "Your last turn stopped because every model you may use was at its plan's limit. One is available again: carry on from where you stopped. Nothing else has changed, and nobody has written to you since."
+// resumeText is what the model is told when it is woken, by why it stopped.
+func resumeText(why string) string {
+	if why == event.ResumeFault {
+		return "Your last turn stopped at a passing fault at the provider (a dropped connection, or a model at capacity). It has been a moment: carry on from where you stopped. Nothing else has changed, and nobody has written to you since."
+	}
+	return "Your last turn stopped because every model you may use was at its plan's limit. One is available again: carry on from where you stopped. Nothing else has changed, and nobody has written to you since."
+}
 
 // parkUntil is when to wake an agent whose turn is ending with nowhere to
 // move: when the first limited candidate comes back, else when its own
@@ -467,10 +514,11 @@ func (a *Agent) parkUntil(soonest, own time.Time) time.Time {
 	return soonest
 }
 
-// MaybeResume wakes the agents whose turn stopped at every plan's limit and
-// whose time has come, provided a model really is available now: the wake is
-// an input from the harness, not a message put in the human's mouth, and the
-// turn it starts moves the agent to the available model before it calls.
+// MaybeResume wakes the agents whose turn stopped at every plan's limit, or
+// at a passing fault, and whose time has come, provided a model really is
+// available now: the wake is an input from the harness, not a message put in
+// the human's mouth, and the turn it starts moves the agent to the available
+// model before it calls.
 func (c *Channel) MaybeResume(ctx context.Context, now time.Time) error {
 	c.mu.Lock()
 	due := false
@@ -494,7 +542,7 @@ func (c *Channel) MaybeResume(ctx context.Context, now time.Time) error {
 		if !st.parkedUntil(now) || !mk.available(c.roleLocked(st).def, c.cfg, st.model) {
 			continue // not parked, or still nothing to run on: look again at the next tick
 		}
-		evs = append(evs, c.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputResume, Text: resumeText}))
+		evs = append(evs, c.event(id, event.InputQueued, event.Input{ID: NewID("i"), Kind: event.InputResume, Text: resumeText(st.resumeWhy)}))
 	}
 	return c.commitLocked(ctx, evs...)
 }

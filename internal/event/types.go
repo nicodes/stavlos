@@ -300,11 +300,20 @@ type TurnEndedPayload struct {
 	Turn   int        `json:"turn"`
 	Reason TurnReason `json:"reason"`
 	Error  string     `json:"error,omitempty"`
-	// ResumeAt is set when the turn stopped because every model the agent may
-	// use was at its plan's limit: the harness wakes the agent once one is back,
-	// no sooner than this (docs/model-selection.md).
+	// ResumeAt is set when the turn stopped for something that passes: every
+	// model the agent may use at its plan's limit, or a fault at the provider
+	// (a dropped stream, a model at capacity). The harness wakes the agent no
+	// sooner than this, and for a limit only once a model is back
+	// (docs/model-selection.md). Resume says which.
 	ResumeAt time.Time `json:"resume_at,omitzero"`
+	Resume   string    `json:"resume,omitempty"` // "limit" | "fault"
 }
+
+// Why a turn is resumed (TurnEndedPayload.Resume).
+const (
+	ResumeLimit = "limit"
+	ResumeFault = "fault"
+)
 
 // --- asks ---
 
