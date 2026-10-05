@@ -15,6 +15,7 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -66,9 +67,12 @@ var (
 	RetryDelay  = 500 * time.Millisecond // first backoff; doubles, jittered, capped at maxRetryWait
 	IdleTimeout = 2 * time.Minute        // no bytes for this long ends the call
 	// MidStreamRetries is how many times a call whose stream broke off
-	// (the connection dropped, went idle, or ended without a terminal event)
-	// is sent again, as long as no tool call had begun streaming.
-	MidStreamRetries = 1
+	// (the connection dropped, went idle, ended without a terminal event, or
+	// carried a passing fault such as "at capacity") is sent again. Nothing
+	// is on the record until a call completes, so a retry duplicates
+	// nothing, tool calls included: a Reset delta tells the clients to drop
+	// what streamed.
+	MidStreamRetries = 3
 	maxRetryWait     = 30 * time.Second
 	maxErrorBody     = 2048
 )
@@ -86,10 +90,12 @@ func NewHTTPClient() *http.Client {
 
 // Complete runs one streaming call. newCodec makes the codec for an
 // attempt, streaming through the delta callback it is given. A stream that
-// breaks off before a tool call began is sent again once, after a Reset
-// delta tells the caller to drop what streamed. On cancellation it returns
-// the partial response with ctx.Err(); on any other failure the partial
-// response and a "name: …" error.
+// breaks off, or fails with a passing fault, is sent again up to
+// MidStreamRetries times with backoff, after a Reset delta tells the caller
+// to drop what streamed. On cancellation it returns the partial response
+// with ctx.Err(); a call given up on for a passing fault returns a
+// model.TransientError, so the agent runtime knows to try later; any other
+// failure the partial response and a "name: …" error.
 func Complete(ctx context.Context, r Request, onDelta func(model.Delta), newCodec func(onDelta func(model.Delta)) Codec) (model.Response, error) {
 	if r.Client == nil {
 		r.Client = NewHTTPClient()
@@ -97,22 +103,42 @@ func Complete(ctx context.Context, r Request, onDelta func(model.Delta), newCode
 	if onDelta == nil {
 		onDelta = func(model.Delta) {}
 	}
+	delay := RetryDelay
 	for attempt := 0; ; attempt++ {
-		var streamed, tool bool
+		var streamed bool
 		codec := newCodec(func(d model.Delta) {
 			streamed = true
-			tool = tool || d.ToolName != ""
 			onDelta(d)
 		})
 		res, broke, err := attemptStream(ctx, r, codec)
-		if err == nil || !broke || tool || attempt >= MidStreamRetries || ctx.Err() != nil {
+		if err == nil || !broke || ctx.Err() != nil {
 			return res, err
+		}
+		if attempt >= MidStreamRetries {
+			return res, &model.TransientError{Err: err}
 		}
 		if streamed {
 			onDelta(model.Delta{Reset: true})
 		}
+		wait := min(delay/2+time.Duration(rand.Int64N(int64(delay)+1)), maxRetryWait)
+		select {
+		case <-time.After(wait):
+		case <-ctx.Done():
+			return res, ctx.Err()
+		}
+		delay *= 2
 	}
 }
+
+// transientMessage matches what a provider says when the fault is its own
+// and passing: xAI's "The model is currently at capacity due to high
+// demand", an "overloaded" or "server_error" event, "please try again".
+// Such a stream error is retried like a dropped connection, where any
+// other stream error (a bad request, a refused tool) is final.
+var transientMessage = regexp.MustCompile(`(?i)at capacity|high demand|overloaded|try again|temporar|server[ _]error|internal error|service unavailable|upstream|timed? ?out|connection reset`)
+
+// Transient reports whether a stream error's text names a passing fault.
+func Transient(err error) bool { return err != nil && transientMessage.MatchString(err.Error()) }
 
 // attemptStream is one call; broke reports that its stream broke off after
 // it began (a dropped connection, an idle timeout, a missing terminal
@@ -149,7 +175,10 @@ func attemptStream(ctx context.Context, r Request, codec Codec) (res model.Respo
 	case idle.Load():
 		return incomplete(codec), true, fmt.Errorf("%s: no data from the provider for %s", r.Name, IdleTimeout)
 	case err != nil:
-		return codec.Response(), !codecFailed, fmt.Errorf("%s: %w", r.Name, err)
+		// a broken transport, or the provider failing the stream for a
+		// passing fault of its own, is retried; a codec's other failures are
+		// final
+		return codec.Response(), !codecFailed || Transient(err), fmt.Errorf("%s: %w", r.Name, err)
 	case !done && !codec.Terminal():
 		return incomplete(codec), true, fmt.Errorf("%s: %w", r.Name, ErrIncomplete)
 	}
@@ -177,6 +206,9 @@ func post(ctx context.Context, r Request) (*http.Response, error) {
 			if re != nil {
 				if re.limit && ctx.Err() == nil {
 					return nil, &model.LimitError{Err: re.err, RetryAfter: re.after}
+				}
+				if ctx.Err() == nil {
+					return nil, &model.TransientError{Err: re.err} // retried and still failing: later, not never
 				}
 				return nil, re.err
 			}

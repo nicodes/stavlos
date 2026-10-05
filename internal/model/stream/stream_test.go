@@ -37,6 +37,8 @@ func (c *codec) Feed(p []byte) error {
 		return nil
 	case "boom":
 		return errors.New("bad event")
+	case "capacity":
+		return errors.New("stream error: The model is currently at capacity due to high demand. Please try again in a few minutes")
 	}
 	c.text.WriteString(string(p))
 	return nil
@@ -236,21 +238,30 @@ func (c *streamingCodec) Feed(p []byte) error {
 	switch string(p) {
 	case "tool":
 		c.onDelta(model.Delta{ToolName: "shell"})
-	case "end", "fin", "boom":
+	case "end", "fin", "boom", "capacity":
 	default:
 		c.onDelta(model.Delta{Text: string(p)})
 	}
 	return c.codec.Feed(p)
 }
 
-// TestMidStreamRetry: a stream that breaks off is sent again once, after a
-// Reset delta, with a fresh codec; not when a tool call had begun, and not
-// when the provider itself failed the stream.
+// TestMidStreamRetry: a stream that breaks off is sent again, after a
+// Reset delta, with a fresh codec, a tool call in flight or not (nothing is
+// on the record until the call completes); so is one the provider failed
+// for a passing fault of its own; not one it failed for good. A call given
+// up on is a model.TransientError, for the agent runtime to park on.
 func TestMidStreamRetry(t *testing.T) {
-	run := func(t *testing.T, first string) (model.Response, []model.Delta, int32, error) {
+	old := RetryDelay
+	RetryDelay = time.Millisecond
+	t.Cleanup(func() { RetryDelay = old })
+	run := func(t *testing.T, first string, failures ...int32) (model.Response, []model.Delta, int32, error) {
 		var hits atomic.Int32
+		fails := int32(1)
+		if len(failures) > 0 {
+			fails = failures[0]
+		}
 		srv := serve(t, func(w http.ResponseWriter, _ *http.Request) {
-			if hits.Add(1) == 1 {
+			if hits.Add(1) <= fails {
 				_, _ = io.WriteString(w, first) // then the response ends without a terminal event
 				return
 			}
@@ -272,18 +283,49 @@ func TestMidStreamRetry(t *testing.T) {
 			t.Fatalf("deltas %+v", deltas)
 		}
 	})
-	t.Run("not after a tool call began", func(t *testing.T) {
-		_, _, hits, err := run(t, "data: tool\n\n")
-		if !errors.Is(err, ErrIncomplete) || hits != 1 {
-			t.Fatalf("err %v hits %d", err, hits)
+	t.Run("after a tool call began too", func(t *testing.T) {
+		res, deltas, hits, err := run(t, "data: tool\n\n")
+		if err != nil || res.Blocks[0].Text != "ok" || hits != 2 || len(deltas) != 3 || !deltas[1].Reset {
+			t.Fatalf("res %+v err %v hits %d deltas %+v", res, err, hits, deltas)
 		}
 	})
-	t.Run("not when the provider failed the stream", func(t *testing.T) {
+	t.Run("a passing fault the provider reports is retried", func(t *testing.T) {
+		res, _, hits, err := run(t, "data: capacity\n\n")
+		if err != nil || res.Blocks[0].Text != "ok" || hits != 2 {
+			t.Fatalf("res %+v err %v hits %d", res, err, hits)
+		}
+	})
+	t.Run("not when the provider failed the stream for good", func(t *testing.T) {
 		_, _, hits, err := run(t, "data: boom\n\n")
-		if err == nil || !strings.Contains(err.Error(), "bad event") || hits != 1 {
+		var te *model.TransientError
+		if err == nil || !strings.Contains(err.Error(), "bad event") || hits != 1 || errors.As(err, &te) {
 			t.Fatalf("err %v hits %d", err, hits)
 		}
 	})
+	t.Run("given up on after the retries, as a fault that passes", func(t *testing.T) {
+		_, _, hits, err := run(t, "data: par\n\n", 10)
+		var te *model.TransientError
+		if !errors.As(err, &te) || !errors.Is(err, ErrIncomplete) || hits != int32(MidStreamRetries)+1 {
+			t.Fatalf("err %v hits %d", err, hits)
+		}
+	})
+}
+
+func TestTransient(t *testing.T) {
+	for _, s := range []string{
+		"xai: stream error: The model is currently at capacity due to high demand. Please try again in a few minutes, or use a higher service tier",
+		"codex: read tcp [::1]:1->[::2]:443: read: connection reset by peer",
+		"stream error: Overloaded", "stream error: server_error: something", "zai: status 503: service unavailable",
+	} {
+		if !Transient(errors.New(s)) {
+			t.Errorf("not transient: %s", s)
+		}
+	}
+	for _, s := range []string{"stream error: invalid tool schema", "test: bad event", "status 400: unknown model"} {
+		if Transient(errors.New(s)) {
+			t.Errorf("transient: %s", s)
+		}
+	}
 }
 
 // TestPlanLimitRefusals: a used-up plan is refused in whatever status its
