@@ -465,3 +465,62 @@ func TestUsableWindow(t *testing.T) {
 		}
 	}
 }
+
+// TestAFaultParksAndResumes: a call that fails for a passing fault (the
+// stream layer has retried it already) ends the turn, parks the agent with
+// a backoff, and the next tick past it wakes the agent with a note saying a
+// fault, not a limit, stopped it; the backoff doubles per wake in a row and
+// resets once a model answers. Turned off with resumeAfterLimit.
+func TestAFaultParksAndResumes(t *testing.T) {
+	fault := fail(&model.TransientError{Err: errors.New("xai: stream error: The model is currently at capacity due to high demand")})
+	ctx := context.Background()
+	fm := &fakeModel{steps: []step{fault}}
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1"}`}, fm)
+	end := runTurn(t, s, h, "go")
+	if end.Reason != event.ReasonError || end.ResumeAt.IsZero() || end.Resume != event.ResumeFault || !strings.Contains(end.Error, "tries again by itself") {
+		t.Fatalf("a fault did not park the agent: %+v", end)
+	}
+	if until := time.Until(end.ResumeAt); until < 20*time.Second || until > 40*time.Second {
+		t.Fatalf("first backoff is about 30s, got %s", until)
+	}
+	if err := s.MaybeResume(ctx, time.Now()); err != nil || len(h.ofType(event.TurnStarted, s.Root().ID)) != 1 {
+		t.Fatal("woken before its time")
+	}
+	// still faulting: parked again, twice as long
+	fm.mu.Lock()
+	fm.steps = []step{fault}
+	fm.mu.Unlock()
+	if err := s.MaybeResume(ctx, end.ResumeAt.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	end2 := h.waitTurnEnd(t, s.Root().ID, 2)
+	if end2.Resume != event.ResumeFault || time.Until(end2.ResumeAt) < 50*time.Second {
+		t.Fatalf("second backoff is about 60s: %+v", end2)
+	}
+	// the fault passes: the wake says what stopped it, and the agent finishes
+	var woke string
+	fm.mu.Lock()
+	fm.steps = []step{func(_ context.Context, req model.Request) (model.Response, error) {
+		woke = lastUserText(req)
+		return text("done"), nil
+	}}
+	fm.mu.Unlock()
+	if err := s.MaybeResume(ctx, end2.ResumeAt.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if end3 := h.waitTurnEnd(t, s.Root().ID, 3); end3.Reason != event.ReasonEndTurn || !strings.Contains(woke, "passing fault") || !end3.ResumeAt.IsZero() {
+		t.Fatalf("resumed turn: %+v woke=%q", end3, woke)
+	}
+	t.Run("resumeAfterLimit false", func(t *testing.T) {
+		s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","resumeAfterLimit":false}`}, &fakeModel{steps: []step{fault}})
+		if end := runTurn(t, s, h, "go"); !end.ResumeAt.IsZero() || strings.Contains(end.Error, "tries again") {
+			t.Fatalf("parked although turned off: %+v", end)
+		}
+	})
+	t.Run("an ordinary error does not park", func(t *testing.T) {
+		s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1"}`}, &fakeModel{steps: []step{fail(errors.New("status 400: bad request"))}})
+		if end := runTurn(t, s, h, "go"); !end.ResumeAt.IsZero() || end.Resume != "" {
+			t.Fatalf("parked on a final error: %+v", end)
+		}
+	})
+}
