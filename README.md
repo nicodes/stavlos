@@ -223,6 +223,7 @@ Add specialised ones as `agents/<name>.md` in the global or project config; `.st
 - `type`: primary, subagent or all
 - `models`: the models good enough for the role, in the order it prefers them, with the variants allowed per model.
   The harness chooses among them, never the agent that creates the child: it takes the plan with the most allowance about to lapse, and moves a running agent to the next when its model's plan runs out, mid-turn, saying why in its chat; an agent with nowhere to move stops, and is woken when a model is back (`"resumeAfterLimit": false` turns that off).
+  A passing fault at the provider (a connection reset mid-stream, "the model is currently at capacity", a 5xx) is retried by the call itself up to three times with backoff, tool call or not; if it still fails the turn ends saying so and the agent is woken to carry on after 30 seconds, then a minute, doubling to ten minutes at most, up to twelve times in a row, the same switch turning it off. Before this such an agent stayed stopped with the error until someone wrote to it.
   A role that lists none chooses from `"models"` in `stavlos.json`.
   See [model selection](docs/model-selection.md)
 - `tools`: every tool is available by default; `<tool>: deny` removes one, and policy rules nested under a tool tighten it

@@ -298,7 +298,9 @@ type Effective struct {
 	// turn (docs/super-chat.md).
 	Reminders bool
 	// ResumeAfterLimit wakes an agent stopped at every plan's limit once a
-	// model is back (docs/model-selection.md).
+	// model is back, and one stopped at a passing fault at the provider (a
+	// dropped stream, a model at capacity) after a growing pause
+	// (docs/model-selection.md).
 	ResumeAfterLimit bool
 	Sandbox          struct {
 		Enabled, Network bool
