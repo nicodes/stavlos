@@ -9,22 +9,28 @@
 // add a conversion at every one of those seams without catching more.
 package toolname
 
+import "encoding/json"
+
 const (
 	Shell      = "shell"
 	ShellKill  = "shell_kill"
 	Read       = "read"
 	Grep       = "grep"
 	Glob       = "glob"
-	ApplyPatch = "apply_patch"
+	ApplyPatch = "patch"
 	Skill      = "skill"
-	WebFetch   = "web_fetch"
-	WebSearch  = "web_search"
+	WebFetch   = "fetch"
+	WebSearch  = "search"
+	Web        = "web"
 	Todo       = "todo"
-	AskUser    = "ask_user"
+	AskUser    = "ask"
 	Sheet      = "sheet"
 
 	Message = "message"
+	Agent   = "agent"
+	Channel = "channel"
 
+	// Legacy operation names remain useful for old logs and policy migration.
 	AgentCreate = "agent_create"
 	AgentCancel = "agent_cancel"
 	AgentStatus = "agent_status"
@@ -38,11 +44,7 @@ const (
 var (
 	// Messaging is offered to every agent: any agent may message any other
 	// in its channel, or the human, and see the tree.
-	Messaging = []string{Message, AgentStatus}
-	// Orchestration is implied by a non-empty spawn list.
-	Orchestration = []string{AgentCreate, AgentCancel}
-	// Async is offered to every agent that has shell.
-	Async = []string{ShellKill}
+	Messaging = []string{Message, Agent, Channel}
 	// Ask is offered to every agent: asking the human is never a role choice.
 	Ask = []string{AskUser}
 )
@@ -66,3 +68,79 @@ func Expand(names []string) []string {
 // User is the name that stands for the human: a message's recipient
 // ("@user"), and the sender of what the human types.
 const User = "user"
+
+// Canonical accepts old configuration and transcript names without exposing
+// aliases as additional model-facing tools.
+func Canonical(name string) string {
+	switch name {
+	case "apply_patch":
+		return ApplyPatch
+	case "web_fetch":
+		return WebFetch
+	case "web_search":
+		return WebSearch
+	case "ask_user":
+		return AskUser
+	}
+	return name
+}
+
+// Operation identifies an agent action for presentation and context clearing.
+// Legacy log entries already carry the operation as their tool name.
+func Operation(name string, input json.RawMessage) string {
+	if name != Agent && name != Web && name != Shell {
+		return Canonical(name)
+	}
+	var in struct{ Action string }
+	_ = json.Unmarshal(input, &in)
+	if name == Web {
+		switch in.Action {
+		case "fetch":
+			return WebFetch
+		case "search":
+			return WebSearch
+		}
+		return name
+	}
+	if name == Shell {
+		if in.Action == "kill" {
+			return ShellKill
+		}
+		return name
+	}
+	switch in.Action {
+	case "create":
+		return AgentCreate
+	case "cancel":
+		return AgentCancel
+	case "status":
+		return AgentStatus
+	}
+	return name
+}
+
+// PolicyRule migrates old tool names, preserving each agent action's scope.
+// Agent subjects are "<action> <target>", including the space for an empty target.
+func PolicyRule(name, pattern string) (string, string) {
+	name = Canonical(name)
+	switch name {
+	case Shell:
+		if pattern != "*" {
+			return Shell, "run " + pattern
+		}
+		return Shell, pattern
+	case AgentCreate:
+		return Agent, "create " + pattern
+	case AgentCancel:
+		return Agent, "cancel " + pattern
+	case AgentStatus:
+		return Agent, "status " + pattern
+	case WebFetch:
+		return Web, "fetch " + pattern
+	case WebSearch:
+		return Web, "search " + pattern
+	case ShellKill:
+		return Shell, "kill " + pattern
+	}
+	return Canonical(name), pattern
+}

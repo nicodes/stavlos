@@ -770,8 +770,8 @@ func TestPermissionDialogOptions(t *testing.T) {
 	if len(permOptions(&m.prompts[0])) != 3 {
 		t.Fatalf("options %+v", permOptions(&m.prompts[0]))
 	}
-	// web_fetch: the subject is the URL, the prefix row is the host
-	m.prompts = []protocol.PromptInfo{{ID: "p4", Kind: "permission", Tool: "web_fetch", Agent: "a", Input: []byte(`{"url":"https://pkg.go.dev/net/http"}`), Prefix: "pkg.go.dev"}}
+	// fetch: the subject is the URL, the prefix row is the host
+	m.prompts = []protocol.PromptInfo{{ID: "p4", Kind: "permission", Tool: "fetch", Agent: "a", Input: []byte(`{"url":"https://pkg.go.dev/net/http"}`), Prefix: "pkg.go.dev"}}
 	body = stripANSI(strings.Join(m.tabBodyLines(80), "\n"))
 	for _, w := range []string{"↓ https://pkg.go.dev/net/http  coder (general)", "○ Allow for this channel  this exact URL", "○ Allow pkg.go.dev for this channel  every page on this host"} {
 		if !strings.Contains(body, w) {
@@ -2869,7 +2869,7 @@ func TestQuestionsInlineLegacyBatch(t *testing.T) {
 	if sv := stripANSI(tabsView(m, 120)); !strings.Contains(sv, "! 0 · dirs 0\nasync") {
 		t.Fatalf("strip:\n%s", sv)
 	}
-	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", From: "coder", Role: "general", Tool: "ask_user", Questions: []protocol.Question{
+	batch := protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", From: "coder", Role: "general", Tool: "ask", Questions: []protocol.Question{
 		{Question: "Which backend?", Options: []protocol.QuestionOption{{Label: "Postgres", Description: "what the repo uses"}, {Label: "SQLite"}}},
 		{Question: "Which extras?", Options: []protocol.QuestionOption{{Label: "Cache"}, {Label: "Queue"}, {Label: "Search"}}},
 		{Question: "What should the service be called?", Options: []protocol.QuestionOption{{Label: "stavlos-api"}}},
@@ -2952,8 +2952,8 @@ func TestQuestionsInlineLegacyBatch(t *testing.T) {
 		t.Fatalf("after the answer: focus=%v", m.focus)
 	}
 	// chat: the tool call line names the headers
-	if got := transcript.ToolArg("ask_user", []byte(`{"questions":[{"question":"Which backend?"},{"question":"Call it?"}]}`)); got != "Which backend? · Call it?" {
-		t.Fatalf("ask_user arg %q", got)
+	if got := transcript.ToolArg("ask", []byte(`{"questions":[{"question":"Which backend?"},{"question":"Call it?"}]}`)); got != "Which backend? · Call it?" {
+		t.Fatalf("ask arg %q", got)
 	}
 }
 

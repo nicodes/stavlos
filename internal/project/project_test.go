@@ -1,6 +1,7 @@
 package project
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -56,5 +57,22 @@ func TestClearOldKeepsTheRecentAndTheConversation(t *testing.T) {
 	fresh := []model.Message{user("a"), use("x1", "read"), result("x1"), user("b"), user("c")}
 	if n, _ := ClearOld(fresh, 100, 5000, keep); n != 0 || fresh[2].Blocks[0].Content != big {
 		t.Fatalf("cleared %d below the minimum", n)
+	}
+}
+
+func TestMergedAgentCompactionKeepsCreateButClearsStatus(t *testing.T) {
+	big := strings.Repeat("x", 4000)
+	messages := []model.Message{{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: "first"}}}}
+	for i, action := range []string{"create", "status"} {
+		id := []string{"create-call", "status-call"}[i]
+		messages = append(messages, model.Message{Role: model.RoleAssistant, Blocks: []model.Block{{Type: model.BlockToolUse, ID: id, Name: "agent", Input: json.RawMessage(`{"action":"` + action + `"}`)}}}, model.Message{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockToolResult, ToolUseID: id, Content: big}}})
+	}
+	messages = append(messages, model.Message{Role: model.RoleAssistant, Blocks: []model.Block{{Type: model.BlockToolUse, ID: "read-call", Name: "read"}}}, model.Message{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockToolResult, ToolUseID: "read-call", Content: big}}})
+	for _, text := range []string{"second", "third"} {
+		messages = append(messages, model.Message{Role: model.RoleUser, Blocks: []model.Block{{Type: model.BlockText, Text: text}}})
+	}
+	ClearOld(messages, 1, 0, map[string]bool{"agent_create": true})
+	if messages[2].Blocks[0].Content != big || messages[4].Blocks[0].Content != ClearedNote {
+		t.Fatal("create/status results were not distinguished")
 	}
 }

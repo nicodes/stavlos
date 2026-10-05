@@ -1,21 +1,24 @@
 package protocol
 
+import "github.com/nicodes/stavlos/internal/event"
+
 // Channels: what a client is told of one, and what it may ask of it.
 
 type ChannelInfo struct {
-	ID           string  `json:"id"`
-	Name         string  `json:"name"` // unique across the daemon, shown as #name
-	Dir          string  `json:"dir"`
-	DirError     string  `json:"dir_error,omitempty"` // directory unavailable; history remains accessible
-	Model        string  `json:"model"`
-	RootAgent    string  `json:"root_agent"`
-	Created      string  `json:"created"`
-	Archived     bool    `json:"archived"`
-	Seq          int64   `json:"seq"` // latest per-channel sequence
-	Live         int     `json:"live_agents"`
-	CostUSD      float64 `json:"cost_usd"`
-	Tokens       int     `json:"tokens"` // input + output tokens every agent of the channel has used
-	TrustPending bool    `json:"trust_pending"`
+	Board        *event.BoardInfo `json:"board,omitempty"`
+	ID           string           `json:"id"`
+	Name         string           `json:"name"` // unique across the daemon, shown as #name
+	Dir          string           `json:"dir"`
+	DirError     string           `json:"dir_error,omitempty"` // directory unavailable; history remains accessible
+	Model        string           `json:"model"`
+	RootAgent    string           `json:"root_agent"`
+	Created      string           `json:"created"`
+	Archived     bool             `json:"archived"`
+	Seq          int64            `json:"seq"` // latest per-channel sequence
+	Live         int              `json:"live_agents"`
+	CostUSD      float64          `json:"cost_usd"`
+	Tokens       int              `json:"tokens"` // input + output tokens every agent of the channel has used
+	TrustPending bool             `json:"trust_pending"`
 	// Sandbox is what bounds this channel's commands: "full", "limited"
 	// (writes and network bounded, nothing hidden), "none" (the kernel offers
 	// nothing: every command asks) or "off" (turned off in stavlos.json).

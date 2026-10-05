@@ -38,6 +38,9 @@ func nudgeLimit(reminders bool) int {
 // owedBy is the party an input is owed to once taken: the sending agent for
 // a request, the human for a channel chat post, nobody otherwise.
 func owedBy(in event.Input) string {
+	if in.ExpectResponse {
+		return in.From
+	}
 	switch in.Kind {
 	case event.InputRequest:
 		return in.From
@@ -83,7 +86,7 @@ func replyRequest(in event.Input, party string) event.ReplyRequest {
 	if len(text) > 200 {
 		text = append(text[:199], '…')
 	}
-	return event.ReplyRequest{ID: requestID(in), From: party, FromName: name, To: slices.Clone(in.To), Text: string(text), Post: in.Post}
+	return event.ReplyRequest{Channel: in.Channel, ChannelName: in.ChannelName, ID: requestID(in), From: party, FromName: name, To: slices.Clone(in.To), Text: string(text), Post: in.Post}
 }
 
 // asked opens the request an input carries, or widens an open one to

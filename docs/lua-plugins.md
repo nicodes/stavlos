@@ -114,7 +114,7 @@ like any other tool. It defaults to `ask`.
 | `stavlos.steer(agent, text)` | message an agent as `system` | none (rate limited) |
 | `stavlos.notice(text)` | note in the channel chat | none |
 | `stavlos.shell(cmd)` | run a command | `shell` policy, sandbox, channel dirs |
-| `stavlos.fetch(url)` | HTTP GET | `web_fetch` policy and host rules |
+| `stavlos.fetch(url)` | HTTP GET | `fetch` policy and host rules |
 | `stavlos.read(path)` | read a file | channel directory boundary |
 | `stavlos.log(text)` | daemon log | none |
 

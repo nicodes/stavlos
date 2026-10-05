@@ -25,8 +25,8 @@ func TestPrefixFor(t *testing.T) {
 		t.Fatal("permits")
 	}
 	// A patch is covered only when every path it touches is.
-	p.apply(event.PermitPayload{Tool: "apply_patch", Call: "a.go"})
-	if !p.covers("apply_patch", policy.Path("a.go")) || p.covers("apply_patch", policy.Path("a.go", "../../.bashrc")) || p.covers("apply_patch", policy.Path()) {
+	p.apply(event.PermitPayload{Tool: "patch", Call: "a.go"})
+	if !p.covers("patch", policy.Path("a.go")) || p.covers("patch", policy.Path("a.go", "../../.bashrc")) || p.covers("patch", policy.Path()) {
 		t.Fatal("a permit for one path covered another")
 	}
 }
@@ -45,11 +45,11 @@ func TestAlwaysAllowNeverCoversAControlFile(t *testing.T) {
 		return string(b)
 	}
 	fm := &fakeModel{steps: []step{
-		reply(call("c1", "apply_patch", patch("first"))),
-		reply(call("c2", "apply_patch", update())),
+		reply(call("c1", "patch", patch("first"))),
+		reply(call("c2", "patch", update())),
 		reply(text("done")),
 	}}
-	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"apply_patch":"allow"}}`}, fm)
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"patch":"allow"}}`}, fm)
 	h.answerWith(escalation.Answer{Value: protocol.AnswerAllowAlways})
 	runTurn(t, s, h, "edit the instructions twice")
 	if n := h.promptCount(); n != 2 {
@@ -59,5 +59,15 @@ func TestAlwaysAllowNeverCoversAControlFile(t *testing.T) {
 		if !p.Sticky {
 			t.Fatalf("a control-file prompt is not marked sticky: %+v", p)
 		}
+	}
+}
+
+func TestMergedActionsDoNotSharePermits(t *testing.T) {
+	var p permits
+	p.apply(event.PermitPayload{Tool: "web_fetch", Prefix: "example.com"})
+	p.apply(event.PermitPayload{Tool: "agent_status", Call: "child"})
+	p.apply(event.PermitPayload{Tool: "apply_patch", Call: "a.go"})
+	if !p.covers("fetch", policy.URL("https://example.com/x")) || p.covers("search", policy.Text("https://example.com/x")) || p.covers("agent_cancel", policy.ID("child")) || !p.covers("patch", policy.Path("a.go")) {
+		t.Fatal("permits widened or legacy rename lost")
 	}
 }

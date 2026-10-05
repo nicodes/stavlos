@@ -5,6 +5,7 @@ import type { EventType } from "./vocabulary.gen";
 export type { EventType, InputKind } from "./vocabulary.gen";
 
 export interface ChannelInfo {
+  board?: { source: string; owner: string; members: string[] };
   id: string;
   name: string;
   dir: string;

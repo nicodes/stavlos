@@ -30,7 +30,7 @@ func TestStarterConfigLoads(t *testing.T) {
 		t.Fatalf("model %q, limits %+v", e.Model, e.Limits)
 	}
 	for cmd, want := range map[string]policy.Verb{"rm -rf /tmp/x": policy.Deny, "git push": policy.Ask, "ls": policy.Ask} {
-		if got, _ := e.Policy.Decide("shell", policy.Command(cmd)); got != want {
+		if got, _ := e.Policy.Decide("shell", policy.Text("run "+cmd)); got != want {
 			t.Errorf("shell %q: %s, want %s", cmd, got, want)
 		}
 	}

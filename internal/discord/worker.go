@@ -237,7 +237,22 @@ func (w *worker) terminalPost(ctx context.Context, text string) error {
 	return nil
 }
 
-func (w *worker) mirror(ctx context.Context, e event.Event) error {
+func (w *worker) finishBoardMirror(previous int64, err error) error {
+	if w.info.Board == nil || w.b.boardCursors == nil || w.seq <= previous {
+		return err
+	}
+	if err == nil {
+		err = w.b.boardCursors.set(w.discord, w.seq)
+	}
+	if err != nil {
+		w.seq = previous
+	}
+	return err
+}
+
+func (w *worker) mirror(ctx context.Context, e event.Event) (err error) {
+	previous := w.seq
+	defer func() { err = w.finishBoardMirror(previous, err) }()
 	if e.Channel != "" && e.Channel != w.id {
 		return nil
 	}

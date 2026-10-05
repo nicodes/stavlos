@@ -9,7 +9,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-// HTML → markdown: a small readability pass for web_fetch (see web_fetch.go).
+// HTML → markdown: a small readability pass for fetch (see web_fetch.go).
 
 // htmlToMarkdown is a small readability pass: it takes <main> or <article>
 // when the page has one, drops chrome (nav, header, footer, aside, scripts,

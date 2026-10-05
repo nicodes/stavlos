@@ -59,6 +59,10 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		finish(fmt.Sprintf("unknown tool %q", c.Name), true, false, false)
 		return
 	}
+	if c.Name == toolname.Agent && !canOrchestrate(rv) && toolname.Operation(c.Name, c.Input) != toolname.AgentStatus {
+		finish("this role may only inspect agent status", true, false, true)
+		return
+	}
 	d, no := a.admit(turnCtx, c, t, rv, cfg)
 	if no != nil {
 		finish(no.out, true, no.cancelled, no.denied)
@@ -174,7 +178,10 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	// Policy judges every value of the subject (each path a patch touches)
 	// and the most restrictive decision wins; the prompt names that value.
 	sub := t.Subject(c.Input)
-	ruled, arg := cfg.Policy.With(rv.def.RolePolicy()).Decide(c.Name, sub)
+	ruled, arg := cfg.Policy.With(rv.def.RolePolicy()).Decide(c.Name, tools.PolicySubject(c.Name, c.Input, sub))
+	if c.Name == toolname.Agent || c.Name == toolname.Web || c.Name == toolname.Shell {
+		arg = sub.Primary()
+	}
 	// The channel's sheets are part of the working set for the file tools
 	// (never for commands: the sandbox builds its own list).
 	dirs := append(a.c.dirPaths(), a.c.SheetDir())
@@ -188,9 +195,9 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 		ruled:     ruled,
 		compound:  sub.Kind == policy.KindCommand && !shellcmd.Simple(arg),
 		control:   control != "",
-		permitted: a.c.st.permits.covers(c.Name, sub) || sub.Kind == policy.KindURL && hostsAllow(cfg.Hosts, sub.Values),
+		permitted: a.c.st.permits.covers(toolname.Operation(c.Name, c.Input), sub) || sub.Kind == policy.KindURL && hostsAllow(cfg.Hosts, sub.Values),
 		mode:      a.c.st.mode,
-		egress:    egress(c.Name, sub),
+		egress:    egress(toolname.Operation(c.Name, c.Input), sub),
 		outside:   boundary != "",
 	}
 	a.c.mu.Unlock()
@@ -304,7 +311,7 @@ func egress(tool string, sub policy.Subject) bool {
 // at any depth asks too: it is what every agent follows.
 var controlFiles = []string{".stavlos", ".git", ".envrc"}
 
-// controlFile is the first control file an apply_patch call edits, "" when
+// controlFile is the first control file a patch call edits, "" when
 // it edits none.
 func controlFile(tool string, sub policy.Subject, base string, dirs []string) string {
 	if tool != toolname.ApplyPatch {
@@ -362,10 +369,10 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	case protocol.AnswerAllowPrefix, protocol.AnswerAllowAlways:
 		var grants []event.Event
 		if ans.Value == protocol.AnswerAllowPrefix && prefix != "" {
-			grants = append(grants, a.c.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: c.Name, Prefix: prefix}))
+			grants = append(grants, a.c.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: toolname.Operation(c.Name, c.Input), Prefix: prefix}))
 		} else {
 			for _, v := range d.sub.Values { // the call as a whole: every path it touches
-				grants = append(grants, a.c.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: c.Name, Call: v}))
+				grants = append(grants, a.c.event(a.ID, event.PermitGranted, event.PermitPayload{Tool: toolname.Operation(c.Name, c.Input), Call: v}))
 			}
 		}
 		_ = a.recordAll(grants...)
@@ -496,7 +503,7 @@ func (a *Agent) toolEnv(turn int, c model.Block, sub policy.Subject, rv roleView
 			judged[v] = tools.ResolvePath(a.c.Dir(), v)
 		}
 	}
-	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
+	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Boards: boardAPI{a: a}, Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
 		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir(), Roots: a.c.fileRoots(), Judged: judged, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Sandbox: a.c.sandboxSpec(cfg),
 		Partial: func(out string) {

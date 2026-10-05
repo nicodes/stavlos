@@ -102,7 +102,7 @@ func TestReminderWhileAwaitingChild(t *testing.T) {
 	started := make(chan struct{})
 	fm := &fakeModel{
 		steps: []step{
-			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("waiting on scout")),
 			reply(text("still notes")),
 		},
@@ -150,7 +150,7 @@ func TestNoReminderWhileJobRuns(t *testing.T) {
 func TestChildRemindedOfItsParent(t *testing.T) {
 	fm := &fakeModel{
 		steps: []step{
-			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look"}`)),
 			reply(call("c2", "message", `{"to":"user","text":"delegated to scout","kind":"response"}`)),
 		},
 		childSteps: []step{
@@ -235,7 +235,7 @@ func TestEmptyReminderSeatbeltThenTools(t *testing.T) {
 	release := make(chan struct{})
 	fm := &fakeModel{
 		steps: []step{
-			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("notes")),
 			reply(text("empty 1")),
 			reply(text("empty 2")),
@@ -270,7 +270,7 @@ func TestCancelClearsReplyDebtInTurn(t *testing.T) {
 	started := make(chan struct{})
 	fm := &fakeModel{
 		steps: []step{
-			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("waiting")),
 		},
 		childSteps: []step{func(ctx context.Context, _ model.Request) (model.Response, error) {
@@ -316,7 +316,7 @@ func TestCancelClearsReplyDebtInTurn(t *testing.T) {
 func TestCancelClearsReplyDebtIdle(t *testing.T) {
 	fm := &fakeModel{
 		steps: []step{
-			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("waiting")),
 		},
 		childSteps: []step{reply(text("notes only"))},
@@ -339,5 +339,35 @@ func TestCancelClearsReplyDebtIdle(t *testing.T) {
 	}
 	if len(child.Info().PendingReplies) != 0 || len(root.Info().Awaiting) != 0 {
 		t.Fatalf("idle cancel should drop debt: child due %v parent awaiting %v", child.Info().Due, root.Info().Awaiting)
+	}
+}
+
+func TestResponseCanAskFollowupWithoutAcknowledgmentLoop(t *testing.T) {
+	ctx := context.Background()
+	home, h := newTestChannel(t, testConfig{}, &fakeModel{})
+	root := home.Root()
+	child, err := home.spawn(ctx, root.ID, "general", "worker", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	orch := orchestrator{home}
+	if _, err := orch.Message(root.ID, []string{"worker"}, "question", tools.KindRequest); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h, func() bool { return len(child.Info().PendingReplies) == 1 })
+	original := child.Info().PendingReplies[0].ID
+	if _, err := orch.Message(child.ID, []string{"main"}, "answer and followup", tools.KindResponseRequest, original); err != nil {
+		t.Fatal(err)
+	}
+	waitUntil(t, h, func() bool { return len(root.Info().PendingReplies) == 1 })
+	follow := root.Info().PendingReplies[0].ID
+	if follow == original || len(root.Info().AwaitingReplies) != 0 || len(child.Info().PendingReplies) != 0 {
+		t.Fatal("followup failed to settle original")
+	}
+	if _, err := orch.Message(root.ID, []string{"worker"}, "followup answer", tools.KindResponse, follow); err != nil {
+		t.Fatal(err)
+	}
+	if len(root.Info().PendingReplies) != 0 || len(child.Info().AwaitingReplies) != 0 {
+		t.Fatal("answer created an acknowledgment loop")
 	}
 }

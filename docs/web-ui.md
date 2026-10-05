@@ -26,7 +26,7 @@ the Sheets section.
 
 Not built: a list of sheets in the TUI, QR sign-in, the PWA manifest, and
 answering permissions and questions from the browser (step 4), which is also
-what a sheet submitting through `ask_user` waits on. Three things changed
+what a sheet submitting through `ask` waits on. Three things changed
 from the first draft while building, each marked **Changed** below: the port
 is fixed, the session is a cookie, and the daemon has to be told the name a
 proxy gives it.
@@ -38,7 +38,7 @@ proxy gives it.
   so it can never act as a same-origin page.
 - **Sheets belong to a channel**, not to a session or an agent. A channel
   has many; any agent in it may create, edit or delete one, silently.
-- **A sheet is a file.** Agents edit them with `read` and `apply_patch`, so
+- **A sheet is a file.** Agents edit them with `read` and `patch`, so
   the diff, permission and event-log machinery is reused rather than
   reinvented.
 - **Sheets get a CSS framework and no JavaScript framework**, the way reindr
@@ -134,7 +134,7 @@ internet, because nothing is meant to be able to reach it from there.
 **Storage.** One file per sheet, `<data>/sheets/<channel>/s<n>.html`, not in
 the channel's working directory: nobody wants `sheets/` turning up in
 `git status`. That directory is part of the working set **for the file tools
-only** (`read`, `grep`, `apply_patch`), so every agent in the channel can read
+only** (`read`, `grep`, `patch`), so every agent in the channel can read
 and patch what is in it under the usual permission rules. Commands cannot:
 the sandbox hides the whole data directory, and a sheet is no reason to open
 a hole in that.
@@ -145,7 +145,7 @@ therefore rebuilds the list of sheets a channel has without reading the disk,
 and the hash is what tells a viewer to load the page again. The events do not
 carry the HTML, though the log is not free of it: the tool call that wrote
 the page is in the agent's `assistant.message`, as every tool input is. An
-`apply_patch` that touches a known sheet's file is followed by a
+`patch` that touches a known sheet's file is followed by a
 `sheet.written` with the new hash (or a `sheet.deleted`), so an edit made
 with the ordinary tools reaches the viewers like one made with the sheet
 tool. Ids are never reused.
@@ -153,7 +153,7 @@ tool. Ids are never reused.
 **Tools.** Because a sheet is a file, the tool surface is one tool, `sheet`,
 with three actions: `write` (create, or replace the content of the sheet
 whose id is given), `list` and `delete`. Editing is `read` plus
-`apply_patch`, like any other file; there is no `sheet_edit`. **Changed:**
+`patch`, like any other file; there is no `sheet_edit`. **Changed:**
 the tool hands back the file's path, not a URL. A sheet URL is useless to an
 agent, and useless to the human without a session; the human finds the sheet
 as a tab.
@@ -415,5 +415,5 @@ Write the relay only when something is genuinely blocked by not having one.
    TypeScript core, and a small read-only client — channels, chat, the live
    stream. QR sign-in.
 4. Interaction: answering permissions and questions from the client, and a
-   sheet submitting through `ask_user`, so it uses the prompt lifecycle that
+   sheet submitting through `ask`, so it uses the prompt lifecycle that
    already exists rather than a queue of its own.

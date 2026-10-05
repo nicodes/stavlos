@@ -37,7 +37,7 @@ func (s promptScope) holds(p protocol.PromptInfo) bool {
 	return (s.channel == "" || p.Channel == s.channel) && (s.agent == "" || p.Agent == s.agent)
 }
 
-// questionState is where the human is inside an ask_user batch: which
+// questionState is where the human is inside an ask batch: which
 // question, which row the cursor is on, the picks so far (options and a
 // typed answer), and whether the text field has the keys.
 type questionState struct {
@@ -235,7 +235,7 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 		}
 	}
 	what := "this exact call"
-	switch p.Tool {
+	switch toolname.Operation(p.Tool, p.Input) {
 	case toolname.Shell:
 		what = "this exact command"
 	case toolname.WebFetch:
@@ -249,7 +249,7 @@ func permOptions(p *protocol.PromptInfo) []permOption {
 	}
 	if pre := p.Prefix; pre != "" && !p.Sticky {
 		desc := "every command starting with it"
-		if p.Tool == toolname.WebFetch {
+		if toolname.Operation(p.Tool, p.Input) == toolname.WebFetch {
 			desc = "every page on this host"
 		}
 		opts = append(opts, permOption{"prefix", present.AllowPrefix(pre), desc})

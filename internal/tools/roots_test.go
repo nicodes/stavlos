@@ -55,7 +55,7 @@ func TestPatchRefusesADirectorySwappedForALink(t *testing.T) {
 	_ = os.Symlink(outside, filepath.Join(dir, "sub"))
 	patch := "*** Begin Patch\n*** Update File: sub/f.txt\n@@\n-mine\n+changed\n*** End Patch"
 	b, _ := json.Marshal(map[string]string{"patch": patch})
-	r := Builtin()["apply_patch"].Run(context.Background(), b, env)
+	r := Builtin()["patch"].Run(context.Background(), b, env)
 	if !r.IsError {
 		t.Fatalf("a patch wrote through a swapped directory link: %+v", r)
 	}
@@ -66,7 +66,7 @@ func TestPatchRefusesADirectorySwappedForALink(t *testing.T) {
 	patch = "*** Begin Patch\n*** Add File: sub/new.txt\n+x\n*** End Patch"
 	b, _ = json.Marshal(map[string]string{"patch": patch})
 	env.Judged = map[string]string{"sub/new.txt": filepath.Join(dir, "sub", "new.txt")}
-	if r := Builtin()["apply_patch"].Run(context.Background(), b, env); !r.IsError {
+	if r := Builtin()["patch"].Run(context.Background(), b, env); !r.IsError {
 		t.Fatalf("an add wrote through a swapped directory link: %+v", r)
 	}
 	if _, err := os.Stat(filepath.Join(outside, "new.txt")); err == nil {

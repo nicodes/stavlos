@@ -298,9 +298,9 @@ checkbox used for question selections.
 
 Other permission subjects use the same heading and code-block layout:
 
-- `apply_patch`: the full patch in a `diff` block, including file operations.
-- `web_fetch`: the URL and any requested continuation offset.
-- `web_search`: the query and requested result count.
+- `patch`: the full patch in a `diff` block, including file operations.
+- `fetch`: the URL and any requested continuation offset.
+- `search`: the query and requested result count.
 - `read`: the path, starting line and line limit.
 - `grep` / `glob`: the pattern, path and supplied filters/limits.
 - Skills and cancellation tools: the skill name or target ID.
@@ -316,7 +316,7 @@ and the directory/prefix approved. A decision made in the TUI updates that same
 Discord card. Pending message mappings retain permission details and an event
 checkpoint so results can be recovered after reconnecting, just like questions.
 
-All questions requested by `ask_user` appear immediately, each as **its own
+All questions requested by `ask` appear immediately, each as **its own
 editable message from the asking agent**, with inline toggle buttons and a
 submit button. Review the full set and answer in any order. Tap an
 option to switch between ⬜ and ✅; several options can be selected. Each option
@@ -607,3 +607,5 @@ close and a non-reading peer during a context-cancelled RPC write.
 - **Backfilling** what was missed while the bridge was down.
 - **Mode changes from Discord**, including yolo.
 - **Threads, agent chats, and mirroring tool calls.**
+
+Shared board channels use the ordinary directory allow-list and topic marker mapping. Their public posts replay from persisted per-Discord-channel cursors (`<statePath>.boards`), including initial posts before discovery and posts made while disconnected. A replacement Discord channel starts at the beginning. Cursor writes follow successful mirror processing; failures retry from the previous cursor. A send that succeeds just before a cursor-write failure can be replayed, so delivery is at least once across that failure window. Execution channels keep their existing snapshot behavior.

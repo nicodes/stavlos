@@ -5,7 +5,7 @@ plan runs out (decided 2026-09-18).
 
 ## Before
 
-A role whitelisted models; `agent_create` took an optional `model`; a child
+A role whitelisted models; `agent` with `action: create` took an optional `model`; a child
 with none inherited its parent's model when the role allowed it, else took the
 role's first. The parent never saw which models a role allowed, so the
 argument went unused and children ran on whatever their parent ran on. Which
@@ -16,7 +16,7 @@ model by hand.
 ## Now
 
 **A role lists the models good enough for it, in the order it prefers them.
-The harness chooses among them.** No agent names a model: `agent_create` has
+The harness chooses among them.** No agent names a model: `agent` with `action: create` has
 no `model` argument.
 
 ```yaml
