@@ -29,12 +29,14 @@ const (
 )
 
 func (shellTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Shell, Description: "Run a shell command in the working directory and return its output. Build, test and run with it; search with grep and glob, which need no approval. A command still running after the wait (15 seconds by default) becomes a background job: you get its id and the output so far, and its exit wakes you with the rest between turns. Set background for servers and anything slow. With nothing to do until a job ends, end your turn.",
+	return model.ToolDef{Name: toolname.Shell, Description: "Run a shell command (action run, the default), or stop a background job with action kill and its id. Execute commands in the working directory and return its output. Build, test and run with it; search with grep and glob, which need no approval. A command still running after the wait (15 seconds by default) becomes a background job: you get its id and the output so far, and its exit wakes you with the rest between turns. Set background for servers and anything slow. With nothing to do until a job ends, end your turn.",
 		Schema: schemaOf(shellInput{})}
 }
 
 type shellInput struct {
-	Command    string `json:"command" desc:"The command line to run with bash -c" req:"true"`
+	Action     string `json:"action" enum:"run,kill" desc:"run (default) executes a command; kill stops your background job"`
+	ID         string `json:"id" desc:"Required for kill: the job id shell returned"`
+	Command    string `json:"command" desc:"Required for run: the command line to run with bash -c"`
 	Wait       int    `json:"wait" desc:"Seconds to wait for the command before it continues as a background job (default 15, max 300)"`
 	Background bool   `json:"background" desc:"Start it as a background job at once, without waiting"`
 	Timeout    int    `json:"timeout" desc:"Seconds before a background job is killed (default 3600, max 7200)"`
@@ -50,6 +52,9 @@ type shellInput struct {
 func (shellTool) Subject(in json.RawMessage) policy.Subject {
 	var a shellInput
 	_ = decode(in, &a)
+	if a.Action == "kill" {
+		return policy.ID(a.ID)
+	}
 	return policy.Command(a.Command)
 }
 
@@ -58,6 +63,19 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
 	}
+	if a.Action == "kill" {
+		if strings.TrimSpace(a.ID) == "" {
+			return errf("kill requires id")
+		}
+		return (shellKillTool{}).Run(ctx, in, env)
+	}
+	if a.Action != "" && a.Action != "run" {
+		return errf("action must be run or kill")
+	}
+	return runShell(ctx, a, env)
+}
+
+func runShell(ctx context.Context, a shellInput, env *Env) Result {
 	if strings.TrimSpace(a.Command) == "" {
 		return errf("empty command")
 	}
@@ -93,9 +111,9 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 			return errf("%v", err)
 		}
 		if a.UntilChanged {
-			return Result{Output: fmt.Sprintf("waiting as job %s: the command runs again with a growing pause until its output or exit status changes, and you will be woken once with the result (shell_kill %s stops waiting). Nothing more to do until then: end your turn.", id, id)}
+			return Result{Output: fmt.Sprintf("waiting as job %s: the command runs again with a growing pause until its output or exit status changes, and you will be woken once with the result (shell with action kill and id %s stops waiting). Nothing more to do until then: end your turn.", id, id)}
 		}
-		return Result{Output: fmt.Sprintf("started job %s; you will be woken with its output when it exits (shell_kill %s stops it)", id, id)}
+		return Result{Output: fmt.Sprintf("started job %s; you will be woken with its output when it exits (shell with action kill and id %s stops it)", id, id)}
 	}
 	wait := time.NewTimer(time.Duration(a.Wait) * time.Second)
 	defer wait.Stop()
@@ -132,7 +150,7 @@ func (shellTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 		<-job.Done()
 		return errf("%v", err)
 	}
-	msg := fmt.Sprintf("still running after %ds; continuing as job %s. You will be woken with its exit code and output when it exits (shell_kill %s stops it).", a.Wait, id, id)
+	msg := fmt.Sprintf("still running after %ds; continuing as job %s. You will be woken with its exit code and output when it exits (shell with action kill and id %s stops it).", a.Wait, id, id)
 	if out := env.Clip(job.Output()); strings.TrimSpace(out) != "" {
 		msg += "\n\noutput so far:\n" + out
 	}
@@ -179,17 +197,6 @@ func shellResult(job *proc.Job, env *Env) Result {
 // --- shell_kill: stop a background job ---
 
 type shellKillTool struct{}
-
-func (shellKillTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.ShellKill, Description: "Stop a background job started by shell. Use it for servers and watchers you no longer need.",
-		Schema: schemaOf(shellKillInput{})}
-}
-
-type shellKillInput struct {
-	ID string `json:"id" desc:"The job id shell returned" req:"true"`
-}
-
-func (shellKillTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 
 func (shellKillTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if env.Jobs == nil {

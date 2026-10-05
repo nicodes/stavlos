@@ -49,6 +49,9 @@ func (t *trustStore) set(ctx context.Context, dir, hash string) error {
 // is pending. It is a channel-scoped prompt with long timeouts; the
 // channel keeps running on global config meanwhile.
 func (d *Daemon) maybeTrustPrompt(s *agent.Channel) {
+	if s.Board() != nil {
+		return
+	}
 	cfg := s.Config()
 	dir := cfg.Dir
 	if dir == "" {

@@ -16,6 +16,7 @@ import (
 
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/model"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // Builder is one agent's history in progress.
@@ -284,16 +285,19 @@ func (b *Builder) result(seq int64, bl model.Block) {
 // result and a reminder are the harness speaking.
 func InputText(in event.Input, job event.JobFinishedPayload) string {
 	switch in.Kind {
-	case event.InputRequest, event.InputResponse, event.InputInfo:
+	case event.InputRequest, event.InputResponse, event.InputInfo, event.InputAgentSteer:
 		if in.FromName == "" && in.From == "" {
 			// nobody sent it: the harness is telling the agent something (its
 			// channel's directory changed). It used to read "[message from
 			// agent , no reply needed…", an agent with no name.
 			return "[from the harness] " + in.Text
 		}
+		if in.From == "" && in.FromName == "user" && in.Channel != "" {
+			return "[post from user in channel " + in.Channel + " (#" + in.ChannelName + ")]\n" + in.Text
+		}
 		needs := ""
 		switch in.Kind {
-		case event.InputInfo:
+		case event.InputInfo, event.InputAgentSteer:
 			needs = ", no reply needed"
 		case event.InputResponse:
 			needs = ", an answer to you"
@@ -302,7 +306,10 @@ func InputText(in event.Input, job event.JobFinishedPayload) string {
 		if len(in.To) > 0 {
 			needs += ", recipients: @" + strings.Join(in.To, " @")
 		}
-		if in.Kind == event.InputRequest {
+		if in.Channel != "" {
+			needs += ", channel: " + in.Channel + " (#" + in.ChannelName + ")"
+		}
+		if in.Kind == event.InputRequest || in.ExpectResponse {
 			id := in.RequestID
 			if id == "" {
 				id = in.ID
@@ -327,7 +334,7 @@ func InputText(in event.Input, job event.JobFinishedPayload) string {
 		if len(in.Requests) > 0 {
 			return "[reminder from the harness] You still owe explicit responses.\n" + PendingReplyText(in.Requests)
 		}
-		return fmt.Sprintf("[reminder from the harness] Your last turn ended without replying to %s. The text you end a turn with reaches no one: send each reply with message (to: %s, kind: response). If there is nothing more to say, a one-line message still tells them where things stand.",
+		return fmt.Sprintf("[reminder from the harness] Your last turn ended without replying to %s. The text you end a turn with reaches no one: send each reply with message (to: %s, reply_to: [request IDs]). If there is nothing more to say, a one-line message still tells them where things stand.",
 			strings.Join(in.Names, ", "), strings.Join(in.Names, " or "))
 	case event.InputPrompt, event.InputSteer:
 		if in.RequestID != "" {
@@ -353,9 +360,13 @@ func PendingReplyText(requests []event.ReplyRequest) string {
 		if r.From != r.FromName {
 			from += " (" + r.From + ")"
 		}
-		lines = append(lines, fmt.Sprintf("- %s from %s: %q", r.ID, from, r.Text))
+		where := ""
+		if r.Channel != "" {
+			where = " in channel " + r.Channel + " (#" + r.ChannelName + ")"
+		}
+		lines = append(lines, fmt.Sprintf("- %s from %s%s: %q", r.ID, from, where, r.Text))
 	}
-	return "Pending requests:\n" + strings.Join(lines, "\n") + "\nAnswer with message(kind: response, to: [request senders], reply_to: [request IDs], text: your answer). One response may answer several IDs. Info messages never clear requests."
+	return "Pending requests:\n" + strings.Join(lines, "\n") + "\nAnswer with message(to: [request senders], reply_to: [request IDs], text: your answer), including channel for public requests. Only reply_to clears requests; answers default to expect_response: false."
 }
 
 func allResults(bs []model.Block) bool {
@@ -479,7 +490,7 @@ func ClearOld(msgs []model.Message, keep, minimum int, keepTools map[string]bool
 	for _, m := range msgs {
 		for _, b := range m.Blocks {
 			if b.Type == model.BlockToolUse {
-				tool[b.ID] = b.Name
+				tool[b.ID] = toolname.Operation(b.Name, b.Input)
 			}
 		}
 	}

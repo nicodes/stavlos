@@ -290,7 +290,7 @@ func TestEndToEnd(t *testing.T) {
 		},
 		// turn 2: spawn a child, wait for it
 		func(model.Request) model.Response {
-			return call("c3", "agent_create", `{"archetype":"general","label":"scout","task":"look around"}`)
+			return call("c3", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look around"}`)
 		},
 		// parent has nothing else to do; it stops and is woken by the child's answer
 		func(model.Request) model.Response { return text("delegated; waiting") },
@@ -514,7 +514,7 @@ func TestChildResponseWakesParent(t *testing.T) {
 	fm.steps = []func(model.Request) model.Response{
 		// turn 1: spawn and stop
 		func(model.Request) model.Response {
-			return call("c1", "agent_create", `{"archetype":"general","label":"slow","task":"a"}`)
+			return call("c1", "agent", `{"action":"create","archetype":"general","label":"slow","task":"a"}`)
 		},
 		func(model.Request) model.Response { return text("spawned, done for now") },
 		// turn 2: woken by the child's answer
@@ -722,7 +722,7 @@ func TestShellKillStopsJob(t *testing.T) {
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			id := strings.TrimSpace(strings.TrimPrefix(strings.Split(last.Content, ";")[0], "started job "))
-			return call("c2", "shell_kill", `{"id":"`+id+`"}`)
+			return call("c2", "shell", `{"action":"kill","id":"`+id+`"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
@@ -758,7 +758,7 @@ func TestSetRoleSwitchesRoleInPlace(t *testing.T) {
 	// Only "general" ships built in; a user role comes from agents/<name>.md.
 	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
 	_ = os.MkdirAll(agentsDir, 0o755)
-	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools:\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
+	os.WriteFile(filepath.Join(agentsDir, "explorer.md"), []byte("---\ndescription: Read-only investigation\ntools:\n  patch: deny\n  skill: deny\n  todo: deny\n  fetch: deny\n  search: deny\n---\nYou are a read-only code explorer. Do not modify anything.\n"), 0o644)
 	work := t.TempDir()
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
@@ -773,7 +773,10 @@ func TestSetRoleSwitchesRoleInPlace(t *testing.T) {
 				t.Errorf("turn 2 should use the explorer role: %.80q", req.System)
 			}
 			for _, d := range req.Tools {
-				if d.Name == "apply_patch" || d.Name == "agent_create" {
+				if d.Name == "agent" && strings.Contains(string(d.Schema), `"create"`) {
+					t.Error("explorer may only inspect status")
+				}
+				if d.Name == "patch" {
 					t.Errorf("explorer should not have %s", d.Name)
 				}
 			}
@@ -822,7 +825,7 @@ func TestAgentsMessageAcrossTheChannel(t *testing.T) {
 	var rootID string
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"ask me something"}`)
+			return call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"ask me something"}`)
 		},
 		func(model.Request) model.Response { return text("delegated") },
 		// woken by the child's answer: the model sees the sender
@@ -865,7 +868,7 @@ func TestAgentsMessageAcrossTheChannel(t *testing.T) {
 					t.Errorf("subagent should not be offered %s", d.Name)
 				}
 			}
-			return call("k3", "agent_status", `{}`)
+			return call("k3", "agent", `{"action":"status"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
@@ -932,7 +935,7 @@ func TestVariants(t *testing.T) {
 			mu.Lock()
 			seen = append(seen, req.Variant)
 			mu.Unlock()
-			return call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)
+			return call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look"}`)
 		},
 		func(model.Request) model.Response { return text("delegated") },
 		func(model.Request) model.Response { return text("noted") },
@@ -1219,7 +1222,7 @@ func TestRecoveredAgentWithMissingRoleFallsBack(t *testing.T) {
 	agentsDir := filepath.Join(os.Getenv("STAVLOS_CONFIG_DIR"), "agents")
 	_ = os.MkdirAll(agentsDir, 0o755)
 	roleFile := filepath.Join(agentsDir, "coder.md")
-	os.WriteFile(roleFile, []byte("---\ndescription: Old coder\ntools:\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are the old coder.\n"), 0o644)
+	os.WriteFile(roleFile, []byte("---\ndescription: Old coder\ntools:\n  patch: deny\n  skill: deny\n  todo: deny\n  fetch: deny\n  search: deny\n---\nYou are the old coder.\n"), 0o644)
 	work := t.TempDir()
 	data := t.TempDir()
 	fm := &fakeModel{}
@@ -1262,7 +1265,7 @@ func TestRecoveredAgentWithMissingRoleFallsBack(t *testing.T) {
 	_ = errOf(rpc.Do(ctx, h2.c, protocol.AgentSend, protocol.AgentSendParams{Agent: agents[0].ID, Kind: protocol.KindPrompt, Text: "hello"}))
 	h2.waitFor(event.TurnEnded, agents[0].ID)
 	got := " " + strings.Join(offered, " ") + " "
-	for _, gone := range []string{" shell ", " apply_patch ", " agent_create "} {
+	for _, gone := range []string{" shell ", " patch ", " agent_create "} {
 		if strings.Contains(got, gone) {
 			t.Fatalf("the fallback must not offer %s, got %v", strings.TrimSpace(gone), offered)
 		}
@@ -1296,7 +1299,7 @@ func TestRepeatedPromptsNeedExplicitReferences(t *testing.T) {
 	firstStarted := make(chan struct{})
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return call("c1", "agent_create", `{"archetype":"general","label":"kid","task":"look"}`)
+			return call("c1", "agent", `{"action":"create","archetype":"general","label":"kid","task":"look"}`)
 		},
 		func(model.Request) model.Response {
 			// impatient: message the same child again before it answered
@@ -1439,7 +1442,7 @@ func TestFullAgentIDs(t *testing.T) {
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look around"}`)
+			return call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look around"}`)
 		},
 		func(model.Request) model.Response { return text("waiting") },
 		func(req model.Request) model.Response {
@@ -1495,7 +1498,7 @@ func TestRoles(t *testing.T) {
 	roles := filepath.Join(g, "agents")
 	os.MkdirAll(roles, 0o755)
 	os.WriteFile(filepath.Join(roles, "lead.md"), []byte("---\ndescription: Leads\ntype: primary\nmodels:\n  - id: fake/m1\n    variants: [high]\nspawn: [limited, boss, general]\n---\nYou lead.\n"), 0o644)
-	os.WriteFile(filepath.Join(roles, "limited.md"), []byte("---\ndescription: Limited\ntype: subagent\nmodels: [fake/m2]\nmax_turns: 1\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou are limited.\n"), 0o644)
+	os.WriteFile(filepath.Join(roles, "limited.md"), []byte("---\ndescription: Limited\ntype: subagent\nmodels: [fake/m2]\nmax_turns: 1\ntools:\n  shell: deny\n  patch: deny\n  skill: deny\n  todo: deny\n  fetch: deny\n  search: deny\n---\nYou are limited.\n"), 0o644)
 	os.WriteFile(filepath.Join(roles, "boss.md"), []byte("---\ndescription: Boss\ntype: primary\n---\nYou boss.\n"), 0o644)
 
 	work := t.TempDir()
@@ -1506,14 +1509,14 @@ func TestRoles(t *testing.T) {
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(model.Request) model.Response {
-			return call("c1", "agent_create", `{"archetype":"limited","label":"kid","task":"think"}`)
+			return call("c1", "agent", `{"action":"create","archetype":"limited","label":"kid","task":"think"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if last.IsError || !strings.HasPrefix(last.Content, "created kid (limited), id ") {
 				t.Errorf("spawn result: %+v", last)
 			}
-			return call("c2", "agent_create", `{"archetype":"boss","label":"b","task":"x"}`)
+			return call("c2", "agent", `{"action":"create","archetype":"boss","label":"b","task":"x"}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
@@ -1683,7 +1686,7 @@ func TestMCPServersPerAgent(t *testing.T) {
 	cfg := fmt.Sprintf(`{"model":"fake/m1","reminders":false,"rootAgent":"mcpuser","mcp":{"echo":{"command":%q,"env":{"STAVLOS_TEST_MCP_SERVER":"1","GREETING":"${env:STAVLOS_TEST_GREETING}"}}},"policy":{"mcp__echo__*":"allow"}}`, exe)
 	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(cfg), 0o644)
 	os.MkdirAll(filepath.Join(g, "agents"), 0o755)
-	os.WriteFile(filepath.Join(g, "agents", "mcpuser.md"), []byte("---\ndescription: Uses MCP\nmcp: [echo, missing]\ntools:\n  shell: deny\n  apply_patch: deny\n  skill: deny\n  todo: deny\n  web_fetch: deny\n  web_search: deny\n---\nYou use tools.\n"), 0o644)
+	os.WriteFile(filepath.Join(g, "agents", "mcpuser.md"), []byte("---\ndescription: Uses MCP\nmcp: [echo, missing]\ntools:\n  shell: deny\n  patch: deny\n  skill: deny\n  todo: deny\n  fetch: deny\n  search: deny\n---\nYou use tools.\n"), 0o644)
 
 	work := t.TempDir()
 	fm := &fakeModel{}
@@ -1819,7 +1822,7 @@ func TestWorkingDirectories(t *testing.T) {
 			if last.IsError || !strings.Contains(last.Content, "s") {
 				t.Errorf("outside read after allow_always: %+v", last)
 			}
-			return call("c4", "agent_create", `{"archetype":"general","label":"kid","task":"read the secret"}`)
+			return call("c4", "agent", `{"action":"create","archetype":"general","label":"kid","task":"read the secret"}`)
 		},
 		func(req model.Request) model.Response {
 			if last := req.Messages[len(req.Messages)-1].Blocks[0]; last.IsError {
@@ -2011,7 +2014,7 @@ func TestDenyReasonReachesTheAgent(t *testing.T) {
 		func(model.Request) model.Response { return call("c1", "shell", `{"command":"touch a"}`) },
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
-			if !last.IsError || last.Content != "Permission denied by the user: use apply_patch instead" {
+			if !last.IsError || last.Content != "Permission denied by the user: use patch instead" {
 				t.Errorf("deny with reason: %+v", last)
 			}
 			return call("c2", "shell", `{"command":"touch b"}`)
@@ -2035,7 +2038,7 @@ func TestDenyReasonReachesTheAgent(t *testing.T) {
 	h.waitFor(event.AskRequested, root)
 	p := h.pending(s.ID)[0]
 	_ = errOf(rpc.Do(ctx, h.c, protocol.PromptClaim, protocol.PromptClaimParams{ID: p.ID}))
-	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerDeny, Reason: "use apply_patch instead"})); err != nil {
+	if err := errOf(rpc.Do(ctx, h.c, protocol.PromptReply, protocol.PromptReplyParams{ID: p.ID, Answer: protocol.AnswerDeny, Reason: "use patch instead"})); err != nil {
 		t.Fatal(err)
 	}
 	h.waitFor(event.AskRequested, root)
@@ -2117,7 +2120,7 @@ func TestAllowPrefix(t *testing.T) {
 // turn with the model and logs a Compacted event; the next turn's request
 // starts from the summary. Mid-turn it is queued and runs before the next
 // model call.
-// TestWebSearchAlwaysOffered: web_search is offered with or without a
+// TestWebSearchAlwaysOffered: search is offered with or without a
 // configured backend (the keyless Exa fallback covers the latter), and a
 // configured key is read from the environment.
 func TestWebSearchAlwaysOffered(t *testing.T) {
@@ -2125,7 +2128,7 @@ func TestWebSearchAlwaysOffered(t *testing.T) {
 	work := t.TempDir()
 	offered := func(req model.Request) bool {
 		for _, d := range req.Tools {
-			if d.Name == "web_search" {
+			if d.Name == "web" {
 				return true
 			}
 		}
@@ -2134,8 +2137,8 @@ func TestWebSearchAlwaysOffered(t *testing.T) {
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
-			if !offered(req) || !strings.Contains(req.System, "web_search returns titles") {
-				t.Error("web_search should be offered without a backend (keyless fallback)")
+			if !offered(req) || !strings.Contains(req.System, "web(action: search) returns titles") {
+				t.Error("search should be offered without a backend (keyless fallback)")
 			}
 			return text("ok")
 		},
@@ -2157,7 +2160,7 @@ func TestWebSearchAlwaysOffered(t *testing.T) {
 	fm2.steps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
 			if !offered(req) {
-				t.Error("web_search should be offered with a backend configured")
+				t.Error("search should be offered with a backend configured")
 			}
 			return text("ok")
 		},
@@ -2250,21 +2253,21 @@ func TestAskUser(t *testing.T) {
 		func(req model.Request) model.Response {
 			has := false
 			for _, d := range req.Tools {
-				if d.Name == "ask_user" {
+				if d.Name == "ask" {
 					has = true
 				}
 			}
 			if !has || !strings.Contains(req.System, "# Asking the human") {
-				t.Errorf("ask_user should be offered to every agent")
+				t.Errorf("ask should be offered to every agent")
 			}
-			return call("c1", "ask_user", `{"questions":[{"question":"Which backend?","options":[{"label":"Postgres","description":"in use"},{"label":"SQLite"}]},{"question":"Call it?","options":[{"label":"stavlos-api"}]}]}`)
+			return call("c1", "ask", `{"questions":[{"question":"Which backend?","options":[{"label":"Postgres","description":"in use"},{"label":"SQLite"}]},{"question":"Call it?","options":[{"label":"stavlos-api"}]}]}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
 			if last.IsError || last.Content != "Which backend? → Postgres\nCall it? → stavlos" {
 				t.Errorf("answers: %+v", last)
 			}
-			return call("c2", "ask_user", `{"questions":[{"question":"Sure?","options":[{"label":"yes"}]}]}`)
+			return call("c2", "ask", `{"questions":[{"question":"Sure?","options":[{"label":"yes"}]}]}`)
 		},
 		func(req model.Request) model.Response {
 			last := req.Messages[len(req.Messages)-1].Blocks[0]
@@ -2285,7 +2288,7 @@ func TestAskUser(t *testing.T) {
 	e := h.waitFor(event.AskRequested, root)
 	var pr event.AskRequestedPayload
 	_ = e.Decode(&pr)
-	if pr.Kind != "question" || pr.Tool != "ask_user" || !strings.Contains(pr.Question, "Which backend?") {
+	if pr.Kind != "question" || pr.Tool != "ask" || !strings.Contains(pr.Question, "Which backend?") {
 		t.Fatalf("prompt %+v", pr)
 	}
 	agents, _ = tree(ctx, h.c, s.ID)

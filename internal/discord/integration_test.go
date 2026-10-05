@@ -33,7 +33,7 @@ func (m *bridgeModel) Complete(_ context.Context, req model.Request, _ func(mode
 	case 1:
 		b = model.Block{Type: model.BlockToolUse, ID: "shell", Name: "shell", Input: json.RawMessage(`{"command":"true"}`)}
 		if m.questions {
-			b = model.Block{Type: model.BlockToolUse, ID: "question", Name: "ask_user", Input: json.RawMessage(`{"questions":[{"question":"Which database?","options":[{"label":"SQLite","description":"Local storage"},{"label":"Postgres","description":"Shared server"}]},{"question":"Where should it run?","options":[{"label":"Locally","description":"This machine"},{"label":"Cloud","description":"A remote server"}]}]}`)}
+			b = model.Block{Type: model.BlockToolUse, ID: "question", Name: "ask", Input: json.RawMessage(`{"questions":[{"question":"Which database?","options":[{"label":"SQLite","description":"Local storage"},{"label":"Postgres","description":"Shared server"}]},{"question":"Where should it run?","options":[{"label":"Locally","description":"This machine"},{"label":"Cloud","description":"A remote server"}]}]}`)}
 		}
 	case 2:
 		if m.questions {

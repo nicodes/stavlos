@@ -34,5 +34,5 @@
       "type": 1
     }
   ],
-  "content": "❗ **Apply patch**\n```diff\n*** Begin Patch\n*** Update File: main.go\n@@\n-a\n+b\n*** End Patch\n```"
+  "content": "❗ **Patch**\n```diff\n*** Begin Patch\n*** Update File: main.go\n@@\n-a\n+b\n*** End Patch\n```"
 }

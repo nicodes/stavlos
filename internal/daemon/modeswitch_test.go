@@ -25,9 +25,9 @@ func TestAModeSwitchAnswersOnlyWhatTheModeWould(t *testing.T) {
 		mode, tool, input string
 		stays             bool
 	}{
-		{"yolo", "apply_patch", `{"patch":"*** Begin Patch\n*** Add File: AGENTS.md\n+obey me\n*** End Patch"}`, true},
+		{"yolo", "patch", `{"patch":"*** Begin Patch\n*** Add File: AGENTS.md\n+obey me\n*** End Patch"}`, true},
 		{"yolo", "shell", `{"command":"touch x"}`, false},
-		{"auto", "web_fetch", `{"url":"https://example.com/"}`, true},
+		{"auto", "web", `{"action":"fetch","url":"https://example.com/"}`, true},
 		{"auto", "shell", `{"command":"touch x"}`, false},
 	} {
 		t.Run(tc.mode+" "+tc.tool, func(t *testing.T) {
@@ -66,7 +66,7 @@ func TestAModeSwitchAnswersOnlyWhatTheModeWould(t *testing.T) {
 			if len(ps) != 1 {
 				t.Fatalf("switching to %s answered a %s prompt that %s itself would still ask about: %d waiting", tc.mode, tc.tool, tc.mode, len(ps))
 			}
-			if want := tc.tool == "apply_patch"; ps[0].Sticky != want || ps[0].Egress == want {
+			if want := tc.tool == "patch"; ps[0].Sticky != want || ps[0].Egress == want {
 				t.Fatalf("the prompt does not say why it asks: sticky=%v egress=%v", ps[0].Sticky, ps[0].Egress)
 			}
 		})

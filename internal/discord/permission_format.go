@@ -12,7 +12,7 @@ import (
 )
 
 func permissionHeading(p protocol.PromptInfo) string {
-	title := permissionToolLabel(p.Tool)
+	title := permissionToolLabel(toolname.Operation(p.Tool, p.Input))
 	if name, ok := strings.CutPrefix(p.Tool, toolname.MCPPrefix); ok {
 		if server, tool, ok := strings.Cut(name, "__"); ok {
 			title = permissionToolLabel(server) + " · " + permissionToolLabel(tool)
@@ -56,7 +56,7 @@ type permissionField struct{ key, label string }
 // Known subjects are decoded into readable text; unrecognised arguments stay
 // visible as formatted JSON so a tool-specific view never hides extra inputs.
 func permissionSubject(p protocol.PromptInfo) string {
-	switch p.Tool {
+	switch toolname.Operation(p.Tool, p.Input) {
 	case toolname.Shell:
 		var input struct {
 			Command *string `json:"command"`
@@ -65,7 +65,7 @@ func permissionSubject(p protocol.PromptInfo) string {
 			return permissionCode("sh", *input.Command)
 		}
 	}
-	if l, ok := permissionLayouts[p.Tool]; ok {
+	if l, ok := permissionLayouts[toolname.Operation(p.Tool, p.Input)]; ok {
 		return permissionFields(p.Input, l.language, l.fields)
 	}
 	return permissionJSON(p.Input)

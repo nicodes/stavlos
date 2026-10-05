@@ -33,6 +33,7 @@ type Env struct {
 	Dir       string           // channel working directory
 	Skills    map[string]Skill // skills this agent may load
 	Agent     string           // caller agent id
+	Boards    BoardService     // shared channels supplied by the daemon
 	Orch      Orchestrator     // nil if the agent cannot orchestrate
 	Partial   func(string)     // receives streamed partial output (shell); may be nil
 	MaxOutput int              // truncate tool output beyond this many bytes (0 = clip.DefaultMax)
@@ -40,7 +41,7 @@ type Env struct {
 	Jobs      Jobs             // the agent's background jobs; nil if unavailable
 	Todo      Todos            // the agent's todo list; nil if the role does not include "todo"
 	Ask       Asker            // presents all questions immediately and waits; nil in tests without a runtime
-	Search    SearchConfig     // web_search backend; zero → the tool explains how to configure it
+	Search    SearchConfig     // search backend; zero → the tool explains how to configure it
 	PassEnv   []string         // environment variables kept for child processes although their names look like secrets (config env.pass)
 	Sandbox   *sandbox.Spec    // the boundary commands run in; nil runs them unsandboxed
 	Sheets    Sheets           // the channel's sheets; nil when unavailable
@@ -217,10 +218,9 @@ func Builtin() Set {
 	s := Set{}
 	for _, t := range []Tool{
 		shellTool{}, readTool{}, grepTool{}, globTool{}, patchTool{}, skillTool{},
-		spawnTool{}, messageTool{}, cancelTool{}, statusTool{},
-		shellKillTool{},
+		agentTool{}, messageTool{}, channelTool{},
 		todoTool{}, askTool{}, sheetTool{},
-		webFetchTool{}, webSearchTool{},
+		webTool{},
 	} {
 		s[t.Def().Name] = t
 	}
@@ -230,11 +230,9 @@ func Builtin() Set {
 // The tool groups a role's list implies live in toolname; these names
 // stay for the agent package's prompt assembly.
 var (
-	OrchestrationNames = toolname.Orchestration // implied by a non-empty spawn list
-	MessagingNames     = toolname.Messaging     // every agent may message any other, or the human, and see the tree
-	AsyncNames         = toolname.Async         // every agent that has shell
-	AskNames           = toolname.Ask           // every agent: asking the human is never a role choice
-	TodoNames          = toolname.Todo          // implied by "todo" in a role's tool list
+	MessagingNames = toolname.Messaging // every agent may message and inspect the tree
+	AskNames       = toolname.Ask       // every agent: asking the human is never a role choice
+	TodoNames      = toolname.Todo      // implied by "todo" in a role's tool list
 )
 
 func errf(format string, a ...any) Result {

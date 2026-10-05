@@ -10,7 +10,7 @@ import (
 // schemaOf builds the JSON Schema for a tool's input from its input struct,
 // so the field a tool decodes and the property a model sees are one
 // declaration. Tags: json (the property name), desc (its description),
-// req:"true" (required), min and max (array bounds). Strings, integers,
+// req:"true" (required), enum (comma-separated choices), min and max (array bounds). Strings, integers,
 // booleans, floats, slices and nested structs are supported; that is every
 // shape a built-in tool uses.
 func schemaOf(v any) json.RawMessage {
@@ -48,6 +48,9 @@ func objectSchema(t reflect.Type) map[string]any {
 		}
 		if m := f.Tag.Get("max"); m != "" {
 			p["maxItems"], _ = strconv.Atoi(m)
+		}
+		if e := f.Tag.Get("enum"); e != "" {
+			p["enum"] = strings.Split(e, ",")
 		}
 		props[name] = p
 		if f.Tag.Get("req") == "true" {

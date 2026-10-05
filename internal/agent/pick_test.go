@@ -88,7 +88,7 @@ func TestPickModel(t *testing.T) {
 // with the most allowance about to lapse.
 func TestHarnessChoosesAChildsModel(t *testing.T) {
 	fm := &fakeModel{steps: []step{
-		reply(call("c1", "agent_create", `{"archetype":"scout","label":"s","task":"look","model":"fake/m1"}`)),
+		reply(call("c1", "agent", `{"action":"create","archetype":"scout","label":"s","task":"look","model":"fake/m1"}`)),
 		reply(text("ok")),
 	}}
 	s, h := newTestChannel(t, testConfig{

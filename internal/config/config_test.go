@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nicodes/stavlos/internal/policy"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 type allTrust struct{}
@@ -30,7 +31,7 @@ func TestLoadLayersAndTrust(t *testing.T) {
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".stavlos", "agents"), 0o755)
 	os.WriteFile(filepath.Join(dir, ".stavlos", "stavlos.json"), []byte(`{"policy":{"shell":{"git push*":"allow","curl*":"deny"}}}`), 0o644)
-	os.WriteFile(filepath.Join(dir, ".stavlos", "agents", "reviewer.md"), []byte("---\ndescription: reviews\nmodels: [openai/gpt-5-mini]\ntools:\n  apply_patch: deny\n---\nYou review.\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, ".stavlos", "agents", "reviewer.md"), []byte("---\ndescription: reviews\nmodels: [openai/gpt-5-mini]\ntools:\n  patch: deny\n---\nYou review.\n"), 0o644)
 	os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("Use light models."), 0o644)
 
 	e, err := Load(dir, noTrust{})
@@ -144,7 +145,7 @@ tools:
     "*": ask
   read: allow
   todo:
-  web_fetch: deny
+  fetch: deny
 spawn: [explorer]
 max_turns: 20
 color: cyan
@@ -160,7 +161,7 @@ You review.
 	if len(p.Models) != 3 || p.Models[0].ID != "openai/gpt-5.1-codex" || len(p.Models[0].Variants) != 2 || p.Models[2].ID != "xai/grok-4-fast" || p.Models[2].Variants != nil {
 		t.Fatalf("models %+v", p.Models)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,apply_patch,skill,todo,web_search,sheet" { // everything but the removed web_fetch
+	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,patch,skill,todo,web,sheet" { // everything but the removed fetch
 		t.Fatalf("tools %v", p.Tools)
 	}
 	pol := p.RolePolicy()
@@ -243,7 +244,7 @@ func TestExampleCoderRoleParses(t *testing.T) {
 	if p.Name != "coder" || p.Type != TypeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
 		t.Fatalf("%+v", p)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,apply_patch,skill,todo,web_fetch,sheet" || verb(p.RolePolicy(), "shell", "git push origin main") != policy.Deny || verb(p.RolePolicy(), "web_fetch", "https://x.slack.com/y") != policy.Deny {
+	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,patch,skill,todo,web,sheet" || verb(p.RolePolicy(), "shell", "git push origin main") != policy.Deny || verb(p.RolePolicy(), "fetch", "https://x.slack.com/y") != policy.Deny {
 		t.Fatalf("tools %v rules %+v", p.Tools, p.RolePolicy().Rules())
 	}
 }
@@ -298,8 +299,8 @@ func TestRepositoryLayersTakePrecedence(t *testing.T) {
 	if e.Limits.MaxAgents != 30 || !slices.Contains(e.PassEnv, "GITHUB_TOKEN") || e.Search.Provider != "brave" || !slices.Contains(e.Plugins, "x") || e.Escalation.Default != policy.Allow || e.Sandbox.Enabled {
 		t.Fatalf("a project sets what the global file can: limits %+v env %v search %q plugins %v default %s sandbox %v", e.Limits, e.PassEnv, e.Search.Provider, e.Plugins, e.Escalation.Default, e.Sandbox.Enabled)
 	}
-	if verb(e.Policy, "web_search", "q") != policy.Allow {
-		t.Fatal("a project's search backend allows web_search")
+	if verb(e.Policy, "search", "q") != policy.Allow {
+		t.Fatal("a project's search backend allows search")
 	}
 	e, err = Load(dir, noTrust{})
 	if err != nil || e.Limits.MaxAgents != 6 || !e.Sandbox.Enabled || e.Search.Provider != "" {
@@ -365,17 +366,19 @@ func TestWebSearchAsksUntilConfigured(t *testing.T) {
 	t.Setenv("STAVLOS_TEST_KEY", "k")
 	for cfg, want := range map[string]policy.Verb{
 		`{}`: policy.Ask,
-		`{"search":{"provider":"brave","apiKey":"${env:STAVLOS_TEST_KEY}"}}`:                                policy.Allow,
-		`{"search":{"provider":"brave","apiKey":"${env:STAVLOS_TEST_KEY}"},"policy":{"web_search":"deny"}}`: policy.Deny,
-		`{"policy":{"web_search":"allow"}}`:                                                                 policy.Allow,
+		`{"search":{"provider":"brave","apiKey":"${env:STAVLOS_TEST_KEY}"}}`:                            policy.Allow,
+		`{"search":{"provider":"brave","apiKey":"${env:STAVLOS_TEST_KEY}"},"policy":{"search":"deny"}}`: policy.Deny,
+		`{"policy":{"search":"allow"}}`: policy.Allow,
+		`{"search":{"provider":"brave","apiKey":"k"},"policy":{"web":{"fetch *":"deny"}}}`:  policy.Allow,
+		`{"search":{"provider":"brave","apiKey":"k"},"policy":{"web":{"search *":"deny"}}}`: policy.Deny,
 	} {
 		os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(cfg), 0o644)
 		e, err := LoadGlobal()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := verb(e.Policy, "web_search", "anything"); got != want {
-			t.Errorf("%s: web_search %s want %s", cfg, got, want)
+		if got := verb(e.Policy, "search", "anything"); got != want {
+			t.Errorf("%s: search %s want %s", cfg, got, want)
 		}
 	}
 }
@@ -385,12 +388,12 @@ func TestWebSearchAsksUntilConfigured(t *testing.T) {
 // stays a rule.
 func TestRoleToolsAreRemovedNotListed(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "reviewer.md")
-	os.WriteFile(path, []byte("---\ndescription: d\ntools:\n  apply_patch: deny\n  todo: deny\n  shell:\n    \"*\": deny\n  mcp__github__merge: deny\n  message:\n    user: deny\n---\nx"), 0o644)
+	os.WriteFile(path, []byte("---\ndescription: d\ntools:\n  patch: deny\n  todo: deny\n  shell:\n    \"*\": deny\n  mcp__github__merge: deny\n  message:\n    user: deny\n---\nx"), 0o644)
 	p, err := ReadRole(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(p.Tools, ","); got != "shell,read,grep,glob,skill,web_fetch,web_search,sheet" {
+	if got := strings.Join(p.Tools, ","); got != "shell,read,grep,glob,skill,web,sheet" {
 		t.Fatalf("tools %s", got)
 	}
 	pol := p.RolePolicy()
@@ -425,6 +428,7 @@ func TestRoleDirsRemoved(t *testing.T) {
 // verb is a policy's decision on one argument: a command line for shell,
 // text otherwise.
 func verb(p any, tool, arg string) policy.Verb {
+	tool, arg = toolname.PolicyRule(tool, arg)
 	sub := policy.Text(arg)
 	if tool == "shell" {
 		sub = policy.Command(arg)
@@ -454,5 +458,35 @@ func TestSandboxConfig(t *testing.T) {
 	home, _ := os.UserHomeDir()
 	if err != nil || !e.Sandbox.Enabled || e.Sandbox.Network || strings.Join(e.Sandbox.Writable, ",") != filepath.Join(home, ".cache/x") || strings.Join(e.Sandbox.Hide, ",") != "/srv/y" {
 		t.Fatalf("%+v %v", e.Sandbox, err)
+	}
+}
+
+// Old tool-specific restrictions must stay scoped after the names are merged.
+func TestLegacyPolicyActionsStaySeparate(t *testing.T) {
+	p, err := ParsePolicy(map[string]any{"apply_patch": "deny", "web_fetch": map[string]any{"https://example.com/*": "deny"}, "web_search": "allow", "agent_cancel": "deny", "agent_status": "allow", "shell_kill": "deny"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		tool, arg string
+		want      policy.Verb
+	}{
+		{"patch", "a.go", policy.Deny},
+		{"web", "fetch https://example.com/a", policy.Deny},
+		{"web", "search https://example.com/a", policy.Allow},
+		{"agent", "cancel child", policy.Deny},
+		{"agent", "status child", policy.Allow},
+		{"shell", "kill job", policy.Deny},
+	} {
+		if got := p.Decide(tc.tool, policy.Text(tc.arg)); got != tc.want {
+			t.Errorf("%s %s: %s want %s", tc.tool, tc.arg, got, tc.want)
+		}
+	}
+	role, err := ReadRole(writeRole(t, "---\ndescription: restricted\ntools:\n  web_fetch: deny\n---\nx"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(role.Tools, "web") || verb(role.RolePolicy(), "web", "fetch https://example.com") != policy.Deny || verb(role.RolePolicy(), "web", "search example") == policy.Deny {
+		t.Fatalf("legacy role restriction: %+v", role)
 	}
 }

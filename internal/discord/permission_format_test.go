@@ -13,9 +13,9 @@ import (
 
 func TestPermissionSubjectsAreReadableAndComplete(t *testing.T) {
 	for _, tc := range []struct{ tool, input, want string }{
-		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: AGENTS.md\n@@\n-old\n+new\n*** End Patch"}`, "```diff\n*** Begin Patch\n*** Update File: AGENTS.md\n@@\n-old\n+new\n*** End Patch\n```"},
-		{"web_fetch", `{"url":"https://example.com/docs?a=1&b=2","start":100}`, "```text\nhttps://example.com/docs?a=1&b=2\nStart: 100\n```"},
-		{"web_search", `{"query":"how does this work?","n":5}`, "```text\nhow does this work?\nResults: 5\n```"},
+		{"patch", `{"patch":"*** Begin Patch\n*** Update File: AGENTS.md\n@@\n-old\n+new\n*** End Patch"}`, "```diff\n*** Begin Patch\n*** Update File: AGENTS.md\n@@\n-old\n+new\n*** End Patch\n```"},
+		{"fetch", `{"url":"https://example.com/docs?a=1&b=2","start":100}`, "```text\nhttps://example.com/docs?a=1&b=2\nStart: 100\n```"},
+		{"search", `{"query":"how does this work?","n":5}`, "```text\nhow does this work?\nResults: 5\n```"},
 		{"read", `{"path":"/outside/file.txt","offset":10,"limit":20}`, "```text\n/outside/file.txt\nFirst line: 10\nLine limit: 20\n```"},
 		{"grep", `{"pattern":"log.*Error","path":"src","glob":"*.go","ignore_case":true,"limit":50}`, "```text\nPattern: log.*Error\nPath: src\nFile glob: *.go\nIgnore case: true\nMatch limit: 50\n```"},
 		{"glob", `{"pattern":"**/*.go","path":"/outside","limit":20}`, "```text\nPattern: **/*.go\nPath: /outside\nPath limit: 20\n```"},
@@ -34,7 +34,7 @@ func TestPermissionSubjectsAreReadableAndComplete(t *testing.T) {
 			if !strings.Contains(text, "** /outside\n"+tc.want) || strings.Contains(text, "Directory:") || strings.Contains(text, "Permission:") || len(controls) != 1 || len(controls[0].(dg.ActionsRow).Components) != 4 {
 				t.Fatalf("card: %s", text)
 			}
-			titles := map[string]string{"apply_patch": "Apply patch", "web_fetch": "Web fetch", "web_search": "Web search", "mcp__github__create_issue": "Github · Create issue"}
+			titles := map[string]string{"patch": "Patch", "fetch": "Fetch", "search": "Search", "mcp__github__create_issue": "Github · Create issue"}
 			if title := titles[tc.tool]; title != "" && !strings.HasPrefix(text, "❗ **"+title+"**") {
 				t.Fatalf("heading should use a readable tool name: %s", text)
 			}
@@ -48,7 +48,7 @@ func TestPermissionSubjectsAreReadableAndComplete(t *testing.T) {
 }
 
 func TestPermissionFormattingKeepsUnexpectedArguments(t *testing.T) {
-	p := protocol.PromptInfo{Tool: "web_fetch", Input: json.RawMessage(`{"url":"https://example.com","new_setting":{"id":9007199254740993}}`)}
+	p := protocol.PromptInfo{Tool: "fetch", Input: json.RawMessage(`{"url":"https://example.com","new_setting":{"id":9007199254740993}}`)}
 	text := permissionSubject(p)
 	if !strings.Contains(text, "```text\nhttps://example.com\n```") || !strings.Contains(text, "Additional arguments:\n```json") || !strings.Contains(text, "9007199254740993") {
 		t.Fatalf("new arguments hidden or rounded: %s", text)
@@ -78,7 +78,7 @@ func TestLongPatchPermissionRetainsBoundedEditableCard(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := protocol.PromptInfo{ID: "p", Channel: "channel", Kind: protocol.PromptPermission, From: "main", Tool: "apply_patch", Input: input, Escalated: true}
+	p := protocol.PromptInfo{ID: "p", Channel: "channel", Kind: protocol.PromptPermission, From: "main", Tool: "patch", Input: input, Escalated: true}
 	b, w, api := fixture(t, func(_ context.Context, _ string, _, out any) error {
 		return result(out, protocol.PromptListResult{Prompts: []protocol.PromptInfo{p}})
 	})
@@ -123,7 +123,7 @@ func TestToolInputCannotLeaveItsCodeBlock(t *testing.T) {
 		t.Fatalf("a direction override or an escape reached Discord: %q", got)
 	}
 	patch, _ := json.Marshal(map[string]string{"patch": "*** Begin Patch\n+```\n+@here\n*** End Patch"})
-	if got := permissionSubject(protocol.PromptInfo{Tool: "apply_patch", Input: patch}); strings.Count(got, "```") != 2 {
+	if got := permissionSubject(protocol.PromptInfo{Tool: "patch", Input: patch}); strings.Count(got, "```") != 2 {
 		t.Fatalf("a patch left its block:\n%s", got)
 	}
 }

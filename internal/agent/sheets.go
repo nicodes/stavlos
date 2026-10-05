@@ -47,7 +47,7 @@ type sheetState struct {
 var sheetFile = regexp.MustCompile(`^(s[0-9]+)\.html$`)
 
 // SheetDir is where the channel's sheets live. Native tools treat it as part
-// of the working set, so read and apply_patch edit a sheet like any file;
+// of the working set, so read and patch edit a sheet like any file;
 // commands do not: the sandbox hides the harness's data directory.
 func (c *Channel) SheetDir() string { return filepath.Join(paths.DataDir(), "sheets", c.ID) }
 
@@ -156,7 +156,7 @@ func (a *Agent) guardSheets(sub policy.Subject) (refusal string, after func() st
 		known := m != nil && filepath.Dir(p) == dir && c.st.sheets[m[1]] != nil
 		c.mu.Unlock()
 		if !known {
-			return "Refused: " + v + " is in the channel's sheets directory but is no sheet. Sheets are created with the sheet tool (action write); read and apply_patch edit the file of a sheet that exists.", nil
+			return "Refused: " + v + " is in the channel's sheets directory but is no sheet. Sheets are created with the sheet tool (action write); read and patch edit the file of a sheet that exists.", nil
 		}
 		old, err := readSheet(p)
 		if err != nil {
@@ -251,7 +251,7 @@ func (c *Channel) sheetWrittenLocked(a *Agent, id, title string, page []byte) er
 	return err
 }
 
-// sheetsPatched records what an apply_patch did to the sheets it touched, so
+// sheetsPatched records what an patch did to the sheets it touched, so
 // an edit made with the ordinary file tools reaches the viewers like one
 // made with the sheet tool. A file that is no known sheet is left alone:
 // sheets are created by the sheet tool, which numbers and caps them.

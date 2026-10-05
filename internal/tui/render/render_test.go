@@ -997,8 +997,8 @@ func TestDeniedCallReadsOnItsLine(t *testing.T) {
 func TestPatchDiffRenders(t *testing.T) {
 	input, _ := json.Marshal(map[string]string{"patch": "*** Begin Patch\n*** Update File: a.go\n@@ func run() {\n-old()\n*** End Patch"})
 	tr := transcript.NewTranscript()
-	evtest.Apply(tr, evtest.Call("a", "c1", "apply_patch", string(input)))
-	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Output: "updated a.go (1 hunk(s))"}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "patch", string(input)))
+	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "patch", Output: "updated a.go (1 hunk(s))"}))
 	assertSubsequence(t, renderLines(tr.All()), []string{"± Patch  a.go", "  a.go", "  @@ func run() {", "  -old()"})
 }
 

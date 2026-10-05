@@ -48,7 +48,7 @@ var busyCount = regexp.MustCompile(`Agents busy in this channel: \d+ of`)
 
 func TestGoldenPrompt(t *testing.T) {
 	fm := &fakeModel{
-		steps:      []step{reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look around"}`)), reply(text("delegated"))},
+		steps:      []step{reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look around"}`)), reply(text("delegated"))},
 		childSteps: []step{reply(text("looked"))},
 	}
 	s, h := newTestChannel(t, testConfig{}, fm)

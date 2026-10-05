@@ -79,3 +79,24 @@ describe("a daemon newer than this bundle", () => {
     expect(v.chats[CHAT]).toEqual([]);
   });
 });
+
+
+it("shows merged tool actions with their targets", () => {
+ const v = emptyChannel();
+ apply(v, ev("agent.spawned", "", { id: "a1", name: "main" }));
+ const calls = [
+  { type: "tool_use", id: "c1", name: "web", input: { action: "fetch", url: "https://example.com" } },
+  { type: "tool_use", id: "c2", name: "web", input: { action: "search", query: "documentation" } },
+  { type: "tool_use", id: "c3", name: "shell", input: { action: "kill", id: "job1" } },
+  { type: "tool_use", id: "c4", name: "agent", input: { action: "cancel", id: "scout" } },
+ ];
+ apply(v, ev("assistant.message", "a1", { blocks: calls }));
+ expect(v.chats.a1.map(i => i.kind === "tool" && i.input)).toEqual(["fetch https://example.com", "search documentation", "kill job1", "cancel scout"]);
+});
+
+it("keeps public addressing visible on a shared board", () => {
+ const v = emptyChannel();
+ apply(v, ev("chat.message", "manager", { from: "manager", to: ["reviewer"], text: "Review the contract", kind: "request", request_id: "r1" }));
+ const message = v.chats[CHAT][0];
+ expect(message.kind === "message" && [message.from, message.text]).toEqual(["manager", "@reviewer Review the contract"]);
+});
