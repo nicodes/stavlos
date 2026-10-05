@@ -17,8 +17,8 @@ import (
 // it whole.
 func TestPostDeliversByMention(t *testing.T) {
 	fm := &fakeModel{steps: []step{
-		reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
-		reply(call("c2", "agent_create", `{"archetype":"general","label":"lookout","task":"watch"}`)),
+		reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look"}`)),
+		reply(call("c2", "agent", `{"action":"create","archetype":"general","label":"lookout","task":"watch"}`)),
 		reply(text("delegated")),
 	}}
 	s, h := newTestChannel(t, testConfig{}, fm)
@@ -121,7 +121,7 @@ func TestNoReplyNote(t *testing.T) {
 	sendInfo := make(chan struct{})
 	fm := &fakeModel{
 		steps: []step{
-			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("delegated")),
 			func(ctx context.Context, _ model.Request) (model.Response, error) {
 				// Scout's response can wake main before scout finishes its turn.

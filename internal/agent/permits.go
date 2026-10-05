@@ -8,6 +8,7 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/shellcmd"
+	"github.com/nicodes/stavlos/internal/toolname"
 )
 
 // permits are the allows a human granted for the rest of a channel: exact
@@ -50,6 +51,7 @@ func (p *permits) coversOne(tool string, kind policy.Kind, v string) bool {
 
 // apply installs a granted permit.
 func (p *permits) apply(g event.PermitPayload) {
+	g.Tool = toolname.Canonical(g.Tool)
 	switch {
 	case g.Prefix != "":
 		if p.prefixes == nil {

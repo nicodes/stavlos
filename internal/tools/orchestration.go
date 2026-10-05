@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/model"
@@ -29,11 +30,6 @@ func needOrch(env *Env) *Result {
 // --- spawn ---
 
 type spawnTool struct{}
-
-func (spawnTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AgentCreate, Description: "Create a child agent and give it a task. Returns its id immediately. The task is the child's first prompt; its answer (a message to you) wakes you between turns, never mid-turn. If you have nothing else to do until then, end your turn. The child stays alive in the channel: message it again for follow-ups (it keeps its context). There is nothing to clean up.",
-		Schema: schemaOf(spawnInput{})}
-}
 
 type spawnInput struct {
 	Archetype string `json:"archetype" desc:"Role name of the child (see the list in your instructions)" req:"true"`
@@ -81,35 +77,42 @@ func Recipient(to string) string {
 
 // Message kinds.
 const (
-	KindRequest  = "request"  // asks for something: the recipient owes a reply, the sender waits (the default)
-	KindResponse = "response" // answers a request: settles it and wakes the agent waiting on it
-	KindInfo     = "info"     // needs no reply: nobody owes or waits, and an idle recipient is not woken
-	KindNoReply  = "no_reply" // parse alias for KindInfo; stored events stay "info"
+	KindRequest         = "request"  // asks for something: the recipient owes a reply, the sender waits (the default)
+	KindResponse        = "response" // answers a request: settles it and wakes the agent waiting on it
+	KindInfo            = "info"     // needs no reply: nobody owes or waits, and an idle recipient is not woken
+	KindSteer           = "steer"
+	KindResponseRequest = "response_request" // settles reply_to and opens a new request
+	KindNoReply         = "no_reply"         // parse alias for KindInfo; stored events stay "info"
 )
 
 type messageTool struct{}
 
 func (messageTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Message, Description: "Send text to agents and/or user (to is an array; every recipient sees it). kind request (the default) opens a request each agent addressed must answer. kind response answers the request IDs in reply_to, with their senders in to, and settles only those; the human's prompts carry request IDs to answer the same way. kind info needs no reply and wakes nobody. Ask the human questions with ask_user, not message.",
-		Schema: schemaOf(messageInput{})}
+	schema := objectSchema(reflect.TypeOf(messageInput{}))
+	delete(schema["properties"].(map[string]any), "kind") // decode old calls, advertise the new contract
+	raw, _ := json.Marshal(schema)
+	return model.ToolDef{Name: toolname.Message, Description: "Send a private message to agents/user, or post publicly in a shared channel. Addressed messages default to expect_response true: each recipient owes a reply. Set false to steer agents without requiring an answer. Unaddressed channel posts and answers with reply_to default false. reply_to settles specific request IDs; public answers must use their original channel. Ask the human questions with ask.", Schema: raw}
 }
 
 type messageInput struct {
-	ReplyTo []string            `json:"reply_to" desc:"Request IDs explicitly answered by this response; required for kind response, omitted for request/info/no_reply" min:"1"`
-	To      protocol.Recipients `json:"to" desc:"Recipient names or ids, including user for the human; everyone sees the full recipient list" req:"true" min:"1"`
-	Text    string              `json:"text" desc:"The shared message body; include exact paths and results. Recipient context is attached separately" req:"true"`
-	Kind    string              `json:"kind" desc:"request (the default): you want something and wait for it; response: this answers a request you received; info or no_reply: no reply needed"`
+	Channel        string              `json:"channel" desc:"Shared channel name or id; omit for private delivery"`
+	To             protocol.Recipients `json:"to" desc:"Recipient names/ids, or user. Omit for an unaddressed channel post" min:"1"`
+	Text           string              `json:"text" req:"true" desc:"Message body"`
+	ExpectResponse *bool               `json:"expect_response" desc:"Addressed messages default true; false steers recipients without a reply obligation. Unaddressed posts and answers default false"`
+	ReplyTo        []string            `json:"reply_to" desc:"Request IDs this message answers; their senders must be recipients. Include the original channel for public requests" min:"1"`
+	Kind           string              `json:"kind"` // legacy input only
 }
 
 func (messageTool) Subject(in json.RawMessage) policy.Subject {
 	var a messageInput
 	_ = decode(in, &a)
-	return policy.Subject{Kind: policy.KindID, Values: a.To.Normalized()}
+	values := a.To.Normalized()
+	if a.Channel != "" {
+		values = append(values, "#"+a.Channel)
+	}
+	return policy.Subject{Kind: policy.KindID, Values: values}
 }
 func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
-	if r := needOrch(env); r != nil {
-		return *r
-	}
 	var a messageInput
 	if err := decode(in, &a); err != nil {
 		return errf("bad input: %v", err)
@@ -117,24 +120,12 @@ func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 	if strings.TrimSpace(a.Text) == "" {
 		return errf("text is required")
 	}
-	kind := strings.ToLower(strings.TrimSpace(a.Kind))
-	switch kind {
-	case "":
-		kind = KindRequest
-	case KindNoReply:
-		kind = KindInfo
-	case KindRequest, KindResponse, KindInfo:
-	default:
-		return errf("kind %q: use request, response, info or no_reply", a.Kind)
-	}
-	if kind == KindResponse && len(a.ReplyTo) == 0 {
-		return errf("responses require reply_to request IDs; use info for updates that answer no request")
-	}
-	if kind != KindResponse && len(a.ReplyTo) > 0 {
-		return errf("reply_to is only valid for kind response")
-	}
 	recipients := a.To.Normalized()
-	if len(recipients) == 0 {
+	kind, err := messageKind(a, recipients)
+	if err != nil {
+		return errf("%v", err)
+	}
+	if len(recipients) == 0 && a.Channel == "" {
 		return errf("at least one recipient is required")
 	}
 	for _, to := range recipients {
@@ -142,25 +133,69 @@ func (messageTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result
 			return errf("recipient must not be empty")
 		}
 	}
-	out, err := env.Orch.Message(env.Agent, recipients, a.Text, kind, a.ReplyTo...)
+	var out string
+	if a.Channel != "" {
+		if env.Boards == nil {
+			return errf("shared channels are not available")
+		}
+		out, err = env.Boards.Message(ctx, env.Agent, a.Channel, recipients, a.Text, kind, a.ReplyTo)
+	} else {
+		if r := needOrch(env); r != nil {
+			return *r
+		}
+		out, err = env.Orch.Message(env.Agent, recipients, a.Text, kind, a.ReplyTo...)
+	}
 	if err != nil {
 		return errf("%v", err)
 	}
 	return Result{Output: out}
 }
+func messageKind(a messageInput, recipients []string) (string, error) {
+	if a.Kind != "" {
+		if a.ExpectResponse != nil {
+			return "", fmt.Errorf("use expect_response instead of kind, not both")
+		}
+		kind := strings.ToLower(strings.TrimSpace(a.Kind))
+		if kind == KindNoReply {
+			kind = KindInfo
+		}
+		switch kind {
+		case KindRequest, KindResponse, KindInfo:
+		default:
+			return "", fmt.Errorf("kind %q: use request, response, info or no_reply", a.Kind)
+		}
+		if kind == KindResponse && len(a.ReplyTo) == 0 {
+			return "", fmt.Errorf("responses require reply_to request IDs")
+		}
+		if kind != KindResponse && len(a.ReplyTo) > 0 {
+			return "", fmt.Errorf("reply_to is only valid for kind response")
+		}
+		return kind, nil
+	}
+	expect := len(recipients) > 0 && !(len(recipients) == 1 && recipients[0] == User) && len(a.ReplyTo) == 0
+	if a.ExpectResponse != nil {
+		expect = *a.ExpectResponse
+	}
+	if expect && len(recipients) == 0 {
+		return "", fmt.Errorf("expect_response requires explicit recipients")
+	}
+	if len(a.ReplyTo) > 0 {
+		if expect {
+			return KindResponseRequest, nil
+		}
+		return KindResponse, nil
+	}
+	if expect {
+		return KindRequest, nil
+	}
+	if len(recipients) > 0 {
+		return KindSteer, nil
+	}
+	return KindInfo, nil
+}
 
 type cancelTool struct{}
 
-func (cancelTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AgentCancel, Description: "End a child's current turn immediately. The child survives and can be sent new prompts.",
-		Schema: schemaOf(cancelInput{})}
-}
-
-type cancelInput struct {
-	ID string `json:"id" desc:"Child agent: its name or id" req:"true"`
-}
-
-func (cancelTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 func (cancelTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
 		return *r
@@ -173,16 +208,6 @@ func (cancelTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result 
 
 type statusTool struct{}
 
-func (statusTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.AgentStatus, Description: "One line per agent: state, turn count, cost, and what it owes or awaits, for one agent or the whole tree (parents before children; you are marked). Not for waiting: a child's answer wakes you by itself, so asking whether it is done yet learns nothing.",
-		Schema: schemaOf(statusInput{})}
-}
-
-type statusInput struct {
-	ID string `json:"id" desc:"Agent name or id; omit for the whole channel"`
-}
-
-func (statusTool) Subject(in json.RawMessage) policy.Subject { return policy.ID(idArg(in)) }
 func (statusTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if r := needOrch(env); r != nil {
 		return *r
@@ -233,4 +258,60 @@ func excerpt(s string, n int) string {
 		return string(r[:n-1]) + "…"
 	}
 	return s
+}
+
+// agentTool dispatches lifecycle actions without adding separate model tools.
+type agentTool struct{}
+type agentInput struct {
+	Action    string `json:"action" req:"true" enum:"create,cancel,status" desc:"create a child, cancel its current turn, or inspect status"`
+	Archetype string `json:"archetype" desc:"Required for create: role from your delegation instructions"`
+	Label     string `json:"label" desc:"Required for create: short child name"`
+	Task      string `json:"task" desc:"Required for create: complete task; the child has no other context"`
+	ID        string `json:"id" desc:"Required for cancel: child name or id; optional for status (omit for the whole channel)"`
+}
+
+func (agentTool) Def() model.ToolDef { return AgentDef(true) }
+
+// AgentDef restricts the advertised actions for roles without delegation.
+func AgentDef(delegate bool) model.ToolDef {
+	schema := objectSchema(reflect.TypeOf(agentInput{}))
+	if !delegate {
+		schema["properties"].(map[string]any)["action"].(map[string]any)["enum"] = []string{"status"}
+	}
+	raw, _ := json.Marshal(schema)
+	return model.ToolDef{Name: toolname.Agent, Description: "Manage agents. create returns a child id immediately; its response wakes you between turns. Children keep their context for follow-up messages. cancel ends a child's current turn; it survives. status reports state, turns, cost and reply obligations for one agent or the channel. Do not poll status to wait: end your turn when you have nothing else to do.", Schema: raw}
+}
+func (agentTool) Subject(in json.RawMessage) policy.Subject {
+	if toolname.Operation(toolname.Agent, in) == toolname.AgentCreate {
+		return (spawnTool{}).Subject(in)
+	}
+	return policy.ID(idArg(in))
+}
+func (agentTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
+	var a agentInput
+	if err := decode(in, &a); err != nil {
+		return errf("bad input: %v", err)
+	}
+	switch a.Action {
+	case "create":
+		if strings.TrimSpace(a.Archetype) == "" || strings.TrimSpace(a.Task) == "" {
+			return errf("create requires archetype, label and task")
+		}
+		return (spawnTool{}).Run(ctx, in, env)
+	case "cancel":
+		if strings.TrimSpace(a.ID) == "" {
+			return errf("cancel requires id")
+		}
+		if r := needOrch(env); r != nil {
+			return *r
+		}
+		if len(env.Orch.Archetypes(env.Agent)) == 0 {
+			return errf("this role cannot cancel agents")
+		}
+		return (cancelTool{}).Run(ctx, in, env)
+	case "status":
+		return (statusTool{}).Run(ctx, in, env)
+	default:
+		return errf("action must be create, cancel or status")
+	}
 }

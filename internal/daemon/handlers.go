@@ -238,7 +238,7 @@ var handlers = routes(
 			return protocol.ChannelPostResult{}, err
 		}
 		name, _ := c.cl.identity()
-		to, err := s.Post(ctx, p.Text, "human:"+name)
+		to, err := c.d.channelPost(ctx, s, p.Text, "human:"+name)
 		return protocol.ChannelPostResult{To: to}, err
 	})),
 	route(protocol.ChannelSetRecap, func(ctx context.Context, c *conn, p protocol.ChannelSetRecapParams) (protocol.None, error) {
@@ -299,7 +299,7 @@ var handlers = routes(
 		if err != nil {
 			return protocol.AgentTreeResult{}, err
 		}
-		return protocol.AgentTreeResult{Agents: s.Tree()}, nil
+		return protocol.AgentTreeResult{Agents: c.d.channelTree(s)}, nil
 	})),
 	forBridge(route(protocol.AgentSend, func(ctx context.Context, c *conn, p protocol.AgentSendParams) (protocol.None, error) {
 		s, _, err := c.d.agentChannel(p.Agent)
@@ -458,7 +458,7 @@ var handlers = routes(
 		info := s.Info()
 		info.Seq = seq
 		// Every channel's prompts: the permission and questions tabs span channels.
-		return protocol.ReconcileResult{Channel: info, Agents: s.Tree(), Prompts: c.d.esc.Pending(""), Seq: seq}, nil
+		return protocol.ReconcileResult{Channel: info, Agents: c.d.channelTree(s), Prompts: c.d.esc.Pending(""), Seq: seq}, nil
 	})),
 	route(protocol.Roles, func(_ context.Context, c *conn, p protocol.RolesParams) (protocol.RolesResult, error) {
 		s, err := c.d.channel(p.Channel)

@@ -38,6 +38,7 @@ export type EventType =
   | "turn.started";
 
 export type InputKind =
+  | "agent_steer"
   | "info"
   | "job"
   | "prompt"

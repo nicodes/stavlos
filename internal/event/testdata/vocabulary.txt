@@ -1,6 +1,7 @@
 AskOutcome answered
 AskOutcome defaulted
 AskOutcome withdrawn
+InputKind agent_steer
 InputKind info
 InputKind job
 InputKind prompt

@@ -93,12 +93,20 @@ func Str(s string) *string { return &s }
 
 // --- channel ---
 
+// BoardInfo identifies a shared channel backed by agents in an execution channel.
+type BoardInfo struct {
+	Source  string   `json:"source"`
+	Owner   string   `json:"owner"`
+	Members []string `json:"members"`
+}
+
 type ChannelCreatedPayload struct {
-	Name  string `json:"name"` // unique across the daemon, shown as #name
-	Dir   string `json:"dir"`
-	Model string `json:"model,omitempty"`
-	Role  string `json:"role"`           // the main agent's role
-	Mode  string `json:"mode,omitempty"` // the permission mode it starts in (ask when empty)
+	Board *BoardInfo `json:"board,omitempty"`
+	Name  string     `json:"name"` // unique across the daemon, shown as #name
+	Dir   string     `json:"dir"`
+	Model string     `json:"model,omitempty"`
+	Role  string     `json:"role"`           // the main agent's role
+	Mode  string     `json:"mode,omitempty"` // the permission mode it starts in (ask when empty)
 }
 
 // ChannelUpdatedPayload carries only what changed.
@@ -163,14 +171,15 @@ type AgentUpdatedPayload struct {
 type InputKind string
 
 const (
-	InputPrompt   InputKind = "prompt"   // the human's, queued for after the current turn
-	InputSteer    InputKind = "steer"    // the human's, at the next model call; a channel post carries Post and is owed a reply
-	InputRequest  InputKind = "request"  // another agent's (a message, a child's task), at the next model call; owed a reply
-	InputInfo     InputKind = "info"     // another agent's, needing no reply; it never wakes the agent
-	InputResponse InputKind = "response" // another agent's answer, between turns; it settles the wait on that agent
-	InputJob      InputKind = "job"      // a background job's result (Job), between turns
-	InputReminder InputKind = "reminder" // the harness's reminder of replies still owed (Parties)
-	InputResume   InputKind = "resume"   // the harness's: a model is available again after the turn stopped at every plan's limit
+	InputPrompt     InputKind = "prompt"      // the human's, queued for after the current turn
+	InputSteer      InputKind = "steer"       // the human's, at the next model call; a channel post carries Post and is owed a reply
+	InputRequest    InputKind = "request"     // another agent's (a message, a child's task), at the next model call; owed a reply
+	InputAgentSteer InputKind = "agent_steer" // addressed agent message without a reply obligation
+	InputInfo       InputKind = "info"        // another agent's, needing no reply; it never wakes the agent
+	InputResponse   InputKind = "response"    // another agent's answer, between turns; it settles the wait on that agent
+	InputJob        InputKind = "job"         // a background job's result (Job), between turns
+	InputReminder   InputKind = "reminder"    // the harness's reminder of replies still owed (Parties)
+	InputResume     InputKind = "resume"      // the harness's: a model is available again after the turn stopped at every plan's limit
 )
 
 // InputRule is what a kind of input means to the runtime. The rules used to
@@ -185,14 +194,15 @@ type InputRule struct {
 }
 
 var inputRules = map[InputKind]InputRule{
-	InputPrompt:   {Wakes: true},
-	InputSteer:    {Wakes: true, MidTurn: true},
-	InputRequest:  {Wakes: true, MidTurn: true},
-	InputInfo:     {MidTurn: true},
-	InputResponse: {Wakes: true},
-	InputJob:      {Wakes: true},
-	InputReminder: {Wakes: true, Harness: true},
-	InputResume:   {Wakes: true, Harness: true},
+	InputPrompt:     {Wakes: true},
+	InputSteer:      {Wakes: true, MidTurn: true},
+	InputRequest:    {Wakes: true, MidTurn: true},
+	InputInfo:       {MidTurn: true},
+	InputAgentSteer: {Wakes: true, MidTurn: true},
+	InputResponse:   {Wakes: true},
+	InputJob:        {Wakes: true},
+	InputReminder:   {Wakes: true, Harness: true},
+	InputResume:     {Wakes: true, Harness: true},
 }
 
 // Rule is the kind's rule. A kind nobody declared (a log written by a newer
@@ -217,31 +227,36 @@ func InputKinds() []InputKind {
 
 // Input is one entry of an agent's inbox.
 type Input struct {
-	RequestID string         `json:"request_id,omitempty"`
-	ReplyTo   []string       `json:"reply_to,omitempty"`
-	Requests  []ReplyRequest `json:"requests,omitempty"` // per-request reminder entries
-	To        []string       `json:"to,omitempty"`       // all recipient names, shared by every delivery
-	ID        string         `json:"id"`
-	Kind      InputKind      `json:"kind"`
-	Text      string         `json:"text,omitempty"`
-	From      string         `json:"from,omitempty"`      // the sending agent's id
-	FromName  string         `json:"from_name,omitempty"` // its name when it sent
-	Post      string         `json:"post,omitempty"`      // the channel chat post a steer delivers
-	Job       string         `json:"job,omitempty"`       // kind job: the job whose result this is
-	Parties   []string       `json:"parties,omitempty"`   // kind reminder: who is owed ("user" or agent ids)
-	Names     []string       `json:"names,omitempty"`     // …and their names
-	Recap     bool           `json:"recap,omitempty"`     // the harness's ask for a status report: it starts the recap clock when folded
+	Channel        string         `json:"channel,omitempty"`
+	ChannelName    string         `json:"channel_name,omitempty"`
+	ExpectResponse bool           `json:"expect_response,omitempty"`
+	RequestID      string         `json:"request_id,omitempty"`
+	ReplyTo        []string       `json:"reply_to,omitempty"`
+	Requests       []ReplyRequest `json:"requests,omitempty"` // per-request reminder entries
+	To             []string       `json:"to,omitempty"`       // all recipient names, shared by every delivery
+	ID             string         `json:"id"`
+	Kind           InputKind      `json:"kind"`
+	Text           string         `json:"text,omitempty"`
+	From           string         `json:"from,omitempty"`      // the sending agent's id
+	FromName       string         `json:"from_name,omitempty"` // its name when it sent
+	Post           string         `json:"post,omitempty"`      // the channel chat post a steer delivers
+	Job            string         `json:"job,omitempty"`       // kind job: the job whose result this is
+	Parties        []string       `json:"parties,omitempty"`   // kind reminder: who is owed ("user" or agent ids)
+	Names          []string       `json:"names,omitempty"`     // …and their names
+	Recap          bool           `json:"recap,omitempty"`     // the harness's ask for a status report: it starts the recap clock when folded
 }
 
 // ReplyRequest identifies one response obligation. A broadcast shares an ID,
 // but every receiving agent independently owes its own response.
 type ReplyRequest struct {
-	ID       string   `json:"id"`
-	From     string   `json:"from"`
-	FromName string   `json:"from_name"`
-	To       []string `json:"to,omitempty"`
-	Text     string   `json:"text"` // short excerpt for status and reminders
-	Post     string   `json:"post,omitempty"`
+	Channel     string   `json:"channel,omitempty"`
+	ChannelName string   `json:"channel_name,omitempty"`
+	ID          string   `json:"id"`
+	From        string   `json:"from"`
+	FromName    string   `json:"from_name"`
+	To          []string `json:"to,omitempty"`
+	Text        string   `json:"text"` // short excerpt for status and reminders
+	Post        string   `json:"post,omitempty"`
 }
 
 // InputTakenPayload lists the inputs a model call consumed.

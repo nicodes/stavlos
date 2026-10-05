@@ -43,12 +43,16 @@ func (o orchestrator) Message(caller string, recipients []string, text, kind str
 		s.mu.Unlock()
 		return "", err
 	}
-	if err := validateReply(from, targets, kind, replyTo); err != nil {
+	replyKind := kind
+	if kind == tools.KindResponseRequest {
+		replyKind = tools.KindResponse
+	}
+	if err := validateReply(from, targets, replyKind, replyTo); err != nil {
 		s.mu.Unlock()
 		return "", err
 	}
 	requestID := ""
-	if kind == tools.KindRequest || kind == "" {
+	if kind == tools.KindRequest || kind == tools.KindResponseRequest || kind == "" {
 		for _, target := range targets {
 			if target != tools.User {
 				requestID = NewID("r")
@@ -58,8 +62,10 @@ func (o orchestrator) Message(caller string, recipients []string, text, kind str
 	}
 	inKind := event.InputRequest
 	switch kind {
-	case tools.KindResponse:
+	case tools.KindResponse, tools.KindResponseRequest:
 		inKind = event.InputResponse
+	case tools.KindSteer:
+		inKind = event.InputAgentSteer
 	case tools.KindInfo:
 		inKind = event.InputInfo
 	}
@@ -67,8 +73,8 @@ func (o orchestrator) Message(caller string, recipients []string, text, kind str
 	for _, target := range targets {
 		if target == tools.User {
 			message := event.ChatPayload{From: from.name, Text: text, To: names, Kind: tools.KindInfo}
-			if kind == tools.KindResponse {
-				message.Kind, message.ReplyTo = kind, slices.Clone(replyTo)
+			if replyKind == tools.KindResponse {
+				message.Kind, message.ReplyTo = tools.KindResponse, slices.Clone(replyTo)
 				for _, id := range replyTo {
 					if debt, ok := from.owedRequest(id); ok && debt.From == tools.User && debt.Post != "" {
 						message.Posts = append(message.Posts, debt.Post)
@@ -81,7 +87,7 @@ func (o orchestrator) Message(caller string, recipients []string, text, kind str
 			evs = append(evs, s.event(caller, event.ChatMessage, message))
 			continue
 		}
-		in := event.Input{ID: NewID("i"), RequestID: requestID, ReplyTo: slices.Clone(replyTo), Kind: inKind, Text: text, From: caller, FromName: from.name, To: names}
+		in := event.Input{ID: NewID("i"), ExpectResponse: kind == tools.KindResponseRequest, RequestID: requestID, ReplyTo: slices.Clone(replyTo), Kind: inKind, Text: text, From: caller, FromName: from.name, To: names}
 		evs = append(evs, s.event(target, event.InputQueued, in))
 	}
 	err = s.commitLocked(context.Background(), evs...)
@@ -97,6 +103,9 @@ func (o orchestrator) Message(caller string, recipients []string, text, kind str
 }
 
 func validateReply(from *agentState, targets []string, kind string, ids []string) error {
+	return validateReplyIn(from, targets, kind, ids, "")
+}
+func validateReplyIn(from *agentState, targets []string, kind string, ids []string, channel string, system ...bool) error {
 	if kind != tools.KindResponse {
 		if len(ids) > 0 {
 			return fmt.Errorf("reply_to is only valid for a response")
@@ -113,8 +122,16 @@ func validateReply(from *agentState, targets []string, kind string, ids []string
 		}
 		seen[id] = true
 		request, ok := from.owedRequest(id)
+		if !ok && len(system) > 0 && system[0] {
+			if r := from.cs.requests[id]; r != nil && r.open[from.id] {
+				request, ok = r.ReplyRequest, true
+			}
+		}
 		if !ok {
-			return fmt.Errorf("request %q is not pending for this agent; check agent_status", id)
+			return fmt.Errorf("request %q is not pending for this agent; check agent with action status", id)
+		}
+		if request.Channel != channel {
+			return fmt.Errorf("request %q must be answered in its original channel %q", id, request.Channel)
 		}
 		if !slices.Contains(targets, request.From) {
 			return fmt.Errorf("request %q belongs to %s, who is not a recipient", id, request.FromName)
@@ -166,8 +183,10 @@ func messageResult(names []string, kind string) string {
 	}
 	to := strings.Join(names, ", ")
 	switch kind {
-	case tools.KindResponse:
+	case tools.KindResponse, tools.KindResponseRequest:
 		return "response delivered to " + to
+	case tools.KindSteer:
+		return "steer delivered to " + to + "; no response required"
 	case tools.KindInfo:
 		if len(names) > 1 {
 			return "info delivered to " + to + "; no replies are needed and idle agents are not woken"

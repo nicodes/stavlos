@@ -9,7 +9,7 @@ A channel-wide chat where the human talks to any agent by name and agents talk b
    - `request` (the default): creates a request ID and an independent obligation for each agent recipient; it is delivered at the recipient's next step.
    - `response`: requires `reply_to` IDs; only those requests are settled. One response can answer several requests from one or more senders, delivered between turns.
    - `info` (alias `no_reply` at parse time): no reply needed; creates and clears no debt, and does not wake an idle recipient. Stored events stay `info`.
-   - To `user`: an explicit response answers the referenced human requests; other messages are updates. Human questions use `ask_user`.
+   - To `user`: an explicit response answers the referenced human requests; other messages are updates. Human questions use `ask`.
    Old logs replay `agent_message` and `agent_response` calls as `message`.
 3. **Final text is notes.** An agent's final assistant text reaches no one; the system prompt says so. Every reply goes through `message`. The agent's own chat shows the notes dimmed.
 4. **Reminders.** Human prompts/steers and agent requests are owed explicit responses. Reminders and the TUI async panel list each request ID, sender and excerpt separately, including repeated requests from the same sender. The current harness-state note carries pending IDs so compaction cannot lose them. Empty reminder-only turns stop after three; a later turn that uses a tool, replies, or takes a new request can be reminded again. Awaiting another agent does not skip the reminder; a running job does. Cancel drops reply-debt like kill without killing the agent. Info messages never reset or clear this queue. See `docs/reply-tracking.md`.

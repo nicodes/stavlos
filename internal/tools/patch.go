@@ -18,7 +18,7 @@ import (
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
-// apply_patch: the Codex CLI patch grammar. No line numbers; hunks are
+// patch: the Codex CLI patch grammar. No line numbers; hunks are
 // anchored on context lines, so models can produce them reliably.
 //
 //	*** Begin Patch

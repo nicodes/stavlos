@@ -66,7 +66,7 @@ func TestPromptOptionsTakeTheMouse(t *testing.T) {
 
 	m.prompts, m.promptBusy = nil, ""
 	m.setFocus(focusInput) // a new question opens its dialog when the input is idle
-	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask_user",
+	m.applyPromptNotification(protocol.PromptNotification{Action: "requested", Prompt: protocol.PromptInfo{ID: "q1", Kind: "question", Agent: "a", Tool: "ask",
 		Questions: []protocol.Question{{Question: "Which backend?", Options: []protocol.QuestionOption{{Label: "Postgres"}, {Label: "SQLite"}}}}}})
 	m.refreshViewport()
 	if m.focus != focusInput || strings.Contains(stripANSI(m.View()), "╭") {

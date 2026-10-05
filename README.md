@@ -233,25 +233,30 @@ The role decides what `/roles`, `/models` and `/variants` offer, and the daemon 
 
 ## What agents can do
 
-**Delegate and message.** Delegating to child agents is the model's job (`agent_create`).
+**Delegate and message.** Delegating to child agents is the model's job (`agent` with `action: "create"`).
 Every agent has a unique name in its channel (the root is `main`; a name already taken gets a suffix, `scout-2`).
-Agents use `message` with a recipient array, such as `{"to":["scout","reviewer"],"text":"Review this change","kind":"request"}`.
+Agents use `message` with a recipient array, such as `{"to":["scout","reviewer"],"text":"Review this change","expect_response":true}`.
 Every recipient sees the full list; aliases deduplicate, and an invalid recipient rejects the entire send.
 Policy checks every recipient.
 Each request is tracked independently for each receiving agent.
-Responses require `reply_to` IDs and clear only those requests, even when several came from the same sender.
-Info creates no debt, clears no requests and does not wake idle agents.
+Answers use `reply_to` IDs and clear only those requests, even when several came from the same sender.
+Addressed messages default to `expect_response: true`; setting it to false steers recipients without requiring a reply. Answers with `reply_to` default to false, preventing acknowledgment loops.
+Legacy `kind` calls remain accepted for existing integrations.
 Human requests also require explicit responses; other human-facing messages are updates.
 Older single-recipient string calls still work.
 A child idles with its context intact for follow-ups, and its MCP servers stop after ten idle minutes.
 There is no wait tool.
+
+**Shared channels.** A manager uses `channel` with `action: "create"`, a unique `name`, and existing descendant `members` to create a shared board; it joins automatically. Boards appear alongside execution channels in the UI and in the configured Discord bridge. Members keep their existing identities, histories, and parent relationships. `channel` also supports `list` and paginated `read` (`from`, `limit`, and a returned `next` sequence).
+
+Post with `message({"channel":"auth-work","text":"Contract ready"})`: everyone can read it, and idle agents stay idle. Address a member with `to` to deliver a request (the default) or a steer (`expect_response: false`). Everyone sees the discussion, but only addressed recipients wake or owe a response. Public answers include the same `channel` and their `reply_to` request IDs. Human posts to a board follow the same visibility: leading `@names` request answers; unaddressed posts are passive. Membership and history survive restart. Discord provisions the mirror asynchronously and catches up from a saved board cursor, including posts made before discovery or while disconnected.
 
 **Search.** `grep` and `glob` search file contents and names (with ripgrep when it is installed) and never ask. They are tools, not shell commands, so searching needs no shell permission.
 
 **Run commands.** Agents run commands with one `shell` tool.
 No command is allowed by default: each asks until you allow it once, for the channel, or by prefix, or with a rule in `stavlos.json`.
 A call waits up to 15 seconds; a command still running then continues as a background job (the call returns its id and the output so far), and `background: true` skips the wait for servers.
-A job's exit wakes its agent the same way a response does, and `shell_kill` stops a job.
+A job's exit wakes its agent the same way a response does, and `shell` with `action: "kill"` and its `id` stops a job.
 Every command and MCP server runs with a scrubbed environment, without `STAVLOS_*`, any variable whose name looks like a credential, or one whose value carries a user and password in a URL (`GOPROXY=https://u:token@…`), so list what a build really needs under `"env": {"pass": ["GITHUB_TOKEN"]}` in `stavlos.json`.
 
 **The sandbox.** On Linux every command and MCP server runs inside a boundary the kernel enforces (Landlock, plus a user and mount namespace where the kernel allows them; the daemon log names the level).
@@ -259,7 +264,7 @@ It may write only beneath the channel's directories, a scratch directory of the 
 The files that steer the harness or run code later stay read-only: `.git/hooks`, `.git/config`, `.stavlos`, `.envrc`, and every `AGENTS.md` or `CLAUDE.md` the project's trust covers.
 They are also stamped before every command and compared after it, at every level: a command that changes one anyway (by renaming its parent out from under the mount, or where there is no mount) has that said in its result, for the agent and for you, and the daemon log records it. Review such a change before git or a shell runs it.
 It cannot see Stavlos's own config, data, cache or socket, your runtime directory (where the D-Bus and agent sockets live), or credential stores such as `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh` and `~/.netrc`, nor other tools' tokens (`~/.claude`, `~/.codex`, `~/.pgpass`, `~/.vault-token`, …), browser profiles or shell histories, which a command could otherwise read and send out in one step, since reads are not restricted otherwise.
-The file tools (`read`, `grep`, `glob`, `apply_patch`) are refused those same paths in every mode, yolo included, and whatever a rule allows: a list that bound only commands was one an agent could read its way round. The channel's own sheets and scratch directory stay open to it.
+The file tools (`read`, `grep`, `glob`, `patch`) are refused those same paths in every mode, yolo included, and whatever a rule allows: a list that bound only commands was one an agent could read its way round. The channel's own sheets and scratch directory stay open to it.
 `/sandbox` shows what bounds commands on this machine and is the switch: `/sandbox off` and `/sandbox on` set `sandbox.enabled` in your `stavlos.json` and take effect with the next command. Only you can flip it: an agent cannot call it, and the file tools are refused the configuration directory.
 The nav says nothing while the sandbox is on and whole. `sandbox off` is your choice. `sandbox limited` is the machine's: writes and the network are bounded but nothing is hidden, because the system will not let an unprivileged process make a user namespace (Ubuntu 24.04 and later by default, most containers, a hardened kernel); a click on the row says what is missing, why, and the command that mends it where there is one. `sandbox none · asks` means the kernel offers nothing at all: every command asks, whatever the mode, a rule or an earlier "allow for this channel" says, because it would run with your full access. `sandbox limited` asks the same way, because with nothing hidden a command can ask a service in your runtime directory (D-Bus, `systemd-run --user`, tmux) to start a process for it outside the sandbox, which could then speak to the daemon as you. On a kernel older than Linux 6.12 (Landlock ABI 6) the sandbox cannot scope abstract Unix sockets, and older than 6.7 (ABI 4) it cannot restrict TCP; the row says so. UDP, and so DNS, is never restricted.
 Configure it in `stavlos.json` (yours, or a trusted project's, which takes precedence): `"sandbox": {"network": false, "writable": ["~/.m2"], "hide": ["~/private"]}`, or `"enabled": false` to turn it off.
@@ -267,11 +272,11 @@ The build caches stay writable, so a command can still poison one.
 
 **Reach the web.**
 
-- `web_fetch` returns one page as markdown, 20k characters at a time, with HTML boiled down to headings, text, lists, links and code. http is upgraded to https, credentials are stripped, private and local addresses are refused, cross-host redirects are reported rather than followed, and pages are cached for 15 minutes.
+- `web` with `action: "fetch"` returns one page as markdown, 20k characters at a time, with HTML boiled down to headings, text, lists, links and code. http is upgraded to https, credentials are stripped, private and local addresses are refused, cross-host redirects are reported rather than followed, and pages are cached for 15 minutes.
   It asks by default, and the dialog offers "Allow <host> for this channel".
   `"hosts"` in `stavlos.json` lists the hosts it reaches without asking (`["github.com", "*.golang.org"]`, or `["*"]` for every host; yours, plus a trusted project's), and a deny rule still wins.
-  For a rule about paths, `policy` takes URL patterns (`"web_fetch": {"https://github.com/*": "allow"}`, matched against the URL as it will be fetched: lower-case host, https, no credentials), and roles may tighten further per URL.
-- `web_search` returns title, URL and snippet.
+  For a rule about paths, `policy` takes URL patterns (`"web": {"fetch https://github.com/*": "allow"}`, matched against the URL as it will be fetched: lower-case host, https, no credentials), and roles may tighten further per URL.
+- `web` with `action: "search"` returns title, URL and snippet.
   Out of the box it uses Exa's free, keyless endpoint, the same one OpenCode uses, which has no published rate limit and may change.
   For your own quota, configure a backend under `search` in `stavlos.json`: `{"provider": "brave" | "tavily" | "exa", "apiKey": "${env:BRAVE_KEY}"}`.
   It asks until you configure a backend (its keyless fallback is a third party you never chose) and is allowed once you have.
@@ -282,13 +287,13 @@ Everything fetched is handed to the model as untrusted data, and so is every MCP
 **Plan.** One `todo` tool keeps a per-agent list (a call adds steps, each free to start at any status, updates others by id, or both, and returns the list, so planning the work and starting its first step is one call) that is logged, projected into the system prompt at every call (so it survives compaction) and shown to you in the todo tab.
 
 **Work in directories.** A channel has one set of working directories, shared by every agent: the channel directory, the directories listed under `"dirs"` in `stavlos.json` (yours for every channel, a trusted project's for its channels, any path such as `/tmp`; only those files change them), plus whatever you add.
-Roles and `agent_create` grant none.
+Roles and `agent` with `action: "create"` grant none.
 A call that reaches outside asks first (see Permissions and modes), and the dirs tab edits the set by hand.
 
 **Use MCP servers.** A role's `mcp:` list starts MCP servers for that agent alone (stdio servers defined under `mcp` in `stavlos.json`).
 The model sees their tools as `mcp__<server>__<tool>` and calls them through the usual permission path.
 
-**Ask you.** An agent can request one to four short questions with `ask_user`.
+**Ask you.** An agent can request one to four short questions with `ask`.
 Each question gets its own prompt and submission, with no timeout or
 auto-approval. Both the TUI and Discord show all requested questions immediately,
 each as a separate inline chat card. You can review them together and answer in
@@ -405,7 +410,7 @@ the Tailwind and daisyUI classes already in the frame, and the page appears
 as a tab beside that channel's chat, under a bar naming the agent that wrote
 it. Every agent of the channel shares its sheets (at most 50, 2 MiB each);
 they live in Stavlos's data directory, not the repository, agents edit them
-with `read` and `apply_patch` like any file, and a change reloads the tab. A
+with `read` and `patch` like any file, and a change reloads the tab. A
 sheet runs sandboxed with no network: it cannot fetch, reach the app or your
 session, or load anything from a server. What no browser policy stops is a
 page navigating itself to a URL of its own when you open its tab, which could
@@ -461,3 +466,5 @@ The client checks the daemon's build id on connect and restarts it when the daem
 A restart ends every turn in progress and loses every running job, so it waits for a moment when no agent is working: until then the client says the builds differ and uses the running daemon.
 Set `STAVLOS_RESTART_DAEMON=1` to replace it at once, or `STAVLOS_KEEP_DAEMON=1` never to.
 Daemon output is in `~/.local/share/stavlos/stavlosd.log`.
+
+Tool actions share one name: `agent` uses `create`, `cancel`, or `status`; `web` uses `search` or `fetch`; `shell` uses `run` (the default) or `kill`. `patch` edits files and `ask` asks the human. Old tool names in policy configuration remain accepted with their original action scope.

@@ -37,7 +37,13 @@ function compact(input: unknown, tool = ""): string {
   if (input == null) return "";
   if (typeof input === "object") {
     const o = input as Record<string, unknown>;
-    const key = primaryArg[tool];
+    let key = primaryArg[tool];
+    let action = "";
+    if (tool === "web" || tool === "agent" || tool === "channel" || (tool === "shell" && o.action === "kill")) {
+      action = typeof o.action === "string" ? o.action : "";
+      key = ({ search: "query", fetch: "url", create: tool === "channel" ? "name" : "label", read: "channel", list: "channel", cancel: "id", status: "id", kill: "id" } as Record<string, string>)[action];
+      return [action, typeof o[key] === "string" ? o[key] : ""].filter(Boolean).join(" ");
+    }
     if (key === "patch" && typeof o.patch === "string") return o.patch.split("\n").slice(0, 3).join("\n");
     if (key && typeof o[key] === "string") return o[key] as string;
   }
@@ -68,8 +74,8 @@ export function apply(v: ChannelView, e: WireEvent): void {
       push(v, CHAT, { key, kind: "post", time: e.time, to: p.to ?? [], text: p.text ?? "" });
       break;
     case "chat.message":
-      push(v, CHAT, { key, kind: "message", time: e.time, from: p.from || name(), text: p.text ?? "" });
-      push(v, agent, { key, kind: "message", time: e.time, from: p.from || name(), text: p.text ?? "" });
+      push(v, CHAT, { key, kind: "message", time: e.time, from: p.from || name(), text: `${p.to?.length ? "@" + p.to.join(" @") + " " : ""}${p.text ?? ""}` });
+      push(v, agent, { key, kind: "message", time: e.time, from: p.from || name(), text: `${p.to?.length ? "@" + p.to.join(" @") + " " : ""}${p.text ?? ""}` });
       break;
     case "input.queued":
       if (p.kind === "reminder") break;

@@ -33,7 +33,7 @@ request. Use a separate `info` (or `no_reply`) message for an unrelated update o
 ## Context and nudges
 
 Incoming messages expose their request IDs. The current harness-state note and
-`agent_status` expose pending requests with IDs, senders and excerpts, including
+`agent` with `action: status` expose pending requests with IDs, senders and excerpts, including
 after compaction or recovery. Reminders list each outstanding request separately;
 several requests from the same sender remain separate entries. The TUI async
 panel likewise shows per-request rows for responses awaited and responses owed.
@@ -47,7 +47,7 @@ new request can be reminded again. Final assistant prose is still notes and
 does not answer a request.
 
 Human-facing messages that are not explicit responses are updates, not answers
-to pending human requests. Use `info` for such updates and `ask_user` for questions
+to pending human requests. Use `info` for such updates and `ask` for questions
 that the human must answer. Question and permission prompts retain their separate
 prompt-reply lifecycle.
 
@@ -97,3 +97,5 @@ reminder-turn seatbelt (`n empty reminder turns`), or reminders off. Awaiting
 another agent does not suppress the reminder line. The tab is marked when
 replies are owed, and `AgentInfo` carries `nudges` and `nudge_limit` for any
 client.
+
+Shared boards add a `channel` identity to requests and reminders. Answers must name that same channel; a private answer cannot settle a public request. The message tool exposes `expect_response` (addressed messages default true, posts and answers false) and `reply_to` rather than `kind`. Stored events retain their kind for replay compatibility. An explicitly response-required answer settles old requests and opens a new request with a fresh ID. Targeted steers wake without debt; passive posts reach bystanders' next context without waking them. Public posts and source inbox deliveries commit in one transaction. Turn-limit reports answer public requests on their original boards.

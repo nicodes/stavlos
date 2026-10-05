@@ -24,6 +24,12 @@ func AllowPrefix(prefix string) string { return "Allow " + prefix + " for this c
 // primary is the argument that says what a call does, by tool.
 var primary = map[string]string{
 	toolname.Shell:       "command",
+	toolname.Agent:       "action",
+	toolname.Channel:     "action",
+	toolname.Web:         "action",
+	"apply_patch":        "patch",
+	"web_fetch":          "url",
+	"web_search":         "query",
 	toolname.ShellKill:   "id",
 	toolname.Read:        "path",
 	toolname.Grep:        "pattern",
