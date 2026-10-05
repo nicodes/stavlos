@@ -46,7 +46,7 @@ func (p PromptInfo) QuestionPosition(index int) (int, int) {
 	return index + 1, len(p.Questions)
 }
 
-// Question is an ask_user question: a checklist. Options are
+// Question is an ask question: a checklist. Options are
 // always present; the human may pick any number of them and add a typed
 // answer of their own, all joined with ", " in the answer.
 type Question = event.Question

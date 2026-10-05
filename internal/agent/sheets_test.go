@@ -14,7 +14,7 @@ import (
 )
 
 // TestSheetsAreFilesTheLogKnows writes a sheet with the tool, edits it with
-// apply_patch like any file (inside the working set, so nothing asks), and
+// patch like any file (inside the working set, so nothing asks), and
 // recovers the channel: the list, the author and the hash all come from the
 // log, the page from the file.
 func TestSheetsAreFilesTheLogKnows(t *testing.T) {
@@ -26,14 +26,14 @@ func TestSheetsAreFilesTheLogKnows(t *testing.T) {
 			out := lastUserText(req) // the tool result names the file
 			sheetFilePath = strings.Fields(out[strings.Index(out, "File: ")+6:])[0]
 			patch, _ := json.Marshal(map[string]string{"patch": "*** Begin Patch\n*** Update File: " + sheetFilePath + "\n@@\n-<p>old</p>\n+<p>new</p>\n*** End Patch"})
-			return call("c2", "apply_patch", string(patch)), nil
+			return call("c2", "patch", string(patch)), nil
 		},
 		reply(call("c3", "sheet", `{"action":"write","title":"Second","html":"<p>two</p>"}`)),
 		reply(call("c4", "sheet", `{"action":"delete","id":"s2"}`)),
 		reply(call("c5", "sheet", `{"action":"write","id":"s9","html":"<p>nope</p>"}`)),
 		reply(text("done")),
 	}}
-	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"apply_patch":"allow","sheet":"allow"}}`}, fm)
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"patch":"allow","sheet":"allow"}}`}, fm)
 	runTurn(t, s, h, "make a sheet")
 
 	if h.promptCount() != 0 {
@@ -86,7 +86,7 @@ func TestSheetsAreFilesTheLogKnows(t *testing.T) {
 
 // TestTheFileToolsKeepToASheetsLimits (SEC-N7): the sheets directory is
 // inside the working set for the file tools, so the limits have to hold for
-// them and not only for the sheet tool. apply_patch may edit the file of a
+// them and not only for the sheet tool. patch may edit the file of a
 // sheet that exists; it may not plant another file there, nor grow a sheet
 // past what a sheet may be (the sheet is put back as it was).
 func TestTheFileToolsKeepToASheetsLimits(t *testing.T) {
@@ -102,20 +102,20 @@ func TestTheFileToolsKeepToASheetsLimits(t *testing.T) {
 		func(_ context.Context, req model.Request) (model.Response, error) {
 			out := lastUserText(req)
 			dir = filepath.Dir(strings.Fields(out[strings.Index(out, "File: ")+6:])[0])
-			return call("c2", "apply_patch", patchJSON("*** Begin Patch\n*** Add File: "+dir+"/notes.txt\n+not a sheet\n*** End Patch")), nil
+			return call("c2", "patch", patchJSON("*** Begin Patch\n*** Add File: "+dir+"/notes.txt\n+not a sheet\n*** End Patch")), nil
 		},
 		func(context.Context, model.Request) (model.Response, error) {
-			return call("c3", "apply_patch", patchJSON("*** Begin Patch\n*** Add File: "+dir+"/s7.html\n+<p>a sheet nobody created</p>\n*** End Patch")), nil
+			return call("c3", "patch", patchJSON("*** Begin Patch\n*** Add File: "+dir+"/s7.html\n+<p>a sheet nobody created</p>\n*** End Patch")), nil
 		},
 		func(context.Context, model.Request) (model.Response, error) {
-			return call("c4", "apply_patch", patchJSON("*** Begin Patch\n*** Update File: "+dir+"/s1.html\n@@\n-<p>old</p>\n+<p>"+huge+"</p>\n*** End Patch")), nil
+			return call("c4", "patch", patchJSON("*** Begin Patch\n*** Update File: "+dir+"/s1.html\n@@\n-<p>old</p>\n+<p>"+huge+"</p>\n*** End Patch")), nil
 		},
 		func(context.Context, model.Request) (model.Response, error) {
-			return call("c5", "apply_patch", patchJSON("*** Begin Patch\n*** Update File: "+dir+"/s1.html\n@@\n-<p>old</p>\n+<p>new</p>\n*** End Patch")), nil
+			return call("c5", "patch", patchJSON("*** Begin Patch\n*** Update File: "+dir+"/s1.html\n@@\n-<p>old</p>\n+<p>new</p>\n*** End Patch")), nil
 		},
 		reply(text("done")),
 	}}
-	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"apply_patch":"allow","sheet":"allow"}}`}, fm)
+	s, h := newTestChannel(t, testConfig{json: `{"model":"fake/m1","policy":{"patch":"allow","sheet":"allow"}}`}, fm)
 	runTurn(t, s, h, "go")
 	fin := finished(h, s.Root().ID)
 	if len(fin) != 5 {

@@ -7,8 +7,8 @@ func TestDecide(t *testing.T) {
 		Rule{"shell", "git push*", Ask},
 		Rule{"shell", "rm -rf*", Deny},
 		Rule{"shell", "*", Allow},
-		Rule{"apply_patch", "src/**", Allow},
-		Rule{"apply_patch", "**", Ask},
+		Rule{"patch", "src/**", Allow},
+		Rule{"patch", "**", Ask},
 		Rule{"read", "*", Allow},
 		Rule{"mcp__github__*", "*", Ask},
 		Rule{"mcp__github__get_*", "*", Allow},
@@ -25,9 +25,9 @@ func TestDecide(t *testing.T) {
 		{"shell", Command("cd x && rm -rf /"), Deny},
 		{"shell", Command("FOO=1 sudo /bin/rm  -rf /"), Deny},
 		{"shell", Command("bash -c 'rm -rf ~'"), Deny},
-		{"apply_patch", Path("src/a/b.go"), Allow},
-		{"apply_patch", Path("docs/x.md"), Ask},
-		{"apply_patch", Path("src/a.go", "docs/x.md"), Ask}, // every path is judged
+		{"patch", Path("src/a/b.go"), Allow},
+		{"patch", Path("docs/x.md"), Ask},
+		{"patch", Path("src/a.go", "docs/x.md"), Ask}, // every path is judged
 		{"read", Path("/etc/passwd"), Allow},
 		{"mcp__github__get_issue", Text(""), Allow},
 		{"mcp__github__create_issue", Text(""), Ask},
@@ -97,8 +97,8 @@ func TestLayered(t *testing.T) {
 	}
 	// The decision names what it is about: the worst path of several; the
 	// whole line for a command, whichever part decided.
-	pl := Layer(New(Rule{"apply_patch", "*", Allow}, Rule{"apply_patch", ".env", Deny}, Rule{"shell", "rm *", Deny}, Rule{"shell", "*", Allow}))
-	if v, about := pl.Decide("apply_patch", Path("a.go", ".env")); v != Deny || about != ".env" {
+	pl := Layer(New(Rule{"patch", "*", Allow}, Rule{"patch", ".env", Deny}, Rule{"shell", "rm *", Deny}, Rule{"shell", "*", Allow}))
+	if v, about := pl.Decide("patch", Path("a.go", ".env")); v != Deny || about != ".env" {
 		t.Errorf("patch: %s %q", v, about)
 	}
 	if v, about := pl.Decide("shell", Command("ls; rm x")); v != Deny || about != "ls; rm x" {

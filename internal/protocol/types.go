@@ -158,7 +158,7 @@ type PromptKind string
 
 const (
 	PromptPermission PromptKind = "permission" // may this tool call run
-	PromptQuestion   PromptKind = "question"   // an ask_user batch
+	PromptQuestion   PromptKind = "question"   // an ask batch
 	PromptTrust      PromptKind = "trust"      // trust a project's configuration
 )
 

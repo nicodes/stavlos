@@ -111,6 +111,13 @@ func (d *Daemon) ArchiveChannel(ctx context.Context, id string) error {
 	if err := s.Archive(ctx); err != nil {
 		return err
 	}
+	for _, board := range d.channelList() {
+		if b := board.Board(); b != nil && b.Source == id {
+			if err := board.Archive(ctx); err != nil {
+				return err
+			}
+		}
+	}
 	d.withdrawTrustPrompts(id, "archived")
 	return nil
 }

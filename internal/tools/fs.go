@@ -151,7 +151,7 @@ func (readTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 			sb.WriteString(fmt.Sprintf("… (more lines; continue with offset=%d)\n", n))
 			break
 		}
-		// Lines carry no numbers: apply_patch anchors on the text, and a
+		// Lines carry no numbers: patch anchors on the text, and a
 		// number on every line of a 2,000-line read is about 5,000 tokens
 		// the model never uses (Codex reads through the shell, unnumbered).
 		sb.WriteString(sc.Text())

@@ -26,7 +26,7 @@ type SheetRef struct {
 	ID     string `json:"id"`
 	Title  string `json:"title"`
 	Author string `json:"author"`
-	Path   string `json:"path"` // the file: read and apply_patch edit it like any other
+	Path   string `json:"path"` // the file: read and patch edit it like any other
 	Size   int    `json:"size"`
 }
 
@@ -40,7 +40,7 @@ type sheetInput struct {
 }
 
 func (sheetTool) Def() model.ToolDef {
-	return model.ToolDef{Name: toolname.Sheet, Description: "An HTML page for the human, shown as a tab beside the chat in the web UI: a report, a comparison table, a diagram, a small interactive tool, when a page says it better than chat text. action write creates a sheet (give a title) or replaces the content of the sheet whose id you pass; list and delete manage them. A sheet is a file the result names: edit it with read and apply_patch rather than rewriting it. The page runs in a sandboxed frame with no network, so inline every script, style and image (data: URI or SVG) and use vanilla JavaScript. daisyUI's component classes (btn, card, badge, alert, stats, tabs, table, modal…) on a dark theme and the common Tailwind CSS 4 utilities (flex/grid with sm:/md:/lg:, spacing, typography, colours, borders) are already loaded: prefer them, and put anything unusual, such as an arbitrary value, in a <style> block. Then tell the human the title with message.",
+	return model.ToolDef{Name: toolname.Sheet, Description: "An HTML page for the human, shown as a tab beside the chat in the web UI: a report, a comparison table, a diagram, a small interactive tool, when a page says it better than chat text. action write creates a sheet (give a title) or replaces the content of the sheet whose id you pass; list and delete manage them. A sheet is a file the result names: edit it with read and patch rather than rewriting it. The page runs in a sandboxed frame with no network, so inline every script, style and image (data: URI or SVG) and use vanilla JavaScript. daisyUI's component classes (btn, card, badge, alert, stats, tabs, table, modal…) on a dark theme and the common Tailwind CSS 4 utilities (flex/grid with sm:/md:/lg:, spacing, typography, colours, borders) are already loaded: prefer them, and put anything unusual, such as an arbitrary value, in a <style> block. Then tell the human the title with message.",
 		Schema: schemaOf(sheetInput{})}
 }
 
@@ -74,7 +74,7 @@ func (sheetTool) Run(_ context.Context, in json.RawMessage, env *Env) Result {
 		if a.ID != "" {
 			verb = "replaced"
 		}
-		return Result{Output: fmt.Sprintf("Sheet %s %s: %q (%d bytes), shown as a tab in the web UI.\nFile: %s (edit it with read and apply_patch)", ref.ID, verb, ref.Title, ref.Size, ref.Path)}
+		return Result{Output: fmt.Sprintf("Sheet %s %s: %q (%d bytes), shown as a tab in the web UI.\nFile: %s (edit it with read and patch)", ref.ID, verb, ref.Title, ref.Size, ref.Path)}
 	case "list":
 		refs := env.Sheets.List()
 		if len(refs) == 0 {

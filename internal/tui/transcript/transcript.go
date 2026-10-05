@@ -377,7 +377,7 @@ func InputLines(in event.Input, to string) []Line {
 		return lines
 	case event.InputRequest, event.InputResponse:
 		return received(in.FromName, recipients, to, in.Text, GlyphAsk)
-	case event.InputInfo:
+	case event.InputInfo, event.InputAgentSteer:
 		return received(in.FromName, recipients, to, in.Text, GlyphInfo) // needs no reply
 	default:
 	}
@@ -524,6 +524,12 @@ func (t *Transcript) applyToolCall(ev event.Event) bool {
 		return false
 	}
 	r, ok := t.calls[p.CallID]
+	if ok && t.valid(r) {
+		p.Name = t.items[r.item][r.off].Tool
+	} else {
+		p.Name = toolname.Canonical(p.Name)
+	}
+	ev.Payload = event.MustPayload(p)
 	t.finishCall(p)
 	t.stream = nil
 	if ok && t.valid(r) {
@@ -1452,6 +1458,7 @@ var eventRenderers = map[event.Type]func(event.Event) []Line{
 // text under it, for a patch its diff. input is the call's arguments from
 // the assistant message (nil when unknown).
 func toolStartedLines(name, callID string, input json.RawMessage) []Line {
+	name = toolname.Operation(name, input)
 	if name == toolname.Message || name == toolname.AgentCreate {
 		// "‹ @scout first line" (a message) or "» @scout first line" (the
 		// task that creates it), then the rest of the text under it
@@ -1662,6 +1669,7 @@ func truncLines(text string, n int, kind LineKind) []Line {
 // toolLine renders "Bash  git status": the tool name title-cased and its
 // most relevant argument.
 func toolLine(name string, input json.RawMessage) string {
+	name = toolname.Operation(name, input)
 	if name == toolname.Message || name == toolname.AgentCreate {
 		// what this agent sends: "@scout look at the parser" (its first
 		// line), for a message and for the task that creates an agent
@@ -1682,6 +1690,7 @@ func toolLine(name string, input json.RawMessage) string {
 
 // ToolArg picks the argument worth showing for a tool call.
 func ToolArg(name string, raw json.RawMessage) string {
+	name = toolname.Operation(name, raw)
 	if len(raw) == 0 {
 		return ""
 	}
@@ -1775,6 +1784,7 @@ func todoArg(raw json.RawMessage) string {
 // the name, bar the few that read shorter without it, with MCP tools read
 // as "server · tool".
 func ToolTitle(name string) string {
+	name = toolname.Canonical(name)
 	if strings.HasPrefix(name, toolname.MCPPrefix) {
 		// mcp__server__tool reads "server · tool"
 		if parts := strings.SplitN(strings.TrimPrefix(name, toolname.MCPPrefix), "__", 2); len(parts) == 2 {
@@ -1858,7 +1868,7 @@ func OutputLines(out string) []Line {
 // MaxDiffExpanded is how many diff lines an expanded patch shows.
 const MaxDiffExpanded = 200
 
-// DiffLines is an apply_patch diff for under its call: a header per file
+// DiffLines is an patch diff for under its call: a header per file
 // ("a.go", "b.md (new)", "c.txt (deleted)", "→ d.go" for a move), each
 // hunk's "@@" anchor, and the changed and context lines as written. Like a
 // command's output, the first MaxOutputCollapsed lines always show and the
@@ -1907,7 +1917,7 @@ func DiffLines(patch string) []Line {
 	return out
 }
 
-// patchFiles summarises the files an apply_patch touches: "a.go, b.md" or
+// patchFiles summarises the files an patch touches: "a.go, b.md" or
 // "a.go, b.md (+2 more)".
 func patchFiles(patch string) string {
 	var files []string
@@ -1939,15 +1949,15 @@ func CleanLines(lines []Line) []Line {
 const (
 	GlyphToolFiles  = "◆" // file tools (skill)
 	GlyphToolRead   = "▤" // read: the lines of a file
-	GlyphToolSearch = "⌕" // web_search: a magnifying glass
-	GlyphToolPatch  = "±" // apply_patch: a diff
+	GlyphToolSearch = "⌕" // search: a magnifying glass
+	GlyphToolPatch  = "±" // patch: a diff
 	GlyphToolShell  = "$" // shell, shell_kill (and the old bash names): the shell prompt
 	GlyphJob        = "$" // async jobs are shell commands
 	GlyphToolAgents = "⑂"
 	GlyphToolCreate = "⋙" // agent_create: the triple of a prompt\'s ›, since it makes the agent it prompts
 	GlyphToolTodo   = "☐" // todo
 	GlyphToolMCP    = "≡" // mcp__<server>__<tool> and MCP server notices
-	GlyphToolWeb    = "↓" // web_fetch: pulling a page in
+	GlyphToolWeb    = "↓" // fetch: pulling a page in
 )
 
 // CallGlyph is a tool line's glyph and the gap after it: ToolGlyph of its
@@ -2000,6 +2010,7 @@ func messageRecipients(input json.RawMessage) []string {
 
 // ToolGlyph returns the glyph for a tool name and the gap after it.
 func ToolGlyph(tool string) (string, string) {
+	tool = toolname.Canonical(tool)
 	switch {
 	case tool == toolname.Read:
 		return GlyphToolRead, " "
@@ -2007,7 +2018,7 @@ func ToolGlyph(tool string) (string, string) {
 		return GlyphToolPatch, " "
 	case tool == toolname.AgentCreate:
 		return GlyphToolCreate, " "
-	case strings.HasPrefix(tool, "agent_") || tool == toolname.Message:
+	case strings.HasPrefix(tool, "agent_") || tool == toolname.Agent || tool == toolname.Message:
 		return GlyphToolAgents, " "
 	case tool == toolname.Shell || tool == toolname.ShellKill:
 		return GlyphToolShell, " "
@@ -2017,7 +2028,7 @@ func ToolGlyph(tool string) (string, string) {
 		return GlyphToolMCP, " "
 	case tool == toolname.WebSearch:
 		return GlyphToolSearch, " "
-	case strings.HasPrefix(tool, "web_"):
+	case strings.HasPrefix(tool, "web_") || tool == toolname.Web || tool == toolname.WebFetch:
 		return GlyphToolWeb, " "
 	}
 	return GlyphToolFiles, " "

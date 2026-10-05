@@ -43,7 +43,7 @@ func TestConfigEditorScopesPersistsAndReloads(t *testing.T) {
 		t.Fatal("save did not write the project file")
 	}
 	s, _ := h.d.channel(ch.ID)
-	if decision, _ := s.Config().Policy.Decide("shell", policy.Command("echo hello")); decision != policy.Deny {
+	if decision, _ := s.Config().Policy.Decide("shell", policy.Text("run echo hello")); decision != policy.Deny {
 		t.Fatalf("live policy was not reloaded: %s; pending=%v; file=%s; notice=%s", decision, s.Config().TrustPending, saved.Document.Content, saved.Notice)
 	}
 	_, hash, _ := config.ProjectHash(ch.Dir)
@@ -71,7 +71,7 @@ func TestConfigEditorScopesPersistsAndReloads(t *testing.T) {
 	if s.Config().Limits.MaxAgents != 12 {
 		t.Fatal("system edit was not applied to the channel")
 	}
-	if decision, _ := s.Config().Policy.Decide("shell", policy.Command("echo hello")); decision != policy.Deny {
+	if decision, _ := s.Config().Policy.Decide("shell", policy.Text("run echo hello")); decision != policy.Deny {
 		t.Fatal("system reload lost project overrides")
 	}
 }

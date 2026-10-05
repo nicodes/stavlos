@@ -24,17 +24,17 @@ func TestFileToolsAndShell(t *testing.T) {
 	env := &Env{Dir: dir}
 	ts := Builtin()
 	ctx := context.Background()
-	r := ts["apply_patch"].Run(ctx, json.RawMessage(`{"patch":"*** Begin Patch\n*** Add File: a/b.txt\n+hello\n+world\n*** End Patch"}`), env)
+	r := ts["patch"].Run(ctx, json.RawMessage(`{"patch":"*** Begin Patch\n*** Add File: a/b.txt\n+hello\n+world\n*** End Patch"}`), env)
 	if r.IsError {
 		t.Fatal(r.Output)
 	}
-	r = ts["apply_patch"].Run(ctx, json.RawMessage(`{"patch":"*** Begin Patch\n*** Update File: a/b.txt\n hello\n-world\n+there\n*** End Patch"}`), env)
+	r = ts["patch"].Run(ctx, json.RawMessage(`{"patch":"*** Begin Patch\n*** Update File: a/b.txt\n hello\n-world\n+there\n*** End Patch"}`), env)
 	if r.IsError {
 		t.Fatal(r.Output)
 	}
 	for _, gone := range []string{"write", "edit"} {
 		if _, ok := ts[gone]; ok {
-			t.Fatalf("%s should be gone: apply_patch covers it", gone)
+			t.Fatalf("%s should be gone: patch covers it", gone)
 		}
 	}
 	r = ts["read"].Run(ctx, json.RawMessage(`{"path":"a/b.txt"}`), env)
@@ -227,11 +227,11 @@ func TestTodoTool(t *testing.T) {
 
 func TestAskUserNeedsOptions(t *testing.T) {
 	ts := Builtin()
-	r := ts["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"question":"q?"}]}`), &Env{Ask: fakeAsker{}})
+	r := ts["ask"].Run(context.Background(), json.RawMessage(`{"questions":[{"question":"q?"}]}`), &Env{Ask: fakeAsker{}})
 	if !r.IsError || !strings.Contains(r.Output, "at least one option") {
 		t.Fatalf("options are required: %+v", r)
 	}
-	r = ts["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"question":"q?","options":[{"label":"a"},{"label":"b"}]}]}`), &Env{Ask: fakeAsker{}})
+	r = ts["ask"].Run(context.Background(), json.RawMessage(`{"questions":[{"question":"q?","options":[{"label":"a"},{"label":"b"}]}]}`), &Env{Ask: fakeAsker{}})
 	if r.IsError || r.Output != "q? → a, b, typed" {
 		t.Fatalf("answers: %+v", r)
 	}
@@ -250,7 +250,7 @@ func (interruptedAsker) Ask(context.Context, []protocol.Question) ([]string, err
 }
 
 func TestInterruptedQuestionsKeepAcceptedAnswers(t *testing.T) {
-	r := Builtin()["ask_user"].Run(context.Background(), json.RawMessage(`{"questions":[{"question":"First?","options":[{"label":"accepted"}]},{"question":"Second?","options":[{"label":"later"}]}]}`), &Env{Ask: interruptedAsker{}})
+	r := Builtin()["ask"].Run(context.Background(), json.RawMessage(`{"questions":[{"question":"First?","options":[{"label":"accepted"}]},{"question":"Second?","options":[{"label":"later"}]}]}`), &Env{Ask: interruptedAsker{}})
 	if !r.IsError || !strings.Contains(r.Output, "First? → (no answer)") || !strings.Contains(r.Output, "canceled") || !strings.Contains(r.Output, "Second? → accepted") {
 		t.Fatalf("partial answers: %+v", r)
 	}

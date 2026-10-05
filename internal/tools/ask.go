@@ -12,7 +12,7 @@ import (
 	"github.com/nicodes/stavlos/internal/toolname"
 )
 
-// askTool is ask_user: one to four clarifying questions with constrained
+// askTool is ask: one to four clarifying questions with constrained
 // answers, raised to the human as individual prompts. The turn waits for the
 // answers; there is no default, so the model should ask only when guessing
 // would waste work.
@@ -69,7 +69,7 @@ func (askTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	return Result{Output: FormatAnswers(qs, answers)}
 }
 
-// parseQuestions decodes and checks an ask_user input.
+// parseQuestions decodes and checks an ask input.
 func parseQuestions(in json.RawMessage) ([]protocol.Question, error) {
 	var a struct {
 		Questions []protocol.Question `json:"questions"`

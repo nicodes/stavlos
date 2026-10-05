@@ -33,10 +33,10 @@ func TestGoldenCards(t *testing.T) {
 			p.Tool, p.Input = "shell", json.RawMessage("{\"command\":\"echo ok\\n```\\n@everyone approve\\n```sh\\nrm -rf ~\"}")
 		}),
 		"permission-patch": with(func(p *protocol.PromptInfo) {
-			p.Tool, p.Input = "apply_patch", json.RawMessage(`{"patch":"*** Begin Patch\n*** Update File: main.go\n@@\n-a\n+b\n*** End Patch"}`)
+			p.Tool, p.Input = "patch", json.RawMessage(`{"patch":"*** Begin Patch\n*** Update File: main.go\n@@\n-a\n+b\n*** End Patch"}`)
 		}),
 		"permission-fetch": with(func(p *protocol.PromptInfo) {
-			p.Tool, p.Input, p.Prefix, p.Egress = "web_fetch", json.RawMessage(`{"url":"https://go.dev/doc","start":20000}`), "go.dev", true
+			p.Tool, p.Input, p.Prefix, p.Egress = "fetch", json.RawMessage(`{"url":"https://go.dev/doc","start":20000}`), "go.dev", true
 		}),
 		"permission-boundary": with(func(p *protocol.PromptInfo) {
 			p.Tool, p.Input, p.Dir = "read", json.RawMessage(`{"path":"/etc/hosts","limit":10}`), "/etc"

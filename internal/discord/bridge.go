@@ -39,6 +39,7 @@ func call[P, R any](ctx context.Context, c rpc, m protocol.Method[P, R], p P) (R
 // Bridge owns routing; each channel worker exclusively owns its UI state.
 // mu protects routing only, never a Discord request or a daemon call.
 type Bridge struct {
+	boardCursors                        *boardCursors
 	cfg                                 config.Discord
 	api                                 API
 	bot                                 string
@@ -92,11 +93,15 @@ func New(cfg config.Discord, api API, bot, statePath string) (*Bridge, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Bridge{cfg: cfg, api: api, bot: bot, store: s, workers: map[string]*worker{}, byDiscord: map[string]*worker{}, gatewayLost: make(chan struct{})}, nil
+	cursors, err := openBoardCursors(statePath + ".boards")
+	if err != nil {
+		return nil, err
+	}
+	return &Bridge{boardCursors: cursors, cfg: cfg, api: api, bot: bot, store: s, workers: map[string]*worker{}, byDiscord: map[string]*worker{}, gatewayLost: make(chan struct{})}, nil
 }
 
 // Run maintains the daemon connection until ctx ends. A connection loss starts
-// a fresh snapshot subscription, never a replay of offline chat.
+// a fresh snapshot for execution channels; shared boards replay from their saved cursor.
 func (b *Bridge) Run(ctx context.Context, socket string) error {
 	defer func() {
 		b.mu.Lock()
@@ -352,6 +357,9 @@ func (b *Bridge) bind(ctx context.Context, l *link, info protocol.ChannelInfo, c
 	r, err := call(l.ctx, l.rpc, protocol.Reconcile, protocol.ChannelRef{Channel: info.ID})
 	if err != nil {
 		return err
+	}
+	if info.Board != nil && b.boardCursors != nil {
+		r.Seq = b.boardCursors.get(ch.ID)
 	}
 	done := make(chan error, 1)
 	if !w.enqueue(work{link: l, snapshot: &r, done: done}) {

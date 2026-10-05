@@ -41,5 +41,5 @@
       "type": 1
     }
   ],
-  "content": "❗ **Web fetch**\n```text\nhttps://go.dev/doc\nStart: 20000\n```"
+  "content": "❗ **Fetch**\n```text\nhttps://go.dev/doc\nStart: 20000\n```"
 }

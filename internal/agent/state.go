@@ -20,6 +20,7 @@ import (
 
 // channelState is what the log says about a channel.
 type channelState struct {
+	board                        *event.BoardInfo
 	name, model, role, mode, dir string
 	archived                     bool
 	recap                        int        // minutes of silence before a recap is asked for; 0 is off
@@ -144,6 +145,7 @@ func (cs *channelState) applyChannel(e event.Event) {
 		var p event.ChannelCreatedPayload
 		if e.Decode(&p) == nil {
 			cs.name, cs.model, cs.role = p.Name, p.Model, p.Role
+			cs.board = p.Board
 			cs.dir = p.Dir
 			if p.Mode != "" {
 				cs.mode = p.Mode // the mode the config started it in
@@ -268,7 +270,7 @@ func (cs *channelState) queued(a *agentState, e event.Event, fx *effects) {
 	case event.InputResume:
 		a.resumes++
 	case event.InputReminder:
-	case event.InputRequest, event.InputPrompt, event.InputSteer, event.InputInfo, event.InputJob:
+	case event.InputRequest, event.InputPrompt, event.InputSteer, event.InputInfo, event.InputAgentSteer, event.InputJob:
 	}
 	if wakes(in.Kind) && !a.killed {
 		fx.wake = append(fx.wake, a.id)

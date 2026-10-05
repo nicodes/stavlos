@@ -2,7 +2,7 @@
 // model providers, their sign-in and usage endpoints, the model catalogue,
 // Discord. Each of them carries a credential or trusts the answer, so they
 // share one rule the standard client does not have: a redirect stays on the
-// host that was asked. (web_fetch, which follows redirects to anywhere
+// host that was asked. (fetch, which follows redirects to anywhere
 // public on purpose, keeps its own client and its own address guard.)
 package httpx
 

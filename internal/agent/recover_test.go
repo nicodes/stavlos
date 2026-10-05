@@ -61,7 +61,7 @@ func TestRecoverRoundTrip(t *testing.T) {
 	release := make(chan struct{})
 	fm := &fakeModel{
 		steps: []step{
-			reply(call("c1", "agent_create", `{"archetype":"general","label":"scout","task":"look"}`)),
+			reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look"}`)),
 			reply(text("delegated")),
 			reply(text("thanks")), // turn 2, woken by the answer
 			reply(text("third")),  // turn 3, after the human's follow-up
@@ -207,7 +207,7 @@ func TestRecoverAbortsOpenTurns(t *testing.T) {
 // agents come back dead, and a queued prompt restarts a live agent.
 func TestRecoverArchivedAndKilled(t *testing.T) {
 	fm := &fakeModel{steps: []step{
-		reply(call("c1", "agent_create", `{"archetype":"general","label":"x","task":"t"}`)),
+		reply(call("c1", "agent", `{"action":"create","archetype":"general","label":"x","task":"t"}`)),
 		reply(text("ok")),
 	}}
 	s, h := newTestChannel(t, testConfig{}, fm)

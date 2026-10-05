@@ -37,7 +37,7 @@ type File struct {
 	Escalation *Escalation    `json:"escalation,omitempty"`
 	Compaction *Compaction    `json:"compaction,omitempty"`
 	MCP        map[string]MCP `json:"mcp,omitempty"`
-	Search     *Search        `json:"search,omitempty"` // web_search backend
+	Search     *Search        `json:"search,omitempty"` // search backend
 	Env        *EnvConfig     `json:"env,omitempty"`    // what child processes inherit
 	Policy     map[string]any `json:"policy,omitempty"` // tool → verb | {pattern: verb}
 	Plugins    []string       `json:"plugins,omitempty"`
@@ -47,7 +47,7 @@ type File struct {
 	ResumeAfterLimit *bool          `json:"resumeAfterLimit,omitempty"`
 	Sandbox          *SandboxConfig `json:"sandbox,omitempty"` // the OS boundary shell commands and MCP servers run in
 	Dirs             []string       `json:"dirs,omitempty"`    // directories every channel works in besides its own (yours, and a trusted project\'s)
-	Hosts            []string       `json:"hosts,omitempty"`   // hosts web_fetch reaches without asking: github.com, *.example.com, or * (yours, and a trusted project\'s)
+	Hosts            []string       `json:"hosts,omitempty"`   // hosts fetch reaches without asking: github.com, *.example.com, or * (yours, and a trusted project\'s)
 	Discord          *Discord       `json:"discord,omitempty"` // global-only bridge configuration; token references remain unexpanded
 	Web              *Web           `json:"web,omitempty"`     // global-only: the browser listener's port and the names it answers to
 }
@@ -98,7 +98,7 @@ type EnvConfig struct {
 	Pass []string `json:"pass,omitempty"`
 }
 
-// Search configures web_search: a provider and its key (the key may be
+// Search configures search: a provider and its key (the key may be
 // "${env:NAME}").
 type Search struct {
 	Provider string `json:"provider,omitempty"` // brave | tavily | exa
@@ -274,11 +274,11 @@ type Effective struct {
 		MaxToolOutput int
 	}
 	MCP         map[string]MCP
-	Search      Search          // web_search backend, key expanded
+	Search      Search          // search backend, key expanded
 	Discord     *Discord        // global bridge configuration, never project-merged or token-expanded
 	Web         *Web            // global browser listener configuration
 	PassEnv     []string        // environment variables child processes keep although their names look like secrets
-	searchRuled bool            // a layer's policy decided web_search, so a search backend does not allow it
+	searchRuled bool            // a layer's policy decided search, so a search backend does not allow it
 	Policy      *policy.Layered // every layer's rules merged in order (defaults, global, project, local); roles add overlays that only tighten
 	Roles       map[string]Role
 	Skills      map[string]Skill
@@ -311,7 +311,7 @@ type Effective struct {
 	// global stavlos.json's dirs, then a trusted project's. ~ and ${env:NAME}
 	// are expanded; a relative one is taken from each channel's directory.
 	Dirs []string
-	// Hosts are the hosts web_fetch reaches without asking, in every mode:
+	// Hosts are the hosts fetch reaches without asking, in every mode:
 	// the global stavlos.json's, then a trusted project's; "*" is every host
 	// and "*.example.com" each subdomain of example.com.
 	Hosts []string
@@ -402,33 +402,51 @@ func Defaults() File {
 		ResumeAfterLimit: &on,
 		Sandbox:          &SandboxConfig{Enabled: &on, Network: &network},
 		Policy: map[string]any{
-			toolname.Read:        allow,
-			toolname.Grep:        allow,
-			toolname.Glob:        allow,
-			toolname.Skill:       allow,
-			toolname.AgentCreate: allow,
-			toolname.Message:     allow,
-			toolname.AgentCancel: allow,
-			toolname.AgentStatus: allow,
-			toolname.ShellKill:   allow,
-			toolname.Todo:        allow,
-			toolname.AskUser:     allow,
-			toolname.Sheet:       ask, // a sheet cannot fetch, but a page can navigate itself to a URL of its own when opened: it asks, and "allow for this channel" covers the rest (docs/web-ui.md)
-			toolname.Shell:       ask, // no command is allowed by default: searching is grep and glob
-			toolname.ApplyPatch:  ask,
-			toolname.WebFetch:    ask, // per host: the dialog offers "allow <host> for this channel"
-			toolname.WebSearch:   ask, // allowed once a search backend is configured (see LoadGlobal)
+			toolname.Read:       allow,
+			toolname.Grep:       allow,
+			toolname.Glob:       allow,
+			toolname.Skill:      allow,
+			toolname.Agent:      allow,
+			toolname.Message:    allow,
+			toolname.Channel:    allow,
+			toolname.ShellKill:  allow,
+			toolname.Todo:       allow,
+			toolname.AskUser:    allow,
+			toolname.Sheet:      ask, // a sheet cannot fetch, but a page can navigate itself to a URL of its own when opened: it asks, and "allow for this channel" covers the rest (docs/web-ui.md)
+			toolname.Shell:      ask, // no command is allowed by default: searching is grep and glob
+			toolname.ApplyPatch: ask,
+			toolname.WebFetch:   ask, // per host: the dialog offers "allow <host> for this channel"
+			toolname.WebSearch:  ask, // allowed once a search backend is configured (see LoadGlobal)
 		},
 	}
 }
 
-// allowSearch allows web_search once a search backend is configured, unless
-// a layer's policy decided web_search itself: without a backend every query
+// allowSearch allows search once a search backend is configured, unless
+// a layer's policy decided search itself: without a backend every query
 // would go to the keyless fallback, a third party the user never chose.
 func (e *Effective) allowSearch() {
 	if e.Search.Provider != "" && !e.searchRuled {
-		e.Policy = policy.Layer(e.Policy.Base().Merge(policy.New(policy.Rule{Tool: toolname.WebSearch, Pattern: "*", Verb: policy.Allow})), e.Policy.Overlays()...)
+		e.Policy = policy.Layer(e.Policy.Base().Merge(policy.New(policy.Rule{Tool: toolname.Web, Pattern: "search *", Verb: policy.Allow})), e.Policy.Overlays()...)
 	}
+}
+
+func searchRules(m map[string]any) bool {
+	return m[toolname.WebSearch] != nil || m["web_search"] != nil || webRulesSearch(m[toolname.Web])
+}
+
+// Fetch-only web rules do not disable the configured search backend's default.
+func webRulesSearch(v any) bool {
+	switch v := v.(type) {
+	case string:
+		return true
+	case map[string]any:
+		for pattern := range v {
+			if !strings.HasPrefix(pattern, "fetch ") {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // LoadGlobal is the daemon-wide configuration: the defaults and the global
@@ -517,8 +535,8 @@ func (e *Effective) applyFile(f File, layer string) error {
 	if err := e.applyGlobalOnly(f, layer); err != nil {
 		return err
 	}
-	if _, ok := f.Policy[toolname.WebSearch]; ok && layer != "defaults" {
-		e.searchRuled = true // a layer decided web_search itself: a search backend does not allow it
+	if layer != "defaults" && searchRules(f.Policy) {
+		e.searchRuled = true // a layer decided search itself: a search backend does not allow it
 	}
 	for _, pl := range f.Plugins {
 		if !slices.Contains(e.Plugins, pl) {
@@ -730,7 +748,8 @@ func ParsePolicy(m map[string]any) (*policy.Set, error) {
 			if !pv.Valid() {
 				return nil, fmt.Errorf("policy.%s: %q is not a verb (allow, ask or deny)", tool, v)
 			}
-			rules = append(rules, policy.Rule{Tool: tool, Pattern: "*", Verb: pv})
+			name, pattern := toolname.PolicyRule(tool, "*")
+			rules = append(rules, policy.Rule{Tool: name, Pattern: pattern, Verb: pv})
 		case map[string]any:
 			pk := make([]string, 0, len(v))
 			for k := range v {
@@ -746,7 +765,8 @@ func ParsePolicy(m map[string]any) (*policy.Set, error) {
 				if !pv.Valid() {
 					return nil, fmt.Errorf("policy.%s.%q: %q is not a verb (allow, ask or deny)", tool, pat, str)
 				}
-				rules = append(rules, policy.Rule{Tool: tool, Pattern: pat, Verb: pv})
+				name, pattern := toolname.PolicyRule(tool, pat)
+				rules = append(rules, policy.Rule{Tool: name, Pattern: pattern, Verb: pv})
 			}
 		default:
 			return nil, fmt.Errorf("policy.%s: want a verb or a {pattern: verb} object, got %T", tool, m[tool])
@@ -854,11 +874,9 @@ type roleFile struct {
 	Loop   *string        `yaml:"loop"`
 }
 
-// RoleTools are the tools every role offers unless its tools: key removes
-// one. The messaging set and
-// ask_user come on top for every agent, shell_kill with shell, and the
-// lifecycle tools with a non-empty spawn list.
-var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.Todo, toolname.WebFetch, toolname.WebSearch, toolname.Sheet}
+// RoleTools are offered unless a role removes them. Every agent also gets
+// message, ask and agent status; create/cancel require a non-empty spawn list.
+var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.Todo, toolname.Web, toolname.Sheet}
 
 // ReadRole parses one agents/<name>.md file.
 func ReadRole(path string) (Role, error) { return readRole(disk{}, path) }
@@ -962,7 +980,7 @@ func parseTools(n *yaml.Node) ([]string, map[string]map[string]string, error) {
 		return nil, nil, errors.New("is no longer a list: every tool is available, and <tool>: deny removes one")
 	case yaml.MappingNode:
 		for i := 0; i+1 < len(n.Content); i += 2 {
-			name, val := n.Content[i].Value, n.Content[i+1]
+			name, val := toolname.Canonical(n.Content[i].Value), n.Content[i+1]
 			switch {
 			case val.Kind == yaml.ScalarNode && (val.Tag == "!!null" || val.Value == ""):
 				// listed with no rule: available under the layered policy
@@ -1005,7 +1023,7 @@ func parseTools(n *yaml.Node) ([]string, map[string]map[string]string, error) {
 // is not a built-in tool, where a deny is only a rule).
 func keptTool(name string) string {
 	switch name {
-	case toolname.Message, toolname.AgentStatus, toolname.AskUser:
+	case toolname.Message, toolname.Agent, toolname.Channel, toolname.AgentStatus, toolname.AskUser:
 		return "every agent has it; it cannot be removed"
 	case toolname.AgentCreate, toolname.AgentCancel:
 		return "comes with spawn: leave spawn empty to remove it"
@@ -1130,7 +1148,7 @@ func builtinRoles() []Role {
 			Spawn:       []string{"general"},
 			Body: `You are a senior software engineer working in the user's repository at the current working directory.
 Work carefully: read before you edit, prefer small targeted changes, and run the project's tests or build after changing code.
-Find files with glob, search their contents with grep, read them with read, and edit with apply_patch; shell is for building, testing and running things, and every command asks the human unless the channel's mode answers for them. A slow command such as a test suite continues as a background job on its own; start servers with background: true.
+Find files with glob, search their contents with grep, read them with read, and edit with patch; shell is for building, testing and running things, and every command asks the human unless the channel's mode answers for them. A slow command such as a test suite continues as a background job on its own; start servers with background: true.
 Delegate independent pieces of work to subagents when that saves your own context or lets things run in parallel: give each a specific task and a short label, then keep working or end your turn; each child's answer comes back to you as a message. A child stays alive in the channel: message it again for follow-ups. Subagents can delegate too.
 Report what you changed and what you verified.`,
 		},

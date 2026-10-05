@@ -177,8 +177,8 @@ func TestGoldenFrames(t *testing.T) {
 	})
 	draw(t, "card-control-file", func(m *Model) {
 		p := permission
-		p.ID, p.Prefix, p.Sticky, p.Tool, p.Input = "p3", "", true, "apply_patch", json.RawMessage(`{"patch":"*** Begin Patch\n*** Update File: AGENTS.md\n@@\n-a\n+b\n*** End Patch"}`)
-		p.Question = "apply_patch: AGENTS.md"
+		p.ID, p.Prefix, p.Sticky, p.Tool, p.Input = "p3", "", true, "patch", json.RawMessage(`{"patch":"*** Begin Patch\n*** Update File: AGENTS.md\n@@\n-a\n+b\n*** End Patch"}`)
+		p.Question = "patch: AGENTS.md"
 		m.upsertPrompt(p)
 	})
 	draw(t, "card-question", func(m *Model) {

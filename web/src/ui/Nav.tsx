@@ -35,6 +35,7 @@ export function Nav(props: { state: ViewState; client: Client; onPick: () => voi
             >
               <Dot state={c.state} />
               <span class="truncate"># {c.name}</span>
+ <Show when={c.board}><span class="text-dim">board</span></Show>
               <Show when={(c.permissions ?? 0) > 0}>
                 <span class="text-accent">!</span>
               </Show>

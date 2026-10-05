@@ -30,11 +30,16 @@ func TestToolLine(t *testing.T) {
 		want  string
 	}{
 		{"shell", `{"command":"git status"}`, "Shell  git status"},
+		{"shell", `{"action":"kill","id":"job1"}`, "Shell kill  job1"},
+		{"web", `{"action":"fetch","url":"https://example.com"}`, "Fetch  https://example.com"},
+		{"web", `{"action":"search","query":"query"}`, "Search  query"},
+		{"agent", `{"action":"create","label":"scout","task":"look"}`, "@scout look"},
+		{"agent", `{"action":"cancel","id":"scout"}`, "Agent cancel  scout"},
 		{"shell", `{"command":"ls\nfoo"}`, "Shell  ls foo"},
 		{"read", `{"path":"internal/agent/turn.go","offset":1}`, "Read  internal/agent/turn.go"},
 		{"shell", `{"command":"go test ./..."}`, "Shell  go test ./..."},
 		{"shell_kill", `{"id":"m1"}`, "Shell kill  m1"},
-		{"apply_patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Patch  a.go, b.md (+1 more)"},
+		{"patch", `{"patch":"*** Begin Patch\n*** Update File: a.go\n-x\n+y\n*** Add File: b.md\n+hi\n*** Delete File: c.txt\n*** End Patch"}`, "Patch  a.go, b.md (+1 more)"},
 		{"agent_create", `{"archetype":"explorer","label":"scout","task":"look\naround"}`, "@scout look"},
 		{"message", `{"to":"scout","text":"go"}`, "@scout go"},
 		{"message", `{"to":"user","text":"done\nand more"}`, "@user done"},
@@ -412,9 +417,9 @@ func TestMessageArrows(t *testing.T) {
 		{Line{Kind: LineTool, Tool: "message", Text: "@user done"}, GlyphReply},
 		{Line{Kind: LineTool, Tool: "shell", Text: "Shell  ls"}, GlyphToolShell},
 		{Line{Kind: LineTool, Tool: "read", Text: "Read  a.go"}, GlyphToolRead},
-		{Line{Kind: LineTool, Tool: "apply_patch", Text: "Patch  a.go"}, GlyphToolPatch},
-		{Line{Kind: LineTool, Tool: "web_search", Text: "Search  go vt"}, GlyphToolSearch},
-		{Line{Kind: LineTool, Tool: "web_fetch", Text: "Fetch  go.dev"}, GlyphToolWeb},
+		{Line{Kind: LineTool, Tool: "patch", Text: "Patch  a.go"}, GlyphToolPatch},
+		{Line{Kind: LineTool, Tool: "search", Text: "Search  go vt"}, GlyphToolSearch},
+		{Line{Kind: LineTool, Tool: "fetch", Text: "Fetch  go.dev"}, GlyphToolWeb},
 		{Line{Kind: LineTool, Tool: "skill", Text: "Skill  deploy"}, GlyphToolFiles},
 		{Line{Kind: LineTool, Tool: "agent_create", Text: "@scout look"}, GlyphToolCreate},
 		{Line{Kind: LineTool, Tool: "agent_status", Text: "Agent status"}, GlyphToolAgents},
@@ -526,8 +531,8 @@ func TestDeniedCallShowsWhy(t *testing.T) {
 // the task under it and hides the "created" result.
 func TestAgentCreateReadsLikeAPrompt(t *testing.T) {
 	tr := NewTranscript()
-	evtest.Apply(tr, evtest.Call("", "c1", "agent_create", `{"archetype":"general","label":"scout","task":"look around\nthen report"}`))
-	tr.Apply(event.Event{Seq: 2, Type: event.ToolFinished, Time: time.Now(), Payload: event.MustPayload(event.ToolFinishedPayload{CallID: "c1", Name: "agent_create", Output: "created scout-2 (general), id a1; address it by its name"})})
+	evtest.Apply(tr, evtest.Call("", "c1", "agent", `{"action":"create","archetype":"general","label":"scout","task":"look around\nthen report"}`))
+	tr.Apply(event.Event{Seq: 2, Type: event.ToolFinished, Time: time.Now(), Payload: event.MustPayload(event.ToolFinishedPayload{CallID: "c1", Name: "agent", Output: "created scout-2 (general), id a1; address it by its name"})})
 	var texts []string
 	for _, l := range tr.All() {
 		if l.Text != "" {
@@ -542,14 +547,14 @@ func TestAgentCreateReadsLikeAPrompt(t *testing.T) {
 	}
 }
 
-// TestPatchShowsItsDiff: an apply_patch call shows its diff under it (file
+// TestPatchShowsItsDiff: a patch call shows its diff under it (file
 // headers, anchors, changed and context lines) and no success summary.
 func TestPatchShowsItsDiff(t *testing.T) {
 	patch := "*** Begin Patch\n*** Update File: a.go\n*** Move to: b.go\n@@ func run() {\n ctx := x\n-old()\n+new()\n*** Add File: c.md\n+hello\n*** Delete File: d.txt\n*** End Patch"
 	input, _ := json.Marshal(map[string]string{"patch": patch})
 	tr := NewTranscript()
-	evtest.Apply(tr, evtest.Call("a", "c1", "apply_patch", string(input)))
-	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "apply_patch", Output: "updated a.go → b.go\nadded c.md (1 lines)\ndeleted d.txt"}))
+	evtest.Apply(tr, evtest.Call("a", "c1", "patch", string(input)))
+	tr.Apply(mk(2, "a", event.ToolFinished, event.ToolFinishedPayload{Turn: 1, CallID: "c1", Name: "patch", Output: "updated a.go → b.go\nadded c.md (1 lines)\ndeleted d.txt"}))
 	var got []string
 	for _, l := range tr.All() {
 		if strings.Contains(l.Text, "updated a.go") {
@@ -571,11 +576,11 @@ func TestPatchShowsItsDiff(t *testing.T) {
 
 // TestWebToolTitles: the web tools read as plain verbs.
 func TestWebToolTitles(t *testing.T) {
-	if got := ToolTitle("web_fetch"); got != "Fetch" {
-		t.Fatalf("web_fetch: %q", got)
+	if got := ToolTitle("fetch"); got != "Fetch" {
+		t.Fatalf("fetch: %q", got)
 	}
-	if got := ToolTitle("web_search"); got != "Search" {
-		t.Fatalf("web_search: %q", got)
+	if got := ToolTitle("search"); got != "Search" {
+		t.Fatalf("search: %q", got)
 	}
 }
 
