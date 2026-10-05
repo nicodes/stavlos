@@ -60,8 +60,9 @@ type agentState struct {
 	jobs     map[string]event.JobStartedPayload // running background jobs
 	asks     map[string]bool                    // prompts put to the human, not yet resolved
 
-	resumeAt time.Time // its turn stopped at every plan's limit: wake it once a model is back, no sooner (zero: not parked)
-	resumes  int       // wakes since a model call last succeeded, so a plan that never comes back is not asked forever
+	resumeAt  time.Time // its turn stopped at every plan's limit or at a passing fault: wake it no sooner than this (zero: not parked)
+	resumeWhy string    // event.ResumeLimit or event.ResumeFault, while parked
+	resumes   int       // wakes since a model call last succeeded, so a plan that never comes back is not asked forever
 
 	turnReminderOnly bool // this turn took only reminders (or nothing yet)
 	turnHadTools     bool // this turn started a tool
@@ -305,7 +306,7 @@ func (a *agentState) applyTurn(e event.Event) {
 			if p.Reason == event.ReasonError {
 				a.lastError = p.Error
 			}
-			a.resumeAt = p.ResumeAt
+			a.resumeAt, a.resumeWhy = p.ResumeAt, p.Resume
 			if (p.Reason == event.ReasonEndTurn || p.Reason == event.ReasonMaxTokens) &&
 				a.turnReminderOnly && !a.turnHadTools && !a.turnSettled {
 				a.nudges++

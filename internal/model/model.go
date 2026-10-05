@@ -145,6 +145,15 @@ type Capable interface {
 	Capabilities(modelID string) Capabilities
 }
 
+// TransientError is a model call that failed for a reason that passes by
+// itself: a connection dropped mid-stream, a provider at capacity, a 5xx.
+// The stream layer has already retried it; the agent runtime parks the
+// agent and tries again later rather than leaving it stopped with an error.
+type TransientError struct{ Err error }
+
+func (e *TransientError) Error() string { return e.Err.Error() }
+func (e *TransientError) Unwrap() error { return e.Err }
+
 // LimitError is a model call refused because the account is at a limit: a
 // plan's window is used up, or the provider kept answering 429. The agent
 // runtime answers it by moving the agent to another model its role allows
