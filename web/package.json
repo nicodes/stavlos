@@ -9,7 +9,7 @@
     "build:sheet": "tailwindcss -i sheet.input.css -o public/sheet.css --minify"
   },
   "dependencies": {
-    "solid-js": "^1.9.0"
+    "solid-js": "^1.9.16"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.0.0",
