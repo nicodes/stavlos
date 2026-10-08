@@ -98,7 +98,13 @@ func runShell(ctx context.Context, a shellInput, env *Env) Result {
 	if a.UntilChanged {
 		a.Background = true
 	}
-	job, err := proc.Start(untilChanged(a.Command, a.UntilChanged), env.Dir, proc.Env(env.PassEnv), env.Partial, env.Sandbox)
+	// Background commands must never stream to the foreground call, even
+	// if the child writes before Start returns and Detach can run.
+	sink := env.Partial
+	if a.Background {
+		sink = nil
+	}
+	job, err := proc.Start(untilChanged(a.Command, a.UntilChanged), env.Dir, proc.Env(env.PassEnv), sink, env.Sandbox)
 	if err != nil {
 		return errf("%v", err)
 	}
