@@ -6,3 +6,5 @@
 *.db-shm
 .stavlos/stavlos.local.json
 .claude/worktrees/
+
+.artifacts/
