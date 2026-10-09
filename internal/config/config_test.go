@@ -490,3 +490,10 @@ func TestLegacyPolicyActionsStaySeparate(t *testing.T) {
 		t.Fatalf("legacy role restriction: %+v", role)
 	}
 }
+
+func TestReadOnlyRoleFlag(t *testing.T) {
+	role, err := ReadRole(writeRole(t, "---\ndescription: research\nread_only: true\n---\nEvidence only."))
+	if err != nil || !role.ReadOnly {
+		t.Fatalf("read-only role: %+v %v", role, err)
+	}
+}

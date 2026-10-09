@@ -589,6 +589,9 @@ func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, la
 		if pp := c.roleLocked(parent).def; !contains(pp.Spawn, role) {
 			return nil, fmt.Errorf("%s may not spawn %q (allowed: %v)", pp.Name, role, pp.Spawn)
 		}
+		if c.roleLocked(parent).def.ReadOnly && !def.ReadOnly {
+			return nil, errors.New("a read-only agent cannot delegate to a writable role")
+		}
 		if !def.CanBeSubagent() {
 			return nil, fmt.Errorf("role %q is primary-only: it cannot be spawned", role)
 		}
