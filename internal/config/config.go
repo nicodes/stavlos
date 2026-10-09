@@ -150,6 +150,7 @@ type Role struct {
 	Name        string
 	Description string
 	Type        string                       // primary | subagent | all
+	ReadOnly    bool                         // shell/MCP cannot write the working set or use TCP
 	Models      []ModelSpec                  // model whitelist, first is the default; empty = any, inherit
 	Tools       []string                     // the tools it offers: RoleTools minus the ones tools: removes (todo stands for the group)
 	ToolRules   map[string]map[string]string // tool → pattern → verb, from the map form of tools:
@@ -858,6 +859,7 @@ func (e *Effective) loadSkills(src source, dir string) error {
 type roleFile struct {
 	Description string    `yaml:"description"`
 	Type        string    `yaml:"type"`
+	ReadOnly    bool      `yaml:"read_only"`
 	Models      yaml.Node `yaml:"models"`
 	Tools       yaml.Node `yaml:"tools"`
 	Skills      []string  `yaml:"skills"`
@@ -893,7 +895,7 @@ func readRole(src source, path string) (Role, error) {
 	}
 	p := Role{
 		Name: strings.TrimSuffix(filepath.Base(path), ".md"), Description: strings.TrimSpace(f.Description),
-		Type: f.Type, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color,
+		Type: f.Type, ReadOnly: f.ReadOnly, Skills: f.Skills, MCP: f.MCP, Spawn: f.Spawn, MaxTurns: f.MaxTurns, Color: f.Color,
 		Body: strings.TrimSpace(body), Source: path,
 	}
 	fail := func(format string, args ...any) (Role, error) {
