@@ -32,6 +32,7 @@ var sandboxReadOnly = append([]string{".git/hooks", ".git/config", ".stavlos", "
 
 // sandboxHiddenHome are credential stores, relative to the home directory.
 var sandboxHiddenHome = []string{
+	".secrets",
 	".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker", ".netrc", ".git-credentials", ".pypirc", ".npmrc",
 	".cargo/credentials.toml", ".config/gh", ".config/hub", ".config/gcloud", ".password-store", ".local/share/keyrings",
 	// other tools' tokens and databases: what a command could read and send
@@ -43,6 +44,10 @@ var sandboxHiddenHome = []string{
 	// shell histories hold whatever was typed, keys included
 	".bash_history", ".zsh_history", ".local/share/fish/fish_history", ".python_history", ".node_repl_history", ".psql_history", ".mysql_history",
 }
+
+// Credential directories may live beside a worktree rather than beneath HOME.
+// Check every ancestor so Work/.secrets remains hidden from Work/.worktrees/repo.
+var sandboxWorkspaceCredentials = []string{".secrets", ".ssh", ".aws", ".azure", ".kube", ".docker", ".netrc", ".git-credentials", ".pypirc", ".npmrc", ".pgpass"}
 
 // sandboxSpec is the boundary for the channel's commands under cfg, nil
 // when the sandbox is turned off.
@@ -69,6 +74,24 @@ func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 		spec.Tmp, spec.PrivateTmp = tmp, !anyWithin(dirs, os.TempDir())
 	}
 	spec.Hidden = hiddenPaths(cfg, dirs)
+	return spec
+}
+
+func (c *Channel) roleSandboxSpec(cfg *config.Effective, readonly bool) *sandbox.Spec {
+	spec := c.sandboxSpec(cfg)
+	if spec == nil || !readonly {
+		return spec
+	}
+	dirs := c.dirPaths()
+	spec.Network = false
+	spec.Writable = slices.DeleteFunc(spec.Writable, func(path string) bool {
+		return slices.ContainsFunc(dirs, func(dir string) bool {
+			return pathx.Within(path, dir) || pathx.Within(dir, path)
+		})
+	})
+	for _, dir := range dirs {
+		spec.ReadOnly = append(spec.ReadOnly, tools.ResolvePath("", dir))
+	}
 	return spec
 }
 
@@ -140,15 +163,29 @@ func hiddenPaths(cfg *config.Effective, dirs []string) []string {
 	if rt := os.Getenv("XDG_RUNTIME_DIR"); rt != "" {
 		hidden = append(hidden, rt)
 	}
-	for _, h := range sandboxHiddenHome {
-		hidden = append(hidden, filepath.Join(home, h))
-	}
 	var out []string
 	for _, h := range append(hidden, cfg.Sandbox.Hide...) {
 		if !anyWithin(dirs, h) {
 			out = append(out, h)
 		}
 	}
+	// Credentials are never exempted because the channel chose a directory
+	// inside them. That directory must become inaccessible, not grant access.
+	for _, h := range sandboxHiddenHome {
+		out = append(out, filepath.Join(home, h))
+	}
+	for _, dir := range dirs {
+		for dir = filepath.Clean(dir); filepath.IsAbs(dir); dir = filepath.Dir(dir) {
+			for _, name := range sandboxWorkspaceCredentials {
+				out = append(out, filepath.Join(dir, name))
+			}
+			if filepath.Dir(dir) == dir {
+				break
+			}
+		}
+	}
+	slices.Sort(out)
+	out = slices.Compact(out)
 	return out
 }
 
