@@ -1,5 +1,5 @@
 [tools]
-go = "1.27.1"
+go = "1.27.2"
 node = "22.20.0"
 python = "3.13.11"
 actionlint = "1.7.12"

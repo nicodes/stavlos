@@ -182,6 +182,14 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	if c.Name == toolname.Agent || c.Name == toolname.Web || c.Name == toolname.Shell {
 		arg = sub.Primary()
 	}
+	if rv.def.ReadOnly {
+		if c.Name == toolname.ApplyPatch || c.Name == toolname.Sheet {
+			return decision{sub: sub, arg: arg, verb: policy.Deny, why: "This role is read-only; file changes are refused."}
+		}
+		if c.Name == toolname.Shell && (!cfg.Sandbox.Enabled || sandboxLevel(cfg) != "full") {
+			return decision{sub: sub, arg: arg, verb: policy.Deny, why: "Read-only shell execution requires the full OS sandbox."}
+		}
+	}
 	// The channel's sheets are part of the working set for the file tools
 	// (never for commands: the sandbox builds its own list).
 	dirs := append(a.c.dirPaths(), a.c.SheetDir())
@@ -505,7 +513,7 @@ func (a *Agent) toolEnv(turn int, c model.Block, sub policy.Subject, rv roleView
 	}
 	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Boards: boardAPI{a: a}, Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
 		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir(), Roots: a.c.fileRoots(), Judged: judged, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
-		Sandbox: a.c.sandboxSpec(cfg),
+		Sandbox: a.c.roleSandboxSpec(cfg, rv.def.ReadOnly),
 		Partial: func(out string) {
 			a.c.host.Stream(protocol.StreamNotification{Channel: a.c.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: out})
 		}}

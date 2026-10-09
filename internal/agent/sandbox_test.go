@@ -2,6 +2,7 @@ package agent
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -71,5 +72,61 @@ func TestHiddenPathsCoverOtherToolsAndBrowsers(t *testing.T) {
 		if !slices.Contains(sandboxHiddenHome, want) {
 			t.Errorf("%s is not hidden", want)
 		}
+	}
+}
+
+func TestWorkspaceCredentialsHiddenAcrossWorktreeAncestors(t *testing.T) {
+	c, _ := newTestChannel(t, testConfig{}, &fakeModel{})
+	cfg := c.Config()
+	workspace := filepath.Join(t.TempDir(), "Work")
+	dir := filepath.Join(workspace, ".worktrees", "product")
+	secret := filepath.Join(workspace, ".secrets")
+	hidden := hiddenPaths(cfg, []string{dir})
+	if !slices.Contains(hidden, secret) {
+		t.Fatal("ancestor workspace credentials exposed")
+	}
+	for _, selected := range []string{secret, filepath.Join(secret, "nested")} {
+		if !slices.Contains(hiddenPaths(cfg, []string{selected}), secret) {
+			t.Fatal("selecting a credential directory bypasses its hidden boundary")
+		}
+	}
+	home, _ := os.UserHomeDir()
+	aws := filepath.Join(home, ".aws")
+	if !slices.Contains(hiddenPaths(cfg, []string{aws}), aws) {
+		t.Fatal("selecting a home credential directory exposes credentials")
+	}
+}
+
+func TestReadOnlyRoleEnforcesKernelBoundary(t *testing.T) {
+	c, _ := newTestChannel(t, testConfig{}, &fakeModel{})
+	cfg := *c.Config()
+	cfg.Sandbox.Enabled = true
+	spec := c.roleSandboxSpec(&cfg, true)
+	if spec == nil || spec.Network || !slices.Contains(spec.ReadOnly, c.Dir()) {
+		t.Fatal("read-only role has no restricted OS boundary")
+	}
+	for _, path := range spec.Writable {
+		if path == c.Dir() {
+			t.Fatal("working directory remained writable")
+		}
+	}
+	if level, _ := sandbox.Probe(); level != sandbox.Full {
+		t.Skip("full OS sandbox unavailable; refusal is tested separately")
+	}
+	target := filepath.Join(c.Dir(), "readonly-proof.txt")
+	if err := os.WriteFile(target, []byte("keep"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "-c", "printf changed > readonly-proof.txt")
+	cmd.Dir = c.Dir()
+	if _, err := sandbox.Wrap(cmd, *spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Run(); err == nil {
+		t.Fatal("read-only shell mutated source")
+	}
+	body, _ := os.ReadFile(target)
+	if string(body) != "keep" {
+		t.Fatal("source was changed")
 	}
 }

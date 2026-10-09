@@ -140,7 +140,12 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 	for k, v := range def.Env {
 		cmd.Env = append(cmd.Env, k+"="+config.ExpandEnv(v))
 	}
-	if spec := a.c.sandboxSpec(cfg); spec != nil {
+	readonly := a.role().def.ReadOnly
+	if readonly && (!cfg.Sandbox.Enabled || sandboxLevel(cfg) != "full") {
+		fail(fmt.Errorf("read-only MCP execution requires the full OS sandbox"))
+		return
+	}
+	if spec := a.c.roleSandboxSpec(cfg, readonly); spec != nil {
 		if _, err := sandbox.Wrap(cmd, *spec); err != nil {
 			fail(fmt.Errorf("sandbox: %v", err))
 			return
