@@ -62,11 +62,12 @@ type Web struct {
 // SandboxConfig shapes the sandbox (any layer; a trusted project's wins). Paths may use ~
 // and ${env:NAME}.
 type SandboxConfig struct {
-	Readable []string `json:"readable,omitempty"` // supporting code and toolchains; grants no writes
-	Enabled  *bool    `json:"enabled,omitempty"`  // default true
-	Network  *bool    `json:"network,omitempty"`  // TCP from commands; default true
-	Writable []string `json:"writable,omitempty"` // more directories commands may write (a cache, a toolchain's store)
-	Hide     []string `json:"hide,omitempty"`     // more paths commands may not see
+	GitMetadata []string `json:"gitMetadata,omitempty"` // explicit common Git directories supporting assigned worktrees
+	Readable    []string `json:"readable,omitempty"`    // supporting code and toolchains; grants no writes
+	Enabled     *bool    `json:"enabled,omitempty"`     // default true
+	Network     *bool    `json:"network,omitempty"`     // TCP from commands; default true
+	Writable    []string `json:"writable,omitempty"`    // more directories commands may write (a cache, a toolchain's store)
+	Hide        []string `json:"hide,omitempty"`        // more paths commands may not see
 }
 
 type Limits struct {
@@ -311,6 +312,7 @@ type Effective struct {
 	Sandbox          struct {
 		Enabled, Network         bool
 		Readable, Writable, Hide []string // expanded, absolute
+		GitMetadata              []string // explicitly granted common Git directories
 	}
 
 	// Dirs are the directories every channel works in besides its own: the
@@ -582,6 +584,7 @@ func (e *Effective) applyFile(f File, layer string) error {
 			e.Sandbox.Writable = append(e.Sandbox.Writable, expandPath(p))
 		}
 		e.Sandbox.Readable = append(e.Sandbox.Readable, expandSandboxPaths(s.Readable)...)
+		e.Sandbox.GitMetadata = append(e.Sandbox.GitMetadata, expandSandboxPaths(s.GitMetadata)...)
 		for _, p := range s.Hide {
 			e.Sandbox.Hide = append(e.Sandbox.Hide, expandPath(p))
 		}

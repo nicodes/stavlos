@@ -452,11 +452,11 @@ func TestSandboxConfig(t *testing.T) {
 	if err != nil || !e.Sandbox.Enabled || !e.Sandbox.Network {
 		t.Fatalf("defaults %+v %v", e.Sandbox, err)
 	}
-	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"sandbox":{"network":false,"writable":["~/.cache/x"],"hide":["${env:STAVLOS_TEST_HIDE}/y"]}}`), 0o644)
+	os.WriteFile(filepath.Join(g, "stavlos.json"), []byte(`{"sandbox":{"network":false,"writable":["~/.cache/x"],"gitMetadata":["${env:STAVLOS_TEST_HIDE}/repo.git"],"hide":["${env:STAVLOS_TEST_HIDE}/y"]}}`), 0o644)
 	t.Setenv("STAVLOS_TEST_HIDE", "/srv")
 	e, err = LoadGlobal()
 	home, _ := os.UserHomeDir()
-	if err != nil || !e.Sandbox.Enabled || e.Sandbox.Network || strings.Join(e.Sandbox.Writable, ",") != filepath.Join(home, ".cache/x") || strings.Join(e.Sandbox.Hide, ",") != "/srv/y" {
+	if err != nil || !e.Sandbox.Enabled || e.Sandbox.Network || strings.Join(e.Sandbox.Writable, ",") != filepath.Join(home, ".cache/x") || strings.Join(e.Sandbox.Hide, ",") != "/srv/y" || strings.Join(e.Sandbox.GitMetadata, ",") != "/srv/repo.git" {
 		t.Fatalf("%+v %v", e.Sandbox, err)
 	}
 }
