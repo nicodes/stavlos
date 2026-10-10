@@ -7,8 +7,8 @@
 // (the harness's own data, config and socket, credentials) under empty
 // mounts, makes control files read-only, and gives the command its own
 // /tmp; then it restricts itself with Landlock — writes only beneath the
-// channel's directories, a scratch directory and caches, no TCP when the
-// network is off, no signals or abstract-socket connections outside the
+// channel's directories, a scratch directory and caches, a private network
+// namespace when the network is off, no signals or abstract-socket connections outside the
 // sandbox — and executes the command. What the system cannot provide is
 // dropped, in that order: no user namespaces means nothing hidden; no
 // Landlock means no sandbox (Probe says which).
@@ -41,7 +41,7 @@ type Spec struct {
 	// shared /tmp holds other programs' sockets (tmux, X11) and is never
 	// writable from the sandbox either way.
 	PrivateTmp bool `json:"private_tmp,omitempty"`
-	Network    bool `json:"network,omitempty"` // TCP connections and listeners allowed
+	Network    bool `json:"network,omitempty"` // host network available (Full isolates all protocols when false)
 }
 
 // wire is Spec with the unexported fields, as the helper receives it.
@@ -56,8 +56,8 @@ type Level int
 
 const (
 	None     Level = iota // nothing: commands run unsandboxed
-	Landlock              // writes, network and signals restricted; nothing hidden, no private /tmp
-	Full                  // Landlock plus hidden paths, read-only control files and a private /tmp
+	Landlock              // partial restrictions, depending on ABI; no path hiding or network namespace
+	Full                  // ABI >= 6, hidden paths, read-only controls, private /tmp and network namespace
 )
 
 func (l Level) String() string {
@@ -89,7 +89,7 @@ func Probe() (Level, error) {
 			probe.level = Full
 			return
 		} else {
-			probe.err = fmt.Errorf("user namespaces unavailable: %v", err)
+			probe.err = fmt.Errorf("full sandbox unavailable: %v", err)
 		}
 		if err := run(wire{Probe: true}); err == nil {
 			probe.level = Landlock

@@ -106,7 +106,16 @@ func (a *Agent) compact(ctx context.Context, m model.Model, info model.Info, all
 	}
 	req := summaryRequest(bareID(modelID), clip.Middle(project.Transcript(cut.Old), summaryInputMax), cut.Prev, info)
 	req.CacheKey = a.ID + ":compact" // a summary shares no prefix with the agent's turns
-	resp, err := m.Complete(ctx, req, nil)
+	callCtx, cancel, err := a.beginBudgetCall(ctx, "compaction")
+	if err != nil {
+		_ = a.recordFact(event.CompactionFailed, event.CompactionPayload{Before: cut.Before, Error: err.Error()})
+		return err
+	}
+	defer cancel()
+	resp, err := m.Complete(callCtx, req, nil)
+	if recordErr := a.finishBudgetCall("compaction", resp.Usage, info.Cost(resp.Usage)); recordErr != nil {
+		err = recordErr
+	}
 	var sb strings.Builder
 	for _, b := range resp.Blocks {
 		if b.Type == model.BlockText {

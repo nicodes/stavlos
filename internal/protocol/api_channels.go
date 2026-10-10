@@ -18,6 +18,7 @@ type ChannelInfo struct {
 	Live         int              `json:"live_agents"`
 	CostUSD      float64          `json:"cost_usd"`
 	Tokens       int              `json:"tokens"` // input + output tokens every agent of the channel has used
+	Budget       *ChannelBudget   `json:"budget,omitempty"`
 	TrustPending bool             `json:"trust_pending"`
 	// Sandbox is what bounds this channel's commands: "full", "limited"
 	// (writes and network bounded, nothing hidden), "none" (the kernel offers
@@ -31,6 +32,14 @@ type ChannelInfo struct {
 	Dirs        []DirInfo    `json:"dirs,omitempty"`        // the working directories every agent shares, the channel directory first
 	Permissions int          `json:"permissions,omitempty"` // permission and trust prompts waiting on the human (channel.list)
 	Questions   int          `json:"questions,omitempty"`   // questions waiting on the human (channel.list)
+}
+
+// ChannelBudget includes retries and compaction, independent of conversation history.
+type ChannelBudget struct {
+	Calls     int     `json:"calls"`
+	Tokens    int     `json:"tokens"`
+	CostUSD   float64 `json:"cost_usd"`
+	Exhausted string  `json:"exhausted,omitempty"`
 }
 
 type ChannelListParams struct {

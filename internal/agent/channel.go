@@ -467,6 +467,7 @@ func (c *Channel) Info() protocol.ChannelInfo {
 		Created: c.Created.Format(time.RFC3339), Archived: c.st.archived,
 		Live: live, CostUSD: cost, Tokens: tokens, TrustPending: c.cfg.TrustPending, TrustFiles: len(c.cfg.TrustFiles), Sandbox: sandboxLevel(c.cfg), Mode: c.st.mode,
 		State: protocol.RollUp(states), Dirs: c.dirInfosLocked(), Recap: c.st.recap,
+		Budget: &protocol.ChannelBudget{Calls: c.st.modelCalls, Tokens: c.st.budgetTokens, CostUSD: c.st.budgetCost, Exhausted: c.budgetReasonLocked(time.Now())},
 	}
 }
 

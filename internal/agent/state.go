@@ -20,6 +20,9 @@ import (
 
 // channelState is what the log says about a channel.
 type channelState struct {
+	modelCalls                   int
+	budgetTokens                 int
+	budgetCost                   float64
 	board                        *event.BoardInfo
 	name, model, role, mode, dir string
 	archived                     bool
@@ -95,6 +98,14 @@ func (cs *channelState) apply(e event.Event, fx *effects) {
 		cs.lastWork = e.Time // something happened worth recapping
 	}
 	switch e.Type {
+	case event.ModelCallStarted:
+		cs.modelCalls++
+	case event.ModelCallCompleted:
+		var p event.ModelCallPayload
+		if e.Decode(&p) == nil {
+			cs.budgetTokens += p.Usage.InputTokens + p.Usage.OutputTokens + p.Usage.CacheReadTokens + p.Usage.CacheWriteTokens
+			cs.budgetCost += p.CostUSD
+		}
 	case event.ChannelCreated, event.ChannelUpdated, event.ChannelArchived, event.ChannelDirAdded, event.ChannelDirRemoved, event.PermitGranted:
 		cs.applyChannel(e)
 	case event.SheetWritten, event.SheetDeleted:

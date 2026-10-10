@@ -27,6 +27,8 @@ export type EventType =
   | "mcp.failed"
   | "mcp.started"
   | "mcp.stopped"
+  | "model.call_completed"
+  | "model.call_started"
   | "permit.granted"
   | "sheet.deleted"
   | "sheet.written"

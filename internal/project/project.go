@@ -95,7 +95,8 @@ func (b *Builder) Apply(e event.Event) {
 		event.ChatPosted, event.ChatMessage, event.AgentSpawned, event.AgentUpdated, event.AgentKilled, event.AgentCancelled,
 		event.TurnStarted, event.ToolStarted, event.AskRequested, event.AskResolved, event.PermitGranted,
 		event.JobStarted, event.JobStopped, event.TodoChanged, event.SheetWritten, event.SheetDeleted,
-		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.CompactionStarted, event.CompactionFailed:
+		event.MCPStarted, event.MCPFailed, event.MCPStopped, event.CompactionStarted, event.CompactionFailed,
+		event.ModelCallStarted, event.ModelCallCompleted:
 	}
 }
 
