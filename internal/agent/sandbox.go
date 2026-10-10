@@ -69,10 +69,19 @@ func (c *Channel) sandboxSpecDirs(cfg *config.Effective, scope []string) *sandbo
 	for _, d := range scope {
 		d = tools.ResolvePath("", d)
 		spec.Writable = append(spec.Writable, d)
+		gitInfo, gitErr := os.Lstat(filepath.Join(d, ".git"))
+		linkedWorktree := gitErr == nil && gitInfo.Mode().IsRegular()
+		if linkedWorktree {
+			spec.ReadOnly = append(spec.ReadOnly, filepath.Join(d, ".git"))
+		}
 		for _, ro := range sandboxReadOnly {
+			if linkedWorktree && (ro == ".git/hooks" || ro == ".git/config") {
+				continue
+			}
 			spec.ReadOnly = append(spec.ReadOnly, filepath.Join(d, ro))
 		}
 	}
+	grantGitMetadata(spec, scope, cfg.Sandbox.GitMetadata)
 	spec.ReadOnly = append(spec.ReadOnly, cfg.InstructionFiles...) // the nested ones too
 	dirs := append([]string(nil), spec.Writable...)
 	spec.Caches = true
@@ -102,6 +111,9 @@ func (c *Channel) roleSandboxSpecDirs(cfg *config.Effective, readonly bool, dirs
 			return pathx.Within(path, dir) || pathx.Within(dir, path)
 		})
 	})
+	for _, metadata := range cfg.Sandbox.GitMetadata {
+		spec.Writable = slices.DeleteFunc(spec.Writable, func(path string) bool { return pathx.Within(metadata, path) })
+	}
 	for _, dir := range dirs {
 		spec.ReadOnly = append(spec.ReadOnly, tools.ResolvePath("", dir))
 		spec.Readable = append(spec.Readable, tools.ResolvePath("", dir))
