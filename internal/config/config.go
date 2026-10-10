@@ -62,6 +62,7 @@ type Web struct {
 // SandboxConfig shapes the sandbox (any layer; a trusted project's wins). Paths may use ~
 // and ${env:NAME}.
 type SandboxConfig struct {
+	Readable []string `json:"readable,omitempty"` // supporting code and toolchains; grants no writes
 	Enabled  *bool    `json:"enabled,omitempty"`  // default true
 	Network  *bool    `json:"network,omitempty"`  // TCP from commands; default true
 	Writable []string `json:"writable,omitempty"` // more directories commands may write (a cache, a toolchain's store)
@@ -308,8 +309,8 @@ type Effective struct {
 	// (docs/model-selection.md).
 	ResumeAfterLimit bool
 	Sandbox          struct {
-		Enabled, Network bool
-		Writable, Hide   []string // expanded, absolute
+		Enabled, Network         bool
+		Readable, Writable, Hide []string // expanded, absolute
 	}
 
 	// Dirs are the directories every channel works in besides its own: the
@@ -580,6 +581,7 @@ func (e *Effective) applyFile(f File, layer string) error {
 		for _, p := range s.Writable {
 			e.Sandbox.Writable = append(e.Sandbox.Writable, expandPath(p))
 		}
+		e.Sandbox.Readable = append(e.Sandbox.Readable, expandSandboxPaths(s.Readable)...)
 		for _, p := range s.Hide {
 			e.Sandbox.Hide = append(e.Sandbox.Hide, expandPath(p))
 		}
@@ -1216,4 +1218,12 @@ func (e *Effective) applyChannelBudget(l *Limits) error {
 		e.Limits.MaxChannelDuration = l.MaxChannelDuration
 	}
 	return nil
+}
+
+func expandSandboxPaths(paths []string) []string {
+	out := make([]string, 0, len(paths))
+	for _, path := range paths {
+		out = append(out, expandPath(path))
+	}
+	return out
 }

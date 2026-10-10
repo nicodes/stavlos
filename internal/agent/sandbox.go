@@ -36,7 +36,7 @@ var sandboxHiddenHome = []string{
 	".ssh", ".gnupg", ".aws", ".azure", ".kube", ".docker", ".netrc", ".git-credentials", ".pypirc", ".npmrc",
 	".cargo/credentials.toml", ".config/gh", ".config/hub", ".config/gcloud", ".password-store", ".local/share/keyrings",
 	// other tools' tokens and databases: what a command could read and send
-	// out in one step, since reads are otherwise unrestricted
+	// out in one step, even when a supporting directory is granted
 	".pgpass", ".my.cnf", ".vault-token", ".terraform.d", ".config/rclone", ".config/doctl", ".config/hcloud",
 	".claude", ".codex", ".gemini", ".config/github-copilot", ".opencode", ".config/opencode", ".kimi-code", ".grok",
 	// browser profiles hold cookies and saved passwords
@@ -60,6 +60,12 @@ func (c *Channel) sandboxSpecDirs(cfg *config.Effective, scope []string) *sandbo
 		return nil
 	}
 	spec := &sandbox.Spec{Network: cfg.Sandbox.Network}
+	spec.Readable = append(spec.Readable, cfg.Sandbox.Readable...)
+	// Tool stores contain executable runtimes, never the whole home or PATH.
+	home, _ := os.UserHomeDir()
+	for _, store := range []string{".local/share/mise/installs", ".rustup/toolchains", ".cargo/bin"} {
+		spec.Readable = append(spec.Readable, filepath.Join(home, store))
+	}
 	for _, d := range scope {
 		d = tools.ResolvePath("", d)
 		spec.Writable = append(spec.Writable, d)
@@ -98,6 +104,7 @@ func (c *Channel) roleSandboxSpecDirs(cfg *config.Effective, readonly bool, dirs
 	})
 	for _, dir := range dirs {
 		spec.ReadOnly = append(spec.ReadOnly, tools.ResolvePath("", dir))
+		spec.Readable = append(spec.Readable, tools.ResolvePath("", dir))
 	}
 	return spec
 }
