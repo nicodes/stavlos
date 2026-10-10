@@ -153,15 +153,26 @@ func (a *Agent) Cancel() {
 func (a *Agent) cancel() error {
 	s := a.c
 	s.mu.Lock()
-	st := a.state()
-	var err error
-	if st != nil && !st.killed {
-		err = s.commitLocked(context.Background(), s.event(a.ID, event.AgentCancelled, nil))
+	// Cancel under the same lock used by adoption: a command that races this
+	// request cannot detach into a new job after we collect the owned jobs.
+	if a.cancelTurn != nil {
+		a.cancelTurn()
 	}
-	c := a.cancelTurn
+	var stopped []*jobRun
+	var facts []event.Event
+	var err error
+	if st := a.state(); st != nil && !st.killed {
+		facts = append(facts, s.event(a.ID, event.AgentCancelled, nil))
+		for id, run := range a.jobs {
+			delete(a.jobs, id)
+			stopped = append(stopped, run)
+			facts = append(facts, s.event(a.ID, event.JobStopped, event.JobStoppedPayload{ID: id, Reason: "cancelled by owner"}))
+		}
+		err = s.commitFactLocked(context.Background(), facts...)
+	}
 	s.mu.Unlock()
-	if c != nil {
-		c()
+	for _, run := range stopped {
+		run.cancel()
 	}
 	return err
 }

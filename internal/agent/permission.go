@@ -90,7 +90,7 @@ func (a *Agent) runTool(turnCtx context.Context, turn int, c model.Block, defs [
 		a.controlBefore = before
 		a.c.mu.Unlock()
 	}
-	res := t.Run(turnCtx, c.Input, a.toolEnv(turn, c, d.sub, rv, cfg))
+	res := t.Run(turnCtx, c.Input, a.toolEnv(turnCtx, turn, c, d.sub, rv, cfg))
 	if before != nil {
 		if note := a.c.controlNote(before, cfg); note != "" {
 			res.Output += "\n\n" + note
@@ -505,7 +505,7 @@ func (a *Agent) askOpened(ctx context.Context, info protocol.PromptInfo, callID 
 }
 
 // toolEnv is what a tool gets from this agent for one call.
-func (a *Agent) toolEnv(turn int, c model.Block, sub policy.Subject, rv roleView, cfg *config.Effective) *tools.Env {
+func (a *Agent) toolEnv(turnCtx context.Context, turn int, c model.Block, sub policy.Subject, rv roleView, cfg *config.Effective) *tools.Env {
 	var judged map[string]string
 	if sub.Kind == policy.KindPath {
 		judged = map[string]string{}
@@ -513,7 +513,7 @@ func (a *Agent) toolEnv(turn int, c model.Block, sub policy.Subject, rv roleView
 			judged[v] = tools.ResolvePath(a.Dir(), v)
 		}
 	}
-	return &tools.Env{Dir: a.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Boards: boardAPI{a: a}, Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
+	return &tools.Env{Dir: a.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Boards: boardAPI{a: a}, Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a, ctx: turnCtx}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
 		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir(), Roots: a.fileRoots(), Judged: judged, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
 		Sandbox: a.roleSandboxSpec(cfg, rv.def.ReadOnly),
 		Partial: func(out string) {
