@@ -33,6 +33,7 @@ const specEnv = "STAVLOS_SANDBOX_SPEC"
 
 // Spec describes one sandbox.
 type Spec struct {
+	Readable []string `json:"readable,omitempty"` // supporting code, toolchains and read-only caches
 	Writable []string `json:"writable,omitempty"` // directories and files the process may change
 	ReadOnly []string `json:"readonly,omitempty"` // paths beneath Writable that stay read-only
 	Hidden   []string `json:"hidden,omitempty"`   // paths replaced by an empty directory or file
@@ -123,6 +124,10 @@ func Wrap(cmd *exec.Cmd, spec Spec) (Level, error) {
 	if lvl == None {
 		return None, nil
 	}
+	// The initial program was selected by the shell/MCP permission layer.
+	// Grant that file only, never its parent or arguments. This supports
+	// declared external MCP binaries without opening their neighbours.
+	spec.Readable = append(append([]string(nil), spec.Readable...), cmd.Path)
 	return lvl, wrap(cmd, wire{Spec: spec, Mounts: lvl == Full})
 }
 
