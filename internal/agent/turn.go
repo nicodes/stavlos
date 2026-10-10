@@ -212,16 +212,28 @@ func (t *turnRun) prepare() (p stepPlan, errText string) {
 // call makes the model call, streaming what it says to the channel's clients.
 func (t *turnRun) call(p stepPlan) (model.Response, error) {
 	a, s := t.a, t.a.c
-	return p.m.Complete(t.ctx, model.Request{Model: bareID(p.modelID), System: p.system, Messages: p.history, Tools: p.defs, Variant: p.variant, CacheKey: a.ID},
+	ctx, cancel, err := a.beginBudgetCall(t.ctx, "turn")
+	if err != nil {
+		return model.Response{}, err
+	}
+	defer cancel()
+	resp, err := p.m.Complete(ctx, model.Request{Model: bareID(p.modelID), System: p.system, Messages: p.history, Tools: p.defs, Variant: p.variant, CacheKey: a.ID},
 		func(d model.Delta) {
 			s.host.Stream(protocol.StreamNotification{Channel: s.ID, Agent: a.ID, Turn: t.turn, Text: d.Text, Thinking: d.Thinking, ToolName: d.ToolName, Reset: d.Reset})
 		})
+	if recordErr := a.finishBudgetCall("turn", resp.Usage, p.info.Cost(resp.Usage)); recordErr != nil {
+		return resp, recordErr
+	}
+	return resp, err
 }
 
 // onError is a model call that failed: the step runs again when the harness
 // moved the agent to another model, and otherwise the turn ends, with what
 // was produced and paid for kept on the record.
 func (t *turnRun) onError(err error, p stepPlan, resp model.Response, msg event.AssistantMessagePayload) (event.TurnReason, string, bool) {
+	if errors.Is(err, errChannelBudget) {
+		return event.ReasonError, err.Error(), true
+	}
 	cancelled := t.ctx.Err() != nil
 	if !cancelled && t.movedOn(err, p.modelID) {
 		return "", "", false // the same step again, on the model the harness moved the agent to

@@ -46,7 +46,10 @@ func helper() int {
 		}
 	}
 	if w.Mounts && os.Getenv(stageEnv) == "" {
-		return enterNamespaces()
+		if abi() < 6 {
+			return fail("full sandbox requires Landlock ABI 6 or newer")
+		}
+		return enterNamespaces(w.Network)
 	}
 	writable := w.Writable
 	if w.Mounts {
@@ -90,7 +93,7 @@ const stageEnv = "STAVLOS_SANDBOX_STAGE"
 // namespace and stands in for it: same arguments, same files, the same
 // process group (so what stops the command stops both), and its exit status.
 // Were this copy to die first, the kernel kills the other.
-func enterNamespaces() int {
+func enterNamespaces(network bool) int {
 	self, err := os.Executable()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "stavlos sandbox: %v\n", err)
@@ -102,7 +105,7 @@ func enterNamespaces() int {
 	cmd.Env = append(os.Environ(), stageEnv+"=2")
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:                 syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS,
+		Cloneflags:                 namespaceFlags(network),
 		UidMappings:                []syscall.SysProcIDMap{{ContainerID: uid, HostID: uid, Size: 1}},
 		GidMappings:                []syscall.SysProcIDMap{{ContainerID: gid, HostID: gid, Size: 1}},
 		GidMappingsEnableSetgroups: false,
@@ -130,6 +133,17 @@ func enterNamespaces() int {
 	}
 	fmt.Fprintf(os.Stderr, "stavlos sandbox: user namespaces unavailable: %v\n", err)
 	return 126
+}
+
+// Network-off commands get their own network namespace: TCP, UDP and
+// abstract sockets cannot reach the host network. Landlock TCP rules remain
+// defense in depth. No interfaces are configured inside this namespace.
+func namespaceFlags(network bool) uintptr {
+	flags := uintptr(syscall.CLONE_NEWUSER | syscall.CLONE_NEWNS)
+	if !network {
+		flags |= syscall.CLONE_NEWNET
+	}
+	return flags
 }
 
 // setEnv replaces or adds one variable.
