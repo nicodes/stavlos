@@ -28,6 +28,50 @@ func testBase(t *testing.T) string {
 	return dir
 }
 
+func TestSandboxBuildAndUnixServiceContainment(t *testing.T) {
+	if level, _ := Probe(); level != Full {
+		t.Skip("requires full sandbox")
+	}
+	base := testBase(t)
+	dirs := mkdirs(t, base, "work", "tmp", "neighbour")
+	work, tmp, neighbour := dirs[0], dirs[1], dirs[2]
+	if err := os.WriteFile(filepath.Join(work, "main.go"), []byte("package main\nfunc main() { println(\"built\") }\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	root, err := exec.Command("go", "env", "GOROOT").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	goRoot := strings.TrimSpace(string(root))
+	spec := Spec{Writable: []string{work}, Readable: []string{goRoot}, Tmp: tmp, PrivateTmp: true, Caches: true}
+	cmd := exec.Command(filepath.Join(goRoot, "bin", "go"), "run", "main.go")
+	cmd.Dir = work
+	cmd.Env = append(os.Environ(), "GOENV=off", "GOTOOLCHAIN=local", "GOPROXY=off", "GOFLAGS=-buildvcs=false")
+	if _, err := Wrap(cmd, spec); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), "built") {
+		t.Fatalf("legitimate build: %v %s", err, out)
+	}
+	// The pathname is intentionally readable. A readable grant must not also
+	// grant the authority of a service listening beneath that path.
+	ln, err := net.Listen("unix", filepath.Join(neighbour, "service.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	spec.Readable = append(spec.Readable, neighbour)
+	spec.Network = true
+	cmd = exec.Command("/usr/bin/python3", "-c", "import socket; s=socket.socket(socket.AF_UNIX); s.connect("+fmt.Sprintf("%q", ln.Addr().String())+")")
+	cmd.Dir = work
+	if _, err := Wrap(cmd, spec); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := cmd.CombinedOutput(); err == nil {
+		t.Fatalf("ungranted Unix service reached: %s", out)
+	}
+}
+
 func mkdirs(t *testing.T, base string, names ...string) []string {
 	var out []string
 	for _, n := range names {
@@ -72,8 +116,16 @@ func TestSandbox(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(outside, "f")); string(b) != "x" {
 		t.Fatalf("outside file changed: %q", b)
 	}
-	if out, err := sh(spec, "cat "+filepath.Join(outside, "f")); err != nil || out != "x" {
-		t.Fatalf("reading outside should work: %v %q", err, out)
+	if out, err := sh(spec, "p="+outside+"; bash -c 'cat \"$1/f\"' _ \"$p\""); err == nil || out == "x" {
+		t.Fatalf("subprocess read outside: %v %q", err, out)
+	}
+	granted := spec
+	granted.Readable = []string{outside}
+	if out, err := sh(granted, "cat "+filepath.Join(outside, "f")); err != nil || out != "x" {
+		t.Fatalf("explicit supporting read: %v %q", err, out)
+	}
+	if out, err := sh(granted, "echo no > "+filepath.Join(outside, "f")); err == nil {
+		t.Fatalf("read grant became a write grant: %q", out)
 	}
 	if out, err := sh(spec, "echo $STAVLOS_SANDBOX_SPEC"); err != nil || strings.TrimSpace(out) != "" {
 		t.Fatalf("the spec leaked into the command's environment: %q", out)
