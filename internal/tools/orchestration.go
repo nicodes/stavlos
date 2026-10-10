@@ -32,9 +32,10 @@ func needOrch(env *Env) *Result {
 type spawnTool struct{}
 
 type spawnInput struct {
-	Archetype string `json:"archetype" desc:"Role name of the child (see the list in your instructions)" req:"true"`
-	Label     string `json:"label" desc:"Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the channel gets a suffix (auth-explorer-2); the result says the name it got" req:"true"`
-	Task      string `json:"task" desc:"The complete task description; the child has no other context" req:"true"`
+	Directories []string `json:"directories,omitempty" desc:"Task directories already granted to you; defaults to your first directory. Children cannot widen this scope."`
+	Archetype   string   `json:"archetype" desc:"Role name of the child (see the list in your instructions)" req:"true"`
+	Label       string   `json:"label" desc:"Short name for this child, e.g. 'auth-explorer': lowercase letters, digits, '-' and '_'. A name already taken in the channel gets a suffix (auth-explorer-2); the result says the name it got" req:"true"`
+	Task        string   `json:"task" desc:"The complete task description; the child has no other context" req:"true"`
 }
 
 func (spawnTool) Subject(in json.RawMessage) policy.Subject {
@@ -56,7 +57,17 @@ func (spawnTool) Run(ctx context.Context, in json.RawMessage, env *Env) Result {
 	if ok, why := env.Orch.CanSpawn(env.Agent); !ok {
 		return errf("cannot spawn: %s", why)
 	}
-	id, name, err := env.Orch.Spawn(ctx, env.Agent, a.Archetype, a.Label, a.Task)
+	var id, name string
+	var err error
+	if scoped, ok := env.Orch.(interface {
+		SpawnScoped(context.Context, string, string, string, string, []string) (string, string, error)
+	}); ok {
+		id, name, err = scoped.SpawnScoped(ctx, env.Agent, a.Archetype, a.Label, a.Task, a.Directories)
+	} else if len(a.Directories) > 0 {
+		return errf("this runtime does not support task directory scopes")
+	} else {
+		id, name, err = env.Orch.Spawn(ctx, env.Agent, a.Archetype, a.Label, a.Task)
+	}
 	if err != nil {
 		return errf("%v", err)
 	}
@@ -263,11 +274,12 @@ func excerpt(s string, n int) string {
 // agentTool dispatches lifecycle actions without adding separate model tools.
 type agentTool struct{}
 type agentInput struct {
-	Action    string `json:"action" req:"true" enum:"create,cancel,status" desc:"create a child, cancel its current turn, or inspect status"`
-	Archetype string `json:"archetype" desc:"Required for create: role from your delegation instructions"`
-	Label     string `json:"label" desc:"Required for create: short child name"`
-	Task      string `json:"task" desc:"Required for create: complete task; the child has no other context"`
-	ID        string `json:"id" desc:"Required for cancel: child name or id; optional for status (omit for the whole channel)"`
+	Directories []string `json:"directories,omitempty" desc:"For create: task directories already granted to you; defaults to your first directory"`
+	Action      string   `json:"action" req:"true" enum:"create,cancel,status" desc:"create a child, cancel its current turn, or inspect status"`
+	Archetype   string   `json:"archetype" desc:"Required for create: role from your delegation instructions"`
+	Label       string   `json:"label" desc:"Required for create: short child name"`
+	Task        string   `json:"task" desc:"Required for create: complete task; the child has no other context"`
+	ID          string   `json:"id" desc:"Required for cancel: child name or id; optional for status (omit for the whole channel)"`
 }
 
 func (agentTool) Def() model.ToolDef { return AgentDef(true) }

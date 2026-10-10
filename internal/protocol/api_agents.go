@@ -7,6 +7,7 @@ import (
 // Agents: the tree, and what is sent to one.
 
 type AgentInfo struct {
+	Directories     []string             `json:"directories,omitempty"`
 	Nudges          int                  `json:"nudges,omitempty"`      // consecutive empty reminder-only turns
 	NudgeLimit      int                  `json:"nudge_limit,omitempty"` // empty-reminder-turn seatbelt; 0 when reminders are off
 	PendingReplies  []event.ReplyRequest `json:"pending_replies,omitempty"`
@@ -47,11 +48,12 @@ type AgentSendParams struct {
 }
 
 type AgentSpawnParams struct {
-	Parent string `json:"parent"`
-	Role   string `json:"role"`
-	Name   string `json:"name"`
-	Task   string `json:"task"`
-	Model  string `json:"model,omitempty"`
+	Directories []string `json:"directories,omitempty"`
+	Parent      string   `json:"parent"`
+	Role        string   `json:"role"`
+	Name        string   `json:"name"`
+	Task        string   `json:"task"`
+	Model       string   `json:"model,omitempty"`
 }
 type AgentSpawnResult struct {
 	ID string `json:"id"`

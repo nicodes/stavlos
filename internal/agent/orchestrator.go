@@ -23,6 +23,14 @@ func (o orchestrator) Spawn(ctx context.Context, parent, role, label, task strin
 	return a.ID, a.Name(), nil
 }
 
+func (o orchestrator) SpawnScoped(ctx context.Context, parent, role, label, task string, directories []string) (string, string, error) {
+	a, err := o.c.spawn(ctx, parent, role, label, task, "", directories...)
+	if err != nil {
+		return "", "", err
+	}
+	return a.ID, a.Name(), nil
+}
+
 // Message sends the caller's text to the human or to another agent, as the
 // caller says it is: a request (the recipient owes a reply and the caller
 // waits; it reaches the recipient at its next model call), a response (it

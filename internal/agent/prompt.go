@@ -31,7 +31,7 @@ type promptPrefix struct {
 
 // buildContext is the system prompt and tool list for a model call.
 func (a *Agent) buildContext(rv roleView, cfg *config.Effective) (string, []model.ToolDef) {
-	dirs := a.c.dirPaths()
+	dirs := a.dirPaths()
 	mdefs := a.mcpDefs()
 	key := prefixKey(cfg, rv, dirs, mdefs)
 	a.c.mu.Lock()
@@ -80,9 +80,9 @@ func prefixKey(cfg *config.Effective, rv roleView, dirs []string, mdefs []model.
 func (a *Agent) writePreamble(sb *strings.Builder, rv roleView, cfg *config.Effective, dirs []string) {
 	sb.WriteString(rv.def.Body)
 	sb.WriteString("\n\n")
-	fmt.Fprintf(sb, "Working directory: %s\n", a.c.Dir())
+	fmt.Fprintf(sb, "Working directory: %s\n", a.Dir())
 	if len(dirs) > 1 {
-		fmt.Fprintf(sb, "The channel's working directories, shared by every agent: %s. Reading, editing or running commands outside them needs the human's approval.\n", strings.Join(dirs, ", "))
+		fmt.Fprintf(sb, "Your task's granted working directories: %s. Child agents cannot expand their task directories.\n", strings.Join(dirs, ", "))
 	} else {
 		sb.WriteString("Reading, editing or running commands outside the working directory asks the human first.\n")
 	}
