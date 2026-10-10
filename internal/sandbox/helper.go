@@ -83,7 +83,11 @@ func helper() int {
 			return fail("private build cache: %v", err)
 		}
 	}
-	if err := restrict(writable, w.Network); err != nil {
+	readable := append(append([]string(nil), w.Readable...), w.ReadOnly...)
+	if err := restrict(writable, readable, w.Network); err != nil {
+		return fail("%v", err)
+	}
+	if err := restrictUnixSockets(); err != nil {
 		return fail("%v", err)
 	}
 	if w.Probe {
@@ -232,6 +236,7 @@ func bindReadOnly(src, dst string) error {
 // Landlock rights (include/uapi/linux/landlock.h).
 const (
 	fsWriteFile  = unix.LANDLOCK_ACCESS_FS_WRITE_FILE
+	fsRead       = unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_READ_DIR | unix.LANDLOCK_ACCESS_FS_EXECUTE
 	fsTruncate   = unix.LANDLOCK_ACCESS_FS_TRUNCATE
 	fsRefer      = unix.LANDLOCK_ACCESS_FS_REFER
 	fsDirChanges = unix.LANDLOCK_ACCESS_FS_REMOVE_DIR | unix.LANDLOCK_ACCESS_FS_REMOVE_FILE | unix.LANDLOCK_ACCESS_FS_MAKE_CHAR |
@@ -246,7 +251,7 @@ const (
 
 // alwaysWritable are the device files and directories every program
 // expects to write.
-var alwaysWritable = []string{"/dev/null", "/dev/zero", "/dev/full", "/dev/tty", "/dev/ptmx", "/dev/pts", "/dev/shm"}
+var alwaysWritable = []string{"/dev/null", "/dev/zero", "/dev/full", "/dev/tty", "/dev/ptmx"}
 
 type rulesetAttr struct{ fs, net, scoped uint64 }
 
@@ -269,7 +274,7 @@ func abi() int {
 // Landlock: writes only beneath writable, TCP only when network is on, and
 // no signals or abstract Unix sockets across the sandbox's edge. Rights the
 // kernel does not know are left out rather than failing.
-func restrict(writable []string, network bool) error {
+func restrict(writable, readable []string, network bool) error {
 	v := abi()
 	if v <= 0 {
 		return fmt.Errorf("landlock unavailable")
@@ -283,7 +288,7 @@ func restrict(writable []string, network bool) error {
 		fileRights |= fsTruncate
 		dirRights |= fsTruncate
 	}
-	attr := rulesetAttr{fs: dirRights}
+	attr := rulesetAttr{fs: dirRights | fsRead}
 	if v >= 4 && !network {
 		attr.net = netTCP
 	}
@@ -301,9 +306,9 @@ func restrict(writable []string, network bool) error {
 			continue // not there: nothing to allow
 		}
 		var st unix.Stat_t
-		rights := fileRights
+		rights := fileRights | unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_EXECUTE
 		if unix.Fstat(pf, &st) == nil && st.Mode&unix.S_IFMT == unix.S_IFDIR {
-			rights = dirRights
+			rights = dirRights | fsRead
 		}
 		rule := pathBeneathAttr{access: rights, fd: int32(pf)}
 		_, _, errno := unix.Syscall6(unix.SYS_LANDLOCK_ADD_RULE, fd, ruleDir, uintptr(unsafe.Pointer(&rule)), 0, 0, 0)
@@ -312,11 +317,48 @@ func restrict(writable []string, network bool) error {
 			return fmt.Errorf("landlock rule for %s: %v", p, errno)
 		}
 	}
+	for _, p := range append(systemReadable(), readable...) {
+		if err := allowRead(fd, p); err != nil {
+			return err
+		}
+	}
 	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
 		return fmt.Errorf("no_new_privs: %v", err)
 	}
 	if _, _, errno := unix.Syscall(unix.SYS_LANDLOCK_RESTRICT_SELF, fd, 0, 0); errno != 0 {
 		return fmt.Errorf("landlock restrict: %v", errno)
+	}
+	return nil
+}
+
+// No home, /etc tree, /run, shared /tmp or other process's /proc is granted.
+// Symlinks are resolved before opening, so resolver configuration may live in
+// /run without granting the services and sockets alongside it.
+func systemReadable() []string {
+	return []string{"/bin", "/sbin", "/lib", "/lib64", "/usr/bin", "/usr/sbin", "/usr/lib", "/usr/lib64", "/usr/share", "/usr/local/bin", "/usr/local/lib", "/usr/local/go", "/etc/ld.so.cache", "/etc/alternatives", "/etc/ssl/certs", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf", "/etc/passwd", "/etc/group", "/etc/localtime", "/dev/urandom", "/dev/random", "/proc/self", "/proc/meminfo", "/proc/cpuinfo", "/sys/devices/system/cpu"}
+}
+
+func allowRead(fd uintptr, p string) error {
+	pf, err := unix.Open(p, unix.O_PATH|unix.O_CLOEXEC, 0)
+	if err != nil {
+		if errors.Is(err, unix.ENOENT) {
+			return nil
+		}
+		return fmt.Errorf("read grant %s: %w", p, err)
+	}
+	defer unix.Close(pf)
+	var st unix.Stat_t
+	if err := unix.Fstat(pf, &st); err != nil {
+		return err
+	}
+	rights := uint64(unix.LANDLOCK_ACCESS_FS_READ_FILE | unix.LANDLOCK_ACCESS_FS_EXECUTE)
+	if st.Mode&unix.S_IFMT == unix.S_IFDIR {
+		rights = fsRead
+	}
+	rule := pathBeneathAttr{access: rights, fd: int32(pf)}
+	_, _, errno := unix.Syscall6(unix.SYS_LANDLOCK_ADD_RULE, fd, ruleDir, uintptr(unsafe.Pointer(&rule)), 0, 0, 0)
+	if errno != 0 {
+		return fmt.Errorf("read grant %s: %v", p, errno)
 	}
 	return nil
 }
