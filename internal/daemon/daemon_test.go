@@ -1804,7 +1804,7 @@ func TestWorkingDirectories(t *testing.T) {
 	fm := &fakeModel{}
 	fm.steps = []func(model.Request) model.Response{
 		func(req model.Request) model.Response {
-			if !strings.Contains(req.System, "working directories, shared by every agent: "+work+", "+shared) {
+			if !strings.Contains(req.System, "task's granted working directories: "+work+", "+shared) {
 				t.Errorf("system prompt should list the channel's directories:\n%s", req.System)
 			}
 			return call("c1", "read", `{"path":"in.txt"}`) // inside the channel dir
@@ -1822,7 +1822,7 @@ func TestWorkingDirectories(t *testing.T) {
 			if last.IsError || !strings.Contains(last.Content, "s") {
 				t.Errorf("outside read after allow_always: %+v", last)
 			}
-			return call("c4", "agent", `{"action":"create","archetype":"general","label":"kid","task":"read the secret"}`)
+			return call("c4", "agent", `{"action":"create","archetype":"general","label":"kid","task":"read the secret","directories":["`+outside+`"]}`)
 		},
 		func(req model.Request) model.Response {
 			if last := req.Messages[len(req.Messages)-1].Blocks[0]; last.IsError {

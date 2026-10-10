@@ -52,11 +52,15 @@ var sandboxWorkspaceCredentials = []string{".secrets", ".ssh", ".aws", ".azure",
 // sandboxSpec is the boundary for the channel's commands under cfg, nil
 // when the sandbox is turned off.
 func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
+	return c.sandboxSpecDirs(cfg, c.dirPaths())
+}
+
+func (c *Channel) sandboxSpecDirs(cfg *config.Effective, scope []string) *sandbox.Spec {
 	if !cfg.Sandbox.Enabled {
 		return nil
 	}
 	spec := &sandbox.Spec{Network: cfg.Sandbox.Network}
-	for _, d := range c.dirPaths() {
+	for _, d := range scope {
 		d = tools.ResolvePath("", d)
 		spec.Writable = append(spec.Writable, d)
 		for _, ro := range sandboxReadOnly {
@@ -65,11 +69,11 @@ func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 	}
 	spec.ReadOnly = append(spec.ReadOnly, cfg.InstructionFiles...) // the nested ones too
 	dirs := append([]string(nil), spec.Writable...)
-	spec.Writable = append(spec.Writable, buildCaches()...)
+	spec.Caches = true
 	spec.Writable = append(spec.Writable, cfg.Sandbox.Writable...)
 	// The channel's scratch directory is TMPDIR, and replaces /tmp unless a
 	// working directory lives there (it would vanish under the mount).
-	tmp := filepath.Join(paths.CacheDir(), "tmp", c.ID)
+	tmp := c.ScratchDir()
 	if err := os.MkdirAll(tmp, 0o700); err == nil {
 		spec.Tmp, spec.PrivateTmp = tmp, !anyWithin(dirs, os.TempDir())
 	}
@@ -78,11 +82,14 @@ func (c *Channel) sandboxSpec(cfg *config.Effective) *sandbox.Spec {
 }
 
 func (c *Channel) roleSandboxSpec(cfg *config.Effective, readonly bool) *sandbox.Spec {
-	spec := c.sandboxSpec(cfg)
+	return c.roleSandboxSpecDirs(cfg, readonly, c.dirPaths())
+}
+
+func (c *Channel) roleSandboxSpecDirs(cfg *config.Effective, readonly bool, dirs []string) *sandbox.Spec {
+	spec := c.sandboxSpecDirs(cfg, dirs)
 	if spec == nil || !readonly {
 		return spec
 	}
-	dirs := c.dirPaths()
 	spec.Network = false
 	spec.Writable = slices.DeleteFunc(spec.Writable, func(path string) bool {
 		return slices.ContainsFunc(dirs, func(dir string) bool {
@@ -93,17 +100,6 @@ func (c *Channel) roleSandboxSpec(cfg *config.Effective, readonly bool) *sandbox
 		spec.ReadOnly = append(spec.ReadOnly, tools.ResolvePath("", dir))
 	}
 	return spec
-}
-
-// fileRoots are the directories the file tools open through a root
-// (tools.Env.Roots): the working set, the channel's sheets and its scratch
-// directory, resolved as the policy resolves them.
-func (c *Channel) fileRoots() []string {
-	var out []string
-	for _, d := range c.dirPaths() {
-		out = append(out, tools.ResolvePath("", d))
-	}
-	return append(out, tools.ResolvePath("", c.SheetDir()), tools.ResolvePath("", filepath.Join(paths.CacheDir(), "tmp", c.ID)))
 }
 
 // sandboxLevel is what bounds a channel's commands, as clients are told it.
@@ -200,7 +196,7 @@ func (c *Channel) hiddenFrom(sub policy.Subject, cfg *config.Effective) string {
 	for _, d := range c.dirPaths() {
 		dirs = append(dirs, tools.ResolvePath("", d))
 	}
-	own := []string{tools.ResolvePath("", c.SheetDir()), tools.ResolvePath("", filepath.Join(paths.CacheDir(), "tmp", c.ID))}
+	own := []string{tools.ResolvePath("", c.SheetDir()), tools.ResolvePath("", c.ScratchDir())}
 	for _, v := range sub.Values {
 		p := tools.ResolvePath(c.Dir(), v)
 		if slices.ContainsFunc(own, func(o string) bool { return pathx.Within(o, p) }) {
@@ -213,33 +209,6 @@ func (c *Channel) hiddenFrom(sub policy.Subject, cfg *config.Effective) string {
 		}
 	}
 	return ""
-}
-
-// buildCaches are the per-user directories build tools write as they work,
-// where they exist. Tool install directories (~/go/bin, ~/.cargo/bin) are
-// not among them: a command must not plant a program the user runs later.
-func buildCaches() []string {
-	home, _ := os.UserHomeDir()
-	cache, _ := os.UserCacheDir()
-	gopath := os.Getenv("GOPATH")
-	if gopath == "" {
-		gopath = filepath.Join(home, "go")
-	}
-	var out []string
-	for _, p := range []string{
-		cache, os.Getenv("GOCACHE"), os.Getenv("GOMODCACHE"), os.Getenv("GOTMPDIR"), filepath.Join(gopath, "pkg", "mod"),
-		filepath.Join(home, ".npm"), filepath.Join(home, ".cargo", "registry"), filepath.Join(home, ".cargo", "git"),
-		filepath.Join(home, ".m2", "repository"), filepath.Join(home, ".gradle", "caches"),
-		filepath.Join(home, ".local", "share", "pnpm", "store"), filepath.Join(home, ".bun", "install", "cache"),
-	} {
-		if p == "" {
-			continue
-		}
-		if st, err := os.Stat(p); err == nil && st.IsDir() {
-			out = append(out, p)
-		}
-	}
-	return out
 }
 
 // anyWithin reports whether any of paths is dir or lies beneath it.
