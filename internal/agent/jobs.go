@@ -27,10 +27,13 @@ type jobRun struct {
 }
 
 // jobsAPI is the tools.Jobs of one agent.
-type jobsAPI struct{ a *Agent }
+type jobsAPI struct {
+	a   *Agent
+	ctx context.Context
+}
 
 func (j jobsAPI) AdoptCommand(command string, job tools.Job, timeout time.Duration) (string, error) {
-	return j.a.adoptJob(command, job, timeout)
+	return j.a.adoptJob(j.ctx, command, job, timeout)
 }
 
 func (j jobsAPI) Stop(id string) error { return j.a.stopJob(id, "stopped by agent") }
@@ -43,9 +46,13 @@ func (j jobsAPI) Has(id string) bool {
 }
 
 // adoptJob takes over a running command as a background job.
-func (a *Agent) adoptJob(command string, job tools.Job, timeout time.Duration) (string, error) {
+func (a *Agent) adoptJob(turnCtx context.Context, command string, job tools.Job, timeout time.Duration) (string, error) {
 	s := a.c
 	s.mu.Lock()
+	if err := turnCtx.Err(); err != nil {
+		s.mu.Unlock()
+		return "", err
+	}
 	if st := a.state(); st.killed {
 		s.mu.Unlock()
 		return "", fmt.Errorf("agent %s is killed", st.name)
