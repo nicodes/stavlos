@@ -161,6 +161,8 @@ export function apply(v: ChannelView, e: WireEvent): void {
     case "mcp.failed":
     case "mcp.started":
     case "mcp.stopped":
+    case "model.call_started":
+    case "model.call_completed":
     case "permit.granted":
     case "todo.changed":
     case "tool.started":

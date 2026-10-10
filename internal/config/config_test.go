@@ -497,3 +497,18 @@ func TestReadOnlyRoleFlag(t *testing.T) {
 		t.Fatalf("read-only role: %+v %v", role, err)
 	}
 }
+
+func TestSharedBudgetsValidateAndCanBeDisabled(t *testing.T) {
+	for _, l := range []Limits{{MaxChannelCalls: -2}, {MaxChannelTokens: -2}, {MaxChannelCostUSD: -0.5}, {MaxChannelDuration: "bad"}, {MaxChannelDuration: "-1h"}} {
+		if err := (&Effective{}).applyChannelBudget(&l); err == nil {
+			t.Fatalf("invalid budget accepted: %+v", l)
+		}
+	}
+	e := &Effective{Limits: Limits{MaxChannelCalls: 400, MaxChannelTokens: 500, MaxChannelCostUSD: 2, MaxChannelDuration: "2h"}}
+	if err := e.applyChannelBudget(&Limits{MaxChannelCalls: -1, MaxChannelTokens: -1, MaxChannelCostUSD: -1, MaxChannelDuration: "0s"}); err != nil {
+		t.Fatal(err)
+	}
+	if e.Limits.MaxChannelCalls != 0 || e.Limits.MaxChannelTokens != 0 || e.Limits.MaxChannelCostUSD != 0 || e.Limits.MaxChannelDuration != "0s" {
+		t.Fatalf("limits not disabled: %+v", e.Limits)
+	}
+}
