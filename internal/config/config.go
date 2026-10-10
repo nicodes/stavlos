@@ -74,7 +74,11 @@ type Limits struct {
 	// MaxCallsPerTurn ends a turn that has made this many model calls: a
 	// turn that polls something every half minute never ends by itself, and
 	// every call carries the whole history. -1 for no cap.
-	MaxCallsPerTurn int `json:"maxCallsPerTurn,omitempty"`
+	MaxCallsPerTurn    int     `json:"maxCallsPerTurn,omitempty"`
+	MaxChannelCalls    int     `json:"maxChannelCalls,omitempty"`
+	MaxChannelTokens   int     `json:"maxChannelTokens,omitempty"`
+	MaxChannelCostUSD  float64 `json:"maxChannelCostUSD,omitempty"`
+	MaxChannelDuration string  `json:"maxChannelDuration,omitempty"`
 }
 
 type Escalation struct {
@@ -396,7 +400,7 @@ func Defaults() File {
 	return File{
 		RootAgent:        "general",
 		Mode:             protocol.ModeAsk,
-		Limits:           &Limits{MaxDepth: 3, MaxAgents: 6, MaxCallsPerTurn: 200},
+		Limits:           &Limits{MaxDepth: 3, MaxAgents: 6, MaxCallsPerTurn: 200, MaxChannelCalls: 400},
 		Escalation:       &Escalation{ClaimTimeout: "30s", AnswerTimeout: "3m", Default: string(policy.Deny)},
 		Compaction:       &Compaction{Threshold: 0.9, MaxTokens: 150_000, ClearTokens: 40_000, KeepTokens: 15_000, MaxToolOutput: "50kb"},
 		Reminders:        &on,
@@ -637,6 +641,9 @@ func (e *Effective) applyLimits(l *Limits) error {
 			return errors.New("limits.maxCallsPerTurn: at least 10, or -1 for no cap")
 		}
 		e.Limits.MaxCallsPerTurn = max(l.MaxCallsPerTurn, 0)
+	}
+	if err := e.applyChannelBudget(l); err != nil {
+		return err
 	}
 	if l.MaxAgents > 0 {
 		e.Limits.MaxAgents = l.MaxAgents
@@ -1186,4 +1193,27 @@ func setGlobalField(path []string, value []byte) error {
 		}
 		return out, nil
 	})
+}
+
+func (e *Effective) applyChannelBudget(l *Limits) error {
+	if l.MaxChannelCalls < -1 || l.MaxChannelTokens < -1 || (l.MaxChannelCostUSD < 0 && l.MaxChannelCostUSD != -1) {
+		return errors.New("channel budgets: positive values, or -1 to disable")
+	}
+	if l.MaxChannelCalls != 0 {
+		e.Limits.MaxChannelCalls = max(l.MaxChannelCalls, 0)
+	}
+	if l.MaxChannelTokens != 0 {
+		e.Limits.MaxChannelTokens = max(l.MaxChannelTokens, 0)
+	}
+	if l.MaxChannelCostUSD != 0 {
+		e.Limits.MaxChannelCostUSD = max(l.MaxChannelCostUSD, 0)
+	}
+	if l.MaxChannelDuration != "" {
+		duration, err := time.ParseDuration(l.MaxChannelDuration)
+		if err != nil || duration < 0 {
+			return errors.New("limits.maxChannelDuration must be a nonnegative duration")
+		}
+		e.Limits.MaxChannelDuration = l.MaxChannelDuration
+	}
+	return nil
 }

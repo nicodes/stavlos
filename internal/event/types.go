@@ -31,12 +31,14 @@ const (
 	InputQueued Type = "input.queued" // Input: something for the agent's model, waiting in its inbox
 	InputTaken  Type = "input.taken"  // InputTakenPayload: the inputs a model call consumed, in order
 
-	TurnStarted      Type = "turn.started"      // TurnPayload
-	AssistantMessage Type = "assistant.message" // AssistantMessagePayload
-	ToolStarted      Type = "tool.started"      // ToolStartedPayload
-	ToolFinished     Type = "tool.finished"     // ToolFinishedPayload
-	TurnEnded        Type = "turn.ended"        // TurnEndedPayload
-	TurnAborted      Type = "turn.aborted"      // TurnPayload: the turn was open when the daemon stopped
+	ModelCallStarted   Type = "model.call_started"   // ModelCallPayload: reserved under the shared channel budget
+	ModelCallCompleted Type = "model.call_completed" // ModelCallPayload: includes compaction and failed calls
+	TurnStarted        Type = "turn.started"         // TurnPayload
+	AssistantMessage   Type = "assistant.message"    // AssistantMessagePayload
+	ToolStarted        Type = "tool.started"         // ToolStartedPayload
+	ToolFinished       Type = "tool.finished"        // ToolFinishedPayload
+	TurnEnded          Type = "turn.ended"           // TurnEndedPayload
+	TurnAborted        Type = "turn.aborted"         // TurnPayload: the turn was open when the daemon stopped
 
 	AskRequested  Type = "ask.requested"  // AskRequestedPayload: a permission, question or trust prompt
 	AskResolved   Type = "ask.resolved"   // AskResolvedPayload
@@ -481,4 +483,12 @@ type SheetPayload struct {
 	Author string `json:"author,omitempty"` // the name of the agent that wrote this version
 	Hash   string `json:"hash,omitempty"`   // sha256 of the file, hex
 	Size   int    `json:"size,omitempty"`
+}
+
+// ModelCallPayload records budget work independently of conversation messages.
+// Reservations survive recovery, including calls interrupted before a response.
+type ModelCallPayload struct {
+	Purpose string      `json:"purpose"`
+	Usage   model.Usage `json:"usage,omitempty"`
+	CostUSD float64     `json:"cost_usd,omitempty"`
 }

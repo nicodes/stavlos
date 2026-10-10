@@ -36,6 +36,7 @@ func Explain() Report {
 			"Commands can read your credentials (~/.ssh, ~/.aws, ~/.config/gh, …) and Stavlos's own files: nothing is hidden from them.",
 			"Commands can edit the files that steer agents or run code later (.git/hooks, .stavlos, AGENTS.md); a change is reported in the result.",
 			"Commands share the system's /tmp and your runtime directory: a service there (D-Bus, systemd-run, tmux) can start a process for them outside the sandbox, so every command asks first.",
+			"No private network namespace: network-off cannot isolate UDP, DNS and all other protocols. Full confinement requires Landlock ABI 6 and user, mount and network namespaces.",
 		}
 		r.Fix = usernsFix()
 	case None:

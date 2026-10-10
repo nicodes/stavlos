@@ -182,3 +182,15 @@ func TestHelperRefusesABadSpecOrMissingSeparator(t *testing.T) {
 		t.Errorf("no program: %d %q", code, stderr)
 	}
 }
+
+func TestNetworkIsolationIsPartOfTheFullNamespaceBoundary(t *testing.T) {
+	for _, network := range []bool{true, false} {
+		flags := namespaceFlags(network)
+		if flags&syscall.CLONE_NEWUSER == 0 || flags&syscall.CLONE_NEWNS == 0 {
+			t.Fatal("filesystem isolation omitted")
+		}
+		if (flags&syscall.CLONE_NEWNET != 0) == network {
+			t.Fatal("network-off must isolate every network protocol")
+		}
+	}
+}

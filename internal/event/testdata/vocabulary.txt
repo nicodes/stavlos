@@ -43,6 +43,8 @@ Type job.stopped
 Type mcp.failed
 Type mcp.started
 Type mcp.stopped
+Type model.call_completed
+Type model.call_started
 Type permit.granted
 Type sheet.deleted
 Type sheet.written
