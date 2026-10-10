@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"syscall"
@@ -74,6 +75,13 @@ func helper() int {
 	case w.Tmp != "":
 		writable = append(writable, w.Tmp) // used where it is
 		env = setEnv(env, "TMPDIR", w.Tmp)
+	}
+	if w.Caches && w.Tmp != "" {
+		var err error
+		env, err = cacheEnv(w, env)
+		if err != nil {
+			return fail("private build cache: %v", err)
+		}
 	}
 	if err := restrict(writable, w.Network); err != nil {
 		return fail("%v", err)
@@ -311,4 +319,22 @@ func restrict(writable []string, network bool) error {
 		return fmt.Errorf("landlock restrict: %v", errno)
 	}
 	return nil
+}
+
+func cacheEnv(w wire, env []string) ([]string, error) {
+	base := w.Tmp
+	if w.Mounts && w.PrivateTmp {
+		base = "/tmp"
+	}
+	for key, tail := range map[string]string{
+		"XDG_CACHE_HOME": "xdg", "GOCACHE": "go-build", "GOMODCACHE": "go-mod", "GOPATH": "go",
+		"npm_config_cache": "npm", "CARGO_HOME": "cargo", "BUN_INSTALL_CACHE_DIR": "bun", "GRADLE_USER_HOME": "gradle",
+	} {
+		target := filepath.Join(base, "caches", tail)
+		if err := os.MkdirAll(target, 0700); err != nil {
+			return nil, err
+		}
+		env = setEnv(env, key, target)
+	}
+	return env, nil
 }

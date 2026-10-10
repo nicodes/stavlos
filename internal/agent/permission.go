@@ -12,7 +12,6 @@ import (
 	"github.com/nicodes/stavlos/internal/event"
 	"github.com/nicodes/stavlos/internal/instructions"
 	"github.com/nicodes/stavlos/internal/model"
-	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/pathx"
 	"github.com/nicodes/stavlos/internal/policy"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -192,10 +191,13 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	}
 	// The channel's sheets are part of the working set for the file tools
 	// (never for commands: the sandbox builds its own list).
-	dirs := append(a.c.dirPaths(), a.c.SheetDir())
-	control := controlFile(c.Name, sub, a.c.Dir(), dirs)
-	boundary := outsideDir(sub, a.c.Dir(), dirs)
+	dirs := append(a.dirPaths(), a.c.SheetDir())
+	control := controlFile(c.Name, sub, a.Dir(), dirs)
+	boundary := outsideDir(sub, a.Dir(), dirs)
 	hidden := a.c.hiddenFrom(sub, cfg)
+	if a.Parent != "" && (len(a.dirPaths()) == 0 || boundary != "") {
+		return decision{sub: sub, arg: arg, verb: policy.Deny, why: "This call is outside the agent's task directories. Delegate a new scoped task from the parent instead of widening a child."}
+	}
 	a.c.mu.Lock()
 	f := facts{
 		hidden:    hidden != "",
@@ -391,7 +393,7 @@ func (a *Agent) escalate(turnCtx context.Context, c model.Block, d decision, rv 
 	if d.boundary != "" && ans.Value != protocol.AnswerAllow {
 		dir := d.boundary
 		if strings.TrimSpace(ans.Dir) != "" {
-			dir = resolveDir(a.c.Dir(), ans.Dir) // the human edited the offered directory
+			dir = resolveDir(a.Dir(), ans.Dir) // the human edited the offered directory
 		}
 		_ = a.c.addDir(context.Background(), a.ID, dir, "human")
 	}
@@ -508,19 +510,19 @@ func (a *Agent) toolEnv(turn int, c model.Block, sub policy.Subject, rv roleView
 	if sub.Kind == policy.KindPath {
 		judged = map[string]string{}
 		for _, v := range sub.Values {
-			judged[v] = tools.ResolvePath(a.c.Dir(), v)
+			judged[v] = tools.ResolvePath(a.Dir(), v)
 		}
 	}
-	return &tools.Env{Dir: a.c.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Boards: boardAPI{a: a}, Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
-		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir(), Roots: a.c.fileRoots(), Judged: judged, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
-		Sandbox: a.c.roleSandboxSpec(cfg, rv.def.ReadOnly),
+	return &tools.Env{Dir: a.Dir(), Agent: a.ID, Skills: skills(cfg, rv), Boards: boardAPI{a: a}, Orch: orchestrator{c: a.c}, Jobs: jobsAPI{a: a}, Todo: a.todoAPIFor(rv), Ask: askAPI{a: a}, Sheets: sheetsAPI{a: a},
+		MaxOutput: cfg.Compaction.MaxToolOutput, Overflow: a.overflowDir(), Roots: a.fileRoots(), Judged: judged, Search: tools.SearchConfig{Provider: cfg.Search.Provider, APIKey: cfg.Search.APIKey}, PassEnv: cfg.PassEnv,
+		Sandbox: a.roleSandboxSpec(cfg, rv.def.ReadOnly),
 		Partial: func(out string) {
 			a.c.host.Stream(protocol.StreamNotification{Channel: a.c.ID, Agent: a.ID, Turn: turn, ToolName: c.Name, Text: out})
 		}}
 }
 
 // overflowDir is where a tool output over the cap is kept whole.
-func (a *Agent) overflowDir() string { return filepath.Join(paths.CacheDir(), "tmp", a.c.ID, "output") }
+func (a *Agent) overflowDir() string { return filepath.Join(a.c.ScratchDir(), "output") }
 
 func hasDef(defs []model.ToolDef, name string) bool {
 	for _, d := range defs {

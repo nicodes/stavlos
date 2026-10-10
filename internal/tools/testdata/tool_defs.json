@@ -17,6 +17,13 @@
           "description": "Required for create: role from your delegation instructions",
           "type": "string"
         },
+        "directories": {
+          "description": "For create: task directories already granted to you; defaults to your first directory",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "id": {
           "description": "Required for cancel: child name or id; optional for status (omit for the whole channel)",
           "type": "string"

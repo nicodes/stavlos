@@ -240,7 +240,7 @@ func (a *Agent) infoLocked() protocol.AgentInfo {
 	info := protocol.AgentInfo{
 		ID: a.ID, Channel: a.c.ID, Parent: a.Parent, Role: st.role, Name: st.name,
 		Model: st.model, Variant: st.variant, Depth: a.Depth, State: st.status(), Turn: st.turn,
-		Queued: len(st.inbox), CostUSD: st.cost, Tokens: st.tokens,
+		Directories: a.c.agentDirsLocked(a.ID), Queued: len(st.inbox), CostUSD: st.cost, Tokens: st.tokens,
 		Context: a.ctxTokens, ContextWindow: a.ctxWindow, LastError: st.lastError,
 		Awaiting: st.awaitingIDs(), Due: st.due(), Todos: append([]event.TodoItem(nil), st.todos...),
 		PendingReplies: st.pendingReplies(), AwaitingReplies: st.awaitingReplies(),

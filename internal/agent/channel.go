@@ -562,14 +562,14 @@ func fitVariant(p config.Role, offered []string, id, want string) string {
 // spawn creates and starts an agent; parentID is "" for the main agent. A
 // task becomes the child's first input, a request from its parent, logged
 // with the spawn in one transaction.
-func (c *Channel) spawn(ctx context.Context, parentID, role, label, task, modelArg string) (*Agent, error) {
+func (c *Channel) spawn(ctx context.Context, parentID, role, label, task, modelArg string, directories ...string) (*Agent, error) {
 	mk := c.readMarket(c.Config(), modelArg, c.Model()) // before the lock
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.spawnLocked(ctx, mk, parentID, role, label, task, modelArg)
+	return c.spawnLocked(ctx, mk, parentID, role, label, task, modelArg, directories...)
 }
 
-func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, label, task, modelArg string) (*Agent, error) {
+func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, label, task, modelArg string, directories ...string) (*Agent, error) {
 	if c.reconfiguring {
 		return nil, errors.New("a directory change is in progress")
 	}
@@ -599,6 +599,10 @@ func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, la
 	} else if !def.CanBePrimary() {
 		return nil, fmt.Errorf("role %q is subagent-only: it cannot be the main agent", role)
 	}
+	scope, err := c.childScopeLocked(parentID, directories)
+	if err != nil {
+		return nil, err
+	}
 	modelID, err := c.resolveModelLocked(mk, modelArg, def, parent)
 	if err != nil {
 		return nil, err
@@ -627,7 +631,7 @@ func (c *Channel) spawnLocked(ctx context.Context, mk market, parentID, role, la
 	}
 	a := newAgent(c, id, parentID, depth, parentCtx)
 	c.agents[id] = a
-	evs := []event.Event{c.event(id, event.AgentSpawned, event.AgentSpawnedPayload{ID: id, Parent: parentID, Role: role, Name: name, Model: modelID, Variant: variant, Depth: depth})}
+	evs := []event.Event{c.event(id, event.AgentSpawned, event.AgentSpawnedPayload{ID: id, Parent: parentID, Role: role, Name: name, Model: modelID, Variant: variant, Depth: depth, Directories: scope})}
 	if task != "" {
 		in := event.Input{ID: NewID("i"), Kind: event.InputPrompt, Text: task}
 		in.RequestID = in.ID
@@ -662,7 +666,7 @@ func (c *Channel) canSpawnLocked(p *agentState) (bool, string) {
 }
 
 // SpawnFromClient spawns on behalf of a human (PRD §9).
-func (c *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, task, modelArg string) (string, error) {
+func (c *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, task, modelArg string, directories ...string) (string, error) {
 	mk := c.readMarket(c.Config(), modelArg, c.Model()) // before the lock
 	c.mu.Lock()
 	p := c.st.agents[parentID]
@@ -674,7 +678,7 @@ func (c *Channel) SpawnFromClient(ctx context.Context, parentID, role, label, ta
 		c.mu.Unlock()
 		return "", errors.New(why)
 	}
-	a, err := c.spawnLocked(ctx, mk, parentID, role, label, task, modelArg)
+	a, err := c.spawnLocked(ctx, mk, parentID, role, label, task, modelArg, directories...)
 	c.mu.Unlock()
 	if err != nil {
 		return "", err
