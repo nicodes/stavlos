@@ -148,13 +148,14 @@ type ChatPayload struct {
 // --- agent ---
 
 type AgentSpawnedPayload struct {
-	ID      string `json:"id"`
-	Parent  string `json:"parent,omitempty"` // "" for the main agent
-	Role    string `json:"role"`
-	Name    string `json:"name"` // unique in the channel, never reused
-	Model   string `json:"model,omitempty"`
-	Variant string `json:"variant,omitempty"`
-	Depth   int    `json:"depth"`
+	Directories []string `json:"directories,omitempty"`
+	ID          string   `json:"id"`
+	Parent      string   `json:"parent,omitempty"` // "" for the main agent
+	Role        string   `json:"role"`
+	Name        string   `json:"name"` // unique in the channel, never reused
+	Model       string   `json:"model,omitempty"`
+	Variant     string   `json:"variant,omitempty"`
+	Depth       int      `json:"depth"`
 }
 
 // AgentUpdatedPayload carries only what changed.

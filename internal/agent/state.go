@@ -47,6 +47,7 @@ type agentState struct {
 	id, parent, role, name, model, variant string
 	depth                                  int
 	children                               []string
+	directories                            []string
 	killed                                 bool
 
 	// instructed is the instructions files a tool result has carried to the
@@ -213,7 +214,7 @@ func (cs *channelState) spawned(e event.Event) {
 		return
 	}
 	cs.agents[p.ID] = &agentState{
-		cs: cs, id: p.ID, parent: p.Parent, role: p.Role, name: p.Name, model: p.Model, variant: p.Variant, depth: p.Depth,
+		cs: cs, id: p.ID, parent: p.Parent, role: p.Role, name: p.Name, model: p.Model, variant: p.Variant, depth: p.Depth, directories: p.Directories,
 		jobs: map[string]event.JobStartedPayload{}, asks: map[string]bool{},
 		hist: project.NewBuilder(),
 	}

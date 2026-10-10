@@ -134,8 +134,12 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 		fail(fmt.Errorf("server %q has no command (remote servers are not supported yet)", name))
 		return
 	}
+	if a.Parent != "" && len(a.dirPaths()) == 0 {
+		fail(fmt.Errorf("agent task directories were revoked"))
+		return
+	}
 	cmd := exec.CommandContext(a.ctx, config.ExpandEnv(def.Command), expandAll(def.Args)...)
-	cmd.Dir = a.c.Dir()
+	cmd.Dir = a.Dir()
 	cmd.Env = proc.Env(cfg.PassEnv) // scrubbed like a shell command's; the definition's env: adds what the server needs
 	for k, v := range def.Env {
 		cmd.Env = append(cmd.Env, k+"="+config.ExpandEnv(v))
@@ -145,7 +149,7 @@ func (a *Agent) startMCP(ctx context.Context, cfg *config.Effective, name string
 		fail(fmt.Errorf("read-only MCP execution requires the full OS sandbox"))
 		return
 	}
-	if spec := a.c.roleSandboxSpec(cfg, readonly); spec != nil {
+	if spec := a.roleSandboxSpec(cfg, readonly); spec != nil {
 		if _, err := sandbox.Wrap(cmd, *spec); err != nil {
 			fail(fmt.Errorf("sandbox: %v", err))
 			return

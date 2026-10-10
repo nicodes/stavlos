@@ -36,6 +36,7 @@ type Spec struct {
 	Writable []string `json:"writable,omitempty"` // directories and files the process may change
 	ReadOnly []string `json:"readonly,omitempty"` // paths beneath Writable that stay read-only
 	Hidden   []string `json:"hidden,omitempty"`   // paths replaced by an empty directory or file
+	Caches   bool     `json:"caches,omitempty"`   // redirect build caches into this sandbox
 	Tmp      string   `json:"tmp,omitempty"`      // the command's scratch directory (TMPDIR), writable
 	// PrivateTmp mounts Tmp over /tmp as well, where the system can: the
 	// shared /tmp holds other programs' sockets (tmux, X11) and is never
