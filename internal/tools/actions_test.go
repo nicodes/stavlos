@@ -15,7 +15,7 @@ func TestMergedToolSurfaceAndInvalidActions(t *testing.T) {
 		names = append(names, name)
 	}
 	slices.Sort(names)
-	want := []string{"agent", "ask", "channel", "glob", "grep", "message", "patch", "read", "sheet", "shell", "skill", "todo", "web"}
+	want := []string{"agent", "ask", "channel", "glob", "grep", "message", "operator", "patch", "read", "sheet", "shell", "skill", "todo", "web"}
 	if !reflect.DeepEqual(names, want) {
 		t.Fatalf("tools %v", names)
 	}

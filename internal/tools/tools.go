@@ -220,7 +220,7 @@ func Builtin() Set {
 		shellTool{}, readTool{}, grepTool{}, globTool{}, patchTool{}, skillTool{},
 		agentTool{}, messageTool{}, channelTool{},
 		todoTool{}, askTool{}, sheetTool{},
-		webTool{},
+		webTool{}, operatorTool{},
 	} {
 		s[t.Def().Name] = t
 	}

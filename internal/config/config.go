@@ -425,6 +425,7 @@ func Defaults() File {
 			toolname.ApplyPatch: ask,
 			toolname.WebFetch:   ask, // per host: the dialog offers "allow <host> for this channel"
 			toolname.WebSearch:  ask, // allowed once a search backend is configured (see LoadGlobal)
+			toolname.Operator:   ask,
 		},
 	}
 }
@@ -890,7 +891,7 @@ type roleFile struct {
 
 // RoleTools are offered unless a role removes them. Every agent also gets
 // message, ask and agent status; create/cancel require a non-empty spawn list.
-var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.Todo, toolname.Web, toolname.Sheet}
+var RoleTools = []string{toolname.Shell, toolname.Read, toolname.Grep, toolname.Glob, toolname.ApplyPatch, toolname.Skill, toolname.Todo, toolname.Web, toolname.Sheet, toolname.Operator}
 
 // ReadRole parses one agents/<name>.md file.
 func ReadRole(path string) (Role, error) { return readRole(disk{}, path) }

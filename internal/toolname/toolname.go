@@ -25,6 +25,7 @@ const (
 	Todo       = "todo"
 	AskUser    = "ask"
 	Sheet      = "sheet"
+	Operator   = "operator"
 
 	Message = "message"
 	Agent   = "agent"

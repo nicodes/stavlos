@@ -161,7 +161,7 @@ You review.
 	if len(p.Models) != 3 || p.Models[0].ID != "openai/gpt-5.1-codex" || len(p.Models[0].Variants) != 2 || p.Models[2].ID != "xai/grok-4-fast" || p.Models[2].Variants != nil {
 		t.Fatalf("models %+v", p.Models)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,patch,skill,todo,web,sheet" { // everything but the removed fetch
+	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,patch,skill,todo,web,sheet,operator" { // everything but the removed fetch
 		t.Fatalf("tools %v", p.Tools)
 	}
 	pol := p.RolePolicy()
@@ -244,7 +244,7 @@ func TestExampleCoderRoleParses(t *testing.T) {
 	if p.Name != "coder" || p.Type != TypeAll || p.Color != "green" || len(p.Models) != 3 || p.DefaultVariant("openai/gpt-5.1-codex") != "medium" || strings.Join(p.Spawn, ",") != "general" {
 		t.Fatalf("%+v", p)
 	}
-	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,patch,skill,todo,web,sheet" || verb(p.RolePolicy(), "shell", "git push origin main") != policy.Deny || verb(p.RolePolicy(), "fetch", "https://x.slack.com/y") != policy.Deny {
+	if strings.Join(p.Tools, ",") != "shell,read,grep,glob,patch,skill,todo,web,sheet,operator" || verb(p.RolePolicy(), "shell", "git push origin main") != policy.Deny || verb(p.RolePolicy(), "fetch", "https://x.slack.com/y") != policy.Deny {
 		t.Fatalf("tools %v rules %+v", p.Tools, p.RolePolicy().Rules())
 	}
 }
@@ -393,7 +393,7 @@ func TestRoleToolsAreRemovedNotListed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(p.Tools, ","); got != "shell,read,grep,glob,skill,web,sheet" {
+	if got := strings.Join(p.Tools, ","); got != "shell,read,grep,glob,skill,web,sheet,operator" {
 		t.Fatalf("tools %s", got)
 	}
 	pol := p.RolePolicy()
