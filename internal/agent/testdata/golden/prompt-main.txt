@@ -34,7 +34,7 @@ Children run in the background. A child's response wakes you as a new message, n
 
 
 ## tools
-shell read grep glob patch skill todo web sheet message agent channel ask
+shell read grep glob patch skill todo web sheet operator message agent channel ask
 
 ## note on the request
 [harness state for this request]
