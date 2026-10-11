@@ -235,6 +235,52 @@
     }
   },
   {
+    "description": "Use one finite grant supplied by the protected fleet operator. The separate operator verifies caller identity, exact request, expiry and single-use state, and authenticates CI before a merge. A failed or interrupted request consumes its grant; inspect its outcome before requesting a new one. This tool cannot issue grants, execute commands or read credentials.",
+    "name": "operator",
+    "schema": {
+      "properties": {
+        "grant": {
+          "description": "32-character grant ID supplied by the protected operator",
+          "type": "string"
+        },
+        "head": {
+          "description": "Full reviewed PR head for merge",
+          "type": "string"
+        },
+        "host": {
+          "description": "Exact approved host for its sanitized read-only report",
+          "type": "string"
+        },
+        "operation": {
+          "description": "Exactly the operation granted",
+          "enum": [
+            "merge",
+            "delivery",
+            "host_report"
+          ],
+          "type": "string"
+        },
+        "pull_request": {
+          "description": "Reviewed PR number for merge",
+          "type": "integer"
+        },
+        "repository": {
+          "description": "Exact owner/repository for merge or delivery",
+          "type": "string"
+        },
+        "revision": {
+          "description": "Full merged revision for delivery status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "grant",
+        "operation"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "description": "Create, modify, delete, or move files with a patch in this exact format:\n\n*** Begin Patch\n*** Add File: relative/path.txt\n+every line of the new file, each prefixed with +\n*** Update File: relative/other.go\n@@ a line from the file that identifies where the change is (optional)\n unchanged context line (leading space)\n-line to remove\n+line to add\n*** Delete File: relative/old.txt\n*** End Patch\n\nRules: paths are relative to the working directory. Update hunks must include enough unchanged context (usually 3 lines above and below) to locate the change uniquely; there are no line numbers. Use \"*** Move to: newpath\" right after an Update File header to rename. Several files may appear in one patch; every change is checked before any file is written, then each file is written in one step and a failure midway is rolled back. A move keeps the file's permissions and refuses to overwrite an existing file. To replace a whole file, delete and re-add it in the same patch.",
     "name": "patch",
     "schema": {

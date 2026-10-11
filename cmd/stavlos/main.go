@@ -89,6 +89,7 @@ var subcommands = map[string]func(ctx context.Context, cmd string, args []string
 	"cancel":    cmdSend,
 	"kill":      cmdSend,
 	"plugin":    cmdPlugin,
+	"operator":  cmdOperator,
 	"help":      cmdHelp,
 	"-h":        cmdHelp,
 	"--help":    cmdHelp,
@@ -343,6 +344,7 @@ const usage = `usage:
   stavlos send|steer|cancel|kill <agent> [text]
   stavlos auth login [provider] | auth list | auth logout [provider]
   stavlos trust [dir] | init [--model p/m] | daemon
+  stavlos operator                       send a finite operator grant from stdin
   stavlos version | --version | help
 `
 
