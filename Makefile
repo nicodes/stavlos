@@ -7,7 +7,7 @@ help:
 	@echo 'make install: pinned toolchain and dependencies; make check: every existing gate and CLI build'
 install:
 	mise trust .mise.toml
-	mise install go node python actionlint shellcheck
+	mise install go node python actionlint shellcheck http:cicd-engineering
 	mise exec -- go mod download
 	mise exec -- npm --prefix web ci --no-audit --no-fund
 lint:
