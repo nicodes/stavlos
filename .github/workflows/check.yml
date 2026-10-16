@@ -43,6 +43,15 @@ jobs:
           path: .artifacts/fleet-integration.json
           if-no-files-found: error
           retention-days: 7
+      - name: Cache Go compilation
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: go-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.mise.toml', '**/go.mod', '**/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            go-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.mise.toml', '**/go.mod', '**/go.sum') }}-
       - name: "Ripgrep (the search tools use it when present)"
         run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
       - name: "Install"
