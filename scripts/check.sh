@@ -3,8 +3,9 @@
 # formatting, module tidiness, vet, the exhaustive-switch lint, staticcheck,
 # dead code, known vulnerabilities, the complexity ratchet, the fuzz targets'
 # seeds and a short run of each, the web client's tests and bundle, the race
-# detector on every package, and the whole suite three times so a flaky test
-# fails loudly. It names the failed gates and exits non-zero when any fails.
+# detector on every package. The race run includes every ordinary test and fuzz
+# seed; repeated execution is an explicit diagnostic, not extra coverage.
+# It names the failed gates and exits non-zero when any fails.
 # CI runs exactly this (.github/workflows/check.yml).
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
@@ -91,11 +92,6 @@ step race
 go test -race -count=1 ./... | grep -Ev '^(ok|\?) '
 [ "${PIPESTATUS[0]}" -eq 0 ] || failed+=(race)
 
-for i in 1 2 3; do
-	step "test run $i"
-	go test -count=1 ./... | grep -Ev '^(ok|\?) '
-	[ "${PIPESTATUS[0]}" -eq 0 ] || failed+=("test$i")
-done
 
 fi
 

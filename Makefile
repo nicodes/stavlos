@@ -32,3 +32,8 @@ dev stop:
 	@echo '$@: unsupported: interactive CLI requires caller-owned configuration and sessions'
 clean:
 	mise exec -- python3 -c 'import shutil; [shutil.rmtree(p, ignore_errors=True) for p in (".artifacts", "web/node_modules")]'
+
+# Optional flake diagnosis; the required race suite already runs these cases.
+.PHONY: test-stability
+test-stability:
+	mise exec -- go test -race -count=3 ./...
