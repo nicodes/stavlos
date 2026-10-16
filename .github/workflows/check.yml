@@ -1,6 +1,6 @@
 # The gate, run for every pull request and every push to main: exactly what
 # scripts/check.sh runs locally (docs/ground-up-refactor.md 0.4).
-name: "CI"
+name: "Build & Test"
 on:
   pull_request:
   push:
