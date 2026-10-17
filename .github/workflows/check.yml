@@ -18,6 +18,9 @@ jobs:
     steps:
       - name: "Check out source"
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
       - name: "Set up tools"
         uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
         with:
@@ -57,6 +60,7 @@ jobs:
       - name: "Install"
         run: make install
       - name: "Gate"
-        run: make check
         env:
+          BASE: ${{ github.event.pull_request.base.sha || github.sha }}
           GOFLAGS: -p=4
+        run: make verify-changed

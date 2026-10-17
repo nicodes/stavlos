@@ -4,6 +4,7 @@ SHELL := /bin/bash
 .NOTPARALLEL:
 .PHONY: help install lint test build check web dev stop clean
 help:
+	@echo 'make plan / verify-changed BASE=<commit>: explain / run affected checks'
 	@echo 'make install: pinned toolchain and dependencies; make check: every existing gate and CLI build'
 install:
 	mise trust .mise.toml
@@ -37,3 +38,11 @@ clean:
 .PHONY: test-stability
 test-stability:
 	mise exec -- go test -race -count=3 ./...
+
+# The caller owns affected-input rules; unknown and production inputs require the full gate.
+export BASE
+.PHONY: plan verify-changed
+plan:
+	@python3 "$$(python3 scripts/engineering-bootstrap.py)/helpers/verification-plan.py" --base "$$BASE"
+verify-changed:
+	@python3 "$$(python3 scripts/engineering-bootstrap.py)/helpers/verification-plan.py" --base "$$BASE" --output .artifacts/contract/verification-plan.json --run lint test build
