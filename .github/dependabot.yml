@@ -1,0 +1,201 @@
+version: 2
+updates:
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: 09:50
+    timezone: Etc/UTC
+  open-pull-requests-limit: 5
+  cooldown:
+    default-days: 3
+  groups:
+    routine-updates:
+      patterns:
+      - '*'
+      exclude-patterns:
+      - nicodes/tools/*
+      - nicodes/cicd/*
+      - nicodes/komizo-actions/*
+      - aviorstudio/gdam-actions/*
+      - '*clerk*'
+      - '*pocketbase*'
+      - '*crypto*'
+      - '*jsonwebtoken*'
+      - '*jose*'
+      - '*oauth*'
+      - '*openid*'
+      - '*passport*'
+      - '*bcrypt*'
+      - '*argon2*'
+      - '@noble/*'
+      - '*prisma*'
+      - '*drizzle*'
+      - '*migrate*'
+      - github.com/atotto/clipboard
+      - github.com/bwmarrin/discordgo
+      - github.com/charmbracelet/colorprofile
+      - github.com/charmbracelet/x/ansi
+      - github.com/charmbracelet/x/cellbuf
+      - github.com/charmbracelet/x/term
+      - github.com/clipperhouse/displaywidth
+      - github.com/erikgeiser/coninput
+      - github.com/fzipp/gocyclo
+      - github.com/google/jsonschema-go
+      - github.com/mattn/go-isatty
+      - github.com/mattn/go-localereader
+      - github.com/mattn/go-runewidth
+      - github.com/muesli/ansi
+      - github.com/muesli/cancelreader
+      - github.com/muesli/termenv
+      - github.com/nishanths/exhaustive
+      - github.com/remyoudompheng/bigfft
+      - github.com/rivo/uniseg
+      - github.com/segmentio/encoding
+      - github.com/xo/terminfo
+      - golang.org/x/crypto
+      - golang.org/x/exp/typeparams
+      - golang.org/x/mod
+      - golang.org/x/net
+      - golang.org/x/oauth2
+      - golang.org/x/sync
+      - golang.org/x/sys
+      - golang.org/x/telemetry
+      - golang.org/x/text
+      - golang.org/x/time
+      - golang.org/x/tools
+      - honnef.co/go/tools
+      update-types:
+      - minor
+      - patch
+    managed-releases:
+      patterns: &id001
+      - nicodes/tools/*
+      - nicodes/cicd/*
+      - nicodes/komizo-actions/*
+      - aviorstudio/gdam-actions/*
+      update-types:
+      - minor
+      - patch
+    security-fixes:
+      applies-to: security-updates
+      patterns:
+      - '*'
+      exclude-patterns:
+      - nicodes/tools/*
+      - nicodes/cicd/*
+      - nicodes/komizo-actions/*
+      - aviorstudio/gdam-actions/*
+      - '*clerk*'
+      - '*pocketbase*'
+      - '*crypto*'
+      - '*jsonwebtoken*'
+      - '*jose*'
+      - '*oauth*'
+      - '*openid*'
+      - '*passport*'
+      - '*bcrypt*'
+      - '*argon2*'
+      - '@noble/*'
+      - '*prisma*'
+      - '*drizzle*'
+      - '*migrate*'
+- package-ecosystem: gomod
+  directories:
+  - /
+  schedule:
+    interval: weekly
+    day: monday
+    time: 09:50
+    timezone: Etc/UTC
+  open-pull-requests-limit: 5
+  cooldown:
+    default-days: 3
+  groups:
+    routine-updates:
+      patterns:
+      - '*'
+      exclude-patterns:
+      - nicodes/tools/*
+      - nicodes/cicd/*
+      - nicodes/komizo-actions/*
+      - aviorstudio/gdam-actions/*
+      - '*clerk*'
+      - '*pocketbase*'
+      - '*crypto*'
+      - '*jsonwebtoken*'
+      - '*jose*'
+      - '*oauth*'
+      - '*openid*'
+      - '*passport*'
+      - '*bcrypt*'
+      - '*argon2*'
+      - '@noble/*'
+      - '*prisma*'
+      - '*drizzle*'
+      - '*migrate*'
+      - github.com/atotto/clipboard
+      - github.com/bwmarrin/discordgo
+      - github.com/charmbracelet/colorprofile
+      - github.com/charmbracelet/x/ansi
+      - github.com/charmbracelet/x/cellbuf
+      - github.com/charmbracelet/x/term
+      - github.com/clipperhouse/displaywidth
+      - github.com/erikgeiser/coninput
+      - github.com/fzipp/gocyclo
+      - github.com/google/jsonschema-go
+      - github.com/mattn/go-isatty
+      - github.com/mattn/go-localereader
+      - github.com/mattn/go-runewidth
+      - github.com/muesli/ansi
+      - github.com/muesli/cancelreader
+      - github.com/muesli/termenv
+      - github.com/nishanths/exhaustive
+      - github.com/remyoudompheng/bigfft
+      - github.com/rivo/uniseg
+      - github.com/segmentio/encoding
+      - github.com/xo/terminfo
+      - golang.org/x/crypto
+      - golang.org/x/exp/typeparams
+      - golang.org/x/mod
+      - golang.org/x/net
+      - golang.org/x/oauth2
+      - golang.org/x/sync
+      - golang.org/x/sys
+      - golang.org/x/telemetry
+      - golang.org/x/text
+      - golang.org/x/time
+      - golang.org/x/tools
+      - honnef.co/go/tools
+      update-types:
+      - minor
+      - patch
+    managed-releases:
+      patterns: *id001
+      update-types:
+      - minor
+      - patch
+    security-fixes:
+      applies-to: security-updates
+      patterns:
+      - '*'
+      exclude-patterns:
+      - nicodes/tools/*
+      - nicodes/cicd/*
+      - nicodes/komizo-actions/*
+      - aviorstudio/gdam-actions/*
+      - '*clerk*'
+      - '*pocketbase*'
+      - '*crypto*'
+      - '*jsonwebtoken*'
+      - '*jose*'
+      - '*oauth*'
+      - '*openid*'
+      - '*passport*'
+      - '*bcrypt*'
+      - '*argon2*'
+      - '@noble/*'
+      - '*prisma*'
+      - '*drizzle*'
+      - '*migrate*'
