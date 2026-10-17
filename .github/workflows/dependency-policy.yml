@@ -1,0 +1,25 @@
+name: Dependency Policy
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_run:
+    workflows: ["Build & Test"]
+    types: [completed]
+  workflow_dispatch:
+  schedule:
+    - cron: '50 6 * * *'
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+  checks: read
+  statuses: read
+concurrency:
+  group: dependency-policy
+  cancel-in-progress: false
+jobs:
+  auto-merge:
+    name: Apply dependency policy
+    uses: nicodes/tools/.github/workflows/dependency-merge.yml@ca747e13a51f301f51635c262d883d57d6084ae3 # v0.27.1
+    with:
+      runner: ubuntu-24.04
