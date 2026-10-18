@@ -66,6 +66,10 @@ updates:
       - golang.org/x/time
       - golang.org/x/tools
       - honnef.co/go/tools
+      - modernc.org/sqlite
+      - github.com/jackc/pgx/*
+      - github.com/go-sql-driver/mysql
+      - go.mongodb.org/mongo-driver/*
       update-types:
       - minor
       - patch
@@ -101,6 +105,10 @@ updates:
       - '*prisma*'
       - '*drizzle*'
       - '*migrate*'
+      - modernc.org/sqlite
+      - github.com/jackc/pgx/*
+      - github.com/go-sql-driver/mysql
+      - go.mongodb.org/mongo-driver/*
 - package-ecosystem: gomod
   directories:
   - /
@@ -168,6 +176,10 @@ updates:
       - golang.org/x/time
       - golang.org/x/tools
       - honnef.co/go/tools
+      - modernc.org/sqlite
+      - github.com/jackc/pgx/*
+      - github.com/go-sql-driver/mysql
+      - go.mongodb.org/mongo-driver/*
       update-types:
       - minor
       - patch
@@ -203,3 +215,7 @@ updates:
       - '*prisma*'
       - '*drizzle*'
       - '*migrate*'
+      - modernc.org/sqlite
+      - github.com/jackc/pgx/*
+      - github.com/go-sql-driver/mysql
+      - go.mongodb.org/mongo-driver/*
