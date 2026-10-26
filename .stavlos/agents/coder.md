@@ -8,7 +8,7 @@ type: all
 
 # The models good enough for this role, in the order it prefers them. The
 # harness chooses among them by their plans' usage and moves the agent to the
-# next when one runs out (docs/model-selection.md); no agent names a model.
+# next when one runs out; no agent names a model.
 # Omit the key to choose from "models" in stavlos.json instead.
 models:
   - id: openai/gpt-5.1-codex

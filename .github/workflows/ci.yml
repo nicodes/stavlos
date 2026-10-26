@@ -1,0 +1,60 @@
+name: Build & Test
+'on':
+  pull_request:
+    types:
+    - opened
+    - synchronize
+    - reopened
+    - ready_for_review
+  push:
+    branches:
+    - main
+  workflow_dispatch: null
+permissions:
+  contents: read
+  attestations: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  ci:
+    name: Test
+    runs-on: ubuntu-24.04
+    env:
+      MISE_GITHUB_TOKEN: ${{ github.token }}
+    timeout-minutes: 45
+    steps:
+    - name: Check out source
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      with:
+        persist-credentials: false
+        fetch-depth: 0
+    - name: Set up locked Komizo
+      uses: nicodes/komizo/setup@c5f5ce398dcae5c7b3f8157e8331e7fcdf0c9e03
+      env:
+        GH_TOKEN: ${{ github.token }}
+      timeout-minutes: 5
+    - name: Install search utility
+      run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep
+    - name: Record tested integration identity
+      if: github.event_name == 'pull_request'
+      env:
+        EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+      run: |
+        komizo exec --tools python -- bash -euo pipefail <<'KOMIZO_COMMAND'
+        python3 "$CICD_ENGINEERING/helpers/integration-identity.py"
+        KOMIZO_COMMAND
+    - name: Upload artifacts
+      if: github.event_name == 'pull_request'
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+      with:
+        name: fleet-integration-${{ github.run_id }}-${{ github.run_attempt }}
+        path: .artifacts/fleet-integration.json
+        if-no-files-found: error
+        retention-days: 7
+        include-hidden-files: true
+    - name: Check project
+      uses: nicodes/komizo/run@c5f5ce398dcae5c7b3f8157e8331e7fcdf0c9e03
+      with:
+        target: check
+        base: ${{ github.event.pull_request.base.sha || github.sha }}
