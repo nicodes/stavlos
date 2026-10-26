@@ -1,4 +1,4 @@
-// Package statefile writes the small files Stavlos keeps beside its event
+// Package statefile writes the small files stavlos keeps beside its event
 // log and in its configuration directory. There was a hand-written
 // temp-and-rename in nine places, three plain os.WriteFile calls that could
 // leave half a file, and none of them synced; this is the one way.

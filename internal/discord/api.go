@@ -1,4 +1,4 @@
-// Package discord bridges Stavlos channels to Discord. The daemon is reached
+// Package discord bridges stavlos channels to Discord. The daemon is reached
 // only through its public socket protocol; Discord I/O lives behind API.
 package discord
 

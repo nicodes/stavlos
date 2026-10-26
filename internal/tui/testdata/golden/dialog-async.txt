@@ -1,4 +1,4 @@
-Stavlos                      ⚙  │ › @user: find out why the build is slow                                  16m
+stavlos                      ⚙  │ › @user: find out why the build is slow                                  16m
                                 │ § Aside I'll time the build first.                                       15m
 System               2k · $0.25 │ $ Shell  go build -x ./... 2>&1 | tail -5                                14m
 @main                1k · $0.20 │ ✗ Shell (by policy)  rm -rf ~/.cache/go-build                            11m

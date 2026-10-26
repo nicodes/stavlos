@@ -75,7 +75,7 @@ func (r *Registry) lookup(full string) (model.Provider, string, error) {
 	}
 	s, known := subscriptionByID(name)
 	if !known {
-		return nil, "", fmt.Errorf("unknown provider %q: Stavlos supports %s; run /provider", name, supported())
+		return nil, "", fmt.Errorf("unknown provider %q: stavlos supports %s; run /provider", name, supported())
 	}
 	if _, ok := r.credential(name); !ok {
 		return nil, "", fmt.Errorf("%s is not connected: run /provider to sign in with your %s subscription", s.name, s.name)

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Dirs are a test's own Stavlos directories.
+// Dirs are a test's own stavlos directories.
 type Dirs struct{ Config, Data, Cache, Socket string }
 
 // Isolate gives a test its own config, data and cache directories and socket

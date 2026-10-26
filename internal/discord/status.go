@@ -12,7 +12,7 @@ import (
 
 func applicationCommands() []*dg.ApplicationCommand {
 	return []*dg.ApplicationCommand{
-		{Name: "status", Description: "Show this channel's Stavlos agents", Options: []*dg.ApplicationCommandOption{
+		{Name: "status", Description: "Show this channel's stavlos agents", Options: []*dg.ApplicationCommandOption{
 			{Type: dg.ApplicationCommandOptionSubCommand, Name: "active", Description: "Show non-idle agents"},
 			{Type: dg.ApplicationCommandOptionSubCommand, Name: "all", Description: "Show all agents, including idle agents"},
 		}},

@@ -36,7 +36,7 @@ export function SheetFrame(props: { channel: string; sheet: SheetInfo }) {
     <div class="flex min-h-0 flex-1 flex-col">
       <div class="flex items-center gap-2 border-b border-line bg-panel px-4 py-1 text-dim">
         <span>
-          written by <span class="text-text">@{props.sheet.author || "an agent"}</span> · a page from an agent, not from Stavlos: never type a password or key into it
+          written by <span class="text-text">@{props.sheet.author || "an agent"}</span> · a page from an agent, not from stavlos: never type a password or key into it
         </span>
       </div>
       <Show when={token()}>
