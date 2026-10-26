@@ -382,7 +382,7 @@ func initConfig(args []string) error {
 	fmt.Println("wrote", p)
 	fmt.Println(`next:
   - run stavlos in a project directory, then /providers to sign in and /models to pick a model (or run stavlos auth login now)
-  - add agent definitions as agents/<name>.md next to stavlos.json (docs/stavlos-prd.md §10.3)
+  - add agent definitions as agents/<name>.md next to stavlos.json (see README.md)
   - directories every channel may work in besides its own: "dirs": ["~/Work/shared"]
   - for search on your own quota, add "search": {"provider": "brave", "apiKey": "${env:BRAVE_API_KEY}"}
   - commands run without credential-looking variables; list what a build needs under "env": {"pass": ["GITHUB_TOKEN"]}`)
