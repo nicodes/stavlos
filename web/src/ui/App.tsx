@@ -14,7 +14,7 @@ export function App(props: { client: Client }) {
   const channel = () => state.app.channels.find((c) => c.id === state.app.current);
   const title = () => {
     const c = channel();
-    if (!c) return "Stavlos";
+    if (!c) return "stavlos";
     return state.app.chat === CHAT ? `#${c.name}` : `#${c.name} · @${state.names[state.app.chat] ?? "agent"}`;
   };
 

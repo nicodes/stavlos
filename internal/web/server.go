@@ -376,7 +376,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /", s.asset)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !s.hostAllowed(r.Host) {
-			http.Error(w, "this name is not one the Stavlos web UI answers to; list it under web.hosts in stavlos.json", http.StatusMisdirectedRequest)
+			http.Error(w, "this name is not one the stavlos web UI answers to; list it under web.hosts in stavlos.json", http.StatusMisdirectedRequest)
 			return
 		}
 		h := w.Header()
@@ -411,7 +411,7 @@ func (s *Server) sessionPost(w http.ResponseWriter, r *http.Request) {
 	}
 	token, pageKey, ok := s.redeem(body.Code)
 	if !ok {
-		http.Error(w, "that code is wrong, used or expired; open the web UI from Stavlos again", http.StatusUnauthorized)
+		http.Error(w, "that code is wrong, used or expired; open the web UI from stavlos again", http.StatusUnauthorized)
 		return
 	}
 	http.SetCookie(w, &http.Cookie{

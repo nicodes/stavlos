@@ -1,4 +1,4 @@
-// Package registry serves the providers Stavlos supports, each through the
+// Package registry serves the providers stavlos supports, each through the
 // user's own subscription rather than a platform API key (PRD §8.4):
 //
 //   - openai: ChatGPT Plus/Pro, via the Codex sign-in and backend

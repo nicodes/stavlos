@@ -7,7 +7,7 @@ import (
 
 // TestParseKeepsOnlyWhatStavlosServes: with keep, other providers are
 // neither decoded nor kept, and the encoded catalog parses back to the same
-// metadata without them or the fields Stavlos does not read.
+// metadata without them or the fields stavlos does not read.
 func TestParseKeepsOnlyWhatStavlosServes(t *testing.T) {
 	doc := `{
 		"openai": {"id": "openai", "env": ["OPENAI_API_KEY"], "models": {"gpt-5": {"id": "gpt-5", "name": "GPT-5", "attachment": true, "limit": {"context": 400000, "output": 128000}, "cost": {"input": 1.25, "output": 10}}}},

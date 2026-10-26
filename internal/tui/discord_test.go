@@ -13,12 +13,12 @@ func TestDiscordPanelAndControls(t *testing.T) {
 	if cmd := m.openDiscord(""); cmd == nil || m.ov == nil || m.ov.kind != ovDiscord {
 		t.Fatal("Discord panel did not open")
 	}
-	st := protocol.DiscordStatus{Configured: true, Enabled: true, State: "connected", Bot: "Stavlos", GuildName: "My Server", Channels: 5}
+	st := protocol.DiscordStatus{Configured: true, Enabled: true, State: "connected", Bot: "stavlos", GuildName: "My Server", Channels: 5}
 	if cmd := m.onDiscord(discordMsg{status: st, epoch: m.discordEpoch}); cmd == nil {
 		t.Fatal("status polling not scheduled")
 	}
 	view := stripANSI(m.ov.view(100, ""))
-	for _, want := range []string{"connected", "Stavlos", "My Server", "Bridged channels: 5", "Automatic connection: on", "Disconnect"} {
+	for _, want := range []string{"connected", "stavlos", "My Server", "Bridged channels: 5", "Automatic connection: on", "Disconnect"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("panel lacks %q:\n%s", want, view)
 		}

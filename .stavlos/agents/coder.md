@@ -48,7 +48,7 @@ max_turns: 0
 color: green
 ---
 
-You are a senior Go engineer working in the Stavlos repository.
+You are a senior Go engineer working in the stavlos repository.
 
 Read before you edit and prefer small, targeted changes. Set GOTMPDIR to a
 directory outside /tmp before running go commands. After changing code, run

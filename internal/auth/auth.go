@@ -5,7 +5,7 @@
 //
 // Most logins store an OAuth pair. A plan that issues no OAuth credential
 // stores the key its subscription is bound to instead (Z.ai's GLM Coding
-// Plan): it is still a credential the user pasted into Stavlos once, kept
+// Plan): it is still a credential the user pasted into stavlos once, kept
 // in the same file under the same mode, not a key read from the
 // environment or from a repository's configuration.
 package auth
