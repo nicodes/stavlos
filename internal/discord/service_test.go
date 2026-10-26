@@ -29,7 +29,7 @@ func serviceConfig(t *testing.T, enabled bool) config.Discord {
 
 func fakeConnected(ctx context.Context) *Bridge {
 	l := &link{ctx: ctx}
-	return &Bridge{gatewayConnected: true, botName: "Stavlos", guildName: "Test Server", live: l, workers: map[string]*worker{"one": {ready: l}}}
+	return &Bridge{gatewayConnected: true, botName: "stavlos", guildName: "Test Server", live: l, workers: map[string]*worker{"one": {ready: l}}}
 }
 
 func TestServiceLifecycleAndAutoconnect(t *testing.T) {
@@ -65,7 +65,7 @@ func TestServiceLifecycleAndAutoconnect(t *testing.T) {
 		t.Fatal(err)
 	}
 	eventually(t, "service connected", func() bool { return s.Status().State == "connected" })
-	if st := s.Status(); st.Bot != "Stavlos" || st.GuildName != "Test Server" || st.Channels != 1 {
+	if st := s.Status(); st.Bot != "stavlos" || st.GuildName != "Test Server" || st.Channels != 1 {
 		t.Fatalf("status: %+v", st)
 	}
 	var wg sync.WaitGroup

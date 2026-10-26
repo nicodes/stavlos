@@ -18,7 +18,7 @@ import (
 func (r *Registry) Flow(provider string) (oauth.Flow, error) {
 	f, ok := r.flows[provider]
 	if !ok {
-		return nil, fmt.Errorf("unknown provider %q: Stavlos supports %s", provider, supported())
+		return nil, fmt.Errorf("unknown provider %q: stavlos supports %s", provider, supported())
 	}
 	return f, nil
 }

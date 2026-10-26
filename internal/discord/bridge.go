@@ -46,7 +46,7 @@ type Bridge struct {
 	store                               *promptStore
 	mu                                  sync.RWMutex
 	live                                *link
-	workers                             map[string]*worker // Stavlos ID
+	workers                             map[string]*worker // stavlos ID
 	byDiscord                           map[string]*worker
 	wg                                  sync.WaitGroup
 	gatewayConnected                    bool
@@ -306,7 +306,7 @@ func channelMarkers(channels []*dg.Channel, category string) (map[string]*dg.Cha
 				continue
 			}
 			if marked {
-				return nil, fmt.Errorf("discord channel %s has multiple Stavlos markers", ch.ID)
+				return nil, fmt.Errorf("discord channel %s has multiple stavlos markers", ch.ID)
 			}
 			marked = true
 			if out[id] != nil {
@@ -386,7 +386,7 @@ func (b *Bridge) disablePrompts(ctx context.Context) {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	for _, p := range b.store.snapshot() {
-		_ = b.editPrompt(ctx, p, "Stavlos disconnected — waiting to reconcile this prompt.", nil)
+		_ = b.editPrompt(ctx, p, "stavlos disconnected — waiting to reconcile this prompt.", nil)
 	}
 }
 func (b *Bridge) retireUnmapped(ctx context.Context) error {
@@ -437,7 +437,7 @@ func (b *Bridge) Message(m *dg.MessageCreate) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	_, _ = b.api.Send(ctx, m.ChannelID, "", "Stavlos is offline or busy; this task was not queued. Please try again when connected.", nil)
+	_, _ = b.api.Send(ctx, m.ChannelID, "", "stavlos is offline or busy; this task was not queued. Please try again when connected.", nil)
 }
 
 // Interaction acknowledges within Discord's deadline, before queuing RPC or
@@ -452,7 +452,7 @@ func (b *Bridge) Interaction(ic *dg.InteractionCreate) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2500*time.Millisecond)
 	defer cancel()
 	if w == nil || l == nil {
-		_ = b.api.Respond(ctx, i, ephemeral("Not authorized here, or Stavlos is offline."))
+		_ = b.api.Respond(ctx, i, ephemeral("Not authorized here, or stavlos is offline."))
 		return
 	}
 	if r := modalResponse(i); r != nil {

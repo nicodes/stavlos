@@ -1,4 +1,4 @@
-// Package oauth implements the subscription logins Stavlos supports:
+// Package oauth implements the subscription logins stavlos supports:
 // ChatGPT Plus/Pro (via the Codex sign-in), SuperGrok (via the Grok CLI
 // sign-in), the Z.ai GLM Coding Plan and Kimi For Coding. The first two are device-code
 // flows using the official CLIs' public client ids, the same mechanism

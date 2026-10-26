@@ -46,7 +46,7 @@ type rawCost struct {
 
 // Parse decodes a models.dev api.json document. With keep, only those
 // providers are decoded and kept: the database lists every provider there
-// is (megabytes of it), and Stavlos serves a few.
+// is (megabytes of it), and stavlos serves a few.
 func Parse(data []byte, keep ...string) (*Catalog, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
@@ -70,7 +70,7 @@ func Parse(data []byte, keep ...string) (*Catalog, error) {
 }
 
 // encode is the catalog as a models.dev document holding only what it kept:
-// its providers, and the fields Stavlos reads.
+// its providers, and the fields stavlos reads.
 func (c *Catalog) encode() ([]byte, error) { return json.Marshal(c.providers) }
 
 // Model returns metadata for a bare model id under a provider.

@@ -11,9 +11,9 @@ export function SignIn(props: { error: string; onCode: (code: string) => void })
           if (code().trim()) props.onCode(code().trim());
         }}
       >
-        <h1 class="text-lg font-bold text-accent">Stavlos</h1>
+        <h1 class="text-lg font-bold text-accent">stavlos</h1>
         <p class="text-dim">
-          This browser is not signed in. In the Stavlos terminal run <span class="text-text">/web open</span>, or paste the code from its link here.
+          This browser is not signed in. In the stavlos terminal run <span class="text-text">/web open</span>, or paste the code from its link here.
         </p>
         <input
           class="w-full rounded border border-line bg-panel px-3 py-2 uppercase tracking-widest outline-none focus:border-accent"

@@ -370,13 +370,13 @@ func TestQuestionsCombineSelectionsAndText(t *testing.T) {
 	})
 	d := newDraft(p)
 	d.selected[0][0], d.selected[0][1] = true, true
-	d.text[0], d.text[1] = "Three", "Stavlos"
+	d.text[0], d.text[1] = "Three", "stavlos"
 	w.drafts["q"] = d
 	_, _, err := w.interact(context.Background(), interaction("q", "submit"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(reply.Answers, ";") != "One, Two, Three;Stavlos" {
+	if strings.Join(reply.Answers, ";") != "One, Two, Three;stavlos" {
 		t.Fatalf("%+v", reply)
 	}
 	if strings.Join(methods, ";") != "prompt.list;prompt.claim;prompt.reply" {

@@ -44,7 +44,7 @@ type navRow struct {
 
 // navHeader is the header's rows, in order:
 //
-//	Stavlos                       ⚙
+//	stavlos                       ⚙
 //
 //	System               2k · $0.25
 //	@main                1k · $0.20
@@ -65,7 +65,7 @@ type navRow struct {
 func (m Model) navHeader(width int) []navRow {
 	blank := navRow{id: navBlank}
 	rows := []navRow{
-		{id: navTitle, text: theme.StyleAccent.Bold(true).Render("Stavlos") + strings.Repeat(" ", max(1, width-len("Stavlos")-2)) + theme.StyleDim.Render(channelGear+" ")},
+		{id: navTitle, text: theme.StyleAccent.Bold(true).Render("stavlos") + strings.Repeat(" ", max(1, width-len("stavlos")-2)) + theme.StyleDim.Render(channelGear+" ")},
 		blank,
 		{id: navSystem, text: m.navUsageRow(navSystem, width)},
 		{id: navSelected, text: m.navUsageRow(navSelected, width)},

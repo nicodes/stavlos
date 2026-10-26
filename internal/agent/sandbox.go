@@ -160,7 +160,7 @@ func unsandboxed(cfg *config.Effective) bool {
 // cannot hold.
 func bareWhy(cfg *config.Effective) string {
 	if sandboxLevel(cfg) == "limited" {
-		return "the sandbox on this system hides nothing: the command can reach your session's services and Stavlos's socket"
+		return "the sandbox on this system hides nothing: the command can reach your session's services and stavlos's socket"
 	}
 	return "no sandbox on this system: the command runs with your full access"
 }

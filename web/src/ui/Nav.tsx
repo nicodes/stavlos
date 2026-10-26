@@ -19,7 +19,7 @@ export function Nav(props: { state: ViewState; client: Client; onPick: () => voi
   return (
     <nav class="flex h-full flex-col overflow-y-auto p-3">
       <div class="mb-3 flex items-center justify-between">
-        <span class="font-bold text-accent">Stavlos</span>
+        <span class="font-bold text-accent">stavlos</span>
         <button class="text-dim hover:text-text" onClick={() => props.client.signOut()}>
           sign out
         </button>

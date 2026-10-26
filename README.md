@@ -1,6 +1,6 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 335044716b2d4fa31dcafe5f6a449331db3d5bb77716e93e7e212604f9303b46 -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: d271e9f6b03895208ba3190bbcd1869637f214e25304595fccb1fd904d9f3aad -->
 
-# Stavlos
+# stavlos
 
 A Go agent harness with a terminal UI.
 
@@ -20,4 +20,4 @@ Project configuration lives in `.stavlos/stavlos.json`. Agent definitions are Ma
 
 ## Repository development
 
-Install the [Komizo release](https://github.com/nicodes/komizo#install) matching `komizo.lock`. Run `komizo check` for the full verification gate and `komizo check --explain` to inspect the selected checks. `komizo run build` compiles the declared artifacts. Interactive product sessions use the CLI directly.
+Install the [komizo release](https://github.com/nicodes/komizo#install) matching `komizo.lock`. Run `komizo check` for the full verification gate and `komizo check --explain` to inspect the selected checks. `komizo run build` compiles the declared artifacts. Interactive product sessions use the CLI directly.
