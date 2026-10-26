@@ -98,7 +98,7 @@ fi
 if [[ "$group" == all || "$group" == test || "$group" == build ]]; then
 	step "web dependencies"
 	if ! command -v npm >/dev/null; then
-		echo "npm is required: run make install" >&2
+		echo "npm is required: run komizo run install" >&2
 		failed+=(npm-missing)
 	elif [[ ! -d web/node_modules ]]; then
 		(cd web && npm ci --no-audit --no-fund) || failed+=(web-install)
@@ -121,8 +121,8 @@ if [[ "$group" == all || "$group" == test || "$group" == build ]]; then
 fi
 if [[ "$group" == all || "$group" == build ]]; then
 	step "CLI build"
-	mkdir -p .artifacts/bin
-	go build -o .artifacts/bin/stavlos ./cmd/stavlos || failed+=(cli-build)
+	mkdir -p .artifacts/build
+	go build -o .artifacts/build/app ./cmd/stavlos || failed+=(cli-build)
 fi
 
 if [ ${#failed[@]} -gt 0 ]; then
