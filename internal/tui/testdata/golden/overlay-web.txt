@@ -1,4 +1,4 @@
-Stavlos                      ⚙  │ › find out why the build is slow                                         19m
+stavlos                      ⚙  │ › find out why the build is slow                                         19m
                                 │
 System               2k · $0.25 │ ‹ @main: Linking takes 38 of the 41 seconds. I've asked scout to look at
 #proj                2k · $0.25 │   the linker flags.                                                       8m
