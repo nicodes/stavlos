@@ -217,7 +217,7 @@ func (a *Agent) decide(c model.Block, t tools.Tool, rv roleView, cfg *config.Eff
 	}
 	why := ""
 	if hidden != "" {
-		boundary, why = "", hidden+" is hidden from agents in every mode: it holds credentials or Stavlos's own state. Ask the human for what you need from it."
+		boundary, why = "", hidden+" is hidden from agents in every mode: it holds credentials or stavlos's own state. Ask the human for what you need from it."
 	} else if ruled == policy.Deny {
 		boundary = "" // the rules refused it: where it reaches is beside the point
 	} else if verb == policy.Deny {

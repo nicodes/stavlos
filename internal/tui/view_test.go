@@ -205,7 +205,7 @@ func TestHomeAndChannelViews(t *testing.T) {
 	m.showTree = true
 	m.layout()
 	sess := stripANSI(m.View())
-	if !strings.Contains(sess, "hello") || !strings.Contains(sess, "Stavlos") || strings.Contains(sess, "\nidle ") || !strings.Contains(sess, "\nChannels ") || !strings.Contains(sess, "$0.00") {
+	if !strings.Contains(sess, "hello") || !strings.Contains(sess, "stavlos") || strings.Contains(sess, "\nidle ") || !strings.Contains(sess, "\nChannels ") || !strings.Contains(sess, "$0.00") {
 		t.Fatalf("channel view:\n%s", sess)
 	}
 	m.width = 90 // too narrow: sidebar auto-hides
@@ -2079,7 +2079,7 @@ func TestSidebarOnTheLeftAndMouseOffsets(t *testing.T) {
 	// the left edge, the chat to its right
 	found := false
 	for _, l := range lines {
-		if strings.HasPrefix(l, "Stavlos") {
+		if strings.HasPrefix(l, "stavlos") {
 			found = true
 		}
 	}
@@ -2157,7 +2157,7 @@ func TestSidebarNav(t *testing.T) {
 		header := len(m.sidebarHeader(sidebarWidth - 1))
 		// the title, a blank, the usage rows, a blank, the Clients section (its
 		// title, Web UI, Discord), a blank; no Subscriptions section without a reading
-		if header != 9 || !strings.HasPrefix(sb[0], "Stavlos") || strings.TrimSpace(sb[1]) != "" ||
+		if header != 9 || !strings.HasPrefix(sb[0], "stavlos") || strings.TrimSpace(sb[1]) != "" ||
 			m.sidebarSystemRow() != 2 || strings.Join(strings.Fields(sb[2]), " ") != "System 2k · $0.25" || strings.Join(strings.Fields(sb[3]), " ") != "@main 1k · $0.20" ||
 			strings.TrimSpace(sb[4]) != "" || strings.TrimSpace(sb[5]) != "Clients" ||
 			m.navRowIndex(navWeb) != 6 || strings.TrimSpace(sb[m.navRowIndex(navWeb)]) != "○ Web UI" || m.sidebarDiscordRow() != 7 || !strings.Contains(sb[m.sidebarDiscordRow()], "Discord checking") ||

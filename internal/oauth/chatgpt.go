@@ -115,7 +115,7 @@ func (c *ChatGPT) startBrowser(ctx context.Context) (*Pending, error) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if q.Get("state") != bl.state {
 			w.WriteHeader(400)
-			fmt.Fprint(w, page("Sign-in failed", "state mismatch: this is not the sign-in Stavlos is waiting for"))
+			fmt.Fprint(w, page("Sign-in failed", "state mismatch: this is not the sign-in stavlos is waiting for"))
 			return
 		}
 		if e := q.Get("error"); e != "" {
@@ -134,7 +134,7 @@ func (c *ChatGPT) startBrowser(ctx context.Context) (*Pending, error) {
 			bl.finish(browserResult{err: errors.New("missing authorization code")})
 			return
 		}
-		fmt.Fprint(w, page("Signed in", "You can close this tab and return to Stavlos."))
+		fmt.Fprint(w, page("Signed in", "You can close this tab and return to stavlos."))
 		bl.finish(browserResult{code: code})
 	})
 	mux.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
@@ -210,7 +210,7 @@ func (c *ChatGPT) waitBrowser(ctx context.Context, p *Pending) (Tokens, error) {
 
 func page(title, body string) string {
 	title, body = html.EscapeString(title), html.EscapeString(body)
-	return "<!doctype html><meta charset=utf-8><title>Stavlos · " + title + "</title>" +
+	return "<!doctype html><meta charset=utf-8><title>stavlos · " + title + "</title>" +
 		"<body style=\"font-family:system-ui;background:#111;color:#eee;display:grid;place-items:center;height:100vh;margin:0\">" +
 		"<div style=\"text-align:center\"><h1 style=\"font-weight:600\">" + title + "</h1><p style=\"color:#aaa\">" + body + "</p></div>"
 }
