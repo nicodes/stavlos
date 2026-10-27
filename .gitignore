@@ -12,3 +12,4 @@
 .komizo.mise*.toml
 
 .komizo.mise*.lock
+/release-assets/
