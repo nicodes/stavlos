@@ -1,0 +1,28 @@
+name: Release
+'on':
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        required: true
+        type: choice
+        default: patch
+        options:
+        - patch
+        - minor
+        - major
+permissions: {}
+concurrency: release-${{ github.repository }}
+jobs:
+  release:
+    name: Release
+    uses: nicodes/tools/.github/workflows/cli-release.yml@0276991861118d6e70a92cd11432dd664d3b030f
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+    with:
+      tools-ref: '0276991861118d6e70a92cd11432dd664d3b030f'
+      bump: ${{ inputs.bump }}
+      binary: stavlos
+      main-package: ./cmd/stavlos
