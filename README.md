@@ -1,11 +1,13 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: d271e9f6b03895208ba3190bbcd1869637f214e25304595fccb1fd904d9f3aad -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 4d885d01263648621e82b2953e2d2cb17defb44e5146f37838a70b6e0860aa98 -->
 
 # stavlos
 
 A Go agent harness with a terminal UI.
 
+Installation requires Go 1.26.6 or later. The installer builds the Go module into `~/.local/bin`; add that directory to your PATH if necessary.
+
 ```sh
-go install github.com/nicodes/stavlos/cmd/stavlos@latest
+curl -fsSL https://raw.githubusercontent.com/nicodes/stavlos/main/install.sh | sh
 cd /path/to/project
 stavlos
 ```
