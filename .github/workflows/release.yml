@@ -16,13 +16,14 @@ concurrency: release-${{ github.repository }}
 jobs:
   release:
     name: Release
-    uses: nicodes/tools/.github/workflows/cli-release.yml@0276991861118d6e70a92cd11432dd664d3b030f
+    uses: nicodes/tools/.github/workflows/cli-release.yml@a404cbcef2a2ccfb7a9aa1961f5d893e0c31ad42
     permissions:
       contents: write
       attestations: write
       id-token: write
     with:
-      tools-ref: '0276991861118d6e70a92cd11432dd664d3b030f'
+      tools-ref: 'a404cbcef2a2ccfb7a9aa1961f5d893e0c31ad42'
       bump: ${{ inputs.bump }}
       binary: stavlos
+      platforms: linux
       main-package: ./cmd/stavlos
