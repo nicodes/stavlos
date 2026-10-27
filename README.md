@@ -1,4 +1,4 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 29ce39f85bc69c9306c4b2e8b4b6fb62d6b2ad89655afe7238998807cddd335a -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 11ad636eef5c95d5cce96cd0e9566125cb5021308bee10912ed0c34865129b09 -->
 
 # stavlos
 
@@ -7,7 +7,7 @@ A Go agent harness with a terminal UI.
 Install the published Linux binary (x86_64 or arm64) into `~/.local/bin`; add that directory to your PATH if necessary. A Go compiler is not required.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/nicodes/stavlos/main/install.sh | sh
+curl -fsSL https://stavlos.ai/install | sh
 cd /path/to/project
 stavlos
 ```
