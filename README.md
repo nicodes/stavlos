@@ -1,13 +1,30 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 11ad636eef5c95d5cce96cd0e9566125cb5021308bee10912ed0c34865129b09 -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: ea2e43def22be2c6be434ddd11efffaf1fe4c16e47ecc875cf072f8185d74469 -->
 
 # stavlos
 
 A Go agent harness with a terminal UI.
 
-Install the published Linux binary (x86_64 or arm64) into `~/.local/bin`; add that directory to your PATH if necessary. A Go compiler is not required.
+## Install
+
+Linux (x86_64 or arm64), using prebuilt binaries:
+
+With curl:
 
 ```sh
 curl -fsSL https://stavlos.ai/install | sh
+```
+
+Or with mise:
+
+```sh
+mise use --global github:nicodes/stavlos@latest
+```
+
+The shell installer installs to `~/.local/bin`; add that directory to your PATH if necessary. Mise manages its own installation directory and PATH through its shell activation.
+
+## Run
+
+```sh
 cd /path/to/project
 stavlos
 ```
@@ -19,12 +36,6 @@ A message beginning with `@name` addresses that agent; an unaddressed message go
 ## Project configuration
 
 Project configuration lives in `.stavlos/stavlos.json`. Agent definitions are Markdown files with YAML frontmatter in the adjacent `agents/` directory. The trust prompt controls whether project-defined configuration is used.
-
-Source builds remain available for development with a compatible Go toolchain:
-
-```sh
-go install github.com/nicodes/stavlos/cmd/stavlos@latest
-```
 
 ## Repository development
 
