@@ -98,7 +98,7 @@ fi
 if [[ "$group" == all || "$group" == test || "$group" == build ]]; then
 	step "web dependencies"
 	if ! command -v npm >/dev/null; then
-		echo "npm is required: run komizo run install" >&2
+		echo "npm is required: run mise run install" >&2
 		failed+=(npm-missing)
 	elif [[ ! -d web/node_modules ]]; then
 		(cd web && npm ci --no-audit --no-fund) || failed+=(web-install)

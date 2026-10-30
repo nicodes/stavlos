@@ -1,4 +1,4 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 13af26b8851dd6cac36d0c91ae92edf5ea41c183598d85cfde2c5bc6a8aff028 -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 4d4fa0c435624bb3394b8999646a23fc4fc1929843847b342592faebecc8bef8 -->
 
 # stavlos
 
@@ -48,3 +48,16 @@ python3 scripts/prepare-runtime.py
 ```
 
 This creates the native discovery files from the tracked functional inputs. Run it again after pulling an update; if a generated file has local edits, preserve those edits before replacing it.
+
+## Contributor verification
+
+Tool versions and native tasks live in `mise.toml`. Prepare the pinned helper source and run the complete gate:
+
+```sh
+git clone https://github.com/nicodes/tools.git .ci-tools
+git -C .ci-tools checkout --detach 091101094fedf5ce2e67c339c1c9c842d6a662dc
+mise install
+mise run check
+```
+
+Native build and test commands retain source and output checks, with receipts in `.artifacts/verification`. Existing product release rules and artifacts remain owned by this repository. End users install the product’s published distribution.
