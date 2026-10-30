@@ -1,0 +1,10 @@
+[
+  {
+    "source": ".stavlos/agents/coder.prompt",
+    "target": ".stavlos/agents/coder.md"
+  },
+  {
+    "source": ".stavlos/commands/cmd.prompt",
+    "target": ".stavlos/commands/cmd.md"
+  }
+]
