@@ -13,3 +13,7 @@
 
 .komizo.mise*.lock
 /release-assets/
+
+# Native runtime files generated from functional inputs.
+/.stavlos/agents/coder.md
+/.stavlos/commands/cmd.md

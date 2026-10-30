@@ -44,6 +44,10 @@
   "stages": {
     "install": [
       [
+        "python3",
+        "scripts/prepare-runtime.py"
+      ],
+      [
         "go",
         "mod",
         "download"
