@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/nicodes/stavlos/internal/config"
+	"github.com/nicodes/stavlos/internal/paths"
 	"github.com/nicodes/stavlos/internal/tools"
 )
 
@@ -59,6 +60,7 @@ func (c *Channel) controlPaths(cfg *config.Effective) []string {
 			add(filepath.Join(d, ro))
 		}
 	}
+	add(paths.SharedSkillsDir())
 	for _, f := range cfg.InstructionFiles {
 		add(f)
 	}

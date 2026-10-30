@@ -75,3 +75,20 @@ func AuthFile() string { return filepath.Join(DataDir(), "auth.json") }
 
 // ProjectDir is the project config layer inside a working directory.
 func ProjectDir(workdir string) string { return filepath.Join(workdir, ".stavlos") }
+
+// SharedSkillsDir is the user-owned, cross-tool skill library. A selected
+// directory is useful when running from a separately checked-out config set.
+func SharedSkillsDir() string {
+	if v := os.Getenv("STAVLOS_SKILLS_DIR"); v != "" {
+		return v
+	}
+	if underTest() {
+		return filepath.Join(os.TempDir(), "stavlos-test-"+strconv.Itoa(os.Getpid()), ".agents", "skills")
+	}
+	return filepath.Join(home(), ".agents", "skills")
+}
+
+// ProjectSharedSkillsDir is the project's trust-gated cross-tool library.
+func ProjectSharedSkillsDir(workdir string) string {
+	return filepath.Join(workdir, ".agents", "skills")
+}

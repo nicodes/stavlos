@@ -53,11 +53,21 @@ type disk struct{}
 func (disk) ReadFile(path string) ([]byte, error)      { return os.ReadFile(path) }
 func (disk) ReadDir(dir string) ([]fs.DirEntry, error) { return os.ReadDir(dir) }
 
-// TakeSnapshot reads the trust-gated files of dir: .stavlos/**, and the
+// TakeSnapshot reads the trust-gated files of dir: .stavlos/**, .agents/skills/**, and the
 // instructions files agents follow there (PRD §10.6).
 func TakeSnapshot(dir string) (*Snapshot, error) {
 	s := &Snapshot{Dir: dir, data: map[string][]byte{}}
 	total := 0
+	// WalkDir starts at skills, so explicitly refuse an aliased .agents parent
+	// rather than following an unreviewed directory outside the project tree.
+	sharedParent := filepath.Dir(paths.ProjectSharedSkillsDir(dir))
+	if st, err := os.Lstat(sharedParent); err == nil {
+		if !st.IsDir() {
+			return nil, fmt.Errorf("%s is not a real directory", sharedParent)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
+	}
 	add := func(abs string) error {
 		rel, _ := filepath.Rel(dir, abs)
 		if _, ok := s.data[rel]; ok {
@@ -76,20 +86,24 @@ func TakeSnapshot(dir string) (*Snapshot, error) {
 		s.data[rel] = b
 		return nil
 	}
-	err := filepath.WalkDir(paths.ProjectDir(dir), func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			if errors.Is(err, fs.ErrNotExist) {
+	// Shared skill bodies and resources participate in the same bounded read
+	// as native configuration. No project bytes are loaded outside this snapshot.
+	for _, root := range []string{paths.ProjectDir(dir), paths.ProjectSharedSkillsDir(dir)} {
+		err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					return nil
+				}
+				return err
+			}
+			if d.IsDir() {
 				return nil
 			}
-			return err
+			return add(p)
+		})
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
 		}
-		if d.IsDir() {
-			return nil
-		}
-		return add(p)
-	})
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
 	}
 	// The instructions agents will follow: the files from the repository
 	// root down to dir, and those below it that reach agents as they work.

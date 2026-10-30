@@ -1,4 +1,4 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: d4a0260be884aa36fc91b5c9003e76a05b61f7a6e67fb0c9c8610098591068c8 -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 13af26b8851dd6cac36d0c91ae92edf5ea41c183598d85cfde2c5bc6a8aff028 -->
 
 # stavlos
 
@@ -35,7 +35,9 @@ A message beginning with `@name` addresses that agent; an unaddressed message go
 
 ## Project configuration
 
-Project configuration lives in `.stavlos/stavlos.json`. Agent definitions are Markdown files with YAML frontmatter in the adjacent `agents/` directory. The trust prompt controls whether project-defined configuration is used.
+Project configuration lives in `.stavlos/stavlos.json`. Agent definitions are Markdown files with YAML frontmatter in the adjacent `agents/` directory. The trust prompt controls whether project-defined configuration is used. Shared skills live in `.agents/skills/<name>/SKILL.md` in the project or `~/.agents/skills/<name>/SKILL.md` for the user. The skill body uses Markdown with `name` and `description` YAML frontmatter; supporting scripts and resources stay in the package directory.
+
+Shared project skills and resources are trust-gated together with native configuration. Project definitions override user definitions; native `skills/` definitions override shared definitions within the same scope. `STAVLOS_SKILLS_DIR` can select a different user-level shared library. Updating project skills requires renewed project trust.
 
 ## Prepare runtime files
 

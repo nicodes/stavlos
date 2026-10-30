@@ -28,7 +28,7 @@ import (
 // sandboxReadOnly are the control paths, relative to each working
 // directory, a command may read but not change. git's objects and refs
 // stay writable: only what runs code or steers an agent is frozen.
-var sandboxReadOnly = append([]string{".git/hooks", ".git/config", ".stavlos", ".envrc"}, instructions.Names...)
+var sandboxReadOnly = append([]string{".git/hooks", ".git/config", ".stavlos", ".agents", ".envrc"}, instructions.Names...)
 
 // sandboxHiddenHome are credential stores, relative to the home directory.
 var sandboxHiddenHome = []string{
@@ -83,6 +83,8 @@ func (c *Channel) sandboxSpecDirs(cfg *config.Effective, scope []string) *sandbo
 	}
 	grantGitMetadata(spec, scope, cfg.Sandbox.GitMetadata)
 	spec.ReadOnly = append(spec.ReadOnly, cfg.InstructionFiles...) // the nested ones too
+	spec.ReadOnly = append(spec.ReadOnly, paths.SharedSkillsDir())
+	spec.Readable = append(spec.Readable, paths.SharedSkillsDir())
 	dirs := append([]string(nil), spec.Writable...)
 	spec.Caches = true
 	spec.Writable = append(spec.Writable, cfg.Sandbox.Writable...)
