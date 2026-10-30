@@ -379,6 +379,10 @@ func Load(dir string, trust Trust) (*Effective, error) {
 			if err := e.loadRoles(snap, filepath.Join(pdir, "agents"), "project"); err != nil {
 				return nil, err
 			}
+			if err := e.loadSkills(snap, paths.ProjectSharedSkillsDir(dir)); err != nil {
+				return nil, err
+			}
+			// Native definitions override shared definitions in the same layer.
 			if err := e.loadSkills(snap, filepath.Join(pdir, "skills")); err != nil {
 				return nil, err
 			}
@@ -489,6 +493,9 @@ func loadGlobalFrom(gdir string) (*Effective, error) {
 	e.allowSearch()
 	e.Instructions = instructions.Global() // the user's own, trusted like the rest of this layer
 	if err := e.loadRoles(disk{}, filepath.Join(gdir, "agents"), "global"); err != nil {
+		return nil, err
+	}
+	if err := e.loadSkills(disk{}, paths.SharedSkillsDir()); err != nil {
 		return nil, err
 	}
 	if err := e.loadSkills(disk{}, filepath.Join(gdir, "skills")); err != nil {
