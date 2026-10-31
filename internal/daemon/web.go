@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"log"
-	"net"
 	"os"
 	"path/filepath"
 
@@ -26,13 +25,14 @@ func (d *Daemon) webStatePath() string { return filepath.Join(d.DataDir, "web.js
 // startWeb builds the web server from the global configuration and brings it
 // up when it was on the last time the daemon ran.
 func (d *Daemon) startWeb(ctx context.Context) {
-	o := web.Options{Serve: func(ctx context.Context, nc net.Conn) { d.handleConn(ctx, nc, true) }, Sheet: d.webSheet}
+	o := web.Options{DataDir: d.DataDir, Snapshot: d.webFacts, Deliver: d.webDeliver}
 	if cfg, err := config.LoadGlobal(); err == nil && cfg.Web != nil {
 		o.Port, o.Hosts = cfg.Web.Port, cfg.Web.Hosts
 	}
 	d.webMu.Lock()
 	defer d.webMu.Unlock()
 	d.web, d.webCtx = web.New(o), ctx
+	d.webFeed.Store(d.web)
 	var st webState
 	if b, err := os.ReadFile(d.webStatePath()); err == nil && json.Unmarshal(b, &st) == nil && st.Enabled {
 		if err := d.web.Enable(ctx); err != nil {
@@ -80,17 +80,4 @@ func (d *Daemon) saveWebState(enabled bool) {
 
 func webRoute(m protocol.Method[protocol.None, protocol.WebStatus]) routeEntry {
 	return route(m, func(_ context.Context, c *conn, _ protocol.None) (protocol.WebStatus, error) { return c.d.Web(m.Name) })
-}
-
-// webSheet hands the web server one sheet's page.
-func (d *Daemon) webSheet(channel, id string) (web.Sheet, error) {
-	s, err := d.channel(channel)
-	if err != nil {
-		return web.Sheet{}, err
-	}
-	info, page, err := s.Sheet(id)
-	if err != nil {
-		return web.Sheet{}, err
-	}
-	return web.Sheet{Title: info.Title, HTML: page}, nil
 }

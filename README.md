@@ -1,8 +1,8 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 4d4fa0c435624bb3394b8999646a23fc4fc1929843847b342592faebecc8bef8 -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 31565eda89a6fc2bf235f27b7c055c89fb8308a2d18df748d452ff4c88231f86 -->
 
 # stavlos
 
-A Go agent harness with a terminal UI.
+An agent harness with a terminal UI and a Rust/Axum browser API.
 
 ## Install
 
@@ -60,4 +60,10 @@ mise install
 mise run check
 ```
 
-Native build and test commands retain source and output checks, with receipts in `.artifacts/verification`. Existing product release rules and artifacts remain owned by this repository. End users install the product’s published distribution.
+The browser API and local OAuth callback are implemented in root `api/`. Rust owns browser sessions, one-time sign-in codes, Host/Origin checks, sheet capabilities, the fourteen scoped WebSocket methods, event replay, usage queries and browser message routing. The Go terminal client and agent runtime remain independent native components. Browser RPC requests are handled in Rust and are never forwarded to the Go daemon's RPC dispatcher.
+
+The API reads the existing SQLite event history without changing its schema. The agent runtime publishes bounded observations and accepts concrete, already-routed message deliveries. Rust records each admitted delivery before execution; an entry whose acknowledgement is lost remains for reconciliation and is never replayed automatically. Inspect channel history before resubmitting an uncertain post. Disabling the browser UI clears its sessions and closes its sockets.
+
+Release CLIs embed their matching native Rust executable, so installation needs no Rust or Go toolchain. Linux x86_64 and arm64 use static musl APIs. Two native Actions builders test the API and a real packaged CLI sign-in, and archive assembly verifies each payload's exact source revision and SHA256 receipt. A contributor archive build requires the matching `.artifacts/native-api/` payload; `bash scripts/build-api.sh` builds the current platform and requires its musl C toolchain on Linux.
+
+For source development, run `cargo build --locked --manifest-path api/Cargo.toml` and set `STAVLOS_API_BINARY` to the absolute built executable when running Go commands. `mise run check` supplies the test path and retains the complete Go race/fuzz/static/dependency/complexity, web bundle and installer checks. It also runs Rust formatting, Clippy, tests and dependency scanning. Native build and test commands retain source and output checks, with receipts in `.artifacts/verification`. End users install the product’s published distribution.

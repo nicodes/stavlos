@@ -67,9 +67,11 @@ type Daemon struct {
 
 	streams *streams // stream deltas waiting to be sent together
 
-	webMu  sync.Mutex
-	web    *web.Server     // the browser front door (web.go); nil until Serve
-	webCtx context.Context // what its listener lives under
+	webFeed       atomic.Pointer[web.Server]
+	webModelEpoch sync.Map // agent id -> model.call_started global sequence
+	webMu         sync.Mutex
+	web           *web.Server     // the browser front door (web.go); nil until Serve
+	webCtx        context.Context // what its listener lives under
 }
 
 // New locks the data directory, opens the log and registry and recovers
@@ -139,7 +141,7 @@ func (d *Daemon) closeWeb() {
 	d.webMu.Lock()
 	defer d.webMu.Unlock()
 	if d.web != nil {
-		d.web.Disable() // the listener only; whether it is on stays as the human left it
+		d.web.Close() // stop its owned native process; retain the human's persisted choice
 	}
 }
 
@@ -225,6 +227,19 @@ func (d *Daemon) committed(evs []event.Event) {
 			d.streams.flush(e.Channel) // what streamed goes out before the event that settles it
 		}
 	}
+	for _, e := range evs {
+		if e.Type == event.ModelCallStarted {
+			d.webModelEpoch.Store(e.Agent, webModelCall{Sequence: e.Global, Active: true})
+		}
+		if e.Type == event.ModelCallCompleted {
+			if prior, ok := d.webModelEpoch.Load(e.Agent); ok {
+				value := prior.(webModelCall)
+				value.Active = false
+				d.webModelEpoch.Store(e.Agent, value)
+			}
+		}
+
+	}
 	clients := d.clientList()
 	for _, e := range evs {
 		var line []byte // encoded for the first client subscribed to it, and not at all for none
@@ -246,6 +261,7 @@ func (d *Daemon) Stream(n protocol.StreamNotification) { d.streams.add(n) }
 func (d *Daemon) sendStream(n protocol.StreamNotification) {
 	b, _ := json.Marshal(n)
 	line := notification(protocol.NStream, b)
+	d.notifyWeb(protocol.NStream, b)
 	d.eachSubscribed(n.Channel, func(c *client) { c.send(line, true) })
 }
 
@@ -290,6 +306,7 @@ func (f sinkFunc) Notify(n protocol.PromptNotification, tiers []protocol.Tier) {
 func (d *Daemon) notifyPrompt(n protocol.PromptNotification, tiers []protocol.Tier) {
 	b, _ := json.Marshal(n)
 	line := notification(protocol.NPrompt, b)
+	d.notifyWeb(protocol.NPrompt, b)
 	for _, c := range d.clientList() {
 		_, tier := c.identity()
 		for _, t := range tiers {

@@ -10,6 +10,12 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 1
 
+if [[ -z ${STAVLOS_API_BINARY:-} ]]; then
+ case ${CARGO_TARGET_DIR:-api/target} in
+  /*) export STAVLOS_API_BINARY="$CARGO_TARGET_DIR/debug/stavlos-api" ;;
+  *) export STAVLOS_API_BINARY="$PWD/${CARGO_TARGET_DIR:-api/target}/debug/stavlos-api" ;;
+ esac
+fi
 group=${1:-all}
 case "$group" in all|lint|test|build) ;; *) echo "usage: $0 [all|lint|test|build]" >&2; exit 2 ;; esac
 scratch=$(mktemp -d)
@@ -122,7 +128,7 @@ fi
 if [[ "$group" == all || "$group" == build ]]; then
 	step "CLI build"
 	mkdir -p .artifacts/build
-	go build -o .artifacts/build/app ./cmd/stavlos || failed+=(cli-build)
+	bash scripts/build-cli.sh || failed+=(cli-build)
 fi
 
 if [ ${#failed[@]} -gt 0 ]; then

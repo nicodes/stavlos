@@ -1,6 +1,8 @@
 [tools]
 "python" = "3.13.11"
 "go" = "1.27.3"
+"rust" = "1.94.0"
+"trivy" = "0.74.0"
 "go:golang.org/x/vuln/cmd/govulncheck" = "1.7.0"
 "node" = "22.20.0"
 "actionlint" = "1.7.12"
@@ -12,10 +14,10 @@ GOTOOLCHAIN = "local"
 PYTHONDONTWRITEBYTECODE = "1"
 
 [tasks."install"]
-run = ["python3 scripts/prepare-runtime.py", "go mod download", "npm --prefix web ci --no-audit --no-fund"]
+run = ["rustup component add --toolchain 1.94.0 rustfmt clippy", "python3 scripts/prepare-runtime.py", "go mod download", "npm --prefix web ci --no-audit --no-fund"]
 
 [tasks."lint"]
-run = ["bash scripts/check.sh lint", "actionlint", "shellcheck scripts/check.sh"]
+run = ["cargo fmt --manifest-path api/Cargo.toml --check", "cargo clippy --locked --manifest-path api/Cargo.toml --all-targets -- -D warnings", "trivy fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --skip-dirs api/target api", "bash scripts/check.sh lint", "actionlint", "shellcheck scripts/*.sh"]
 
 [tasks."unit"]
 run = "python3 \"$TOOLS_ROOT/helpers/verification.py\" test --name unit --artifact .artifacts/build -- mise run _unit"
@@ -40,7 +42,7 @@ run = ["bash scripts/check.sh build"]
 hide = true
 
 [tasks."_unit"]
-run = ["python3 scripts/check_gate_test.py", "bash scripts/check.sh test"]
+run = ["cargo test --locked --manifest-path api/Cargo.toml", "python3 scripts/check_gate_test.py", "bash scripts/check.sh test"]
 hide = true
 
 [tasks."_test-stages"]

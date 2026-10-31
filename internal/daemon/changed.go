@@ -15,6 +15,7 @@ import (
 func (d *Daemon) changed(what string) {
 	b, _ := json.Marshal(protocol.ChangedNotification{What: what})
 	line := notification(protocol.NChanged, b)
+	d.notifyWeb(protocol.NChanged, b)
 	for _, c := range d.clientList() {
 		c.send(line, true) // a hint: a client that misses one still asks now and then
 	}
