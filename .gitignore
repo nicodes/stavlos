@@ -16,3 +16,6 @@
 /.stavlos/agents/coder.md
 /.stavlos/commands/cmd.md
 /.ci-tools/
+
+/api/target/
+/internal/nativeapi/payload.gz

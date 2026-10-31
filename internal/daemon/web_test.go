@@ -12,6 +12,9 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/nicodes/stavlos/internal/event"
 
 	"github.com/gorilla/websocket"
 	"github.com/nicodes/stavlos/internal/protocol"
@@ -95,6 +98,63 @@ func TestWebUIIsScopedAndRemembered(t *testing.T) {
 	for i, m := range []string{protocol.MChannelSetMode, protocol.MPromptReply, protocol.MTrustReply, protocol.MDaemonShutdown, protocol.MWebOpen, protocol.MChannelAddDir, protocol.MProviderLoginStart, "no.such.method"} {
 		if r := call(10+i, m, struct{}{}); r.Error == nil || r.Error.Code != protocol.ErrForbidden {
 			t.Fatalf("%s from a browser: %+v", m, r.Error)
+		}
+	}
+	// The native API resolves and records a post before the independent fake
+	// model runtime admits it. No browser connection enters the Go RPC hub.
+	created, err := rpc.Do(ctx, h.c, protocol.ChannelCreate, protocol.ChannelCreateParams{Dir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tree protocol.AgentTreeResult
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		reply := call(100, protocol.MAgentTree, protocol.AgentTreeParams{Channel: created.ID})
+		if reply.Error == nil {
+			if err := json.Unmarshal(reply.Result, &tree); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("native observation feed: %+v", reply.Error)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(tree.Agents) == 0 {
+		t.Fatal("created channel has no root agent")
+	}
+	rootName := tree.Agents[0].Name
+	reply := call(101, protocol.MChannelPost, protocol.ChannelPostParams{Channel: created.ID, Text: "@" + rootName + " from the Rust API"})
+	if reply.Error != nil {
+		t.Fatalf("native post: %+v", reply.Error)
+	}
+	var posted protocol.ChannelPostResult
+	if err := json.Unmarshal(reply.Result, &posted); err != nil || len(posted.To) != 1 || posted.To[0] != rootName {
+		t.Fatalf("native post recipients: %+v %v", posted, err)
+	}
+	events, err := h.d.Log.Read(ctx, created.ID, 1, 512)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, entry := range events {
+		if entry.Type == event.ChatPosted {
+			var payload event.ChatPayload
+			if err := entry.Decode(&payload); err != nil {
+				t.Fatal(err)
+			}
+			if payload.Text == "from the Rust API" && payload.From == "human:web" {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatal("native input did not reach the model runtime journal")
+	}
+	for _, client := range h.d.clientList() {
+		if name, _ := client.identity(); name == "web" {
+			t.Fatal("browser RPC was forwarded into the Go dispatcher")
 		}
 	}
 	// it comes back on with the daemon, and off stays off

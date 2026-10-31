@@ -8,13 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
-	"net"
-	"net/http"
 	"net/url"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/nicodes/stavlos/internal/nativeapi"
 )
 
 // Public client id of the official Codex CLI (same one opencode uses).
@@ -73,7 +72,7 @@ func (c *ChatGPT) Wait(ctx context.Context, p *Pending) (Tokens, error) {
 // --- browser (PKCE + loopback redirect) ---
 
 type browserLogin struct {
-	srv      *http.Server
+	native   *nativeapi.Callback
 	verifier string
 	state    string
 	redirect string
@@ -95,10 +94,6 @@ func randB64(n int) string {
 }
 
 func (c *ChatGPT) startBrowser(ctx context.Context) (*Pending, error) {
-	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", c.port()))
-	if err != nil {
-		return nil, fmt.Errorf("chatgpt: cannot listen on localhost:%d for the sign-in callback (%v); is another login running? The headless method does not need the port", c.port(), err)
-	}
 	verifier := randB64(64)
 	sum := sha256.Sum256([]byte(verifier))
 	challenge := base64.RawURLEncoding.EncodeToString(sum[:])
@@ -106,48 +101,22 @@ func (c *ChatGPT) startBrowser(ctx context.Context) (*Pending, error) {
 	redirect := fmt.Sprintf("http://localhost:%d/auth/callback", c.port())
 
 	bl := &browserLogin{verifier: verifier, state: state, redirect: redirect, done: make(chan browserResult, 1)}
-	mux := http.NewServeMux()
-	// Every path checks the state first: a request without it is some other
-	// page in the browser (an <img src="http://localhost:1455/…">), and it
-	// gets an error page while the real sign-in stays pending.
-	mux.HandleFunc("/auth/callback", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if q.Get("state") != bl.state {
-			w.WriteHeader(400)
-			fmt.Fprint(w, page("Sign-in failed", "state mismatch: this is not the sign-in stavlos is waiting for"))
-			return
+
+	native, err := nativeapi.StartCallback(ctx, c.port(), state)
+	if err != nil {
+		return nil, fmt.Errorf("chatgpt: cannot start the Rust callback on localhost:%d (%v); is another login running? The headless method does not need the port", c.port(), err)
+	}
+	bl.native = native
+	go func() {
+		result := <-native.Results
+		var err error
+		if result.Error == "expired" {
+			err = ErrExpired
+		} else if result.Error != "" {
+			err = errors.New(result.Error)
 		}
-		if e := q.Get("error"); e != "" {
-			msg := q.Get("error_description")
-			if msg == "" {
-				msg = e
-			}
-			fmt.Fprint(w, page("Sign-in failed", msg))
-			bl.finish(browserResult{err: errors.New(msg)})
-			return
-		}
-		code := q.Get("code")
-		if code == "" {
-			w.WriteHeader(400)
-			fmt.Fprint(w, page("Sign-in failed", "missing authorization code"))
-			bl.finish(browserResult{err: errors.New("missing authorization code")})
-			return
-		}
-		fmt.Fprint(w, page("Signed in", "You can close this tab and return to stavlos."))
-		bl.finish(browserResult{code: code})
-	})
-	mux.HandleFunc("/cancel", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("state") != bl.state {
-			w.WriteHeader(400)
-			fmt.Fprint(w, "state mismatch")
-			return
-		}
-		bl.finish(browserResult{err: errors.New("login cancelled")})
-		fmt.Fprint(w, "cancelled")
-	})
-	bl.srv = &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
-	go bl.srv.Serve(ln)
+		bl.finish(browserResult{code: result.Code, err: err})
+	}()
 	// The port is released when the sign-in expires, whether or not anyone
 	// is waiting on it: an abandoned login must not block the next one.
 	bl.expire = time.AfterFunc(10*time.Minute, func() {
@@ -184,9 +153,7 @@ func (b *browserLogin) shutdown() {
 		if b.expire != nil {
 			b.expire.Stop()
 		}
-		sctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = b.srv.Shutdown(sctx)
+		b.native.Close()
 	})
 }
 
@@ -206,13 +173,6 @@ func (c *ChatGPT) waitBrowser(ctx context.Context, p *Pending) (Tokens, error) {
 	case <-ctx.Done():
 		return Tokens{}, ctx.Err()
 	}
-}
-
-func page(title, body string) string {
-	title, body = html.EscapeString(title), html.EscapeString(body)
-	return "<!doctype html><meta charset=utf-8><title>stavlos · " + title + "</title>" +
-		"<body style=\"font-family:system-ui;background:#111;color:#eee;display:grid;place-items:center;height:100vh;margin:0\">" +
-		"<div style=\"text-align:center\"><h1 style=\"font-weight:600\">" + title + "</h1><p style=\"color:#aaa\">" + body + "</p></div>"
 }
 
 // --- device (headless) ---

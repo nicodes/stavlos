@@ -17,7 +17,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  native-api:
+    uses: ./.github/workflows/native-api.yml
   ci:
+    needs: native-api
     name: Test
     runs-on: ubuntu-24.04
     env:
@@ -50,6 +53,12 @@ jobs:
         if-no-files-found: error
         retention-days: 7
         include-hidden-files: true
+    - name: Download native APIs
+      uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+      with:
+        pattern: native-api-*
+        path: .artifacts/native-api
+        merge-multiple: true
     - name: Check project
       shell: bash
       run: |-
