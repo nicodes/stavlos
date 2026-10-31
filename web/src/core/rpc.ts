@@ -65,7 +65,7 @@ export class Rpc {
       // A refused upgrade looks like any other close; ask whether we are still signed in.
       let unauthorized = false;
       try {
-        unauthorized = (await fetch("/api/session")).status === 401;
+        unauthorized = (await fetch("/api/session", { headers: { "X-Stavlos-Key": currentKey() } })).status === 401;
       } catch {
         /* the daemon is away: keep trying */
       }
