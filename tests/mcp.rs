@@ -48,6 +48,21 @@ async fn wait_stopped(pids: &[i32]) {
     .await
     .expect("MCP process group still running after cleanup");
 }
+async fn published_pid(root: &Path) -> i32 {
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if let Ok(text) = fs::read_to_string(root.join("server.pid"))
+                && let Ok(pid) = text.parse::<i32>()
+                && pid > 0
+            {
+                return pid;
+            }
+            tokio::time::sleep(Duration::from_millis(2)).await;
+        }
+    })
+    .await
+    .expect("MCP fixture did not publish its process identity")
+}
 #[test]
 fn original_mcp_names_compact_subjects_and_result_rendering_remain_exact() {
     let cases: Vec<Value> = serde_json::from_str(include_str!("data/go-mcp-names.json")).unwrap();
@@ -297,29 +312,23 @@ async fn launch_refuses_unbounded_readonly_execution_and_reaps_failed_or_cancell
         .parse()
         .unwrap();
     wait_stopped(&[pid]).await;
-    let cancel = CancellationToken::new();
-    let c = cancel.clone();
-    tokio::spawn(async move {
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        c.cancel();
-    });
-    assert!(
-        Session::launch(
-            "fixture",
-            &definition(root.path(), "quiet"),
-            &context,
-            cancel
-        )
-        .await
-        .is_err()
-    );
-    let pid = fs::read_to_string(root.path().join("server.pid"))
-        .unwrap()
-        .parse()
-        .unwrap();
-    wait_stopped(&[pid]).await;
+    {
+        let cancelled_root = tempfile::tempdir().unwrap();
+        let cancelled_definition = definition(cancelled_root.path(), "quiet");
+        let cancel = CancellationToken::new();
+        let launch = Session::launch("fixture", &cancelled_definition, &context, cancel.clone());
+        tokio::pin!(launch);
+        let pid = tokio::select! {
+            pid = published_pid(cancelled_root.path()) => pid,
+            _ = &mut launch => panic!("quiet server returned before cancellation"),
+        };
+        cancel.cancel();
+        assert!(launch.await.is_err());
+        wait_stopped(&[pid]).await;
+    }
+    let manager_root = tempfile::tempdir().unwrap();
     let manager = Manager::new(Arc::new(|_, _| Ok(())));
-    let definitions = BTreeMap::from([("quiet".into(), definition(root.path(), "quiet"))]);
+    let definitions = BTreeMap::from([("quiet".into(), definition(manager_root.path(), "quiet"))]);
     let weak = Arc::downgrade(&manager);
     let task_manager = manager.clone();
     let task = tokio::spawn(async move {
@@ -332,7 +341,7 @@ async fn launch_refuses_unbounded_readonly_execution_and_reaps_failed_or_cancell
             )
             .await;
     });
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    let pid = published_pid(manager_root.path()).await;
     manager.stop(None, true).await;
     tokio::time::timeout(Duration::from_secs(3), task)
         .await
@@ -341,9 +350,5 @@ async fn launch_refuses_unbounded_readonly_execution_and_reaps_failed_or_cancell
     assert!(!manager.has_servers());
     drop(manager);
     assert!(weak.upgrade().is_none());
-    let pid = fs::read_to_string(root.path().join("server.pid"))
-        .unwrap()
-        .parse()
-        .unwrap();
     wait_stopped(&[pid]).await;
 }

@@ -36,12 +36,17 @@ fn all_go_permission_verdicts_and_shell_boundaries_match() {
     let rows: Vec<Value> =
         serde_json::from_str(include_str!("data/go-command-boundaries.json")).unwrap();
     for row in rows {
+        let expected: Vec<String> = serde_json::from_value(row["paths"].clone()).unwrap();
+        let expected: Vec<_> = expected
+            .into_iter()
+            .map(|path| path.replace("<home>", &std::env::var("HOME").unwrap()))
+            .collect();
         assert_eq!(
             json!(scope::bash_path_candidates(
                 row["command"].as_str().unwrap(),
                 Path::new("/work/repo")
             )),
-            row["paths"],
+            json!(expected),
             "{row}"
         );
     }

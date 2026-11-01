@@ -20,11 +20,11 @@
   {
     "command": "grep -r x ~/other",
     "paths": [
-      "/root/other"
+      "<home>/other"
     ]
   },
   {
-    "command": "cd /tmp/build \u0026\u0026 make",
+    "command": "cd /tmp/build && make",
     "paths": [
       "/tmp/build"
     ]
@@ -36,13 +36,13 @@
     ]
   },
   {
-    "command": "go test ./... \u003e /tmp/out.txt",
+    "command": "go test ./... > /tmp/out.txt",
     "paths": [
       "/tmp/out.txt"
     ]
   },
   {
-    "command": "make 2\u003e/var/log/x.log",
+    "command": "make 2>/var/log/x.log",
     "paths": [
       "/var/log/x.log"
     ]
@@ -60,7 +60,7 @@
     ]
   },
   {
-    "command": "echo hi \u003e /dev/null",
+    "command": "echo hi > /dev/null",
     "paths": []
   },
   {
@@ -90,7 +90,7 @@
   {
     "command": "cat $HOME/.ssh/id_rsa",
     "paths": [
-      "/root/.ssh/id_rsa"
+      "<home>/.ssh/id_rsa"
     ]
   },
   {
@@ -118,7 +118,7 @@
     ]
   },
   {
-    "command": "echo x 2\u003e\u003e /tmp/log; cat /etc/x",
+    "command": "echo x 2>> /tmp/log; cat /etc/x",
     "paths": [
       "/tmp/log",
       "/etc/x"

@@ -3,7 +3,9 @@ import json, os, pathlib, subprocess, sys
 
 root = pathlib.Path(sys.argv[1])
 mode = sys.argv[2] if len(sys.argv) > 2 else "ordinary"
-root.joinpath("server.pid").write_text(str(os.getpid()))
+pid_file = root.joinpath(f".server.{os.getpid()}.pid")
+pid_file.write_text(str(os.getpid()))
+os.replace(pid_file, root.joinpath("server.pid"))
 if mode == "fail":
     sys.stderr.write("fixture failed: " + "x" * 5000)
     sys.stderr.flush()
