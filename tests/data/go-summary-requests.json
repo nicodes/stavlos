@@ -1,0 +1,94 @@
+[
+  {
+    "ignore_max": false,
+    "previous": "",
+    "request": {
+      "Model": "fixture-model",
+      "System": "You summarise an AI coding agent's conversation so another agent can continue the work with less context. Be concrete and complete; omit pleasantries. Write the summary as this Markdown, keeping every heading in this order, and \"(none)\" under a heading with nothing to say:\n\n## Task\n- what the human asked for, and the current status\n\n## Decisions\n- what was decided and why, and constraints the human gave\n\n## Work so far\n- what is done and verified\n- what is in progress, and where it stands\n- what is blocked, with the error or unknown\n\n## Files and commands\n- paths touched and why they matter; commands run and their outcomes\n\n## Next\n- the next concrete step, then the one after it\n\nRules: terse bullets, not prose. Keep exact paths, identifiers, commands and error text. Do not mention this summary or that the conversation was compacted.",
+      "Messages": [
+        {
+          "role": "user",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Summarise this transcript:\n\nuser: task\nassistant: worked"
+            }
+          ]
+        }
+      ],
+      "Tools": null,
+      "MaxTokens": 4000,
+      "Variant": "",
+      "CacheKey": ""
+    }
+  },
+  {
+    "ignore_max": false,
+    "previous": "Earlier task λ\nKeep constraint.",
+    "request": {
+      "Model": "fixture-model",
+      "System": "You summarise an AI coding agent's conversation so another agent can continue the work with less context. Be concrete and complete; omit pleasantries. Write the summary as this Markdown, keeping every heading in this order, and \"(none)\" under a heading with nothing to say:\n\n## Task\n- what the human asked for, and the current status\n\n## Decisions\n- what was decided and why, and constraints the human gave\n\n## Work so far\n- what is done and verified\n- what is in progress, and where it stands\n- what is blocked, with the error or unknown\n\n## Files and commands\n- paths touched and why they matter; commands run and their outcomes\n\n## Next\n- the next concrete step, then the one after it\n\nRules: terse bullets, not prose. Keep exact paths, identifiers, commands and error text. Do not mention this summary or that the conversation was compacted.\n\nThe transcript follows an earlier summary of everything before it. Merge both: carry forward every still-relevant task, decision and constraint from the earlier summary even when the transcript does not mention it, drop what is finished, and where they disagree the transcript is newer and wins.",
+      "Messages": [
+        {
+          "role": "user",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Earlier summary of the conversation before this transcript:\n\nEarlier task λ\nKeep constraint.\n\n---\n\nSummarise this transcript:\n\nuser: task\nassistant: worked"
+            }
+          ]
+        }
+      ],
+      "Tools": null,
+      "MaxTokens": 4000,
+      "Variant": "",
+      "CacheKey": ""
+    }
+  },
+  {
+    "ignore_max": true,
+    "previous": "",
+    "request": {
+      "Model": "fixture-model",
+      "System": "You summarise an AI coding agent's conversation so another agent can continue the work with less context. Be concrete and complete; omit pleasantries. Write the summary as this Markdown, keeping every heading in this order, and \"(none)\" under a heading with nothing to say:\n\n## Task\n- what the human asked for, and the current status\n\n## Decisions\n- what was decided and why, and constraints the human gave\n\n## Work so far\n- what is done and verified\n- what is in progress, and where it stands\n- what is blocked, with the error or unknown\n\n## Files and commands\n- paths touched and why they matter; commands run and their outcomes\n\n## Next\n- the next concrete step, then the one after it\n\nRules: terse bullets, not prose. Keep exact paths, identifiers, commands and error text. Do not mention this summary or that the conversation was compacted. Keep the summary under 2,500 words.",
+      "Messages": [
+        {
+          "role": "user",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Summarise this transcript:\n\nuser: task\nassistant: worked"
+            }
+          ]
+        }
+      ],
+      "Tools": null,
+      "MaxTokens": 0,
+      "Variant": "",
+      "CacheKey": ""
+    }
+  },
+  {
+    "ignore_max": true,
+    "previous": "Earlier task λ\nKeep constraint.",
+    "request": {
+      "Model": "fixture-model",
+      "System": "You summarise an AI coding agent's conversation so another agent can continue the work with less context. Be concrete and complete; omit pleasantries. Write the summary as this Markdown, keeping every heading in this order, and \"(none)\" under a heading with nothing to say:\n\n## Task\n- what the human asked for, and the current status\n\n## Decisions\n- what was decided and why, and constraints the human gave\n\n## Work so far\n- what is done and verified\n- what is in progress, and where it stands\n- what is blocked, with the error or unknown\n\n## Files and commands\n- paths touched and why they matter; commands run and their outcomes\n\n## Next\n- the next concrete step, then the one after it\n\nRules: terse bullets, not prose. Keep exact paths, identifiers, commands and error text. Do not mention this summary or that the conversation was compacted.\n\nThe transcript follows an earlier summary of everything before it. Merge both: carry forward every still-relevant task, decision and constraint from the earlier summary even when the transcript does not mention it, drop what is finished, and where they disagree the transcript is newer and wins. Keep the summary under 2,500 words.",
+      "Messages": [
+        {
+          "role": "user",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Earlier summary of the conversation before this transcript:\n\nEarlier task λ\nKeep constraint.\n\n---\n\nSummarise this transcript:\n\nuser: task\nassistant: worked"
+            }
+          ]
+        }
+      ],
+      "Tools": null,
+      "MaxTokens": 0,
+      "Variant": "",
+      "CacheKey": ""
+    }
+  }
+]

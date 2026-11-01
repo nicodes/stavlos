@@ -1,0 +1,1025 @@
+[
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "state A"
+      }
+    ],
+    "note": "state A",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          },
+          {
+            "type": "text",
+            "text": "state A"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "answer"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "more"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "state A"
+      },
+      {
+        "block": 1,
+        "message": 2,
+        "synthetic": false,
+        "text": "state B"
+      }
+    ],
+    "note": "state B",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          },
+          {
+            "type": "text",
+            "text": "state A"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "answer"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "more"
+          },
+          {
+            "type": "text",
+            "text": "state B"
+          }
+        ]
+      }
+    ],
+    "prior": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "state A"
+      }
+    ]
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "answer"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "more"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "another"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "state A"
+      },
+      {
+        "block": 1,
+        "message": 2,
+        "synthetic": false,
+        "text": "state B"
+      },
+      {
+        "block": 0,
+        "message": 4,
+        "synthetic": true,
+        "text": "state C"
+      }
+    ],
+    "note": "state C",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          },
+          {
+            "type": "text",
+            "text": "state A"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "answer"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "more"
+          },
+          {
+            "type": "text",
+            "text": "state B"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "another"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "state C"
+          }
+        ]
+      }
+    ],
+    "prior": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "state A"
+      },
+      {
+        "block": 1,
+        "message": 2,
+        "synthetic": false,
+        "text": "state B"
+      }
+    ]
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "answer"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "more"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "another"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "state A"
+      },
+      {
+        "block": 1,
+        "message": 2,
+        "synthetic": false,
+        "text": "state B"
+      },
+      {
+        "block": 0,
+        "message": 4,
+        "synthetic": true,
+        "text": "state C"
+      },
+      {
+        "block": 1,
+        "message": 4,
+        "synthetic": false,
+        "text": "state D"
+      }
+    ],
+    "note": "state D",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          },
+          {
+            "type": "text",
+            "text": "state A"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "answer"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "more"
+          },
+          {
+            "type": "text",
+            "text": "state B"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "another"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "state C"
+          },
+          {
+            "type": "text",
+            "text": "state D"
+          }
+        ]
+      }
+    ],
+    "prior": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "state A"
+      },
+      {
+        "block": 1,
+        "message": 2,
+        "synthetic": false,
+        "text": "state B"
+      },
+      {
+        "block": 0,
+        "message": 4,
+        "synthetic": true,
+        "text": "state C"
+      }
+    ]
+  },
+  {
+    "history": null,
+    "kept": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": true,
+        "text": "(continue)"
+      }
+    ],
+    "note": "",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "(continue)"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": null,
+    "kept": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": true,
+        "text": "state λ"
+      }
+    ],
+    "note": "state λ",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "state λ"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [],
+    "kept": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": true,
+        "text": "(continue)"
+      }
+    ],
+    "note": "",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "(continue)"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [],
+    "kept": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": true,
+        "text": "state λ"
+      }
+    ],
+    "note": "state λ",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "state λ"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": null
+      }
+    ],
+    "kept": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": false,
+        "text": "(continue)"
+      }
+    ],
+    "note": "",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "(continue)"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": null
+      }
+    ],
+    "kept": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": false,
+        "text": "state λ"
+      }
+    ],
+    "note": "state λ",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "state λ"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": []
+      }
+    ],
+    "kept": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": false,
+        "text": "(continue)"
+      }
+    ],
+    "note": "",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "(continue)"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": []
+      }
+    ],
+    "kept": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": false,
+        "text": "state λ"
+      }
+    ],
+    "note": "state λ",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "state λ"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 0,
+        "message": 1,
+        "synthetic": true,
+        "text": "(continue)"
+      }
+    ],
+    "note": "",
+    "output": [
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "(continue)"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 0,
+        "message": 1,
+        "synthetic": true,
+        "text": "state λ"
+      }
+    ],
+    "note": "state λ",
+    "output": [
+      {
+        "role": "assistant",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "state λ"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      }
+    ],
+    "kept": [],
+    "note": "",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "state λ"
+      }
+    ],
+    "note": "state λ",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "hello"
+          },
+          {
+            "type": "text",
+            "text": "state λ"
+          }
+        ]
+      }
+    ],
+    "prior": []
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "new"
+      }
+    ],
+    "note": "new",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          },
+          {
+            "type": "text",
+            "text": "new"
+          }
+        ]
+      }
+    ],
+    "prior": [
+      {
+        "block": 0,
+        "message": -1,
+        "synthetic": false,
+        "text": "bad"
+      }
+    ]
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "new"
+      }
+    ],
+    "note": "new",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          },
+          {
+            "type": "text",
+            "text": "new"
+          }
+        ]
+      }
+    ],
+    "prior": [
+      {
+        "block": 0,
+        "message": 999,
+        "synthetic": false,
+        "text": "bad"
+      }
+    ]
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 1,
+        "message": 0,
+        "synthetic": false,
+        "text": "new"
+      }
+    ],
+    "note": "new",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          },
+          {
+            "type": "text",
+            "text": "new"
+          }
+        ]
+      }
+    ],
+    "prior": [
+      {
+        "block": 99,
+        "message": 0,
+        "synthetic": false,
+        "text": "bad"
+      }
+    ]
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 0,
+        "message": 1,
+        "synthetic": true,
+        "text": "inserted"
+      },
+      {
+        "block": 1,
+        "message": 1,
+        "synthetic": false,
+        "text": "new"
+      }
+    ],
+    "note": "new",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "inserted"
+          },
+          {
+            "type": "text",
+            "text": "new"
+          }
+        ]
+      }
+    ],
+    "prior": [
+      {
+        "block": 0,
+        "message": 1,
+        "synthetic": true,
+        "text": "inserted"
+      }
+    ]
+  },
+  {
+    "history": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          }
+        ]
+      }
+    ],
+    "kept": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": true,
+        "text": "inserted"
+      },
+      {
+        "block": 1,
+        "message": 1,
+        "synthetic": false,
+        "text": "new"
+      }
+    ],
+    "note": "new",
+    "output": [
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "inserted"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "blocks": [
+          {
+            "type": "text",
+            "text": "base"
+          },
+          {
+            "type": "text",
+            "text": "new"
+          }
+        ]
+      }
+    ],
+    "prior": [
+      {
+        "block": 0,
+        "message": 0,
+        "synthetic": true,
+        "text": "inserted"
+      }
+    ]
+  }
+]

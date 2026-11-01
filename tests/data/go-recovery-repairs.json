@@ -1,0 +1,461 @@
+[
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 1,
+        "channel": "repair",
+        "type": "channel.created",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "repair",
+          "dir": "/tmp/TestRustConversationFixture3387623997/001",
+          "role": "general"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 2,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "a1",
+          "role": "general",
+          "name": "main",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 3,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "turn.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "turn": 2
+        }
+      },
+      {
+        "global": 0,
+        "seq": 4,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "ask.requested",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "q2",
+          "kind": "tool"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 5,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "ask.requested",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "q1",
+          "kind": "tool"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 6,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "compaction.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "before": 100
+        }
+      },
+      {
+        "global": 0,
+        "seq": 7,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "job.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "j2",
+          "command": "fixture"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 8,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "job.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "j1",
+          "command": "fixture"
+        }
+      }
+    ],
+    "repairs": [
+      {
+        "agent": "a1",
+        "payload": {
+          "turn": 2
+        },
+        "type": "turn.aborted"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "id": "q1",
+          "outcome": "withdrawn"
+        },
+        "type": "ask.resolved"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "id": "q2",
+          "outcome": "withdrawn"
+        },
+        "type": "ask.resolved"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "error": "interrupted by a daemon restart"
+        },
+        "type": "compaction.failed"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "exit_code": -1,
+          "id": "j1",
+          "is_error": true,
+          "summary": "background job lost in a daemon restart; rerun it if you still need the result"
+        },
+        "type": "job.finished"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "id": "\u003cid\u003e",
+          "job": "j1",
+          "kind": "job"
+        },
+        "type": "input.queued"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "exit_code": -1,
+          "id": "j2",
+          "is_error": true,
+          "summary": "background job lost in a daemon restart; rerun it if you still need the result"
+        },
+        "type": "job.finished"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "id": "\u003cid\u003e",
+          "job": "j2",
+          "kind": "job"
+        },
+        "type": "input.queued"
+      }
+    ]
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 1,
+        "channel": "repair",
+        "type": "channel.created",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "repair",
+          "dir": "/tmp/TestRustConversationFixture3387623997/002",
+          "role": "general"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 2,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "a1",
+          "role": "general",
+          "name": "main",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 3,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "turn.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "turn": 2
+        }
+      },
+      {
+        "global": 0,
+        "seq": 4,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "ask.requested",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "q2",
+          "kind": "tool"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 5,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "ask.requested",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "q1",
+          "kind": "tool"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 6,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "compaction.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "before": 100
+        }
+      },
+      {
+        "global": 0,
+        "seq": 7,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "job.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "j2",
+          "command": "fixture"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 8,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "job.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "j1",
+          "command": "fixture"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 9,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "agent.killed",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": null
+      }
+    ],
+    "repairs": [
+      {
+        "agent": "a1",
+        "payload": {
+          "error": "interrupted by a daemon restart"
+        },
+        "type": "compaction.failed"
+      }
+    ]
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 1,
+        "channel": "repair",
+        "type": "channel.created",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "repair",
+          "dir": "/tmp/TestRustConversationFixture3387623997/003",
+          "role": "general"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 2,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "a1",
+          "role": "general",
+          "name": "main",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 3,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "turn.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "turn": 2
+        }
+      },
+      {
+        "global": 0,
+        "seq": 4,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "ask.requested",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "q2",
+          "kind": "tool"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 5,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "ask.requested",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "q1",
+          "kind": "tool"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 6,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "compaction.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "before": 100
+        }
+      },
+      {
+        "global": 0,
+        "seq": 7,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "job.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "j2",
+          "command": "fixture"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 8,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "job.started",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "j1",
+          "command": "fixture"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 9,
+        "channel": "repair",
+        "type": "channel.archived",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": null
+      }
+    ],
+    "repairs": [
+      {
+        "agent": "a1",
+        "payload": {
+          "turn": 2
+        },
+        "type": "turn.aborted"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "id": "q1",
+          "outcome": "withdrawn"
+        },
+        "type": "ask.resolved"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "id": "q2",
+          "outcome": "withdrawn"
+        },
+        "type": "ask.resolved"
+      },
+      {
+        "agent": "a1",
+        "payload": {
+          "error": "interrupted by a daemon restart"
+        },
+        "type": "compaction.failed"
+      }
+    ]
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 1,
+        "channel": "repair",
+        "type": "channel.created",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "repair",
+          "dir": "/tmp/TestRustConversationFixture3387623997/004",
+          "role": "general"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 2,
+        "channel": "repair",
+        "agent": "a1",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "a1",
+          "role": "general",
+          "name": "main",
+          "depth": 0
+        }
+      }
+    ],
+    "repairs": []
+  }
+]
