@@ -27,6 +27,12 @@ pub fn finite_f64<S: Serializer>(value: &f64, s: S) -> Result<S::Ok, S::Error> {
     }
     s.serialize_f64(*value)
 }
+pub fn finite_f64_slice<S: Serializer>(value: &Slice<f64>, s: S) -> Result<S::Ok, S::Error> {
+    if value.iter().any(|number| !number.is_finite()) {
+        return Err(serde::ser::Error::custom("non-finite JSON number"));
+    }
+    value.serialize(s)
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct Slice<T>(pub Option<Vec<T>>);
@@ -201,6 +207,9 @@ macro_rules! wire_struct {
     };
     (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>float,$($rest:tt)*) => {
         $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::null_default",serialize_with="crate::wire::finite_f64")]pub $field:$ty,] $($rest)*);
+    };
+    (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>floats,$($rest:tt)*) => {
+        $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::null_default",serialize_with="crate::wire::finite_f64_slice")]pub $field:$ty,] $($rest)*);
     };
     (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>float_optional,$($rest:tt)*) => {
         $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::null_default",serialize_with="crate::wire::finite_f64",skip_serializing_if="crate::wire::Empty::empty")]pub $field:$ty,] $($rest)*);
