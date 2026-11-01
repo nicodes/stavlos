@@ -1,4 +1,5 @@
 //! Provider-independent conversation and accounting contract.
+pub mod stream;
 use crate::{
     wire::{Slice, Time},
     wire_struct,
@@ -80,5 +81,84 @@ impl Block {
             text: Arc::from(text.into()),
             ..Self::default()
         }
+    }
+}
+pub type DeltaSink = Arc<dyn Fn(Delta) + Send + Sync>;
+#[derive(Clone, thiserror::Error, Debug)]
+pub enum CallError {
+    #[error("{0}")]
+    Permanent(String),
+    #[error("{0}")]
+    Transient(String),
+    #[error("{message}")]
+    Limit {
+        message: String,
+        retry_after: std::time::Duration,
+    },
+    #[error("operation cancelled")]
+    Cancelled,
+}
+#[derive(Clone, Debug, thiserror::Error)]
+#[error("{error}")]
+pub struct Failure {
+    pub response: Response,
+    pub error: CallError,
+}
+pub type CompleteResult = Result<Response, Failure>;
+pub type CompleteFuture<'a> =
+    std::pin::Pin<Box<dyn std::future::Future<Output = CompleteResult> + Send + 'a>>;
+pub trait Model: Send + Sync {
+    fn complete(
+        &self,
+        request: Request,
+        on_delta: Option<DeltaSink>,
+        cancel: tokio_util::sync::CancellationToken,
+    ) -> CompleteFuture<'_>;
+}
+pub trait Provider: Send + Sync {
+    fn name(&self) -> &str;
+    fn open(&self, model_id: &str) -> Result<Arc<dyn Model>, CallError>;
+    fn variants(&self, _model_id: &str) -> Vec<String> {
+        Vec::new()
+    }
+    fn capabilities(&self, _model_id: &str) -> Capabilities {
+        Capabilities::default()
+    }
+}
+#[derive(Clone, Default)]
+pub struct Token {
+    pub access: String,
+    pub account_id: String,
+}
+impl std::fmt::Debug for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Token")
+            .field("access", &"[redacted]")
+            .field("account_id", &self.account_id)
+            .finish()
+    }
+}
+pub type TokenFuture =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<Token, CallError>> + Send>>;
+pub type TokenSource =
+    Arc<dyn Fn(tokio_util::sync::CancellationToken) -> TokenFuture + Send + Sync>;
+pub fn tool_schema(tool: &ToolDef) -> Box<RawValue> {
+    tool.schema.clone().unwrap_or_else(|| {
+        RawValue::from_string(r#"{"type":"object","properties":{}}"#.into()).unwrap()
+    })
+}
+pub fn tool_arguments(block: &Block) -> &str {
+    block.input.as_ref().map_or("{}", |raw| raw.get())
+}
+pub fn tool_result_text(block: &Block) -> String {
+    let output = if block.content.is_empty() {
+        "(no output)"
+    } else {
+        &block.content
+    };
+    if block.is_error && !output.starts_with("Error") {
+        format!("Error: {output}")
+    } else {
+        output.into()
     }
 }

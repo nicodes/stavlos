@@ -1,0 +1,200 @@
+[
+  {
+    "body": "",
+    "done": false,
+    "error": "",
+    "lines": 0,
+    "values": []
+  },
+  {
+    "body": "\n",
+    "done": false,
+    "error": "",
+    "lines": 1,
+    "values": []
+  },
+  {
+    "body": "data: one\n\n",
+    "done": false,
+    "error": "",
+    "lines": 2,
+    "values": [
+      "one"
+    ]
+  },
+  {
+    "body": "data: one\n",
+    "done": false,
+    "error": "",
+    "lines": 1,
+    "values": [
+      "one"
+    ]
+  },
+  {
+    "body": "data: one",
+    "done": false,
+    "error": "",
+    "lines": 1,
+    "values": [
+      "one"
+    ]
+  },
+  {
+    "body": "data: one\ndata: two\n\n",
+    "done": false,
+    "error": "",
+    "lines": 3,
+    "values": [
+      "one\ntwo"
+    ]
+  },
+  {
+    "body": "data:\n\ndata: two\n\n",
+    "done": false,
+    "error": "",
+    "lines": 4,
+    "values": [
+      "two"
+    ]
+  },
+  {
+    "body": ": heartbeat\n\ndata: two\n\n",
+    "done": false,
+    "error": "",
+    "lines": 4,
+    "values": [
+      "two"
+    ]
+  },
+  {
+    "body": "event: message\nid: 3\ndata: λ雪\n\n",
+    "done": false,
+    "error": "",
+    "lines": 4,
+    "values": [
+      "λ雪"
+    ]
+  },
+  {
+    "body": "data:  leading\n\n",
+    "done": false,
+    "error": "",
+    "lines": 2,
+    "values": [
+      " leading"
+    ]
+  },
+  {
+    "body": "data:one\n\n",
+    "done": false,
+    "error": "",
+    "lines": 2,
+    "values": [
+      "one"
+    ]
+  },
+  {
+    "body": "data: one\r\n\r\n",
+    "done": false,
+    "error": "",
+    "lines": 2,
+    "values": [
+      "one"
+    ]
+  },
+  {
+    "body": "data: one\r",
+    "done": false,
+    "error": "",
+    "lines": 1,
+    "values": [
+      "one"
+    ]
+  },
+  {
+    "body": "data: [DONE]\n\ndata: ignored\n\n",
+    "done": true,
+    "error": "",
+    "lines": 2,
+    "values": []
+  },
+  {
+    "body": "data: first\n\ndata: [DONE]\n\n",
+    "done": true,
+    "error": "",
+    "lines": 4,
+    "values": [
+      "first"
+    ]
+  },
+  {
+    "body": "data:  [DONE] \n\n",
+    "done": true,
+    "error": "",
+    "lines": 2,
+    "values": []
+  },
+  {
+    "body": "data: stop\n\ndata: ignored\n\n",
+    "done": true,
+    "error": "",
+    "lines": 2,
+    "values": [
+      "stop"
+    ]
+  },
+  {
+    "body": "data: fail:hard\n\n",
+    "done": false,
+    "error": "hard",
+    "lines": 2,
+    "values": [
+      "fail:hard"
+    ]
+  },
+  {
+    "body": "data: fail:at capacity\n\n",
+    "done": false,
+    "error": "at capacity",
+    "lines": 2,
+    "values": [
+      "fail:at capacity"
+    ]
+  },
+  {
+    "body": "data: one\nunknown\ndata: two",
+    "done": false,
+    "error": "",
+    "lines": 3,
+    "values": [
+      "one\ntwo"
+    ]
+  },
+  {
+    "body": " data: ignored\n\n",
+    "done": false,
+    "error": "",
+    "lines": 2,
+    "values": []
+  },
+  {
+    "body": "data:\ndata:two\n\n",
+    "done": false,
+    "error": "",
+    "lines": 3,
+    "values": [
+      "two"
+    ]
+  },
+  {
+    "body": "data: one\n\n\n\ndata: two\n\n",
+    "done": false,
+    "error": "",
+    "lines": 6,
+    "values": [
+      "one",
+      "two"
+    ]
+  }
+]
