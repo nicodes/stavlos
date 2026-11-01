@@ -8,6 +8,7 @@ pub mod permission;
 pub mod pick;
 pub mod prompt;
 pub mod routing;
+pub mod runtime;
 pub mod scope;
 pub mod security;
 pub mod services;

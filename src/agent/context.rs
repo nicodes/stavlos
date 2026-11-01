@@ -38,6 +38,10 @@ impl Conversation {
     pub fn gauge(&self) -> (i64, i64) {
         *self.gauge.lock().unwrap()
     }
+    pub fn refresh_gauge(&self, system: &str, definitions: &[model::ToolDef], window: i64) {
+        let tokens = project::estimate_tokens(&self.history(), system, definitions);
+        *self.gauge.lock().unwrap() = (tokens, window);
+    }
     pub fn with_notes(&self, history: Vec<model::Message>, note: &str) -> Vec<model::Message> {
         let mut prior = self.notes.lock().unwrap();
         let (history, notes) = conversation::with_notes(history, &prior, note);
