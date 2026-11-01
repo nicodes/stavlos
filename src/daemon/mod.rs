@@ -12,4 +12,5 @@ mod handlers;
 mod logins;
 pub mod planusage;
 pub mod stream;
+pub mod sweep;
 pub mod web;

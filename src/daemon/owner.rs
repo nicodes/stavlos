@@ -16,7 +16,10 @@ use std::{
     collections::BTreeMap,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, RwLock, Weak},
+    sync::{
+        Arc, Mutex, RwLock, Weak,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
@@ -49,6 +52,7 @@ pub struct Daemon {
     lock: Mutex<Option<DataLock>>,
     close: tokio::sync::Mutex<bool>,
     tasks: TaskTracker,
+    loops_started: AtomicBool,
 }
 struct TrustPrompt {
     id: String,
@@ -190,6 +194,7 @@ impl Daemon {
                 lock: Mutex::new(Some(lock)),
                 close: tokio::sync::Mutex::new(false),
                 tasks: TaskTracker::new(),
+                loops_started: AtomicBool::new(false),
             }
         });
         daemon.load_plan_usage();
@@ -460,9 +465,7 @@ impl Daemon {
         providers.sort();
         protocol::DaemonStatusResult {
             version: protocol::VERSION,
-            build: option_env!("STAVLOS_BUILD")
-                .unwrap_or(env!("CARGO_PKG_VERSION"))
-                .into(),
+            build: crate::buildid::id().into(),
             pid: std::process::id() as i64,
             data_dir: self.paths.data.to_string_lossy().into_owned(),
             channels: channels.len() as i64,
@@ -656,6 +659,21 @@ impl Daemon {
         );
     }
     pub fn start_loops(self: &Arc<Self>) {
+        if self.loops_started.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        self.registry.enable_plan_polling();
+        let registry = self.registry.clone();
+        let cancel = self.cancel.clone();
+        self.tasks.spawn(async move {
+            registry.poll_all_plan_usage(Duration::ZERO, &cancel).await;
+        });
+        let root = self.paths.cache.join("tmp");
+        let cancel = self.cancel.clone();
+        self.tasks.spawn(async move {
+            let mut tick=tokio::time::interval(Duration::from_secs(6*60*60));tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            loop {tokio::select! {biased;_=cancel.cancelled()=>break,_=tick.tick()=>{let root=root.clone();let _=tokio::task::spawn_blocking(move||super::sweep::older(&root,std::time::SystemTime::now()-Duration::from_secs(7*24*60*60))).await;}}}
+        });
         let weak = self.owner.clone();
         let cancel = self.cancel.clone();
         self.tasks.spawn(async move {
