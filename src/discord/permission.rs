@@ -250,7 +250,7 @@ pub fn parse_id(id: &str) -> Option<(&str, &str, &str)> {
     Some((parts[1], parts[2], parts[3]))
 }
 pub fn button(id: &str, action: &str, label: &str, disabled: bool) -> Value {
-    let mut button = json!({"type":2,"style":2,"label":text::clip(label,80),"custom_id":component_id(id,action,"")});
+    let mut button = json!({"type":2,"style":2,"label":text::clip(label,80),"custom_id":component_id(id,action,""),"disabled":disabled});
     if disabled {
         button["disabled"] = json!(true);
     }
@@ -311,4 +311,100 @@ pub fn answer(
         _ => anyhow::bail!("invalid permission action"),
     }
     Ok(answer)
+}
+pub fn view(prompt: &protocol::PromptInfo, client: &str) -> (String, Vec<Value>) {
+    if prompt.kind == protocol::PROMPT_QUESTION {
+        return super::questions::prompt_view(
+            prompt,
+            &super::questions::Draft::new(prompt),
+            client,
+        );
+    }
+    let disabled = !prompt.claimed_by.is_empty() && prompt.claimed_by != client;
+    let mut body = format!("**{} · {}**\n{}", prompt.from, prompt.kind, prompt.question);
+    let mut buttons = Vec::new();
+    match prompt.kind.as_str() {
+        protocol::PROMPT_PERMISSION => {
+            body = heading(prompt);
+            buttons.push(button(&prompt.id, "allow", "Allow once", disabled));
+            if !prompt.dir.is_empty() {
+                buttons.push(button(
+                    &prompt.id,
+                    "always",
+                    "Allow and add directory",
+                    disabled,
+                ));
+            } else if !prompt.sticky {
+                buttons.push(button(
+                    &prompt.id,
+                    "always",
+                    "Allow for this channel",
+                    disabled,
+                ));
+                if !prompt.prefix.is_empty() {
+                    buttons.push(button(
+                        &prompt.id,
+                        "prefix",
+                        &format!("Allow {} for this channel", prompt.prefix),
+                        disabled,
+                    ));
+                }
+            }
+            buttons.extend([
+                button(&prompt.id, "deny-now", "Deny", disabled),
+                button(&prompt.id, "deny", "Deny with reason", disabled),
+            ]);
+        }
+        protocol::PROMPT_TRUST => {
+            body = trust_text(prompt);
+            buttons.extend([
+                button(&prompt.id, "allow", "Trust this project's config", disabled),
+                button(&prompt.id, "skip", "Not now", disabled),
+            ]);
+        }
+        _ => {}
+    }
+    if prompt.kind == protocol::PROMPT_PERMISSION && prompt.input.is_some() {
+        body.push('\n');
+        body.push_str(&subject(prompt));
+    }
+    if disabled {
+        body.push_str("\nClaimed by another client.");
+    }
+    (body, vec![row(buttons)])
+}
+pub fn recorded_result(
+    prompt: &protocol::PromptInfo,
+    result: &crate::event::AskResolvedPayload,
+) -> String {
+    let mut prompt = prompt.clone();
+    prompt.claimed_by.clear();
+    let (body, _) = view(&prompt, "");
+    let mark = if result.outcome == crate::event::ASK_WITHDRAWN {
+        "⏹️"
+    } else {
+        match result.answer.as_str() {
+            "allow" | "allow_always" | "allow_prefix" => "✔️",
+            "deny" => "❌",
+            _ => "ℹ️",
+        }
+    };
+    let decision = protocol::permission_result(&prompt, result)
+        .replace("\r\n", " ")
+        .replace(['\r', '\n'], " ");
+    let decision = text::clip(&text::escape(&decision), 1000)
+        .trim_end_matches('\\')
+        .to_owned();
+    let note = format!(" {mark} **{decision}**");
+    let (head, rest) = body
+        .split_once('\n')
+        .map_or((body.as_str(), None), |(head, body)| (head, Some(body)));
+    let head = text::clip(head, 2000usize.saturating_sub(text::units(&note))) + &note;
+    if let Some(rest) = rest
+        && text::units(&head) < 2000
+    {
+        let limit = 1999 - text::units(&head);
+        return head + "\n" + &text::clip_markdown(rest, limit);
+    }
+    head
 }

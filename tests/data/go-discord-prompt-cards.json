@@ -1,0 +1,3124 @@
+[
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow for this channel",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed for this channel · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed prefix:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "escalated": false,
+      "created": ""
+    },
+    "text": "❗ **Shell**\n```sh\necho \u003chi\u003e\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed for this channel · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed prefix:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "escalated": false,
+      "created": "",
+      "sticky": true
+    },
+    "text": "❗ **Shell**\n```sh\necho \u003chi\u003e\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow and add directory",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed and added directory: /edited · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed prefix:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "escalated": false,
+      "created": "",
+      "dir": "/outside"
+    },
+    "text": "❗ **Shell** /outside\n```sh\necho \u003chi\u003e\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow and add directory",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed and added directory: /edited · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed prefix:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "sticky": true
+    },
+    "text": "❗ **Shell** /outside\n```sh\necho \u003chi\u003e\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow for this channel",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Allow git status for this channel",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|prefix|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed for this channel · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed prefix: git status · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "escalated": false,
+      "created": "",
+      "prefix": "git status"
+    },
+    "text": "❗ **Shell**\n```sh\necho \u003chi\u003e\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed for this channel · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed prefix: git status · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "escalated": false,
+      "created": "",
+      "sticky": true,
+      "prefix": "git status"
+    },
+    "text": "❗ **Shell**\n```sh\necho \u003chi\u003e\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow and add directory",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed and added directory: /edited · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed prefix: git status · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "prefix": "git status"
+    },
+    "text": "❗ **Shell** /outside\n```sh\necho \u003chi\u003e\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow and add directory",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed and added directory: /edited · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed prefix: git status · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "sticky": true,
+      "prefix": "git status"
+    },
+    "text": "❗ **Shell** /outside\n```sh\necho \u003chi\u003e\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow for this channel",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed for this channel · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed prefix:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": ""
+    },
+    "text": "❗ **Shell**\n```sh\necho \u003chi\u003e\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed for this channel · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed prefix:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "sticky": true
+    },
+    "text": "❗ **Shell**\n```sh\necho \u003chi\u003e\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow and add directory",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed and added directory: /edited · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed prefix:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "dir": "/outside"
+    },
+    "text": "❗ **Shell** /outside\n```sh\necho \u003chi\u003e\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow and add directory",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed and added directory: /edited · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed prefix:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "sticky": true
+    },
+    "text": "❗ **Shell** /outside\n```sh\necho \u003chi\u003e\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow for this channel",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Allow git status for this channel",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|prefix|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed for this channel · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed prefix: git status · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "prefix": "git status"
+    },
+    "text": "❗ **Shell**\n```sh\necho \u003chi\u003e\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed for this channel · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ✔️ **Allowed prefix: git status · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "sticky": true,
+      "prefix": "git status"
+    },
+    "text": "❗ **Shell**\n```sh\necho \u003chi\u003e\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow and add directory",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed and added directory: /edited · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed prefix: git status · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "prefix": "git status"
+    },
+    "text": "❗ **Shell** /outside\n```sh\necho \u003chi\u003e\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Allow once",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Allow and add directory",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|always|",
+            "type": 2
+          },
+          {
+            "label": "Deny",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny-now|",
+            "type": 2
+          },
+          {
+            "label": "Deny with reason",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|deny|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed once · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed and added directory: /edited · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ✔️ **Allowed prefix: git status · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ❌ **Denied · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Shell** /outside ℹ️ **Permission resolved:  · explain reason**\n```sh\necho \u003chi\u003e\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "permission",
+      "tool": "shell",
+      "input": {
+        "command": "echo \u003chi\u003e"
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "sticky": true,
+      "prefix": "git status"
+    },
+    "text": "❗ **Shell** /outside\n```sh\necho \u003chi\u003e\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed for this channel · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "escalated": false,
+      "created": ""
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed for this channel · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "escalated": false,
+      "created": "",
+      "sticky": true
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed and added directory: /edited · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "escalated": false,
+      "created": "",
+      "dir": "/outside"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed and added directory: /edited · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "sticky": true
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed for this channel · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix: git status · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "escalated": false,
+      "created": "",
+      "prefix": "git status"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed for this channel · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix: git status · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "escalated": false,
+      "created": "",
+      "sticky": true,
+      "prefix": "git status"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed and added directory: /edited · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix: git status · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "prefix": "git status"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": false,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed and added directory: /edited · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix: git status · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "sticky": true,
+      "prefix": "git status"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```"
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed for this channel · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": ""
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed for this channel · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "sticky": true
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed and added directory: /edited · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "dir": "/outside"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed and added directory: /edited · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "sticky": true
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed for this channel · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix: git status · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "prefix": "git status"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed for this channel · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix: git status · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "sticky": true,
+      "prefix": "git status"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed and added directory: /edited · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix: git status · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "prefix": "git status"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```\nClaimed by another client."
+  },
+  {
+    "controls": [
+      {
+        "components": [
+          {
+            "label": "Trust this project's config",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|allow|",
+            "type": 2
+          },
+          {
+            "label": "Not now",
+            "style": 2,
+            "disabled": true,
+            "custom_id": "sv|p1|skip|",
+            "type": 2
+          }
+        ],
+        "type": 1
+      }
+    ],
+    "outcomes": [
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed once · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed and added directory: /edited · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_always"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ✔️ **Allowed prefix: git status · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "allow_prefix"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ❌ **Denied · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered",
+          "answer": "deny"
+        }
+      },
+      {
+        "expected": "❗ **Project configuration trust** · /work ℹ️ **Permission resolved:  · explain reason**\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```",
+        "result": {
+          "reason": "explain\nreason",
+          "dir": "/edited",
+          "id": "",
+          "outcome": "answered"
+        }
+      }
+    ],
+    "prompt": {
+      "id": "p1",
+      "channel": "",
+      "from": "main",
+      "kind": "trust",
+      "tool": "shell",
+      "input": {
+        "dir": "/work",
+        "files": [
+          "AGENTS.md",
+          ".stavlos/stavlos.json"
+        ]
+      },
+      "claimed_by": "other",
+      "escalated": false,
+      "created": "",
+      "dir": "/outside",
+      "sticky": true,
+      "prefix": "git status"
+    },
+    "text": "❗ **Project configuration trust** · /work\nProject configuration can define MCP servers, policy, roles, skills and AGENTS.md.\nConfiguration files:\n```text\nAGENTS.md\n.stavlos/stavlos.json\n```\nClaimed by another client."
+  }
+]
