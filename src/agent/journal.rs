@@ -48,6 +48,7 @@ pub(crate) struct State {
     pub reconfiguring: bool,
     pub model_chosen: bool,
     pub wakes: BTreeMap<String, Arc<Notify>>,
+    pub log_errors: BTreeMap<String, String>,
 }
 pub struct Core {
     pub id: String,
@@ -84,6 +85,7 @@ impl Core {
                 reconfiguring: false,
                 model_chosen: chosen,
                 wakes: BTreeMap::new(),
+                log_errors: BTreeMap::new(),
             }),
             journal,
         }
@@ -141,6 +143,25 @@ impl Core {
     pub fn commit(&self, events: Vec<Event>, cancel: &CancellationToken) -> Result<()> {
         let mut state = self.state.lock().unwrap();
         self.commit_locked(&mut state, events, cancel)
+    }
+    /// A failed decision write prevents this agent from taking its next runtime step.
+    pub fn record(&self, agent: &str, events: Vec<Event>) -> Result<()> {
+        let mut state = self.state.lock().unwrap();
+        if let Err(error) = self.commit_locked(&mut state, events, &CancellationToken::new()) {
+            let message = format!("event log: {error:#}");
+            state
+                .log_errors
+                .entry(agent.into())
+                .or_insert_with(|| message.clone());
+            return Err(anyhow::anyhow!(message));
+        }
+        Ok(())
+    }
+    pub fn log_error(&self, agent: &str) -> Option<String> {
+        self.state.lock().unwrap().log_errors.get(agent).cloned()
+    }
+    pub fn clear_log_error(&self, agent: &str) {
+        self.state.lock().unwrap().log_errors.remove(agent);
     }
     pub(crate) fn fact_locked(
         &self,

@@ -61,7 +61,8 @@ pub struct AgentState {
     pub variant: String,
     pub depth: i64,
     pub children: Vec<String>,
-    pub directories: Vec<String>,
+    // None inherits the channel working set; Some([]) grants no task directories.
+    pub directories: crate::wire::Slice<String>,
     pub killed: bool,
     pub instructed: BTreeSet<String>,
     pub turn: i64,
@@ -397,7 +398,7 @@ impl ChannelState {
                             model: spawned.model,
                             variant: spawned.variant,
                             depth: spawned.depth,
-                            directories: spawned.directories.into_vec(),
+                            directories: spawned.directories,
                             ..AgentState::default()
                         },
                     );

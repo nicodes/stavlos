@@ -1,0 +1,133 @@
+[
+  {
+    "command": "ls",
+    "paths": []
+  },
+  {
+    "command": "cat README.md",
+    "paths": []
+  },
+  {
+    "command": "/usr/bin/env python3 run.py",
+    "paths": []
+  },
+  {
+    "command": "cat /etc/hostname",
+    "paths": [
+      "/etc/hostname"
+    ]
+  },
+  {
+    "command": "grep -r x ~/other",
+    "paths": [
+      "/root/other"
+    ]
+  },
+  {
+    "command": "cd /tmp/build \u0026\u0026 make",
+    "paths": [
+      "/tmp/build"
+    ]
+  },
+  {
+    "command": "cd ../sibling; ls",
+    "paths": [
+      "/work/sibling"
+    ]
+  },
+  {
+    "command": "go test ./... \u003e /tmp/out.txt",
+    "paths": [
+      "/tmp/out.txt"
+    ]
+  },
+  {
+    "command": "make 2\u003e/var/log/x.log",
+    "paths": [
+      "/var/log/x.log"
+    ]
+  },
+  {
+    "command": "rg --path=/srv/data foo",
+    "paths": [
+      "/srv/data"
+    ]
+  },
+  {
+    "command": "ls /opt/*/bin",
+    "paths": [
+      "/opt"
+    ]
+  },
+  {
+    "command": "echo hi \u003e /dev/null",
+    "paths": []
+  },
+  {
+    "command": "cat \"/etc/passwd\"",
+    "paths": [
+      "/etc/passwd"
+    ]
+  },
+  {
+    "command": "cat ../../etc/passwd",
+    "paths": [
+      "/etc/passwd"
+    ]
+  },
+  {
+    "command": "cp ../x .",
+    "paths": [
+      "/work/x"
+    ]
+  },
+  {
+    "command": "cat ./a/../b",
+    "paths": [
+      "/work/repo/b"
+    ]
+  },
+  {
+    "command": "cat $HOME/.ssh/id_rsa",
+    "paths": [
+      "/root/.ssh/id_rsa"
+    ]
+  },
+  {
+    "command": "ls ${PWD}/sub",
+    "paths": [
+      "/work/repo/sub"
+    ]
+  },
+  {
+    "command": "cat $STAVLOS_UNSET_VAR/etc/passwd",
+    "paths": [
+      "/etc/passwd"
+    ]
+  },
+  {
+    "command": "cat ~root/.ssh/id_rsa",
+    "paths": [
+      "/root/.ssh/id_rsa"
+    ]
+  },
+  {
+    "command": "echo ${UNSET} $! $$ $1 $PWD/path",
+    "paths": [
+      "/work/repo/path"
+    ]
+  },
+  {
+    "command": "echo x 2\u003e\u003e /tmp/log; cat /etc/x",
+    "paths": [
+      "/tmp/log",
+      "/etc/x"
+    ]
+  },
+  {
+    "command": "ls /** /opt/?/a",
+    "paths": [
+      "/opt"
+    ]
+  }
+]
