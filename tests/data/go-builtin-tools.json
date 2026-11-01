@@ -1,0 +1,2258 @@
+[
+  {
+    "error": false,
+    "input": "{\"name\": \"fixture\"}",
+    "output": "# Skill: Fixture\nDirectory: /skills/fixture\n\nFull instructions λ",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "fixture"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "fixture"
+      ]
+    },
+    "tool": "skill"
+  },
+  {
+    "error": true,
+    "input": "{\"name\": \"missing\"}",
+    "output": "unknown skill \"missing\"; available: fixture",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "missing"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "missing"
+      ]
+    },
+    "tool": "skill"
+  },
+  {
+    "error": true,
+    "input": "{\"name\": \"\"}",
+    "output": "unknown skill \"\"; available: fixture",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "skill"
+  },
+  {
+    "error": false,
+    "input": "{\"Name\": \"fixture\"}",
+    "output": "# Skill: Fixture\nDirectory: /skills/fixture\n\nFull instructions λ",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "fixture"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "fixture"
+      ]
+    },
+    "tool": "skill"
+  },
+  {
+    "error": true,
+    "input": "{}",
+    "output": "$ROOT is a directory",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "read"
+  },
+  {
+    "error": false,
+    "input": "{\"path\": \"text\"}",
+    "output": "one\ntwo\nλ雪\n",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "tool": "read"
+  },
+  {
+    "error": false,
+    "input": "{\"path\": \"text\", \"offset\": 2, \"limit\": 1}",
+    "output": "two\n… (more lines; continue with offset=3)\n",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "tool": "read"
+  },
+  {
+    "error": false,
+    "input": "{\"path\": \"text\", \"offset\": -9, \"limit\": -9}",
+    "output": "one\ntwo\nλ雪\n",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "tool": "read"
+  },
+  {
+    "error": false,
+    "input": "{\"path\": \"text\", \"offset\": 99}",
+    "output": "(empty file)",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "tool": "read"
+  },
+  {
+    "error": false,
+    "input": "{\"path\": \"empty\"}",
+    "output": "(empty file)",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "empty"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "empty"
+      ]
+    },
+    "tool": "read"
+  },
+  {
+    "error": true,
+    "input": "{\"path\": \"png\"}",
+    "output": "png is not a text file (image/png, 9 bytes): read cannot show it",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "png"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "png"
+      ]
+    },
+    "tool": "read"
+  },
+  {
+    "error": false,
+    "input": "{\"path\": \"text\", \"limit\": 99999}",
+    "output": "one\ntwo\nλ雪\n",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "tool": "read"
+  },
+  {
+    "error": false,
+    "input": "{\"PATH\": \"text\"}",
+    "output": "one\ntwo\nλ雪\n",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "text"
+      ]
+    },
+    "tool": "read"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"Hello\"}",
+    "output": "a/notes.md:1:Hello\na/x.go:1:Hello",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "grep"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"no-match\"}",
+    "output": "no matches",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "grep"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"hello\", \"ignore_case\": true}",
+    "output": "a/notes.md:1:Hello\na/x.go:1:Hello\na/x.go:2:hello",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "grep"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"Hello\", \"glob\": \"*.go\"}",
+    "output": "a/x.go:1:Hello",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "grep"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"a/*.go\"}",
+    "output": "no matches",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "grep"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"Hello\", \"path\": \"a\", \"limit\": 1}",
+    "output": "a/notes.md:1:Hello\n… (stopped at 1 matching lines; narrow the pattern or the path, or raise limit)",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "a"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "a"
+      ]
+    },
+    "tool": "grep"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"--pre=sh\"}",
+    "output": "no matches",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "grep"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"*.txt\"}",
+    "output": "no matches",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "glob"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"no-match\"}",
+    "output": "no matches",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "glob"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"hello\", \"ignore_case\": true}",
+    "output": "no matches",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "glob"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"Hello\", \"glob\": \"*.go\"}",
+    "output": "no matches",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "glob"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"a/*.go\"}",
+    "output": "a/x.go",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "glob"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"Hello\", \"path\": \"a\", \"limit\": 1}",
+    "output": "no matches",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "a"
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "a"
+      ]
+    },
+    "tool": "glob"
+  },
+  {
+    "error": false,
+    "input": "{\"pattern\": \"--pre=sh\"}",
+    "output": "no matches",
+    "policy": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "subject": {
+      "Kind": 2,
+      "Values": [
+        "."
+      ]
+    },
+    "tool": "glob"
+  },
+  {
+    "error": true,
+    "input": "{}",
+    "output": "action must be create, cancel or status",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "agent"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"bad\"}",
+    "output": "action must be create, cancel or status",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "agent"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"cancel\"}",
+    "output": "cancel requires id",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "cancel "
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "agent"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"create\"}",
+    "output": "create requires archetype, label and task",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "create "
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "agent"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"create\", \"archetype\": \"worker\", \"task\": \"complete\", \"label\": \"\"}",
+    "output": "label is required",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "create worker"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "worker"
+      ]
+    },
+    "tool": "agent"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"create\", \"archetype\": \"worker\", \"task\": \"complete\", \"label\": \"child\", \"directories\": [\"one\"]}",
+    "output": "created child (worker), id a2; address it by its name",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "create worker"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "worker"
+      ]
+    },
+    "tool": "agent"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"status\"}",
+    "output": "lead (you) [a1] running · turn 7 · $1.23 · owes 1 reply (r1 from child: Some words) · awaits other",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "status "
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "agent"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"cancel\", \"id\": \"child\"}",
+    "output": "cancelled",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "cancel child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "agent"
+  },
+  {
+    "error": true,
+    "input": "{}",
+    "output": "action must be create, list or read",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        " "
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        " "
+      ]
+    },
+    "tool": "channel"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"create\"}",
+    "output": "create requires name",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "create "
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "create "
+      ]
+    },
+    "tool": "channel"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"create\", \"name\": \"board\", \"members\": [\"child\"]}",
+    "output": "{\"caller\":\"agent\",\"members\":[\"child\"],\"name\":\"board\"}",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "create board"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "create board"
+      ]
+    },
+    "tool": "channel"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"list\"}",
+    "output": "boards for agent",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "list "
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "list "
+      ]
+    },
+    "tool": "channel"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"read\"}",
+    "output": "read requires channel",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "read "
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "read "
+      ]
+    },
+    "tool": "channel"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"read\", \"channel\": \"board\", \"from\": 0, \"limit\": 999}",
+    "output": "agent/board from 1 limit 500",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "read board"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "read board"
+      ]
+    },
+    "tool": "channel"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"read\", \"channel\": \"board\", \"from\": 8, \"limit\": 2}",
+    "output": "agent/board from 8 limit 2",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "read board"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "read board"
+      ]
+    },
+    "tool": "channel"
+  },
+  {
+    "error": true,
+    "input": "{}",
+    "output": "action must be write, list or delete",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "sheet"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"list\"}",
+    "output": "s1  \"Existing\"  by agent  12 bytes  /sheets/s1.html",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "list"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "list"
+      ]
+    },
+    "tool": "sheet"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"write\"}",
+    "output": "write needs html",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "write"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "write"
+      ]
+    },
+    "tool": "sheet"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"write\", \"html\": \"x\"}",
+    "output": "a new sheet needs a title",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "write"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "write"
+      ]
+    },
+    "tool": "sheet"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"write\", \"html\": \"\u003cp\u003eλ\u003c/p\u003e\", \"title\": \" Title \"}",
+    "output": "Sheet s1 created: \"Title\" (9 bytes), shown as a tab in the web UI.\nFile: /sheets/s1.html (edit it with read and patch)",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "write   Title"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "write   Title"
+      ]
+    },
+    "tool": "sheet"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"write\", \"html\": \"new\", \"id\": \"s2\"}",
+    "output": "Sheet s2 replaced: \"\" (3 bytes), shown as a tab in the web UI.\nFile: /sheets/s2.html (edit it with read and patch)",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "write s2"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "write s2"
+      ]
+    },
+    "tool": "sheet"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"delete\"}",
+    "output": "delete needs an id",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "delete"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "delete"
+      ]
+    },
+    "tool": "sheet"
+  },
+  {
+    "error": false,
+    "input": "{\"action\": \"delete\", \"id\": \"s1\"}",
+    "output": "Sheet s1 deleted.",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "delete s1"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "delete s1"
+      ]
+    },
+    "tool": "sheet"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"delete\", \"id\": \"missing\"}",
+    "output": "unknown sheet",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "delete missing"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "delete missing"
+      ]
+    },
+    "tool": "sheet"
+  },
+  {
+    "error": true,
+    "input": "{}",
+    "output": "nothing to do: give add, update, or both",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": false,
+    "input": "{\"add\": [{\"text\": \" new \"}]}",
+    "output": "added t2 [pending] new\n0 of 2 done",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        " new "
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        " new "
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": false,
+    "input": "{\"add\": [{\"text\": \" new \", \"status\": \"in_progress\"}], \"update\": [{\"id\": \"t1\", \"status\": \"done\"}]}",
+    "output": "added t2 [in_progress] new\nt1 → done\n1 of 2 done",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        " new \nt1"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        " new \nt1"
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": true,
+    "input": "{\"add\": [{\"text\": \" \"}]}",
+    "output": "add: a step needs text",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        " "
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        " "
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": true,
+    "input": "{\"add\": [{\"text\": \"x\", \"status\": \"bad\"}]}",
+    "output": "add \"x\": status must be one of pending, in_progress, done, cancelled",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "x"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "x"
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": true,
+    "input": "{\"update\": [{}]}",
+    "output": "update: every change needs the item's id",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": true,
+    "input": "{\"update\": [{\"id\": \"t1\"}]}",
+    "output": "update t1: nothing to change: give a status, a text, or both",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "t1"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "t1"
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": true,
+    "input": "{\"update\": [{\"id\": \"t1\", \"status\": \"BAD\"}]}",
+    "output": "update t1: status must be one of pending, in_progress, done, cancelled",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "t1"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "t1"
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": false,
+    "input": "{\"update\": [{\"id\": \"t1\", \"text\": \" renamed \"}]}",
+    "output": "t1 → pending\n0 of 1 done",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "t1"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "t1"
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": true,
+    "input": "{\"update\": [{\"id\": \"unknown\", \"status\": \"done\"}]}",
+    "output": "unknown todo unknown",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "unknown"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "unknown"
+      ]
+    },
+    "tool": "todo"
+  },
+  {
+    "error": true,
+    "input": "{}",
+    "output": "at least one question is required",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "ask"
+  },
+  {
+    "error": false,
+    "input": "{\"questions\": [{\"question\": \" What? \", \"options\": [{\"label\": \" yes \", \"description\": \"Choose\"}]}, {\"question\": \"Second?\", \"options\": [{\"label\": \"no\"}]}]}",
+    "output": "What? → yes\nSecond? → (no answer)",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "What? | Second?"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "What? | Second?"
+      ]
+    },
+    "tool": "ask"
+  },
+  {
+    "error": false,
+    "input": "{\"questions\": [{\"question\": \" What? \", \"options\": [{\"label\": \" yes \", \"description\": \"Choose\"}]}]}",
+    "output": "What? → yes",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "What?"
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        "What?"
+      ]
+    },
+    "tool": "ask"
+  },
+  {
+    "error": true,
+    "input": "{\"questions\": [{\"question\": \" What? \", \"options\": [{\"label\": \" yes \", \"description\": \"Choose\"}]}, {\"question\": \"Second?\", \"options\": [{\"label\": \"no\"}]}, {\"question\": \" What? \", \"options\": [{\"label\": \" yes \", \"description\": \"Choose\"}]}, {\"question\": \"Second?\", \"options\": [{\"label\": \"no\"}]}, {\"question\": \" What? \", \"options\": [{\"label\": \" yes \", \"description\": \"Choose\"}]}, {\"question\": \"Second?\", \"options\": [{\"label\": \"no\"}]}]}",
+    "output": "at most 4 questions per call",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "ask"
+  },
+  {
+    "error": true,
+    "input": "{\"questions\": [{\"question\": \" \", \"options\": [{\"label\": \"x\"}]}]}",
+    "output": "question 1 needs its text",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "ask"
+  },
+  {
+    "error": true,
+    "input": "{\"questions\": [{\"question\": \"Q?\"}]}",
+    "output": "question 1 needs at least one option (the human can always type something else)",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "ask"
+  },
+  {
+    "error": true,
+    "input": "{\"questions\": [{\"question\": \"Q?\", \"options\": [{\"label\": \" \"}]}]}",
+    "output": "question 1: every option needs a label",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "ask"
+  },
+  {
+    "error": true,
+    "input": "{\"questions\": [{\"question\": \"Q?\", \"options\": [{\"label\": \"a\"}, {\"label\": \"a\"}, {\"label\": \"a\"}, {\"label\": \"a\"}, {\"label\": \"a\"}]}]}",
+    "output": "question 1: at most 4 options",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "subject": {
+      "Kind": 0,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "ask"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"child\", \"text\": \" message \"}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"request\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"child\", \"text\": \" message \", \"expect_response\": false}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"steer\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"child\", \"text\": \" message \", \"expect_response\": true}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"request\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"child\", \"text\": \" message \", \"reply_to\": [\"r1\"]}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"response\",\"reply\":[\"r1\"],\"text\":\" message \",\"to\":[\"child\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"child\", \"text\": \" message \", \"reply_to\": [\"r1\"], \"expect_response\": true}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"response_request\",\"reply\":[\"r1\"],\"text\":\" message \",\"to\":[\"child\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"child\", \"text\": \" message \", \"kind\": \"request\"}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"request\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": \"child\", \"text\": \" message \", \"kind\": \"response\"}",
+    "output": "responses require reply_to request IDs",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"child\", \"text\": \" message \", \"kind\": \"no_reply\"}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"info\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": \"child\", \"text\": \" message \", \"kind\": \"request\", \"expect_response\": false}",
+    "output": "use expect_response instead of kind, not both",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": \"child\", \"text\": \" message \", \"kind\": \"bad\"}",
+    "output": "kind \"bad\": use request, response, info or no_reply",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \"}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"request\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\",\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \", \"expect_response\": false}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"steer\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\",\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \", \"expect_response\": true}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"request\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\",\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \", \"reply_to\": [\"r1\"]}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"response\",\"reply\":[\"r1\"],\"text\":\" message \",\"to\":[\"child\",\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \", \"reply_to\": [\"r1\"], \"expect_response\": true}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"response_request\",\"reply\":[\"r1\"],\"text\":\" message \",\"to\":[\"child\",\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \", \"kind\": \"request\"}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"request\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\",\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \", \"kind\": \"response\"}",
+    "output": "responses require reply_to request IDs",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \", \"kind\": \"no_reply\"}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"info\",\"reply\":null,\"text\":\" message \",\"to\":[\"child\",\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \", \"kind\": \"request\", \"expect_response\": false}",
+    "output": "use expect_response instead of kind, not both",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [\"child\", \"@human\"], \"text\": \" message \", \"kind\": \"bad\"}",
+    "output": "kind \"bad\": use request, response, info or no_reply",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \"}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \", \"expect_response\": false}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \", \"expect_response\": true}",
+    "output": "expect_response requires explicit recipients",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \", \"reply_to\": [\"r1\"]}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \", \"reply_to\": [\"r1\"], \"expect_response\": true}",
+    "output": "expect_response requires explicit recipients",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \", \"kind\": \"request\"}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \", \"kind\": \"response\"}",
+    "output": "responses require reply_to request IDs",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \", \"kind\": \"no_reply\"}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \", \"kind\": \"request\", \"expect_response\": false}",
+    "output": "use expect_response instead of kind, not both",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": [], \"text\": \" message \", \"kind\": \"bad\"}",
+    "output": "kind \"bad\": use request, response, info or no_reply",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \"}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \", \"expect_response\": false}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \", \"expect_response\": true}",
+    "output": "expect_response requires explicit recipients",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \", \"reply_to\": [\"r1\"]}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \", \"reply_to\": [\"r1\"], \"expect_response\": true}",
+    "output": "expect_response requires explicit recipients",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \", \"kind\": \"request\"}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \", \"kind\": \"response\"}",
+    "output": "responses require reply_to request IDs",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \", \"kind\": \"no_reply\"}",
+    "output": "at least one recipient is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \", \"kind\": \"request\", \"expect_response\": false}",
+    "output": "use expect_response instead of kind, not both",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": null, \"text\": \" message \", \"kind\": \"bad\"}",
+    "output": "kind \"bad\": use request, response, info or no_reply",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"user\", \"text\": \" message \"}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"steer\",\"reply\":null,\"text\":\" message \",\"to\":[\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"user\", \"text\": \" message \", \"expect_response\": false}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"steer\",\"reply\":null,\"text\":\" message \",\"to\":[\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"user\", \"text\": \" message \", \"expect_response\": true}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"request\",\"reply\":null,\"text\":\" message \",\"to\":[\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"user\", \"text\": \" message \", \"reply_to\": [\"r1\"]}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"response\",\"reply\":[\"r1\"],\"text\":\" message \",\"to\":[\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"user\", \"text\": \" message \", \"reply_to\": [\"r1\"], \"expect_response\": true}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"response_request\",\"reply\":[\"r1\"],\"text\":\" message \",\"to\":[\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"user\", \"text\": \" message \", \"kind\": \"request\"}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"request\",\"reply\":null,\"text\":\" message \",\"to\":[\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": \"user\", \"text\": \" message \", \"kind\": \"response\"}",
+    "output": "responses require reply_to request IDs",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"to\": \"user\", \"text\": \" message \", \"kind\": \"no_reply\"}",
+    "output": "{\"caller\":\"agent\",\"kind\":\"info\",\"reply\":null,\"text\":\" message \",\"to\":[\"user\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": \"user\", \"text\": \" message \", \"kind\": \"request\", \"expect_response\": false}",
+    "output": "use expect_response instead of kind, not both",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"to\": \"user\", \"text\": \" message \", \"kind\": \"bad\"}",
+    "output": "kind \"bad\": use request, response, info or no_reply",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "user"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{}",
+    "output": "text is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"text\": \" \"}",
+    "output": "text is required",
+    "policy": {
+      "Kind": 4,
+      "Values": []
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": []
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"channel\": \"board\", \"text\": \"post\"}",
+    "output": "{\"caller\":\"agent\",\"channel\":\"board\",\"kind\":\"info\",\"reply\":null,\"text\":\"post\",\"to\":[]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "#board"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "#board"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": false,
+    "input": "{\"channel\": \"board\", \"text\": \"post\", \"to\": [\"child\"]}",
+    "output": "{\"caller\":\"agent\",\"channel\":\"board\",\"kind\":\"request\",\"reply\":null,\"text\":\"post\",\"to\":[\"child\"]}",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "#board"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "child",
+        "#board"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{\"channel\": \"board\", \"text\": \"post\", \"expect_response\": true}",
+    "output": "expect_response requires explicit recipients",
+    "policy": {
+      "Kind": 4,
+      "Values": [
+        "#board"
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        "#board"
+      ]
+    },
+    "tool": "message"
+  },
+  {
+    "error": true,
+    "input": "{}",
+    "output": "empty command",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "run "
+      ]
+    },
+    "subject": {
+      "Kind": 1,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "shell"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"bad\"}",
+    "output": "action must be run or kill",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "run "
+      ]
+    },
+    "subject": {
+      "Kind": 1,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "shell"
+  },
+  {
+    "error": true,
+    "input": "{\"action\": \"kill\"}",
+    "output": "kill requires id",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "kill "
+      ]
+    },
+    "subject": {
+      "Kind": 4,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "shell"
+  },
+  {
+    "error": true,
+    "input": "{\"command\": \"\"}",
+    "output": "empty command",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "run "
+      ]
+    },
+    "subject": {
+      "Kind": 1,
+      "Values": [
+        ""
+      ]
+    },
+    "tool": "shell"
+  },
+  {
+    "error": true,
+    "input": "{\"command\": \"x\", \"background\": true}",
+    "output": "background jobs are not available to this agent",
+    "policy": {
+      "Kind": 0,
+      "Values": [
+        "run x"
+      ]
+    },
+    "subject": {
+      "Kind": 1,
+      "Values": [
+        "x"
+      ]
+    },
+    "tool": "shell"
+  }
+]

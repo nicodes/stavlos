@@ -13,6 +13,7 @@ anyhow = "1"
 base64 = "0.22"
 cap-std = "4.0.3"
 chrono = { version = "0.4", features = ["serde"] }
+ego-tree = "0.11"
 fs2 = "0.4"
 getrandom = "0.4"
 httpdate = "1"
@@ -20,6 +21,7 @@ libc = "0.2"
 regex = "1"
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "http2", "system-proxy", "json", "form", "query", "stream", "gzip"] }
 rusqlite = { version = "0.41.1", features = ["bundled", "hooks"] }
+scraper = { version = "0.29", default-features = false }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["raw_value"] }
 serde_yaml_ng = "0.10"
@@ -30,6 +32,9 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net
 tokio-util = { version = "0.7", features = ["rt"] }
 uuid = { version = "1", features = ["v4"] }
 yaml-edit = "0.3.2"
+
+[dev-dependencies]
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
 
 [profile.release]
 lto = "thin"

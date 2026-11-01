@@ -1,0 +1,420 @@
+[
+  {
+    "error": "",
+    "input": "{\"web\": {\"results\": [{\"title\": \"Title λ\", \"url\": \"https://example.org\", \"description\": \"snippet\"}]}}",
+    "provider": "brave",
+    "rows": [
+      {
+        "Title": "Title λ",
+        "URL": "https://example.org",
+        "Snippet": "snippet"
+      }
+    ]
+  },
+  {
+    "error": "",
+    "input": "null",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal array into Go value of type struct { Web struct { Results []struct { Title string; URL string; Description string } \"json:\\\"results\\\"\" } \"json:\\\"web\\\"\" }",
+    "input": "[]",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal bool into Go value of type struct { Web struct { Results []struct { Title string; URL string; Description string } \"json:\\\"results\\\"\" } \"json:\\\"web\\\"\" }",
+    "input": "false",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal string into Go value of type struct { Web struct { Results []struct { Title string; URL string; Description string } \"json:\\\"results\\\"\" } \"json:\\\"web\\\"\" }",
+    "input": "\"text\"",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": \"wrong\"}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": [null]}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": [{\"title\": 12}]}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal bool into Go struct field .web.results.0.url of type string",
+    "input": "{\"web\": {\"results\": [{\"url\": false}]}}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"isError\": true, \"content\": [{\"type\": \"text\", \"text\": \"refused\"}]}}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"error\": {\"message\": \"denied\"}}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": \"wrong\"}}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": [{\"type\": 12}]}}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": [{\"type\": \"image\", \"text\": false}]}}",
+    "provider": "brave",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": [{\"title\": \"Title λ\", \"url\": \"https://example.org\", \"content\": \"snippet\", \"text\": \"snippet\"}]}",
+    "provider": "tavily",
+    "rows": [
+      {
+        "Title": "Title λ",
+        "URL": "https://example.org",
+        "Snippet": "snippet"
+      }
+    ]
+  },
+  {
+    "error": "",
+    "input": "null",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{}",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal array into Go value of type struct { Results []struct { Title string; URL string; Content string } \"json:\\\"results\\\"\" }",
+    "input": "[]",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal bool into Go value of type struct { Results []struct { Title string; URL string; Content string } \"json:\\\"results\\\"\" }",
+    "input": "false",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal string into Go value of type struct { Results []struct { Title string; URL string; Content string } \"json:\\\"results\\\"\" }",
+    "input": "\"text\"",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal string into Go struct field .results of type []struct { Title string; URL string; Content string }",
+    "input": "{\"results\": \"wrong\"}",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": [null]}",
+    "provider": "tavily",
+    "rows": [
+      {
+        "Title": "",
+        "URL": "",
+        "Snippet": ""
+      }
+    ]
+  },
+  {
+    "error": "bad response: json: cannot unmarshal number into Go struct field .results.0.title of type string",
+    "input": "{\"results\": [{\"title\": 12}]}",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"web\": {\"results\": [{\"url\": false}]}}",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"isError\": true, \"content\": [{\"type\": \"text\", \"text\": \"refused\"}]}}",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"error\": {\"message\": \"denied\"}}",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": \"wrong\"}}",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": [{\"type\": 12}]}}",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": [{\"type\": \"image\", \"text\": false}]}}",
+    "provider": "tavily",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": [{\"title\": \"Title λ\", \"url\": \"https://example.org\", \"content\": \"snippet\", \"text\": \"snippet\"}]}",
+    "provider": "exa",
+    "rows": [
+      {
+        "Title": "Title λ",
+        "URL": "https://example.org",
+        "Snippet": "snippet"
+      }
+    ]
+  },
+  {
+    "error": "",
+    "input": "null",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{}",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal array into Go value of type struct { Results []struct { Title string; URL string; Text string } \"json:\\\"results\\\"\" }",
+    "input": "[]",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal bool into Go value of type struct { Results []struct { Title string; URL string; Text string } \"json:\\\"results\\\"\" }",
+    "input": "false",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal string into Go value of type struct { Results []struct { Title string; URL string; Text string } \"json:\\\"results\\\"\" }",
+    "input": "\"text\"",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "bad response: json: cannot unmarshal string into Go struct field .results of type []struct { Title string; URL string; Text string }",
+    "input": "{\"results\": \"wrong\"}",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": [null]}",
+    "provider": "exa",
+    "rows": [
+      {
+        "Title": "",
+        "URL": "",
+        "Snippet": ""
+      }
+    ]
+  },
+  {
+    "error": "bad response: json: cannot unmarshal number into Go struct field .results.0.title of type string",
+    "input": "{\"results\": [{\"title\": 12}]}",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"web\": {\"results\": [{\"url\": false}]}}",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"isError\": true, \"content\": [{\"type\": \"text\", \"text\": \"refused\"}]}}",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"error\": {\"message\": \"denied\"}}",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": \"wrong\"}}",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": [{\"type\": 12}]}}",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": [{\"type\": \"image\", \"text\": false}]}}",
+    "provider": "exa",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"result\": {\"content\": [{\"type\": \"text\", \"text\": \"Title: Title λ\\nURL: https://example.org\\nHighlights:\\nsource\\n...\\n---\\nTitle: Second\\nURL: https://example.org/2\\nHighlights:\\nsecond\"}]}}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": [
+      {
+        "Title": "Title λ",
+        "URL": "https://example.org",
+        "Snippet": "source"
+      },
+      {
+        "Title": "Second",
+        "URL": "https://example.org/2",
+        "Snippet": "second"
+      }
+    ]
+  },
+  {
+    "error": "",
+    "input": "null",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "exa mcp: bad response: json: cannot unmarshal array into Go value of type struct { Result struct { IsError bool \"json:\\\"isError\\\"\"; Content []struct { Type string \"json:\\\"type\\\"\"; Text string \"json:\\\"text\\\"\" } \"json:\\\"content\\\"\" } \"json:\\\"result\\\"\"; Error *struct { Message string \"json:\\\"message\\\"\" } \"json:\\\"error\\\"\" }",
+    "input": "[]",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "exa mcp: bad response: json: cannot unmarshal bool into Go value of type struct { Result struct { IsError bool \"json:\\\"isError\\\"\"; Content []struct { Type string \"json:\\\"type\\\"\"; Text string \"json:\\\"text\\\"\" } \"json:\\\"content\\\"\" } \"json:\\\"result\\\"\"; Error *struct { Message string \"json:\\\"message\\\"\" } \"json:\\\"error\\\"\" }",
+    "input": "false",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "exa mcp: bad response: json: cannot unmarshal string into Go value of type struct { Result struct { IsError bool \"json:\\\"isError\\\"\"; Content []struct { Type string \"json:\\\"type\\\"\"; Text string \"json:\\\"text\\\"\" } \"json:\\\"content\\\"\" } \"json:\\\"result\\\"\"; Error *struct { Message string \"json:\\\"message\\\"\" } \"json:\\\"error\\\"\" }",
+    "input": "\"text\"",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": \"wrong\"}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": [null]}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"results\": [{\"title\": 12}]}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "{\"web\": {\"results\": [{\"url\": false}]}}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "exa mcp: refused",
+    "input": "{\"result\": {\"isError\": true, \"content\": [{\"type\": \"text\", \"text\": \"refused\"}]}}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "exa mcp: denied",
+    "input": "{\"error\": {\"message\": \"denied\"}}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "exa mcp: bad response: json: cannot unmarshal string into Go struct field .result.content of type []struct { Type string \"json:\\\"type\\\"\"; Text string \"json:\\\"text\\\"\" }",
+    "input": "{\"result\": {\"content\": \"wrong\"}}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "exa mcp: bad response: json: cannot unmarshal number into Go struct field .result.content.0.type of type string",
+    "input": "{\"result\": {\"content\": [{\"type\": 12}]}}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "exa mcp: bad response: json: cannot unmarshal bool into Go struct field .result.content.0.text of type string",
+    "input": "{\"result\": {\"content\": [{\"type\": \"image\", \"text\": false}]}}",
+    "provider": "exa-mcp (free, no key)",
+    "rows": []
+  },
+  {
+    "error": "",
+    "input": "event: message\ndata: {\"result\": {\"content\": [{\"type\": \"text\", \"text\": \"Title: Title λ\\nURL: https://example.org\\nHighlights:\\nsource\\n...\\n---\\nTitle: Second\\nURL: https://example.org/2\\nHighlights:\\nsecond\"}]}}\n\n",
+    "provider": "exa-mcp (free, no key)",
+    "rows": [
+      {
+        "Title": "Title λ",
+        "URL": "https://example.org",
+        "Snippet": "source"
+      },
+      {
+        "Title": "Second",
+        "URL": "https://example.org/2",
+        "Snippet": "second"
+      }
+    ]
+  }
+]

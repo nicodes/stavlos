@@ -1,0 +1,216 @@
+[
+  {
+    "error": "",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"merge\", \"repository\": \"owner/repo\", \"head\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"pull_request\": 3}",
+    "request": {
+      "grant": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "operation": "merge",
+        "pull_request": 3,
+        "repository": "owner/repo"
+      }
+    }
+  },
+  {
+    "error": "operator needs one exact finite grant",
+    "input": "{\"grant\": \"x\", \"operation\": \"merge\", \"repository\": \"owner/repo\", \"head\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"pull_request\": 3}",
+    "request": null
+  },
+  {
+    "error": "merge scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"merge\", \"repository\": \"owner/repo\", \"head\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"pull_request\": 3, \"host\": \"127.0.0.1\"}",
+    "request": null
+  },
+  {
+    "error": "operator requires exact repository and revision",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"merge\", \"repository\": \"owner/repo\", \"head\": \"short\", \"pull_request\": 3}",
+    "request": null
+  },
+  {
+    "error": "merge scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"merge\", \"repository\": \"owner/repo\", \"head\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"pull_request\": 3, \"revision\": \"cccccccccccccccccccccccccccccccccccccccc\"}",
+    "request": null
+  },
+  {
+    "error": "operator requires exact repository and revision",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"merge\", \"repository\": \"wrong\", \"head\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"pull_request\": 3}",
+    "request": null
+  },
+  {
+    "error": "merge scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"merge\", \"repository\": \"owner/repo\", \"head\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"pull_request\": -1}",
+    "request": null
+  },
+  {
+    "error": "json: unknown field \"socket\"",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"merge\", \"repository\": \"owner/repo\", \"head\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"pull_request\": 3, \"socket\": \"/tmp/foreign\"}",
+    "request": null
+  },
+  {
+    "error": "json: unknown field \"command\"",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"merge\", \"repository\": \"owner/repo\", \"head\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"pull_request\": 3, \"command\": \"true\"}",
+    "request": null
+  },
+  {
+    "error": "",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"delivery\", \"repository\": \"owner/repo\", \"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}",
+    "request": {
+      "grant": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "operation": "delivery",
+        "repository": "owner/repo",
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    }
+  },
+  {
+    "error": "operator needs one exact finite grant",
+    "input": "{\"grant\": \"x\", \"operation\": \"delivery\", \"repository\": \"owner/repo\", \"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}",
+    "request": null
+  },
+  {
+    "error": "delivery scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"delivery\", \"repository\": \"owner/repo\", \"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"host\": \"127.0.0.1\"}",
+    "request": null
+  },
+  {
+    "error": "delivery scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"delivery\", \"repository\": \"owner/repo\", \"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"head\": \"short\"}",
+    "request": null
+  },
+  {
+    "error": "",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"delivery\", \"repository\": \"owner/repo\", \"revision\": \"cccccccccccccccccccccccccccccccccccccccc\"}",
+    "request": {
+      "grant": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "operation": "delivery",
+        "repository": "owner/repo",
+        "revision": "cccccccccccccccccccccccccccccccccccccccc"
+      }
+    }
+  },
+  {
+    "error": "operator requires exact repository and revision",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"delivery\", \"repository\": \"wrong\", \"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}",
+    "request": null
+  },
+  {
+    "error": "delivery scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"delivery\", \"repository\": \"owner/repo\", \"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"pull_request\": -1}",
+    "request": null
+  },
+  {
+    "error": "json: unknown field \"socket\"",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"delivery\", \"repository\": \"owner/repo\", \"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"socket\": \"/tmp/foreign\"}",
+    "request": null
+  },
+  {
+    "error": "json: unknown field \"command\"",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"delivery\", \"repository\": \"owner/repo\", \"revision\": \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\", \"command\": \"true\"}",
+    "request": null
+  },
+  {
+    "error": "",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"host_report\", \"host\": \"approved.test\"}",
+    "request": {
+      "grant": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "host": "approved.test",
+        "operation": "host_report"
+      }
+    }
+  },
+  {
+    "error": "operator needs one exact finite grant",
+    "input": "{\"grant\": \"x\", \"operation\": \"host_report\", \"host\": \"approved.test\"}",
+    "request": null
+  },
+  {
+    "error": "",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"host_report\", \"host\": \"127.0.0.1\"}",
+    "request": {
+      "grant": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "request": {
+        "host": "127.0.0.1",
+        "operation": "host_report"
+      }
+    }
+  },
+  {
+    "error": "host report scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"host_report\", \"host\": \"approved.test\", \"head\": \"short\"}",
+    "request": null
+  },
+  {
+    "error": "host report scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"host_report\", \"host\": \"approved.test\", \"revision\": \"cccccccccccccccccccccccccccccccccccccccc\"}",
+    "request": null
+  },
+  {
+    "error": "host report scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"host_report\", \"host\": \"approved.test\", \"repository\": \"wrong\"}",
+    "request": null
+  },
+  {
+    "error": "host report scope differs",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"host_report\", \"host\": \"approved.test\", \"pull_request\": -1}",
+    "request": null
+  },
+  {
+    "error": "json: unknown field \"socket\"",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"host_report\", \"host\": \"approved.test\", \"socket\": \"/tmp/foreign\"}",
+    "request": null
+  },
+  {
+    "error": "json: unknown field \"command\"",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"host_report\", \"host\": \"approved.test\", \"command\": \"true\"}",
+    "request": null
+  },
+  {
+    "error": "unknown operator operation",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"shell\"}",
+    "request": null
+  },
+  {
+    "error": "operator needs one exact finite grant",
+    "input": "{\"grant\": \"x\", \"operation\": \"shell\"}",
+    "request": null
+  },
+  {
+    "error": "unknown operator operation",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"shell\", \"host\": \"127.0.0.1\"}",
+    "request": null
+  },
+  {
+    "error": "unknown operator operation",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"shell\", \"head\": \"short\"}",
+    "request": null
+  },
+  {
+    "error": "unknown operator operation",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"shell\", \"revision\": \"cccccccccccccccccccccccccccccccccccccccc\"}",
+    "request": null
+  },
+  {
+    "error": "unknown operator operation",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"shell\", \"repository\": \"wrong\"}",
+    "request": null
+  },
+  {
+    "error": "unknown operator operation",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"shell\", \"pull_request\": -1}",
+    "request": null
+  },
+  {
+    "error": "json: unknown field \"socket\"",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"shell\", \"socket\": \"/tmp/foreign\"}",
+    "request": null
+  },
+  {
+    "error": "json: unknown field \"command\"",
+    "input": "{\"grant\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"operation\": \"shell\", \"command\": \"true\"}",
+    "request": null
+  }
+]

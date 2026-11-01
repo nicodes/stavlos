@@ -1,0 +1,87 @@
+[
+  {
+    "error": "empty url",
+    "input": "",
+    "url": ""
+  },
+  {
+    "error": "",
+    "input": "example.org",
+    "url": "https://example.org"
+  },
+  {
+    "error": "",
+    "input": "example.org?x=1",
+    "url": "https://example.org?x=1"
+  },
+  {
+    "error": "",
+    "input": "HTTP://EXAMPLE.ORG:80/a",
+    "url": "https://example.org:80/a"
+  },
+  {
+    "error": "",
+    "input": "http://EXAMPLE.ORG:443/a#fragment",
+    "url": "https://example.org/a"
+  },
+  {
+    "error": "",
+    "input": "https://user:pass@Example.org/path?q=λ#fragment",
+    "url": "https://example.org/path?q=λ"
+  },
+  {
+    "error": "",
+    "input": "https://github.com/owner/repo/blob/main/src/a.rs",
+    "url": "https://raw.githubusercontent.com/owner/repo/main/src/a.rs"
+  },
+  {
+    "error": "",
+    "input": "https://github.com/owner/repo/blob/branch/file%20name",
+    "url": "https://raw.githubusercontent.com/owner/repo/branch/file%20name"
+  },
+  {
+    "error": "unsupported scheme \"ftp\": only http(s) is fetched",
+    "input": "ftp://example.org/x",
+    "url": ""
+  },
+  {
+    "error": "unsupported scheme \"file\": only http(s) is fetched",
+    "input": "file:///etc/passwd",
+    "url": ""
+  },
+  {
+    "error": "url has no host",
+    "input": "https:///missing",
+    "url": ""
+  },
+  {
+    "error": "",
+    "input": "https://[::1]:443/a",
+    "url": "https://::1/a"
+  },
+  {
+    "error": "",
+    "input": "https://example.org/a/../b",
+    "url": "https://example.org/a/../b"
+  },
+  {
+    "error": "",
+    "input": "https://example.org/a%2Fb?q=a b",
+    "url": "https://example.org/a%2Fb?q=a b"
+  },
+  {
+    "error": "",
+    "input": "https://example.org?q=λ",
+    "url": "https://example.org?q=λ"
+  },
+  {
+    "error": "",
+    "input": "https://例え.テスト/x",
+    "url": "https://%E4%BE%8B%E3%81%88.%E3%83%86%E3%82%B9%E3%83%88/x"
+  },
+  {
+    "error": "bad url: parse \"https://example.org/%zz\": invalid URL escape \"%zz\"",
+    "input": "https://example.org/%zz",
+    "url": ""
+  }
+]
