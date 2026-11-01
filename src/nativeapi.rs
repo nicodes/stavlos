@@ -14,6 +14,7 @@ use tokio::{
     sync::{oneshot, watch},
 };
 use tokio_util::sync::CancellationToken;
+pub mod web;
 
 pub const HELPER_ARG0: &str = "stavlos-api";
 #[derive(Clone, Debug)]
@@ -58,6 +59,10 @@ impl Program {
     }
     pub fn command(&self) -> Command {
         let mut command = Command::new(&self.path);
+        let environment = crate::childenv::process(&[], vec![]);
+        command
+            .env_clear()
+            .envs(crate::childenv::pairs(&environment));
         if self.bundled {
             command.as_std_mut().arg0(HELPER_ARG0);
         }
