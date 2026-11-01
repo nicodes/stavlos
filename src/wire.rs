@@ -1,0 +1,208 @@
+//! Existing persisted JSON conventions: nil slices, explicit raw nulls and Go timestamps.
+use chrono::{DateTime, FixedOffset, Timelike, Utc};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::value::RawValue;
+use std::{
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+};
+pub fn null_default<'de, D: Deserializer<'de>, T: Deserialize<'de> + Default>(
+    d: D,
+) -> Result<T, D::Error> {
+    Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
+}
+pub fn raw_some<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Box<RawValue>>, D::Error> {
+    Box::<RawValue>::deserialize(d).map(Some)
+}
+pub fn decode<T: serde::de::DeserializeOwned + Default>(input: &str) -> serde_json::Result<T> {
+    if input.trim() == "null" {
+        Ok(T::default())
+    } else {
+        serde_json::from_str(input)
+    }
+}
+pub fn finite_f64<S: Serializer>(value: &f64, s: S) -> Result<S::Ok, S::Error> {
+    if !value.is_finite() {
+        return Err(serde::ser::Error::custom("non-finite JSON number"));
+    }
+    s.serialize_f64(*value)
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct Slice<T>(pub Option<Vec<T>>);
+impl<T> Default for Slice<T> {
+    fn default() -> Self {
+        Self(None)
+    }
+}
+impl<T> From<Vec<T>> for Slice<T> {
+    fn from(value: Vec<T>) -> Self {
+        Self(Some(value))
+    }
+}
+impl<T> FromIterator<T> for Slice<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(items: I) -> Self {
+        Self(Some(items.into_iter().collect()))
+    }
+}
+impl<T> Deref for Slice<T> {
+    type Target = [T];
+    fn deref(&self) -> &[T] {
+        self.0.as_deref().unwrap_or(&[])
+    }
+}
+impl<T> DerefMut for Slice<T> {
+    fn deref_mut(&mut self) -> &mut [T] {
+        self.0.get_or_insert_with(Vec::new).as_mut_slice()
+    }
+}
+impl<T> Slice<T> {
+    pub fn push(&mut self, value: T) {
+        self.0.get_or_insert_with(Vec::new).push(value);
+    }
+    pub fn extend(&mut self, items: impl IntoIterator<Item = T>) {
+        self.0.get_or_insert_with(Vec::new).extend(items);
+    }
+    pub fn take_vec(&mut self) -> Vec<T> {
+        self.0.take().unwrap_or_default()
+    }
+    pub fn into_vec(self) -> Vec<T> {
+        self.0.unwrap_or_default()
+    }
+}
+impl<'de, T: Deserialize<'de> + Default> Deserialize<'de> for Slice<T> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(transparent)]
+        struct Item<T>(
+            #[serde(deserialize_with = "null_default")]
+            #[serde(bound(deserialize = "T: Deserialize<'de> + Default"))]
+            T,
+        );
+        Ok(Self(Option::<Vec<Item<T>>>::deserialize(d)?.map(|items| {
+            items.into_iter().map(|item| item.0).collect()
+        })))
+    }
+}
+pub trait Empty {
+    fn empty(&self) -> bool;
+}
+impl Empty for String {
+    fn empty(&self) -> bool {
+        self.is_empty()
+    }
+}
+impl Empty for bool {
+    fn empty(&self) -> bool {
+        !*self
+    }
+}
+impl Empty for std::sync::Arc<str> {
+    fn empty(&self) -> bool {
+        self.is_empty()
+    }
+}
+impl Empty for i64 {
+    fn empty(&self) -> bool {
+        *self == 0
+    }
+}
+impl Empty for f64 {
+    fn empty(&self) -> bool {
+        *self == 0.
+    }
+}
+impl<T> Empty for Option<T> {
+    fn empty(&self) -> bool {
+        self.is_none()
+    }
+}
+impl<T> Empty for Slice<T> {
+    fn empty(&self) -> bool {
+        self.is_empty()
+    }
+}
+impl<K, V> Empty for BTreeMap<K, V> {
+    fn empty(&self) -> bool {
+        self.is_empty()
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Time(pub DateTime<FixedOffset>);
+impl Default for Time {
+    fn default() -> Self {
+        Self(
+            DateTime::from_timestamp(-62135596800, 0)
+                .unwrap()
+                .fixed_offset(),
+        )
+    }
+}
+impl Time {
+    pub fn now() -> Self {
+        Self(Utc::now().fixed_offset())
+    }
+    pub fn is_zero(&self) -> bool {
+        *self == Self::default()
+    }
+    pub fn utc(&self) -> DateTime<Utc> {
+        self.0.with_timezone(&Utc)
+    }
+}
+impl Serialize for Time {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let mut value = self.0.format("%Y-%m-%dT%H:%M:%S").to_string();
+        if self.0.nanosecond() != 0 {
+            value.push('.');
+            value.push_str(format!("{:09}", self.0.nanosecond()).trim_end_matches('0'));
+        }
+        if self.0.offset().local_minus_utc() == 0 {
+            value.push('Z');
+        } else {
+            value.push_str(&self.0.format("%:z").to_string());
+        }
+        s.serialize_str(&value)
+    }
+}
+impl<'de> Deserialize<'de> for Time {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let Some(value) = Option::<String>::deserialize(d)? else {
+            return Ok(Self::default());
+        };
+        let parsed = DateTime::parse_from_rfc3339(&value).map_err(serde::de::Error::custom)?;
+        if parsed.nanosecond() >= 1_000_000_000 {
+            return Err(serde::de::Error::custom("leap seconds are not supported"));
+        }
+        Ok(Self(parsed))
+    }
+}
+#[macro_export]
+macro_rules! wire_struct {
+    ($name:ident { $($field:ident:$wire:literal:$ty:ty=>$mode:ident),*$(,)? }) => {
+        $crate::wire_struct!(@fields $name [] $($field:$wire:$ty=>$mode,)*);
+    };
+    (@fields $name:ident [$($fields:tt)*]) => {
+        #[derive(Clone,Debug,Default,serde::Serialize,serde::Deserialize)]pub struct $name {$($fields)*}
+    };
+    (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>required,$($rest:tt)*) => {
+        $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::null_default")]pub $field:$ty,] $($rest)*);
+    };
+    (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>optional,$($rest:tt)*) => {
+        $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::null_default",skip_serializing_if="crate::wire::Empty::empty")]pub $field:$ty,] $($rest)*);
+    };
+    (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>raw,$($rest:tt)*) => {
+        $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::raw_some")]pub $field:$ty,] $($rest)*);
+    };
+    (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>raw_optional,$($rest:tt)*) => {
+        $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::raw_some",skip_serializing_if="Option::is_none")]pub $field:$ty,] $($rest)*);
+    };
+    (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>time_optional,$($rest:tt)*) => {
+        $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,skip_serializing_if="crate::wire::Time::is_zero")]pub $field:$ty,] $($rest)*);
+    };
+    (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>float,$($rest:tt)*) => {
+        $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::null_default",serialize_with="crate::wire::finite_f64")]pub $field:$ty,] $($rest)*);
+    };
+    (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>float_optional,$($rest:tt)*) => {
+        $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::null_default",serialize_with="crate::wire::finite_f64",skip_serializing_if="crate::wire::Empty::empty")]pub $field:$ty,] $($rest)*);
+    };
+}

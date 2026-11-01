@@ -44,10 +44,30 @@ pub fn expand(names: impl IntoIterator<Item = String>) -> Vec<String> {
     result
 }
 pub fn operation<'a>(name: &'a str, input: &serde_json::Value) -> &'a str {
-    let action = input
-        .get("action")
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default();
+    let encoded = serde_json::to_string(input).expect("serializable JSON");
+    let raw: &serde_json::value::RawValue =
+        serde_json::from_str(&encoded).expect("encoded JSON is valid");
+    operation_raw(name, Some(raw))
+}
+pub fn operation_raw<'a>(name: &'a str, input: Option<&serde_json::value::RawValue>) -> &'a str {
+    if !matches!(name, AGENT | WEB | SHELL) {
+        return canonical(name);
+    }
+    let mut action = String::new();
+    if let Some(input) = input
+        && let Ok(fields) = crate::config::jsonc::object_fields(input.get().as_bytes())
+    {
+        for (key, value) in fields {
+            if key.eq_ignore_ascii_case("action")
+                && let Ok(value) = serde_json::from_slice::<String>(&value)
+            {
+                action = value;
+            }
+        }
+    }
+    operation_action(name, &action)
+}
+fn operation_action<'a>(name: &'a str, action: &str) -> &'a str {
     match (name, action) {
         (WEB, "fetch") => FETCH,
         (WEB, "search") => SEARCH,
