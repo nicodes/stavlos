@@ -1,0 +1,856 @@
+[
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/replace",
+    "output": "YQpCCmMKYgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/context",
+    "output": "YQpCCmMKYgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n a\n-b\n+B\n c\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/spaces",
+    "output": "YQpCCmMKYgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n a   \n-b\n+B\n c\t\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/eof",
+    "output": "YQpiCmMKQgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n c\n*** End of File\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/insert",
+    "output": "YQpuZXcKYgpjCmIKYwo=",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ a\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/append",
+    "output": "YQpiCmMKYgpjCm5ldwo=",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "hunk 1: anchor not found: missing",
+    "name": "lf/missing-anchor",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ missing\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "hunk 1: context not found:\nnot here",
+    "name": "lf/missing-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-not here\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "hunk 1: context not found:\n雪",
+    "name": "lf/unicode",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-雪\n+月\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/anchor-repeat",
+    "output": "YQpCCmMKYgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ b\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/two-hunks",
+    "output": "QQpCCmMKYgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n+A\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/delete-all",
+    "output": "YgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n-b\n-c\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "hunk 1: context not found:\n",
+    "name": "lf/empty-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n \n+x\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/context-only",
+    "output": "YQpiCmMKYgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n a\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/bare-context",
+    "output": "YQpCCmMKYgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\na\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc\nb\nc\n",
+    "error": "",
+    "name": "lf/trailing-empty",
+    "output": "YQpCCmMKYgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/replace",
+    "output": "YQ0KQg0KYw0KYg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/context",
+    "output": "YQ0KQg0KYw0KYg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\n a\n-b\n+B\n c\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/spaces",
+    "output": "YQ0KQg0KYw0KYg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\n a   \n-b\n+B\n c\t\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/eof",
+    "output": "YQ0KYg0KYw0KQg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n c\n*** End of File\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/insert",
+    "output": "YQ0KbmV3DQpiDQpjDQpiDQpjDQo=",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ a\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/append",
+    "output": "YQ0KYg0KYw0KYg0KYw0KbmV3DQo=",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "hunk 1: anchor not found: missing",
+    "name": "crlf/missing-anchor",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ missing\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "hunk 1: context not found:\nnot here",
+    "name": "crlf/missing-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-not here\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "hunk 1: context not found:\n雪",
+    "name": "crlf/unicode",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-雪\n+月\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/anchor-repeat",
+    "output": "YQ0KQg0KYw0KYg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ b\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/two-hunks",
+    "output": "QQ0KQg0KYw0KYg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n+A\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/delete-all",
+    "output": "Yg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n-b\n-c\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "hunk 1: context not found:\n",
+    "name": "crlf/empty-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n \n+x\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/context-only",
+    "output": "YQ0KYg0KYw0KYg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n a\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/bare-context",
+    "output": "YQ0KQg0KYw0KYg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\na\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\r\nb\r\nc\r\nb\r\nc\r\n",
+    "error": "",
+    "name": "crlf/trailing-empty",
+    "output": "YQ0KQg0KYw0KYg0KYw0K",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/replace",
+    "output": "YQpCCmMK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/context",
+    "output": "YQpCCmMK",
+    "patch": "*** Begin Patch\n*** Update File: f\n a\n-b\n+B\n c\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/spaces",
+    "output": "YQpCCmMK",
+    "patch": "*** Begin Patch\n*** Update File: f\n a   \n-b\n+B\n c\t\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/eof",
+    "output": "YQpCCmMK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n c\n*** End of File\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/insert",
+    "output": "YQpuZXcKYgpjCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ a\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/append",
+    "output": "YQpiCmMKbmV3Cg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "hunk 1: anchor not found: missing",
+    "name": "no-newline/missing-anchor",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ missing\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "hunk 1: context not found:\nnot here",
+    "name": "no-newline/missing-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-not here\n+new\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "hunk 1: context not found:\n雪",
+    "name": "no-newline/unicode",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-雪\n+月\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/anchor-repeat",
+    "output": "YQpCCmMK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ b\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/two-hunks",
+    "output": "QQpCCmMK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n+A\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/delete-all",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n-b\n-c\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "hunk 1: context not found:\n",
+    "name": "no-newline/empty-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n \n+x\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/context-only",
+    "output": "YQpiCmMK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n a\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/bare-context",
+    "output": "YQpCCmMK",
+    "patch": "*** Begin Patch\n*** Update File: f\na\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "a\nb\nc",
+    "error": "",
+    "name": "no-newline/trailing-empty",
+    "output": "YQpCCmMK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/replace",
+    "output": "IGEgCkIKYyAK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/context",
+    "output": "IGEgCkIKYyAK",
+    "patch": "*** Begin Patch\n*** Update File: f\n a\n-b\n+B\n c\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/spaces",
+    "output": "IGEgCkIKYyAK",
+    "patch": "*** Begin Patch\n*** Update File: f\n a   \n-b\n+B\n c\t\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/eof",
+    "output": "IGEgCkIKYyAK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n c\n*** End of File\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/insert",
+    "output": "IGEgCm5ldwoJYgkKYyAK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ a\n+new\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/append",
+    "output": "IGEgCgliCQpjIApuZXcK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n+new\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "hunk 1: anchor not found: missing",
+    "name": "spaces/missing-anchor",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ missing\n+new\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "hunk 1: context not found:\nnot here",
+    "name": "spaces/missing-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-not here\n+new\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "hunk 1: context not found:\n雪",
+    "name": "spaces/unicode",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-雪\n+月\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/anchor-repeat",
+    "output": "IGEgCkIKYyAK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ b\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/two-hunks",
+    "output": "QQpCCmMgCg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n+A\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/delete-all",
+    "output": "Cg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n-b\n-c\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "hunk 1: context not found:\n",
+    "name": "spaces/empty-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n \n+x\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/context-only",
+    "output": "IGEgCgliCQpjIAo=",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n a\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/bare-context",
+    "output": "IGEgCkIKYyAK",
+    "patch": "*** Begin Patch\n*** Update File: f\na\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": " a \n\tb\t\nc \n",
+    "error": "",
+    "name": "spaces/trailing-empty",
+    "output": "IGEgCkIKYyAK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\nb",
+    "name": "unicode/replace",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\na\nb\nc",
+    "name": "unicode/context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n a\n-b\n+B\n c\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\na   \nb\nc\t",
+    "name": "unicode/spaces",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n a   \n-b\n+B\n c\t\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\nb\nc",
+    "name": "unicode/eof",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n c\n*** End of File\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: anchor not found: a",
+    "name": "unicode/insert",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ a\n+new\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "",
+    "name": "unicode/append",
+    "output": "zrsK6ZuqCvCfmYIKbmV3Cg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n+new\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: anchor not found: missing",
+    "name": "unicode/missing-anchor",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ missing\n+new\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\nnot here",
+    "name": "unicode/missing-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-not here\n+new\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "",
+    "name": "unicode/unicode",
+    "output": "zrsK5pyICvCfmYIK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-雪\n+月\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\nb",
+    "name": "unicode/anchor-repeat",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ b\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\na",
+    "name": "unicode/two-hunks",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n+A\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\na\nb\nc",
+    "name": "unicode/delete-all",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n-b\n-c\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\n",
+    "name": "unicode/empty-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n \n+x\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\na",
+    "name": "unicode/context-only",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n a\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\na\nb",
+    "name": "unicode/bare-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\na\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "λ\n雪\n🙂\n",
+    "error": "hunk 1: context not found:\nb",
+    "name": "unicode/trailing-empty",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\nb",
+    "name": "empty/replace",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\na\nb\nc",
+    "name": "empty/context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n a\n-b\n+B\n c\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\na   \nb\nc\t",
+    "name": "empty/spaces",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n a   \n-b\n+B\n c\t\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\nb\nc",
+    "name": "empty/eof",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n c\n*** End of File\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: anchor not found: a",
+    "name": "empty/insert",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ a\n+new\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "",
+    "name": "empty/append",
+    "output": "bmV3Cg==",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n+new\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: anchor not found: missing",
+    "name": "empty/missing-anchor",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ missing\n+new\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\nnot here",
+    "name": "empty/missing-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-not here\n+new\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\n雪",
+    "name": "empty/unicode",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-雪\n+月\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\nb",
+    "name": "empty/anchor-repeat",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ b\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\na",
+    "name": "empty/two-hunks",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n+A\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\na\nb\nc",
+    "name": "empty/delete-all",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n-b\n-c\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\n",
+    "name": "empty/empty-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n \n+x\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\na",
+    "name": "empty/context-only",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n a\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\na\nb",
+    "name": "empty/bare-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\na\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk 1: context not found:\nb",
+    "name": "empty/trailing-empty",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\nb",
+    "name": "one-newline/replace",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\na\nb\nc",
+    "name": "one-newline/context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n a\n-b\n+B\n c\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\na   \nb\nc\t",
+    "name": "one-newline/spaces",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n a   \n-b\n+B\n c\t\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\nb\nc",
+    "name": "one-newline/eof",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n c\n*** End of File\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: anchor not found: a",
+    "name": "one-newline/insert",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ a\n+new\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "",
+    "name": "one-newline/append",
+    "output": "Cm5ldwo=",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n+new\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: anchor not found: missing",
+    "name": "one-newline/missing-anchor",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ missing\n+new\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\nnot here",
+    "name": "one-newline/missing-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-not here\n+new\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\n雪",
+    "name": "one-newline/unicode",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-雪\n+月\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\nb",
+    "name": "one-newline/anchor-repeat",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@ b\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\na",
+    "name": "one-newline/two-hunks",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n+A\n@@\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\na\nb\nc",
+    "name": "one-newline/delete-all",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-a\n-b\n-c\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "",
+    "name": "one-newline/empty-context",
+    "output": "CngK",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n \n+x\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\na",
+    "name": "one-newline/context-only",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n a\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\na\nb",
+    "name": "one-newline/bare-context",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\na\n-b\n+B\n*** End Patch"
+  },
+  {
+    "content": "\n",
+    "error": "hunk 1: context not found:\nb",
+    "name": "one-newline/trailing-empty",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n@@\n-b\n+B\n\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "missing \"*** Begin Patch\"",
+    "name": "no-start",
+    "output": "",
+    "patch": "x"
+  },
+  {
+    "content": "",
+    "error": "missing \"*** End Patch\"",
+    "name": "no-end",
+    "output": "",
+    "patch": "*** Begin Patch\n@@"
+  },
+  {
+    "content": "",
+    "error": "missing \"*** End Patch\"",
+    "name": "backwards",
+    "output": "",
+    "patch": "*** End Patch\n*** Begin Patch"
+  },
+  {
+    "content": "",
+    "error": "hunk outside an Update File section",
+    "name": "outside-hunk",
+    "output": "",
+    "patch": "*** Begin Patch\n@@\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "\"*** Move to:\" must follow an Update File header",
+    "name": "outside-move",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Move to: a\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "a add section names no file",
+    "name": "missing-path",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Add File:  \n+x\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "update file f has no hunks",
+    "name": "empty-update",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Update File: f\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "add file x: line must start with '+': \"wrong\"",
+    "name": "bad-add",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Add File: x\nwrong\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "delete file x: unexpected content",
+    "name": "bad-delete",
+    "output": "",
+    "patch": "*** Begin Patch\n*** Delete File: x\nwrong\n*** End Patch"
+  },
+  {
+    "content": "",
+    "error": "unexpected line before any file header: \"wrong\"",
+    "name": "prose",
+    "output": "",
+    "patch": "*** Begin Patch\nwrong\n*** End Patch"
+  }
+]
