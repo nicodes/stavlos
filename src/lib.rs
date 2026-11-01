@@ -5,6 +5,7 @@ pub mod childenv;
 pub mod client;
 pub mod clip;
 pub mod config;
+pub mod daemon;
 pub mod duration;
 pub mod escalation;
 pub mod event;
