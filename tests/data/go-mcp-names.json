@@ -1,0 +1,102 @@
+[
+  {
+    "name": "mcp____read",
+    "server": "",
+    "tool": "read"
+  },
+  {
+    "name": "mcp____tool_name",
+    "server": "",
+    "tool": "tool/name"
+  },
+  {
+    "name": "mcp_____tool",
+    "server": "",
+    "tool": "λtool"
+  },
+  {
+    "name": "mcp____zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz_73c9ac",
+    "server": "",
+    "tool": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+    "name": "mcp__github__read",
+    "server": "github",
+    "tool": "read"
+  },
+  {
+    "name": "mcp__github__tool_name",
+    "server": "github",
+    "tool": "tool/name"
+  },
+  {
+    "name": "mcp__github___tool",
+    "server": "github",
+    "tool": "λtool"
+  },
+  {
+    "name": "mcp__github__zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz_918416",
+    "server": "github",
+    "tool": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+    "name": "mcp__odd_name__read",
+    "server": "odd.name",
+    "tool": "read"
+  },
+  {
+    "name": "mcp__odd_name__tool_name",
+    "server": "odd.name",
+    "tool": "tool/name"
+  },
+  {
+    "name": "mcp__odd_name___tool",
+    "server": "odd.name",
+    "tool": "λtool"
+  },
+  {
+    "name": "mcp__odd_name__zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz_c80e8f",
+    "server": "odd.name",
+    "tool": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+    "name": "mcp_______read",
+    "server": "λ雪🙂",
+    "tool": "read"
+  },
+  {
+    "name": "mcp_______tool_name",
+    "server": "λ雪🙂",
+    "tool": "tool/name"
+  },
+  {
+    "name": "mcp________tool",
+    "server": "λ雪🙂",
+    "tool": "λtool"
+  },
+  {
+    "name": "mcp_______zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz_46ee25",
+    "server": "λ雪🙂",
+    "tool": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  },
+  {
+    "name": "mcp__xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_a39080",
+    "server": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "tool": "read"
+  },
+  {
+    "name": "mcp__xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_32c669",
+    "server": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "tool": "tool/name"
+  },
+  {
+    "name": "mcp__xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_9cf670",
+    "server": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "tool": "λtool"
+  },
+  {
+    "name": "mcp__xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx_835d32",
+    "server": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "tool": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+  }
+]
