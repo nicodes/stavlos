@@ -1,0 +1,54 @@
+[
+  {
+    "host": "",
+    "raw": ""
+  },
+  {
+    "host": "example.com",
+    "raw": "example.com/a"
+  },
+  {
+    "host": "docs.go.dev",
+    "raw": "https://Docs.Go.dev/pkg/x?y"
+  },
+  {
+    "host": "pkg.go.dev",
+    "raw": "pkg.go.dev/net"
+  },
+  {
+    "host": "example.com",
+    "raw": "https://user:pass@example.com:443/x"
+  },
+  {
+    "host": "::1",
+    "raw": "https://[::1]:443/x"
+  },
+  {
+    "host": "éxample.com",
+    "raw": "https://éxample.com/x"
+  },
+  {
+    "host": "host.",
+    "raw": "https://HOST./"
+  },
+  {
+    "host": "",
+    "raw": "https://host:bad/"
+  },
+  {
+    "host": "",
+    "raw": "https://bad%20host/x"
+  },
+  {
+    "host": "",
+    "raw": "//other.example/a"
+  },
+  {
+    "host": "example.com",
+    "raw": "mailto:owner@example.com"
+  },
+  {
+    "host": "",
+    "raw": "https://example.com\\x"
+  }
+]

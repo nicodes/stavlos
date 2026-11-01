@@ -4,4 +4,7 @@ pub mod mcp;
 pub mod names;
 pub mod pick;
 pub mod prompt;
+pub mod scope;
+pub mod security;
+pub mod services;
 pub mod state;
