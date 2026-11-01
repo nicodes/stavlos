@@ -10,6 +10,8 @@ pub mod eventlog;
 pub mod httpx;
 pub mod instructions;
 pub mod model;
+pub mod nativeapi;
+pub mod oauth;
 pub mod paths;
 pub mod pathx;
 pub mod peercred;
