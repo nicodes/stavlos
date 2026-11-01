@@ -1,0 +1,1554 @@
+{
+  "predicates": [
+    {
+      "name": "ANDROID_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "ANDROID_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "ANDROID_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "ANDROID_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "ANDROID_HOME",
+      "passes": true
+    },
+    {
+      "name": "ANDROID_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "ANDROID_PATH",
+      "passes": true
+    },
+    {
+      "name": "ANDROID_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "ANDROID_SECRET",
+      "passes": false
+    },
+    {
+      "name": "ANDROID_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "ANDROID_custom",
+      "passes": true
+    },
+    {
+      "name": "ASDF_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "ASDF_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "ASDF_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "ASDF_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "ASDF_HOME",
+      "passes": true
+    },
+    {
+      "name": "ASDF_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "ASDF_PATH",
+      "passes": true
+    },
+    {
+      "name": "ASDF_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "ASDF_SECRET",
+      "passes": false
+    },
+    {
+      "name": "ASDF_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "ASDF_custom",
+      "passes": true
+    },
+    {
+      "name": "BASH_ENV",
+      "passes": false
+    },
+    {
+      "name": "BUN_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "BUN_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "BUN_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "BUN_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "BUN_HOME",
+      "passes": true
+    },
+    {
+      "name": "BUN_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "BUN_PATH",
+      "passes": true
+    },
+    {
+      "name": "BUN_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "BUN_SECRET",
+      "passes": false
+    },
+    {
+      "name": "BUN_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "BUN_custom",
+      "passes": true
+    },
+    {
+      "name": "CARGO_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "CARGO_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "CARGO_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "CARGO_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "CARGO_HOME",
+      "passes": true
+    },
+    {
+      "name": "CARGO_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "CARGO_PATH",
+      "passes": true
+    },
+    {
+      "name": "CARGO_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "CARGO_SECRET",
+      "passes": false
+    },
+    {
+      "name": "CARGO_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "CARGO_custom",
+      "passes": true
+    },
+    {
+      "name": "CC",
+      "passes": true
+    },
+    {
+      "name": "CFLAGS",
+      "passes": true
+    },
+    {
+      "name": "CI",
+      "passes": true
+    },
+    {
+      "name": "COLORTERM",
+      "passes": true
+    },
+    {
+      "name": "CONDA_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "CONDA_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "CONDA_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "CONDA_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "CONDA_HOME",
+      "passes": true
+    },
+    {
+      "name": "CONDA_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "CONDA_PATH",
+      "passes": true
+    },
+    {
+      "name": "CONDA_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "CONDA_SECRET",
+      "passes": false
+    },
+    {
+      "name": "CONDA_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "CONDA_custom",
+      "passes": true
+    },
+    {
+      "name": "CPPFLAGS",
+      "passes": true
+    },
+    {
+      "name": "CXX",
+      "passes": true
+    },
+    {
+      "name": "CXXFLAGS",
+      "passes": true
+    },
+    {
+      "name": "DBUS_SESSION_BUS_ADDRESS",
+      "passes": false
+    },
+    {
+      "name": "DENO_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "DENO_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "DENO_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "DENO_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "DENO_HOME",
+      "passes": true
+    },
+    {
+      "name": "DENO_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "DENO_PATH",
+      "passes": true
+    },
+    {
+      "name": "DENO_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "DENO_SECRET",
+      "passes": false
+    },
+    {
+      "name": "DENO_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "DENO_custom",
+      "passes": true
+    },
+    {
+      "name": "DOTNET_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "DOTNET_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "DOTNET_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "DOTNET_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "DOTNET_HOME",
+      "passes": true
+    },
+    {
+      "name": "DOTNET_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "DOTNET_PATH",
+      "passes": true
+    },
+    {
+      "name": "DOTNET_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "DOTNET_SECRET",
+      "passes": false
+    },
+    {
+      "name": "DOTNET_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "DOTNET_custom",
+      "passes": true
+    },
+    {
+      "name": "EDITOR",
+      "passes": true
+    },
+    {
+      "name": "ENV",
+      "passes": false
+    },
+    {
+      "name": "FORCE_COLOR",
+      "passes": true
+    },
+    {
+      "name": "GIT_AUTHOR_EMAIL",
+      "passes": true
+    },
+    {
+      "name": "GIT_AUTHOR_NAME",
+      "passes": true
+    },
+    {
+      "name": "GIT_COMMITTER_EMAIL",
+      "passes": true
+    },
+    {
+      "name": "GIT_COMMITTER_NAME",
+      "passes": true
+    },
+    {
+      "name": "GOAPI_KEY",
+      "passes": false
+    },
+    {
+      "name": "GOAUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "GOCREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "GOFLAGS",
+      "passes": true
+    },
+    {
+      "name": "GOHOME",
+      "passes": true
+    },
+    {
+      "name": "GOOGLE_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "GOPASSWORD",
+      "passes": false
+    },
+    {
+      "name": "GOPATH",
+      "passes": true
+    },
+    {
+      "name": "GOPRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "GOSECRET",
+      "passes": false
+    },
+    {
+      "name": "GOTOKEN",
+      "passes": false
+    },
+    {
+      "name": "GOcustom",
+      "passes": true
+    },
+    {
+      "name": "GRADLE_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "GRADLE_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "GRADLE_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "GRADLE_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "GRADLE_HOME",
+      "passes": true
+    },
+    {
+      "name": "GRADLE_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "GRADLE_PATH",
+      "passes": true
+    },
+    {
+      "name": "GRADLE_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "GRADLE_SECRET",
+      "passes": false
+    },
+    {
+      "name": "GRADLE_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "GRADLE_custom",
+      "passes": true
+    },
+    {
+      "name": "HOME",
+      "passes": true
+    },
+    {
+      "name": "HOSTNAME",
+      "passes": true
+    },
+    {
+      "name": "JAVA_HOME",
+      "passes": true
+    },
+    {
+      "name": "LANG",
+      "passes": true
+    },
+    {
+      "name": "LANGUAGE",
+      "passes": true
+    },
+    {
+      "name": "LC_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "LC_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "LC_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "LC_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "LC_HOME",
+      "passes": true
+    },
+    {
+      "name": "LC_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "LC_PATH",
+      "passes": true
+    },
+    {
+      "name": "LC_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "LC_SECRET",
+      "passes": false
+    },
+    {
+      "name": "LC_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "LC_custom",
+      "passes": true
+    },
+    {
+      "name": "LDFLAGS",
+      "passes": true
+    },
+    {
+      "name": "LD_LIBRARY_PATH",
+      "passes": true
+    },
+    {
+      "name": "LESS",
+      "passes": true
+    },
+    {
+      "name": "LOGNAME",
+      "passes": true
+    },
+    {
+      "name": "MAKEFLAGS",
+      "passes": true
+    },
+    {
+      "name": "MAVEN_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "MAVEN_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "MAVEN_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "MAVEN_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "MAVEN_HOME",
+      "passes": true
+    },
+    {
+      "name": "MAVEN_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "MAVEN_PATH",
+      "passes": true
+    },
+    {
+      "name": "MAVEN_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "MAVEN_SECRET",
+      "passes": false
+    },
+    {
+      "name": "MAVEN_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "MAVEN_custom",
+      "passes": true
+    },
+    {
+      "name": "MISE_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "MISE_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "MISE_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "MISE_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "MISE_HOME",
+      "passes": true
+    },
+    {
+      "name": "MISE_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "MISE_PATH",
+      "passes": true
+    },
+    {
+      "name": "MISE_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "MISE_SECRET",
+      "passes": false
+    },
+    {
+      "name": "MISE_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "MISE_custom",
+      "passes": true
+    },
+    {
+      "name": "NODE_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "NODE_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "NODE_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "NODE_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "NODE_HOME",
+      "passes": true
+    },
+    {
+      "name": "NODE_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "NODE_PATH",
+      "passes": true
+    },
+    {
+      "name": "NODE_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "NODE_SECRET",
+      "passes": false
+    },
+    {
+      "name": "NODE_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "NODE_custom",
+      "passes": true
+    },
+    {
+      "name": "NO_COLOR",
+      "passes": true
+    },
+    {
+      "name": "NPM_CONFIG_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "NPM_CONFIG_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "NPM_CONFIG_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "NPM_CONFIG_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "NPM_CONFIG_HOME",
+      "passes": true
+    },
+    {
+      "name": "NPM_CONFIG_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "NPM_CONFIG_PATH",
+      "passes": true
+    },
+    {
+      "name": "NPM_CONFIG_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "NPM_CONFIG_SECRET",
+      "passes": false
+    },
+    {
+      "name": "NPM_CONFIG_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "NPM_CONFIG_custom",
+      "passes": true
+    },
+    {
+      "name": "NVM_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "NVM_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "NVM_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "NVM_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "NVM_HOME",
+      "passes": true
+    },
+    {
+      "name": "NVM_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "NVM_PATH",
+      "passes": true
+    },
+    {
+      "name": "NVM_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "NVM_SECRET",
+      "passes": false
+    },
+    {
+      "name": "NVM_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "NVM_custom",
+      "passes": true
+    },
+    {
+      "name": "PAGER",
+      "passes": true
+    },
+    {
+      "name": "PATH",
+      "passes": true
+    },
+    {
+      "name": "PIP_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "PIP_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "PIP_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "PIP_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "PIP_HOME",
+      "passes": true
+    },
+    {
+      "name": "PIP_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "PIP_PATH",
+      "passes": true
+    },
+    {
+      "name": "PIP_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "PIP_SECRET",
+      "passes": false
+    },
+    {
+      "name": "PIP_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "PIP_custom",
+      "passes": true
+    },
+    {
+      "name": "PKG_CONFIGAPI_KEY",
+      "passes": false
+    },
+    {
+      "name": "PKG_CONFIGAUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "PKG_CONFIGCREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "PKG_CONFIGFLAGS",
+      "passes": true
+    },
+    {
+      "name": "PKG_CONFIGHOME",
+      "passes": true
+    },
+    {
+      "name": "PKG_CONFIGPASSWORD",
+      "passes": false
+    },
+    {
+      "name": "PKG_CONFIGPATH",
+      "passes": true
+    },
+    {
+      "name": "PKG_CONFIGPRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "PKG_CONFIGSECRET",
+      "passes": false
+    },
+    {
+      "name": "PKG_CONFIGTOKEN",
+      "passes": false
+    },
+    {
+      "name": "PKG_CONFIGcustom",
+      "passes": true
+    },
+    {
+      "name": "PNPM_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "PNPM_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "PNPM_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "PNPM_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "PNPM_HOME",
+      "passes": true
+    },
+    {
+      "name": "PNPM_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "PNPM_PATH",
+      "passes": true
+    },
+    {
+      "name": "PNPM_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "PNPM_SECRET",
+      "passes": false
+    },
+    {
+      "name": "PNPM_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "PNPM_custom",
+      "passes": true
+    },
+    {
+      "name": "POETRY_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "POETRY_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "POETRY_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "POETRY_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "POETRY_HOME",
+      "passes": true
+    },
+    {
+      "name": "POETRY_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "POETRY_PATH",
+      "passes": true
+    },
+    {
+      "name": "POETRY_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "POETRY_SECRET",
+      "passes": false
+    },
+    {
+      "name": "POETRY_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "POETRY_custom",
+      "passes": true
+    },
+    {
+      "name": "PWD",
+      "passes": true
+    },
+    {
+      "name": "PYENV_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "PYENV_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "PYENV_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "PYENV_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "PYENV_HOME",
+      "passes": true
+    },
+    {
+      "name": "PYENV_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "PYENV_PATH",
+      "passes": true
+    },
+    {
+      "name": "PYENV_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "PYENV_SECRET",
+      "passes": false
+    },
+    {
+      "name": "PYENV_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "PYENV_custom",
+      "passes": true
+    },
+    {
+      "name": "PYTHONAPI_KEY",
+      "passes": false
+    },
+    {
+      "name": "PYTHONAUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "PYTHONCREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "PYTHONFLAGS",
+      "passes": true
+    },
+    {
+      "name": "PYTHONHOME",
+      "passes": true
+    },
+    {
+      "name": "PYTHONPASSWORD",
+      "passes": false
+    },
+    {
+      "name": "PYTHONPATH",
+      "passes": true
+    },
+    {
+      "name": "PYTHONPRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "PYTHONSECRET",
+      "passes": false
+    },
+    {
+      "name": "PYTHONTOKEN",
+      "passes": false
+    },
+    {
+      "name": "PYTHONcustom",
+      "passes": true
+    },
+    {
+      "name": "RUSTCAPI_KEY",
+      "passes": false
+    },
+    {
+      "name": "RUSTCAUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "RUSTCCREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "RUSTCFLAGS",
+      "passes": true
+    },
+    {
+      "name": "RUSTCHOME",
+      "passes": true
+    },
+    {
+      "name": "RUSTCPASSWORD",
+      "passes": false
+    },
+    {
+      "name": "RUSTCPATH",
+      "passes": true
+    },
+    {
+      "name": "RUSTCPRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "RUSTCSECRET",
+      "passes": false
+    },
+    {
+      "name": "RUSTCTOKEN",
+      "passes": false
+    },
+    {
+      "name": "RUSTCcustom",
+      "passes": true
+    },
+    {
+      "name": "RUSTUP_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "RUSTUP_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "RUSTUP_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "RUSTUP_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "RUSTUP_HOME",
+      "passes": true
+    },
+    {
+      "name": "RUSTUP_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "RUSTUP_PATH",
+      "passes": true
+    },
+    {
+      "name": "RUSTUP_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "RUSTUP_SECRET",
+      "passes": false
+    },
+    {
+      "name": "RUSTUP_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "RUSTUP_custom",
+      "passes": true
+    },
+    {
+      "name": "SHELL",
+      "passes": true
+    },
+    {
+      "name": "SHELLOPTS",
+      "passes": false
+    },
+    {
+      "name": "SHLVL",
+      "passes": true
+    },
+    {
+      "name": "SSH_AUTH_SOCK",
+      "passes": false
+    },
+    {
+      "name": "STAVLOS_SANDBOX_STAGE",
+      "passes": false
+    },
+    {
+      "name": "STAVLOS_SOCKET",
+      "passes": false
+    },
+    {
+      "name": "TERM",
+      "passes": true
+    },
+    {
+      "name": "TERM_PROGRAM",
+      "passes": true
+    },
+    {
+      "name": "TMPDIR",
+      "passes": true
+    },
+    {
+      "name": "TZ",
+      "passes": true
+    },
+    {
+      "name": "UNKNOWN_VALUE",
+      "passes": false
+    },
+    {
+      "name": "USER",
+      "passes": true
+    },
+    {
+      "name": "UV_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "UV_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "UV_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "UV_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "UV_HOME",
+      "passes": true
+    },
+    {
+      "name": "UV_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "UV_PATH",
+      "passes": true
+    },
+    {
+      "name": "UV_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "UV_SECRET",
+      "passes": false
+    },
+    {
+      "name": "UV_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "UV_custom",
+      "passes": true
+    },
+    {
+      "name": "VIRTUAL_ENV",
+      "passes": true
+    },
+    {
+      "name": "VISUAL",
+      "passes": true
+    },
+    {
+      "name": "VOLTA_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "VOLTA_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "VOLTA_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "VOLTA_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "VOLTA_HOME",
+      "passes": true
+    },
+    {
+      "name": "VOLTA_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "VOLTA_PATH",
+      "passes": true
+    },
+    {
+      "name": "VOLTA_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "VOLTA_SECRET",
+      "passes": false
+    },
+    {
+      "name": "VOLTA_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "VOLTA_custom",
+      "passes": true
+    },
+    {
+      "name": "XDG_CACHE_HOMEAPI_KEY",
+      "passes": false
+    },
+    {
+      "name": "XDG_CACHE_HOMEAUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "XDG_CACHE_HOMECREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "XDG_CACHE_HOMEFLAGS",
+      "passes": true
+    },
+    {
+      "name": "XDG_CACHE_HOMEHOME",
+      "passes": true
+    },
+    {
+      "name": "XDG_CACHE_HOMEPASSWORD",
+      "passes": false
+    },
+    {
+      "name": "XDG_CACHE_HOMEPATH",
+      "passes": true
+    },
+    {
+      "name": "XDG_CACHE_HOMEPRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "XDG_CACHE_HOMESECRET",
+      "passes": false
+    },
+    {
+      "name": "XDG_CACHE_HOMETOKEN",
+      "passes": false
+    },
+    {
+      "name": "XDG_CACHE_HOMEcustom",
+      "passes": true
+    },
+    {
+      "name": "XDG_CONFIG_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "XDG_CONFIG_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "XDG_CONFIG_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "XDG_CONFIG_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "XDG_CONFIG_HOME",
+      "passes": true
+    },
+    {
+      "name": "XDG_CONFIG_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "XDG_CONFIG_PATH",
+      "passes": true
+    },
+    {
+      "name": "XDG_CONFIG_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "XDG_CONFIG_SECRET",
+      "passes": false
+    },
+    {
+      "name": "XDG_CONFIG_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "XDG_CONFIG_custom",
+      "passes": true
+    },
+    {
+      "name": "XDG_DATA_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "XDG_DATA_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "XDG_DATA_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "XDG_DATA_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "XDG_DATA_HOME",
+      "passes": true
+    },
+    {
+      "name": "XDG_DATA_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "XDG_DATA_PATH",
+      "passes": true
+    },
+    {
+      "name": "XDG_DATA_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "XDG_DATA_SECRET",
+      "passes": false
+    },
+    {
+      "name": "XDG_DATA_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "XDG_DATA_custom",
+      "passes": true
+    },
+    {
+      "name": "XDG_STATE_HOMEAPI_KEY",
+      "passes": false
+    },
+    {
+      "name": "XDG_STATE_HOMEAUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "XDG_STATE_HOMECREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "XDG_STATE_HOMEFLAGS",
+      "passes": true
+    },
+    {
+      "name": "XDG_STATE_HOMEHOME",
+      "passes": true
+    },
+    {
+      "name": "XDG_STATE_HOMEPASSWORD",
+      "passes": false
+    },
+    {
+      "name": "XDG_STATE_HOMEPATH",
+      "passes": true
+    },
+    {
+      "name": "XDG_STATE_HOMEPRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "XDG_STATE_HOMESECRET",
+      "passes": false
+    },
+    {
+      "name": "XDG_STATE_HOMETOKEN",
+      "passes": false
+    },
+    {
+      "name": "XDG_STATE_HOMEcustom",
+      "passes": true
+    },
+    {
+      "name": "YARN_API_KEY",
+      "passes": false
+    },
+    {
+      "name": "YARN_AUTH_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "YARN_CREDENTIALS",
+      "passes": false
+    },
+    {
+      "name": "YARN_FLAGS",
+      "passes": true
+    },
+    {
+      "name": "YARN_HOME",
+      "passes": true
+    },
+    {
+      "name": "YARN_PASSWORD",
+      "passes": false
+    },
+    {
+      "name": "YARN_PATH",
+      "passes": true
+    },
+    {
+      "name": "YARN_PRIVATE_KEY",
+      "passes": false
+    },
+    {
+      "name": "YARN_SECRET",
+      "passes": false
+    },
+    {
+      "name": "YARN_TOKEN",
+      "passes": false
+    },
+    {
+      "name": "YARN_custom",
+      "passes": true
+    }
+  ],
+  "urls": [
+    {
+      "credential": true,
+      "value": "https://user:fixture@proxy.example/path"
+    },
+    {
+      "credential": false,
+      "value": "https://proxy.example/path"
+    },
+    {
+      "credential": false,
+      "value": "https://token@proxy.example"
+    },
+    {
+      "credential": false,
+      "value": "https://user:@proxy.example"
+    },
+    {
+      "credential": true,
+      "value": "http://user:fixture@host"
+    },
+    {
+      "credential": true,
+      "value": "a+b://user:fixture@host"
+    },
+    {
+      "credential": true,
+      "value": "https://user :fixture@host"
+    },
+    {
+      "credential": true,
+      "value": "https://user\u000b:fixture@host"
+    },
+    {
+      "credential": false,
+      "value": "https://user :fixture@host"
+    },
+    {
+      "credential": false,
+      "value": " HTTPS://user:fixture@host"
+    },
+    {
+      "credential": false,
+      "value": "https://user:fixture/elsewhere@host"
+    },
+    {
+      "credential": true,
+      "value": "https://user:fixture?x@host"
+    }
+  ]
+}
