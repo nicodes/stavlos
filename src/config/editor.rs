@@ -610,7 +610,8 @@ fn commit_mutation(root: &Path, edit: &ConfigEdit) -> Result<()> {
         "rename" => {
             let (destination, target) = held_parent(root, &edit.destination, true)?;
             if unsafe {
-                libc::renameat2(
+                libc::syscall(
+                    libc::SYS_renameat2,
                     parent.as_raw_fd(),
                     name.as_ptr(),
                     destination.as_raw_fd(),
