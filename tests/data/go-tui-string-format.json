@@ -1,0 +1,317 @@
+[
+  {
+    "first": "",
+    "id": "",
+    "input": "",
+    "n": 0,
+    "trunc": ""
+  },
+  {
+    "first": "",
+    "id": "",
+    "input": "",
+    "n": 1,
+    "trunc": ""
+  },
+  {
+    "first": "",
+    "id": "",
+    "input": "",
+    "n": 3,
+    "trunc": ""
+  },
+  {
+    "first": "",
+    "id": "",
+    "input": "",
+    "n": 8,
+    "trunc": ""
+  },
+  {
+    "first": "",
+    "id": "",
+    "input": "",
+    "n": 12,
+    "trunc": ""
+  },
+  {
+    "first": "abc",
+    "id": "abc",
+    "input": "abc",
+    "n": 0,
+    "trunc": "…"
+  },
+  {
+    "first": "abc",
+    "id": "abc",
+    "input": "abc",
+    "n": 1,
+    "trunc": "a…"
+  },
+  {
+    "first": "abc",
+    "id": "abc",
+    "input": "abc",
+    "n": 3,
+    "trunc": "abc"
+  },
+  {
+    "first": "abc",
+    "id": "abc",
+    "input": "abc",
+    "n": 8,
+    "trunc": "abc"
+  },
+  {
+    "first": "abc",
+    "id": "abc",
+    "input": "abc",
+    "n": 12,
+    "trunc": "abc"
+  },
+  {
+    "first": "12345678😀rest",
+    "id": "12345678",
+    "input": "12345678😀rest",
+    "n": 0,
+    "trunc": "…"
+  },
+  {
+    "first": "12345678😀rest",
+    "id": "12345678",
+    "input": "12345678😀rest",
+    "n": 1,
+    "trunc": "1…"
+  },
+  {
+    "first": "12345678😀rest",
+    "id": "12345678",
+    "input": "12345678😀rest",
+    "n": 3,
+    "trunc": "123…"
+  },
+  {
+    "first": "12345678😀rest",
+    "id": "12345678",
+    "input": "12345678😀rest",
+    "n": 8,
+    "trunc": "12345678…"
+  },
+  {
+    "first": "12345678😀rest",
+    "id": "12345678",
+    "input": "12345678😀rest",
+    "n": 12,
+    "trunc": "12345678😀res…"
+  },
+  {
+    "first": "1234567😀rest",
+    "id": "1234567�",
+    "input": "1234567😀rest",
+    "n": 0,
+    "trunc": "…"
+  },
+  {
+    "first": "1234567😀rest",
+    "id": "1234567�",
+    "input": "1234567😀rest",
+    "n": 1,
+    "trunc": "1…"
+  },
+  {
+    "first": "1234567😀rest",
+    "id": "1234567�",
+    "input": "1234567😀rest",
+    "n": 3,
+    "trunc": "123…"
+  },
+  {
+    "first": "1234567😀rest",
+    "id": "1234567�",
+    "input": "1234567😀rest",
+    "n": 8,
+    "trunc": "1234567😀…"
+  },
+  {
+    "first": "1234567😀rest",
+    "id": "1234567�",
+    "input": "1234567😀rest",
+    "n": 12,
+    "trunc": "1234567😀rest"
+  },
+  {
+    "first": "123456😀rest",
+    "id": "123456��",
+    "input": "123456😀rest",
+    "n": 0,
+    "trunc": "…"
+  },
+  {
+    "first": "123456😀rest",
+    "id": "123456��",
+    "input": "123456😀rest",
+    "n": 1,
+    "trunc": "1…"
+  },
+  {
+    "first": "123456😀rest",
+    "id": "123456��",
+    "input": "123456😀rest",
+    "n": 3,
+    "trunc": "123…"
+  },
+  {
+    "first": "123456😀rest",
+    "id": "123456��",
+    "input": "123456😀rest",
+    "n": 8,
+    "trunc": "123456😀r…"
+  },
+  {
+    "first": "123456😀rest",
+    "id": "123456��",
+    "input": "123456😀rest",
+    "n": 12,
+    "trunc": "123456😀rest"
+  },
+  {
+    "first": "line one…",
+    "id": "  line o",
+    "input": "  line one\nline two\n ",
+    "n": 0,
+    "trunc": "…"
+  },
+  {
+    "first": "line one…",
+    "id": "  line o",
+    "input": "  line one\nline two\n ",
+    "n": 1,
+    "trunc": " …"
+  },
+  {
+    "first": "line one…",
+    "id": "  line o",
+    "input": "  line one\nline two\n ",
+    "n": 3,
+    "trunc": "  l…"
+  },
+  {
+    "first": "line one…",
+    "id": "  line o",
+    "input": "  line one\nline two\n ",
+    "n": 8,
+    "trunc": "  line o…"
+  },
+  {
+    "first": "line one…",
+    "id": "  line o",
+    "input": "  line one\nline two\n ",
+    "n": 12,
+    "trunc": "  line one\nl…"
+  },
+  {
+    "first": "short",
+    "id": "short\n",
+    "input": "short\n",
+    "n": 0,
+    "trunc": "…"
+  },
+  {
+    "first": "short",
+    "id": "short\n",
+    "input": "short\n",
+    "n": 1,
+    "trunc": "s…"
+  },
+  {
+    "first": "short",
+    "id": "short\n",
+    "input": "short\n",
+    "n": 3,
+    "trunc": "sho…"
+  },
+  {
+    "first": "short",
+    "id": "short\n",
+    "input": "short\n",
+    "n": 8,
+    "trunc": "short\n"
+  },
+  {
+    "first": "short",
+    "id": "short\n",
+    "input": "short\n",
+    "n": 12,
+    "trunc": "short\n"
+  },
+  {
+    "first": "é😀界🦀",
+    "id": "é😀��",
+    "input": "é😀界🦀",
+    "n": 0,
+    "trunc": "…"
+  },
+  {
+    "first": "é😀界🦀",
+    "id": "é😀��",
+    "input": "é😀界🦀",
+    "n": 1,
+    "trunc": "é…"
+  },
+  {
+    "first": "é😀界🦀",
+    "id": "é😀��",
+    "input": "é😀界🦀",
+    "n": 3,
+    "trunc": "é😀界…"
+  },
+  {
+    "first": "é😀界🦀",
+    "id": "é😀��",
+    "input": "é😀界🦀",
+    "n": 8,
+    "trunc": "é😀界🦀"
+  },
+  {
+    "first": "é😀界🦀",
+    "id": "é😀��",
+    "input": "é😀界🦀",
+    "n": 12,
+    "trunc": "é😀界🦀"
+  },
+  {
+    "first": "éabc",
+    "id": "éabc",
+    "input": "éabc",
+    "n": 0,
+    "trunc": "…"
+  },
+  {
+    "first": "éabc",
+    "id": "éabc",
+    "input": "éabc",
+    "n": 1,
+    "trunc": "e…"
+  },
+  {
+    "first": "éabc",
+    "id": "éabc",
+    "input": "éabc",
+    "n": 3,
+    "trunc": "éa…"
+  },
+  {
+    "first": "éabc",
+    "id": "éabc",
+    "input": "éabc",
+    "n": 8,
+    "trunc": "éabc"
+  },
+  {
+    "first": "éabc",
+    "id": "éabc",
+    "input": "éabc",
+    "n": 12,
+    "trunc": "éabc"
+  }
+]

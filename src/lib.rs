@@ -36,4 +36,5 @@ pub mod toolfs;
 pub mod toolname;
 pub mod toolpatch;
 pub mod tools;
+pub mod tui;
 pub mod wire;

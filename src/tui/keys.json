@@ -1,0 +1,351 @@
+[
+  {
+    "help": "ctrl+c",
+    "keys": [
+      "ctrl+c"
+    ],
+    "name": "Quit"
+  },
+  {
+    "help": "tab",
+    "keys": [
+      "tab"
+    ],
+    "name": "NextSection"
+  },
+  {
+    "help": "",
+    "keys": [
+      "shift+tab"
+    ],
+    "name": "PrevSection"
+  },
+  {
+    "help": "←",
+    "keys": [
+      "left"
+    ],
+    "name": "TabLeft"
+  },
+  {
+    "help": "→",
+    "keys": [
+      "right"
+    ],
+    "name": "TabRight"
+  },
+  {
+    "help": "ctrl+n",
+    "keys": [
+      "ctrl+n"
+    ],
+    "name": "NextAgent"
+  },
+  {
+    "help": "ctrl+p",
+    "keys": [
+      "ctrl+p"
+    ],
+    "name": "PrevAgent"
+  },
+  {
+    "help": "↑",
+    "keys": [
+      "up"
+    ],
+    "name": "SelUp"
+  },
+  {
+    "help": "↓",
+    "keys": [
+      "down"
+    ],
+    "name": "SelDown"
+  },
+  {
+    "help": "pgup",
+    "keys": [
+      "pgup"
+    ],
+    "name": "PageUp"
+  },
+  {
+    "help": "pgdn",
+    "keys": [
+      "pgdown"
+    ],
+    "name": "PageDown"
+  },
+  {
+    "help": "",
+    "keys": [
+      "ctrl+home"
+    ],
+    "name": "Top"
+  },
+  {
+    "help": "",
+    "keys": [
+      "ctrl+end"
+    ],
+    "name": "Bottom"
+  },
+  {
+    "help": "",
+    "keys": [
+      "home",
+      "ctrl+home"
+    ],
+    "name": "ChatTop"
+  },
+  {
+    "help": "",
+    "keys": [
+      "end",
+      "ctrl+end"
+    ],
+    "name": "ChatBottom"
+  },
+  {
+    "help": "enter",
+    "keys": [
+      "enter"
+    ],
+    "name": "Submit"
+  },
+  {
+    "help": "space/enter",
+    "keys": [
+      " ",
+      "enter"
+    ],
+    "name": "Select"
+  },
+  {
+    "help": "esc",
+    "keys": [
+      "esc"
+    ],
+    "name": "Clear"
+  },
+  {
+    "help": "ctrl+b",
+    "keys": [
+      "ctrl+b"
+    ],
+    "name": "ToggleTree"
+  },
+  {
+    "help": "ctrl+space",
+    "keys": [
+      "ctrl+@",
+      "ctrl+space"
+    ],
+    "name": "FocusInput"
+  },
+  {
+    "help": "",
+    "keys": [
+      "up",
+      "ctrl+p"
+    ],
+    "name": "OvUp"
+  },
+  {
+    "help": "",
+    "keys": [
+      "down",
+      "ctrl+n"
+    ],
+    "name": "OvDown"
+  },
+  {
+    "help": "",
+    "keys": [
+      "enter"
+    ],
+    "name": "OvSelect"
+  },
+  {
+    "help": "",
+    "keys": [
+      "esc"
+    ],
+    "name": "OvClose"
+  },
+  {
+    "help": "ctrl+s",
+    "keys": [
+      "ctrl+s"
+    ],
+    "name": "OvAlt"
+  },
+  {
+    "help": "o",
+    "keys": [
+      "o",
+      "O"
+    ],
+    "name": "OvOpen"
+  },
+  {
+    "help": "c",
+    "keys": [
+      "c",
+      "C"
+    ],
+    "name": "OvCopy"
+  },
+  {
+    "help": "ctrl+d",
+    "keys": [
+      "ctrl+d"
+    ],
+    "name": "OvRemove"
+  },
+  {
+    "help": "",
+    "keys": [
+      "k"
+    ],
+    "name": "VimUp"
+  },
+  {
+    "help": "",
+    "keys": [
+      "j"
+    ],
+    "name": "VimDown"
+  },
+  {
+    "help": "n",
+    "keys": [
+      "n"
+    ],
+    "name": "NextWaiting"
+  },
+  {
+    "help": "a",
+    "keys": [
+      "a"
+    ],
+    "name": "AddDir"
+  },
+  {
+    "help": "t",
+    "keys": [
+      "t"
+    ],
+    "name": "ShowTokens"
+  },
+  {
+    "help": "c",
+    "keys": [
+      "c"
+    ],
+    "name": "ShowCost"
+  },
+  {
+    "help": "",
+    "keys": [
+      "esc",
+      "ctrl+c"
+    ],
+    "name": "EdClose"
+  },
+  {
+    "help": "",
+    "keys": [
+      "ctrl+s"
+    ],
+    "name": "EdSave"
+  },
+  {
+    "help": "",
+    "keys": [
+      "enter"
+    ],
+    "name": "EdConfirm"
+  },
+  {
+    "help": "",
+    "keys": [
+      "f4"
+    ],
+    "name": "EdRaw"
+  },
+  {
+    "help": "",
+    "keys": [
+      "tab",
+      "shift+tab"
+    ],
+    "name": "EdPane"
+  },
+  {
+    "help": "",
+    "keys": [
+      "up",
+      "k"
+    ],
+    "name": "EdUp"
+  },
+  {
+    "help": "",
+    "keys": [
+      "down",
+      "j"
+    ],
+    "name": "EdDown"
+  },
+  {
+    "help": "",
+    "keys": [
+      "left"
+    ],
+    "name": "EdPrev"
+  },
+  {
+    "help": "",
+    "keys": [
+      "right"
+    ],
+    "name": "EdNext"
+  },
+  {
+    "help": "",
+    "keys": [
+      "enter",
+      " "
+    ],
+    "name": "EdOpen"
+  },
+  {
+    "help": "",
+    "keys": [
+      "ctrl+n"
+    ],
+    "name": "EdNew"
+  },
+  {
+    "help": "",
+    "keys": [
+      "f2"
+    ],
+    "name": "EdRename"
+  },
+  {
+    "help": "",
+    "keys": [
+      "ctrl+d"
+    ],
+    "name": "EdDelete"
+  },
+  {
+    "help": "",
+    "keys": [
+      "ctrl+l"
+    ],
+    "name": "EdReload"
+  }
+]

@@ -1,0 +1,157 @@
+[
+  {
+    "active": false,
+    "expected": [],
+    "input": ""
+  },
+  {
+    "active": false,
+    "expected": [],
+    "input": "abc"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/queue",
+      "/providers",
+      "/models",
+      "/variants",
+      "/roles",
+      "/mode",
+      "/auto",
+      "/yolo",
+      "/channels",
+      "/dir",
+      "/sandbox",
+      "/web",
+      "/discord",
+      "/rename",
+      "/tree",
+      "/chat",
+      "/tokens",
+      "/cost",
+      "/recap",
+      "/plan",
+      "/history",
+      "/compact",
+      "/help",
+      "/settings"
+    ],
+    "input": "/"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/models",
+      "/mode"
+    ],
+    "input": "/m"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/mode",
+      "/models"
+    ],
+    "input": "/mode"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/models"
+    ],
+    "input": "/model"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/models"
+    ],
+    "input": "/models"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/help",
+      "/history"
+    ],
+    "input": "/h"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/help",
+      "/history"
+    ],
+    "input": "/H"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/history"
+    ],
+    "input": "/history"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/settings"
+    ],
+    "input": "/config"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/providers"
+    ],
+    "input": "/connect"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/queue"
+    ],
+    "input": "/que"
+  },
+  {
+    "active": true,
+    "expected": [],
+    "input": "/new"
+  },
+  {
+    "active": false,
+    "expected": [],
+    "input": "/MODE "
+  },
+  {
+    "active": true,
+    "expected": [],
+    "input": "/mode\t"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/providers"
+    ],
+    "input": "/provider"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/help"
+    ],
+    "input": "/?"
+  },
+  {
+    "active": true,
+    "expected": [
+      "/cost"
+    ],
+    "input": "/cost"
+  },
+  {
+    "active": true,
+    "expected": [],
+    "input": "//"
+  }
+]
