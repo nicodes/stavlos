@@ -1,0 +1,459 @@
+[
+  {
+    "body": "{\"plan_type\":\"pro\",\"rate_limit\":{\"allowed\":true,\"primary_window\":{\"used_percent\":38,\"limit_window_seconds\":18000,\"reset_at\":1800000000},\"secondary_window\":{\"used_percent\":17,\"limit_window_seconds\":604800,\"reset_at\":1800500000}},\"credits\":{\"has_credits\":false}}",
+    "error": false,
+    "name": "chatgpt two windows",
+    "provider": "openai",
+    "serialization_error": false,
+    "usage": {
+      "plan": "pro",
+      "windows": [
+        {
+          "used_percent": 38,
+          "minutes": 300,
+          "resets_at": "2027-01-15T09:00:00+01:00"
+        },
+        {
+          "used_percent": 17,
+          "minutes": 10080,
+          "resets_at": "2027-01-21T03:53:20+01:00"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"plan_type\":\"pro\",\"rate_limit\":{\"primary_window\":{\"used_percent\":100,\"limit_window_seconds\":604800,\"reset_at\":1800500000},\"secondary_window\":null}}",
+    "error": false,
+    "name": "chatgpt weekly only, the secondary null",
+    "provider": "openai",
+    "serialization_error": false,
+    "usage": {
+      "plan": "pro",
+      "windows": [
+        {
+          "used_percent": 100,
+          "minutes": 10080,
+          "resets_at": "2027-01-21T03:53:20+01:00"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"code\":200,\"success\":true,\"data\":{\"limits\":[{\"type\":\"TIME_LIMIT\",\"unit\":5,\"number\":1,\"usage\":100,\"currentValue\":3,\"percentage\":3},{\"type\":\"TOKENS_LIMIT\",\"unit\":6,\"number\":1,\"percentage\":40,\"nextResetTime\":1800500000000},{\"type\":\"TOKENS_LIMIT\",\"unit\":3,\"number\":5,\"percentage\":12,\"nextResetTime\":1800000000000}]}}",
+    "error": false,
+    "name": "zai tokens",
+    "provider": "zai",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 12,
+          "minutes": 300,
+          "resets_at": "2027-01-15T09:00:00+01:00"
+        },
+        {
+          "used_percent": 40,
+          "minutes": 10080,
+          "resets_at": "2027-01-21T03:53:20+01:00"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"code\":200,\"data\":{\"limits\":[{\"type\":\"CREDIT_LIMIT\",\"unit\":3,\"number\":5,\"usage\":2000,\"currentValue\":500,\"percentage\":0,\"nextResetTime\":1800000000000}]}}",
+    "error": false,
+    "name": "zai credits, the shape that broke other tools",
+    "provider": "zai",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 25,
+          "minutes": 300,
+          "resets_at": "2027-01-15T09:00:00+01:00"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"usage\":{\"limit\":\"1000\",\"used\":\"500\",\"resetTime\":\"2027-01-15T00:00:00Z\"},\"limits\":[{\"window\":{\"duration\":300,\"timeUnit\":\"TIME_UNIT_MINUTE\"},\"detail\":{\"limit\":200,\"remaining\":180,\"resetTime\":\"2027-01-10T05:00:00Z\"}}]}",
+    "error": false,
+    "name": "kimi weekly and 5h",
+    "provider": "kimi",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 10,
+          "minutes": 300,
+          "resets_at": "2027-01-10T05:00:00Z"
+        },
+        {
+          "used_percent": 50,
+          "minutes": 10080,
+          "resets_at": "2027-01-15T00:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"usages\":{\"limit_5h\":{\"used_ratio\":0.07,\"reset_time\":1800000000},\"limit_month_total\":{\"used_ratio\":0.61,\"reset_time\":1800500000}}}",
+    "error": false,
+    "name": "kimi ratio pools",
+    "provider": "kimi",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 7.000000000000001,
+          "minutes": 300,
+          "resets_at": "2027-01-15T09:00:00+01:00"
+        },
+        {
+          "used_percent": 61,
+          "minutes": 43200,
+          "resets_at": "2027-01-21T03:53:20+01:00"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"config\":{\"currentPeriod\":{\"type\":\"USAGE_PERIOD_TYPE_WEEKLY\",\"start\":\"2026-07-13T02:24:00.983423+00:00\",\"end\":\"2026-07-20T02:24:00.983423+00:00\"},\"creditUsagePercent\":5,\"isUnifiedBillingUser\":true,\"productUsage\":[{\"product\":\"Api\",\"usagePercent\":5},{\"product\":\"GrokChat\"}]}}",
+    "error": false,
+    "name": "grok weekly",
+    "provider": "xai",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 5,
+          "minutes": 10080,
+          "resets_at": "2026-07-20T02:24:00.983423Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"config\":{\"currentPeriod\":{\"type\":\"USAGE_PERIOD_TYPE_WEEKLY\",\"end\":\"2026-07-20T02:24:00Z\"}}}",
+    "error": false,
+    "name": "grok, a period nothing was used in yet",
+    "provider": "xai",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 0,
+          "minutes": 10080,
+          "resets_at": "2026-07-20T02:24:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{}",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "openai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "null",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "openai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "[]",
+    "error": true,
+    "name": "empty-or-invalid",
+    "provider": "openai"
+  },
+  {
+    "body": "not json",
+    "error": true,
+    "name": "empty-or-invalid",
+    "provider": "openai"
+  },
+  {
+    "body": "{\"unexpected\":true}",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "openai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{}",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "zai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "null",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "zai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "[]",
+    "error": true,
+    "name": "empty-or-invalid",
+    "provider": "zai"
+  },
+  {
+    "body": "not json",
+    "error": true,
+    "name": "empty-or-invalid",
+    "provider": "zai"
+  },
+  {
+    "body": "{\"unexpected\":true}",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "zai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{}",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "kimi",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "null",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "kimi",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "[]",
+    "error": true,
+    "name": "empty-or-invalid",
+    "provider": "kimi"
+  },
+  {
+    "body": "not json",
+    "error": true,
+    "name": "empty-or-invalid",
+    "provider": "kimi"
+  },
+  {
+    "body": "{\"unexpected\":true}",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "kimi",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{}",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "xai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "null",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "xai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "[]",
+    "error": true,
+    "name": "empty-or-invalid",
+    "provider": "xai"
+  },
+  {
+    "body": "not json",
+    "error": true,
+    "name": "empty-or-invalid",
+    "provider": "xai"
+  },
+  {
+    "body": "{\"unexpected\":true}",
+    "error": false,
+    "name": "empty-or-invalid",
+    "provider": "xai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"code\":403,\"msg\":\"refused\"}",
+    "error": true,
+    "name": "zai-precedence-and-bounds",
+    "provider": "zai"
+  },
+  {
+    "body": "{\"success\":false}",
+    "error": true,
+    "name": "zai-precedence-and-bounds",
+    "provider": "zai"
+  },
+  {
+    "body": "{\"limits\":[{\"type\":\"TOKENS_LIMIT\",\"unit\":3,\"percentage\":-1},{\"type\":\"CREDIT_LIMIT\",\"unit\":6,\"usage\":40,\"currentValue\":50,\"percentage\":2}]}",
+    "error": false,
+    "name": "zai-precedence-and-bounds",
+    "provider": "zai",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 0,
+          "minutes": 300
+        },
+        {
+          "used_percent": 100,
+          "minutes": 10080
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"limits\":[{\"type\":\"TOKENS_LIMIT\",\"unit\":3,\"percentage\":12}],\"data\":{\"limits\":[]}}",
+    "error": false,
+    "name": "zai-precedence-and-bounds",
+    "provider": "zai",
+    "serialization_error": false,
+    "usage": {
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"usage\":{\"limit\":\"100 total\",\"remaining\":\"60 remaining\",\"ttl\":\"1.25 seconds\"}}",
+    "error": false,
+    "name": "kimi-shapes-and-numeric-prefixes",
+    "provider": "kimi",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 40,
+          "minutes": 10080,
+          "resets_at": "2026-09-21T16:13:21.25+02:00"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"usage\":{\"limit\":100,\"used\":30,\"resetAt\":1800000000001},\"limits\":[{\"duration\":5,\"timeUnit\":\"HOUR\",\"detail\":{\"limit\":100,\"remaining\":95,\"reset_in\":300}}]}",
+    "error": false,
+    "name": "kimi-shapes-and-numeric-prefixes",
+    "provider": "kimi",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 5,
+          "minutes": 300,
+          "resets_at": "2026-09-21T16:18:20+02:00"
+        },
+        {
+          "used_percent": 30,
+          "minutes": 10080,
+          "resets_at": "2027-01-15T09:00:00.001+01:00"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"usage\":{\"limit\":100,\"used\":2},\"data\":{\"usage\":null,\"usages\":{\"limit_weekly\":{\"used_ratio\":\"1.5 of all\",\"resetTime\":\"2026-10-31T12:13:14.123+05:30\"}}}}",
+    "error": false,
+    "name": "kimi-shapes-and-numeric-prefixes",
+    "provider": "kimi",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 100,
+          "minutes": 10080,
+          "resets_at": "2026-10-31T12:13:14.123+05:30"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  },
+  {
+    "body": "{\"limits\":[null,1,{\"window\":{\"duration\":2,\"timeUnit\":\"DAY\"},\"limit\":20,\"used\":3},{\"duration\":120,\"limit\":20,\"used\":1}]}",
+    "error": false,
+    "name": "kimi-shapes-and-numeric-prefixes",
+    "provider": "kimi",
+    "serialization_error": false,
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 5,
+          "minutes": 2
+        },
+        {
+          "used_percent": 15,
+          "minutes": 2880
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    }
+  }
+]

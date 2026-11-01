@@ -1,0 +1,237 @@
+{
+ "openai": {
+  "models": {
+   "gpt-5": {
+    "id": "gpt-5",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5"
+   },
+   "gpt-5-mini": {
+    "id": "gpt-5-mini",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5 Mini"
+   },
+   "gpt-5-nano": {
+    "id": "gpt-5-nano",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5 Nano"
+   },
+   "gpt-5.1": {
+    "id": "gpt-5.1",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5.1"
+   },
+   "gpt-5.2": {
+    "id": "gpt-5.2",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5.2"
+   },
+   "gpt-5.2-chat-latest": {
+    "id": "gpt-5.2-chat-latest",
+    "limit": {
+     "context": 128000,
+     "output": 16384
+    },
+    "name": "GPT-5.2 Chat"
+   },
+   "gpt-5.3-chat-latest": {
+    "id": "gpt-5.3-chat-latest",
+    "limit": {
+     "context": 128000,
+     "output": 16384
+    },
+    "name": "GPT-5.3 Chat (latest)"
+   },
+   "gpt-5.3-codex": {
+    "id": "gpt-5.3-codex",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5.3 Codex"
+   },
+   "gpt-5.3-codex-spark": {
+    "id": "gpt-5.3-codex-spark",
+    "limit": {
+     "context": 128000,
+     "output": 32000
+    },
+    "name": "GPT-5.3 Codex Spark"
+   },
+   "gpt-5.4": {
+    "id": "gpt-5.4",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.4"
+   },
+   "gpt-5.4-mini": {
+    "id": "gpt-5.4-mini",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5.4 mini"
+   },
+   "gpt-5.4-nano": {
+    "id": "gpt-5.4-nano",
+    "limit": {
+     "context": 400000,
+     "output": 128000
+    },
+    "name": "GPT-5.4 nano"
+   },
+   "gpt-5.5": {
+    "id": "gpt-5.5",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.5"
+   },
+   "gpt-5.6": {
+    "id": "gpt-5.6",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.6"
+   },
+   "gpt-5.6-luna": {
+    "id": "gpt-5.6-luna",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.6 Luna"
+   },
+   "gpt-5.6-sol": {
+    "id": "gpt-5.6-sol",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.6 Sol"
+   },
+   "gpt-5.6-terra": {
+    "id": "gpt-5.6-terra",
+    "limit": {
+     "context": 1050000,
+     "output": 128000
+    },
+    "name": "GPT-5.6 Terra"
+   }
+  }
+ },
+ "xai": {
+  "models": {
+   "grok-4.20-0309-non-reasoning": {
+    "id": "grok-4.20-0309-non-reasoning",
+    "limit": {
+     "context": 1000000,
+     "output": 30000
+    },
+    "name": "Grok 4.20 (Non-Reasoning)"
+   },
+   "grok-4.20-0309-reasoning": {
+    "id": "grok-4.20-0309-reasoning",
+    "limit": {
+     "context": 1000000,
+     "output": 30000
+    },
+    "name": "Grok 4.20 (Reasoning)"
+   },
+   "grok-4.20-multi-agent-0309": {
+    "id": "grok-4.20-multi-agent-0309",
+    "limit": {
+     "context": 1000000,
+     "output": 30000
+    },
+    "name": "Grok 4.20 Multi-Agent"
+   },
+   "grok-4.3": {
+    "id": "grok-4.3",
+    "limit": {
+     "context": 1000000,
+     "output": 30000
+    },
+    "name": "Grok 4.3"
+   },
+   "grok-4.5": {
+    "id": "grok-4.5",
+    "limit": {
+     "context": 500000,
+     "output": 500000
+    },
+    "name": "Grok 4.5"
+   },
+   "grok-4.6": {
+    "id": "grok-4.6",
+    "limit": {
+     "context": 500000,
+     "output": 500000
+    },
+    "name": "Grok 4.6"
+   },
+   "grok-build-0.1": {
+    "id": "grok-build-0.1",
+    "limit": {
+     "context": 256000,
+     "output": 256000
+    },
+    "name": "Grok Build 0.1"
+   },
+   "grok-imagine-image": {
+    "id": "grok-imagine-image",
+    "limit": {
+     "context": 16000
+    },
+    "name": "Grok Imagine Image"
+   },
+   "grok-imagine-image-2.0": {
+    "id": "grok-imagine-image-2.0",
+    "limit": {
+     "context": 64000
+    },
+    "name": "Grok Imagine Image 2.0"
+   },
+   "grok-imagine-image-quality": {
+    "id": "grok-imagine-image-quality",
+    "limit": {
+     "context": 16000
+    },
+    "name": "Grok Imagine Image Quality"
+   },
+   "grok-imagine-video": {
+    "id": "grok-imagine-video",
+    "limit": {
+     "context": 1024
+    },
+    "name": "Grok Imagine Video"
+   },
+   "grok-imagine-video-1.5": {
+    "id": "grok-imagine-video-1.5",
+    "limit": {
+     "context": 1024
+    },
+    "name": "Grok Imagine Video 1.5"
+   }
+  }
+ }
+}

@@ -1,0 +1,152 @@
+[
+  {
+    "base": "",
+    "provider": "kimi",
+    "url": ""
+  },
+  {
+    "base": "",
+    "provider": "openai",
+    "url": ""
+  },
+  {
+    "base": "",
+    "provider": "unknown",
+    "url": ""
+  },
+  {
+    "base": "",
+    "provider": "xai",
+    "url": ""
+  },
+  {
+    "base": "",
+    "provider": "zai",
+    "url": ""
+  },
+  {
+    "base": "http://127.0.0.1:9/v1/",
+    "provider": "kimi",
+    "url": "http://127.0.0.1:9/v1/usages"
+  },
+  {
+    "base": "http://127.0.0.1:9/v1/",
+    "provider": "openai",
+    "url": ""
+  },
+  {
+    "base": "http://127.0.0.1:9/v1/",
+    "provider": "unknown",
+    "url": ""
+  },
+  {
+    "base": "http://127.0.0.1:9/v1/",
+    "provider": "xai",
+    "url": "http://127.0.0.1:9/v1/billing?format=credits"
+  },
+  {
+    "base": "http://127.0.0.1:9/v1/",
+    "provider": "zai",
+    "url": "http://127.0.0.1:9/api/monitor/usage/quota/limit"
+  },
+  {
+    "base": "https://api.kimi.ai/coding/v1?old=1#fragment",
+    "provider": "kimi",
+    "url": "https://api.kimi.ai/coding/v1/usages#fragment"
+  },
+  {
+    "base": "https://api.kimi.ai/coding/v1?old=1#fragment",
+    "provider": "openai",
+    "url": ""
+  },
+  {
+    "base": "https://api.kimi.ai/coding/v1?old=1#fragment",
+    "provider": "unknown",
+    "url": ""
+  },
+  {
+    "base": "https://api.kimi.ai/coding/v1?old=1#fragment",
+    "provider": "xai",
+    "url": "https://api.kimi.ai/v1/billing?format=credits#fragment"
+  },
+  {
+    "base": "https://api.kimi.ai/coding/v1?old=1#fragment",
+    "provider": "zai",
+    "url": "https://api.kimi.ai/api/monitor/usage/quota/limit#fragment"
+  },
+  {
+    "base": "https://api.x.ai/v1",
+    "provider": "kimi",
+    "url": "https://api.x.ai/v1/usages"
+  },
+  {
+    "base": "https://api.x.ai/v1",
+    "provider": "openai",
+    "url": ""
+  },
+  {
+    "base": "https://api.x.ai/v1",
+    "provider": "unknown",
+    "url": ""
+  },
+  {
+    "base": "https://api.x.ai/v1",
+    "provider": "xai",
+    "url": "https://cli-chat-proxy.grok.com/v1/billing?format=credits"
+  },
+  {
+    "base": "https://api.x.ai/v1",
+    "provider": "zai",
+    "url": "https://api.x.ai/api/monitor/usage/quota/limit"
+  },
+  {
+    "base": "https://chatgpt.com/backend-api/codex/responses",
+    "provider": "kimi",
+    "url": "https://chatgpt.com/backend-api/codex/responses/usages"
+  },
+  {
+    "base": "https://chatgpt.com/backend-api/codex/responses",
+    "provider": "openai",
+    "url": "https://chatgpt.com/backend-api/wham/usage"
+  },
+  {
+    "base": "https://chatgpt.com/backend-api/codex/responses",
+    "provider": "unknown",
+    "url": ""
+  },
+  {
+    "base": "https://chatgpt.com/backend-api/codex/responses",
+    "provider": "xai",
+    "url": "https://chatgpt.com/v1/billing?format=credits"
+  },
+  {
+    "base": "https://chatgpt.com/backend-api/codex/responses",
+    "provider": "zai",
+    "url": "https://chatgpt.com/api/monitor/usage/quota/limit"
+  },
+  {
+    "base": "not a URL",
+    "provider": "kimi",
+    "url": ""
+  },
+  {
+    "base": "not a URL",
+    "provider": "openai",
+    "url": ""
+  },
+  {
+    "base": "not a URL",
+    "provider": "unknown",
+    "url": ""
+  },
+  {
+    "base": "not a URL",
+    "provider": "xai",
+    "url": ""
+  },
+  {
+    "base": "not a URL",
+    "provider": "zai",
+    "url": ""
+  }
+]

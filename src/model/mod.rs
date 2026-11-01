@@ -1,6 +1,8 @@
 //! Provider-independent conversation and accounting contract.
 pub mod chatcompletions;
 pub mod codex;
+pub mod quota;
+pub mod registry;
 pub mod stream;
 use crate::{
     wire::{Slice, Time},

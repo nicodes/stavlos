@@ -1,0 +1,16 @@
+{
+ "anthropic": {
+  "id": "anthropic", "name": "Anthropic", "env": ["ANTHROPIC_API_KEY"], "npm": "@ai-sdk/anthropic",
+  "models": {
+   "claude-sonnet-5": {"id": "claude-sonnet-5", "limit": {"context": 1000000, "output": 128000},
+     "cost": {"input": 2, "output": 10, "cache_read": 0.2, "cache_write": 2.5}}
+  }
+ },
+ "ollama-cloud": {
+  "id": "ollama-cloud", "name": "Ollama Cloud", "env": ["OLLAMA_API_KEY"], "npm": "@ai-sdk/openai-compatible", "api": "https://ollama.com/v1",
+  "models": {
+   "free-model": {"id": "free-model", "limit": {"context": 32000, "output": 4096}},
+   "priced": {"id": "priced", "limit": {"context": 8000, "output": 1000}, "cost": {"input": 1, "output": 2}}
+  }
+ }
+}

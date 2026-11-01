@@ -21,6 +21,29 @@ pub fn decode<T: serde::de::DeserializeOwned + Default>(input: &str) -> serde_js
         serde_json::from_str(input)
     }
 }
+pub fn deserialize_object<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    struct Object<T>(std::marker::PhantomData<T>);
+    impl<'de, T: Deserialize<'de> + Default> serde::de::Visitor<'de> for Object<T> {
+        type Value = T;
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("an object")
+        }
+        fn visit_map<A: serde::de::MapAccess<'de>>(self, map: A) -> Result<T, A::Error> {
+            T::deserialize(serde::de::value::MapAccessDeserializer::new(map))
+        }
+        fn visit_unit<E: serde::de::Error>(self) -> Result<T, E> {
+            Ok(T::default())
+        }
+        fn visit_none<E: serde::de::Error>(self) -> Result<T, E> {
+            Ok(T::default())
+        }
+    }
+    deserializer.deserialize_any(Object(std::marker::PhantomData))
+}
 pub fn finite_f64<S: Serializer>(value: &f64, s: S) -> Result<S::Ok, S::Error> {
     if !value.is_finite() {
         return Err(serde::ser::Error::custom("non-finite JSON number"));
@@ -59,7 +82,7 @@ impl<T> Deref for Slice<T> {
 }
 impl<T> DerefMut for Slice<T> {
     fn deref_mut(&mut self) -> &mut [T] {
-        self.0.get_or_insert_with(Vec::new).as_mut_slice()
+        self.0.as_deref_mut().unwrap_or(&mut [])
     }
 }
 impl<T> Slice<T> {
@@ -146,7 +169,7 @@ impl Default for Time {
 }
 impl Time {
     pub fn now() -> Self {
-        Self(Utc::now().fixed_offset())
+        Self(chrono::Local::now().fixed_offset())
     }
     pub fn is_zero(&self) -> bool {
         *self == Self::default()
@@ -188,7 +211,17 @@ macro_rules! wire_struct {
         $crate::wire_struct!(@fields $name [] $($field:$wire:$ty=>$mode,)*);
     };
     (@fields $name:ident [$($fields:tt)*]) => {
-        #[derive(Clone,Debug,Default,serde::Serialize,serde::Deserialize)]pub struct $name {$($fields)*}
+        $crate::wire_struct!(@finish $name {$($fields)*});
+    };
+    (@finish $name:ident {$($(#[$attribute:meta])*pub $field:ident:$ty:ty,)*}) => {
+        #[derive(Clone,Debug,Default,serde::Serialize)]pub struct $name {$($(#[$attribute])*pub $field:$ty,)*}
+        impl<'de> serde::Deserialize<'de> for $name {
+            fn deserialize<D:serde::Deserializer<'de>>(deserializer:D)->std::result::Result<Self,D::Error> {
+                #[derive(Default,serde::Deserialize)]struct Fields {$($(#[$attribute])*$field:$ty,)*}
+                let Fields{$($field,)*}=$crate::wire::deserialize_object(deserializer)?;
+                Ok(Self{$($field,)*})
+            }
+        }
     };
     (@fields $name:ident [$($fields:tt)*] $field:ident:$wire:literal:$ty:ty=>required,$($rest:tt)*) => {
         $crate::wire_struct!(@fields $name [$($fields)* #[serde(rename=$wire,default,deserialize_with="crate::wire::null_default")]pub $field:$ty,] $($rest)*);
