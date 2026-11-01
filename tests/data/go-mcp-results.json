@@ -1,0 +1,140 @@
+[
+  {
+    "result": {},
+    "text": ""
+  },
+  {
+    "result": {
+      "content": []
+    },
+    "text": ""
+  },
+  {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "one"
+        },
+        {
+          "type": "text",
+          "text": "two λ"
+        }
+      ]
+    },
+    "text": "one\ntwo λ"
+  },
+  {
+    "result": {
+      "content": [
+        {
+          "type": "image",
+          "mimeType": "image/png",
+          "data": "AAECAw=="
+        },
+        {
+          "type": "audio",
+          "mimeType": "audio/wav",
+          "data": "AAEC"
+        }
+      ]
+    },
+    "text": "[image image/png, 4 bytes]\n[audio audio/wav, 3 bytes]"
+  },
+  {
+    "result": {
+      "content": [
+        {
+          "type": "resource_link",
+          "name": "ref",
+          "uri": "file:///ref"
+        },
+        {
+          "type": "resource",
+          "resource": {
+            "uri": "file:///a",
+            "text": "source λ",
+            "mimeType": "text/plain"
+          }
+        },
+        {
+          "type": "resource",
+          "resource": {
+            "uri": "file:///b",
+            "blob": "AA=="
+          }
+        }
+      ]
+    },
+    "text": "[resource file:///ref]\nsource λ\n[resource file:///b]"
+  },
+  {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": ""
+        }
+      ],
+      "structuredContent": {
+        "must": "not win"
+      }
+    },
+    "text": ""
+  },
+  {
+    "result": {
+      "structuredContent": {
+        "b": "\u003c\u0026\u003e\u2028",
+        "a": [
+          1000000.0,
+          1e-07,
+          1e+21
+        ]
+      }
+    },
+    "text": "{\"a\":[1000000,1e-7,1e+21],\"b\":\"\\u003c\\u0026\\u003e\\u2028\"}"
+  },
+  {
+    "result": {
+      "structuredContent": null
+    },
+    "text": ""
+  },
+  {
+    "result": {
+      "content": [
+        {
+          "type": "text",
+          "text": "refused"
+        }
+      ],
+      "isError": true
+    },
+    "text": "refused"
+  },
+  {
+    "result": {
+      "content": [
+        {
+          "type": "image",
+          "mimeType": "image/png",
+          "data": "AA\r\nEC"
+        }
+      ]
+    },
+    "text": "[image image/png, 3 bytes]"
+  },
+  {
+    "result": {
+      "content": [
+        {
+          "type": "image",
+          "mimeType": "image/png",
+          "data": "AB=="
+        }
+      ]
+    },
+    "text": "[image image/png, 1 bytes]"
+  }
+]

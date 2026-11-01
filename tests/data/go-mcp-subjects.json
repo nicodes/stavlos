@@ -1,0 +1,14 @@
+[
+  {
+    "input": " { \"b\": 1.00, \"a\": [ true, null, \" a b \"] } ",
+    "subject": "{\"b\":1.00,\"a\":[true,null,\" a b \"]}"
+  },
+  {
+    "input": "{\"duplicate\":1,\"duplicate\":2}",
+    "subject": "{\"duplicate\":1,\"duplicate\":2}"
+  },
+  {
+    "input": "{\"html\":\"\u003c\u003e\u0026\",\"unicode\":\"\\u03bb\"}",
+    "subject": "{\"html\":\"\u003c\u003e\u0026\",\"unicode\":\"\\u03bb\"}"
+  }
+]
