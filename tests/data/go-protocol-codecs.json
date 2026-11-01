@@ -1,0 +1,7613 @@
+[
+  {
+    "case": "zero",
+    "expected": {
+      "agent": "",
+      "model": ""
+    },
+    "input": {},
+    "name": "AgentSetModelParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSetModelParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSetModelParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "agent": "",
+      "model": ""
+    },
+    "input": {
+      "agent": null,
+      "model": null
+    },
+    "name": "AgentSetModelParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "agent": "",
+      "model": ""
+    },
+    "input": null,
+    "name": "AgentSetModelParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "provider": "",
+      "name": ""
+    },
+    "input": {},
+    "name": "ModelInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "context": 7,
+      "input_price": 1.25,
+      "output_price": 1.25
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "context": 7,
+      "input_price": 1.25,
+      "output_price": 1.25
+    },
+    "name": "ModelInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "context": 7,
+      "input_price": 1.25,
+      "output_price": 1.25
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "context": 7,
+      "input_price": 1.25,
+      "output_price": 1.25
+    },
+    "name": "ModelInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "provider": "",
+      "name": ""
+    },
+    "input": {
+      "context": null,
+      "id": null,
+      "input_price": null,
+      "name": null,
+      "output_price": null,
+      "provider": null
+    },
+    "name": "ModelInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "provider": "",
+      "name": ""
+    },
+    "input": null,
+    "name": "ModelInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {},
+    "input": {},
+    "name": "ChannelListParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "include_archived": true
+    },
+    "input": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "include_archived": true
+    },
+    "name": "ChannelListParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "include_archived": true
+    },
+    "input": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "include_archived": true
+    },
+    "name": "ChannelListParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {},
+    "input": {
+      "dir": null,
+      "include_archived": null
+    },
+    "name": "ChannelListParams"
+  },
+  {
+    "case": "null",
+    "expected": {},
+    "input": null,
+    "name": "ChannelListParams"
+  },
+  {
+    "case": "zero",
+    "expected": {},
+    "input": {},
+    "name": "None"
+  },
+  {
+    "case": "filled",
+    "expected": {},
+    "input": {},
+    "name": "None"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {},
+    "input": {},
+    "name": "None"
+  },
+  {
+    "case": "null-fields",
+    "expected": {},
+    "input": {},
+    "name": "None"
+  },
+  {
+    "case": "null",
+    "expected": {},
+    "input": null,
+    "name": "None"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "client_id": "",
+      "version": 0
+    },
+    "input": {},
+    "name": "AttachResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "client_id": "fixture \u003c\u0026\u003e Unicode λ",
+      "version": 7
+    },
+    "input": {
+      "client_id": "fixture \u003c\u0026\u003e Unicode λ",
+      "version": 7
+    },
+    "name": "AttachResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "client_id": "fixture \u003c\u0026\u003e Unicode λ",
+      "version": 7
+    },
+    "input": {
+      "client_id": "fixture \u003c\u0026\u003e Unicode λ",
+      "version": 7
+    },
+    "name": "AttachResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "client_id": "",
+      "version": 0
+    },
+    "input": {
+      "client_id": null,
+      "version": null
+    },
+    "name": "AttachResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "client_id": "",
+      "version": 0
+    },
+    "input": null,
+    "name": "AttachResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "jsonrpc": ""
+    },
+    "input": {},
+    "name": "Response"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "jsonrpc": "fixture \u003c\u0026\u003e Unicode λ",
+      "id": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "result": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "error": {
+        "code": 7,
+        "message": "fixture \u003c\u0026\u003e Unicode λ",
+        "data": {
+          "nested": [
+            null,
+            true,
+            1.25
+          ]
+        }
+      },
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "params": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "input": {
+      "jsonrpc": "fixture \u003c\u0026\u003e Unicode λ",
+      "id": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "result": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "error": {
+        "code": 7,
+        "message": "fixture \u003c\u0026\u003e Unicode λ",
+        "data": {
+          "nested": [
+            null,
+            true,
+            1.25
+          ]
+        }
+      },
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "params": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "name": "Response"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "jsonrpc": "fixture \u003c\u0026\u003e Unicode λ",
+      "id": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "result": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "error": {
+        "code": 7,
+        "message": "fixture \u003c\u0026\u003e Unicode λ",
+        "data": {
+          "nested": [
+            null,
+            true,
+            1.25
+          ]
+        }
+      },
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "params": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "input": {
+      "jsonrpc": "fixture \u003c\u0026\u003e Unicode λ",
+      "id": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "result": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "error": {
+        "code": 7,
+        "message": "fixture \u003c\u0026\u003e Unicode λ",
+        "data": {
+          "nested": [
+            null,
+            true,
+            1.25
+          ]
+        }
+      },
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "params": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "name": "Response"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "jsonrpc": "",
+      "result": null,
+      "params": null
+    },
+    "input": {
+      "error": null,
+      "id": null,
+      "jsonrpc": null,
+      "method": null,
+      "params": null,
+      "result": null
+    },
+    "name": "Response"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "jsonrpc": ""
+    },
+    "input": null,
+    "name": "Response"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "label": ""
+    },
+    "input": {},
+    "name": "LoginMethod"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "label": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "label": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "LoginMethod"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "label": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "label": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "LoginMethod"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "label": ""
+    },
+    "input": {
+      "id": null,
+      "label": null
+    },
+    "name": "LoginMethod"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "label": ""
+    },
+    "input": null,
+    "name": "LoginMethod"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "fresh": 0,
+      "cached": 0
+    },
+    "input": {},
+    "name": "CacheUsageResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "fresh": 7,
+      "cached": 7,
+      "providers": [
+        {
+          "provider": "fixture \u003c\u0026\u003e Unicode λ",
+          "fresh": 7,
+          "cached": 7
+        }
+      ]
+    },
+    "input": {
+      "fresh": 7,
+      "cached": 7,
+      "providers": [
+        {
+          "provider": "fixture \u003c\u0026\u003e Unicode λ",
+          "fresh": 7,
+          "cached": 7
+        }
+      ]
+    },
+    "name": "CacheUsageResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "fresh": 7,
+      "cached": 7
+    },
+    "input": {
+      "fresh": 7,
+      "cached": 7
+    },
+    "name": "CacheUsageResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "fresh": 0,
+      "cached": 0
+    },
+    "input": {
+      "cached": null,
+      "fresh": null,
+      "providers": null
+    },
+    "name": "CacheUsageResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "fresh": 0,
+      "cached": 0
+    },
+    "input": null,
+    "name": "CacheUsageResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "from": "0001-01-01T00:00:00Z",
+      "to": "0001-01-01T00:00:00Z",
+      "used_percent": null
+    },
+    "input": {},
+    "name": "PlanSeriesResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "used_percent": [
+        1.25
+      ]
+    },
+    "input": {
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "used_percent": [
+        1.25
+      ]
+    },
+    "name": "PlanSeriesResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "used_percent": []
+    },
+    "input": {
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "used_percent": []
+    },
+    "name": "PlanSeriesResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "from": "0001-01-01T00:00:00Z",
+      "to": "0001-01-01T00:00:00Z",
+      "used_percent": null
+    },
+    "input": {
+      "from": null,
+      "to": null,
+      "used_percent": null
+    },
+    "name": "PlanSeriesResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "from": "0001-01-01T00:00:00Z",
+      "to": "0001-01-01T00:00:00Z",
+      "used_percent": null
+    },
+    "input": null,
+    "name": "PlanSeriesResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "channel": "",
+      "role": "",
+      "name": "",
+      "model": "",
+      "depth": 0,
+      "state": "",
+      "turn": 0,
+      "queued": 0,
+      "cost_usd": 0,
+      "tokens": 0
+    },
+    "input": {},
+    "name": "AgentInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "directories": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "nudges": 7,
+      "nudge_limit": 7,
+      "pending_replies": [
+        {
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "from": "fixture \u003c\u0026\u003e Unicode λ",
+          "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "to": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "text": "fixture \u003c\u0026\u003e Unicode λ",
+          "post": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "awaiting_replies": [
+        {
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "from": "fixture \u003c\u0026\u003e Unicode λ",
+          "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "to": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "text": "fixture \u003c\u0026\u003e Unicode λ",
+          "post": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "parent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "variant": "fixture \u003c\u0026\u003e Unicode λ",
+      "depth": 7,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "turn": 7,
+      "queued": 7,
+      "cost_usd": 1.25,
+      "tokens": 7,
+      "context": 7,
+      "context_window": 7,
+      "last_error": "fixture \u003c\u0026\u003e Unicode λ",
+      "jobs": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "agent": "fixture \u003c\u0026\u003e Unicode λ",
+          "label": "fixture \u003c\u0026\u003e Unicode λ",
+          "spec": "fixture \u003c\u0026\u003e Unicode λ",
+          "started": "fixture \u003c\u0026\u003e Unicode λ",
+          "progress": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "todos": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "text": "fixture \u003c\u0026\u003e Unicode λ",
+          "status": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "mcp": [
+        {
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "state": "fixture \u003c\u0026\u003e Unicode λ",
+          "error": "fixture \u003c\u0026\u003e Unicode λ",
+          "tools": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "started": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "awaiting": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "due": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "input": {
+      "directories": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "nudges": 7,
+      "nudge_limit": 7,
+      "pending_replies": [
+        {
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "from": "fixture \u003c\u0026\u003e Unicode λ",
+          "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "to": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "text": "fixture \u003c\u0026\u003e Unicode λ",
+          "post": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "awaiting_replies": [
+        {
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "from": "fixture \u003c\u0026\u003e Unicode λ",
+          "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "to": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "text": "fixture \u003c\u0026\u003e Unicode λ",
+          "post": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "parent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "variant": "fixture \u003c\u0026\u003e Unicode λ",
+      "depth": 7,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "turn": 7,
+      "queued": 7,
+      "cost_usd": 1.25,
+      "tokens": 7,
+      "context": 7,
+      "context_window": 7,
+      "last_error": "fixture \u003c\u0026\u003e Unicode λ",
+      "jobs": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "agent": "fixture \u003c\u0026\u003e Unicode λ",
+          "label": "fixture \u003c\u0026\u003e Unicode λ",
+          "spec": "fixture \u003c\u0026\u003e Unicode λ",
+          "started": "fixture \u003c\u0026\u003e Unicode λ",
+          "progress": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "todos": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "text": "fixture \u003c\u0026\u003e Unicode λ",
+          "status": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "mcp": [
+        {
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "state": "fixture \u003c\u0026\u003e Unicode λ",
+          "error": "fixture \u003c\u0026\u003e Unicode λ",
+          "tools": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "started": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "awaiting": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "due": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "name": "AgentInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "nudges": 7,
+      "nudge_limit": 7,
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "parent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "variant": "fixture \u003c\u0026\u003e Unicode λ",
+      "depth": 7,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "turn": 7,
+      "queued": 7,
+      "cost_usd": 1.25,
+      "tokens": 7,
+      "context": 7,
+      "context_window": 7,
+      "last_error": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "nudges": 7,
+      "nudge_limit": 7,
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "parent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "variant": "fixture \u003c\u0026\u003e Unicode λ",
+      "depth": 7,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "turn": 7,
+      "queued": 7,
+      "cost_usd": 1.25,
+      "tokens": 7,
+      "context": 7,
+      "context_window": 7,
+      "last_error": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "channel": "",
+      "role": "",
+      "name": "",
+      "model": "",
+      "depth": 0,
+      "state": "",
+      "turn": 0,
+      "queued": 0,
+      "cost_usd": 0,
+      "tokens": 0
+    },
+    "input": {
+      "awaiting": null,
+      "awaiting_replies": null,
+      "channel": null,
+      "context": null,
+      "context_window": null,
+      "cost_usd": null,
+      "depth": null,
+      "directories": null,
+      "due": null,
+      "id": null,
+      "jobs": null,
+      "last_error": null,
+      "mcp": null,
+      "model": null,
+      "name": null,
+      "nudge_limit": null,
+      "nudges": null,
+      "parent": null,
+      "pending_replies": null,
+      "queued": null,
+      "role": null,
+      "state": null,
+      "todos": null,
+      "tokens": null,
+      "turn": null,
+      "variant": null
+    },
+    "name": "AgentInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "channel": "",
+      "role": "",
+      "name": "",
+      "model": "",
+      "depth": 0,
+      "state": "",
+      "turn": 0,
+      "queued": 0,
+      "cost_usd": 0,
+      "tokens": 0
+    },
+    "input": null,
+    "name": "AgentInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": ""
+    },
+    "input": {},
+    "name": "AgentSpawnResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSpawnResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSpawnResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": ""
+    },
+    "input": {
+      "id": null
+    },
+    "name": "AgentSpawnResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": ""
+    },
+    "input": null,
+    "name": "AgentSpawnResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": "",
+      "minutes": 0
+    },
+    "input": {},
+    "name": "ChannelSetRecapParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "minutes": 7
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "minutes": 7
+    },
+    "name": "ChannelSetRecapParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "minutes": 7
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "minutes": 7
+    },
+    "name": "ChannelSetRecapParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": "",
+      "minutes": 0
+    },
+    "input": {
+      "channel": null,
+      "minutes": null
+    },
+    "name": "ChannelSetRecapParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": "",
+      "minutes": 0
+    },
+    "input": null,
+    "name": "ChannelSetRecapParams"
+  },
+  {
+    "case": "zero",
+    "expected": {},
+    "input": {},
+    "name": "CacheUsageParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "minutes": 7
+    },
+    "input": {
+      "minutes": 7
+    },
+    "name": "CacheUsageParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "minutes": 7
+    },
+    "input": {
+      "minutes": 7
+    },
+    "name": "CacheUsageParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {},
+    "input": {
+      "minutes": null
+    },
+    "name": "CacheUsageParams"
+  },
+  {
+    "case": "null",
+    "expected": {},
+    "input": null,
+    "name": "CacheUsageParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "what": ""
+    },
+    "input": {},
+    "name": "ChangedNotification"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "what": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "what": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChangedNotification"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "what": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "what": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChangedNotification"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "what": ""
+    },
+    "input": {
+      "what": null
+    },
+    "name": "ChangedNotification"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "what": ""
+    },
+    "input": null,
+    "name": "ChangedNotification"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": {
+        "id": "",
+        "name": "",
+        "dir": "",
+        "model": "",
+        "root_agent": "",
+        "created": "",
+        "archived": false,
+        "seq": 0,
+        "live_agents": 0,
+        "cost_usd": 0,
+        "tokens": 0,
+        "trust_pending": false,
+        "mode": ""
+      },
+      "agents": null,
+      "prompts": null,
+      "seq": 0
+    },
+    "input": {},
+    "name": "ReconcileResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": {
+        "board": {
+          "source": "fixture \u003c\u0026\u003e Unicode λ",
+          "owner": "fixture \u003c\u0026\u003e Unicode λ",
+          "members": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        },
+        "id": "fixture \u003c\u0026\u003e Unicode λ",
+        "name": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+        "model": "fixture \u003c\u0026\u003e Unicode λ",
+        "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "created": "fixture \u003c\u0026\u003e Unicode λ",
+        "archived": true,
+        "seq": 7,
+        "live_agents": 7,
+        "cost_usd": 1.25,
+        "tokens": 7,
+        "budget": {
+          "calls": 7,
+          "tokens": 7,
+          "cost_usd": 1.25,
+          "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+        },
+        "trust_pending": true,
+        "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+        "trust_files": 7,
+        "mode": "fixture \u003c\u0026\u003e Unicode λ",
+        "recap": 7,
+        "state": "fixture \u003c\u0026\u003e Unicode λ",
+        "title": "fixture \u003c\u0026\u003e Unicode λ",
+        "dirs": [
+          {
+            "path": "fixture \u003c\u0026\u003e Unicode λ",
+            "source": "fixture \u003c\u0026\u003e Unicode λ"
+          }
+        ],
+        "permissions": 7,
+        "questions": 7
+      },
+      "agents": [
+        {
+          "directories": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "nudges": 7,
+          "nudge_limit": 7,
+          "pending_replies": [
+            {
+              "channel": "fixture \u003c\u0026\u003e Unicode λ",
+              "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "from": "fixture \u003c\u0026\u003e Unicode λ",
+              "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "to": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "post": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "awaiting_replies": [
+            {
+              "channel": "fixture \u003c\u0026\u003e Unicode λ",
+              "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "from": "fixture \u003c\u0026\u003e Unicode λ",
+              "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "to": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "post": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "parent": "fixture \u003c\u0026\u003e Unicode λ",
+          "role": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "model": "fixture \u003c\u0026\u003e Unicode λ",
+          "variant": "fixture \u003c\u0026\u003e Unicode λ",
+          "depth": 7,
+          "state": "fixture \u003c\u0026\u003e Unicode λ",
+          "turn": 7,
+          "queued": 7,
+          "cost_usd": 1.25,
+          "tokens": 7,
+          "context": 7,
+          "context_window": 7,
+          "last_error": "fixture \u003c\u0026\u003e Unicode λ",
+          "jobs": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "agent": "fixture \u003c\u0026\u003e Unicode λ",
+              "label": "fixture \u003c\u0026\u003e Unicode λ",
+              "spec": "fixture \u003c\u0026\u003e Unicode λ",
+              "started": "fixture \u003c\u0026\u003e Unicode λ",
+              "progress": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "todos": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "status": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "mcp": [
+            {
+              "name": "fixture \u003c\u0026\u003e Unicode λ",
+              "state": "fixture \u003c\u0026\u003e Unicode λ",
+              "error": "fixture \u003c\u0026\u003e Unicode λ",
+              "tools": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "started": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "awaiting": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "due": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        }
+      ],
+      "prompts": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "agent": "fixture \u003c\u0026\u003e Unicode λ",
+          "from": "fixture \u003c\u0026\u003e Unicode λ",
+          "role": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "kind": "fixture \u003c\u0026\u003e Unicode λ",
+          "tool": "fixture \u003c\u0026\u003e Unicode λ",
+          "input": {
+            "opaque": 1.50,
+            "html": "\u003c\u0026\u003e"
+          },
+          "question": "fixture \u003c\u0026\u003e Unicode λ",
+          "options": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+          "escalated": true,
+          "created": "fixture \u003c\u0026\u003e Unicode λ",
+          "dir": "fixture \u003c\u0026\u003e Unicode λ",
+          "sticky": true,
+          "egress": true,
+          "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+          "questions": [
+            {
+              "question": "fixture \u003c\u0026\u003e Unicode λ",
+              "options": [
+                {
+                  "label": ""
+                }
+              ]
+            }
+          ],
+          "question_number": 7,
+          "question_total": 7
+        }
+      ],
+      "seq": 7
+    },
+    "input": {
+      "channel": {
+        "board": {
+          "source": "fixture \u003c\u0026\u003e Unicode λ",
+          "owner": "fixture \u003c\u0026\u003e Unicode λ",
+          "members": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        },
+        "id": "fixture \u003c\u0026\u003e Unicode λ",
+        "name": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+        "model": "fixture \u003c\u0026\u003e Unicode λ",
+        "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "created": "fixture \u003c\u0026\u003e Unicode λ",
+        "archived": true,
+        "seq": 7,
+        "live_agents": 7,
+        "cost_usd": 1.25,
+        "tokens": 7,
+        "budget": {
+          "calls": 7,
+          "tokens": 7,
+          "cost_usd": 1.25,
+          "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+        },
+        "trust_pending": true,
+        "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+        "trust_files": 7,
+        "mode": "fixture \u003c\u0026\u003e Unicode λ",
+        "recap": 7,
+        "state": "fixture \u003c\u0026\u003e Unicode λ",
+        "title": "fixture \u003c\u0026\u003e Unicode λ",
+        "dirs": [
+          {
+            "path": "fixture \u003c\u0026\u003e Unicode λ",
+            "source": "fixture \u003c\u0026\u003e Unicode λ"
+          }
+        ],
+        "permissions": 7,
+        "questions": 7
+      },
+      "agents": [
+        {
+          "directories": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "nudges": 7,
+          "nudge_limit": 7,
+          "pending_replies": [
+            {
+              "channel": "fixture \u003c\u0026\u003e Unicode λ",
+              "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "from": "fixture \u003c\u0026\u003e Unicode λ",
+              "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "to": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "post": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "awaiting_replies": [
+            {
+              "channel": "fixture \u003c\u0026\u003e Unicode λ",
+              "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "from": "fixture \u003c\u0026\u003e Unicode λ",
+              "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "to": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "post": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "parent": "fixture \u003c\u0026\u003e Unicode λ",
+          "role": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "model": "fixture \u003c\u0026\u003e Unicode λ",
+          "variant": "fixture \u003c\u0026\u003e Unicode λ",
+          "depth": 7,
+          "state": "fixture \u003c\u0026\u003e Unicode λ",
+          "turn": 7,
+          "queued": 7,
+          "cost_usd": 1.25,
+          "tokens": 7,
+          "context": 7,
+          "context_window": 7,
+          "last_error": "fixture \u003c\u0026\u003e Unicode λ",
+          "jobs": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "agent": "fixture \u003c\u0026\u003e Unicode λ",
+              "label": "fixture \u003c\u0026\u003e Unicode λ",
+              "spec": "fixture \u003c\u0026\u003e Unicode λ",
+              "started": "fixture \u003c\u0026\u003e Unicode λ",
+              "progress": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "todos": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "status": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "mcp": [
+            {
+              "name": "fixture \u003c\u0026\u003e Unicode λ",
+              "state": "fixture \u003c\u0026\u003e Unicode λ",
+              "error": "fixture \u003c\u0026\u003e Unicode λ",
+              "tools": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "started": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "awaiting": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "due": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        }
+      ],
+      "prompts": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "agent": "fixture \u003c\u0026\u003e Unicode λ",
+          "from": "fixture \u003c\u0026\u003e Unicode λ",
+          "role": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "kind": "fixture \u003c\u0026\u003e Unicode λ",
+          "tool": "fixture \u003c\u0026\u003e Unicode λ",
+          "input": {
+            "opaque": 1.50,
+            "html": "\u003c\u0026\u003e"
+          },
+          "question": "fixture \u003c\u0026\u003e Unicode λ",
+          "options": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+          "escalated": true,
+          "created": "fixture \u003c\u0026\u003e Unicode λ",
+          "dir": "fixture \u003c\u0026\u003e Unicode λ",
+          "sticky": true,
+          "egress": true,
+          "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+          "questions": [
+            {
+              "question": "fixture \u003c\u0026\u003e Unicode λ",
+              "options": [
+                {
+                  "label": ""
+                }
+              ]
+            }
+          ],
+          "question_number": 7,
+          "question_total": 7
+        }
+      ],
+      "seq": 7
+    },
+    "name": "ReconcileResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": {
+        "board": {
+          "source": "fixture \u003c\u0026\u003e Unicode λ",
+          "owner": "fixture \u003c\u0026\u003e Unicode λ",
+          "members": []
+        },
+        "id": "fixture \u003c\u0026\u003e Unicode λ",
+        "name": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+        "model": "fixture \u003c\u0026\u003e Unicode λ",
+        "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "created": "fixture \u003c\u0026\u003e Unicode λ",
+        "archived": true,
+        "seq": 7,
+        "live_agents": 7,
+        "cost_usd": 1.25,
+        "tokens": 7,
+        "budget": {
+          "calls": 7,
+          "tokens": 7,
+          "cost_usd": 1.25,
+          "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+        },
+        "trust_pending": true,
+        "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+        "trust_files": 7,
+        "mode": "fixture \u003c\u0026\u003e Unicode λ",
+        "recap": 7,
+        "state": "fixture \u003c\u0026\u003e Unicode λ",
+        "title": "fixture \u003c\u0026\u003e Unicode λ",
+        "permissions": 7,
+        "questions": 7
+      },
+      "agents": [],
+      "prompts": [],
+      "seq": 7
+    },
+    "input": {
+      "channel": {
+        "board": {
+          "source": "fixture \u003c\u0026\u003e Unicode λ",
+          "owner": "fixture \u003c\u0026\u003e Unicode λ",
+          "members": []
+        },
+        "id": "fixture \u003c\u0026\u003e Unicode λ",
+        "name": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+        "model": "fixture \u003c\u0026\u003e Unicode λ",
+        "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "created": "fixture \u003c\u0026\u003e Unicode λ",
+        "archived": true,
+        "seq": 7,
+        "live_agents": 7,
+        "cost_usd": 1.25,
+        "tokens": 7,
+        "budget": {
+          "calls": 7,
+          "tokens": 7,
+          "cost_usd": 1.25,
+          "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+        },
+        "trust_pending": true,
+        "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+        "trust_files": 7,
+        "mode": "fixture \u003c\u0026\u003e Unicode λ",
+        "recap": 7,
+        "state": "fixture \u003c\u0026\u003e Unicode λ",
+        "title": "fixture \u003c\u0026\u003e Unicode λ",
+        "permissions": 7,
+        "questions": 7
+      },
+      "agents": [],
+      "prompts": [],
+      "seq": 7
+    },
+    "name": "ReconcileResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": {
+        "id": "",
+        "name": "",
+        "dir": "",
+        "model": "",
+        "root_agent": "",
+        "created": "",
+        "archived": false,
+        "seq": 0,
+        "live_agents": 0,
+        "cost_usd": 0,
+        "tokens": 0,
+        "trust_pending": false,
+        "mode": ""
+      },
+      "agents": null,
+      "prompts": null,
+      "seq": 0
+    },
+    "input": {
+      "agents": null,
+      "channel": null,
+      "prompts": null,
+      "seq": null
+    },
+    "name": "ReconcileResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": {
+        "id": "",
+        "name": "",
+        "dir": "",
+        "model": "",
+        "root_agent": "",
+        "created": "",
+        "archived": false,
+        "seq": 0,
+        "live_agents": 0,
+        "cost_usd": 0,
+        "tokens": 0,
+        "trust_pending": false,
+        "mode": ""
+      },
+      "agents": null,
+      "prompts": null,
+      "seq": 0
+    },
+    "input": null,
+    "name": "ReconcileResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "provider": "",
+      "method": "",
+      "url": "",
+      "code": "",
+      "instructions": "",
+      "expires_in": 0
+    },
+    "input": {},
+    "name": "LoginStartResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "url": "fixture \u003c\u0026\u003e Unicode λ",
+      "code": "fixture \u003c\u0026\u003e Unicode λ",
+      "instructions": "fixture \u003c\u0026\u003e Unicode λ",
+      "expires_in": 7
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "url": "fixture \u003c\u0026\u003e Unicode λ",
+      "code": "fixture \u003c\u0026\u003e Unicode λ",
+      "instructions": "fixture \u003c\u0026\u003e Unicode λ",
+      "expires_in": 7
+    },
+    "name": "LoginStartResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "url": "fixture \u003c\u0026\u003e Unicode λ",
+      "code": "fixture \u003c\u0026\u003e Unicode λ",
+      "instructions": "fixture \u003c\u0026\u003e Unicode λ",
+      "expires_in": 7
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "url": "fixture \u003c\u0026\u003e Unicode λ",
+      "code": "fixture \u003c\u0026\u003e Unicode λ",
+      "instructions": "fixture \u003c\u0026\u003e Unicode λ",
+      "expires_in": 7
+    },
+    "name": "LoginStartResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "provider": "",
+      "method": "",
+      "url": "",
+      "code": "",
+      "instructions": "",
+      "expires_in": 0
+    },
+    "input": {
+      "code": null,
+      "expires_in": null,
+      "id": null,
+      "instructions": null,
+      "method": null,
+      "provider": null,
+      "url": null
+    },
+    "name": "LoginStartResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "provider": "",
+      "method": "",
+      "url": "",
+      "code": "",
+      "instructions": "",
+      "expires_in": 0
+    },
+    "input": null,
+    "name": "LoginStartResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "agent": "",
+      "label": "",
+      "spec": "",
+      "started": ""
+    },
+    "input": {},
+    "name": "JobInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "label": "fixture \u003c\u0026\u003e Unicode λ",
+      "spec": "fixture \u003c\u0026\u003e Unicode λ",
+      "started": "fixture \u003c\u0026\u003e Unicode λ",
+      "progress": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "label": "fixture \u003c\u0026\u003e Unicode λ",
+      "spec": "fixture \u003c\u0026\u003e Unicode λ",
+      "started": "fixture \u003c\u0026\u003e Unicode λ",
+      "progress": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "JobInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "label": "fixture \u003c\u0026\u003e Unicode λ",
+      "spec": "fixture \u003c\u0026\u003e Unicode λ",
+      "started": "fixture \u003c\u0026\u003e Unicode λ",
+      "progress": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "label": "fixture \u003c\u0026\u003e Unicode λ",
+      "spec": "fixture \u003c\u0026\u003e Unicode λ",
+      "started": "fixture \u003c\u0026\u003e Unicode λ",
+      "progress": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "JobInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "agent": "",
+      "label": "",
+      "spec": "",
+      "started": ""
+    },
+    "input": {
+      "agent": null,
+      "id": null,
+      "label": null,
+      "progress": null,
+      "spec": null,
+      "started": null
+    },
+    "name": "JobInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "agent": "",
+      "label": "",
+      "spec": "",
+      "started": ""
+    },
+    "input": null,
+    "name": "JobInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": ""
+    },
+    "input": {},
+    "name": "ChannelRef"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelRef"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelRef"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": ""
+    },
+    "input": {
+      "channel": null
+    },
+    "name": "ChannelRef"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": ""
+    },
+    "input": null,
+    "name": "ChannelRef"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "to": null
+    },
+    "input": {},
+    "name": "ChannelPostResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "to": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "input": {
+      "to": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "name": "ChannelPostResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "to": []
+    },
+    "input": {
+      "to": []
+    },
+    "name": "ChannelPostResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "to": null
+    },
+    "input": {
+      "to": null
+    },
+    "name": "ChannelPostResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "to": null
+    },
+    "input": null,
+    "name": "ChannelPostResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "configured": false,
+      "enabled": false,
+      "state": "",
+      "channels": 0,
+      "config_path": ""
+    },
+    "input": {},
+    "name": "DiscordStatus"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "configured": true,
+      "enabled": true,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "bot": "fixture \u003c\u0026\u003e Unicode λ",
+      "guild": "fixture \u003c\u0026\u003e Unicode λ",
+      "guild_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "channels": 7,
+      "error": "fixture \u003c\u0026\u003e Unicode λ",
+      "config_path": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "configured": true,
+      "enabled": true,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "bot": "fixture \u003c\u0026\u003e Unicode λ",
+      "guild": "fixture \u003c\u0026\u003e Unicode λ",
+      "guild_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "channels": 7,
+      "error": "fixture \u003c\u0026\u003e Unicode λ",
+      "config_path": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "DiscordStatus"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "configured": true,
+      "enabled": true,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "bot": "fixture \u003c\u0026\u003e Unicode λ",
+      "guild": "fixture \u003c\u0026\u003e Unicode λ",
+      "guild_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "channels": 7,
+      "error": "fixture \u003c\u0026\u003e Unicode λ",
+      "config_path": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "configured": true,
+      "enabled": true,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "bot": "fixture \u003c\u0026\u003e Unicode λ",
+      "guild": "fixture \u003c\u0026\u003e Unicode λ",
+      "guild_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "channels": 7,
+      "error": "fixture \u003c\u0026\u003e Unicode λ",
+      "config_path": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "DiscordStatus"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "configured": false,
+      "enabled": false,
+      "state": "",
+      "channels": 0,
+      "config_path": ""
+    },
+    "input": {
+      "bot": null,
+      "channels": null,
+      "config_path": null,
+      "configured": null,
+      "enabled": null,
+      "error": null,
+      "guild": null,
+      "guild_name": null,
+      "state": null
+    },
+    "name": "DiscordStatus"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "configured": false,
+      "enabled": false,
+      "state": "",
+      "channels": 0,
+      "config_path": ""
+    },
+    "input": null,
+    "name": "DiscordStatus"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "agents": null
+    },
+    "input": {},
+    "name": "AgentTreeResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "agents": [
+        {
+          "directories": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "nudges": 7,
+          "nudge_limit": 7,
+          "pending_replies": [
+            {
+              "channel": "fixture \u003c\u0026\u003e Unicode λ",
+              "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "from": "fixture \u003c\u0026\u003e Unicode λ",
+              "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "to": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "post": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "awaiting_replies": [
+            {
+              "channel": "fixture \u003c\u0026\u003e Unicode λ",
+              "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "from": "fixture \u003c\u0026\u003e Unicode λ",
+              "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "to": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "post": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "parent": "fixture \u003c\u0026\u003e Unicode λ",
+          "role": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "model": "fixture \u003c\u0026\u003e Unicode λ",
+          "variant": "fixture \u003c\u0026\u003e Unicode λ",
+          "depth": 7,
+          "state": "fixture \u003c\u0026\u003e Unicode λ",
+          "turn": 7,
+          "queued": 7,
+          "cost_usd": 1.25,
+          "tokens": 7,
+          "context": 7,
+          "context_window": 7,
+          "last_error": "fixture \u003c\u0026\u003e Unicode λ",
+          "jobs": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "agent": "fixture \u003c\u0026\u003e Unicode λ",
+              "label": "fixture \u003c\u0026\u003e Unicode λ",
+              "spec": "fixture \u003c\u0026\u003e Unicode λ",
+              "started": "fixture \u003c\u0026\u003e Unicode λ",
+              "progress": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "todos": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "status": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "mcp": [
+            {
+              "name": "fixture \u003c\u0026\u003e Unicode λ",
+              "state": "fixture \u003c\u0026\u003e Unicode λ",
+              "error": "fixture \u003c\u0026\u003e Unicode λ",
+              "tools": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "started": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "awaiting": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "due": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        }
+      ]
+    },
+    "input": {
+      "agents": [
+        {
+          "directories": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "nudges": 7,
+          "nudge_limit": 7,
+          "pending_replies": [
+            {
+              "channel": "fixture \u003c\u0026\u003e Unicode λ",
+              "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "from": "fixture \u003c\u0026\u003e Unicode λ",
+              "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "to": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "post": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "awaiting_replies": [
+            {
+              "channel": "fixture \u003c\u0026\u003e Unicode λ",
+              "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "from": "fixture \u003c\u0026\u003e Unicode λ",
+              "from_name": "fixture \u003c\u0026\u003e Unicode λ",
+              "to": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "post": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "parent": "fixture \u003c\u0026\u003e Unicode λ",
+          "role": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "model": "fixture \u003c\u0026\u003e Unicode λ",
+          "variant": "fixture \u003c\u0026\u003e Unicode λ",
+          "depth": 7,
+          "state": "fixture \u003c\u0026\u003e Unicode λ",
+          "turn": 7,
+          "queued": 7,
+          "cost_usd": 1.25,
+          "tokens": 7,
+          "context": 7,
+          "context_window": 7,
+          "last_error": "fixture \u003c\u0026\u003e Unicode λ",
+          "jobs": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "agent": "fixture \u003c\u0026\u003e Unicode λ",
+              "label": "fixture \u003c\u0026\u003e Unicode λ",
+              "spec": "fixture \u003c\u0026\u003e Unicode λ",
+              "started": "fixture \u003c\u0026\u003e Unicode λ",
+              "progress": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "todos": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "text": "fixture \u003c\u0026\u003e Unicode λ",
+              "status": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "mcp": [
+            {
+              "name": "fixture \u003c\u0026\u003e Unicode λ",
+              "state": "fixture \u003c\u0026\u003e Unicode λ",
+              "error": "fixture \u003c\u0026\u003e Unicode λ",
+              "tools": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ],
+              "started": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "awaiting": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "due": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        }
+      ]
+    },
+    "name": "AgentTreeResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "agents": []
+    },
+    "input": {
+      "agents": []
+    },
+    "name": "AgentTreeResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "agents": null
+    },
+    "input": {
+      "agents": null
+    },
+    "name": "AgentTreeResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "agents": null
+    },
+    "input": null,
+    "name": "AgentTreeResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "model": ""
+    },
+    "input": {},
+    "name": "VariantsParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "VariantsParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "VariantsParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "model": ""
+    },
+    "input": {
+      "model": null
+    },
+    "name": "VariantsParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "model": ""
+    },
+    "input": null,
+    "name": "VariantsParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "variants": null
+    },
+    "input": {},
+    "name": "VariantsResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "variants": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "input": {
+      "variants": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "name": "VariantsResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "variants": []
+    },
+    "input": {
+      "variants": []
+    },
+    "name": "VariantsResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "variants": null
+    },
+    "input": {
+      "variants": null
+    },
+    "name": "VariantsResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "variants": null
+    },
+    "input": null,
+    "name": "VariantsResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "name": "",
+      "description": "",
+      "type": ""
+    },
+    "input": {},
+    "name": "RoleInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "description": "fixture \u003c\u0026\u003e Unicode λ",
+      "type": "fixture \u003c\u0026\u003e Unicode λ",
+      "models": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "variants": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        }
+      ],
+      "spawn": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "color": "fixture \u003c\u0026\u003e Unicode λ",
+      "max_turns": 7
+    },
+    "input": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "description": "fixture \u003c\u0026\u003e Unicode λ",
+      "type": "fixture \u003c\u0026\u003e Unicode λ",
+      "models": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "variants": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        }
+      ],
+      "spawn": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "color": "fixture \u003c\u0026\u003e Unicode λ",
+      "max_turns": 7
+    },
+    "name": "RoleInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "description": "fixture \u003c\u0026\u003e Unicode λ",
+      "type": "fixture \u003c\u0026\u003e Unicode λ",
+      "color": "fixture \u003c\u0026\u003e Unicode λ",
+      "max_turns": 7
+    },
+    "input": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "description": "fixture \u003c\u0026\u003e Unicode λ",
+      "type": "fixture \u003c\u0026\u003e Unicode λ",
+      "color": "fixture \u003c\u0026\u003e Unicode λ",
+      "max_turns": 7
+    },
+    "name": "RoleInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "name": "",
+      "description": "",
+      "type": ""
+    },
+    "input": {
+      "color": null,
+      "description": null,
+      "max_turns": null,
+      "models": null,
+      "name": null,
+      "spawn": null,
+      "type": null
+    },
+    "name": "RoleInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "name": "",
+      "description": "",
+      "type": ""
+    },
+    "input": null,
+    "name": "RoleInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "path": "",
+      "source": ""
+    },
+    "input": {},
+    "name": "DirInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "source": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "source": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "DirInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "source": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "source": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "DirInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "path": "",
+      "source": ""
+    },
+    "input": {
+      "path": null,
+      "source": null
+    },
+    "name": "DirInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "path": "",
+      "source": ""
+    },
+    "input": null,
+    "name": "DirInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "prompts": null
+    },
+    "input": {},
+    "name": "PromptListResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "prompts": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "agent": "fixture \u003c\u0026\u003e Unicode λ",
+          "from": "fixture \u003c\u0026\u003e Unicode λ",
+          "role": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "kind": "fixture \u003c\u0026\u003e Unicode λ",
+          "tool": "fixture \u003c\u0026\u003e Unicode λ",
+          "input": {
+            "opaque": 1.50,
+            "html": "\u003c\u0026\u003e"
+          },
+          "question": "fixture \u003c\u0026\u003e Unicode λ",
+          "options": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+          "escalated": true,
+          "created": "fixture \u003c\u0026\u003e Unicode λ",
+          "dir": "fixture \u003c\u0026\u003e Unicode λ",
+          "sticky": true,
+          "egress": true,
+          "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+          "questions": [
+            {
+              "question": "fixture \u003c\u0026\u003e Unicode λ",
+              "options": [
+                {
+                  "label": ""
+                }
+              ]
+            }
+          ],
+          "question_number": 7,
+          "question_total": 7
+        }
+      ]
+    },
+    "input": {
+      "prompts": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel": "fixture \u003c\u0026\u003e Unicode λ",
+          "agent": "fixture \u003c\u0026\u003e Unicode λ",
+          "from": "fixture \u003c\u0026\u003e Unicode λ",
+          "role": "fixture \u003c\u0026\u003e Unicode λ",
+          "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+          "kind": "fixture \u003c\u0026\u003e Unicode λ",
+          "tool": "fixture \u003c\u0026\u003e Unicode λ",
+          "input": {
+            "opaque": 1.50,
+            "html": "\u003c\u0026\u003e"
+          },
+          "question": "fixture \u003c\u0026\u003e Unicode λ",
+          "options": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+          "escalated": true,
+          "created": "fixture \u003c\u0026\u003e Unicode λ",
+          "dir": "fixture \u003c\u0026\u003e Unicode λ",
+          "sticky": true,
+          "egress": true,
+          "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+          "questions": [
+            {
+              "question": "fixture \u003c\u0026\u003e Unicode λ",
+              "options": [
+                {
+                  "label": ""
+                }
+              ]
+            }
+          ],
+          "question_number": 7,
+          "question_total": 7
+        }
+      ]
+    },
+    "name": "PromptListResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "prompts": []
+    },
+    "input": {
+      "prompts": []
+    },
+    "name": "PromptListResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "prompts": null
+    },
+    "input": {
+      "prompts": null
+    },
+    "name": "PromptListResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "prompts": null
+    },
+    "input": null,
+    "name": "PromptListResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "dir": "",
+      "hash": "",
+      "trust": false
+    },
+    "input": {},
+    "name": "TrustReplyParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "trust": true
+    },
+    "input": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "trust": true
+    },
+    "name": "TrustReplyParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "trust": true
+    },
+    "input": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "trust": true
+    },
+    "name": "TrustReplyParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "dir": "",
+      "hash": "",
+      "trust": false
+    },
+    "input": {
+      "dir": null,
+      "hash": null,
+      "trust": null
+    },
+    "name": "TrustReplyParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "dir": "",
+      "hash": "",
+      "trust": false
+    },
+    "input": null,
+    "name": "TrustReplyParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": "",
+      "name": ""
+    },
+    "input": {},
+    "name": "CommandRunParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "CommandRunParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "CommandRunParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": "",
+      "name": ""
+    },
+    "input": {
+      "agent": null,
+      "channel": null,
+      "name": null
+    },
+    "name": "CommandRunParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": "",
+      "name": ""
+    },
+    "input": null,
+    "name": "CommandRunParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "buckets": 0
+    },
+    "input": {},
+    "name": "UsageSeriesParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "buckets": 7
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "buckets": 7
+    },
+    "name": "UsageSeriesParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "buckets": 7
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "buckets": 7
+    },
+    "name": "UsageSeriesParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "buckets": 0
+    },
+    "input": {
+      "agent": null,
+      "buckets": null,
+      "channel": null,
+      "from": null,
+      "to": null
+    },
+    "name": "UsageSeriesParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "buckets": 0
+    },
+    "input": null,
+    "name": "UsageSeriesParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "provider": ""
+    },
+    "input": {},
+    "name": "ProviderRef"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ProviderRef"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ProviderRef"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "provider": ""
+    },
+    "input": {
+      "provider": null
+    },
+    "name": "ProviderRef"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "provider": ""
+    },
+    "input": null,
+    "name": "ProviderRef"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "event": {
+        "global": 0,
+        "seq": 0,
+        "channel": "",
+        "type": "",
+        "time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "input": {},
+    "name": "EventNotification"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "event": {
+        "global": 7,
+        "seq": 7,
+        "channel": "fixture \u003c\u0026\u003e Unicode λ",
+        "agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "type": "fixture \u003c\u0026\u003e Unicode λ",
+        "time": "2026-10-31T01:02:03.1234+05:30",
+        "payload": {
+          "opaque": 1.50,
+          "html": "\u003c\u0026\u003e"
+        }
+      }
+    },
+    "input": {
+      "event": {
+        "global": 7,
+        "seq": 7,
+        "channel": "fixture \u003c\u0026\u003e Unicode λ",
+        "agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "type": "fixture \u003c\u0026\u003e Unicode λ",
+        "time": "2026-10-31T01:02:03.1234+05:30",
+        "payload": {
+          "opaque": 1.50,
+          "html": "\u003c\u0026\u003e"
+        }
+      }
+    },
+    "name": "EventNotification"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "event": {
+        "global": 7,
+        "seq": 7,
+        "channel": "fixture \u003c\u0026\u003e Unicode λ",
+        "agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "type": "fixture \u003c\u0026\u003e Unicode λ",
+        "time": "2026-10-31T01:02:03.1234+05:30",
+        "payload": {
+          "opaque": 1.50,
+          "html": "\u003c\u0026\u003e"
+        }
+      }
+    },
+    "input": {
+      "event": {
+        "global": 7,
+        "seq": 7,
+        "channel": "fixture \u003c\u0026\u003e Unicode λ",
+        "agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "type": "fixture \u003c\u0026\u003e Unicode λ",
+        "time": "2026-10-31T01:02:03.1234+05:30",
+        "payload": {
+          "opaque": 1.50,
+          "html": "\u003c\u0026\u003e"
+        }
+      }
+    },
+    "name": "EventNotification"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "event": {
+        "global": 0,
+        "seq": 0,
+        "channel": "",
+        "type": "",
+        "time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "input": {
+      "event": null
+    },
+    "name": "EventNotification"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "event": {
+        "global": 0,
+        "seq": 0,
+        "channel": "",
+        "type": "",
+        "time": "0001-01-01T00:00:00Z"
+      }
+    },
+    "input": null,
+    "name": "EventNotification"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "provider": "",
+      "name": "",
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "input": {},
+    "name": "PlanUsageInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "plan": "fixture \u003c\u0026\u003e Unicode λ",
+      "windows": [
+        {
+          "used_percent": 1.25,
+          "minutes": 7,
+          "resets_at": "2026-10-31T01:02:03.1234+05:30"
+        }
+      ],
+      "observed": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "plan": "fixture \u003c\u0026\u003e Unicode λ",
+      "windows": [
+        {
+          "used_percent": 1.25,
+          "minutes": 7,
+          "resets_at": "2026-10-31T01:02:03.1234+05:30"
+        }
+      ],
+      "observed": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "name": "PlanUsageInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "plan": "fixture \u003c\u0026\u003e Unicode λ",
+      "windows": [],
+      "observed": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "plan": "fixture \u003c\u0026\u003e Unicode λ",
+      "windows": [],
+      "observed": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "name": "PlanUsageInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "provider": "",
+      "name": "",
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "input": {
+      "name": null,
+      "observed": null,
+      "plan": null,
+      "provider": null,
+      "windows": null
+    },
+    "name": "PlanUsageInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "provider": "",
+      "name": "",
+      "windows": null,
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "input": null,
+    "name": "PlanUsageInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "enabled": false,
+      "url": ""
+    },
+    "input": {},
+    "name": "WebStatus"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "enabled": true,
+      "url": "fixture \u003c\u0026\u003e Unicode λ",
+      "open_url": "fixture \u003c\u0026\u003e Unicode λ",
+      "error": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "enabled": true,
+      "url": "fixture \u003c\u0026\u003e Unicode λ",
+      "open_url": "fixture \u003c\u0026\u003e Unicode λ",
+      "error": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "WebStatus"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "enabled": true,
+      "url": "fixture \u003c\u0026\u003e Unicode λ",
+      "open_url": "fixture \u003c\u0026\u003e Unicode λ",
+      "error": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "enabled": true,
+      "url": "fixture \u003c\u0026\u003e Unicode λ",
+      "open_url": "fixture \u003c\u0026\u003e Unicode λ",
+      "error": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "WebStatus"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "enabled": false,
+      "url": ""
+    },
+    "input": {
+      "enabled": null,
+      "error": null,
+      "open_url": null,
+      "url": null
+    },
+    "name": "WebStatus"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "enabled": false,
+      "url": ""
+    },
+    "input": null,
+    "name": "WebStatus"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "parent": "",
+      "role": "",
+      "name": "",
+      "task": ""
+    },
+    "input": {},
+    "name": "AgentSpawnParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "directories": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "parent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "task": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "directories": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "parent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "task": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSpawnParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "parent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "task": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "parent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "task": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSpawnParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "parent": "",
+      "role": "",
+      "name": "",
+      "task": ""
+    },
+    "input": {
+      "directories": null,
+      "model": null,
+      "name": null,
+      "parent": null,
+      "role": null,
+      "task": null
+    },
+    "name": "AgentSpawnParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "parent": "",
+      "role": "",
+      "name": "",
+      "task": ""
+    },
+    "input": null,
+    "name": "AgentSpawnParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "agent": "",
+      "variant": ""
+    },
+    "input": {},
+    "name": "AgentSetVariantParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "variant": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "variant": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSetVariantParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "variant": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "variant": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSetVariantParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "agent": "",
+      "variant": ""
+    },
+    "input": {
+      "agent": null,
+      "variant": null
+    },
+    "name": "AgentSetVariantParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "agent": "",
+      "variant": ""
+    },
+    "input": null,
+    "name": "AgentSetVariantParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "action": "",
+      "prompt": {
+        "id": "",
+        "channel": "",
+        "kind": "",
+        "escalated": false,
+        "created": ""
+      }
+    },
+    "input": {},
+    "name": "PromptNotification"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "action": "fixture \u003c\u0026\u003e Unicode λ",
+      "prompt": {
+        "id": "fixture \u003c\u0026\u003e Unicode λ",
+        "channel": "fixture \u003c\u0026\u003e Unicode λ",
+        "agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "from": "fixture \u003c\u0026\u003e Unicode λ",
+        "role": "fixture \u003c\u0026\u003e Unicode λ",
+        "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+        "kind": "fixture \u003c\u0026\u003e Unicode λ",
+        "tool": "fixture \u003c\u0026\u003e Unicode λ",
+        "input": {
+          "opaque": 1.50,
+          "html": "\u003c\u0026\u003e"
+        },
+        "question": "fixture \u003c\u0026\u003e Unicode λ",
+        "options": [
+          "fixture \u003c\u0026\u003e Unicode λ"
+        ],
+        "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+        "escalated": true,
+        "created": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir": "fixture \u003c\u0026\u003e Unicode λ",
+        "sticky": true,
+        "egress": true,
+        "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+        "questions": [
+          {
+            "question": "fixture \u003c\u0026\u003e Unicode λ",
+            "options": [
+              {
+                "label": "fixture \u003c\u0026\u003e Unicode λ",
+                "description": "fixture \u003c\u0026\u003e Unicode λ"
+              }
+            ]
+          }
+        ],
+        "question_number": 7,
+        "question_total": 7
+      }
+    },
+    "input": {
+      "action": "fixture \u003c\u0026\u003e Unicode λ",
+      "prompt": {
+        "id": "fixture \u003c\u0026\u003e Unicode λ",
+        "channel": "fixture \u003c\u0026\u003e Unicode λ",
+        "agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "from": "fixture \u003c\u0026\u003e Unicode λ",
+        "role": "fixture \u003c\u0026\u003e Unicode λ",
+        "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+        "kind": "fixture \u003c\u0026\u003e Unicode λ",
+        "tool": "fixture \u003c\u0026\u003e Unicode λ",
+        "input": {
+          "opaque": 1.50,
+          "html": "\u003c\u0026\u003e"
+        },
+        "question": "fixture \u003c\u0026\u003e Unicode λ",
+        "options": [
+          "fixture \u003c\u0026\u003e Unicode λ"
+        ],
+        "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+        "escalated": true,
+        "created": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir": "fixture \u003c\u0026\u003e Unicode λ",
+        "sticky": true,
+        "egress": true,
+        "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+        "questions": [
+          {
+            "question": "fixture \u003c\u0026\u003e Unicode λ",
+            "options": [
+              {
+                "label": "fixture \u003c\u0026\u003e Unicode λ",
+                "description": "fixture \u003c\u0026\u003e Unicode λ"
+              }
+            ]
+          }
+        ],
+        "question_number": 7,
+        "question_total": 7
+      }
+    },
+    "name": "PromptNotification"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "action": "fixture \u003c\u0026\u003e Unicode λ",
+      "prompt": {
+        "id": "fixture \u003c\u0026\u003e Unicode λ",
+        "channel": "fixture \u003c\u0026\u003e Unicode λ",
+        "agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "from": "fixture \u003c\u0026\u003e Unicode λ",
+        "role": "fixture \u003c\u0026\u003e Unicode λ",
+        "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+        "kind": "fixture \u003c\u0026\u003e Unicode λ",
+        "tool": "fixture \u003c\u0026\u003e Unicode λ",
+        "input": {
+          "opaque": 1.50,
+          "html": "\u003c\u0026\u003e"
+        },
+        "question": "fixture \u003c\u0026\u003e Unicode λ",
+        "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+        "escalated": true,
+        "created": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir": "fixture \u003c\u0026\u003e Unicode λ",
+        "sticky": true,
+        "egress": true,
+        "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+        "question_number": 7,
+        "question_total": 7
+      }
+    },
+    "input": {
+      "action": "fixture \u003c\u0026\u003e Unicode λ",
+      "prompt": {
+        "id": "fixture \u003c\u0026\u003e Unicode λ",
+        "channel": "fixture \u003c\u0026\u003e Unicode λ",
+        "agent": "fixture \u003c\u0026\u003e Unicode λ",
+        "from": "fixture \u003c\u0026\u003e Unicode λ",
+        "role": "fixture \u003c\u0026\u003e Unicode λ",
+        "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+        "kind": "fixture \u003c\u0026\u003e Unicode λ",
+        "tool": "fixture \u003c\u0026\u003e Unicode λ",
+        "input": {
+          "opaque": 1.50,
+          "html": "\u003c\u0026\u003e"
+        },
+        "question": "fixture \u003c\u0026\u003e Unicode λ",
+        "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+        "escalated": true,
+        "created": "fixture \u003c\u0026\u003e Unicode λ",
+        "dir": "fixture \u003c\u0026\u003e Unicode λ",
+        "sticky": true,
+        "egress": true,
+        "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+        "question_number": 7,
+        "question_total": 7
+      }
+    },
+    "name": "PromptNotification"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "action": "",
+      "prompt": {
+        "id": "",
+        "channel": "",
+        "kind": "",
+        "escalated": false,
+        "created": ""
+      }
+    },
+    "input": {
+      "action": null,
+      "prompt": null
+    },
+    "name": "PromptNotification"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "action": "",
+      "prompt": {
+        "id": "",
+        "channel": "",
+        "kind": "",
+        "escalated": false,
+        "created": ""
+      }
+    },
+    "input": null,
+    "name": "PromptNotification"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "commands": null
+    },
+    "input": {},
+    "name": "CommandListResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "commands": [
+        {
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "description": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ]
+    },
+    "input": {
+      "commands": [
+        {
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "description": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ]
+    },
+    "name": "CommandListResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "commands": []
+    },
+    "input": {
+      "commands": []
+    },
+    "name": "CommandListResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "commands": null
+    },
+    "input": {
+      "commands": null
+    },
+    "name": "CommandListResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "commands": null
+    },
+    "input": null,
+    "name": "CommandListResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "root": "",
+      "revision": "",
+      "files": null
+    },
+    "input": {},
+    "name": "ConfigTree"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "revision": "fixture \u003c\u0026\u003e Unicode λ",
+      "files": [
+        {
+          "path": "fixture \u003c\u0026\u003e Unicode λ",
+          "directory": true
+        }
+      ]
+    },
+    "input": {
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "revision": "fixture \u003c\u0026\u003e Unicode λ",
+      "files": [
+        {
+          "path": "fixture \u003c\u0026\u003e Unicode λ",
+          "directory": true
+        }
+      ]
+    },
+    "name": "ConfigTree"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "revision": "fixture \u003c\u0026\u003e Unicode λ",
+      "files": []
+    },
+    "input": {
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "revision": "fixture \u003c\u0026\u003e Unicode λ",
+      "files": []
+    },
+    "name": "ConfigTree"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "root": "",
+      "revision": "",
+      "files": null
+    },
+    "input": {
+      "files": null,
+      "revision": null,
+      "root": null
+    },
+    "name": "ConfigTree"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "root": "",
+      "revision": "",
+      "files": null
+    },
+    "input": null,
+    "name": "ConfigTree"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "at": "0001-01-01T00:00:00Z",
+      "used_percent": 0
+    },
+    "input": {},
+    "name": "PlanUsagePoint"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "at": "2026-10-31T01:02:03.1234+05:30",
+      "used_percent": 1.25
+    },
+    "input": {
+      "at": "2026-10-31T01:02:03.1234+05:30",
+      "used_percent": 1.25
+    },
+    "name": "PlanUsagePoint"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "at": "2026-10-31T01:02:03.1234+05:30",
+      "used_percent": 1.25
+    },
+    "input": {
+      "at": "2026-10-31T01:02:03.1234+05:30",
+      "used_percent": 1.25
+    },
+    "name": "PlanUsagePoint"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "at": "0001-01-01T00:00:00Z",
+      "used_percent": 0
+    },
+    "input": {
+      "at": null,
+      "used_percent": null
+    },
+    "name": "PlanUsagePoint"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "at": "0001-01-01T00:00:00Z",
+      "used_percent": 0
+    },
+    "input": null,
+    "name": "PlanUsagePoint"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": "",
+      "from": 0
+    },
+    "input": {},
+    "name": "SubscribeParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": 7,
+      "tail": 7
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": 7,
+      "tail": 7
+    },
+    "name": "SubscribeParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": 7,
+      "tail": 7
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": 7,
+      "tail": 7
+    },
+    "name": "SubscribeParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": "",
+      "from": 0
+    },
+    "input": {
+      "channel": null,
+      "from": null,
+      "tail": null
+    },
+    "name": "SubscribeParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": "",
+      "from": 0
+    },
+    "input": null,
+    "name": "SubscribeParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "agent": "",
+      "role": ""
+    },
+    "input": {},
+    "name": "AgentSetRoleParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSetRoleParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSetRoleParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "agent": "",
+      "role": ""
+    },
+    "input": {
+      "agent": null,
+      "role": null
+    },
+    "name": "AgentSetRoleParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "agent": "",
+      "role": ""
+    },
+    "input": null,
+    "name": "AgentSetRoleParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "agent": ""
+    },
+    "input": {},
+    "name": "AgentCompactParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentCompactParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentCompactParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "agent": ""
+    },
+    "input": {
+      "agent": null
+    },
+    "name": "AgentCompactParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "agent": ""
+    },
+    "input": null,
+    "name": "AgentCompactParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "name": "",
+      "connected": false,
+      "kind": "",
+      "priority": 0,
+      "models": 0
+    },
+    "input": {},
+    "name": "ProviderInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "connected": true,
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "priority": 7,
+      "models": 7,
+      "label": "fixture \u003c\u0026\u003e Unicode λ",
+      "account": "fixture \u003c\u0026\u003e Unicode λ",
+      "methods": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "label": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ]
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "connected": true,
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "priority": 7,
+      "models": 7,
+      "label": "fixture \u003c\u0026\u003e Unicode λ",
+      "account": "fixture \u003c\u0026\u003e Unicode λ",
+      "methods": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "label": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ]
+    },
+    "name": "ProviderInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "connected": true,
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "priority": 7,
+      "models": 7,
+      "label": "fixture \u003c\u0026\u003e Unicode λ",
+      "account": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "connected": true,
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "priority": 7,
+      "models": 7,
+      "label": "fixture \u003c\u0026\u003e Unicode λ",
+      "account": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ProviderInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "name": "",
+      "connected": false,
+      "kind": "",
+      "priority": 0,
+      "models": 0
+    },
+    "input": {
+      "account": null,
+      "connected": null,
+      "id": null,
+      "kind": null,
+      "label": null,
+      "methods": null,
+      "models": null,
+      "name": null,
+      "priority": null
+    },
+    "name": "ProviderInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "name": "",
+      "connected": false,
+      "kind": "",
+      "priority": 0,
+      "models": 0
+    },
+    "input": null,
+    "name": "ProviderInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "dir": ""
+    },
+    "input": {},
+    "name": "ChannelCreateParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "root_agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "root_agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelCreateParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "root_agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "root_agent": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelCreateParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "dir": ""
+    },
+    "input": {
+      "dir": null,
+      "model": null,
+      "name": null,
+      "root_agent": null
+    },
+    "name": "ChannelCreateParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "dir": ""
+    },
+    "input": null,
+    "name": "ChannelCreateParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": "",
+      "name": ""
+    },
+    "input": {},
+    "name": "ChannelRenameParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelRenameParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelRenameParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": "",
+      "name": ""
+    },
+    "input": {
+      "channel": null,
+      "name": null
+    },
+    "name": "ChannelRenameParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": "",
+      "name": ""
+    },
+    "input": null,
+    "name": "ChannelRenameParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": ""
+    },
+    "input": {},
+    "name": "PromptClaimParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "PromptClaimParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "PromptClaimParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": ""
+    },
+    "input": {
+      "id": null
+    },
+    "name": "PromptClaimParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": ""
+    },
+    "input": null,
+    "name": "PromptClaimParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "scope": ""
+    },
+    "input": {},
+    "name": "ConfigScope"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ConfigScope"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ConfigScope"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "scope": ""
+    },
+    "input": {
+      "channel": null,
+      "scope": null
+    },
+    "name": "ConfigScope"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "scope": ""
+    },
+    "input": null,
+    "name": "ConfigScope"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "tree": {
+        "root": "",
+        "revision": "",
+        "files": null
+      },
+      "notice": ""
+    },
+    "input": {},
+    "name": "ConfigEditResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "tree": {
+        "root": "fixture \u003c\u0026\u003e Unicode λ",
+        "revision": "fixture \u003c\u0026\u003e Unicode λ",
+        "files": [
+          {
+            "path": "fixture \u003c\u0026\u003e Unicode λ",
+            "directory": true
+          }
+        ]
+      },
+      "document": {
+        "path": "fixture \u003c\u0026\u003e Unicode λ",
+        "content": "fixture \u003c\u0026\u003e Unicode λ",
+        "exists": true,
+        "fields": [
+          {
+            "path": [
+              "fixture \u003c\u0026\u003e Unicode λ"
+            ],
+            "kind": "fixture \u003c\u0026\u003e Unicode λ",
+            "value": "fixture \u003c\u0026\u003e Unicode λ",
+            "set": true,
+            "choices": [
+              "fixture \u003c\u0026\u003e Unicode λ"
+            ]
+          }
+        ]
+      },
+      "notice": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "tree": {
+        "root": "fixture \u003c\u0026\u003e Unicode λ",
+        "revision": "fixture \u003c\u0026\u003e Unicode λ",
+        "files": [
+          {
+            "path": "fixture \u003c\u0026\u003e Unicode λ",
+            "directory": true
+          }
+        ]
+      },
+      "document": {
+        "path": "fixture \u003c\u0026\u003e Unicode λ",
+        "content": "fixture \u003c\u0026\u003e Unicode λ",
+        "exists": true,
+        "fields": [
+          {
+            "path": [
+              "fixture \u003c\u0026\u003e Unicode λ"
+            ],
+            "kind": "fixture \u003c\u0026\u003e Unicode λ",
+            "value": "fixture \u003c\u0026\u003e Unicode λ",
+            "set": true,
+            "choices": [
+              "fixture \u003c\u0026\u003e Unicode λ"
+            ]
+          }
+        ]
+      },
+      "notice": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ConfigEditResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "tree": {
+        "root": "fixture \u003c\u0026\u003e Unicode λ",
+        "revision": "fixture \u003c\u0026\u003e Unicode λ",
+        "files": []
+      },
+      "document": {
+        "path": "fixture \u003c\u0026\u003e Unicode λ",
+        "content": "fixture \u003c\u0026\u003e Unicode λ",
+        "exists": true
+      },
+      "notice": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "tree": {
+        "root": "fixture \u003c\u0026\u003e Unicode λ",
+        "revision": "fixture \u003c\u0026\u003e Unicode λ",
+        "files": []
+      },
+      "document": {
+        "path": "fixture \u003c\u0026\u003e Unicode λ",
+        "content": "fixture \u003c\u0026\u003e Unicode λ",
+        "exists": true
+      },
+      "notice": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ConfigEditResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "tree": {
+        "root": "",
+        "revision": "",
+        "files": null
+      },
+      "notice": ""
+    },
+    "input": {
+      "document": null,
+      "notice": null,
+      "tree": null
+    },
+    "name": "ConfigEditResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "tree": {
+        "root": "",
+        "revision": "",
+        "files": null
+      },
+      "notice": ""
+    },
+    "input": null,
+    "name": "ConfigEditResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": ""
+    },
+    "input": {},
+    "name": "ModelSpec"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "variants": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "variants": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "name": "ModelSpec"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ModelSpec"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": ""
+    },
+    "input": {
+      "id": null,
+      "variants": null
+    },
+    "name": "ModelSpec"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": ""
+    },
+    "input": null,
+    "name": "ModelSpec"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "auth_path": "",
+      "providers": null
+    },
+    "input": {},
+    "name": "ProviderListResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "auth_path": "fixture \u003c\u0026\u003e Unicode λ",
+      "providers": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "connected": true,
+          "kind": "fixture \u003c\u0026\u003e Unicode λ",
+          "priority": 7,
+          "models": 7,
+          "label": "fixture \u003c\u0026\u003e Unicode λ",
+          "account": "fixture \u003c\u0026\u003e Unicode λ",
+          "methods": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "label": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ]
+        }
+      ]
+    },
+    "input": {
+      "auth_path": "fixture \u003c\u0026\u003e Unicode λ",
+      "providers": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "connected": true,
+          "kind": "fixture \u003c\u0026\u003e Unicode λ",
+          "priority": 7,
+          "models": 7,
+          "label": "fixture \u003c\u0026\u003e Unicode λ",
+          "account": "fixture \u003c\u0026\u003e Unicode λ",
+          "methods": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "label": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ]
+        }
+      ]
+    },
+    "name": "ProviderListResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "auth_path": "fixture \u003c\u0026\u003e Unicode λ",
+      "providers": []
+    },
+    "input": {
+      "auth_path": "fixture \u003c\u0026\u003e Unicode λ",
+      "providers": []
+    },
+    "name": "ProviderListResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "auth_path": "",
+      "providers": null
+    },
+    "input": {
+      "auth_path": null,
+      "providers": null
+    },
+    "name": "ProviderListResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "auth_path": "",
+      "providers": null
+    },
+    "input": null,
+    "name": "ProviderListResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": ""
+    },
+    "input": {},
+    "name": "LoginWaitParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "LoginWaitParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "LoginWaitParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": ""
+    },
+    "input": {
+      "id": null
+    },
+    "name": "LoginWaitParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": ""
+    },
+    "input": null,
+    "name": "LoginWaitParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "key": ""
+    },
+    "input": {},
+    "name": "LoginKeyParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "key": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "key": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "LoginKeyParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "key": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "key": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "LoginKeyParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "key": ""
+    },
+    "input": {
+      "id": null,
+      "key": null
+    },
+    "name": "LoginKeyParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "key": ""
+    },
+    "input": null,
+    "name": "LoginKeyParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "channel": "",
+      "kind": "",
+      "escalated": false,
+      "created": ""
+    },
+    "input": {},
+    "name": "PromptInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "tool": "fixture \u003c\u0026\u003e Unicode λ",
+      "input": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "question": "fixture \u003c\u0026\u003e Unicode λ",
+      "options": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+      "escalated": true,
+      "created": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "sticky": true,
+      "egress": true,
+      "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+      "questions": [
+        {
+          "question": "fixture \u003c\u0026\u003e Unicode λ",
+          "options": [
+            {
+              "label": "fixture \u003c\u0026\u003e Unicode λ",
+              "description": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ]
+        }
+      ],
+      "question_number": 7,
+      "question_total": 7
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "tool": "fixture \u003c\u0026\u003e Unicode λ",
+      "input": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "question": "fixture \u003c\u0026\u003e Unicode λ",
+      "options": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+      "escalated": true,
+      "created": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "sticky": true,
+      "egress": true,
+      "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+      "questions": [
+        {
+          "question": "fixture \u003c\u0026\u003e Unicode λ",
+          "options": [
+            {
+              "label": "fixture \u003c\u0026\u003e Unicode λ",
+              "description": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ]
+        }
+      ],
+      "question_number": 7,
+      "question_total": 7
+    },
+    "name": "PromptInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "tool": "fixture \u003c\u0026\u003e Unicode λ",
+      "input": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "question": "fixture \u003c\u0026\u003e Unicode λ",
+      "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+      "escalated": true,
+      "created": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "sticky": true,
+      "egress": true,
+      "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+      "question_number": 7,
+      "question_total": 7
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "fixture \u003c\u0026\u003e Unicode λ",
+      "role": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "tool": "fixture \u003c\u0026\u003e Unicode λ",
+      "input": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "question": "fixture \u003c\u0026\u003e Unicode λ",
+      "claimed_by": "fixture \u003c\u0026\u003e Unicode λ",
+      "escalated": true,
+      "created": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "sticky": true,
+      "egress": true,
+      "prefix": "fixture \u003c\u0026\u003e Unicode λ",
+      "question_number": 7,
+      "question_total": 7
+    },
+    "name": "PromptInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "channel": "",
+      "kind": "",
+      "input": null,
+      "escalated": false,
+      "created": ""
+    },
+    "input": {
+      "agent": null,
+      "channel": null,
+      "channel_name": null,
+      "claimed_by": null,
+      "created": null,
+      "dir": null,
+      "egress": null,
+      "escalated": null,
+      "from": null,
+      "id": null,
+      "input": null,
+      "kind": null,
+      "options": null,
+      "prefix": null,
+      "question": null,
+      "question_number": null,
+      "question_total": null,
+      "questions": null,
+      "role": null,
+      "sticky": null,
+      "tool": null
+    },
+    "name": "PromptInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "channel": "",
+      "kind": "",
+      "escalated": false,
+      "created": ""
+    },
+    "input": null,
+    "name": "PromptInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "path": ""
+    },
+    "input": {},
+    "name": "ConfigEntry"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "directory": true
+    },
+    "input": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "directory": true
+    },
+    "name": "ConfigEntry"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "directory": true
+    },
+    "input": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "directory": true
+    },
+    "name": "ConfigEntry"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "path": ""
+    },
+    "input": {
+      "directory": null,
+      "path": null
+    },
+    "name": "ConfigEntry"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "path": ""
+    },
+    "input": null,
+    "name": "ConfigEntry"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "scope": "",
+      "root": "",
+      "path": "",
+      "revision": "",
+      "action": ""
+    },
+    "input": {},
+    "name": "ConfigEditParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "revision": "fixture \u003c\u0026\u003e Unicode λ",
+      "action": "fixture \u003c\u0026\u003e Unicode λ",
+      "content": "fixture \u003c\u0026\u003e Unicode λ",
+      "destination": "fixture \u003c\u0026\u003e Unicode λ",
+      "field_path": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "field_value": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "input": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "revision": "fixture \u003c\u0026\u003e Unicode λ",
+      "action": "fixture \u003c\u0026\u003e Unicode λ",
+      "content": "fixture \u003c\u0026\u003e Unicode λ",
+      "destination": "fixture \u003c\u0026\u003e Unicode λ",
+      "field_path": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "field_value": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "name": "ConfigEditParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "revision": "fixture \u003c\u0026\u003e Unicode λ",
+      "action": "fixture \u003c\u0026\u003e Unicode λ",
+      "content": "fixture \u003c\u0026\u003e Unicode λ",
+      "destination": "fixture \u003c\u0026\u003e Unicode λ",
+      "field_value": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "input": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "revision": "fixture \u003c\u0026\u003e Unicode λ",
+      "action": "fixture \u003c\u0026\u003e Unicode λ",
+      "content": "fixture \u003c\u0026\u003e Unicode λ",
+      "destination": "fixture \u003c\u0026\u003e Unicode λ",
+      "field_value": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "name": "ConfigEditParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "scope": "",
+      "root": "",
+      "path": "",
+      "revision": "",
+      "action": "",
+      "field_value": null
+    },
+    "input": {
+      "action": null,
+      "channel": null,
+      "content": null,
+      "destination": null,
+      "field_path": null,
+      "field_value": null,
+      "path": null,
+      "revision": null,
+      "root": null,
+      "scope": null
+    },
+    "name": "ConfigEditParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "scope": "",
+      "root": "",
+      "path": "",
+      "revision": "",
+      "action": ""
+    },
+    "input": null,
+    "name": "ConfigEditParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "seq": 0
+    },
+    "input": {},
+    "name": "SubscribeResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "seq": 7,
+      "first": 7
+    },
+    "input": {
+      "seq": 7,
+      "first": 7
+    },
+    "name": "SubscribeResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "seq": 7,
+      "first": 7
+    },
+    "input": {
+      "seq": 7,
+      "first": 7
+    },
+    "name": "SubscribeResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "seq": 0
+    },
+    "input": {
+      "first": null,
+      "seq": null
+    },
+    "name": "SubscribeResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "seq": 0
+    },
+    "input": null,
+    "name": "SubscribeResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "agent": "",
+      "kind": ""
+    },
+    "input": {},
+    "name": "AgentSendParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "text": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "text": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSendParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "text": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "text": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentSendParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "agent": "",
+      "kind": ""
+    },
+    "input": {
+      "agent": null,
+      "kind": null,
+      "text": null
+    },
+    "name": "AgentSendParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "agent": "",
+      "kind": ""
+    },
+    "input": null,
+    "name": "AgentSendParams"
+  },
+  {
+    "case": "zero",
+    "expected": {},
+    "input": {},
+    "name": "ModelListParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "all": true
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "all": true
+    },
+    "name": "ModelListParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "all": true
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "all": true
+    },
+    "name": "ModelListParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {},
+    "input": {
+      "all": null,
+      "provider": null
+    },
+    "name": "ModelListParams"
+  },
+  {
+    "case": "null",
+    "expected": {},
+    "input": null,
+    "name": "ModelListParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "dir": ""
+    },
+    "input": {},
+    "name": "TrustStatusParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "TrustStatusParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "TrustStatusParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "dir": ""
+    },
+    "input": {
+      "dir": null
+    },
+    "name": "TrustStatusParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "dir": ""
+    },
+    "input": null,
+    "name": "TrustStatusParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "from": "0001-01-01T00:00:00Z",
+      "to": "0001-01-01T00:00:00Z",
+      "tokens": null,
+      "cost_usd": null
+    },
+    "input": {},
+    "name": "UsageSeriesResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "tokens": [
+        7
+      ],
+      "cost_usd": [
+        1.25
+      ]
+    },
+    "input": {
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "tokens": [
+        7
+      ],
+      "cost_usd": [
+        1.25
+      ]
+    },
+    "name": "UsageSeriesResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "tokens": [],
+      "cost_usd": []
+    },
+    "input": {
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "tokens": [],
+      "cost_usd": []
+    },
+    "name": "UsageSeriesResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "from": "0001-01-01T00:00:00Z",
+      "to": "0001-01-01T00:00:00Z",
+      "tokens": null,
+      "cost_usd": null
+    },
+    "input": {
+      "cost_usd": null,
+      "from": null,
+      "to": null,
+      "tokens": null
+    },
+    "name": "UsageSeriesResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "from": "0001-01-01T00:00:00Z",
+      "to": "0001-01-01T00:00:00Z",
+      "tokens": null,
+      "cost_usd": null
+    },
+    "input": null,
+    "name": "UsageSeriesResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "provider": "",
+      "buckets": 0
+    },
+    "input": {},
+    "name": "PlanSeriesParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "buckets": 7
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "buckets": 7
+    },
+    "name": "PlanSeriesParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "buckets": 7
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "from": "2026-10-31T01:02:03.1234+05:30",
+      "to": "2026-10-31T01:02:03.1234+05:30",
+      "buckets": 7
+    },
+    "name": "PlanSeriesParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "provider": "",
+      "buckets": 0
+    },
+    "input": {
+      "buckets": null,
+      "from": null,
+      "provider": null,
+      "to": null
+    },
+    "name": "PlanSeriesParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "provider": "",
+      "buckets": 0
+    },
+    "input": null,
+    "name": "PlanSeriesParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "code": 0,
+      "message": ""
+    },
+    "input": {},
+    "name": "Error"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "code": 7,
+      "message": "fixture \u003c\u0026\u003e Unicode λ",
+      "data": {
+        "nested": [
+          null,
+          true,
+          1.25
+        ]
+      }
+    },
+    "input": {
+      "code": 7,
+      "message": "fixture \u003c\u0026\u003e Unicode λ",
+      "data": {
+        "nested": [
+          null,
+          true,
+          1.25
+        ]
+      }
+    },
+    "name": "Error"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "code": 7,
+      "message": "fixture \u003c\u0026\u003e Unicode λ",
+      "data": {
+        "nested": [
+          null,
+          true,
+          1.25
+        ]
+      }
+    },
+    "input": {
+      "code": 7,
+      "message": "fixture \u003c\u0026\u003e Unicode λ",
+      "data": {
+        "nested": [
+          null,
+          true,
+          1.25
+        ]
+      }
+    },
+    "name": "Error"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "code": 0,
+      "message": ""
+    },
+    "input": {
+      "code": null,
+      "data": null,
+      "message": null
+    },
+    "name": "Error"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "code": 0,
+      "message": ""
+    },
+    "input": null,
+    "name": "Error"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "name": "",
+      "dir": "",
+      "model": "",
+      "root_agent": "",
+      "created": "",
+      "archived": false,
+      "seq": 0,
+      "live_agents": 0,
+      "cost_usd": 0,
+      "tokens": 0,
+      "trust_pending": false,
+      "mode": ""
+    },
+    "input": {},
+    "name": "ChannelInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "board": {
+        "source": "fixture \u003c\u0026\u003e Unicode λ",
+        "owner": "fixture \u003c\u0026\u003e Unicode λ",
+        "members": [
+          "fixture \u003c\u0026\u003e Unicode λ"
+        ]
+      },
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "created": "fixture \u003c\u0026\u003e Unicode λ",
+      "archived": true,
+      "seq": 7,
+      "live_agents": 7,
+      "cost_usd": 1.25,
+      "tokens": 7,
+      "budget": {
+        "calls": 7,
+        "tokens": 7,
+        "cost_usd": 1.25,
+        "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+      },
+      "trust_pending": true,
+      "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+      "trust_files": 7,
+      "mode": "fixture \u003c\u0026\u003e Unicode λ",
+      "recap": 7,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "title": "fixture \u003c\u0026\u003e Unicode λ",
+      "dirs": [
+        {
+          "path": "fixture \u003c\u0026\u003e Unicode λ",
+          "source": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "permissions": 7,
+      "questions": 7
+    },
+    "input": {
+      "board": {
+        "source": "fixture \u003c\u0026\u003e Unicode λ",
+        "owner": "fixture \u003c\u0026\u003e Unicode λ",
+        "members": [
+          "fixture \u003c\u0026\u003e Unicode λ"
+        ]
+      },
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "created": "fixture \u003c\u0026\u003e Unicode λ",
+      "archived": true,
+      "seq": 7,
+      "live_agents": 7,
+      "cost_usd": 1.25,
+      "tokens": 7,
+      "budget": {
+        "calls": 7,
+        "tokens": 7,
+        "cost_usd": 1.25,
+        "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+      },
+      "trust_pending": true,
+      "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+      "trust_files": 7,
+      "mode": "fixture \u003c\u0026\u003e Unicode λ",
+      "recap": 7,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "title": "fixture \u003c\u0026\u003e Unicode λ",
+      "dirs": [
+        {
+          "path": "fixture \u003c\u0026\u003e Unicode λ",
+          "source": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ],
+      "permissions": 7,
+      "questions": 7
+    },
+    "name": "ChannelInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "board": {
+        "source": "fixture \u003c\u0026\u003e Unicode λ",
+        "owner": "fixture \u003c\u0026\u003e Unicode λ",
+        "members": []
+      },
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "created": "fixture \u003c\u0026\u003e Unicode λ",
+      "archived": true,
+      "seq": 7,
+      "live_agents": 7,
+      "cost_usd": 1.25,
+      "tokens": 7,
+      "budget": {
+        "calls": 7,
+        "tokens": 7,
+        "cost_usd": 1.25,
+        "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+      },
+      "trust_pending": true,
+      "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+      "trust_files": 7,
+      "mode": "fixture \u003c\u0026\u003e Unicode λ",
+      "recap": 7,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "title": "fixture \u003c\u0026\u003e Unicode λ",
+      "permissions": 7,
+      "questions": 7
+    },
+    "input": {
+      "board": {
+        "source": "fixture \u003c\u0026\u003e Unicode λ",
+        "owner": "fixture \u003c\u0026\u003e Unicode λ",
+        "members": []
+      },
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ",
+      "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "created": "fixture \u003c\u0026\u003e Unicode λ",
+      "archived": true,
+      "seq": 7,
+      "live_agents": 7,
+      "cost_usd": 1.25,
+      "tokens": 7,
+      "budget": {
+        "calls": 7,
+        "tokens": 7,
+        "cost_usd": 1.25,
+        "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+      },
+      "trust_pending": true,
+      "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+      "trust_files": 7,
+      "mode": "fixture \u003c\u0026\u003e Unicode λ",
+      "recap": 7,
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "title": "fixture \u003c\u0026\u003e Unicode λ",
+      "permissions": 7,
+      "questions": 7
+    },
+    "name": "ChannelInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "name": "",
+      "dir": "",
+      "model": "",
+      "root_agent": "",
+      "created": "",
+      "archived": false,
+      "seq": 0,
+      "live_agents": 0,
+      "cost_usd": 0,
+      "tokens": 0,
+      "trust_pending": false,
+      "mode": ""
+    },
+    "input": {
+      "archived": null,
+      "board": null,
+      "budget": null,
+      "cost_usd": null,
+      "created": null,
+      "dir": null,
+      "dir_error": null,
+      "dirs": null,
+      "id": null,
+      "live_agents": null,
+      "mode": null,
+      "model": null,
+      "name": null,
+      "permissions": null,
+      "questions": null,
+      "recap": null,
+      "root_agent": null,
+      "sandbox": null,
+      "seq": null,
+      "state": null,
+      "title": null,
+      "tokens": null,
+      "trust_files": null,
+      "trust_pending": null
+    },
+    "name": "ChannelInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "name": "",
+      "dir": "",
+      "model": "",
+      "root_agent": "",
+      "created": "",
+      "archived": false,
+      "seq": 0,
+      "live_agents": 0,
+      "cost_usd": 0,
+      "tokens": 0,
+      "trust_pending": false,
+      "mode": ""
+    },
+    "input": null,
+    "name": "ChannelInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "enabled": false,
+      "level": ""
+    },
+    "input": {},
+    "name": "SandboxStatus"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "enabled": true,
+      "level": "fixture \u003c\u0026\u003e Unicode λ",
+      "missing": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "why": "fixture \u003c\u0026\u003e Unicode λ",
+      "fix": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "enabled": true,
+      "level": "fixture \u003c\u0026\u003e Unicode λ",
+      "missing": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "why": "fixture \u003c\u0026\u003e Unicode λ",
+      "fix": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "SandboxStatus"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "enabled": true,
+      "level": "fixture \u003c\u0026\u003e Unicode λ",
+      "why": "fixture \u003c\u0026\u003e Unicode λ",
+      "fix": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "enabled": true,
+      "level": "fixture \u003c\u0026\u003e Unicode λ",
+      "why": "fixture \u003c\u0026\u003e Unicode λ",
+      "fix": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "SandboxStatus"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "enabled": false,
+      "level": ""
+    },
+    "input": {
+      "enabled": null,
+      "fix": null,
+      "level": null,
+      "missing": null,
+      "why": null
+    },
+    "name": "SandboxStatus"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "enabled": false,
+      "level": ""
+    },
+    "input": null,
+    "name": "SandboxStatus"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "name": "",
+      "description": ""
+    },
+    "input": {},
+    "name": "CommandInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "description": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "description": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "CommandInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "description": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "description": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "CommandInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "name": "",
+      "description": ""
+    },
+    "input": {
+      "description": null,
+      "name": null
+    },
+    "name": "CommandInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "name": "",
+      "description": ""
+    },
+    "input": null,
+    "name": "CommandInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "path": "",
+      "content": "",
+      "exists": false
+    },
+    "input": {},
+    "name": "ConfigDocument"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "content": "fixture \u003c\u0026\u003e Unicode λ",
+      "exists": true,
+      "fields": [
+        {
+          "path": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "kind": "fixture \u003c\u0026\u003e Unicode λ",
+          "value": "fixture \u003c\u0026\u003e Unicode λ",
+          "set": true,
+          "choices": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        }
+      ]
+    },
+    "input": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "content": "fixture \u003c\u0026\u003e Unicode λ",
+      "exists": true,
+      "fields": [
+        {
+          "path": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "kind": "fixture \u003c\u0026\u003e Unicode λ",
+          "value": "fixture \u003c\u0026\u003e Unicode λ",
+          "set": true,
+          "choices": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ]
+        }
+      ]
+    },
+    "name": "ConfigDocument"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "content": "fixture \u003c\u0026\u003e Unicode λ",
+      "exists": true
+    },
+    "input": {
+      "path": "fixture \u003c\u0026\u003e Unicode λ",
+      "content": "fixture \u003c\u0026\u003e Unicode λ",
+      "exists": true
+    },
+    "name": "ConfigDocument"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "path": "",
+      "content": "",
+      "exists": false
+    },
+    "input": {
+      "content": null,
+      "exists": null,
+      "fields": null,
+      "path": null
+    },
+    "name": "ConfigDocument"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "path": "",
+      "content": "",
+      "exists": false
+    },
+    "input": null,
+    "name": "ConfigDocument"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "provider": "",
+      "fresh": 0,
+      "cached": 0
+    },
+    "input": {},
+    "name": "CacheProviderUsage"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "fresh": 7,
+      "cached": 7
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "fresh": 7,
+      "cached": 7
+    },
+    "name": "CacheProviderUsage"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "fresh": 7,
+      "cached": 7
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "fresh": 7,
+      "cached": 7
+    },
+    "name": "CacheProviderUsage"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "provider": "",
+      "fresh": 0,
+      "cached": 0
+    },
+    "input": {
+      "cached": null,
+      "fresh": null,
+      "provider": null
+    },
+    "name": "CacheProviderUsage"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "provider": "",
+      "fresh": 0,
+      "cached": 0
+    },
+    "input": null,
+    "name": "CacheProviderUsage"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "version": 0,
+      "build": "",
+      "pid": 0,
+      "data_dir": "",
+      "channels": 0,
+      "agents": 0,
+      "working": 0,
+      "providers": null
+    },
+    "input": {},
+    "name": "DaemonStatusResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "version": 7,
+      "build": "fixture \u003c\u0026\u003e Unicode λ",
+      "pid": 7,
+      "data_dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "channels": 7,
+      "agents": 7,
+      "working": 7,
+      "providers": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "input": {
+      "version": 7,
+      "build": "fixture \u003c\u0026\u003e Unicode λ",
+      "pid": 7,
+      "data_dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "channels": 7,
+      "agents": 7,
+      "working": 7,
+      "providers": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "name": "DaemonStatusResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "version": 7,
+      "build": "fixture \u003c\u0026\u003e Unicode λ",
+      "pid": 7,
+      "data_dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "channels": 7,
+      "agents": 7,
+      "working": 7,
+      "providers": []
+    },
+    "input": {
+      "version": 7,
+      "build": "fixture \u003c\u0026\u003e Unicode λ",
+      "pid": 7,
+      "data_dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "channels": 7,
+      "agents": 7,
+      "working": 7,
+      "providers": []
+    },
+    "name": "DaemonStatusResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "version": 0,
+      "build": "",
+      "pid": 0,
+      "data_dir": "",
+      "channels": 0,
+      "agents": 0,
+      "working": 0,
+      "providers": null
+    },
+    "input": {
+      "agents": null,
+      "build": null,
+      "channels": null,
+      "data_dir": null,
+      "pid": null,
+      "providers": null,
+      "version": null,
+      "working": null
+    },
+    "name": "DaemonStatusResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "version": 0,
+      "build": "",
+      "pid": 0,
+      "data_dir": "",
+      "channels": 0,
+      "agents": 0,
+      "working": 0,
+      "providers": null
+    },
+    "input": null,
+    "name": "DaemonStatusResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "jsonrpc": "",
+      "v": 0,
+      "method": ""
+    },
+    "input": {},
+    "name": "Request"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "jsonrpc": "fixture \u003c\u0026\u003e Unicode λ",
+      "v": 7,
+      "id": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "params": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "input": {
+      "jsonrpc": "fixture \u003c\u0026\u003e Unicode λ",
+      "v": 7,
+      "id": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "params": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "name": "Request"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "jsonrpc": "fixture \u003c\u0026\u003e Unicode λ",
+      "v": 7,
+      "id": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "params": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "input": {
+      "jsonrpc": "fixture \u003c\u0026\u003e Unicode λ",
+      "v": 7,
+      "id": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      },
+      "method": "fixture \u003c\u0026\u003e Unicode λ",
+      "params": {
+        "opaque": 1.50,
+        "html": "\u003c\u0026\u003e"
+      }
+    },
+    "name": "Request"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "jsonrpc": "",
+      "v": 0,
+      "method": "",
+      "params": null
+    },
+    "input": {
+      "id": null,
+      "jsonrpc": null,
+      "method": null,
+      "params": null,
+      "v": null
+    },
+    "name": "Request"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "jsonrpc": "",
+      "v": 0,
+      "method": ""
+    },
+    "input": null,
+    "name": "Request"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "roles": null
+    },
+    "input": {},
+    "name": "RolesResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "roles": [
+        {
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "description": "fixture \u003c\u0026\u003e Unicode λ",
+          "type": "fixture \u003c\u0026\u003e Unicode λ",
+          "models": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "variants": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ]
+            }
+          ],
+          "spawn": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "color": "fixture \u003c\u0026\u003e Unicode λ",
+          "max_turns": 7
+        }
+      ]
+    },
+    "input": {
+      "roles": [
+        {
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "description": "fixture \u003c\u0026\u003e Unicode λ",
+          "type": "fixture \u003c\u0026\u003e Unicode λ",
+          "models": [
+            {
+              "id": "fixture \u003c\u0026\u003e Unicode λ",
+              "variants": [
+                "fixture \u003c\u0026\u003e Unicode λ"
+              ]
+            }
+          ],
+          "spawn": [
+            "fixture \u003c\u0026\u003e Unicode λ"
+          ],
+          "color": "fixture \u003c\u0026\u003e Unicode λ",
+          "max_turns": 7
+        }
+      ]
+    },
+    "name": "RolesResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "roles": []
+    },
+    "input": {
+      "roles": []
+    },
+    "name": "RolesResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "roles": null
+    },
+    "input": {
+      "roles": null
+    },
+    "name": "RolesResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "roles": null
+    },
+    "input": null,
+    "name": "RolesResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "provider": ""
+    },
+    "input": {},
+    "name": "LoginStartParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "method": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "method": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "LoginStartParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "method": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "provider": "fixture \u003c\u0026\u003e Unicode λ",
+      "method": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "LoginStartParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "provider": ""
+    },
+    "input": {
+      "method": null,
+      "provider": null
+    },
+    "name": "LoginStartParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "provider": ""
+    },
+    "input": null,
+    "name": "LoginStartParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": "",
+      "model": ""
+    },
+    "input": {},
+    "name": "ChannelSetModelParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelSetModelParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "model": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelSetModelParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": "",
+      "model": ""
+    },
+    "input": {
+      "channel": null,
+      "model": null
+    },
+    "name": "ChannelSetModelParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": "",
+      "model": ""
+    },
+    "input": null,
+    "name": "ChannelSetModelParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "scope": "",
+      "root": "",
+      "path": ""
+    },
+    "input": {},
+    "name": "ConfigFileParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "path": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "path": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ConfigFileParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "path": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "scope": "fixture \u003c\u0026\u003e Unicode λ",
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "root": "fixture \u003c\u0026\u003e Unicode λ",
+      "path": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ConfigFileParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "scope": "",
+      "root": "",
+      "path": ""
+    },
+    "input": {
+      "channel": null,
+      "path": null,
+      "root": null,
+      "scope": null
+    },
+    "name": "ConfigFileParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "scope": "",
+      "root": "",
+      "path": ""
+    },
+    "input": null,
+    "name": "ConfigFileParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "plans": null
+    },
+    "input": {},
+    "name": "PlanUsageResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "plans": [
+        {
+          "provider": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "plan": "fixture \u003c\u0026\u003e Unicode λ",
+          "windows": [
+            {
+              "used_percent": 1.25,
+              "minutes": 7,
+              "resets_at": "2026-10-31T01:02:03.1234+05:30"
+            }
+          ],
+          "observed": "2026-10-31T01:02:03.1234+05:30"
+        }
+      ]
+    },
+    "input": {
+      "plans": [
+        {
+          "provider": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "plan": "fixture \u003c\u0026\u003e Unicode λ",
+          "windows": [
+            {
+              "used_percent": 1.25,
+              "minutes": 7,
+              "resets_at": "2026-10-31T01:02:03.1234+05:30"
+            }
+          ],
+          "observed": "2026-10-31T01:02:03.1234+05:30"
+        }
+      ]
+    },
+    "name": "PlanUsageResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "plans": []
+    },
+    "input": {
+      "plans": []
+    },
+    "name": "PlanUsageResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "plans": null
+    },
+    "input": {
+      "plans": null
+    },
+    "name": "PlanUsageResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "plans": null
+    },
+    "input": null,
+    "name": "PlanUsageResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": ""
+    },
+    "input": {},
+    "name": "RolesParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "RolesParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "RolesParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": ""
+    },
+    "input": {
+      "channel": null
+    },
+    "name": "RolesParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": ""
+    },
+    "input": null,
+    "name": "RolesParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": "",
+      "agent": "",
+      "turn": 0
+    },
+    "input": {},
+    "name": "StreamNotification"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "turn": 7,
+      "text": "fixture \u003c\u0026\u003e Unicode λ",
+      "thinking": "fixture \u003c\u0026\u003e Unicode λ",
+      "tool_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "reset": true
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "turn": 7,
+      "text": "fixture \u003c\u0026\u003e Unicode λ",
+      "thinking": "fixture \u003c\u0026\u003e Unicode λ",
+      "tool_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "reset": true
+    },
+    "name": "StreamNotification"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "turn": 7,
+      "text": "fixture \u003c\u0026\u003e Unicode λ",
+      "thinking": "fixture \u003c\u0026\u003e Unicode λ",
+      "tool_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "reset": true
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "agent": "fixture \u003c\u0026\u003e Unicode λ",
+      "turn": 7,
+      "text": "fixture \u003c\u0026\u003e Unicode λ",
+      "thinking": "fixture \u003c\u0026\u003e Unicode λ",
+      "tool_name": "fixture \u003c\u0026\u003e Unicode λ",
+      "reset": true
+    },
+    "name": "StreamNotification"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": "",
+      "agent": "",
+      "turn": 0
+    },
+    "input": {
+      "agent": null,
+      "channel": null,
+      "reset": null,
+      "text": null,
+      "thinking": null,
+      "tool_name": null,
+      "turn": null
+    },
+    "name": "StreamNotification"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": "",
+      "agent": "",
+      "turn": 0
+    },
+    "input": null,
+    "name": "StreamNotification"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "name": "",
+      "state": ""
+    },
+    "input": {},
+    "name": "MCPInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "error": "fixture \u003c\u0026\u003e Unicode λ",
+      "tools": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "started": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "error": "fixture \u003c\u0026\u003e Unicode λ",
+      "tools": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "started": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "MCPInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "error": "fixture \u003c\u0026\u003e Unicode λ",
+      "started": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "name": "fixture \u003c\u0026\u003e Unicode λ",
+      "state": "fixture \u003c\u0026\u003e Unicode λ",
+      "error": "fixture \u003c\u0026\u003e Unicode λ",
+      "started": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "MCPInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "name": "",
+      "state": ""
+    },
+    "input": {
+      "error": null,
+      "name": null,
+      "started": null,
+      "state": null,
+      "tools": null
+    },
+    "name": "MCPInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "name": "",
+      "state": ""
+    },
+    "input": null,
+    "name": "MCPInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": "",
+      "mode": ""
+    },
+    "input": {},
+    "name": "ChannelSetModeParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "mode": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "mode": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelSetModeParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "mode": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "mode": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelSetModeParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": "",
+      "mode": ""
+    },
+    "input": {
+      "channel": null,
+      "mode": null
+    },
+    "name": "ChannelSetModeParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": "",
+      "mode": ""
+    },
+    "input": null,
+    "name": "ChannelSetModeParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": "",
+      "dir": ""
+    },
+    "input": {},
+    "name": "ChannelDirParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelDirParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelDirParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": "",
+      "dir": ""
+    },
+    "input": {
+      "channel": null,
+      "dir": null
+    },
+    "name": "ChannelDirParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": "",
+      "dir": ""
+    },
+    "input": null,
+    "name": "ChannelDirParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "answer": ""
+    },
+    "input": {},
+    "name": "PromptReplyParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "answer": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "reason": "fixture \u003c\u0026\u003e Unicode λ",
+      "answers": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "details": [
+        {
+          "selected": [
+            7
+          ],
+          "custom": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ]
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "answer": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "reason": "fixture \u003c\u0026\u003e Unicode λ",
+      "answers": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "details": [
+        {
+          "selected": [
+            7
+          ],
+          "custom": "fixture \u003c\u0026\u003e Unicode λ"
+        }
+      ]
+    },
+    "name": "PromptReplyParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "answer": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "reason": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "answer": "fixture \u003c\u0026\u003e Unicode λ",
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "reason": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "PromptReplyParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "answer": ""
+    },
+    "input": {
+      "answer": null,
+      "answers": null,
+      "details": null,
+      "dir": null,
+      "id": null,
+      "reason": null
+    },
+    "name": "PromptReplyParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "answer": ""
+    },
+    "input": null,
+    "name": "PromptReplyParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "dir": "",
+      "pending": false
+    },
+    "input": {},
+    "name": "TrustStatusResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "pending": true,
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "files": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "input": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "pending": true,
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "files": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "name": "TrustStatusResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "pending": true,
+      "hash": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "dir": "fixture \u003c\u0026\u003e Unicode λ",
+      "pending": true,
+      "hash": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "TrustStatusResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "dir": "",
+      "pending": false
+    },
+    "input": {
+      "dir": null,
+      "files": null,
+      "hash": null,
+      "pending": null
+    },
+    "name": "TrustStatusResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "dir": "",
+      "pending": false
+    },
+    "input": null,
+    "name": "TrustStatusResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "path": null,
+      "kind": "",
+      "value": "",
+      "set": false
+    },
+    "input": {},
+    "name": "ConfigField"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "path": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "value": "fixture \u003c\u0026\u003e Unicode λ",
+      "set": true,
+      "choices": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "input": {
+      "path": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ],
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "value": "fixture \u003c\u0026\u003e Unicode λ",
+      "set": true,
+      "choices": [
+        "fixture \u003c\u0026\u003e Unicode λ"
+      ]
+    },
+    "name": "ConfigField"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "path": [],
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "value": "fixture \u003c\u0026\u003e Unicode λ",
+      "set": true
+    },
+    "input": {
+      "path": [],
+      "kind": "fixture \u003c\u0026\u003e Unicode λ",
+      "value": "fixture \u003c\u0026\u003e Unicode λ",
+      "set": true
+    },
+    "name": "ConfigField"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "path": null,
+      "kind": "",
+      "value": "",
+      "set": false
+    },
+    "input": {
+      "choices": null,
+      "kind": null,
+      "path": null,
+      "set": null,
+      "value": null
+    },
+    "name": "ConfigField"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "path": null,
+      "kind": "",
+      "value": "",
+      "set": false
+    },
+    "input": null,
+    "name": "ConfigField"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "status": ""
+    },
+    "input": {},
+    "name": "AgentCompactResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "status": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "status": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentCompactResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "status": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "status": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentCompactResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "status": ""
+    },
+    "input": {
+      "status": null
+    },
+    "name": "AgentCompactResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "status": ""
+    },
+    "input": null,
+    "name": "AgentCompactResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "models": null
+    },
+    "input": {},
+    "name": "ModelListResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "models": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "provider": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "context": 7,
+          "input_price": 1.25,
+          "output_price": 1.25
+        }
+      ]
+    },
+    "input": {
+      "models": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "provider": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "context": 7,
+          "input_price": 1.25,
+          "output_price": 1.25
+        }
+      ]
+    },
+    "name": "ModelListResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "models": []
+    },
+    "input": {
+      "models": []
+    },
+    "name": "ModelListResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "models": null
+    },
+    "input": {
+      "models": null
+    },
+    "name": "ModelListResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "models": null
+    },
+    "input": null,
+    "name": "ModelListResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "input": {},
+    "name": "ChannelBudget"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "calls": 7,
+      "tokens": 7,
+      "cost_usd": 1.25,
+      "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "calls": 7,
+      "tokens": 7,
+      "cost_usd": 1.25,
+      "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelBudget"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "calls": 7,
+      "tokens": 7,
+      "cost_usd": 1.25,
+      "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "calls": 7,
+      "tokens": 7,
+      "cost_usd": 1.25,
+      "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelBudget"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "input": {
+      "calls": null,
+      "cost_usd": null,
+      "exhausted": null,
+      "tokens": null
+    },
+    "name": "ChannelBudget"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "calls": 0,
+      "tokens": 0,
+      "cost_usd": 0
+    },
+    "input": null,
+    "name": "ChannelBudget"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channels": null
+    },
+    "input": {},
+    "name": "ChannelListResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channels": [
+        {
+          "board": {
+            "source": "fixture \u003c\u0026\u003e Unicode λ",
+            "owner": "fixture \u003c\u0026\u003e Unicode λ",
+            "members": [
+              "fixture \u003c\u0026\u003e Unicode λ"
+            ]
+          },
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "dir": "fixture \u003c\u0026\u003e Unicode λ",
+          "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+          "model": "fixture \u003c\u0026\u003e Unicode λ",
+          "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+          "created": "fixture \u003c\u0026\u003e Unicode λ",
+          "archived": true,
+          "seq": 7,
+          "live_agents": 7,
+          "cost_usd": 1.25,
+          "tokens": 7,
+          "budget": {
+            "calls": 7,
+            "tokens": 7,
+            "cost_usd": 1.25,
+            "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+          },
+          "trust_pending": true,
+          "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+          "trust_files": 7,
+          "mode": "fixture \u003c\u0026\u003e Unicode λ",
+          "recap": 7,
+          "state": "fixture \u003c\u0026\u003e Unicode λ",
+          "title": "fixture \u003c\u0026\u003e Unicode λ",
+          "dirs": [
+            {
+              "path": "fixture \u003c\u0026\u003e Unicode λ",
+              "source": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "permissions": 7,
+          "questions": 7
+        }
+      ]
+    },
+    "input": {
+      "channels": [
+        {
+          "board": {
+            "source": "fixture \u003c\u0026\u003e Unicode λ",
+            "owner": "fixture \u003c\u0026\u003e Unicode λ",
+            "members": [
+              "fixture \u003c\u0026\u003e Unicode λ"
+            ]
+          },
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "name": "fixture \u003c\u0026\u003e Unicode λ",
+          "dir": "fixture \u003c\u0026\u003e Unicode λ",
+          "dir_error": "fixture \u003c\u0026\u003e Unicode λ",
+          "model": "fixture \u003c\u0026\u003e Unicode λ",
+          "root_agent": "fixture \u003c\u0026\u003e Unicode λ",
+          "created": "fixture \u003c\u0026\u003e Unicode λ",
+          "archived": true,
+          "seq": 7,
+          "live_agents": 7,
+          "cost_usd": 1.25,
+          "tokens": 7,
+          "budget": {
+            "calls": 7,
+            "tokens": 7,
+            "cost_usd": 1.25,
+            "exhausted": "fixture \u003c\u0026\u003e Unicode λ"
+          },
+          "trust_pending": true,
+          "sandbox": "fixture \u003c\u0026\u003e Unicode λ",
+          "trust_files": 7,
+          "mode": "fixture \u003c\u0026\u003e Unicode λ",
+          "recap": 7,
+          "state": "fixture \u003c\u0026\u003e Unicode λ",
+          "title": "fixture \u003c\u0026\u003e Unicode λ",
+          "dirs": [
+            {
+              "path": "fixture \u003c\u0026\u003e Unicode λ",
+              "source": "fixture \u003c\u0026\u003e Unicode λ"
+            }
+          ],
+          "permissions": 7,
+          "questions": 7
+        }
+      ]
+    },
+    "name": "ChannelListResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channels": []
+    },
+    "input": {
+      "channels": []
+    },
+    "name": "ChannelListResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channels": null
+    },
+    "input": {
+      "channels": null
+    },
+    "name": "ChannelListResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channels": null
+    },
+    "input": null,
+    "name": "ChannelListResult"
+  },
+  {
+    "case": "zero",
+    "expected": {},
+    "input": {},
+    "name": "PromptListParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "PromptListParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "PromptListParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {},
+    "input": {
+      "channel": null
+    },
+    "name": "PromptListParams"
+  },
+  {
+    "case": "null",
+    "expected": {},
+    "input": null,
+    "name": "PromptListParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "client": "",
+      "tier": ""
+    },
+    "input": {},
+    "name": "AttachParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "client": "fixture \u003c\u0026\u003e Unicode λ",
+      "tier": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "client": "fixture \u003c\u0026\u003e Unicode λ",
+      "tier": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AttachParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "client": "fixture \u003c\u0026\u003e Unicode λ",
+      "tier": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "client": "fixture \u003c\u0026\u003e Unicode λ",
+      "tier": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AttachParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "client": "",
+      "tier": ""
+    },
+    "input": {
+      "client": null,
+      "tier": null
+    },
+    "name": "AttachParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "client": "",
+      "tier": ""
+    },
+    "input": null,
+    "name": "AttachParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "id": "",
+      "title": "",
+      "author": "",
+      "hash": "",
+      "size": 0,
+      "updated": "0001-01-01T00:00:00Z"
+    },
+    "input": {},
+    "name": "SheetInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "title": "fixture \u003c\u0026\u003e Unicode λ",
+      "author": "fixture \u003c\u0026\u003e Unicode λ",
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "size": 7,
+      "updated": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "title": "fixture \u003c\u0026\u003e Unicode λ",
+      "author": "fixture \u003c\u0026\u003e Unicode λ",
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "size": 7,
+      "updated": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "name": "SheetInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "title": "fixture \u003c\u0026\u003e Unicode λ",
+      "author": "fixture \u003c\u0026\u003e Unicode λ",
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "size": 7,
+      "updated": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "input": {
+      "id": "fixture \u003c\u0026\u003e Unicode λ",
+      "title": "fixture \u003c\u0026\u003e Unicode λ",
+      "author": "fixture \u003c\u0026\u003e Unicode λ",
+      "hash": "fixture \u003c\u0026\u003e Unicode λ",
+      "size": 7,
+      "updated": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "name": "SheetInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "id": "",
+      "title": "",
+      "author": "",
+      "hash": "",
+      "size": 0,
+      "updated": "0001-01-01T00:00:00Z"
+    },
+    "input": {
+      "author": null,
+      "hash": null,
+      "id": null,
+      "size": null,
+      "title": null,
+      "updated": null
+    },
+    "name": "SheetInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "id": "",
+      "title": "",
+      "author": "",
+      "hash": "",
+      "size": 0,
+      "updated": "0001-01-01T00:00:00Z"
+    },
+    "input": null,
+    "name": "SheetInfo"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "sheets": null
+    },
+    "input": {},
+    "name": "SheetListResult"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "sheets": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "title": "fixture \u003c\u0026\u003e Unicode λ",
+          "author": "fixture \u003c\u0026\u003e Unicode λ",
+          "hash": "fixture \u003c\u0026\u003e Unicode λ",
+          "size": 7,
+          "updated": "2026-10-31T01:02:03.1234+05:30"
+        }
+      ]
+    },
+    "input": {
+      "sheets": [
+        {
+          "id": "fixture \u003c\u0026\u003e Unicode λ",
+          "title": "fixture \u003c\u0026\u003e Unicode λ",
+          "author": "fixture \u003c\u0026\u003e Unicode λ",
+          "hash": "fixture \u003c\u0026\u003e Unicode λ",
+          "size": 7,
+          "updated": "2026-10-31T01:02:03.1234+05:30"
+        }
+      ]
+    },
+    "name": "SheetListResult"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "sheets": []
+    },
+    "input": {
+      "sheets": []
+    },
+    "name": "SheetListResult"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "sheets": null
+    },
+    "input": {
+      "sheets": null
+    },
+    "name": "SheetListResult"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "sheets": null
+    },
+    "input": null,
+    "name": "SheetListResult"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": ""
+    },
+    "input": {},
+    "name": "AgentTreeParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentTreeParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "AgentTreeParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": ""
+    },
+    "input": {
+      "channel": null
+    },
+    "name": "AgentTreeParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": ""
+    },
+    "input": null,
+    "name": "AgentTreeParams"
+  },
+  {
+    "case": "zero",
+    "expected": {},
+    "input": {},
+    "name": "ProviderListParams"
+  },
+  {
+    "case": "filled",
+    "expected": {},
+    "input": {},
+    "name": "ProviderListParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {},
+    "input": {},
+    "name": "ProviderListParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {},
+    "input": {},
+    "name": "ProviderListParams"
+  },
+  {
+    "case": "null",
+    "expected": {},
+    "input": null,
+    "name": "ProviderListParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "channel": "",
+      "text": ""
+    },
+    "input": {},
+    "name": "ChannelPostParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "text": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "text": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelPostParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "text": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "input": {
+      "channel": "fixture \u003c\u0026\u003e Unicode λ",
+      "text": "fixture \u003c\u0026\u003e Unicode λ"
+    },
+    "name": "ChannelPostParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "channel": "",
+      "text": ""
+    },
+    "input": {
+      "channel": null,
+      "text": null
+    },
+    "name": "ChannelPostParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "channel": "",
+      "text": ""
+    },
+    "input": null,
+    "name": "ChannelPostParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "enabled": false
+    },
+    "input": {},
+    "name": "SandboxSetParams"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "enabled": true
+    },
+    "input": {
+      "enabled": true
+    },
+    "name": "SandboxSetParams"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "enabled": true
+    },
+    "input": {
+      "enabled": true
+    },
+    "name": "SandboxSetParams"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "enabled": false
+    },
+    "input": {
+      "enabled": null
+    },
+    "name": "SandboxSetParams"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "enabled": false
+    },
+    "input": null,
+    "name": "SandboxSetParams"
+  },
+  {
+    "case": "zero",
+    "expected": {
+      "used_percent": 0
+    },
+    "input": {},
+    "name": "UsageWindowInfo"
+  },
+  {
+    "case": "filled",
+    "expected": {
+      "used_percent": 1.25,
+      "minutes": 7,
+      "resets_at": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "input": {
+      "used_percent": 1.25,
+      "minutes": 7,
+      "resets_at": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "name": "UsageWindowInfo"
+  },
+  {
+    "case": "empty-slices",
+    "expected": {
+      "used_percent": 1.25,
+      "minutes": 7,
+      "resets_at": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "input": {
+      "used_percent": 1.25,
+      "minutes": 7,
+      "resets_at": "2026-10-31T01:02:03.1234+05:30"
+    },
+    "name": "UsageWindowInfo"
+  },
+  {
+    "case": "null-fields",
+    "expected": {
+      "used_percent": 0
+    },
+    "input": {
+      "minutes": null,
+      "resets_at": null,
+      "used_percent": null
+    },
+    "name": "UsageWindowInfo"
+  },
+  {
+    "case": "null",
+    "expected": {
+      "used_percent": 0
+    },
+    "input": null,
+    "name": "UsageWindowInfo"
+  },
+  {
+    "case": "zero",
+    "expected": [],
+    "input": [],
+    "name": "Recipients"
+  },
+  {
+    "case": "filled",
+    "expected": [
+      "fixture \u003c\u0026\u003e Unicode λ"
+    ],
+    "input": [
+      "fixture \u003c\u0026\u003e Unicode λ"
+    ],
+    "name": "Recipients"
+  },
+  {
+    "case": "empty-slices",
+    "expected": [],
+    "input": [],
+    "name": "Recipients"
+  },
+  {
+    "case": "null-fields",
+    "expected": null,
+    "input": null,
+    "name": "Recipients"
+  },
+  {
+    "case": "null",
+    "expected": null,
+    "input": null,
+    "name": "Recipients"
+  }
+]

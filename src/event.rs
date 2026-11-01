@@ -1,55 +1,74 @@
 //! The persisted event envelope, including exact retained raw payload bytes.
-use chrono::{DateTime, Timelike, Utc};
+use chrono::{DateTime, FixedOffset, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, value::RawValue};
 include!("event_types.rs");
 #[path = "event_payloads.rs"]
 mod payloads;
 pub use payloads::*;
-fn zero_time() -> DateTime<Utc> {
-    DateTime::from_timestamp(-62135596800, 0).unwrap()
+fn zero_time() -> DateTime<FixedOffset> {
+    DateTime::from_timestamp(-62135596800, 0)
+        .unwrap()
+        .fixed_offset()
 }
 fn raw_option<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Box<RawValue>>, D::Error> {
     Box::<RawValue>::deserialize(d).map(Some)
 }
 mod stamp {
     use super::*;
-    pub fn serialize<S: serde::Serializer>(t: &DateTime<Utc>, s: S) -> Result<S::Ok, S::Error> {
-        let mut value = t.format("%Y-%m-%dT%H:%M:%S").to_string();
-        if t.nanosecond() != 0 {
-            value.push('.');
-            value.push_str(format!("{:09}", t.nanosecond()).trim_end_matches('0'))
-        }
-        value.push('Z');
-        s.serialize_str(&value)
+    pub fn serialize<S: serde::Serializer>(
+        t: &DateTime<FixedOffset>,
+        s: S,
+    ) -> Result<S::Ok, S::Error> {
+        crate::wire::Time(*t).serialize(s)
     }
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(d: D) -> Result<DateTime<Utc>, D::Error> {
-        let value = String::deserialize(d)?;
-        DateTime::parse_from_rfc3339(&value)
-            .map(|v| v.with_timezone(&Utc))
-            .map_err(serde::de::Error::custom)
+    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
+        d: D,
+    ) -> Result<DateTime<FixedOffset>, D::Error> {
+        crate::wire::Time::deserialize(d).map(|time| time.0)
     }
 }
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Event {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::wire::null_default")]
     pub global: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::wire::null_default")]
     pub seq: i64,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::wire::null_default")]
     pub channel: String,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
+    #[serde(
+        default,
+        deserialize_with = "crate::wire::null_default",
+        skip_serializing_if = "String::is_empty"
+    )]
     pub agent: String,
-    #[serde(rename = "type")]
+    #[serde(
+        rename = "type",
+        default,
+        deserialize_with = "crate::wire::null_default"
+    )]
     pub kind: String,
     #[serde(default = "zero_time", with = "stamp")]
-    pub time: DateTime<Utc>,
+    pub time: DateTime<FixedOffset>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
         deserialize_with = "raw_option"
     )]
     pub payload: Option<Box<RawValue>>,
+}
+impl Default for Event {
+    fn default() -> Self {
+        Self {
+            global: 0,
+            seq: 0,
+            channel: String::new(),
+            agent: String::new(),
+            kind: String::new(),
+            time: zero_time(),
+            payload: None,
+        }
+    }
 }
 impl Event {
     pub fn decode<T: serde::de::DeserializeOwned + Default>(&self) -> serde_json::Result<T> {
@@ -84,7 +103,7 @@ impl Event {
     }
     pub fn numbered_time(&mut self) {
         if self.time == zero_time() {
-            self.time = Utc::now()
+            self.time = Utc::now().fixed_offset()
         }
     }
 }

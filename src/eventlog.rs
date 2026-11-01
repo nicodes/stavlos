@@ -194,7 +194,7 @@ impl Log {
                 seq: row.get(2)?,
                 agent: row.get(3)?,
                 kind: row.get(4)?,
-                time: DateTime::from_timestamp_nanos(row.get(5)?),
+                time: DateTime::from_timestamp_nanos(row.get(5)?).fixed_offset(),
                 payload,
             });
         }

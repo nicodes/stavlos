@@ -2,6 +2,7 @@
 pub mod agent;
 pub mod auth;
 pub mod childenv;
+pub mod client;
 pub mod config;
 pub mod duration;
 pub mod event;
