@@ -11,9 +11,6 @@ fn zero_time() -> DateTime<FixedOffset> {
         .unwrap()
         .fixed_offset()
 }
-fn raw_option<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Box<RawValue>>, D::Error> {
-    Box::<RawValue>::deserialize(d).map(Some)
-}
 mod stamp {
     use super::*;
     pub fn serialize<S: serde::Serializer>(
@@ -22,40 +19,35 @@ mod stamp {
     ) -> Result<S::Ok, S::Error> {
         crate::wire::Time(*t).serialize(s)
     }
-    pub fn deserialize<'de, D: serde::Deserializer<'de>>(
-        d: D,
-    ) -> Result<DateTime<FixedOffset>, D::Error> {
-        crate::wire::Time::deserialize(d).map(|time| time.0)
-    }
 }
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Debug)]
 pub struct Event {
-    #[serde(default, deserialize_with = "crate::wire::null_default")]
     pub global: i64,
-    #[serde(default, deserialize_with = "crate::wire::null_default")]
     pub seq: i64,
-    #[serde(default, deserialize_with = "crate::wire::null_default")]
     pub channel: String,
-    #[serde(
-        default,
-        deserialize_with = "crate::wire::null_default",
-        skip_serializing_if = "String::is_empty"
-    )]
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub agent: String,
-    #[serde(
-        rename = "type",
-        default,
-        deserialize_with = "crate::wire::null_default"
-    )]
+    #[serde(rename = "type")]
     pub kind: String,
-    #[serde(default = "zero_time", with = "stamp")]
+    #[serde(with = "stamp")]
     pub time: DateTime<FixedOffset>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "raw_option"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub payload: Option<Box<RawValue>>,
+}
+impl<'de> Deserialize<'de> for Event {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        crate::wire_struct!(Envelope {global:"global":i64=>required,seq:"seq":i64=>required,channel:"channel":String=>required,agent:"agent":String=>optional,kind:"type":String=>required,time:"time":crate::wire::Time=>required,payload:"payload":Option<Box<RawValue>> =>raw_optional});
+        let envelope = Envelope::deserialize(deserializer)?;
+        Ok(Self {
+            global: envelope.global,
+            seq: envelope.seq,
+            channel: envelope.channel,
+            agent: envelope.agent,
+            kind: envelope.kind,
+            time: envelope.time.0,
+            payload: envelope.payload,
+        })
+    }
 }
 impl Default for Event {
     fn default() -> Self {

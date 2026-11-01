@@ -18,16 +18,13 @@ mod types;
 pub use types::*;
 #[path = "protocol_typed_methods.rs"]
 pub mod methods;
-#[derive(Clone, Default, Serialize, Deserialize, Debug, thiserror::Error)]
-#[error("{message}")]
-pub struct Error {
-    #[serde(default, deserialize_with = "crate::wire::null_default")]
-    pub code: i64,
-    #[serde(default, deserialize_with = "crate::wire::null_default")]
-    pub message: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub data: Option<Value>,
+crate::wire_struct!(Error {code:"code":i64=>required,message:"message":String=>required,data:"data":Option<Value> =>optional});
+impl std::fmt::Display for Error {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
 }
+impl std::error::Error for Error {}
 impl Error {
     pub fn new(code: i64, message: impl Into<String>) -> Self {
         Self {

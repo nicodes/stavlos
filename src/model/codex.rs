@@ -505,7 +505,7 @@ pub fn usage_from_headers(headers: &reqwest::header::HeaderMap, now: Time) -> Op
             .ok()
             .filter(|value| *value > 0)
             .and_then(|seconds| chrono::DateTime::from_timestamp(seconds, 0))
-            .map(|date| Time(date.fixed_offset()))
+            .map(|date| Time(date.with_timezone(&chrono::Local).fixed_offset()))
             .unwrap_or_default();
         if used == 0. && minutes == 0 && resets_at.is_zero() {
             continue;
