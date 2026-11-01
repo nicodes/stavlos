@@ -1,0 +1,55 @@
+[
+  {
+    "forget": [],
+    "id": "c1",
+    "input": "{\"path\":\"a\"}",
+    "output": "first",
+    "result": "first"
+  },
+  {
+    "forget": [],
+    "id": "c2",
+    "input": "{\"path\":\"a\"}",
+    "output": "first",
+    "result": "[unchanged since your read c1: its content is still in your context]"
+  },
+  {
+    "forget": [],
+    "id": "c3",
+    "input": "{ \"path\": \"a\" }",
+    "output": "first",
+    "result": "first"
+  },
+  {
+    "forget": [],
+    "id": "c4",
+    "input": "{\"path\":\"a\"}",
+    "output": "changed λ",
+    "result": "changed λ"
+  },
+  {
+    "forget": [
+      "c4"
+    ],
+    "id": "c5",
+    "input": "{\"path\":\"a\"}",
+    "output": "changed λ",
+    "result": "changed λ"
+  },
+  {
+    "forget": [],
+    "id": "c6",
+    "input": "{\"path\":\"a\"}",
+    "output": "changed λ",
+    "result": "[unchanged since your read c5: its content is still in your context]"
+  },
+  {
+    "forget": [
+      "c2"
+    ],
+    "id": "c7",
+    "input": "{\"path\":\"a\"}",
+    "output": "changed λ",
+    "result": "[unchanged since your read c5: its content is still in your context]"
+  }
+]
