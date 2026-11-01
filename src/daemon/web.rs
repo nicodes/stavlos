@@ -253,7 +253,7 @@ impl Daemon {
             })
             .collect::<Vec<_>>();
         Ok(
-            json!({"pid":std::process::id(),"build":option_env!("STAVLOS_BUILD").unwrap_or(env!("CARGO_PKG_VERSION")),"data_dir":self.paths.data.to_string_lossy(),"providers":self.registry.providers(),"channels":channels,"prompts":self.prompts.pending(""),"subscriptions":subscriptions,"model_epochs":self.model_epochs.lock().unwrap().clone()}),
+            json!({"pid":std::process::id(),"build":crate::buildid::id(),"data_dir":self.paths.data.to_string_lossy(),"providers":self.registry.providers(),"channels":channels,"prompts":self.prompts.pending(""),"subscriptions":subscriptions,"model_epochs":self.model_epochs.lock().unwrap().clone()}),
         )
     }
     pub fn deliver_web(&self, value: Value, cancel: &CancellationToken) -> Result<()> {

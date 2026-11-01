@@ -1,6 +1,7 @@
 //! Native owner-runtime components. The separate Axum API remains in `api/`.
 pub mod agent;
 pub mod auth;
+pub mod buildid;
 pub mod childenv;
 pub mod client;
 pub mod clip;
@@ -16,6 +17,7 @@ pub mod instructions;
 pub mod model;
 pub mod modelsdev;
 pub mod nativeapi;
+pub mod navigation;
 pub mod oauth;
 pub mod ownedchild;
 pub mod paths;
