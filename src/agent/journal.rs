@@ -111,7 +111,7 @@ impl Core {
     pub fn remove_wake(&self, id: &str) {
         self.state.lock().unwrap().wakes.remove(id);
     }
-    fn apply(state: &mut State, events: &[Event]) {
+    pub(crate) fn apply(state: &mut State, events: &[Event]) {
         for event in events {
             for id in state.channel.apply(event) {
                 if let Some(wake) = state.wakes.get(&id) {
@@ -143,6 +143,32 @@ impl Core {
     pub fn commit(&self, events: Vec<Event>, cancel: &CancellationToken) -> Result<()> {
         let mut state = self.state.lock().unwrap();
         self.commit_locked(&mut state, events, cancel)
+    }
+    pub(crate) fn commit_pair_locked(
+        &self,
+        source: &mut State,
+        board: &Core,
+        target: &mut State,
+        events: Vec<Event>,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
+        ensure!(!source.stopped && !target.stopped, "channel is stopped");
+        ensure!(
+            self.id != board.id
+                && events
+                    .iter()
+                    .all(|event| event.channel == self.id || event.channel == board.id),
+            "invalid channel transaction"
+        );
+        let persisted = self.journal.append(events, cancel)?;
+        for event in persisted {
+            if event.channel == self.id {
+                Self::apply(source, std::slice::from_ref(&event));
+            } else {
+                Self::apply(target, std::slice::from_ref(&event));
+            }
+        }
+        Ok(())
     }
     /// A failed decision write prevents this agent from taking its next runtime step.
     pub fn record(&self, agent: &str, events: Vec<Event>) -> Result<()> {

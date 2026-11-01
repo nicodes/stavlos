@@ -1,0 +1,212 @@
+[
+  {
+    "kind": "",
+    "names": [
+      "user"
+    ],
+    "result": "message delivered to the user"
+  },
+  {
+    "kind": "request",
+    "names": [
+      "user"
+    ],
+    "result": "message delivered to the user"
+  },
+  {
+    "kind": "response",
+    "names": [
+      "user"
+    ],
+    "result": "message delivered to the user"
+  },
+  {
+    "kind": "response_request",
+    "names": [
+      "user"
+    ],
+    "result": "message delivered to the user"
+  },
+  {
+    "kind": "steer",
+    "names": [
+      "user"
+    ],
+    "result": "message delivered to the user"
+  },
+  {
+    "kind": "info",
+    "names": [
+      "user"
+    ],
+    "result": "message delivered to the user"
+  },
+  {
+    "kind": "",
+    "names": [
+      "main"
+    ],
+    "result": "request delivered to main; its response wakes you between turns"
+  },
+  {
+    "kind": "request",
+    "names": [
+      "main"
+    ],
+    "result": "request delivered to main; its response wakes you between turns"
+  },
+  {
+    "kind": "response",
+    "names": [
+      "main"
+    ],
+    "result": "response delivered to main"
+  },
+  {
+    "kind": "response_request",
+    "names": [
+      "main"
+    ],
+    "result": "response delivered to main"
+  },
+  {
+    "kind": "steer",
+    "names": [
+      "main"
+    ],
+    "result": "steer delivered to main; no response required"
+  },
+  {
+    "kind": "info",
+    "names": [
+      "main"
+    ],
+    "result": "info delivered to main; it needs no reply and does not wake it"
+  },
+  {
+    "kind": "",
+    "names": [
+      "main",
+      "scout"
+    ],
+    "result": "request delivered to main, scout; agent responses wake you between turns"
+  },
+  {
+    "kind": "request",
+    "names": [
+      "main",
+      "scout"
+    ],
+    "result": "request delivered to main, scout; agent responses wake you between turns"
+  },
+  {
+    "kind": "response",
+    "names": [
+      "main",
+      "scout"
+    ],
+    "result": "response delivered to main, scout"
+  },
+  {
+    "kind": "response_request",
+    "names": [
+      "main",
+      "scout"
+    ],
+    "result": "response delivered to main, scout"
+  },
+  {
+    "kind": "steer",
+    "names": [
+      "main",
+      "scout"
+    ],
+    "result": "steer delivered to main, scout; no response required"
+  },
+  {
+    "kind": "info",
+    "names": [
+      "main",
+      "scout"
+    ],
+    "result": "info delivered to main, scout; no replies are needed and idle agents are not woken"
+  },
+  {
+    "kind": "",
+    "names": [
+      "user",
+      "scout"
+    ],
+    "result": "request delivered to user, scout; agent responses wake you between turns"
+  },
+  {
+    "kind": "request",
+    "names": [
+      "user",
+      "scout"
+    ],
+    "result": "request delivered to user, scout; agent responses wake you between turns"
+  },
+  {
+    "kind": "response",
+    "names": [
+      "user",
+      "scout"
+    ],
+    "result": "response delivered to user, scout"
+  },
+  {
+    "kind": "response_request",
+    "names": [
+      "user",
+      "scout"
+    ],
+    "result": "response delivered to user, scout"
+  },
+  {
+    "kind": "steer",
+    "names": [
+      "user",
+      "scout"
+    ],
+    "result": "steer delivered to user, scout; no response required"
+  },
+  {
+    "kind": "info",
+    "names": [
+      "user",
+      "scout"
+    ],
+    "result": "info delivered to user, scout; no replies are needed and idle agents are not woken"
+  },
+  {
+    "kind": "",
+    "names": [],
+    "result": "request delivered to ; its response wakes you between turns"
+  },
+  {
+    "kind": "request",
+    "names": [],
+    "result": "request delivered to ; its response wakes you between turns"
+  },
+  {
+    "kind": "response",
+    "names": [],
+    "result": "response delivered to "
+  },
+  {
+    "kind": "response_request",
+    "names": [],
+    "result": "response delivered to "
+  },
+  {
+    "kind": "steer",
+    "names": [],
+    "result": "steer delivered to ; no response required"
+  },
+  {
+    "kind": "info",
+    "names": [],
+    "result": "info delivered to ; it needs no reply and does not wake it"
+  }
+]
