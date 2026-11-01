@@ -1,0 +1,54 @@
+[
+  {
+    "expected": "-0.00",
+    "value": -0
+  },
+  {
+    "expected": "0.00",
+    "value": 0
+  },
+  {
+    "expected": "0.00",
+    "value": 0.00001
+  },
+  {
+    "expected": "0.0001",
+    "value": 0.00005
+  },
+  {
+    "expected": "0.0001",
+    "value": 0.00015
+  },
+  {
+    "expected": "0.001",
+    "value": 0.001
+  },
+  {
+    "expected": "0.01",
+    "value": 0.01
+  },
+  {
+    "expected": "0.10",
+    "value": 0.1
+  },
+  {
+    "expected": "1.2346",
+    "value": 1.23456
+  },
+  {
+    "expected": "2.675",
+    "value": 2.675
+  },
+  {
+    "expected": "10.00",
+    "value": 9.99995
+  },
+  {
+    "expected": "-1.2346",
+    "value": -1.23456
+  },
+  {
+    "expected": "1000000.00",
+    "value": 1000000
+  }
+]

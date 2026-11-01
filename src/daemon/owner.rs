@@ -79,6 +79,14 @@ pub(super) fn escalation_config(config: &config::Effective) -> escalation::Confi
 impl Daemon {
     pub async fn open(paths: Paths, home: PathBuf, registry: Arc<Registry>) -> Result<Arc<Self>> {
         let lock = DataLock::acquire(&paths.data)?;
+        Self::open_locked(paths, home, registry, lock).await
+    }
+    pub(crate) async fn open_locked(
+        paths: Paths,
+        home: PathBuf,
+        registry: Arc<Registry>,
+        lock: DataLock,
+    ) -> Result<Arc<Self>> {
         std::fs::set_permissions(&paths.data, std::fs::Permissions::from_mode(0o700))?;
         let hub = Arc::new(Hub::default());
         let stream_hub = hub.clone();

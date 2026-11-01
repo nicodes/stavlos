@@ -1,0 +1,106 @@
+[
+  {
+    "args": null,
+    "command": "",
+    "rest": null
+  },
+  {
+    "args": [],
+    "command": "",
+    "rest": null
+  },
+  {
+    "args": [
+      "new"
+    ],
+    "command": "new",
+    "rest": []
+  },
+  {
+    "args": [
+      "--model",
+      "fake/model"
+    ],
+    "command": "",
+    "rest": [
+      "--model",
+      "fake/model"
+    ]
+  },
+  {
+    "args": [
+      "-h"
+    ],
+    "command": "-h",
+    "rest": []
+  },
+  {
+    "args": [
+      "--help"
+    ],
+    "command": "--help",
+    "rest": []
+  },
+  {
+    "args": [
+      "--version"
+    ],
+    "command": "--version",
+    "rest": []
+  },
+  {
+    "args": [
+      "version"
+    ],
+    "command": "version",
+    "rest": []
+  },
+  {
+    "args": [
+      "daemon",
+      "--socket",
+      "/tmp/offline.sock"
+    ],
+    "command": "daemon",
+    "rest": [
+      "--socket",
+      "/tmp/offline.sock"
+    ]
+  },
+  {
+    "args": [
+      "unknown"
+    ],
+    "command": "unknown",
+    "rest": []
+  },
+  {
+    "args": [
+      "-unknown"
+    ],
+    "command": "",
+    "rest": [
+      "-unknown"
+    ]
+  },
+  {
+    "args": [
+      "open",
+      "#work"
+    ],
+    "command": "open",
+    "rest": [
+      "#work"
+    ]
+  },
+  {
+    "args": [
+      "connect",
+      "login"
+    ],
+    "command": "connect",
+    "rest": [
+      "login"
+    ]
+  }
+]

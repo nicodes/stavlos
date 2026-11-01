@@ -1,0 +1,189 @@
+[
+  {
+    "Name": "/queue",
+    "Args": "\u003ctext\u003e",
+    "Desc": "send after the current turn ends (plain enter reaches a busy agent at its next step)",
+    "Aliases": null,
+    "Direct": false
+  },
+  {
+    "Name": "/providers",
+    "Args": "[openai|xai|zai|kimi]",
+    "Desc": "manage providers: sign in with ChatGPT, Grok, the Z.ai Coding Plan or Kimi For Coding (enter) or sign out (ctrl+d); a name jumps to its sign-in",
+    "Aliases": [
+      "/provider",
+      "/connect",
+      "/login"
+    ],
+    "Direct": true
+  },
+  {
+    "Name": "/models",
+    "Args": "",
+    "Desc": "pick a model: enter sets the selected agent's, ctrl+s the channel default",
+    "Aliases": [
+      "/model"
+    ],
+    "Direct": true
+  },
+  {
+    "Name": "/variants",
+    "Args": "[name|default]",
+    "Desc": "pick a model variant (reasoning effort) for the selected agent; no arg opens a picker",
+    "Aliases": [
+      "/variant"
+    ],
+    "Direct": true
+  },
+  {
+    "Name": "/roles",
+    "Args": "[name]",
+    "Desc": "pick the selected agent's role; a name sets it directly",
+    "Aliases": [
+      "/role",
+      "/presets"
+    ],
+    "Direct": true
+  },
+  {
+    "Name": "/mode",
+    "Args": "",
+    "Desc": "permission mode for the channel: ask, auto (free inside the channel's directories) or yolo",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/auto",
+    "Args": "[on|off]",
+    "Desc": "auto mode: approve permissions inside the channel's directories, deny outside (no arg toggles)",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/yolo",
+    "Args": "[on|off]",
+    "Desc": "yolo mode: approve every permission, directories included (no arg toggles)",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/channels",
+    "Args": "",
+    "Desc": "pick any channel across your working directories",
+    "Aliases": [
+      "/resume",
+      "/channel"
+    ],
+    "Direct": true
+  },
+  {
+    "Name": "/dir",
+    "Args": "",
+    "Desc": "set this channel's default directory (or open its directories)",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/sandbox",
+    "Args": "[on|off]",
+    "Desc": "the command sandbox: what bounds what agents run, what this machine cannot do, and the switch",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/web",
+    "Args": "",
+    "Desc": "Web UI: enable, disable or open it in a browser tab",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/discord",
+    "Args": "",
+    "Desc": "Discord status and connect/disconnect controls",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/rename",
+    "Args": "\u003cname\u003e",
+    "Desc": "rename this channel (#name, unique across the daemon)",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/tree",
+    "Args": "",
+    "Desc": "toggle the agent sidebar (also ctrl+b)",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/chat",
+    "Args": "",
+    "Desc": "the channel chat: talk to every agent, @name addresses one (the sidebar opens an agent's own chat)",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/tokens",
+    "Args": "[system]",
+    "Desc": "chart tokens over time: the selected chat's (the channel's, or the agent's), or the system's",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/cost",
+    "Args": "[system]",
+    "Desc": "chart cost over time: the selected chat's (the channel's, or the agent's), or the system's",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/recap",
+    "Args": "[minutes|off]",
+    "Desc": "ask the main agent for a status report after this many minutes without hearing from the channel (no arg reports the setting)",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/plan",
+    "Args": "[provider]",
+    "Desc": "chart a subscription's plan usage over time, as its own model calls reported it",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/history",
+    "Args": "",
+    "Desc": "load all of this channel's history (a chat opens with its most recent part)",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/compact",
+    "Args": "",
+    "Desc": "summarise the selected agent's completed turns now to free context (automatic at 80% of the window)",
+    "Aliases": null,
+    "Direct": true
+  },
+  {
+    "Name": "/help",
+    "Args": "",
+    "Desc": "show or hide the key bar at the bottom (off by default)",
+    "Aliases": [
+      "/h",
+      "/?"
+    ],
+    "Direct": true
+  },
+  {
+    "Name": "/settings",
+    "Args": "[project|system]",
+    "Desc": "edit project or system config files",
+    "Aliases": [
+      "/config"
+    ],
+    "Direct": true
+  }
+]

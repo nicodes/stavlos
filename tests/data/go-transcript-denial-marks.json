@@ -1,0 +1,34 @@
+[
+  {
+    "expected": "",
+    "output": ""
+  },
+  {
+    "expected": "(by policy)",
+    "output": "Denied by policy: no"
+  },
+  {
+    "expected": "(no answer)",
+    "output": "Permission denied: nobody answered this prompt"
+  },
+  {
+    "expected": "(outside dirs, auto mode)",
+    "output": "Denied in auto mode: outside"
+  },
+  {
+    "expected": "(no)",
+    "output": "Permission denied by the user: no."
+  },
+  {
+    "expected": "(because..)",
+    "output": "Permission denied by the user: because..."
+  },
+  {
+    "expected": "",
+    "output": " Permission denied by the user: . "
+  },
+  {
+    "expected": "",
+    "output": "other"
+  }
+]

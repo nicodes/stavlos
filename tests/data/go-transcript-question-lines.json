@@ -1,0 +1,1280 @@
+[
+  {
+    "chat": false,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@user Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": false,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "user"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": false,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": false,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Waiting for answer",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": false,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": null
+  },
+  {
+    "chat": false,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@user Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "user"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "■ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "■ custom",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Submitted",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "details": [
+        {
+          "selected": [
+            0
+          ],
+          "custom": "custom"
+        }
+      ],
+      "id": "",
+      "outcome": "answered"
+    }
+  },
+  {
+    "chat": false,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@user Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "user"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Answer: legacy",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "answered",
+      "answer": "legacy"
+    }
+  },
+  {
+    "chat": false,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@user Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "user"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Question withdrawn",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "withdrawn"
+    }
+  },
+  {
+    "chat": false,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@user Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "user"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Defaulted: default",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "defaulted",
+      "answer": "default"
+    }
+  },
+  {
+    "chat": true,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@scout: Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": false,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "scout"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": false,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": false,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Waiting for answer",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": false,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": null
+  },
+  {
+    "chat": true,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@scout: Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "scout"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "■ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "■ custom",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Submitted",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "details": [
+        {
+          "selected": [
+            0
+          ],
+          "custom": "custom"
+        }
+      ],
+      "id": "",
+      "outcome": "answered"
+    }
+  },
+  {
+    "chat": true,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@scout: Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "scout"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Answer: legacy",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "answered",
+      "answer": "legacy"
+    }
+  },
+  {
+    "chat": true,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@scout: Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "scout"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Question withdrawn",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "withdrawn"
+    }
+  },
+  {
+    "chat": true,
+    "lines": [
+      {
+        "Kind": 0,
+        "Text": "@scout: Choose?",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "?",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "scout",
+        "Names": [
+          "scout"
+        ],
+        "Diff": 0,
+        "Indent": 0,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ A",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 0,
+        "Text": "□ B — details",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 2,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      },
+      {
+        "Kind": 3,
+        "Text": "Defaulted: default",
+        "Block": 0,
+        "Vis": 0,
+        "Running": false,
+        "Err": false,
+        "Suffix": "",
+        "Item": 0,
+        "Lead": false,
+        "Glyph": "",
+        "Tone": 0,
+        "Tool": "",
+        "Note": true,
+        "Agent": "a1",
+        "Who": "",
+        "Names": null,
+        "Diff": 0,
+        "Indent": 1,
+        "TurnStart": false,
+        "At": "0001-01-01T00:00:00Z"
+      }
+    ],
+    "prompt": {
+      "id": "",
+      "channel": "",
+      "agent": "a1",
+      "from": "scout",
+      "kind": "",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Choose?",
+          "options": [
+            {
+              "label": "A"
+            },
+            {
+              "label": "B",
+              "description": "details"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "defaulted",
+      "answer": "default"
+    }
+  }
+]
