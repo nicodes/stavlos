@@ -454,6 +454,28 @@ impl JobRegistry {
     pub fn has(&self, id: &str) -> bool {
         self.jobs.lock().unwrap().contains_key(id)
     }
+    /// The owner holds the channel lock, shared with adoption, until these facts are folded.
+    pub(crate) fn drain_for_cancel(
+        &self,
+        reason: &str,
+    ) -> Result<(Vec<event::Event>, Vec<CancellationToken>)> {
+        let mut jobs = self.jobs.lock().unwrap();
+        let mut events = Vec::new();
+        let mut tokens = Vec::new();
+        for run in jobs.values() {
+            events.push(self.core.event(
+                &self.agent,
+                event::JOB_STOPPED,
+                event::JobStoppedPayload {
+                    id: run.id.clone(),
+                    reason: reason.into(),
+                },
+            )?);
+            tokens.push(run.cancel.clone());
+        }
+        jobs.clear();
+        Ok((events, tokens))
+    }
     pub fn infos(&self) -> Vec<protocol::JobInfo> {
         let jobs = self.jobs.lock().unwrap();
         let mut runs: Vec<_> = jobs.values().collect();
