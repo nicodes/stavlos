@@ -1,0 +1,2088 @@
+[
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {},
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {},
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {},
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {},
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {},
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {},
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {},
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {},
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {},
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {},
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {},
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {},
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCostUSD",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 10
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelTokens",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 2,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 0
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 10
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 0,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.25,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 3,
+    "cost": 1.5,
+    "limits": {
+      "maxChannelCalls": 2,
+      "maxChannelTokens": 10,
+      "maxChannelCostUSD": 1.25
+    },
+    "reason": "limits.maxChannelCalls",
+    "tokens": 20
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {},
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelDuration": "invalid"
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelDuration": "0"
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelDuration": "1m"
+    },
+    "reason": "limits.maxChannelDuration",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelDuration": "2m"
+    },
+    "reason": "limits.maxChannelDuration",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelDuration": "2m1ns"
+    },
+    "reason": "",
+    "tokens": 0
+  },
+  {
+    "calls": 0,
+    "cost": 0,
+    "limits": {
+      "maxChannelDuration": "-1s"
+    },
+    "reason": "",
+    "tokens": 0
+  }
+]
