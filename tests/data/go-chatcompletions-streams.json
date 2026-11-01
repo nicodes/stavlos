@@ -1,0 +1,990 @@
+[
+  {
+    "name": "original-canned-stream",
+    "steps": [
+      {
+        "deltas": [],
+        "done": false,
+        "error": "",
+        "payload": {
+          "id": "c1",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "role": "assistant",
+                "content": ""
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        "response": {
+          "Blocks": null,
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "",
+            "Thinking": "thinking...",
+            "ToolName": "",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "id": "c1",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "reasoning_content": "thinking..."
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "thinking..."
+            }
+          ],
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "",
+            "Thinking": "thinking...",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "Hello",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "id": "c1",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "Hello"
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "thinking..."
+            },
+            {
+              "type": "text",
+              "text": "Hello"
+            }
+          ],
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "",
+            "Thinking": "thinking...",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "Hello",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": " world",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "id": "c1",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": " world"
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "thinking..."
+            },
+            {
+              "type": "text",
+              "text": "Hello world"
+            }
+          ],
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "",
+            "Thinking": "thinking...",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "Hello",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": " world",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "read_file",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "id": "c1",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "id": "call_abc",
+                    "type": "function",
+                    "function": {
+                      "name": "read_file",
+                      "arguments": "{\"pa"
+                    }
+                  }
+                ]
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "thinking..."
+            },
+            {
+              "type": "text",
+              "text": "Hello world"
+            },
+            {
+              "type": "tool_use",
+              "id": "call_abc",
+              "name": "read_file",
+              "input": {}
+            }
+          ],
+          "StopReason": "tool_use",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "",
+            "Thinking": "thinking...",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "Hello",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": " world",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "read_file",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "id": "c1",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": "th\":\"a.go\"}"
+                    }
+                  }
+                ]
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "thinking..."
+            },
+            {
+              "type": "text",
+              "text": "Hello world"
+            },
+            {
+              "type": "tool_use",
+              "id": "call_abc",
+              "name": "read_file",
+              "input": {
+                "path": "a.go"
+              }
+            }
+          ],
+          "StopReason": "tool_use",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "",
+            "Thinking": "thinking...",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "Hello",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": " world",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "read_file",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "id": "c1",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": "tool_calls"
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "thinking..."
+            },
+            {
+              "type": "text",
+              "text": "Hello world"
+            },
+            {
+              "type": "tool_use",
+              "id": "call_abc",
+              "name": "read_file",
+              "input": {
+                "path": "a.go"
+              }
+            }
+          ],
+          "StopReason": "tool_use",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": true
+      },
+      {
+        "deltas": [
+          {
+            "Text": "",
+            "Thinking": "thinking...",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "Hello",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": " world",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "read_file",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "id": "c1",
+          "choices": [],
+          "usage": {
+            "prompt_tokens": 120,
+            "completion_tokens": 30,
+            "prompt_tokens_details": {
+              "cached_tokens": 100
+            }
+          }
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "thinking..."
+            },
+            {
+              "type": "text",
+              "text": "Hello world"
+            },
+            {
+              "type": "tool_use",
+              "id": "call_abc",
+              "name": "read_file",
+              "input": {
+                "path": "a.go"
+              }
+            }
+          ],
+          "StopReason": "tool_use",
+          "Usage": {
+            "input_tokens": 20,
+            "output_tokens": 30,
+            "cache_read_tokens": 100,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": true
+      }
+    ]
+  },
+  {
+    "name": "multi-tool-order",
+    "steps": [
+      {
+        "deltas": [
+          {
+            "Text": "hello",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "first",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "seven",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "minus",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "hello",
+                "reasoning": "first",
+                "tool_calls": [
+                  {
+                    "index": 7,
+                    "function": {
+                      "name": "seven",
+                      "arguments": "{"
+                    }
+                  },
+                  {
+                    "index": -1,
+                    "function": {
+                      "name": "minus",
+                      "arguments": "invalid"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "first"
+            },
+            {
+              "type": "text",
+              "text": "hello"
+            },
+            {
+              "type": "tool_use",
+              "id": "call_0",
+              "name": "minus",
+              "input": {}
+            },
+            {
+              "type": "tool_use",
+              "id": "call_1",
+              "name": "seven",
+              "input": {}
+            }
+          ],
+          "StopReason": "tool_use",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "hello",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "first",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "seven",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "minus",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "choices": [
+            {
+              "index": 1,
+              "delta": {
+                "content": "ignored"
+              }
+            },
+            {
+              "index": 0,
+              "delta": {
+                "reasoning_content": "",
+                "reasoning": "must not win",
+                "tool_calls": [
+                  {
+                    "index": 7,
+                    "id": "updated",
+                    "function": {
+                      "name": "renamed",
+                      "arguments": "\"ok\":true}"
+                    }
+                  }
+                ]
+              },
+              "finish_reason": "stop"
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "first"
+            },
+            {
+              "type": "text",
+              "text": "hello"
+            },
+            {
+              "type": "tool_use",
+              "id": "call_0",
+              "name": "minus",
+              "input": {}
+            },
+            {
+              "type": "tool_use",
+              "id": "updated",
+              "name": "renamed",
+              "input": {
+                "ok": true
+              }
+            }
+          ],
+          "StopReason": "tool_use",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": true
+      },
+      {
+        "deltas": [
+          {
+            "Text": "hello",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "first",
+            "ToolName": "",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "seven",
+            "Reset": false
+          },
+          {
+            "Text": "",
+            "Thinking": "",
+            "ToolName": "minus",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 7,
+            "prompt_tokens_details": {
+              "cached_tokens": 250
+            }
+          }
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "first"
+            },
+            {
+              "type": "text",
+              "text": "hello"
+            },
+            {
+              "type": "tool_use",
+              "id": "call_0",
+              "name": "minus",
+              "input": {}
+            },
+            {
+              "type": "tool_use",
+              "id": "updated",
+              "name": "renamed",
+              "input": {
+                "ok": true
+              }
+            }
+          ],
+          "StopReason": "tool_use",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 7,
+            "cache_read_tokens": 250,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": true
+      }
+    ]
+  },
+  {
+    "name": "null-and-unknown",
+    "steps": [
+      {
+        "deltas": [],
+        "done": false,
+        "error": "",
+        "payload": null,
+        "response": {
+          "Blocks": null,
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [],
+        "done": false,
+        "error": "",
+        "payload": {},
+        "response": {
+          "Blocks": null,
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "",
+            "Thinking": "fallback",
+            "ToolName": "",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "choices": [
+            null,
+            {
+              "delta": {
+                "content": null,
+                "reasoning_content": null,
+                "reasoning": "fallback"
+              }
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "fallback"
+            }
+          ],
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "",
+            "Thinking": "fallback",
+            "ToolName": "",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "choices": [
+            {
+              "finish_reason": "length"
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "thinking",
+              "text": "fallback"
+            }
+          ],
+          "StopReason": "max_tokens",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": true
+      }
+    ]
+  },
+  {
+    "name": "refusal",
+    "steps": [
+      {
+        "deltas": [
+          {
+            "Text": "cannot",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "choices": [
+            {
+              "delta": {
+                "content": "cannot"
+              },
+              "finish_reason": "content_filter"
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "text",
+              "text": "cannot"
+            }
+          ],
+          "StopReason": "refusal",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": true
+      }
+    ]
+  },
+  {
+    "name": "provider-error",
+    "steps": [
+      {
+        "deltas": [
+          {
+            "Text": "partial",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "",
+        "payload": {
+          "choices": [
+            {
+              "delta": {
+                "content": "partial"
+              }
+            }
+          ]
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "text",
+              "text": "partial"
+            }
+          ],
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      },
+      {
+        "deltas": [
+          {
+            "Text": "partial",
+            "Thinking": "",
+            "ToolName": "",
+            "Reset": false
+          }
+        ],
+        "done": false,
+        "error": "stream error: at capacity",
+        "payload": {
+          "error": {
+            "type": "server_error",
+            "message": "at capacity"
+          }
+        },
+        "response": {
+          "Blocks": [
+            {
+              "type": "text",
+              "text": "partial"
+            }
+          ],
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      }
+    ]
+  },
+  {
+    "name": "malformed-chunk",
+    "steps": [
+      {
+        "deltas": [],
+        "done": false,
+        "error": "decode chunk: json: cannot unmarshal string into Go struct field chatChunk.choices of type []chatcompletions.chunkChoice",
+        "payload": {
+          "choices": "wrong type"
+        },
+        "response": {
+          "Blocks": null,
+          "StopReason": "end_turn",
+          "Usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "terminal": false
+      }
+    ]
+  }
+]
