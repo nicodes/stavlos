@@ -2,6 +2,7 @@
 pub mod commands;
 pub mod format;
 pub mod keys;
+pub mod transcript;
 pub fn wrap_index(index: i64, count: i64) -> i64 {
     if count <= 0 {
         0
