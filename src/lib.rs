@@ -1,6 +1,7 @@
 //! Native owner-runtime components. The separate Axum API remains in `api/`.
 pub mod auth;
 pub mod config;
+pub mod duration;
 pub mod event;
 pub mod eventlog;
 pub mod instructions;
@@ -11,3 +12,4 @@ pub mod protocol;
 pub mod shellcmd;
 pub mod statefile;
 pub mod textsafe;
+pub mod toolname;
