@@ -3,6 +3,7 @@ pub mod conversation;
 pub mod journal;
 pub mod mcp;
 pub mod names;
+pub mod permission;
 pub mod pick;
 pub mod prompt;
 pub mod routing;
