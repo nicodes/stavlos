@@ -25,6 +25,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       MISE_GITHUB_TOKEN: ${{ github.token }}
+      NATIVE_CLI_ARTIFACTS: .artifacts/native-cli
     timeout-minutes: 45
     steps:
     - name: Check out source
@@ -33,7 +34,7 @@ jobs:
         persist-credentials: false
         fetch-depth: 0
     - name: Set up development tools
-      uses: nicodes/tools/setup@091101094fedf5ce2e67c339c1c9c842d6a662dc
+      uses: nicodes/tools/setup@f412061a7a3f0914db9e09d1159e69504aee8706
       env:
         GH_TOKEN: ${{ github.token }}
       timeout-minutes: 5
@@ -53,11 +54,11 @@ jobs:
         if-no-files-found: error
         retention-days: 7
         include-hidden-files: true
-    - name: Download native APIs
+    - name: Download native executables
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:
         pattern: native-api-*
-        path: .artifacts/native-api
+        path: .artifacts
         merge-multiple: true
     - name: Check project
       shell: bash

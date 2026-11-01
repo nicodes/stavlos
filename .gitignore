@@ -18,7 +18,6 @@
 /.ci-tools/
 
 /api/target/
-/internal/nativeapi/payload.gz
 
 # Rust owner-runtime workspace.
 /target/

@@ -3,6 +3,7 @@ pub mod config;
 pub mod control;
 pub mod database;
 pub mod engine;
+pub mod entry;
 pub mod error;
 pub mod oauth;
 pub mod response;

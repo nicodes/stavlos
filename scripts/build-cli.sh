@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
-os_label="$(uname -s)"
-case "$(uname -m)" in x86_64|amd64) arch_label=x86_64 ;; aarch64|arm64) arch_label=arm64 ;; *) exit 1 ;; esac
-payload=".artifacts/native-api/stavlos-api_${os_label}_${arch_label}"
-if [ ! -s "$payload" ]; then bash scripts/build-api.sh; fi
-trap 'rm -f internal/nativeapi/payload.gz' EXIT
-python3 scripts/api-payload.py "$payload"
-mkdir -p .artifacts/build
-CGO_ENABLED=0 go build -tags rustapi -trimpath -buildvcs=true \
-  -ldflags "-s -w -X github.com/nicodes/stavlos/internal/buildid.version=${VERSION:-devel}" \
-  -o .artifacts/build/app ./cmd/stavlos
+source scripts/rust-platform.sh
+mkdir -p .artifacts/build .artifacts/native-cli
+name="stavlos_${os_label}_${arch_label}"
+if [[ -n ${NATIVE_CLI_ARTIFACTS:-} ]]; then
+  python3 scripts/native-artifact.py verify "$NATIVE_CLI_ARTIFACTS/$name" cli "$os_label/$arch_label" "${VERSION:-devel}"
+  cp "$NATIVE_CLI_ARTIFACTS/$name" .artifacts/build/app
+else
+  export STAVLOS_BUILD_VERSION="${VERSION:-devel}"
+  cargo build --locked --release --target "$rust_target" --bin stavlos
+  cp "${CARGO_TARGET_DIR:-target}/$rust_target/release/stavlos" ".artifacts/native-cli/$name"
+  python3 scripts/native-artifact.py record ".artifacts/native-cli/$name" cli "$os_label/$arch_label" "$STAVLOS_BUILD_VERSION"
+  cp ".artifacts/native-cli/$name" .artifacts/build/app
+fi
+chmod 755 .artifacts/build/app
