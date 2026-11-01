@@ -93,10 +93,20 @@ impl Manager {
     }
     pub async fn request(
         self: &Arc<Self>,
-        mut info: PromptInfo,
+        info: PromptInfo,
         cancel: CancellationToken,
         opened: Option<Box<dyn FnOnce() + Send>>,
     ) -> Answer {
+        self.begin(info, cancel, opened).await
+    }
+    /// Publish before returning, so a directory transition can dismiss its prompt
+    /// even before the background waiter first runs. Dropping the waiter withdraws it.
+    pub fn begin(
+        self: &Arc<Self>,
+        mut info: PromptInfo,
+        cancel: CancellationToken,
+        opened: Option<Box<dyn FnOnce() + Send>>,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Answer> + Send + 'static>> {
         info.created = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
         if matches!(
             info.kind.as_str(),
@@ -109,10 +119,12 @@ impl Manager {
             let mut state = self.state.lock().unwrap();
             // A repeated ID cannot displace a live request and strand its waiter.
             if state.pending.contains_key(&info.id) {
-                return Answer {
-                    withdrawn: true,
-                    ..Default::default()
-                };
+                return Box::pin(async {
+                    Answer {
+                        withdrawn: true,
+                        ..Default::default()
+                    }
+                });
             }
             state.generation = state.generation.wrapping_add(1);
             let generation = state.generation;
@@ -127,7 +139,7 @@ impl Manager {
             );
             (state.config.clone(), generation)
         };
-        let mut guard = RequestGuard {
+        let guard = RequestGuard {
             manager: self.clone(),
             id: info.id.clone(),
             generation,
@@ -137,44 +149,48 @@ impl Manager {
         if let Some(opened) = opened {
             opened();
         }
-        let claim = tokio::time::sleep(config.claim_timeout);
-        tokio::pin!(claim);
-        let answer = tokio::time::sleep(config.answer_timeout);
-        tokio::pin!(answer);
-        let mut claim_waiting = !info.escalated;
-        let mut answer_waiting = !matches!(
-            info.kind.as_str(),
-            protocol::PROMPT_QUESTION | protocol::PROMPT_TRUST
-        );
-        let mut expiry = tokio::time::interval_at(
-            Instant::now() + Duration::from_secs(10),
-            Duration::from_secs(10),
-        );
-        let result = loop {
-            tokio::select! {
-                accepted = &mut receiver => break accepted.unwrap_or_else(|_| Answer {withdrawn:true, ..Default::default()}),
-                _ = &mut claim, if claim_waiting => {
-                    claim_waiting = false;
-                    let announcement = {
-                        let mut state = self.state.lock().unwrap();
-                        state.pending.get_mut(&info.id).filter(|p| p.generation == generation && p.info.claimed_by.is_empty()).map(|p| {p.info.escalated = true; p.info.clone()})
-                    };
-                    if let Some(info) = announcement { self.notify(protocol::ACTION_ESCALATED, info); }
+        let manager = self.clone();
+        Box::pin(async move {
+            let mut guard = guard;
+            let claim = tokio::time::sleep(config.claim_timeout);
+            tokio::pin!(claim);
+            let answer = tokio::time::sleep(config.answer_timeout);
+            tokio::pin!(answer);
+            let mut claim_waiting = !info.escalated;
+            let mut answer_waiting = !matches!(
+                info.kind.as_str(),
+                protocol::PROMPT_QUESTION | protocol::PROMPT_TRUST
+            );
+            let mut expiry = tokio::time::interval_at(
+                Instant::now() + Duration::from_secs(10),
+                Duration::from_secs(10),
+            );
+            let result = loop {
+                tokio::select! {
+                    accepted = &mut receiver => break accepted.unwrap_or_else(|_| Answer {withdrawn:true, ..Default::default()}),
+                    _ = &mut claim, if claim_waiting => {
+                        claim_waiting = false;
+                        let announcement = {
+                            let mut state = manager.state.lock().unwrap();
+                            state.pending.get_mut(&info.id).filter(|p| p.generation == generation && p.info.claimed_by.is_empty()).map(|p| {p.info.escalated = true; p.info.clone()})
+                        };
+                        if let Some(info) = announcement { manager.notify(protocol::ACTION_ESCALATED, info); }
+                    }
+                    _ = expiry.tick() => manager.expire_claims(Instant::now(), config.claim_expiry),
+                    _ = &mut answer, if answer_waiting => {
+                        answer_waiting = false;
+                        manager.finish(&info.id, Some(generation), Answer {value:config.default.clone(), defaulted:true, ..Default::default()}, protocol::ACTION_DEFAULTED);
+                    }
+                    _ = cancel.cancelled() => {
+                        manager.finish(&info.id, Some(generation), Answer {withdrawn:true, ..Default::default()}, protocol::ACTION_WITHDRAWN);
+                        // A reply already accepted wins simultaneous cancellation.
+                        break receiver.await.unwrap_or_else(|_| Answer {withdrawn:true, ..Default::default()});
+                    }
                 }
-                _ = expiry.tick() => self.expire_claims(Instant::now(), config.claim_expiry),
-                _ = &mut answer, if answer_waiting => {
-                    answer_waiting = false;
-                    self.finish(&info.id, Some(generation), Answer {value:config.default.clone(), defaulted:true, ..Default::default()}, protocol::ACTION_DEFAULTED);
-                }
-                _ = cancel.cancelled() => {
-                    self.finish(&info.id, Some(generation), Answer {withdrawn:true, ..Default::default()}, protocol::ACTION_WITHDRAWN);
-                    // A reply already accepted wins simultaneous cancellation.
-                    break receiver.await.unwrap_or_else(|_| Answer {withdrawn:true, ..Default::default()});
-                }
-            }
-        };
-        guard.armed = false;
-        result
+            };
+            guard.armed = false;
+            result
+        })
     }
     fn finish(&self, id: &str, generation: Option<u64>, answer: Answer, action: &str) -> bool {
         let pending = {

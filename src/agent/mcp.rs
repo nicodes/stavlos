@@ -256,9 +256,13 @@ impl Session {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let mut child = tokio::process::Command::from(command)
-            .kill_on_drop(true)
-            .spawn()?;
+        let (mut child, ownership) = crate::ownedchild::spawn(|| {
+            let child = tokio::process::Command::from(command)
+                .kill_on_drop(true)
+                .spawn()?;
+            let pid = child.id().expect("spawned child pid") as i32;
+            Ok((child, pid))
+        })?;
         let pid = child.id().context("MCP child has no pid")? as i32;
         let mut group = Group(Some(pid));
         let stderr = Stderr::new(child.stderr.take().unwrap());
@@ -294,6 +298,7 @@ impl Session {
         let peer = service.peer().clone();
         let service_stop = service.cancellation_token();
         tokio::spawn(async move {
+            let _ownership = ownership;
             let mut waiting = Box::pin(service.waiting());
             let mut reason = tokio::select! {
                 status=child.wait()=>status.map(|s|if s.success(){"exited".into()}else{s.to_string()}).unwrap_or_else(|e|e.to_string()),

@@ -145,9 +145,12 @@ impl Callback {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit());
-        let mut child = command
-            .spawn()
-            .context("native OAuth callback did not start")?;
+        let (mut child, ownership) = crate::ownedchild::spawn(|| {
+            let child = command.spawn()?;
+            let pid = child.id().expect("spawned child pid") as i32;
+            Ok((child, pid))
+        })
+        .context("native OAuth callback did not start")?;
         let mut input = child
             .stdin
             .take()
@@ -170,6 +173,7 @@ impl Callback {
         let stop = CancellationToken::new();
         let stopping = stop.clone();
         tokio::spawn(async move {
+            let _ownership = ownership;
             let mut output = BufReader::new(output);
             let first = tokio::select! {biased;_=stopping.cancelled()=>Err(anyhow::anyhow!("native OAuth callback cancelled")),first=tokio::time::timeout(Duration::from_secs(5),line(&mut output,32<<10))=>match first{Ok(Ok(Some(raw)))=>serde_json::from_slice::<serde_json::Value>(&raw).map_err(anyhow::Error::from),_=>Err(anyhow::anyhow!("native OAuth callback did not start"))}};
             let accepted = first.is_ok_and(|value| value["ready"] == true);

@@ -16,6 +16,7 @@ pub mod model;
 pub mod modelsdev;
 pub mod nativeapi;
 pub mod oauth;
+pub mod ownedchild;
 pub mod paths;
 pub mod pathx;
 pub mod peercred;
