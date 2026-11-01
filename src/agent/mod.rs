@@ -1,10 +1,13 @@
+pub mod control;
 pub mod conversation;
 pub mod journal;
 pub mod mcp;
 pub mod names;
 pub mod pick;
 pub mod prompt;
+pub mod routing;
 pub mod scope;
 pub mod security;
 pub mod services;
+pub mod sheets;
 pub mod state;
