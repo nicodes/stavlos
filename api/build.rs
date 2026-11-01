@@ -22,7 +22,7 @@ fn walk(root: &Path, dir: &Path, entries: &mut Vec<(String, String)>) {
 }
 fn main() {
     let root = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap())
-        .join("../internal/web/dist")
+        .join("assets")
         .canonicalize()
         .unwrap();
     println!("cargo:rerun-if-changed={}", root.display());

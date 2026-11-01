@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix='stv-smoke-') as scratch:
         listener.bind(('127.0.0.1', 0))
         port = listener.getsockname()[1]
     (root / 'config/stavlos.json').write_text(json.dumps({'web': {'port': port}, 'reminders': False}))
-    (root / 'cache/models.json').write_bytes((ROOT / 'internal/modelsdev/fallback.json').read_bytes())
+    (root / 'cache/modelsdev.json').write_bytes((ROOT / 'src/modelsdev-fallback.json').read_bytes())
     env = {
         'PATH': '/usr/bin:/bin', 'HOME': scratch, 'TMPDIR': str(root / 'tmp'),
         'STAVLOS_CONFIG_DIR': str(root / 'config'), 'STAVLOS_DATA_DIR': str(root / 'data'),
