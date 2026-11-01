@@ -42,7 +42,7 @@ run = ["bash scripts/check.sh build"]
 hide = true
 
 [tasks."_unit"]
-run = ["cargo test --locked --manifest-path Cargo.toml", "cargo test --locked --manifest-path api/Cargo.toml", "python3 scripts/check_gate_test.py", "bash scripts/check.sh test"]
+run = ["cargo build --locked --manifest-path api/Cargo.toml --bin stavlos-api", "cargo test --locked --manifest-path Cargo.toml", "cargo test --locked --manifest-path api/Cargo.toml", "python3 scripts/check_gate_test.py", "bash scripts/check.sh test"]
 hide = true
 
 [tasks."_test-stages"]

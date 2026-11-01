@@ -1,0 +1,626 @@
+[
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "opaque"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "one.two"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "one.invalid%payload.signature"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "header..sig"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.e30.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.e30==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.bnVsbA.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.bnVsbA==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.W10.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.W10==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 1700000001,
+      "email": "fixture@example.invalid",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJlbWFpbCI6ImZpeHR1cmVAZXhhbXBsZS5pbnZhbGlkIiwiZXhwIjoxNzAwMDAwMDAxfQ.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 1700000001,
+      "email": "fixture@example.invalid",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJlbWFpbCI6ImZpeHR1cmVAZXhhbXBsZS5pbnZhbGlkIiwiZXhwIjoxNzAwMDAwMDAxfQ==.s"
+  },
+  {
+    "account_id": "top",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "top",
+      "organizations": [
+        {
+          "id": "org"
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": "nested"
+      }
+    },
+    "token": "h.eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJ0b3AiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoibmVzdGVkIn0sIm9yZ2FuaXphdGlvbnMiOlt7ImlkIjoib3JnIn1dfQ.s"
+  },
+  {
+    "account_id": "top",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "top",
+      "organizations": [
+        {
+          "id": "org"
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": "nested"
+      }
+    },
+    "token": "h.eyJjaGF0Z3B0X2FjY291bnRfaWQiOiJ0b3AiLCJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoibmVzdGVkIn0sIm9yZ2FuaXphdGlvbnMiOlt7ImlkIjoib3JnIn1dfQ==.s"
+  },
+  {
+    "account_id": "nested",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [
+        {
+          "id": "org"
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": "nested"
+      }
+    },
+    "token": "h.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoibmVzdGVkIn0sIm9yZ2FuaXphdGlvbnMiOlt7ImlkIjoib3JnIn1dfQ.s"
+  },
+  {
+    "account_id": "nested",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [
+        {
+          "id": "org"
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": "nested"
+      }
+    },
+    "token": "h.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoibmVzdGVkIn0sIm9yZ2FuaXphdGlvbnMiOlt7ImlkIjoib3JnIn1dfQ==.s"
+  },
+  {
+    "account_id": "first",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [
+        {
+          "id": "first"
+        },
+        {
+          "id": "second"
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJvcmdhbml6YXRpb25zIjpbeyJpZCI6ImZpcnN0In0seyJpZCI6InNlY29uZCJ9XX0.s"
+  },
+  {
+    "account_id": "first",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [
+        {
+          "id": "first"
+        },
+        {
+          "id": "second"
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJvcmdhbml6YXRpb25zIjpbeyJpZCI6ImZpcnN0In0seyJpZCI6InNlY29uZCJ9XX0==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [
+        {
+          "id": ""
+        },
+        {
+          "id": "second"
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJvcmdhbml6YXRpb25zIjpbbnVsbCx7ImlkIjoic2Vjb25kIn1dfQ.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [
+        {
+          "id": ""
+        },
+        {
+          "id": "second"
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJvcmdhbml6YXRpb25zIjpbbnVsbCx7ImlkIjoic2Vjb25kIn1dfQ==.s"
+  },
+  {
+    "account_id": "valid",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "valid",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJlbWFpbCI6MywiY2hhdGdwdF9hY2NvdW50X2lkIjoidmFsaWQifQ.s"
+  },
+  {
+    "account_id": "valid",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "valid",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJlbWFpbCI6MywiY2hhdGdwdF9hY2NvdW50X2lkIjoidmFsaWQifQ==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "still-valid",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOiJub3QgYW4gaW50ZWdlciIsImVtYWlsIjoic3RpbGwtdmFsaWQifQ.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "still-valid",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOiJub3QgYW4gaW50ZWdlciIsImVtYWlsIjoic3RpbGwtdmFsaWQifQ==.s"
+  },
+  {
+    "account_id": "still-valid",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "still-valid",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJvcmdhbml6YXRpb25zIjoibm90IGFuIGFycmF5IiwiY2hhdGdwdF9hY2NvdW50X2lkIjoic3RpbGwtdmFsaWQifQ.s"
+  },
+  {
+    "account_id": "still-valid",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "still-valid",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJvcmdhbml6YXRpb25zIjoibm90IGFuIGFycmF5IiwiY2hhdGdwdF9hY2NvdW50X2lkIjoic3RpbGwtdmFsaWQifQ==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOm51bGwsIm9yZ2FuaXphdGlvbnMiOltdfQ.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOm51bGwsIm9yZ2FuaXphdGlvbnMiOltdfQ==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": -1,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOi0xfQ.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": -1,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOi0xfQ==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOjB9.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOjB9==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 1700000120,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOjE3MDAwMDAxMjB9.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 1700000120,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOjE3MDAwMDAxMjB9==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOjE3MDAwMDAxMjAuMH0.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOjE3MDAwMDAxMjAuMH0==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 9223372036854775807,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOjkyMjMzNzIwMzY4NTQ3NzU4MDd9.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 9223372036854775807,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJleHAiOjkyMjMzNzIwMzY4NTQ3NzU4MDd9==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJlbWFpbCI6bnVsbH0.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJlbWFpbCI6bnVsbH0==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [
+        {
+          "id": ""
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJvcmdhbml6YXRpb25zIjpbeyJpZCI6bnVsbH1dfQ.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": [
+        {
+          "id": ""
+        }
+      ],
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.eyJvcmdhbml6YXRpb25zIjpbeyJpZCI6bnVsbH1dfQ==.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.e2Jyb2tlbg.s"
+  },
+  {
+    "account_id": "",
+    "claims": {
+      "exp": 0,
+      "email": "",
+      "chatgpt_account_id": "",
+      "organizations": null,
+      "https://api.openai.com/auth": {
+        "chatgpt_account_id": ""
+      }
+    },
+    "token": "h.e2Jyb2tlbg==.s"
+  }
+]
