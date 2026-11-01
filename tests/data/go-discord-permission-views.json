@@ -1,0 +1,1570 @@
+[
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```sh\necho hi\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```sh\necho Upper\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```sh\necho `​`​`red\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Shell** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "shell"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```text\nx\nFirst line: 2\nLine limit: 3\n```\nAdditional arguments:\n```json\n{\n  \"extra\": \"\\u003c\\u003e\\u0026\\u2028\"\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```text\n/work\nLine limit: 5\n```\nAdditional arguments:\n```json\n{\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"pattern\": \"foo\"\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Read** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "read"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```text\nPattern: foo\nPath: /work\nFile glob: *.rs\nIgnore case: true\nMatch limit: 5\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Grep** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "grep"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```text\nPattern: foo\nPath: /work\nPath limit: 5\n```\nAdditional arguments:\n```json\n{\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Glob** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "glob"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```diff\n*** Begin Patch\n*** End Patch\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```diff\n*** Begin Patch\n*** End Patch\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Patch** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "apply_patch"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```text\nSkill: skill\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Skill** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "skill"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```text\nhttps://example.com\nStart: 1\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Fetch** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "web_fetch"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```text\nhi\nResults: 3\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Search** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "web_search"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Web** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "web"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```text\nTarget: a1\n```\nAdditional arguments:\n```json\n{\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Agent cancel** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "agent_cancel"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```text\nTarget: a1\n```\nAdditional arguments:\n```json\n{\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **Shell kill** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "shell_kill"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **My server · Run tool** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "mcp__my_server__run_tool"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "null",
+    "json": "```json\nnull\n```",
+    "subject": "```json\nnull\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{}",
+    "json": "```json\n{}\n```",
+    "subject": "```json\n{}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"command\":\"echo hi\"}",
+    "json": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo hi\"\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"Command\":\"echo Upper\"}",
+    "json": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "subject": "```json\n{\n  \"Command\": \"echo Upper\"\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"command\":7}",
+    "json": "```json\n{\n  \"command\": 7\n}\n```",
+    "subject": "```json\n{\n  \"command\": 7\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"command\":\"echo ```\\u001b[31mred\\u202e\"}",
+    "json": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "subject": "```json\n{\n  \"command\": \"echo `​`​`\\u001b[31mred\\u202e\"\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"path\":\"x\",\"offset\":2,\"limit\":3,\"extra\":\"\u003c\u003e\u0026\\u2028\"}",
+    "json": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "subject": "```json\n{\n  \"path\": \"x\",\n  \"offset\": 2,\n  \"limit\": 3,\n  \"extra\": \"\u003c\u003e\u0026\\u2028\"\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"pattern\":\"foo\",\"path\":\"/work\",\"glob\":\"*.rs\",\"ignore_case\":true,\"limit\":5}",
+    "json": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "subject": "```json\n{\n  \"pattern\": \"foo\",\n  \"path\": \"/work\",\n  \"glob\": \"*.rs\",\n  \"ignore_case\": true,\n  \"limit\": 5\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"patch\":\"*** Begin Patch\\n*** End Patch\"}",
+    "json": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "subject": "```json\n{\n  \"patch\": \"*** Begin Patch\\n*** End Patch\"\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"url\":\"https://example.com\",\"start\":1}",
+    "json": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "subject": "```json\n{\n  \"url\": \"https://example.com\",\n  \"start\": 1\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"query\":\"hi\",\"n\":3}",
+    "json": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "subject": "```json\n{\n  \"query\": \"hi\",\n  \"n\": 3\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"name\":\"skill\"}",
+    "json": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "subject": "```json\n{\n  \"name\": \"skill\"\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"id\":\"a1\",\"extra\":{\"z\":1e1,\"a\":[1.20,2]}}",
+    "json": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "subject": "```json\n{\n  \"id\": \"a1\",\n  \"extra\": {\n    \"z\": 1e1,\n    \"a\": [\n      1.20,\n      2\n    ]\n  }\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "[1,2]",
+    "json": "```json\n[\n  1,\n  2\n]\n```",
+    "subject": "```json\n[\n  1,\n  2\n]\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"path\":null}",
+    "json": "```json\n{\n  \"path\": null\n}\n```",
+    "subject": "```json\n{\n  \"path\": null\n}\n```",
+    "tool": "unknown"
+  },
+  {
+    "heading": "❗ **Unknown** /work/\\_thing",
+    "input": "{\"b\":1e1,\"a\":\"\u003ctag\u003e\"}",
+    "json": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "subject": "```json\n{\n  \"b\": 1e1,\n  \"a\": \"\u003ctag\u003e\"\n}\n```",
+    "tool": "unknown"
+  }
+]
