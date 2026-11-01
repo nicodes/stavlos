@@ -172,8 +172,18 @@ impl Client {
 #[derive(Default)]
 pub struct Hub {
     clients: RwLock<BTreeMap<String, Arc<Client>>>,
+    feeds: RwLock<BTreeMap<String, std::sync::Weak<dyn Feed>>>,
+}
+pub trait Feed: Send + Sync {
+    fn notify(&self, line: &[u8]);
 }
 impl Hub {
+    pub fn feed(&self, id: String, feed: std::sync::Weak<dyn Feed>) {
+        self.feeds.write().unwrap().insert(id, feed);
+    }
+    pub fn remove_feed(&self, id: &str) {
+        self.feeds.write().unwrap().remove(id);
+    }
     pub fn add(&self, client: Arc<Client>) {
         self.clients
             .write()
@@ -206,6 +216,16 @@ impl Hub {
         let Ok(line) = notification(method, params) else {
             return;
         };
+        let feeds = self
+            .feeds
+            .read()
+            .unwrap()
+            .values()
+            .filter_map(std::sync::Weak::upgrade)
+            .collect::<Vec<_>>();
+        for feed in feeds {
+            feed.notify(&line);
+        }
         for client in self.clients() {
             if channel.is_some_and(|c| !client.subscribed(c)) {
                 continue;

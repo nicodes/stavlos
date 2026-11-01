@@ -36,6 +36,8 @@ uuid = { version = "1", features = ["v4"] }
 yaml-edit = "0.3.2"
 
 [dev-dependencies]
+futures-util = "0.3"
+tokio-tungstenite = "0.29"
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "tls12"] }
 
 [profile.release]
