@@ -1,0 +1,802 @@
+[
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [],
+    "want": ""
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [],
+    "want": "low"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [],
+    "want": "medium"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [],
+    "want": "high"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [],
+    "want": "invalid"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [],
+    "fitted": "high",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [],
+    "fitted": "medium",
+    "offered": [
+      "medium"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [],
+    "fitted": "medium",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [],
+    "fitted": "high",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [],
+    "fitted": "",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": ""
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "high",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "high",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      "low",
+      "high"
+    ],
+    "fitted": "low",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": ""
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "medium"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      ""
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": ""
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "",
+    "offered": [
+      "low",
+      "high"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "medium"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "medium"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "medium"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "medium"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "medium"
+    ],
+    "want": "invalid"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": ""
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "low"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "medium"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "high"
+  },
+  {
+    "allowed": [
+      "medium"
+    ],
+    "fitted": "medium",
+    "offered": [
+      "low",
+      "medium",
+      "high"
+    ],
+    "want": "invalid"
+  }
+]

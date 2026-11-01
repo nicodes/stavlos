@@ -1,0 +1,394 @@
+[
+  {
+    "description": "provider has reported no plan usage yet",
+    "limited": false,
+    "risk": 0,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": []
+  },
+  {
+    "description": "provider: 10% of its 5 hours used with 60% of it gone",
+    "limited": false,
+    "risk": 1.4880952380952381,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 10,
+          "minutes": 300,
+          "resets_at": "2027-01-15T10:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 60,
+        "minutes": 300,
+        "resets": "2027-01-15T10:00:00Z",
+        "surplus": 50,
+        "used": 10
+      }
+    ]
+  },
+  {
+    "description": "provider: 10% of its week used with 86% of it gone",
+    "limited": false,
+    "risk": 75.71428571428572,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 10,
+          "minutes": 10080,
+          "resets_at": "2027-01-16T08:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 85.71428571428572,
+        "minutes": 10080,
+        "resets": "2027-01-16T08:00:00Z",
+        "surplus": 75.71428571428572,
+        "used": 10
+      }
+    ]
+  },
+  {
+    "description": "provider: 60% of its week used with 57% of it gone",
+    "limited": false,
+    "risk": -2.857142857142861,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 60,
+          "minutes": 10080,
+          "resets_at": "2027-01-18T08:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 57.14285714285714,
+        "minutes": 10080,
+        "resets": "2027-01-18T08:00:00Z",
+        "surplus": -2.857142857142861,
+        "used": 60
+      }
+    ]
+  },
+  {
+    "description": "provider: 10% of its week used with 86% of it gone",
+    "limited": true,
+    "risk": 75.71428571428572,
+    "until": "2027-01-15T10:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 100,
+          "minutes": 300,
+          "resets_at": "2027-01-15T10:00:00Z"
+        },
+        {
+          "used_percent": 10,
+          "minutes": 10080,
+          "resets_at": "2027-01-16T08:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 85.71428571428572,
+        "minutes": 10080,
+        "resets": "2027-01-16T08:00:00Z",
+        "surplus": 75.71428571428572,
+        "used": 10
+      },
+      {
+        "elapsed": 60,
+        "minutes": 300,
+        "resets": "2027-01-15T10:00:00Z",
+        "surplus": -40,
+        "used": 100
+      }
+    ]
+  },
+  {
+    "description": "provider: 100% of its week used with 71% of it gone",
+    "limited": true,
+    "risk": -28.071428571428573,
+    "until": "2027-01-17T08:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 99.5,
+          "minutes": 10080,
+          "resets_at": "2027-01-17T08:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 71.42857142857143,
+        "minutes": 10080,
+        "resets": "2027-01-17T08:00:00Z",
+        "surplus": -28.07142857142857,
+        "used": 99.5
+      }
+    ]
+  },
+  {
+    "description": "provider: 90% used",
+    "limited": false,
+    "risk": 0,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 90,
+          "minutes": 300
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 0,
+        "minutes": 300,
+        "resets": "0001-01-01T00:00:00Z",
+        "surplus": 0,
+        "used": 90
+      }
+    ]
+  },
+  {
+    "description": "provider: 40% used",
+    "limited": false,
+    "risk": 0,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 40,
+          "resets_at": "2027-01-15T09:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 0,
+        "minutes": 0,
+        "resets": "2027-01-15T09:00:00Z",
+        "surplus": 0,
+        "used": 40
+      }
+    ]
+  },
+  {
+    "description": "provider: 50% of its week used with 86% of it gone",
+    "limited": false,
+    "risk": 35.71428571428572,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 100,
+          "minutes": 300,
+          "resets_at": "2027-01-15T07:00:00Z"
+        },
+        {
+          "used_percent": 50,
+          "minutes": 10080,
+          "resets_at": "2027-01-16T08:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 85.71428571428572,
+        "minutes": 10080,
+        "resets": "2027-01-16T08:00:00Z",
+        "surplus": 35.71428571428572,
+        "used": 50
+      },
+      {
+        "elapsed": 0,
+        "minutes": 300,
+        "resets": "0001-01-01T00:00:00Z",
+        "surplus": 0,
+        "used": 0
+      }
+    ]
+  },
+  {
+    "description": "provider has reported no plan usage yet",
+    "limited": true,
+    "risk": 0,
+    "until": "2027-01-15T08:10:00Z",
+    "usage": {
+      "windows": [],
+      "observed": "0001-01-01T00:00:00Z",
+      "limited_until": "2027-01-15T08:10:00Z"
+    },
+    "windows": []
+  },
+  {
+    "description": "provider: 0% used",
+    "limited": false,
+    "risk": 0,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 100,
+          "minutes": 300,
+          "resets_at": "2027-01-15T08:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 0,
+        "minutes": 300,
+        "resets": "0001-01-01T00:00:00Z",
+        "surplus": 0,
+        "used": 0
+      }
+    ]
+  },
+  {
+    "description": "provider: 100% used",
+    "limited": true,
+    "risk": 0,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 100
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 0,
+        "minutes": 0,
+        "resets": "0001-01-01T00:00:00Z",
+        "surplus": 0,
+        "used": 100
+      }
+    ]
+  },
+  {
+    "description": "provider: 48% of its week used with 50% of it gone",
+    "limited": false,
+    "risk": 2,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 49.5,
+          "minutes": 300,
+          "resets_at": "2027-01-15T10:06:00Z"
+        },
+        {
+          "used_percent": 48,
+          "minutes": 10080,
+          "resets_at": "2027-01-18T20:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 50,
+        "minutes": 10080,
+        "resets": "2027-01-18T20:00:00Z",
+        "surplus": 2,
+        "used": 48
+      },
+      {
+        "elapsed": 58.00000000000001,
+        "minutes": 300,
+        "resets": "2027-01-15T10:06:00Z",
+        "surplus": 8.500000000000007,
+        "used": 49.5
+      }
+    ]
+  },
+  {
+    "description": "provider: 25% of its month used with 83% of it gone",
+    "limited": false,
+    "risk": 250.00000000000006,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 25,
+          "minutes": 43200,
+          "resets_at": "2027-01-20T08:00:00Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 83.33333333333334,
+        "minutes": 43200,
+        "resets": "2027-01-20T08:00:00Z",
+        "surplus": 58.33333333333334,
+        "used": 25
+      }
+    ]
+  },
+  {
+    "description": "provider: 20% of its 3 hours used with 67% of it gone",
+    "limited": false,
+    "risk": 0.8333333333333334,
+    "until": "0001-01-01T00:00:00Z",
+    "usage": {
+      "windows": [
+        {
+          "used_percent": 20,
+          "minutes": 180,
+          "resets_at": "2027-01-15T09:00:00Z"
+        },
+        {
+          "used_percent": 5,
+          "minutes": 180,
+          "resets_at": "2027-01-15T09:06:40Z"
+        }
+      ],
+      "observed": "0001-01-01T00:00:00Z"
+    },
+    "windows": [
+      {
+        "elapsed": 66.66666666666667,
+        "minutes": 180,
+        "resets": "2027-01-15T09:00:00Z",
+        "surplus": 46.66666666666667,
+        "used": 20
+      },
+      {
+        "elapsed": 62.962962962962955,
+        "minutes": 180,
+        "resets": "2027-01-15T09:06:40Z",
+        "surplus": 57.962962962962955,
+        "used": 5
+      }
+    ]
+  }
+]
