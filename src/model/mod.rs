@@ -1,4 +1,6 @@
 //! Provider-independent conversation and accounting contract.
+pub mod chatcompletions;
+pub mod codex;
 pub mod stream;
 use crate::{
     wire::{Slice, Time},
@@ -97,6 +99,22 @@ pub enum CallError {
     },
     #[error("operation cancelled")]
     Cancelled,
+}
+impl CallError {
+    pub fn context(self, prefix: &str) -> Self {
+        match self {
+            Self::Permanent(message) => Self::Permanent(format!("{prefix}: {message}")),
+            Self::Transient(message) => Self::Transient(format!("{prefix}: {message}")),
+            Self::Limit {
+                message,
+                retry_after,
+            } => Self::Limit {
+                message: format!("{prefix}: {message}"),
+                retry_after,
+            },
+            Self::Cancelled => Self::Cancelled,
+        }
+    }
 }
 #[derive(Clone, Debug, thiserror::Error)]
 #[error("{error}")]
