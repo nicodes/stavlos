@@ -1,0 +1,690 @@
+[
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nAnswer: legacy answer",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "answered",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nAnswer: one, two\ncustom",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "answers": [
+        "one, two",
+        "custom"
+      ],
+      "id": "",
+      "outcome": "answered",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n    ✅ Option 1 — Description 1\n    ⬜ Option 2 — Description 2\n    ✅ Option 3 — Description 3\n    ✅ Option 1\n\n❓ **Question 2? \\*details\\***\n    ⬜ Option 1 — Description 1\n    ⬜ Option 2 — Description 2\n    ⬜ Option 3 — Description 3\n    ✅ text, with commas",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "details": [
+        {
+          "selected": [
+            0,
+            2
+          ],
+          "custom": "Option 1"
+        },
+        {
+          "custom": "text, with commas"
+        }
+      ],
+      "id": "",
+      "outcome": "answered",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nQuestion withdrawn.",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "withdrawn",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nQuestion withdrawn.",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "answers": [
+        "one, two",
+        "custom"
+      ],
+      "id": "",
+      "outcome": "withdrawn",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nQuestion withdrawn.",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "details": [
+        {
+          "selected": [
+            0,
+            2
+          ],
+          "custom": "Option 1"
+        },
+        {
+          "custom": "text, with commas"
+        }
+      ],
+      "id": "",
+      "outcome": "withdrawn",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nDefaulted by the daemon.",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "defaulted",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nDefaulted by the daemon.",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "answers": [
+        "one, two",
+        "custom"
+      ],
+      "id": "",
+      "outcome": "defaulted",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nDefaulted by the daemon.",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "details": [
+        {
+          "selected": [
+            0,
+            2
+          ],
+          "custom": "Option 1"
+        },
+        {
+          "custom": "text, with commas"
+        }
+      ],
+      "id": "",
+      "outcome": "defaulted",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nQuestion resolved.",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "id": "",
+      "outcome": "future",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nQuestion resolved.",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "answers": [
+        "one, two",
+        "custom"
+      ],
+      "id": "",
+      "outcome": "future",
+      "answer": "legacy answer"
+    }
+  },
+  {
+    "expected": "❓ **Question 1? \\*details\\***\n\n❓ **Question 2? \\*details\\***\n\nQuestion resolved.",
+    "prompt": {
+      "id": "q1",
+      "channel": "c1",
+      "from": "scout",
+      "kind": "question",
+      "escalated": false,
+      "created": "",
+      "questions": [
+        {
+          "question": "Question 1? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        },
+        {
+          "question": "Question 2? *details*",
+          "options": [
+            {
+              "label": "Option 1",
+              "description": "Description 1"
+            },
+            {
+              "label": "Option 2",
+              "description": "Description 2"
+            },
+            {
+              "label": "Option 3",
+              "description": "Description 3"
+            }
+          ]
+        }
+      ]
+    },
+    "result": {
+      "details": [
+        {
+          "selected": [
+            0,
+            2
+          ],
+          "custom": "Option 1"
+        },
+        {
+          "custom": "text, with commas"
+        }
+      ],
+      "id": "",
+      "outcome": "future",
+      "answer": "legacy answer"
+    }
+  }
+]
