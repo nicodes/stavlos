@@ -1,0 +1,317 @@
+[
+  {
+    "base": "https://example.org/dir/page",
+    "html": "plain λ text",
+    "markdown": "plain λ text"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "plain λ text",
+    "markdown": "plain λ text"
+  },
+  {
+    "base": "",
+    "html": "plain λ text",
+    "markdown": "plain λ text"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cp\u003eHello \u003cstrong\u003ebold\u003c/strong\u003e \u003ca href=\"../path?q=λ\"\u003ethere\u003c/a\u003e.\u003c/p\u003e",
+    "markdown": "Hello **bold** [there](https://example.org/path?q=λ)."
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cp\u003eHello \u003cstrong\u003ebold\u003c/strong\u003e \u003ca href=\"../path?q=λ\"\u003ethere\u003c/a\u003e.\u003c/p\u003e",
+    "markdown": "Hello **bold** [there](https://go.dev/path?q=λ)."
+  },
+  {
+    "base": "",
+    "html": "\u003cp\u003eHello \u003cstrong\u003ebold\u003c/strong\u003e \u003ca href=\"../path?q=λ\"\u003ethere\u003c/a\u003e.\u003c/p\u003e",
+    "markdown": "Hello **bold** [there](../path?q=λ)."
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cmain\u003e\u003ch1\u003eTitle\u003c/h1\u003e\u003cp\u003eWords\u003cbr\u003eline \u003ccode\u003e a\nb \u003c/code\u003e\u003c/p\u003e\u003c/main\u003e",
+    "markdown": "# Title\n\nWords\nline `a b`"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cmain\u003e\u003ch1\u003eTitle\u003c/h1\u003e\u003cp\u003eWords\u003cbr\u003eline \u003ccode\u003e a\nb \u003c/code\u003e\u003c/p\u003e\u003c/main\u003e",
+    "markdown": "# Title\n\nWords\nline `a b`"
+  },
+  {
+    "base": "",
+    "html": "\u003cmain\u003e\u003ch1\u003eTitle\u003c/h1\u003e\u003cp\u003eWords\u003cbr\u003eline \u003ccode\u003e a\nb \u003c/code\u003e\u003c/p\u003e\u003c/main\u003e",
+    "markdown": "# Title\n\nWords\nline `a b`"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003carticle\u003efirst\u003c/article\u003e\u003cmain\u003epreferred\u003c/main\u003e",
+    "markdown": "preferred"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003carticle\u003efirst\u003c/article\u003e\u003cmain\u003epreferred\u003c/main\u003e",
+    "markdown": "preferred"
+  },
+  {
+    "base": "",
+    "html": "\u003carticle\u003efirst\u003c/article\u003e\u003cmain\u003epreferred\u003c/main\u003e",
+    "markdown": "preferred"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cnav\u003ehide\u003c/nav\u003e\u003cscript\u003ex()\u003c/script\u003e\u003cdiv\u003ekeep\u003cstyle\u003ehide\u003c/style\u003e\u003c/div\u003e",
+    "markdown": "keep"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cnav\u003ehide\u003c/nav\u003e\u003cscript\u003ex()\u003c/script\u003e\u003cdiv\u003ekeep\u003cstyle\u003ehide\u003c/style\u003e\u003c/div\u003e",
+    "markdown": "keep"
+  },
+  {
+    "base": "",
+    "html": "\u003cnav\u003ehide\u003c/nav\u003e\u003cscript\u003ex()\u003c/script\u003e\u003cdiv\u003ekeep\u003cstyle\u003ehide\u003c/style\u003e\u003c/div\u003e",
+    "markdown": "keep"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cp\u003ea\u0026nbsp; b \u0026amp; c\u003c/p\u003e",
+    "markdown": "a b \u0026 c"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cp\u003ea\u0026nbsp; b \u0026amp; c\u003c/p\u003e",
+    "markdown": "a b \u0026 c"
+  },
+  {
+    "base": "",
+    "html": "\u003cp\u003ea\u0026nbsp; b \u0026amp; c\u003c/p\u003e",
+    "markdown": "a b \u0026 c"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cul\u003e\u003cli\u003ea\u003cul\u003e\u003cli\u003enested\u003c/li\u003e\u003c/ul\u003e\u003c/li\u003e\u003cli\u003eb\u003c/li\u003e\u003c/ul\u003e",
+    "markdown": "- a\n  - nested\n- b"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cul\u003e\u003cli\u003ea\u003cul\u003e\u003cli\u003enested\u003c/li\u003e\u003c/ul\u003e\u003c/li\u003e\u003cli\u003eb\u003c/li\u003e\u003c/ul\u003e",
+    "markdown": "- a\n  - nested\n- b"
+  },
+  {
+    "base": "",
+    "html": "\u003cul\u003e\u003cli\u003ea\u003cul\u003e\u003cli\u003enested\u003c/li\u003e\u003c/ul\u003e\u003c/li\u003e\u003cli\u003eb\u003c/li\u003e\u003c/ul\u003e",
+    "markdown": "- a\n  - nested\n- b"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003col start=\"7\"\u003e\u003cli\u003ex\u003c/li\u003e\u003cli\u003ey\u003c/li\u003e\u003c/ol\u003e",
+    "markdown": "1. x\n2. y"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003col start=\"7\"\u003e\u003cli\u003ex\u003c/li\u003e\u003cli\u003ey\u003c/li\u003e\u003c/ol\u003e",
+    "markdown": "1. x\n2. y"
+  },
+  {
+    "base": "",
+    "html": "\u003col start=\"7\"\u003e\u003cli\u003ex\u003c/li\u003e\u003cli\u003ey\u003c/li\u003e\u003c/ol\u003e",
+    "markdown": "1. x\n2. y"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cblockquote\u003eouter\u003cp\u003ewords\u003c/p\u003e\u003cblockquote\u003enested\u003c/blockquote\u003e\u003c/blockquote\u003e",
+    "markdown": "\u003e outer\n\u003e words\n\n\u003e nested"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cblockquote\u003eouter\u003cp\u003ewords\u003c/p\u003e\u003cblockquote\u003enested\u003c/blockquote\u003e\u003c/blockquote\u003e",
+    "markdown": "\u003e outer\n\u003e words\n\n\u003e nested"
+  },
+  {
+    "base": "",
+    "html": "\u003cblockquote\u003eouter\u003cp\u003ewords\u003c/p\u003e\u003cblockquote\u003enested\u003c/blockquote\u003e\u003c/blockquote\u003e",
+    "markdown": "\u003e outer\n\u003e words\n\n\u003e nested"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003ctable\u003e\u003ctr\u003e\u003cth\u003ea\u003c/th\u003e\u003cth\u003eb\u003c/th\u003e\u003c/tr\u003e\u003ctr\u003e\u003ctd\u003e1\u003c/td\u003e\u003ctd\u003e2\u003c/td\u003e\u003c/tr\u003e\u003c/table\u003e",
+    "markdown": "| a | b |\n| --- | --- |\n| 1 | 2 |"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003ctable\u003e\u003ctr\u003e\u003cth\u003ea\u003c/th\u003e\u003cth\u003eb\u003c/th\u003e\u003c/tr\u003e\u003ctr\u003e\u003ctd\u003e1\u003c/td\u003e\u003ctd\u003e2\u003c/td\u003e\u003c/tr\u003e\u003c/table\u003e",
+    "markdown": "| a | b |\n| --- | --- |\n| 1 | 2 |"
+  },
+  {
+    "base": "",
+    "html": "\u003ctable\u003e\u003ctr\u003e\u003cth\u003ea\u003c/th\u003e\u003cth\u003eb\u003c/th\u003e\u003c/tr\u003e\u003ctr\u003e\u003ctd\u003e1\u003c/td\u003e\u003ctd\u003e2\u003c/td\u003e\u003c/tr\u003e\u003c/table\u003e",
+    "markdown": "| a | b |\n| --- | --- |\n| 1 | 2 |"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cpre\u003e\u003ccode class=\"x language-rust\"\u003efn main() {\n  hi();\n}\n\u003c/code\u003e\u003c/pre\u003e",
+    "markdown": "```rust\nfn main() {\n  hi();\n}\n```"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cpre\u003e\u003ccode class=\"x language-rust\"\u003efn main() {\n  hi();\n}\n\u003c/code\u003e\u003c/pre\u003e",
+    "markdown": "```rust\nfn main() {\n  hi();\n}\n```"
+  },
+  {
+    "base": "",
+    "html": "\u003cpre\u003e\u003ccode class=\"x language-rust\"\u003efn main() {\n  hi();\n}\n\u003c/code\u003e\u003c/pre\u003e",
+    "markdown": "```rust\nfn main() {\n  hi();\n}\n```"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cp\u003e\u003ca href=\"javascript:void(0)\"\u003eclick\u003c/a\u003e\u003ca href=\"/a\"\u003e\u003c/a\u003e\u003cimg alt=\"diagram\"\u003e\u003chr\u003e\u003c/p\u003e",
+    "markdown": "clickhttps://example.org/a[image: diagram]\n\n---"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cp\u003e\u003ca href=\"javascript:void(0)\"\u003eclick\u003c/a\u003e\u003ca href=\"/a\"\u003e\u003c/a\u003e\u003cimg alt=\"diagram\"\u003e\u003chr\u003e\u003c/p\u003e",
+    "markdown": "clickhttps://go.dev/a[image: diagram]\n\n---"
+  },
+  {
+    "base": "",
+    "html": "\u003cp\u003e\u003ca href=\"javascript:void(0)\"\u003eclick\u003c/a\u003e\u003ca href=\"/a\"\u003e\u003c/a\u003e\u003cimg alt=\"diagram\"\u003e\u003chr\u003e\u003c/p\u003e",
+    "markdown": "click/a[image: diagram]\n\n---"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cp\u003e\u003cb\u003ex \u003ci\u003enested\u003c/i\u003e\u003c/b\u003e\u003cem\u003eem\u003c/em\u003e\u003ckbd\u003ekey\u003c/kbd\u003e\u003c/p\u003e",
+    "markdown": "**x nested***em*`key`"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cp\u003e\u003cb\u003ex \u003ci\u003enested\u003c/i\u003e\u003c/b\u003e\u003cem\u003eem\u003c/em\u003e\u003ckbd\u003ekey\u003c/kbd\u003e\u003c/p\u003e",
+    "markdown": "**x nested***em*`key`"
+  },
+  {
+    "base": "",
+    "html": "\u003cp\u003e\u003cb\u003ex \u003ci\u003enested\u003c/i\u003e\u003c/b\u003e\u003cem\u003eem\u003c/em\u003e\u003ckbd\u003ekey\u003c/kbd\u003e\u003c/p\u003e",
+    "markdown": "**x nested***em*`key`"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cp\u003e bad \u003cdiv\u003eblock\u003c/p\u003e end",
+    "markdown": "bad\n\nblock\n\nend"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cp\u003e bad \u003cdiv\u003eblock\u003c/p\u003e end",
+    "markdown": "bad\n\nblock\n\nend"
+  },
+  {
+    "base": "",
+    "html": "\u003cp\u003e bad \u003cdiv\u003eblock\u003c/p\u003e end",
+    "markdown": "bad\n\nblock\n\nend"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003ctable\u003e\u003ctr\u003e\u003ctd\u003ea | b\u003c/td\u003e\u003c/tr\u003e\u003ctr\u003e\u003ctd\u003ec\u003c/td\u003e\u003c/tr\u003e\u003c/table\u003e",
+    "markdown": "| a | b |\n| --- | --- |\n| c |"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003ctable\u003e\u003ctr\u003e\u003ctd\u003ea | b\u003c/td\u003e\u003c/tr\u003e\u003ctr\u003e\u003ctd\u003ec\u003c/td\u003e\u003c/tr\u003e\u003c/table\u003e",
+    "markdown": "| a | b |\n| --- | --- |\n| c |"
+  },
+  {
+    "base": "",
+    "html": "\u003ctable\u003e\u003ctr\u003e\u003ctd\u003ea | b\u003c/td\u003e\u003c/tr\u003e\u003ctr\u003e\u003ctd\u003ec\u003c/td\u003e\u003c/tr\u003e\u003c/table\u003e",
+    "markdown": "| a | b |\n| --- | --- |\n| c |"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\t space \n \u003cspan\u003einline\twords\u003c/span\u003e end\n",
+    "markdown": "space inline words end"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\t space \n \u003cspan\u003einline\twords\u003c/span\u003e end\n",
+    "markdown": "space inline words end"
+  },
+  {
+    "base": "",
+    "html": "\t space \n \u003cspan\u003einline\twords\u003c/span\u003e end\n",
+    "markdown": "space inline words end"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cp\u003e Unicode space \u003c/p\u003e",
+    "markdown": "Unicode space"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cp\u003e Unicode space \u003c/p\u003e",
+    "markdown": "Unicode space"
+  },
+  {
+    "base": "",
+    "html": "\u003cp\u003e Unicode space \u003c/p\u003e",
+    "markdown": "Unicode space"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003ctemplate\u003ehidden\u003c/template\u003e\u003csvg\u003e\u003ctext\u003ehidden\u003c/text\u003e\u003c/svg\u003e\u003ciframe\u003ehidden\u003c/iframe\u003evisible",
+    "markdown": "visible"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003ctemplate\u003ehidden\u003c/template\u003e\u003csvg\u003e\u003ctext\u003ehidden\u003c/text\u003e\u003c/svg\u003e\u003ciframe\u003ehidden\u003c/iframe\u003evisible",
+    "markdown": "visible"
+  },
+  {
+    "base": "",
+    "html": "\u003ctemplate\u003ehidden\u003c/template\u003e\u003csvg\u003e\u003ctext\u003ehidden\u003c/text\u003e\u003c/svg\u003e\u003ciframe\u003ehidden\u003c/iframe\u003evisible",
+    "markdown": "visible"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cdetails\u003e\u003csummary\u003eTitle\u003c/summary\u003e\u003cp\u003einside\u003c/p\u003e\u003c/details\u003e",
+    "markdown": "Title\ninside"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cdetails\u003e\u003csummary\u003eTitle\u003c/summary\u003e\u003cp\u003einside\u003c/p\u003e\u003c/details\u003e",
+    "markdown": "Title\ninside"
+  },
+  {
+    "base": "",
+    "html": "\u003cdetails\u003e\u003csummary\u003eTitle\u003c/summary\u003e\u003cp\u003einside\u003c/p\u003e\u003c/details\u003e",
+    "markdown": "Title\ninside"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003cpre\u003ea\u003cbr\u003eb\u003c/pre\u003e",
+    "markdown": "```\na\nb\n```"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003cpre\u003ea\u003cbr\u003eb\u003c/pre\u003e",
+    "markdown": "```\na\nb\n```"
+  },
+  {
+    "base": "",
+    "html": "\u003cpre\u003ea\u003cbr\u003eb\u003c/pre\u003e",
+    "markdown": "```\na\nb\n```"
+  },
+  {
+    "base": "https://example.org/dir/page",
+    "html": "\u003ca href=\"https://example.org/x\"\u003ehttps://example.org/x\u003c/a\u003e",
+    "markdown": "https://example.org/x"
+  },
+  {
+    "base": "https://go.dev/doc/modules",
+    "html": "\u003ca href=\"https://example.org/x\"\u003ehttps://example.org/x\u003c/a\u003e",
+    "markdown": "https://example.org/x"
+  },
+  {
+    "base": "",
+    "html": "\u003ca href=\"https://example.org/x\"\u003ehttps://example.org/x\u003c/a\u003e",
+    "markdown": "https://example.org/x"
+  }
+]

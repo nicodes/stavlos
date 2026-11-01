@@ -1,0 +1,766 @@
+[
+  {
+    "ip": "0.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "0.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "0.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "1.0.0.0",
+    "public": true
+  },
+  {
+    "ip": "1.1.1.1",
+    "public": true
+  },
+  {
+    "ip": "10.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "10.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "10.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "100.127.255.255",
+    "public": false
+  },
+  {
+    "ip": "100.128.0.0",
+    "public": true
+  },
+  {
+    "ip": "100.63.255.255",
+    "public": true
+  },
+  {
+    "ip": "100.64.0.0",
+    "public": false
+  },
+  {
+    "ip": "100.64.0.1",
+    "public": false
+  },
+  {
+    "ip": "100:0:0:1::",
+    "public": true
+  },
+  {
+    "ip": "100::",
+    "public": false
+  },
+  {
+    "ip": "100::1",
+    "public": false
+  },
+  {
+    "ip": "100::ffff:ffff:ffff:ffff",
+    "public": false
+  },
+  {
+    "ip": "11.0.0.0",
+    "public": true
+  },
+  {
+    "ip": "126.255.255.255",
+    "public": true
+  },
+  {
+    "ip": "127.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "127.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "127.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "128.0.0.0",
+    "public": true
+  },
+  {
+    "ip": "169.253.255.255",
+    "public": true
+  },
+  {
+    "ip": "169.254.0.0",
+    "public": false
+  },
+  {
+    "ip": "169.254.0.1",
+    "public": false
+  },
+  {
+    "ip": "169.254.255.255",
+    "public": false
+  },
+  {
+    "ip": "169.255.0.0",
+    "public": true
+  },
+  {
+    "ip": "172.15.255.255",
+    "public": true
+  },
+  {
+    "ip": "172.16.0.0",
+    "public": false
+  },
+  {
+    "ip": "172.16.0.1",
+    "public": false
+  },
+  {
+    "ip": "172.31.255.255",
+    "public": false
+  },
+  {
+    "ip": "172.32.0.0",
+    "public": true
+  },
+  {
+    "ip": "191.255.255.255",
+    "public": true
+  },
+  {
+    "ip": "192.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "192.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "192.0.0.255",
+    "public": false
+  },
+  {
+    "ip": "192.0.1.0",
+    "public": true
+  },
+  {
+    "ip": "192.0.1.255",
+    "public": true
+  },
+  {
+    "ip": "192.0.2.0",
+    "public": false
+  },
+  {
+    "ip": "192.0.2.1",
+    "public": false
+  },
+  {
+    "ip": "192.0.2.255",
+    "public": false
+  },
+  {
+    "ip": "192.0.3.0",
+    "public": true
+  },
+  {
+    "ip": "192.167.255.255",
+    "public": true
+  },
+  {
+    "ip": "192.168.0.0",
+    "public": false
+  },
+  {
+    "ip": "192.168.0.1",
+    "public": false
+  },
+  {
+    "ip": "192.168.255.255",
+    "public": false
+  },
+  {
+    "ip": "192.169.0.0",
+    "public": true
+  },
+  {
+    "ip": "192.88.100.0",
+    "public": true
+  },
+  {
+    "ip": "192.88.98.255",
+    "public": true
+  },
+  {
+    "ip": "192.88.99.0",
+    "public": false
+  },
+  {
+    "ip": "192.88.99.1",
+    "public": false
+  },
+  {
+    "ip": "192.88.99.255",
+    "public": false
+  },
+  {
+    "ip": "198.17.255.255",
+    "public": true
+  },
+  {
+    "ip": "198.18.0.0",
+    "public": false
+  },
+  {
+    "ip": "198.18.0.1",
+    "public": false
+  },
+  {
+    "ip": "198.19.255.255",
+    "public": false
+  },
+  {
+    "ip": "198.20.0.0",
+    "public": true
+  },
+  {
+    "ip": "198.51.100.0",
+    "public": false
+  },
+  {
+    "ip": "198.51.100.1",
+    "public": false
+  },
+  {
+    "ip": "198.51.100.255",
+    "public": false
+  },
+  {
+    "ip": "198.51.101.0",
+    "public": true
+  },
+  {
+    "ip": "198.51.99.255",
+    "public": true
+  },
+  {
+    "ip": "2000:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": true
+  },
+  {
+    "ip": "2001:1ff:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": false
+  },
+  {
+    "ip": "2001:200::",
+    "public": true
+  },
+  {
+    "ip": "2001::",
+    "public": false
+  },
+  {
+    "ip": "2001::1",
+    "public": false
+  },
+  {
+    "ip": "2001:db7:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": true
+  },
+  {
+    "ip": "2001:db8::",
+    "public": false
+  },
+  {
+    "ip": "2001:db8::1",
+    "public": false
+  },
+  {
+    "ip": "2001:db8:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": false
+  },
+  {
+    "ip": "2001:db9::",
+    "public": true
+  },
+  {
+    "ip": "203.0.112.255",
+    "public": true
+  },
+  {
+    "ip": "203.0.113.0",
+    "public": false
+  },
+  {
+    "ip": "203.0.113.1",
+    "public": false
+  },
+  {
+    "ip": "203.0.113.255",
+    "public": false
+  },
+  {
+    "ip": "203.0.114.0",
+    "public": true
+  },
+  {
+    "ip": "223.255.255.255",
+    "public": true
+  },
+  {
+    "ip": "224.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "224.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "239.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "240.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "240.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "255.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "2606:4700:4700::1111",
+    "public": true
+  },
+  {
+    "ip": "64:ff9a:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": true
+  },
+  {
+    "ip": "64:ff9b:0:ffff:ffff:ffff:ffff:ffff",
+    "public": true
+  },
+  {
+    "ip": "64:ff9b:1::",
+    "public": false
+  },
+  {
+    "ip": "64:ff9b:1::1",
+    "public": false
+  },
+  {
+    "ip": "64:ff9b:1:ffff:ffff:ffff:ffff:ffff",
+    "public": false
+  },
+  {
+    "ip": "64:ff9b:2::",
+    "public": true
+  },
+  {
+    "ip": "64:ff9b::",
+    "public": false
+  },
+  {
+    "ip": "64:ff9b::1",
+    "public": false
+  },
+  {
+    "ip": "64:ff9b::1:0:0",
+    "public": true
+  },
+  {
+    "ip": "64:ff9b::ffff:ffff",
+    "public": false
+  },
+  {
+    "ip": "8.8.8.8",
+    "public": true
+  },
+  {
+    "ip": "8.8.8.8%eth0",
+    "public": false
+  },
+  {
+    "ip": "9.255.255.255",
+    "public": true
+  },
+  {
+    "ip": "::",
+    "public": false
+  },
+  {
+    "ip": "::1",
+    "public": false
+  },
+  {
+    "ip": "::1%lo",
+    "public": false
+  },
+  {
+    "ip": "::2",
+    "public": true
+  },
+  {
+    "ip": "::ffff:0.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:0.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:0.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:1.0.0.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:10.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:10.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:10.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:100.127.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:100.128.0.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:100.63.255.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:100.64.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:100.64.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:11.0.0.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:126.255.255.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:127.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:127.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:127.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:128.0.0.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:169.253.255.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:169.254.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:169.254.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:169.254.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:169.255.0.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:172.15.255.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:172.16.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:172.16.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:172.31.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:172.32.0.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:191.255.255.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:192.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.0.0.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.0.1.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:192.0.1.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:192.0.2.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.0.2.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.0.2.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.0.3.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:192.167.255.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:192.168.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.168.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.168.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.169.0.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:192.88.100.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:192.88.98.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:192.88.99.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.88.99.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:192.88.99.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:198.17.255.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:198.18.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:198.18.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:198.19.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:198.20.0.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:198.51.100.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:198.51.100.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:198.51.100.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:198.51.101.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:198.51.99.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:203.0.112.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:203.0.113.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:203.0.113.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:203.0.113.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:203.0.114.0",
+    "public": true
+  },
+  {
+    "ip": "::ffff:223.255.255.255",
+    "public": true
+  },
+  {
+    "ip": "::ffff:224.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:224.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:239.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:240.0.0.0",
+    "public": false
+  },
+  {
+    "ip": "::ffff:240.0.0.1",
+    "public": false
+  },
+  {
+    "ip": "::ffff:255.255.255.255",
+    "public": false
+  },
+  {
+    "ip": "::ffff:9.255.255.255",
+    "public": true
+  },
+  {
+    "ip": "bad",
+    "public": false
+  },
+  {
+    "ip": "fbff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": true
+  },
+  {
+    "ip": "fc00::",
+    "public": false
+  },
+  {
+    "ip": "fc00::1",
+    "public": false
+  },
+  {
+    "ip": "fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": false
+  },
+  {
+    "ip": "fe00::",
+    "public": true
+  },
+  {
+    "ip": "fe7f:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": true
+  },
+  {
+    "ip": "fe80::",
+    "public": false
+  },
+  {
+    "ip": "fe80::1",
+    "public": false
+  },
+  {
+    "ip": "fe80::1%eth0",
+    "public": false
+  },
+  {
+    "ip": "febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": false
+  },
+  {
+    "ip": "fec0::",
+    "public": true
+  },
+  {
+    "ip": "feff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": true
+  },
+  {
+    "ip": "ff00::",
+    "public": false
+  },
+  {
+    "ip": "ff00::1",
+    "public": false
+  },
+  {
+    "ip": "ff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": true
+  },
+  {
+    "ip": "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",
+    "public": false
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "command": "true",
+    "wrapped": "__c='true'\n__out=$(bash -c \"$__c\" 2\u003e\u00261); __st=$?; __pause=30\nwhile :; do\n  sleep \"$__pause\"; [ \"$__pause\" -lt 300 ] \u0026\u0026 __pause=$((__pause*2)) \u0026\u0026 [ \"$__pause\" -gt 300 ] \u0026\u0026 __pause=300\n  __now=$(bash -c \"$__c\" 2\u003e\u00261); __nst=$?\n  if [ \"$__now\" != \"$__out\" ] || [ \"$__nst\" != \"$__st\" ]; then\n    printf '%s\\n[changed: exit status %s, was %s]\\n' \"$__now\" \"$__nst\" \"$__st\"; exit \"$__nst\"\n  fi\ndone"
+  },
+  {
+    "command": "echo 'quoted'",
+    "wrapped": "__c='echo '\\''quoted'\\'''\n__out=$(bash -c \"$__c\" 2\u003e\u00261); __st=$?; __pause=30\nwhile :; do\n  sleep \"$__pause\"; [ \"$__pause\" -lt 300 ] \u0026\u0026 __pause=$((__pause*2)) \u0026\u0026 [ \"$__pause\" -gt 300 ] \u0026\u0026 __pause=300\n  __now=$(bash -c \"$__c\" 2\u003e\u00261); __nst=$?\n  if [ \"$__now\" != \"$__out\" ] || [ \"$__nst\" != \"$__st\" ]; then\n    printf '%s\\n[changed: exit status %s, was %s]\\n' \"$__now\" \"$__nst\" \"$__st\"; exit \"$__nst\"\n  fi\ndone"
+  },
+  {
+    "command": "printf '%s\\n' \"$HOME\"",
+    "wrapped": "__c='printf '\\''%s\\n'\\'' \"$HOME\"'\n__out=$(bash -c \"$__c\" 2\u003e\u00261); __st=$?; __pause=30\nwhile :; do\n  sleep \"$__pause\"; [ \"$__pause\" -lt 300 ] \u0026\u0026 __pause=$((__pause*2)) \u0026\u0026 [ \"$__pause\" -gt 300 ] \u0026\u0026 __pause=300\n  __now=$(bash -c \"$__c\" 2\u003e\u00261); __nst=$?\n  if [ \"$__now\" != \"$__out\" ] || [ \"$__nst\" != \"$__st\" ]; then\n    printf '%s\\n[changed: exit status %s, was %s]\\n' \"$__now\" \"$__nst\" \"$__st\"; exit \"$__nst\"\n  fi\ndone"
+  },
+  {
+    "command": "a\nb",
+    "wrapped": "__c='a\nb'\n__out=$(bash -c \"$__c\" 2\u003e\u00261); __st=$?; __pause=30\nwhile :; do\n  sleep \"$__pause\"; [ \"$__pause\" -lt 300 ] \u0026\u0026 __pause=$((__pause*2)) \u0026\u0026 [ \"$__pause\" -gt 300 ] \u0026\u0026 __pause=300\n  __now=$(bash -c \"$__c\" 2\u003e\u00261); __nst=$?\n  if [ \"$__now\" != \"$__out\" ] || [ \"$__nst\" != \"$__st\" ]; then\n    printf '%s\\n[changed: exit status %s, was %s]\\n' \"$__now\" \"$__nst\" \"$__st\"; exit \"$__nst\"\n  fi\ndone"
+  }
+]
