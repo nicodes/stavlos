@@ -7,6 +7,7 @@ pub mod config;
 pub mod duration;
 pub mod event;
 pub mod eventlog;
+pub mod httpx;
 pub mod instructions;
 pub mod model;
 pub mod paths;
