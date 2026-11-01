@@ -1,0 +1,44 @@
+[
+  {
+    "action": "",
+    "arg": "",
+    "prompt": "",
+    "raw": ""
+  },
+  {
+    "action": "",
+    "arg": "",
+    "prompt": "",
+    "raw": "sv"
+  },
+  {
+    "action": "allow",
+    "arg": "",
+    "prompt": "p",
+    "raw": "sv|p|allow|"
+  },
+  {
+    "action": "deny",
+    "arg": "reason",
+    "prompt": "p",
+    "raw": "sv|p|deny|reason"
+  },
+  {
+    "action": "",
+    "arg": "",
+    "prompt": "",
+    "raw": "sv|p|allow|bad|extra"
+  },
+  {
+    "action": "",
+    "arg": "",
+    "prompt": "",
+    "raw": "xx|p|allow|"
+  },
+  {
+    "action": "",
+    "arg": "",
+    "prompt": "",
+    "raw": "sv|||"
+  }
+]

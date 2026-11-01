@@ -1,0 +1,6050 @@
+[
+  {
+    "expected": "A tool",
+    "raw": "a_tool"
+  },
+  {
+    "expected": "B tool",
+    "raw": "b_tool"
+  },
+  {
+    "expected": "C tool",
+    "raw": "c_tool"
+  },
+  {
+    "expected": "D tool",
+    "raw": "d_tool"
+  },
+  {
+    "expected": "E tool",
+    "raw": "e_tool"
+  },
+  {
+    "expected": "F tool",
+    "raw": "f_tool"
+  },
+  {
+    "expected": "G tool",
+    "raw": "g_tool"
+  },
+  {
+    "expected": "H tool",
+    "raw": "h_tool"
+  },
+  {
+    "expected": "I tool",
+    "raw": "i_tool"
+  },
+  {
+    "expected": "J tool",
+    "raw": "j_tool"
+  },
+  {
+    "expected": "K tool",
+    "raw": "k_tool"
+  },
+  {
+    "expected": "L tool",
+    "raw": "l_tool"
+  },
+  {
+    "expected": "M tool",
+    "raw": "m_tool"
+  },
+  {
+    "expected": "N tool",
+    "raw": "n_tool"
+  },
+  {
+    "expected": "O tool",
+    "raw": "o_tool"
+  },
+  {
+    "expected": "P tool",
+    "raw": "p_tool"
+  },
+  {
+    "expected": "Q tool",
+    "raw": "q_tool"
+  },
+  {
+    "expected": "R tool",
+    "raw": "r_tool"
+  },
+  {
+    "expected": "S tool",
+    "raw": "s_tool"
+  },
+  {
+    "expected": "T tool",
+    "raw": "t_tool"
+  },
+  {
+    "expected": "U tool",
+    "raw": "u_tool"
+  },
+  {
+    "expected": "V tool",
+    "raw": "v_tool"
+  },
+  {
+    "expected": "W tool",
+    "raw": "w_tool"
+  },
+  {
+    "expected": "X tool",
+    "raw": "x_tool"
+  },
+  {
+    "expected": "Y tool",
+    "raw": "y_tool"
+  },
+  {
+    "expected": "Z tool",
+    "raw": "z_tool"
+  },
+  {
+    "expected": "Μ tool",
+    "raw": "µ_tool"
+  },
+  {
+    "expected": "À tool",
+    "raw": "à_tool"
+  },
+  {
+    "expected": "Á tool",
+    "raw": "á_tool"
+  },
+  {
+    "expected": "Â tool",
+    "raw": "â_tool"
+  },
+  {
+    "expected": "Ã tool",
+    "raw": "ã_tool"
+  },
+  {
+    "expected": "Ä tool",
+    "raw": "ä_tool"
+  },
+  {
+    "expected": "Å tool",
+    "raw": "å_tool"
+  },
+  {
+    "expected": "Æ tool",
+    "raw": "æ_tool"
+  },
+  {
+    "expected": "Ç tool",
+    "raw": "ç_tool"
+  },
+  {
+    "expected": "È tool",
+    "raw": "è_tool"
+  },
+  {
+    "expected": "É tool",
+    "raw": "é_tool"
+  },
+  {
+    "expected": "Ê tool",
+    "raw": "ê_tool"
+  },
+  {
+    "expected": "Ë tool",
+    "raw": "ë_tool"
+  },
+  {
+    "expected": "Ì tool",
+    "raw": "ì_tool"
+  },
+  {
+    "expected": "Í tool",
+    "raw": "í_tool"
+  },
+  {
+    "expected": "Î tool",
+    "raw": "î_tool"
+  },
+  {
+    "expected": "Ï tool",
+    "raw": "ï_tool"
+  },
+  {
+    "expected": "Ð tool",
+    "raw": "ð_tool"
+  },
+  {
+    "expected": "Ñ tool",
+    "raw": "ñ_tool"
+  },
+  {
+    "expected": "Ò tool",
+    "raw": "ò_tool"
+  },
+  {
+    "expected": "Ó tool",
+    "raw": "ó_tool"
+  },
+  {
+    "expected": "Ô tool",
+    "raw": "ô_tool"
+  },
+  {
+    "expected": "Õ tool",
+    "raw": "õ_tool"
+  },
+  {
+    "expected": "Ö tool",
+    "raw": "ö_tool"
+  },
+  {
+    "expected": "Ø tool",
+    "raw": "ø_tool"
+  },
+  {
+    "expected": "Ù tool",
+    "raw": "ù_tool"
+  },
+  {
+    "expected": "Ú tool",
+    "raw": "ú_tool"
+  },
+  {
+    "expected": "Û tool",
+    "raw": "û_tool"
+  },
+  {
+    "expected": "Ü tool",
+    "raw": "ü_tool"
+  },
+  {
+    "expected": "Ý tool",
+    "raw": "ý_tool"
+  },
+  {
+    "expected": "Þ tool",
+    "raw": "þ_tool"
+  },
+  {
+    "expected": "Ÿ tool",
+    "raw": "ÿ_tool"
+  },
+  {
+    "expected": "Ā tool",
+    "raw": "ā_tool"
+  },
+  {
+    "expected": "Ă tool",
+    "raw": "ă_tool"
+  },
+  {
+    "expected": "Ą tool",
+    "raw": "ą_tool"
+  },
+  {
+    "expected": "Ć tool",
+    "raw": "ć_tool"
+  },
+  {
+    "expected": "Ĉ tool",
+    "raw": "ĉ_tool"
+  },
+  {
+    "expected": "Ċ tool",
+    "raw": "ċ_tool"
+  },
+  {
+    "expected": "Č tool",
+    "raw": "č_tool"
+  },
+  {
+    "expected": "Ď tool",
+    "raw": "ď_tool"
+  },
+  {
+    "expected": "Đ tool",
+    "raw": "đ_tool"
+  },
+  {
+    "expected": "Ē tool",
+    "raw": "ē_tool"
+  },
+  {
+    "expected": "Ĕ tool",
+    "raw": "ĕ_tool"
+  },
+  {
+    "expected": "Ė tool",
+    "raw": "ė_tool"
+  },
+  {
+    "expected": "Ę tool",
+    "raw": "ę_tool"
+  },
+  {
+    "expected": "Ě tool",
+    "raw": "ě_tool"
+  },
+  {
+    "expected": "Ĝ tool",
+    "raw": "ĝ_tool"
+  },
+  {
+    "expected": "Ğ tool",
+    "raw": "ğ_tool"
+  },
+  {
+    "expected": "Ġ tool",
+    "raw": "ġ_tool"
+  },
+  {
+    "expected": "Ģ tool",
+    "raw": "ģ_tool"
+  },
+  {
+    "expected": "Ĥ tool",
+    "raw": "ĥ_tool"
+  },
+  {
+    "expected": "Ħ tool",
+    "raw": "ħ_tool"
+  },
+  {
+    "expected": "Ĩ tool",
+    "raw": "ĩ_tool"
+  },
+  {
+    "expected": "Ī tool",
+    "raw": "ī_tool"
+  },
+  {
+    "expected": "Ĭ tool",
+    "raw": "ĭ_tool"
+  },
+  {
+    "expected": "Į tool",
+    "raw": "į_tool"
+  },
+  {
+    "expected": "I tool",
+    "raw": "ı_tool"
+  },
+  {
+    "expected": "Ĳ tool",
+    "raw": "ĳ_tool"
+  },
+  {
+    "expected": "Ĵ tool",
+    "raw": "ĵ_tool"
+  },
+  {
+    "expected": "Ķ tool",
+    "raw": "ķ_tool"
+  },
+  {
+    "expected": "Ĺ tool",
+    "raw": "ĺ_tool"
+  },
+  {
+    "expected": "Ļ tool",
+    "raw": "ļ_tool"
+  },
+  {
+    "expected": "Ľ tool",
+    "raw": "ľ_tool"
+  },
+  {
+    "expected": "Ŀ tool",
+    "raw": "ŀ_tool"
+  },
+  {
+    "expected": "Ł tool",
+    "raw": "ł_tool"
+  },
+  {
+    "expected": "Ń tool",
+    "raw": "ń_tool"
+  },
+  {
+    "expected": "Ņ tool",
+    "raw": "ņ_tool"
+  },
+  {
+    "expected": "Ň tool",
+    "raw": "ň_tool"
+  },
+  {
+    "expected": "Ŋ tool",
+    "raw": "ŋ_tool"
+  },
+  {
+    "expected": "Ō tool",
+    "raw": "ō_tool"
+  },
+  {
+    "expected": "Ŏ tool",
+    "raw": "ŏ_tool"
+  },
+  {
+    "expected": "Ő tool",
+    "raw": "ő_tool"
+  },
+  {
+    "expected": "Œ tool",
+    "raw": "œ_tool"
+  },
+  {
+    "expected": "Ŕ tool",
+    "raw": "ŕ_tool"
+  },
+  {
+    "expected": "Ŗ tool",
+    "raw": "ŗ_tool"
+  },
+  {
+    "expected": "Ř tool",
+    "raw": "ř_tool"
+  },
+  {
+    "expected": "Ś tool",
+    "raw": "ś_tool"
+  },
+  {
+    "expected": "Ŝ tool",
+    "raw": "ŝ_tool"
+  },
+  {
+    "expected": "Ş tool",
+    "raw": "ş_tool"
+  },
+  {
+    "expected": "Š tool",
+    "raw": "š_tool"
+  },
+  {
+    "expected": "Ţ tool",
+    "raw": "ţ_tool"
+  },
+  {
+    "expected": "Ť tool",
+    "raw": "ť_tool"
+  },
+  {
+    "expected": "Ŧ tool",
+    "raw": "ŧ_tool"
+  },
+  {
+    "expected": "Ũ tool",
+    "raw": "ũ_tool"
+  },
+  {
+    "expected": "Ū tool",
+    "raw": "ū_tool"
+  },
+  {
+    "expected": "Ŭ tool",
+    "raw": "ŭ_tool"
+  },
+  {
+    "expected": "Ů tool",
+    "raw": "ů_tool"
+  },
+  {
+    "expected": "Ű tool",
+    "raw": "ű_tool"
+  },
+  {
+    "expected": "Ų tool",
+    "raw": "ų_tool"
+  },
+  {
+    "expected": "Ŵ tool",
+    "raw": "ŵ_tool"
+  },
+  {
+    "expected": "Ŷ tool",
+    "raw": "ŷ_tool"
+  },
+  {
+    "expected": "Ź tool",
+    "raw": "ź_tool"
+  },
+  {
+    "expected": "Ż tool",
+    "raw": "ż_tool"
+  },
+  {
+    "expected": "Ž tool",
+    "raw": "ž_tool"
+  },
+  {
+    "expected": "S tool",
+    "raw": "ſ_tool"
+  },
+  {
+    "expected": "Ƀ tool",
+    "raw": "ƀ_tool"
+  },
+  {
+    "expected": "Ƃ tool",
+    "raw": "ƃ_tool"
+  },
+  {
+    "expected": "Ƅ tool",
+    "raw": "ƅ_tool"
+  },
+  {
+    "expected": "Ƈ tool",
+    "raw": "ƈ_tool"
+  },
+  {
+    "expected": "Ƌ tool",
+    "raw": "ƌ_tool"
+  },
+  {
+    "expected": "Ƒ tool",
+    "raw": "ƒ_tool"
+  },
+  {
+    "expected": "Ƕ tool",
+    "raw": "ƕ_tool"
+  },
+  {
+    "expected": "Ƙ tool",
+    "raw": "ƙ_tool"
+  },
+  {
+    "expected": "Ƚ tool",
+    "raw": "ƚ_tool"
+  },
+  {
+    "expected": "Ƛ tool",
+    "raw": "ƛ_tool"
+  },
+  {
+    "expected": "Ƞ tool",
+    "raw": "ƞ_tool"
+  },
+  {
+    "expected": "Ơ tool",
+    "raw": "ơ_tool"
+  },
+  {
+    "expected": "Ƣ tool",
+    "raw": "ƣ_tool"
+  },
+  {
+    "expected": "Ƥ tool",
+    "raw": "ƥ_tool"
+  },
+  {
+    "expected": "Ƨ tool",
+    "raw": "ƨ_tool"
+  },
+  {
+    "expected": "Ƭ tool",
+    "raw": "ƭ_tool"
+  },
+  {
+    "expected": "Ư tool",
+    "raw": "ư_tool"
+  },
+  {
+    "expected": "Ƴ tool",
+    "raw": "ƴ_tool"
+  },
+  {
+    "expected": "Ƶ tool",
+    "raw": "ƶ_tool"
+  },
+  {
+    "expected": "Ƹ tool",
+    "raw": "ƹ_tool"
+  },
+  {
+    "expected": "Ƽ tool",
+    "raw": "ƽ_tool"
+  },
+  {
+    "expected": "Ƿ tool",
+    "raw": "ƿ_tool"
+  },
+  {
+    "expected": "Ǆ tool",
+    "raw": "ǅ_tool"
+  },
+  {
+    "expected": "Ǆ tool",
+    "raw": "ǆ_tool"
+  },
+  {
+    "expected": "Ǉ tool",
+    "raw": "ǈ_tool"
+  },
+  {
+    "expected": "Ǉ tool",
+    "raw": "ǉ_tool"
+  },
+  {
+    "expected": "Ǌ tool",
+    "raw": "ǋ_tool"
+  },
+  {
+    "expected": "Ǌ tool",
+    "raw": "ǌ_tool"
+  },
+  {
+    "expected": "Ǎ tool",
+    "raw": "ǎ_tool"
+  },
+  {
+    "expected": "Ǐ tool",
+    "raw": "ǐ_tool"
+  },
+  {
+    "expected": "Ǒ tool",
+    "raw": "ǒ_tool"
+  },
+  {
+    "expected": "Ǔ tool",
+    "raw": "ǔ_tool"
+  },
+  {
+    "expected": "Ǖ tool",
+    "raw": "ǖ_tool"
+  },
+  {
+    "expected": "Ǘ tool",
+    "raw": "ǘ_tool"
+  },
+  {
+    "expected": "Ǚ tool",
+    "raw": "ǚ_tool"
+  },
+  {
+    "expected": "Ǜ tool",
+    "raw": "ǜ_tool"
+  },
+  {
+    "expected": "Ǝ tool",
+    "raw": "ǝ_tool"
+  },
+  {
+    "expected": "Ǟ tool",
+    "raw": "ǟ_tool"
+  },
+  {
+    "expected": "Ǡ tool",
+    "raw": "ǡ_tool"
+  },
+  {
+    "expected": "Ǣ tool",
+    "raw": "ǣ_tool"
+  },
+  {
+    "expected": "Ǥ tool",
+    "raw": "ǥ_tool"
+  },
+  {
+    "expected": "Ǧ tool",
+    "raw": "ǧ_tool"
+  },
+  {
+    "expected": "Ǩ tool",
+    "raw": "ǩ_tool"
+  },
+  {
+    "expected": "Ǫ tool",
+    "raw": "ǫ_tool"
+  },
+  {
+    "expected": "Ǭ tool",
+    "raw": "ǭ_tool"
+  },
+  {
+    "expected": "Ǯ tool",
+    "raw": "ǯ_tool"
+  },
+  {
+    "expected": "Ǳ tool",
+    "raw": "ǲ_tool"
+  },
+  {
+    "expected": "Ǳ tool",
+    "raw": "ǳ_tool"
+  },
+  {
+    "expected": "Ǵ tool",
+    "raw": "ǵ_tool"
+  },
+  {
+    "expected": "Ǹ tool",
+    "raw": "ǹ_tool"
+  },
+  {
+    "expected": "Ǻ tool",
+    "raw": "ǻ_tool"
+  },
+  {
+    "expected": "Ǽ tool",
+    "raw": "ǽ_tool"
+  },
+  {
+    "expected": "Ǿ tool",
+    "raw": "ǿ_tool"
+  },
+  {
+    "expected": "Ȁ tool",
+    "raw": "ȁ_tool"
+  },
+  {
+    "expected": "Ȃ tool",
+    "raw": "ȃ_tool"
+  },
+  {
+    "expected": "Ȅ tool",
+    "raw": "ȅ_tool"
+  },
+  {
+    "expected": "Ȇ tool",
+    "raw": "ȇ_tool"
+  },
+  {
+    "expected": "Ȉ tool",
+    "raw": "ȉ_tool"
+  },
+  {
+    "expected": "Ȋ tool",
+    "raw": "ȋ_tool"
+  },
+  {
+    "expected": "Ȍ tool",
+    "raw": "ȍ_tool"
+  },
+  {
+    "expected": "Ȏ tool",
+    "raw": "ȏ_tool"
+  },
+  {
+    "expected": "Ȑ tool",
+    "raw": "ȑ_tool"
+  },
+  {
+    "expected": "Ȓ tool",
+    "raw": "ȓ_tool"
+  },
+  {
+    "expected": "Ȕ tool",
+    "raw": "ȕ_tool"
+  },
+  {
+    "expected": "Ȗ tool",
+    "raw": "ȗ_tool"
+  },
+  {
+    "expected": "Ș tool",
+    "raw": "ș_tool"
+  },
+  {
+    "expected": "Ț tool",
+    "raw": "ț_tool"
+  },
+  {
+    "expected": "Ȝ tool",
+    "raw": "ȝ_tool"
+  },
+  {
+    "expected": "Ȟ tool",
+    "raw": "ȟ_tool"
+  },
+  {
+    "expected": "Ȣ tool",
+    "raw": "ȣ_tool"
+  },
+  {
+    "expected": "Ȥ tool",
+    "raw": "ȥ_tool"
+  },
+  {
+    "expected": "Ȧ tool",
+    "raw": "ȧ_tool"
+  },
+  {
+    "expected": "Ȩ tool",
+    "raw": "ȩ_tool"
+  },
+  {
+    "expected": "Ȫ tool",
+    "raw": "ȫ_tool"
+  },
+  {
+    "expected": "Ȭ tool",
+    "raw": "ȭ_tool"
+  },
+  {
+    "expected": "Ȯ tool",
+    "raw": "ȯ_tool"
+  },
+  {
+    "expected": "Ȱ tool",
+    "raw": "ȱ_tool"
+  },
+  {
+    "expected": "Ȳ tool",
+    "raw": "ȳ_tool"
+  },
+  {
+    "expected": "Ȼ tool",
+    "raw": "ȼ_tool"
+  },
+  {
+    "expected": "Ȿ tool",
+    "raw": "ȿ_tool"
+  },
+  {
+    "expected": "Ɀ tool",
+    "raw": "ɀ_tool"
+  },
+  {
+    "expected": "Ɂ tool",
+    "raw": "ɂ_tool"
+  },
+  {
+    "expected": "Ɇ tool",
+    "raw": "ɇ_tool"
+  },
+  {
+    "expected": "Ɉ tool",
+    "raw": "ɉ_tool"
+  },
+  {
+    "expected": "Ɋ tool",
+    "raw": "ɋ_tool"
+  },
+  {
+    "expected": "Ɍ tool",
+    "raw": "ɍ_tool"
+  },
+  {
+    "expected": "Ɏ tool",
+    "raw": "ɏ_tool"
+  },
+  {
+    "expected": "Ɐ tool",
+    "raw": "ɐ_tool"
+  },
+  {
+    "expected": "Ɑ tool",
+    "raw": "ɑ_tool"
+  },
+  {
+    "expected": "Ɒ tool",
+    "raw": "ɒ_tool"
+  },
+  {
+    "expected": "Ɓ tool",
+    "raw": "ɓ_tool"
+  },
+  {
+    "expected": "Ɔ tool",
+    "raw": "ɔ_tool"
+  },
+  {
+    "expected": "Ɖ tool",
+    "raw": "ɖ_tool"
+  },
+  {
+    "expected": "Ɗ tool",
+    "raw": "ɗ_tool"
+  },
+  {
+    "expected": "Ə tool",
+    "raw": "ə_tool"
+  },
+  {
+    "expected": "Ɛ tool",
+    "raw": "ɛ_tool"
+  },
+  {
+    "expected": "Ɜ tool",
+    "raw": "ɜ_tool"
+  },
+  {
+    "expected": "Ɠ tool",
+    "raw": "ɠ_tool"
+  },
+  {
+    "expected": "Ɡ tool",
+    "raw": "ɡ_tool"
+  },
+  {
+    "expected": "Ɣ tool",
+    "raw": "ɣ_tool"
+  },
+  {
+    "expected": "Ɤ tool",
+    "raw": "ɤ_tool"
+  },
+  {
+    "expected": "Ɥ tool",
+    "raw": "ɥ_tool"
+  },
+  {
+    "expected": "Ɦ tool",
+    "raw": "ɦ_tool"
+  },
+  {
+    "expected": "Ɨ tool",
+    "raw": "ɨ_tool"
+  },
+  {
+    "expected": "Ɩ tool",
+    "raw": "ɩ_tool"
+  },
+  {
+    "expected": "Ɪ tool",
+    "raw": "ɪ_tool"
+  },
+  {
+    "expected": "Ɫ tool",
+    "raw": "ɫ_tool"
+  },
+  {
+    "expected": "Ɬ tool",
+    "raw": "ɬ_tool"
+  },
+  {
+    "expected": "Ɯ tool",
+    "raw": "ɯ_tool"
+  },
+  {
+    "expected": "Ɱ tool",
+    "raw": "ɱ_tool"
+  },
+  {
+    "expected": "Ɲ tool",
+    "raw": "ɲ_tool"
+  },
+  {
+    "expected": "Ɵ tool",
+    "raw": "ɵ_tool"
+  },
+  {
+    "expected": "Ɽ tool",
+    "raw": "ɽ_tool"
+  },
+  {
+    "expected": "Ʀ tool",
+    "raw": "ʀ_tool"
+  },
+  {
+    "expected": "Ʂ tool",
+    "raw": "ʂ_tool"
+  },
+  {
+    "expected": "Ʃ tool",
+    "raw": "ʃ_tool"
+  },
+  {
+    "expected": "Ʇ tool",
+    "raw": "ʇ_tool"
+  },
+  {
+    "expected": "Ʈ tool",
+    "raw": "ʈ_tool"
+  },
+  {
+    "expected": "Ʉ tool",
+    "raw": "ʉ_tool"
+  },
+  {
+    "expected": "Ʊ tool",
+    "raw": "ʊ_tool"
+  },
+  {
+    "expected": "Ʋ tool",
+    "raw": "ʋ_tool"
+  },
+  {
+    "expected": "Ʌ tool",
+    "raw": "ʌ_tool"
+  },
+  {
+    "expected": "Ʒ tool",
+    "raw": "ʒ_tool"
+  },
+  {
+    "expected": "Ʝ tool",
+    "raw": "ʝ_tool"
+  },
+  {
+    "expected": "Ʞ tool",
+    "raw": "ʞ_tool"
+  },
+  {
+    "expected": "Ι tool",
+    "raw": "ͅ_tool"
+  },
+  {
+    "expected": "Ͱ tool",
+    "raw": "ͱ_tool"
+  },
+  {
+    "expected": "Ͳ tool",
+    "raw": "ͳ_tool"
+  },
+  {
+    "expected": "Ͷ tool",
+    "raw": "ͷ_tool"
+  },
+  {
+    "expected": "Ͻ tool",
+    "raw": "ͻ_tool"
+  },
+  {
+    "expected": "Ͼ tool",
+    "raw": "ͼ_tool"
+  },
+  {
+    "expected": "Ͽ tool",
+    "raw": "ͽ_tool"
+  },
+  {
+    "expected": "Ά tool",
+    "raw": "ά_tool"
+  },
+  {
+    "expected": "Έ tool",
+    "raw": "έ_tool"
+  },
+  {
+    "expected": "Ή tool",
+    "raw": "ή_tool"
+  },
+  {
+    "expected": "Ί tool",
+    "raw": "ί_tool"
+  },
+  {
+    "expected": "Α tool",
+    "raw": "α_tool"
+  },
+  {
+    "expected": "Β tool",
+    "raw": "β_tool"
+  },
+  {
+    "expected": "Γ tool",
+    "raw": "γ_tool"
+  },
+  {
+    "expected": "Δ tool",
+    "raw": "δ_tool"
+  },
+  {
+    "expected": "Ε tool",
+    "raw": "ε_tool"
+  },
+  {
+    "expected": "Ζ tool",
+    "raw": "ζ_tool"
+  },
+  {
+    "expected": "Η tool",
+    "raw": "η_tool"
+  },
+  {
+    "expected": "Θ tool",
+    "raw": "θ_tool"
+  },
+  {
+    "expected": "Ι tool",
+    "raw": "ι_tool"
+  },
+  {
+    "expected": "Κ tool",
+    "raw": "κ_tool"
+  },
+  {
+    "expected": "Λ tool",
+    "raw": "λ_tool"
+  },
+  {
+    "expected": "Μ tool",
+    "raw": "μ_tool"
+  },
+  {
+    "expected": "Ν tool",
+    "raw": "ν_tool"
+  },
+  {
+    "expected": "Ξ tool",
+    "raw": "ξ_tool"
+  },
+  {
+    "expected": "Ο tool",
+    "raw": "ο_tool"
+  },
+  {
+    "expected": "Π tool",
+    "raw": "π_tool"
+  },
+  {
+    "expected": "Ρ tool",
+    "raw": "ρ_tool"
+  },
+  {
+    "expected": "Σ tool",
+    "raw": "ς_tool"
+  },
+  {
+    "expected": "Σ tool",
+    "raw": "σ_tool"
+  },
+  {
+    "expected": "Τ tool",
+    "raw": "τ_tool"
+  },
+  {
+    "expected": "Υ tool",
+    "raw": "υ_tool"
+  },
+  {
+    "expected": "Φ tool",
+    "raw": "φ_tool"
+  },
+  {
+    "expected": "Χ tool",
+    "raw": "χ_tool"
+  },
+  {
+    "expected": "Ψ tool",
+    "raw": "ψ_tool"
+  },
+  {
+    "expected": "Ω tool",
+    "raw": "ω_tool"
+  },
+  {
+    "expected": "Ϊ tool",
+    "raw": "ϊ_tool"
+  },
+  {
+    "expected": "Ϋ tool",
+    "raw": "ϋ_tool"
+  },
+  {
+    "expected": "Ό tool",
+    "raw": "ό_tool"
+  },
+  {
+    "expected": "Ύ tool",
+    "raw": "ύ_tool"
+  },
+  {
+    "expected": "Ώ tool",
+    "raw": "ώ_tool"
+  },
+  {
+    "expected": "Β tool",
+    "raw": "ϐ_tool"
+  },
+  {
+    "expected": "Θ tool",
+    "raw": "ϑ_tool"
+  },
+  {
+    "expected": "Φ tool",
+    "raw": "ϕ_tool"
+  },
+  {
+    "expected": "Π tool",
+    "raw": "ϖ_tool"
+  },
+  {
+    "expected": "Ϗ tool",
+    "raw": "ϗ_tool"
+  },
+  {
+    "expected": "Ϙ tool",
+    "raw": "ϙ_tool"
+  },
+  {
+    "expected": "Ϛ tool",
+    "raw": "ϛ_tool"
+  },
+  {
+    "expected": "Ϝ tool",
+    "raw": "ϝ_tool"
+  },
+  {
+    "expected": "Ϟ tool",
+    "raw": "ϟ_tool"
+  },
+  {
+    "expected": "Ϡ tool",
+    "raw": "ϡ_tool"
+  },
+  {
+    "expected": "Ϣ tool",
+    "raw": "ϣ_tool"
+  },
+  {
+    "expected": "Ϥ tool",
+    "raw": "ϥ_tool"
+  },
+  {
+    "expected": "Ϧ tool",
+    "raw": "ϧ_tool"
+  },
+  {
+    "expected": "Ϩ tool",
+    "raw": "ϩ_tool"
+  },
+  {
+    "expected": "Ϫ tool",
+    "raw": "ϫ_tool"
+  },
+  {
+    "expected": "Ϭ tool",
+    "raw": "ϭ_tool"
+  },
+  {
+    "expected": "Ϯ tool",
+    "raw": "ϯ_tool"
+  },
+  {
+    "expected": "Κ tool",
+    "raw": "ϰ_tool"
+  },
+  {
+    "expected": "Ρ tool",
+    "raw": "ϱ_tool"
+  },
+  {
+    "expected": "Ϲ tool",
+    "raw": "ϲ_tool"
+  },
+  {
+    "expected": "Ϳ tool",
+    "raw": "ϳ_tool"
+  },
+  {
+    "expected": "Ε tool",
+    "raw": "ϵ_tool"
+  },
+  {
+    "expected": "Ϸ tool",
+    "raw": "ϸ_tool"
+  },
+  {
+    "expected": "Ϻ tool",
+    "raw": "ϻ_tool"
+  },
+  {
+    "expected": "А tool",
+    "raw": "а_tool"
+  },
+  {
+    "expected": "Б tool",
+    "raw": "б_tool"
+  },
+  {
+    "expected": "В tool",
+    "raw": "в_tool"
+  },
+  {
+    "expected": "Г tool",
+    "raw": "г_tool"
+  },
+  {
+    "expected": "Д tool",
+    "raw": "д_tool"
+  },
+  {
+    "expected": "Е tool",
+    "raw": "е_tool"
+  },
+  {
+    "expected": "Ж tool",
+    "raw": "ж_tool"
+  },
+  {
+    "expected": "З tool",
+    "raw": "з_tool"
+  },
+  {
+    "expected": "И tool",
+    "raw": "и_tool"
+  },
+  {
+    "expected": "Й tool",
+    "raw": "й_tool"
+  },
+  {
+    "expected": "К tool",
+    "raw": "к_tool"
+  },
+  {
+    "expected": "Л tool",
+    "raw": "л_tool"
+  },
+  {
+    "expected": "М tool",
+    "raw": "м_tool"
+  },
+  {
+    "expected": "Н tool",
+    "raw": "н_tool"
+  },
+  {
+    "expected": "О tool",
+    "raw": "о_tool"
+  },
+  {
+    "expected": "П tool",
+    "raw": "п_tool"
+  },
+  {
+    "expected": "Р tool",
+    "raw": "р_tool"
+  },
+  {
+    "expected": "С tool",
+    "raw": "с_tool"
+  },
+  {
+    "expected": "Т tool",
+    "raw": "т_tool"
+  },
+  {
+    "expected": "У tool",
+    "raw": "у_tool"
+  },
+  {
+    "expected": "Ф tool",
+    "raw": "ф_tool"
+  },
+  {
+    "expected": "Х tool",
+    "raw": "х_tool"
+  },
+  {
+    "expected": "Ц tool",
+    "raw": "ц_tool"
+  },
+  {
+    "expected": "Ч tool",
+    "raw": "ч_tool"
+  },
+  {
+    "expected": "Ш tool",
+    "raw": "ш_tool"
+  },
+  {
+    "expected": "Щ tool",
+    "raw": "щ_tool"
+  },
+  {
+    "expected": "Ъ tool",
+    "raw": "ъ_tool"
+  },
+  {
+    "expected": "Ы tool",
+    "raw": "ы_tool"
+  },
+  {
+    "expected": "Ь tool",
+    "raw": "ь_tool"
+  },
+  {
+    "expected": "Э tool",
+    "raw": "э_tool"
+  },
+  {
+    "expected": "Ю tool",
+    "raw": "ю_tool"
+  },
+  {
+    "expected": "Я tool",
+    "raw": "я_tool"
+  },
+  {
+    "expected": "Ѐ tool",
+    "raw": "ѐ_tool"
+  },
+  {
+    "expected": "Ё tool",
+    "raw": "ё_tool"
+  },
+  {
+    "expected": "Ђ tool",
+    "raw": "ђ_tool"
+  },
+  {
+    "expected": "Ѓ tool",
+    "raw": "ѓ_tool"
+  },
+  {
+    "expected": "Є tool",
+    "raw": "є_tool"
+  },
+  {
+    "expected": "Ѕ tool",
+    "raw": "ѕ_tool"
+  },
+  {
+    "expected": "І tool",
+    "raw": "і_tool"
+  },
+  {
+    "expected": "Ї tool",
+    "raw": "ї_tool"
+  },
+  {
+    "expected": "Ј tool",
+    "raw": "ј_tool"
+  },
+  {
+    "expected": "Љ tool",
+    "raw": "љ_tool"
+  },
+  {
+    "expected": "Њ tool",
+    "raw": "њ_tool"
+  },
+  {
+    "expected": "Ћ tool",
+    "raw": "ћ_tool"
+  },
+  {
+    "expected": "Ќ tool",
+    "raw": "ќ_tool"
+  },
+  {
+    "expected": "Ѝ tool",
+    "raw": "ѝ_tool"
+  },
+  {
+    "expected": "Ў tool",
+    "raw": "ў_tool"
+  },
+  {
+    "expected": "Џ tool",
+    "raw": "џ_tool"
+  },
+  {
+    "expected": "Ѡ tool",
+    "raw": "ѡ_tool"
+  },
+  {
+    "expected": "Ѣ tool",
+    "raw": "ѣ_tool"
+  },
+  {
+    "expected": "Ѥ tool",
+    "raw": "ѥ_tool"
+  },
+  {
+    "expected": "Ѧ tool",
+    "raw": "ѧ_tool"
+  },
+  {
+    "expected": "Ѩ tool",
+    "raw": "ѩ_tool"
+  },
+  {
+    "expected": "Ѫ tool",
+    "raw": "ѫ_tool"
+  },
+  {
+    "expected": "Ѭ tool",
+    "raw": "ѭ_tool"
+  },
+  {
+    "expected": "Ѯ tool",
+    "raw": "ѯ_tool"
+  },
+  {
+    "expected": "Ѱ tool",
+    "raw": "ѱ_tool"
+  },
+  {
+    "expected": "Ѳ tool",
+    "raw": "ѳ_tool"
+  },
+  {
+    "expected": "Ѵ tool",
+    "raw": "ѵ_tool"
+  },
+  {
+    "expected": "Ѷ tool",
+    "raw": "ѷ_tool"
+  },
+  {
+    "expected": "Ѹ tool",
+    "raw": "ѹ_tool"
+  },
+  {
+    "expected": "Ѻ tool",
+    "raw": "ѻ_tool"
+  },
+  {
+    "expected": "Ѽ tool",
+    "raw": "ѽ_tool"
+  },
+  {
+    "expected": "Ѿ tool",
+    "raw": "ѿ_tool"
+  },
+  {
+    "expected": "Ҁ tool",
+    "raw": "ҁ_tool"
+  },
+  {
+    "expected": "Ҋ tool",
+    "raw": "ҋ_tool"
+  },
+  {
+    "expected": "Ҍ tool",
+    "raw": "ҍ_tool"
+  },
+  {
+    "expected": "Ҏ tool",
+    "raw": "ҏ_tool"
+  },
+  {
+    "expected": "Ґ tool",
+    "raw": "ґ_tool"
+  },
+  {
+    "expected": "Ғ tool",
+    "raw": "ғ_tool"
+  },
+  {
+    "expected": "Ҕ tool",
+    "raw": "ҕ_tool"
+  },
+  {
+    "expected": "Җ tool",
+    "raw": "җ_tool"
+  },
+  {
+    "expected": "Ҙ tool",
+    "raw": "ҙ_tool"
+  },
+  {
+    "expected": "Қ tool",
+    "raw": "қ_tool"
+  },
+  {
+    "expected": "Ҝ tool",
+    "raw": "ҝ_tool"
+  },
+  {
+    "expected": "Ҟ tool",
+    "raw": "ҟ_tool"
+  },
+  {
+    "expected": "Ҡ tool",
+    "raw": "ҡ_tool"
+  },
+  {
+    "expected": "Ң tool",
+    "raw": "ң_tool"
+  },
+  {
+    "expected": "Ҥ tool",
+    "raw": "ҥ_tool"
+  },
+  {
+    "expected": "Ҧ tool",
+    "raw": "ҧ_tool"
+  },
+  {
+    "expected": "Ҩ tool",
+    "raw": "ҩ_tool"
+  },
+  {
+    "expected": "Ҫ tool",
+    "raw": "ҫ_tool"
+  },
+  {
+    "expected": "Ҭ tool",
+    "raw": "ҭ_tool"
+  },
+  {
+    "expected": "Ү tool",
+    "raw": "ү_tool"
+  },
+  {
+    "expected": "Ұ tool",
+    "raw": "ұ_tool"
+  },
+  {
+    "expected": "Ҳ tool",
+    "raw": "ҳ_tool"
+  },
+  {
+    "expected": "Ҵ tool",
+    "raw": "ҵ_tool"
+  },
+  {
+    "expected": "Ҷ tool",
+    "raw": "ҷ_tool"
+  },
+  {
+    "expected": "Ҹ tool",
+    "raw": "ҹ_tool"
+  },
+  {
+    "expected": "Һ tool",
+    "raw": "һ_tool"
+  },
+  {
+    "expected": "Ҽ tool",
+    "raw": "ҽ_tool"
+  },
+  {
+    "expected": "Ҿ tool",
+    "raw": "ҿ_tool"
+  },
+  {
+    "expected": "Ӂ tool",
+    "raw": "ӂ_tool"
+  },
+  {
+    "expected": "Ӄ tool",
+    "raw": "ӄ_tool"
+  },
+  {
+    "expected": "Ӆ tool",
+    "raw": "ӆ_tool"
+  },
+  {
+    "expected": "Ӈ tool",
+    "raw": "ӈ_tool"
+  },
+  {
+    "expected": "Ӊ tool",
+    "raw": "ӊ_tool"
+  },
+  {
+    "expected": "Ӌ tool",
+    "raw": "ӌ_tool"
+  },
+  {
+    "expected": "Ӎ tool",
+    "raw": "ӎ_tool"
+  },
+  {
+    "expected": "Ӏ tool",
+    "raw": "ӏ_tool"
+  },
+  {
+    "expected": "Ӑ tool",
+    "raw": "ӑ_tool"
+  },
+  {
+    "expected": "Ӓ tool",
+    "raw": "ӓ_tool"
+  },
+  {
+    "expected": "Ӕ tool",
+    "raw": "ӕ_tool"
+  },
+  {
+    "expected": "Ӗ tool",
+    "raw": "ӗ_tool"
+  },
+  {
+    "expected": "Ә tool",
+    "raw": "ә_tool"
+  },
+  {
+    "expected": "Ӛ tool",
+    "raw": "ӛ_tool"
+  },
+  {
+    "expected": "Ӝ tool",
+    "raw": "ӝ_tool"
+  },
+  {
+    "expected": "Ӟ tool",
+    "raw": "ӟ_tool"
+  },
+  {
+    "expected": "Ӡ tool",
+    "raw": "ӡ_tool"
+  },
+  {
+    "expected": "Ӣ tool",
+    "raw": "ӣ_tool"
+  },
+  {
+    "expected": "Ӥ tool",
+    "raw": "ӥ_tool"
+  },
+  {
+    "expected": "Ӧ tool",
+    "raw": "ӧ_tool"
+  },
+  {
+    "expected": "Ө tool",
+    "raw": "ө_tool"
+  },
+  {
+    "expected": "Ӫ tool",
+    "raw": "ӫ_tool"
+  },
+  {
+    "expected": "Ӭ tool",
+    "raw": "ӭ_tool"
+  },
+  {
+    "expected": "Ӯ tool",
+    "raw": "ӯ_tool"
+  },
+  {
+    "expected": "Ӱ tool",
+    "raw": "ӱ_tool"
+  },
+  {
+    "expected": "Ӳ tool",
+    "raw": "ӳ_tool"
+  },
+  {
+    "expected": "Ӵ tool",
+    "raw": "ӵ_tool"
+  },
+  {
+    "expected": "Ӷ tool",
+    "raw": "ӷ_tool"
+  },
+  {
+    "expected": "Ӹ tool",
+    "raw": "ӹ_tool"
+  },
+  {
+    "expected": "Ӻ tool",
+    "raw": "ӻ_tool"
+  },
+  {
+    "expected": "Ӽ tool",
+    "raw": "ӽ_tool"
+  },
+  {
+    "expected": "Ӿ tool",
+    "raw": "ӿ_tool"
+  },
+  {
+    "expected": "Ԁ tool",
+    "raw": "ԁ_tool"
+  },
+  {
+    "expected": "Ԃ tool",
+    "raw": "ԃ_tool"
+  },
+  {
+    "expected": "Ԅ tool",
+    "raw": "ԅ_tool"
+  },
+  {
+    "expected": "Ԇ tool",
+    "raw": "ԇ_tool"
+  },
+  {
+    "expected": "Ԉ tool",
+    "raw": "ԉ_tool"
+  },
+  {
+    "expected": "Ԋ tool",
+    "raw": "ԋ_tool"
+  },
+  {
+    "expected": "Ԍ tool",
+    "raw": "ԍ_tool"
+  },
+  {
+    "expected": "Ԏ tool",
+    "raw": "ԏ_tool"
+  },
+  {
+    "expected": "Ԑ tool",
+    "raw": "ԑ_tool"
+  },
+  {
+    "expected": "Ԓ tool",
+    "raw": "ԓ_tool"
+  },
+  {
+    "expected": "Ԕ tool",
+    "raw": "ԕ_tool"
+  },
+  {
+    "expected": "Ԗ tool",
+    "raw": "ԗ_tool"
+  },
+  {
+    "expected": "Ԙ tool",
+    "raw": "ԙ_tool"
+  },
+  {
+    "expected": "Ԛ tool",
+    "raw": "ԛ_tool"
+  },
+  {
+    "expected": "Ԝ tool",
+    "raw": "ԝ_tool"
+  },
+  {
+    "expected": "Ԟ tool",
+    "raw": "ԟ_tool"
+  },
+  {
+    "expected": "Ԡ tool",
+    "raw": "ԡ_tool"
+  },
+  {
+    "expected": "Ԣ tool",
+    "raw": "ԣ_tool"
+  },
+  {
+    "expected": "Ԥ tool",
+    "raw": "ԥ_tool"
+  },
+  {
+    "expected": "Ԧ tool",
+    "raw": "ԧ_tool"
+  },
+  {
+    "expected": "Ԩ tool",
+    "raw": "ԩ_tool"
+  },
+  {
+    "expected": "Ԫ tool",
+    "raw": "ԫ_tool"
+  },
+  {
+    "expected": "Ԭ tool",
+    "raw": "ԭ_tool"
+  },
+  {
+    "expected": "Ԯ tool",
+    "raw": "ԯ_tool"
+  },
+  {
+    "expected": "Ա tool",
+    "raw": "ա_tool"
+  },
+  {
+    "expected": "Բ tool",
+    "raw": "բ_tool"
+  },
+  {
+    "expected": "Գ tool",
+    "raw": "գ_tool"
+  },
+  {
+    "expected": "Դ tool",
+    "raw": "դ_tool"
+  },
+  {
+    "expected": "Ե tool",
+    "raw": "ե_tool"
+  },
+  {
+    "expected": "Զ tool",
+    "raw": "զ_tool"
+  },
+  {
+    "expected": "Է tool",
+    "raw": "է_tool"
+  },
+  {
+    "expected": "Ը tool",
+    "raw": "ը_tool"
+  },
+  {
+    "expected": "Թ tool",
+    "raw": "թ_tool"
+  },
+  {
+    "expected": "Ժ tool",
+    "raw": "ժ_tool"
+  },
+  {
+    "expected": "Ի tool",
+    "raw": "ի_tool"
+  },
+  {
+    "expected": "Լ tool",
+    "raw": "լ_tool"
+  },
+  {
+    "expected": "Խ tool",
+    "raw": "խ_tool"
+  },
+  {
+    "expected": "Ծ tool",
+    "raw": "ծ_tool"
+  },
+  {
+    "expected": "Կ tool",
+    "raw": "կ_tool"
+  },
+  {
+    "expected": "Հ tool",
+    "raw": "հ_tool"
+  },
+  {
+    "expected": "Ձ tool",
+    "raw": "ձ_tool"
+  },
+  {
+    "expected": "Ղ tool",
+    "raw": "ղ_tool"
+  },
+  {
+    "expected": "Ճ tool",
+    "raw": "ճ_tool"
+  },
+  {
+    "expected": "Մ tool",
+    "raw": "մ_tool"
+  },
+  {
+    "expected": "Յ tool",
+    "raw": "յ_tool"
+  },
+  {
+    "expected": "Ն tool",
+    "raw": "ն_tool"
+  },
+  {
+    "expected": "Շ tool",
+    "raw": "շ_tool"
+  },
+  {
+    "expected": "Ո tool",
+    "raw": "ո_tool"
+  },
+  {
+    "expected": "Չ tool",
+    "raw": "չ_tool"
+  },
+  {
+    "expected": "Պ tool",
+    "raw": "պ_tool"
+  },
+  {
+    "expected": "Ջ tool",
+    "raw": "ջ_tool"
+  },
+  {
+    "expected": "Ռ tool",
+    "raw": "ռ_tool"
+  },
+  {
+    "expected": "Ս tool",
+    "raw": "ս_tool"
+  },
+  {
+    "expected": "Վ tool",
+    "raw": "վ_tool"
+  },
+  {
+    "expected": "Տ tool",
+    "raw": "տ_tool"
+  },
+  {
+    "expected": "Ր tool",
+    "raw": "ր_tool"
+  },
+  {
+    "expected": "Ց tool",
+    "raw": "ց_tool"
+  },
+  {
+    "expected": "Ւ tool",
+    "raw": "ւ_tool"
+  },
+  {
+    "expected": "Փ tool",
+    "raw": "փ_tool"
+  },
+  {
+    "expected": "Ք tool",
+    "raw": "ք_tool"
+  },
+  {
+    "expected": "Օ tool",
+    "raw": "օ_tool"
+  },
+  {
+    "expected": "Ֆ tool",
+    "raw": "ֆ_tool"
+  },
+  {
+    "expected": "Ა tool",
+    "raw": "ა_tool"
+  },
+  {
+    "expected": "Ბ tool",
+    "raw": "ბ_tool"
+  },
+  {
+    "expected": "Გ tool",
+    "raw": "გ_tool"
+  },
+  {
+    "expected": "Დ tool",
+    "raw": "დ_tool"
+  },
+  {
+    "expected": "Ე tool",
+    "raw": "ე_tool"
+  },
+  {
+    "expected": "Ვ tool",
+    "raw": "ვ_tool"
+  },
+  {
+    "expected": "Ზ tool",
+    "raw": "ზ_tool"
+  },
+  {
+    "expected": "Თ tool",
+    "raw": "თ_tool"
+  },
+  {
+    "expected": "Ი tool",
+    "raw": "ი_tool"
+  },
+  {
+    "expected": "Კ tool",
+    "raw": "კ_tool"
+  },
+  {
+    "expected": "Ლ tool",
+    "raw": "ლ_tool"
+  },
+  {
+    "expected": "Მ tool",
+    "raw": "მ_tool"
+  },
+  {
+    "expected": "Ნ tool",
+    "raw": "ნ_tool"
+  },
+  {
+    "expected": "Ო tool",
+    "raw": "ო_tool"
+  },
+  {
+    "expected": "Პ tool",
+    "raw": "პ_tool"
+  },
+  {
+    "expected": "Ჟ tool",
+    "raw": "ჟ_tool"
+  },
+  {
+    "expected": "Რ tool",
+    "raw": "რ_tool"
+  },
+  {
+    "expected": "Ს tool",
+    "raw": "ს_tool"
+  },
+  {
+    "expected": "Ტ tool",
+    "raw": "ტ_tool"
+  },
+  {
+    "expected": "Უ tool",
+    "raw": "უ_tool"
+  },
+  {
+    "expected": "Ფ tool",
+    "raw": "ფ_tool"
+  },
+  {
+    "expected": "Ქ tool",
+    "raw": "ქ_tool"
+  },
+  {
+    "expected": "Ღ tool",
+    "raw": "ღ_tool"
+  },
+  {
+    "expected": "Ყ tool",
+    "raw": "ყ_tool"
+  },
+  {
+    "expected": "Შ tool",
+    "raw": "შ_tool"
+  },
+  {
+    "expected": "Ჩ tool",
+    "raw": "ჩ_tool"
+  },
+  {
+    "expected": "Ც tool",
+    "raw": "ც_tool"
+  },
+  {
+    "expected": "Ძ tool",
+    "raw": "ძ_tool"
+  },
+  {
+    "expected": "Წ tool",
+    "raw": "წ_tool"
+  },
+  {
+    "expected": "Ჭ tool",
+    "raw": "ჭ_tool"
+  },
+  {
+    "expected": "Ხ tool",
+    "raw": "ხ_tool"
+  },
+  {
+    "expected": "Ჯ tool",
+    "raw": "ჯ_tool"
+  },
+  {
+    "expected": "Ჰ tool",
+    "raw": "ჰ_tool"
+  },
+  {
+    "expected": "Ჱ tool",
+    "raw": "ჱ_tool"
+  },
+  {
+    "expected": "Ჲ tool",
+    "raw": "ჲ_tool"
+  },
+  {
+    "expected": "Ჳ tool",
+    "raw": "ჳ_tool"
+  },
+  {
+    "expected": "Ჴ tool",
+    "raw": "ჴ_tool"
+  },
+  {
+    "expected": "Ჵ tool",
+    "raw": "ჵ_tool"
+  },
+  {
+    "expected": "Ჶ tool",
+    "raw": "ჶ_tool"
+  },
+  {
+    "expected": "Ჷ tool",
+    "raw": "ჷ_tool"
+  },
+  {
+    "expected": "Ჸ tool",
+    "raw": "ჸ_tool"
+  },
+  {
+    "expected": "Ჹ tool",
+    "raw": "ჹ_tool"
+  },
+  {
+    "expected": "Ჺ tool",
+    "raw": "ჺ_tool"
+  },
+  {
+    "expected": "Ჽ tool",
+    "raw": "ჽ_tool"
+  },
+  {
+    "expected": "Ჾ tool",
+    "raw": "ჾ_tool"
+  },
+  {
+    "expected": "Ჿ tool",
+    "raw": "ჿ_tool"
+  },
+  {
+    "expected": "Ᏸ tool",
+    "raw": "ᏸ_tool"
+  },
+  {
+    "expected": "Ᏹ tool",
+    "raw": "ᏹ_tool"
+  },
+  {
+    "expected": "Ᏺ tool",
+    "raw": "ᏺ_tool"
+  },
+  {
+    "expected": "Ᏻ tool",
+    "raw": "ᏻ_tool"
+  },
+  {
+    "expected": "Ᏼ tool",
+    "raw": "ᏼ_tool"
+  },
+  {
+    "expected": "Ᏽ tool",
+    "raw": "ᏽ_tool"
+  },
+  {
+    "expected": "В tool",
+    "raw": "ᲀ_tool"
+  },
+  {
+    "expected": "Д tool",
+    "raw": "ᲁ_tool"
+  },
+  {
+    "expected": "О tool",
+    "raw": "ᲂ_tool"
+  },
+  {
+    "expected": "С tool",
+    "raw": "ᲃ_tool"
+  },
+  {
+    "expected": "Т tool",
+    "raw": "ᲄ_tool"
+  },
+  {
+    "expected": "Т tool",
+    "raw": "ᲅ_tool"
+  },
+  {
+    "expected": "Ъ tool",
+    "raw": "ᲆ_tool"
+  },
+  {
+    "expected": "Ѣ tool",
+    "raw": "ᲇ_tool"
+  },
+  {
+    "expected": "Ꙋ tool",
+    "raw": "ᲈ_tool"
+  },
+  {
+    "expected": "Ᲊ tool",
+    "raw": "ᲊ_tool"
+  },
+  {
+    "expected": "Ᵹ tool",
+    "raw": "ᵹ_tool"
+  },
+  {
+    "expected": "Ᵽ tool",
+    "raw": "ᵽ_tool"
+  },
+  {
+    "expected": "Ᶎ tool",
+    "raw": "ᶎ_tool"
+  },
+  {
+    "expected": "Ḁ tool",
+    "raw": "ḁ_tool"
+  },
+  {
+    "expected": "Ḃ tool",
+    "raw": "ḃ_tool"
+  },
+  {
+    "expected": "Ḅ tool",
+    "raw": "ḅ_tool"
+  },
+  {
+    "expected": "Ḇ tool",
+    "raw": "ḇ_tool"
+  },
+  {
+    "expected": "Ḉ tool",
+    "raw": "ḉ_tool"
+  },
+  {
+    "expected": "Ḋ tool",
+    "raw": "ḋ_tool"
+  },
+  {
+    "expected": "Ḍ tool",
+    "raw": "ḍ_tool"
+  },
+  {
+    "expected": "Ḏ tool",
+    "raw": "ḏ_tool"
+  },
+  {
+    "expected": "Ḑ tool",
+    "raw": "ḑ_tool"
+  },
+  {
+    "expected": "Ḓ tool",
+    "raw": "ḓ_tool"
+  },
+  {
+    "expected": "Ḕ tool",
+    "raw": "ḕ_tool"
+  },
+  {
+    "expected": "Ḗ tool",
+    "raw": "ḗ_tool"
+  },
+  {
+    "expected": "Ḙ tool",
+    "raw": "ḙ_tool"
+  },
+  {
+    "expected": "Ḛ tool",
+    "raw": "ḛ_tool"
+  },
+  {
+    "expected": "Ḝ tool",
+    "raw": "ḝ_tool"
+  },
+  {
+    "expected": "Ḟ tool",
+    "raw": "ḟ_tool"
+  },
+  {
+    "expected": "Ḡ tool",
+    "raw": "ḡ_tool"
+  },
+  {
+    "expected": "Ḣ tool",
+    "raw": "ḣ_tool"
+  },
+  {
+    "expected": "Ḥ tool",
+    "raw": "ḥ_tool"
+  },
+  {
+    "expected": "Ḧ tool",
+    "raw": "ḧ_tool"
+  },
+  {
+    "expected": "Ḩ tool",
+    "raw": "ḩ_tool"
+  },
+  {
+    "expected": "Ḫ tool",
+    "raw": "ḫ_tool"
+  },
+  {
+    "expected": "Ḭ tool",
+    "raw": "ḭ_tool"
+  },
+  {
+    "expected": "Ḯ tool",
+    "raw": "ḯ_tool"
+  },
+  {
+    "expected": "Ḱ tool",
+    "raw": "ḱ_tool"
+  },
+  {
+    "expected": "Ḳ tool",
+    "raw": "ḳ_tool"
+  },
+  {
+    "expected": "Ḵ tool",
+    "raw": "ḵ_tool"
+  },
+  {
+    "expected": "Ḷ tool",
+    "raw": "ḷ_tool"
+  },
+  {
+    "expected": "Ḹ tool",
+    "raw": "ḹ_tool"
+  },
+  {
+    "expected": "Ḻ tool",
+    "raw": "ḻ_tool"
+  },
+  {
+    "expected": "Ḽ tool",
+    "raw": "ḽ_tool"
+  },
+  {
+    "expected": "Ḿ tool",
+    "raw": "ḿ_tool"
+  },
+  {
+    "expected": "Ṁ tool",
+    "raw": "ṁ_tool"
+  },
+  {
+    "expected": "Ṃ tool",
+    "raw": "ṃ_tool"
+  },
+  {
+    "expected": "Ṅ tool",
+    "raw": "ṅ_tool"
+  },
+  {
+    "expected": "Ṇ tool",
+    "raw": "ṇ_tool"
+  },
+  {
+    "expected": "Ṉ tool",
+    "raw": "ṉ_tool"
+  },
+  {
+    "expected": "Ṋ tool",
+    "raw": "ṋ_tool"
+  },
+  {
+    "expected": "Ṍ tool",
+    "raw": "ṍ_tool"
+  },
+  {
+    "expected": "Ṏ tool",
+    "raw": "ṏ_tool"
+  },
+  {
+    "expected": "Ṑ tool",
+    "raw": "ṑ_tool"
+  },
+  {
+    "expected": "Ṓ tool",
+    "raw": "ṓ_tool"
+  },
+  {
+    "expected": "Ṕ tool",
+    "raw": "ṕ_tool"
+  },
+  {
+    "expected": "Ṗ tool",
+    "raw": "ṗ_tool"
+  },
+  {
+    "expected": "Ṙ tool",
+    "raw": "ṙ_tool"
+  },
+  {
+    "expected": "Ṛ tool",
+    "raw": "ṛ_tool"
+  },
+  {
+    "expected": "Ṝ tool",
+    "raw": "ṝ_tool"
+  },
+  {
+    "expected": "Ṟ tool",
+    "raw": "ṟ_tool"
+  },
+  {
+    "expected": "Ṡ tool",
+    "raw": "ṡ_tool"
+  },
+  {
+    "expected": "Ṣ tool",
+    "raw": "ṣ_tool"
+  },
+  {
+    "expected": "Ṥ tool",
+    "raw": "ṥ_tool"
+  },
+  {
+    "expected": "Ṧ tool",
+    "raw": "ṧ_tool"
+  },
+  {
+    "expected": "Ṩ tool",
+    "raw": "ṩ_tool"
+  },
+  {
+    "expected": "Ṫ tool",
+    "raw": "ṫ_tool"
+  },
+  {
+    "expected": "Ṭ tool",
+    "raw": "ṭ_tool"
+  },
+  {
+    "expected": "Ṯ tool",
+    "raw": "ṯ_tool"
+  },
+  {
+    "expected": "Ṱ tool",
+    "raw": "ṱ_tool"
+  },
+  {
+    "expected": "Ṳ tool",
+    "raw": "ṳ_tool"
+  },
+  {
+    "expected": "Ṵ tool",
+    "raw": "ṵ_tool"
+  },
+  {
+    "expected": "Ṷ tool",
+    "raw": "ṷ_tool"
+  },
+  {
+    "expected": "Ṹ tool",
+    "raw": "ṹ_tool"
+  },
+  {
+    "expected": "Ṻ tool",
+    "raw": "ṻ_tool"
+  },
+  {
+    "expected": "Ṽ tool",
+    "raw": "ṽ_tool"
+  },
+  {
+    "expected": "Ṿ tool",
+    "raw": "ṿ_tool"
+  },
+  {
+    "expected": "Ẁ tool",
+    "raw": "ẁ_tool"
+  },
+  {
+    "expected": "Ẃ tool",
+    "raw": "ẃ_tool"
+  },
+  {
+    "expected": "Ẅ tool",
+    "raw": "ẅ_tool"
+  },
+  {
+    "expected": "Ẇ tool",
+    "raw": "ẇ_tool"
+  },
+  {
+    "expected": "Ẉ tool",
+    "raw": "ẉ_tool"
+  },
+  {
+    "expected": "Ẋ tool",
+    "raw": "ẋ_tool"
+  },
+  {
+    "expected": "Ẍ tool",
+    "raw": "ẍ_tool"
+  },
+  {
+    "expected": "Ẏ tool",
+    "raw": "ẏ_tool"
+  },
+  {
+    "expected": "Ẑ tool",
+    "raw": "ẑ_tool"
+  },
+  {
+    "expected": "Ẓ tool",
+    "raw": "ẓ_tool"
+  },
+  {
+    "expected": "Ẕ tool",
+    "raw": "ẕ_tool"
+  },
+  {
+    "expected": "Ṡ tool",
+    "raw": "ẛ_tool"
+  },
+  {
+    "expected": "Ạ tool",
+    "raw": "ạ_tool"
+  },
+  {
+    "expected": "Ả tool",
+    "raw": "ả_tool"
+  },
+  {
+    "expected": "Ấ tool",
+    "raw": "ấ_tool"
+  },
+  {
+    "expected": "Ầ tool",
+    "raw": "ầ_tool"
+  },
+  {
+    "expected": "Ẩ tool",
+    "raw": "ẩ_tool"
+  },
+  {
+    "expected": "Ẫ tool",
+    "raw": "ẫ_tool"
+  },
+  {
+    "expected": "Ậ tool",
+    "raw": "ậ_tool"
+  },
+  {
+    "expected": "Ắ tool",
+    "raw": "ắ_tool"
+  },
+  {
+    "expected": "Ằ tool",
+    "raw": "ằ_tool"
+  },
+  {
+    "expected": "Ẳ tool",
+    "raw": "ẳ_tool"
+  },
+  {
+    "expected": "Ẵ tool",
+    "raw": "ẵ_tool"
+  },
+  {
+    "expected": "Ặ tool",
+    "raw": "ặ_tool"
+  },
+  {
+    "expected": "Ẹ tool",
+    "raw": "ẹ_tool"
+  },
+  {
+    "expected": "Ẻ tool",
+    "raw": "ẻ_tool"
+  },
+  {
+    "expected": "Ẽ tool",
+    "raw": "ẽ_tool"
+  },
+  {
+    "expected": "Ế tool",
+    "raw": "ế_tool"
+  },
+  {
+    "expected": "Ề tool",
+    "raw": "ề_tool"
+  },
+  {
+    "expected": "Ể tool",
+    "raw": "ể_tool"
+  },
+  {
+    "expected": "Ễ tool",
+    "raw": "ễ_tool"
+  },
+  {
+    "expected": "Ệ tool",
+    "raw": "ệ_tool"
+  },
+  {
+    "expected": "Ỉ tool",
+    "raw": "ỉ_tool"
+  },
+  {
+    "expected": "Ị tool",
+    "raw": "ị_tool"
+  },
+  {
+    "expected": "Ọ tool",
+    "raw": "ọ_tool"
+  },
+  {
+    "expected": "Ỏ tool",
+    "raw": "ỏ_tool"
+  },
+  {
+    "expected": "Ố tool",
+    "raw": "ố_tool"
+  },
+  {
+    "expected": "Ồ tool",
+    "raw": "ồ_tool"
+  },
+  {
+    "expected": "Ổ tool",
+    "raw": "ổ_tool"
+  },
+  {
+    "expected": "Ỗ tool",
+    "raw": "ỗ_tool"
+  },
+  {
+    "expected": "Ộ tool",
+    "raw": "ộ_tool"
+  },
+  {
+    "expected": "Ớ tool",
+    "raw": "ớ_tool"
+  },
+  {
+    "expected": "Ờ tool",
+    "raw": "ờ_tool"
+  },
+  {
+    "expected": "Ở tool",
+    "raw": "ở_tool"
+  },
+  {
+    "expected": "Ỡ tool",
+    "raw": "ỡ_tool"
+  },
+  {
+    "expected": "Ợ tool",
+    "raw": "ợ_tool"
+  },
+  {
+    "expected": "Ụ tool",
+    "raw": "ụ_tool"
+  },
+  {
+    "expected": "Ủ tool",
+    "raw": "ủ_tool"
+  },
+  {
+    "expected": "Ứ tool",
+    "raw": "ứ_tool"
+  },
+  {
+    "expected": "Ừ tool",
+    "raw": "ừ_tool"
+  },
+  {
+    "expected": "Ử tool",
+    "raw": "ử_tool"
+  },
+  {
+    "expected": "Ữ tool",
+    "raw": "ữ_tool"
+  },
+  {
+    "expected": "Ự tool",
+    "raw": "ự_tool"
+  },
+  {
+    "expected": "Ỳ tool",
+    "raw": "ỳ_tool"
+  },
+  {
+    "expected": "Ỵ tool",
+    "raw": "ỵ_tool"
+  },
+  {
+    "expected": "Ỷ tool",
+    "raw": "ỷ_tool"
+  },
+  {
+    "expected": "Ỹ tool",
+    "raw": "ỹ_tool"
+  },
+  {
+    "expected": "Ỻ tool",
+    "raw": "ỻ_tool"
+  },
+  {
+    "expected": "Ỽ tool",
+    "raw": "ỽ_tool"
+  },
+  {
+    "expected": "Ỿ tool",
+    "raw": "ỿ_tool"
+  },
+  {
+    "expected": "Ἀ tool",
+    "raw": "ἀ_tool"
+  },
+  {
+    "expected": "Ἁ tool",
+    "raw": "ἁ_tool"
+  },
+  {
+    "expected": "Ἂ tool",
+    "raw": "ἂ_tool"
+  },
+  {
+    "expected": "Ἃ tool",
+    "raw": "ἃ_tool"
+  },
+  {
+    "expected": "Ἄ tool",
+    "raw": "ἄ_tool"
+  },
+  {
+    "expected": "Ἅ tool",
+    "raw": "ἅ_tool"
+  },
+  {
+    "expected": "Ἆ tool",
+    "raw": "ἆ_tool"
+  },
+  {
+    "expected": "Ἇ tool",
+    "raw": "ἇ_tool"
+  },
+  {
+    "expected": "Ἐ tool",
+    "raw": "ἐ_tool"
+  },
+  {
+    "expected": "Ἑ tool",
+    "raw": "ἑ_tool"
+  },
+  {
+    "expected": "Ἒ tool",
+    "raw": "ἒ_tool"
+  },
+  {
+    "expected": "Ἓ tool",
+    "raw": "ἓ_tool"
+  },
+  {
+    "expected": "Ἔ tool",
+    "raw": "ἔ_tool"
+  },
+  {
+    "expected": "Ἕ tool",
+    "raw": "ἕ_tool"
+  },
+  {
+    "expected": "Ἠ tool",
+    "raw": "ἠ_tool"
+  },
+  {
+    "expected": "Ἡ tool",
+    "raw": "ἡ_tool"
+  },
+  {
+    "expected": "Ἢ tool",
+    "raw": "ἢ_tool"
+  },
+  {
+    "expected": "Ἣ tool",
+    "raw": "ἣ_tool"
+  },
+  {
+    "expected": "Ἤ tool",
+    "raw": "ἤ_tool"
+  },
+  {
+    "expected": "Ἥ tool",
+    "raw": "ἥ_tool"
+  },
+  {
+    "expected": "Ἦ tool",
+    "raw": "ἦ_tool"
+  },
+  {
+    "expected": "Ἧ tool",
+    "raw": "ἧ_tool"
+  },
+  {
+    "expected": "Ἰ tool",
+    "raw": "ἰ_tool"
+  },
+  {
+    "expected": "Ἱ tool",
+    "raw": "ἱ_tool"
+  },
+  {
+    "expected": "Ἲ tool",
+    "raw": "ἲ_tool"
+  },
+  {
+    "expected": "Ἳ tool",
+    "raw": "ἳ_tool"
+  },
+  {
+    "expected": "Ἴ tool",
+    "raw": "ἴ_tool"
+  },
+  {
+    "expected": "Ἵ tool",
+    "raw": "ἵ_tool"
+  },
+  {
+    "expected": "Ἶ tool",
+    "raw": "ἶ_tool"
+  },
+  {
+    "expected": "Ἷ tool",
+    "raw": "ἷ_tool"
+  },
+  {
+    "expected": "Ὀ tool",
+    "raw": "ὀ_tool"
+  },
+  {
+    "expected": "Ὁ tool",
+    "raw": "ὁ_tool"
+  },
+  {
+    "expected": "Ὂ tool",
+    "raw": "ὂ_tool"
+  },
+  {
+    "expected": "Ὃ tool",
+    "raw": "ὃ_tool"
+  },
+  {
+    "expected": "Ὄ tool",
+    "raw": "ὄ_tool"
+  },
+  {
+    "expected": "Ὅ tool",
+    "raw": "ὅ_tool"
+  },
+  {
+    "expected": "Ὑ tool",
+    "raw": "ὑ_tool"
+  },
+  {
+    "expected": "Ὓ tool",
+    "raw": "ὓ_tool"
+  },
+  {
+    "expected": "Ὕ tool",
+    "raw": "ὕ_tool"
+  },
+  {
+    "expected": "Ὗ tool",
+    "raw": "ὗ_tool"
+  },
+  {
+    "expected": "Ὠ tool",
+    "raw": "ὠ_tool"
+  },
+  {
+    "expected": "Ὡ tool",
+    "raw": "ὡ_tool"
+  },
+  {
+    "expected": "Ὢ tool",
+    "raw": "ὢ_tool"
+  },
+  {
+    "expected": "Ὣ tool",
+    "raw": "ὣ_tool"
+  },
+  {
+    "expected": "Ὤ tool",
+    "raw": "ὤ_tool"
+  },
+  {
+    "expected": "Ὥ tool",
+    "raw": "ὥ_tool"
+  },
+  {
+    "expected": "Ὦ tool",
+    "raw": "ὦ_tool"
+  },
+  {
+    "expected": "Ὧ tool",
+    "raw": "ὧ_tool"
+  },
+  {
+    "expected": "Ὰ tool",
+    "raw": "ὰ_tool"
+  },
+  {
+    "expected": "Ά tool",
+    "raw": "ά_tool"
+  },
+  {
+    "expected": "Ὲ tool",
+    "raw": "ὲ_tool"
+  },
+  {
+    "expected": "Έ tool",
+    "raw": "έ_tool"
+  },
+  {
+    "expected": "Ὴ tool",
+    "raw": "ὴ_tool"
+  },
+  {
+    "expected": "Ή tool",
+    "raw": "ή_tool"
+  },
+  {
+    "expected": "Ὶ tool",
+    "raw": "ὶ_tool"
+  },
+  {
+    "expected": "Ί tool",
+    "raw": "ί_tool"
+  },
+  {
+    "expected": "Ὸ tool",
+    "raw": "ὸ_tool"
+  },
+  {
+    "expected": "Ό tool",
+    "raw": "ό_tool"
+  },
+  {
+    "expected": "Ὺ tool",
+    "raw": "ὺ_tool"
+  },
+  {
+    "expected": "Ύ tool",
+    "raw": "ύ_tool"
+  },
+  {
+    "expected": "Ὼ tool",
+    "raw": "ὼ_tool"
+  },
+  {
+    "expected": "Ώ tool",
+    "raw": "ώ_tool"
+  },
+  {
+    "expected": "ᾈ tool",
+    "raw": "ᾀ_tool"
+  },
+  {
+    "expected": "ᾉ tool",
+    "raw": "ᾁ_tool"
+  },
+  {
+    "expected": "ᾊ tool",
+    "raw": "ᾂ_tool"
+  },
+  {
+    "expected": "ᾋ tool",
+    "raw": "ᾃ_tool"
+  },
+  {
+    "expected": "ᾌ tool",
+    "raw": "ᾄ_tool"
+  },
+  {
+    "expected": "ᾍ tool",
+    "raw": "ᾅ_tool"
+  },
+  {
+    "expected": "ᾎ tool",
+    "raw": "ᾆ_tool"
+  },
+  {
+    "expected": "ᾏ tool",
+    "raw": "ᾇ_tool"
+  },
+  {
+    "expected": "ᾘ tool",
+    "raw": "ᾐ_tool"
+  },
+  {
+    "expected": "ᾙ tool",
+    "raw": "ᾑ_tool"
+  },
+  {
+    "expected": "ᾚ tool",
+    "raw": "ᾒ_tool"
+  },
+  {
+    "expected": "ᾛ tool",
+    "raw": "ᾓ_tool"
+  },
+  {
+    "expected": "ᾜ tool",
+    "raw": "ᾔ_tool"
+  },
+  {
+    "expected": "ᾝ tool",
+    "raw": "ᾕ_tool"
+  },
+  {
+    "expected": "ᾞ tool",
+    "raw": "ᾖ_tool"
+  },
+  {
+    "expected": "ᾟ tool",
+    "raw": "ᾗ_tool"
+  },
+  {
+    "expected": "ᾨ tool",
+    "raw": "ᾠ_tool"
+  },
+  {
+    "expected": "ᾩ tool",
+    "raw": "ᾡ_tool"
+  },
+  {
+    "expected": "ᾪ tool",
+    "raw": "ᾢ_tool"
+  },
+  {
+    "expected": "ᾫ tool",
+    "raw": "ᾣ_tool"
+  },
+  {
+    "expected": "ᾬ tool",
+    "raw": "ᾤ_tool"
+  },
+  {
+    "expected": "ᾭ tool",
+    "raw": "ᾥ_tool"
+  },
+  {
+    "expected": "ᾮ tool",
+    "raw": "ᾦ_tool"
+  },
+  {
+    "expected": "ᾯ tool",
+    "raw": "ᾧ_tool"
+  },
+  {
+    "expected": "Ᾰ tool",
+    "raw": "ᾰ_tool"
+  },
+  {
+    "expected": "Ᾱ tool",
+    "raw": "ᾱ_tool"
+  },
+  {
+    "expected": "ᾼ tool",
+    "raw": "ᾳ_tool"
+  },
+  {
+    "expected": "Ι tool",
+    "raw": "ι_tool"
+  },
+  {
+    "expected": "ῌ tool",
+    "raw": "ῃ_tool"
+  },
+  {
+    "expected": "Ῐ tool",
+    "raw": "ῐ_tool"
+  },
+  {
+    "expected": "Ῑ tool",
+    "raw": "ῑ_tool"
+  },
+  {
+    "expected": "Ῠ tool",
+    "raw": "ῠ_tool"
+  },
+  {
+    "expected": "Ῡ tool",
+    "raw": "ῡ_tool"
+  },
+  {
+    "expected": "Ῥ tool",
+    "raw": "ῥ_tool"
+  },
+  {
+    "expected": "ῼ tool",
+    "raw": "ῳ_tool"
+  },
+  {
+    "expected": "Ⅎ tool",
+    "raw": "ⅎ_tool"
+  },
+  {
+    "expected": "Ⅰ tool",
+    "raw": "ⅰ_tool"
+  },
+  {
+    "expected": "Ⅱ tool",
+    "raw": "ⅱ_tool"
+  },
+  {
+    "expected": "Ⅲ tool",
+    "raw": "ⅲ_tool"
+  },
+  {
+    "expected": "Ⅳ tool",
+    "raw": "ⅳ_tool"
+  },
+  {
+    "expected": "Ⅴ tool",
+    "raw": "ⅴ_tool"
+  },
+  {
+    "expected": "Ⅵ tool",
+    "raw": "ⅵ_tool"
+  },
+  {
+    "expected": "Ⅶ tool",
+    "raw": "ⅶ_tool"
+  },
+  {
+    "expected": "Ⅷ tool",
+    "raw": "ⅷ_tool"
+  },
+  {
+    "expected": "Ⅸ tool",
+    "raw": "ⅸ_tool"
+  },
+  {
+    "expected": "Ⅹ tool",
+    "raw": "ⅹ_tool"
+  },
+  {
+    "expected": "Ⅺ tool",
+    "raw": "ⅺ_tool"
+  },
+  {
+    "expected": "Ⅻ tool",
+    "raw": "ⅻ_tool"
+  },
+  {
+    "expected": "Ⅼ tool",
+    "raw": "ⅼ_tool"
+  },
+  {
+    "expected": "Ⅽ tool",
+    "raw": "ⅽ_tool"
+  },
+  {
+    "expected": "Ⅾ tool",
+    "raw": "ⅾ_tool"
+  },
+  {
+    "expected": "Ⅿ tool",
+    "raw": "ⅿ_tool"
+  },
+  {
+    "expected": "Ↄ tool",
+    "raw": "ↄ_tool"
+  },
+  {
+    "expected": "Ⓐ tool",
+    "raw": "ⓐ_tool"
+  },
+  {
+    "expected": "Ⓑ tool",
+    "raw": "ⓑ_tool"
+  },
+  {
+    "expected": "Ⓒ tool",
+    "raw": "ⓒ_tool"
+  },
+  {
+    "expected": "Ⓓ tool",
+    "raw": "ⓓ_tool"
+  },
+  {
+    "expected": "Ⓔ tool",
+    "raw": "ⓔ_tool"
+  },
+  {
+    "expected": "Ⓕ tool",
+    "raw": "ⓕ_tool"
+  },
+  {
+    "expected": "Ⓖ tool",
+    "raw": "ⓖ_tool"
+  },
+  {
+    "expected": "Ⓗ tool",
+    "raw": "ⓗ_tool"
+  },
+  {
+    "expected": "Ⓘ tool",
+    "raw": "ⓘ_tool"
+  },
+  {
+    "expected": "Ⓙ tool",
+    "raw": "ⓙ_tool"
+  },
+  {
+    "expected": "Ⓚ tool",
+    "raw": "ⓚ_tool"
+  },
+  {
+    "expected": "Ⓛ tool",
+    "raw": "ⓛ_tool"
+  },
+  {
+    "expected": "Ⓜ tool",
+    "raw": "ⓜ_tool"
+  },
+  {
+    "expected": "Ⓝ tool",
+    "raw": "ⓝ_tool"
+  },
+  {
+    "expected": "Ⓞ tool",
+    "raw": "ⓞ_tool"
+  },
+  {
+    "expected": "Ⓟ tool",
+    "raw": "ⓟ_tool"
+  },
+  {
+    "expected": "Ⓠ tool",
+    "raw": "ⓠ_tool"
+  },
+  {
+    "expected": "Ⓡ tool",
+    "raw": "ⓡ_tool"
+  },
+  {
+    "expected": "Ⓢ tool",
+    "raw": "ⓢ_tool"
+  },
+  {
+    "expected": "Ⓣ tool",
+    "raw": "ⓣ_tool"
+  },
+  {
+    "expected": "Ⓤ tool",
+    "raw": "ⓤ_tool"
+  },
+  {
+    "expected": "Ⓥ tool",
+    "raw": "ⓥ_tool"
+  },
+  {
+    "expected": "Ⓦ tool",
+    "raw": "ⓦ_tool"
+  },
+  {
+    "expected": "Ⓧ tool",
+    "raw": "ⓧ_tool"
+  },
+  {
+    "expected": "Ⓨ tool",
+    "raw": "ⓨ_tool"
+  },
+  {
+    "expected": "Ⓩ tool",
+    "raw": "ⓩ_tool"
+  },
+  {
+    "expected": "Ⰰ tool",
+    "raw": "ⰰ_tool"
+  },
+  {
+    "expected": "Ⰱ tool",
+    "raw": "ⰱ_tool"
+  },
+  {
+    "expected": "Ⰲ tool",
+    "raw": "ⰲ_tool"
+  },
+  {
+    "expected": "Ⰳ tool",
+    "raw": "ⰳ_tool"
+  },
+  {
+    "expected": "Ⰴ tool",
+    "raw": "ⰴ_tool"
+  },
+  {
+    "expected": "Ⰵ tool",
+    "raw": "ⰵ_tool"
+  },
+  {
+    "expected": "Ⰶ tool",
+    "raw": "ⰶ_tool"
+  },
+  {
+    "expected": "Ⰷ tool",
+    "raw": "ⰷ_tool"
+  },
+  {
+    "expected": "Ⰸ tool",
+    "raw": "ⰸ_tool"
+  },
+  {
+    "expected": "Ⰹ tool",
+    "raw": "ⰹ_tool"
+  },
+  {
+    "expected": "Ⰺ tool",
+    "raw": "ⰺ_tool"
+  },
+  {
+    "expected": "Ⰻ tool",
+    "raw": "ⰻ_tool"
+  },
+  {
+    "expected": "Ⰼ tool",
+    "raw": "ⰼ_tool"
+  },
+  {
+    "expected": "Ⰽ tool",
+    "raw": "ⰽ_tool"
+  },
+  {
+    "expected": "Ⰾ tool",
+    "raw": "ⰾ_tool"
+  },
+  {
+    "expected": "Ⰿ tool",
+    "raw": "ⰿ_tool"
+  },
+  {
+    "expected": "Ⱀ tool",
+    "raw": "ⱀ_tool"
+  },
+  {
+    "expected": "Ⱁ tool",
+    "raw": "ⱁ_tool"
+  },
+  {
+    "expected": "Ⱂ tool",
+    "raw": "ⱂ_tool"
+  },
+  {
+    "expected": "Ⱃ tool",
+    "raw": "ⱃ_tool"
+  },
+  {
+    "expected": "Ⱄ tool",
+    "raw": "ⱄ_tool"
+  },
+  {
+    "expected": "Ⱅ tool",
+    "raw": "ⱅ_tool"
+  },
+  {
+    "expected": "Ⱆ tool",
+    "raw": "ⱆ_tool"
+  },
+  {
+    "expected": "Ⱇ tool",
+    "raw": "ⱇ_tool"
+  },
+  {
+    "expected": "Ⱈ tool",
+    "raw": "ⱈ_tool"
+  },
+  {
+    "expected": "Ⱉ tool",
+    "raw": "ⱉ_tool"
+  },
+  {
+    "expected": "Ⱊ tool",
+    "raw": "ⱊ_tool"
+  },
+  {
+    "expected": "Ⱋ tool",
+    "raw": "ⱋ_tool"
+  },
+  {
+    "expected": "Ⱌ tool",
+    "raw": "ⱌ_tool"
+  },
+  {
+    "expected": "Ⱍ tool",
+    "raw": "ⱍ_tool"
+  },
+  {
+    "expected": "Ⱎ tool",
+    "raw": "ⱎ_tool"
+  },
+  {
+    "expected": "Ⱏ tool",
+    "raw": "ⱏ_tool"
+  },
+  {
+    "expected": "Ⱐ tool",
+    "raw": "ⱐ_tool"
+  },
+  {
+    "expected": "Ⱑ tool",
+    "raw": "ⱑ_tool"
+  },
+  {
+    "expected": "Ⱒ tool",
+    "raw": "ⱒ_tool"
+  },
+  {
+    "expected": "Ⱓ tool",
+    "raw": "ⱓ_tool"
+  },
+  {
+    "expected": "Ⱔ tool",
+    "raw": "ⱔ_tool"
+  },
+  {
+    "expected": "Ⱕ tool",
+    "raw": "ⱕ_tool"
+  },
+  {
+    "expected": "Ⱖ tool",
+    "raw": "ⱖ_tool"
+  },
+  {
+    "expected": "Ⱗ tool",
+    "raw": "ⱗ_tool"
+  },
+  {
+    "expected": "Ⱘ tool",
+    "raw": "ⱘ_tool"
+  },
+  {
+    "expected": "Ⱙ tool",
+    "raw": "ⱙ_tool"
+  },
+  {
+    "expected": "Ⱚ tool",
+    "raw": "ⱚ_tool"
+  },
+  {
+    "expected": "Ⱛ tool",
+    "raw": "ⱛ_tool"
+  },
+  {
+    "expected": "Ⱜ tool",
+    "raw": "ⱜ_tool"
+  },
+  {
+    "expected": "Ⱝ tool",
+    "raw": "ⱝ_tool"
+  },
+  {
+    "expected": "Ⱞ tool",
+    "raw": "ⱞ_tool"
+  },
+  {
+    "expected": "Ⱟ tool",
+    "raw": "ⱟ_tool"
+  },
+  {
+    "expected": "Ⱡ tool",
+    "raw": "ⱡ_tool"
+  },
+  {
+    "expected": "Ⱥ tool",
+    "raw": "ⱥ_tool"
+  },
+  {
+    "expected": "Ⱦ tool",
+    "raw": "ⱦ_tool"
+  },
+  {
+    "expected": "Ⱨ tool",
+    "raw": "ⱨ_tool"
+  },
+  {
+    "expected": "Ⱪ tool",
+    "raw": "ⱪ_tool"
+  },
+  {
+    "expected": "Ⱬ tool",
+    "raw": "ⱬ_tool"
+  },
+  {
+    "expected": "Ⱳ tool",
+    "raw": "ⱳ_tool"
+  },
+  {
+    "expected": "Ⱶ tool",
+    "raw": "ⱶ_tool"
+  },
+  {
+    "expected": "Ⲁ tool",
+    "raw": "ⲁ_tool"
+  },
+  {
+    "expected": "Ⲃ tool",
+    "raw": "ⲃ_tool"
+  },
+  {
+    "expected": "Ⲅ tool",
+    "raw": "ⲅ_tool"
+  },
+  {
+    "expected": "Ⲇ tool",
+    "raw": "ⲇ_tool"
+  },
+  {
+    "expected": "Ⲉ tool",
+    "raw": "ⲉ_tool"
+  },
+  {
+    "expected": "Ⲋ tool",
+    "raw": "ⲋ_tool"
+  },
+  {
+    "expected": "Ⲍ tool",
+    "raw": "ⲍ_tool"
+  },
+  {
+    "expected": "Ⲏ tool",
+    "raw": "ⲏ_tool"
+  },
+  {
+    "expected": "Ⲑ tool",
+    "raw": "ⲑ_tool"
+  },
+  {
+    "expected": "Ⲓ tool",
+    "raw": "ⲓ_tool"
+  },
+  {
+    "expected": "Ⲕ tool",
+    "raw": "ⲕ_tool"
+  },
+  {
+    "expected": "Ⲗ tool",
+    "raw": "ⲗ_tool"
+  },
+  {
+    "expected": "Ⲙ tool",
+    "raw": "ⲙ_tool"
+  },
+  {
+    "expected": "Ⲛ tool",
+    "raw": "ⲛ_tool"
+  },
+  {
+    "expected": "Ⲝ tool",
+    "raw": "ⲝ_tool"
+  },
+  {
+    "expected": "Ⲟ tool",
+    "raw": "ⲟ_tool"
+  },
+  {
+    "expected": "Ⲡ tool",
+    "raw": "ⲡ_tool"
+  },
+  {
+    "expected": "Ⲣ tool",
+    "raw": "ⲣ_tool"
+  },
+  {
+    "expected": "Ⲥ tool",
+    "raw": "ⲥ_tool"
+  },
+  {
+    "expected": "Ⲧ tool",
+    "raw": "ⲧ_tool"
+  },
+  {
+    "expected": "Ⲩ tool",
+    "raw": "ⲩ_tool"
+  },
+  {
+    "expected": "Ⲫ tool",
+    "raw": "ⲫ_tool"
+  },
+  {
+    "expected": "Ⲭ tool",
+    "raw": "ⲭ_tool"
+  },
+  {
+    "expected": "Ⲯ tool",
+    "raw": "ⲯ_tool"
+  },
+  {
+    "expected": "Ⲱ tool",
+    "raw": "ⲱ_tool"
+  },
+  {
+    "expected": "Ⲳ tool",
+    "raw": "ⲳ_tool"
+  },
+  {
+    "expected": "Ⲵ tool",
+    "raw": "ⲵ_tool"
+  },
+  {
+    "expected": "Ⲷ tool",
+    "raw": "ⲷ_tool"
+  },
+  {
+    "expected": "Ⲹ tool",
+    "raw": "ⲹ_tool"
+  },
+  {
+    "expected": "Ⲻ tool",
+    "raw": "ⲻ_tool"
+  },
+  {
+    "expected": "Ⲽ tool",
+    "raw": "ⲽ_tool"
+  },
+  {
+    "expected": "Ⲿ tool",
+    "raw": "ⲿ_tool"
+  },
+  {
+    "expected": "Ⳁ tool",
+    "raw": "ⳁ_tool"
+  },
+  {
+    "expected": "Ⳃ tool",
+    "raw": "ⳃ_tool"
+  },
+  {
+    "expected": "Ⳅ tool",
+    "raw": "ⳅ_tool"
+  },
+  {
+    "expected": "Ⳇ tool",
+    "raw": "ⳇ_tool"
+  },
+  {
+    "expected": "Ⳉ tool",
+    "raw": "ⳉ_tool"
+  },
+  {
+    "expected": "Ⳋ tool",
+    "raw": "ⳋ_tool"
+  },
+  {
+    "expected": "Ⳍ tool",
+    "raw": "ⳍ_tool"
+  },
+  {
+    "expected": "Ⳏ tool",
+    "raw": "ⳏ_tool"
+  },
+  {
+    "expected": "Ⳑ tool",
+    "raw": "ⳑ_tool"
+  },
+  {
+    "expected": "Ⳓ tool",
+    "raw": "ⳓ_tool"
+  },
+  {
+    "expected": "Ⳕ tool",
+    "raw": "ⳕ_tool"
+  },
+  {
+    "expected": "Ⳗ tool",
+    "raw": "ⳗ_tool"
+  },
+  {
+    "expected": "Ⳙ tool",
+    "raw": "ⳙ_tool"
+  },
+  {
+    "expected": "Ⳛ tool",
+    "raw": "ⳛ_tool"
+  },
+  {
+    "expected": "Ⳝ tool",
+    "raw": "ⳝ_tool"
+  },
+  {
+    "expected": "Ⳟ tool",
+    "raw": "ⳟ_tool"
+  },
+  {
+    "expected": "Ⳡ tool",
+    "raw": "ⳡ_tool"
+  },
+  {
+    "expected": "Ⳣ tool",
+    "raw": "ⳣ_tool"
+  },
+  {
+    "expected": "Ⳬ tool",
+    "raw": "ⳬ_tool"
+  },
+  {
+    "expected": "Ⳮ tool",
+    "raw": "ⳮ_tool"
+  },
+  {
+    "expected": "Ⳳ tool",
+    "raw": "ⳳ_tool"
+  },
+  {
+    "expected": "Ⴀ tool",
+    "raw": "ⴀ_tool"
+  },
+  {
+    "expected": "Ⴁ tool",
+    "raw": "ⴁ_tool"
+  },
+  {
+    "expected": "Ⴂ tool",
+    "raw": "ⴂ_tool"
+  },
+  {
+    "expected": "Ⴃ tool",
+    "raw": "ⴃ_tool"
+  },
+  {
+    "expected": "Ⴄ tool",
+    "raw": "ⴄ_tool"
+  },
+  {
+    "expected": "Ⴅ tool",
+    "raw": "ⴅ_tool"
+  },
+  {
+    "expected": "Ⴆ tool",
+    "raw": "ⴆ_tool"
+  },
+  {
+    "expected": "Ⴇ tool",
+    "raw": "ⴇ_tool"
+  },
+  {
+    "expected": "Ⴈ tool",
+    "raw": "ⴈ_tool"
+  },
+  {
+    "expected": "Ⴉ tool",
+    "raw": "ⴉ_tool"
+  },
+  {
+    "expected": "Ⴊ tool",
+    "raw": "ⴊ_tool"
+  },
+  {
+    "expected": "Ⴋ tool",
+    "raw": "ⴋ_tool"
+  },
+  {
+    "expected": "Ⴌ tool",
+    "raw": "ⴌ_tool"
+  },
+  {
+    "expected": "Ⴍ tool",
+    "raw": "ⴍ_tool"
+  },
+  {
+    "expected": "Ⴎ tool",
+    "raw": "ⴎ_tool"
+  },
+  {
+    "expected": "Ⴏ tool",
+    "raw": "ⴏ_tool"
+  },
+  {
+    "expected": "Ⴐ tool",
+    "raw": "ⴐ_tool"
+  },
+  {
+    "expected": "Ⴑ tool",
+    "raw": "ⴑ_tool"
+  },
+  {
+    "expected": "Ⴒ tool",
+    "raw": "ⴒ_tool"
+  },
+  {
+    "expected": "Ⴓ tool",
+    "raw": "ⴓ_tool"
+  },
+  {
+    "expected": "Ⴔ tool",
+    "raw": "ⴔ_tool"
+  },
+  {
+    "expected": "Ⴕ tool",
+    "raw": "ⴕ_tool"
+  },
+  {
+    "expected": "Ⴖ tool",
+    "raw": "ⴖ_tool"
+  },
+  {
+    "expected": "Ⴗ tool",
+    "raw": "ⴗ_tool"
+  },
+  {
+    "expected": "Ⴘ tool",
+    "raw": "ⴘ_tool"
+  },
+  {
+    "expected": "Ⴙ tool",
+    "raw": "ⴙ_tool"
+  },
+  {
+    "expected": "Ⴚ tool",
+    "raw": "ⴚ_tool"
+  },
+  {
+    "expected": "Ⴛ tool",
+    "raw": "ⴛ_tool"
+  },
+  {
+    "expected": "Ⴜ tool",
+    "raw": "ⴜ_tool"
+  },
+  {
+    "expected": "Ⴝ tool",
+    "raw": "ⴝ_tool"
+  },
+  {
+    "expected": "Ⴞ tool",
+    "raw": "ⴞ_tool"
+  },
+  {
+    "expected": "Ⴟ tool",
+    "raw": "ⴟ_tool"
+  },
+  {
+    "expected": "Ⴠ tool",
+    "raw": "ⴠ_tool"
+  },
+  {
+    "expected": "Ⴡ tool",
+    "raw": "ⴡ_tool"
+  },
+  {
+    "expected": "Ⴢ tool",
+    "raw": "ⴢ_tool"
+  },
+  {
+    "expected": "Ⴣ tool",
+    "raw": "ⴣ_tool"
+  },
+  {
+    "expected": "Ⴤ tool",
+    "raw": "ⴤ_tool"
+  },
+  {
+    "expected": "Ⴥ tool",
+    "raw": "ⴥ_tool"
+  },
+  {
+    "expected": "Ⴧ tool",
+    "raw": "ⴧ_tool"
+  },
+  {
+    "expected": "Ⴭ tool",
+    "raw": "ⴭ_tool"
+  },
+  {
+    "expected": "Ꙁ tool",
+    "raw": "ꙁ_tool"
+  },
+  {
+    "expected": "Ꙃ tool",
+    "raw": "ꙃ_tool"
+  },
+  {
+    "expected": "Ꙅ tool",
+    "raw": "ꙅ_tool"
+  },
+  {
+    "expected": "Ꙇ tool",
+    "raw": "ꙇ_tool"
+  },
+  {
+    "expected": "Ꙉ tool",
+    "raw": "ꙉ_tool"
+  },
+  {
+    "expected": "Ꙋ tool",
+    "raw": "ꙋ_tool"
+  },
+  {
+    "expected": "Ꙍ tool",
+    "raw": "ꙍ_tool"
+  },
+  {
+    "expected": "Ꙏ tool",
+    "raw": "ꙏ_tool"
+  },
+  {
+    "expected": "Ꙑ tool",
+    "raw": "ꙑ_tool"
+  },
+  {
+    "expected": "Ꙓ tool",
+    "raw": "ꙓ_tool"
+  },
+  {
+    "expected": "Ꙕ tool",
+    "raw": "ꙕ_tool"
+  },
+  {
+    "expected": "Ꙗ tool",
+    "raw": "ꙗ_tool"
+  },
+  {
+    "expected": "Ꙙ tool",
+    "raw": "ꙙ_tool"
+  },
+  {
+    "expected": "Ꙛ tool",
+    "raw": "ꙛ_tool"
+  },
+  {
+    "expected": "Ꙝ tool",
+    "raw": "ꙝ_tool"
+  },
+  {
+    "expected": "Ꙟ tool",
+    "raw": "ꙟ_tool"
+  },
+  {
+    "expected": "Ꙡ tool",
+    "raw": "ꙡ_tool"
+  },
+  {
+    "expected": "Ꙣ tool",
+    "raw": "ꙣ_tool"
+  },
+  {
+    "expected": "Ꙥ tool",
+    "raw": "ꙥ_tool"
+  },
+  {
+    "expected": "Ꙧ tool",
+    "raw": "ꙧ_tool"
+  },
+  {
+    "expected": "Ꙩ tool",
+    "raw": "ꙩ_tool"
+  },
+  {
+    "expected": "Ꙫ tool",
+    "raw": "ꙫ_tool"
+  },
+  {
+    "expected": "Ꙭ tool",
+    "raw": "ꙭ_tool"
+  },
+  {
+    "expected": "Ꚁ tool",
+    "raw": "ꚁ_tool"
+  },
+  {
+    "expected": "Ꚃ tool",
+    "raw": "ꚃ_tool"
+  },
+  {
+    "expected": "Ꚅ tool",
+    "raw": "ꚅ_tool"
+  },
+  {
+    "expected": "Ꚇ tool",
+    "raw": "ꚇ_tool"
+  },
+  {
+    "expected": "Ꚉ tool",
+    "raw": "ꚉ_tool"
+  },
+  {
+    "expected": "Ꚋ tool",
+    "raw": "ꚋ_tool"
+  },
+  {
+    "expected": "Ꚍ tool",
+    "raw": "ꚍ_tool"
+  },
+  {
+    "expected": "Ꚏ tool",
+    "raw": "ꚏ_tool"
+  },
+  {
+    "expected": "Ꚑ tool",
+    "raw": "ꚑ_tool"
+  },
+  {
+    "expected": "Ꚓ tool",
+    "raw": "ꚓ_tool"
+  },
+  {
+    "expected": "Ꚕ tool",
+    "raw": "ꚕ_tool"
+  },
+  {
+    "expected": "Ꚗ tool",
+    "raw": "ꚗ_tool"
+  },
+  {
+    "expected": "Ꚙ tool",
+    "raw": "ꚙ_tool"
+  },
+  {
+    "expected": "Ꚛ tool",
+    "raw": "ꚛ_tool"
+  },
+  {
+    "expected": "Ꜣ tool",
+    "raw": "ꜣ_tool"
+  },
+  {
+    "expected": "Ꜥ tool",
+    "raw": "ꜥ_tool"
+  },
+  {
+    "expected": "Ꜧ tool",
+    "raw": "ꜧ_tool"
+  },
+  {
+    "expected": "Ꜩ tool",
+    "raw": "ꜩ_tool"
+  },
+  {
+    "expected": "Ꜫ tool",
+    "raw": "ꜫ_tool"
+  },
+  {
+    "expected": "Ꜭ tool",
+    "raw": "ꜭ_tool"
+  },
+  {
+    "expected": "Ꜯ tool",
+    "raw": "ꜯ_tool"
+  },
+  {
+    "expected": "Ꜳ tool",
+    "raw": "ꜳ_tool"
+  },
+  {
+    "expected": "Ꜵ tool",
+    "raw": "ꜵ_tool"
+  },
+  {
+    "expected": "Ꜷ tool",
+    "raw": "ꜷ_tool"
+  },
+  {
+    "expected": "Ꜹ tool",
+    "raw": "ꜹ_tool"
+  },
+  {
+    "expected": "Ꜻ tool",
+    "raw": "ꜻ_tool"
+  },
+  {
+    "expected": "Ꜽ tool",
+    "raw": "ꜽ_tool"
+  },
+  {
+    "expected": "Ꜿ tool",
+    "raw": "ꜿ_tool"
+  },
+  {
+    "expected": "Ꝁ tool",
+    "raw": "ꝁ_tool"
+  },
+  {
+    "expected": "Ꝃ tool",
+    "raw": "ꝃ_tool"
+  },
+  {
+    "expected": "Ꝅ tool",
+    "raw": "ꝅ_tool"
+  },
+  {
+    "expected": "Ꝇ tool",
+    "raw": "ꝇ_tool"
+  },
+  {
+    "expected": "Ꝉ tool",
+    "raw": "ꝉ_tool"
+  },
+  {
+    "expected": "Ꝋ tool",
+    "raw": "ꝋ_tool"
+  },
+  {
+    "expected": "Ꝍ tool",
+    "raw": "ꝍ_tool"
+  },
+  {
+    "expected": "Ꝏ tool",
+    "raw": "ꝏ_tool"
+  },
+  {
+    "expected": "Ꝑ tool",
+    "raw": "ꝑ_tool"
+  },
+  {
+    "expected": "Ꝓ tool",
+    "raw": "ꝓ_tool"
+  },
+  {
+    "expected": "Ꝕ tool",
+    "raw": "ꝕ_tool"
+  },
+  {
+    "expected": "Ꝗ tool",
+    "raw": "ꝗ_tool"
+  },
+  {
+    "expected": "Ꝙ tool",
+    "raw": "ꝙ_tool"
+  },
+  {
+    "expected": "Ꝛ tool",
+    "raw": "ꝛ_tool"
+  },
+  {
+    "expected": "Ꝝ tool",
+    "raw": "ꝝ_tool"
+  },
+  {
+    "expected": "Ꝟ tool",
+    "raw": "ꝟ_tool"
+  },
+  {
+    "expected": "Ꝡ tool",
+    "raw": "ꝡ_tool"
+  },
+  {
+    "expected": "Ꝣ tool",
+    "raw": "ꝣ_tool"
+  },
+  {
+    "expected": "Ꝥ tool",
+    "raw": "ꝥ_tool"
+  },
+  {
+    "expected": "Ꝧ tool",
+    "raw": "ꝧ_tool"
+  },
+  {
+    "expected": "Ꝩ tool",
+    "raw": "ꝩ_tool"
+  },
+  {
+    "expected": "Ꝫ tool",
+    "raw": "ꝫ_tool"
+  },
+  {
+    "expected": "Ꝭ tool",
+    "raw": "ꝭ_tool"
+  },
+  {
+    "expected": "Ꝯ tool",
+    "raw": "ꝯ_tool"
+  },
+  {
+    "expected": "Ꝺ tool",
+    "raw": "ꝺ_tool"
+  },
+  {
+    "expected": "Ꝼ tool",
+    "raw": "ꝼ_tool"
+  },
+  {
+    "expected": "Ꝿ tool",
+    "raw": "ꝿ_tool"
+  },
+  {
+    "expected": "Ꞁ tool",
+    "raw": "ꞁ_tool"
+  },
+  {
+    "expected": "Ꞃ tool",
+    "raw": "ꞃ_tool"
+  },
+  {
+    "expected": "Ꞅ tool",
+    "raw": "ꞅ_tool"
+  },
+  {
+    "expected": "Ꞇ tool",
+    "raw": "ꞇ_tool"
+  },
+  {
+    "expected": "Ꞌ tool",
+    "raw": "ꞌ_tool"
+  },
+  {
+    "expected": "Ꞑ tool",
+    "raw": "ꞑ_tool"
+  },
+  {
+    "expected": "Ꞓ tool",
+    "raw": "ꞓ_tool"
+  },
+  {
+    "expected": "Ꞔ tool",
+    "raw": "ꞔ_tool"
+  },
+  {
+    "expected": "Ꞗ tool",
+    "raw": "ꞗ_tool"
+  },
+  {
+    "expected": "Ꞙ tool",
+    "raw": "ꞙ_tool"
+  },
+  {
+    "expected": "Ꞛ tool",
+    "raw": "ꞛ_tool"
+  },
+  {
+    "expected": "Ꞝ tool",
+    "raw": "ꞝ_tool"
+  },
+  {
+    "expected": "Ꞟ tool",
+    "raw": "ꞟ_tool"
+  },
+  {
+    "expected": "Ꞡ tool",
+    "raw": "ꞡ_tool"
+  },
+  {
+    "expected": "Ꞣ tool",
+    "raw": "ꞣ_tool"
+  },
+  {
+    "expected": "Ꞥ tool",
+    "raw": "ꞥ_tool"
+  },
+  {
+    "expected": "Ꞧ tool",
+    "raw": "ꞧ_tool"
+  },
+  {
+    "expected": "Ꞩ tool",
+    "raw": "ꞩ_tool"
+  },
+  {
+    "expected": "Ꞵ tool",
+    "raw": "ꞵ_tool"
+  },
+  {
+    "expected": "Ꞷ tool",
+    "raw": "ꞷ_tool"
+  },
+  {
+    "expected": "Ꞹ tool",
+    "raw": "ꞹ_tool"
+  },
+  {
+    "expected": "Ꞻ tool",
+    "raw": "ꞻ_tool"
+  },
+  {
+    "expected": "Ꞽ tool",
+    "raw": "ꞽ_tool"
+  },
+  {
+    "expected": "Ꞿ tool",
+    "raw": "ꞿ_tool"
+  },
+  {
+    "expected": "Ꟁ tool",
+    "raw": "ꟁ_tool"
+  },
+  {
+    "expected": "Ꟃ tool",
+    "raw": "ꟃ_tool"
+  },
+  {
+    "expected": "Ꟈ tool",
+    "raw": "ꟈ_tool"
+  },
+  {
+    "expected": "Ꟊ tool",
+    "raw": "ꟊ_tool"
+  },
+  {
+    "expected": "Ꟍ tool",
+    "raw": "ꟍ_tool"
+  },
+  {
+    "expected": "꟎ tool",
+    "raw": "꟏_tool"
+  },
+  {
+    "expected": "Ꟑ tool",
+    "raw": "ꟑ_tool"
+  },
+  {
+    "expected": "꟒ tool",
+    "raw": "ꟓ_tool"
+  },
+  {
+    "expected": "꟔ tool",
+    "raw": "ꟕ_tool"
+  },
+  {
+    "expected": "Ꟗ tool",
+    "raw": "ꟗ_tool"
+  },
+  {
+    "expected": "Ꟙ tool",
+    "raw": "ꟙ_tool"
+  },
+  {
+    "expected": "Ꟛ tool",
+    "raw": "ꟛ_tool"
+  },
+  {
+    "expected": "Ꟶ tool",
+    "raw": "ꟶ_tool"
+  },
+  {
+    "expected": "Ꭓ tool",
+    "raw": "ꭓ_tool"
+  },
+  {
+    "expected": "Ꭰ tool",
+    "raw": "ꭰ_tool"
+  },
+  {
+    "expected": "Ꭱ tool",
+    "raw": "ꭱ_tool"
+  },
+  {
+    "expected": "Ꭲ tool",
+    "raw": "ꭲ_tool"
+  },
+  {
+    "expected": "Ꭳ tool",
+    "raw": "ꭳ_tool"
+  },
+  {
+    "expected": "Ꭴ tool",
+    "raw": "ꭴ_tool"
+  },
+  {
+    "expected": "Ꭵ tool",
+    "raw": "ꭵ_tool"
+  },
+  {
+    "expected": "Ꭶ tool",
+    "raw": "ꭶ_tool"
+  },
+  {
+    "expected": "Ꭷ tool",
+    "raw": "ꭷ_tool"
+  },
+  {
+    "expected": "Ꭸ tool",
+    "raw": "ꭸ_tool"
+  },
+  {
+    "expected": "Ꭹ tool",
+    "raw": "ꭹ_tool"
+  },
+  {
+    "expected": "Ꭺ tool",
+    "raw": "ꭺ_tool"
+  },
+  {
+    "expected": "Ꭻ tool",
+    "raw": "ꭻ_tool"
+  },
+  {
+    "expected": "Ꭼ tool",
+    "raw": "ꭼ_tool"
+  },
+  {
+    "expected": "Ꭽ tool",
+    "raw": "ꭽ_tool"
+  },
+  {
+    "expected": "Ꭾ tool",
+    "raw": "ꭾ_tool"
+  },
+  {
+    "expected": "Ꭿ tool",
+    "raw": "ꭿ_tool"
+  },
+  {
+    "expected": "Ꮀ tool",
+    "raw": "ꮀ_tool"
+  },
+  {
+    "expected": "Ꮁ tool",
+    "raw": "ꮁ_tool"
+  },
+  {
+    "expected": "Ꮂ tool",
+    "raw": "ꮂ_tool"
+  },
+  {
+    "expected": "Ꮃ tool",
+    "raw": "ꮃ_tool"
+  },
+  {
+    "expected": "Ꮄ tool",
+    "raw": "ꮄ_tool"
+  },
+  {
+    "expected": "Ꮅ tool",
+    "raw": "ꮅ_tool"
+  },
+  {
+    "expected": "Ꮆ tool",
+    "raw": "ꮆ_tool"
+  },
+  {
+    "expected": "Ꮇ tool",
+    "raw": "ꮇ_tool"
+  },
+  {
+    "expected": "Ꮈ tool",
+    "raw": "ꮈ_tool"
+  },
+  {
+    "expected": "Ꮉ tool",
+    "raw": "ꮉ_tool"
+  },
+  {
+    "expected": "Ꮊ tool",
+    "raw": "ꮊ_tool"
+  },
+  {
+    "expected": "Ꮋ tool",
+    "raw": "ꮋ_tool"
+  },
+  {
+    "expected": "Ꮌ tool",
+    "raw": "ꮌ_tool"
+  },
+  {
+    "expected": "Ꮍ tool",
+    "raw": "ꮍ_tool"
+  },
+  {
+    "expected": "Ꮎ tool",
+    "raw": "ꮎ_tool"
+  },
+  {
+    "expected": "Ꮏ tool",
+    "raw": "ꮏ_tool"
+  },
+  {
+    "expected": "Ꮐ tool",
+    "raw": "ꮐ_tool"
+  },
+  {
+    "expected": "Ꮑ tool",
+    "raw": "ꮑ_tool"
+  },
+  {
+    "expected": "Ꮒ tool",
+    "raw": "ꮒ_tool"
+  },
+  {
+    "expected": "Ꮓ tool",
+    "raw": "ꮓ_tool"
+  },
+  {
+    "expected": "Ꮔ tool",
+    "raw": "ꮔ_tool"
+  },
+  {
+    "expected": "Ꮕ tool",
+    "raw": "ꮕ_tool"
+  },
+  {
+    "expected": "Ꮖ tool",
+    "raw": "ꮖ_tool"
+  },
+  {
+    "expected": "Ꮗ tool",
+    "raw": "ꮗ_tool"
+  },
+  {
+    "expected": "Ꮘ tool",
+    "raw": "ꮘ_tool"
+  },
+  {
+    "expected": "Ꮙ tool",
+    "raw": "ꮙ_tool"
+  },
+  {
+    "expected": "Ꮚ tool",
+    "raw": "ꮚ_tool"
+  },
+  {
+    "expected": "Ꮛ tool",
+    "raw": "ꮛ_tool"
+  },
+  {
+    "expected": "Ꮜ tool",
+    "raw": "ꮜ_tool"
+  },
+  {
+    "expected": "Ꮝ tool",
+    "raw": "ꮝ_tool"
+  },
+  {
+    "expected": "Ꮞ tool",
+    "raw": "ꮞ_tool"
+  },
+  {
+    "expected": "Ꮟ tool",
+    "raw": "ꮟ_tool"
+  },
+  {
+    "expected": "Ꮠ tool",
+    "raw": "ꮠ_tool"
+  },
+  {
+    "expected": "Ꮡ tool",
+    "raw": "ꮡ_tool"
+  },
+  {
+    "expected": "Ꮢ tool",
+    "raw": "ꮢ_tool"
+  },
+  {
+    "expected": "Ꮣ tool",
+    "raw": "ꮣ_tool"
+  },
+  {
+    "expected": "Ꮤ tool",
+    "raw": "ꮤ_tool"
+  },
+  {
+    "expected": "Ꮥ tool",
+    "raw": "ꮥ_tool"
+  },
+  {
+    "expected": "Ꮦ tool",
+    "raw": "ꮦ_tool"
+  },
+  {
+    "expected": "Ꮧ tool",
+    "raw": "ꮧ_tool"
+  },
+  {
+    "expected": "Ꮨ tool",
+    "raw": "ꮨ_tool"
+  },
+  {
+    "expected": "Ꮩ tool",
+    "raw": "ꮩ_tool"
+  },
+  {
+    "expected": "Ꮪ tool",
+    "raw": "ꮪ_tool"
+  },
+  {
+    "expected": "Ꮫ tool",
+    "raw": "ꮫ_tool"
+  },
+  {
+    "expected": "Ꮬ tool",
+    "raw": "ꮬ_tool"
+  },
+  {
+    "expected": "Ꮭ tool",
+    "raw": "ꮭ_tool"
+  },
+  {
+    "expected": "Ꮮ tool",
+    "raw": "ꮮ_tool"
+  },
+  {
+    "expected": "Ꮯ tool",
+    "raw": "ꮯ_tool"
+  },
+  {
+    "expected": "Ꮰ tool",
+    "raw": "ꮰ_tool"
+  },
+  {
+    "expected": "Ꮱ tool",
+    "raw": "ꮱ_tool"
+  },
+  {
+    "expected": "Ꮲ tool",
+    "raw": "ꮲ_tool"
+  },
+  {
+    "expected": "Ꮳ tool",
+    "raw": "ꮳ_tool"
+  },
+  {
+    "expected": "Ꮴ tool",
+    "raw": "ꮴ_tool"
+  },
+  {
+    "expected": "Ꮵ tool",
+    "raw": "ꮵ_tool"
+  },
+  {
+    "expected": "Ꮶ tool",
+    "raw": "ꮶ_tool"
+  },
+  {
+    "expected": "Ꮷ tool",
+    "raw": "ꮷ_tool"
+  },
+  {
+    "expected": "Ꮸ tool",
+    "raw": "ꮸ_tool"
+  },
+  {
+    "expected": "Ꮹ tool",
+    "raw": "ꮹ_tool"
+  },
+  {
+    "expected": "Ꮺ tool",
+    "raw": "ꮺ_tool"
+  },
+  {
+    "expected": "Ꮻ tool",
+    "raw": "ꮻ_tool"
+  },
+  {
+    "expected": "Ꮼ tool",
+    "raw": "ꮼ_tool"
+  },
+  {
+    "expected": "Ꮽ tool",
+    "raw": "ꮽ_tool"
+  },
+  {
+    "expected": "Ꮾ tool",
+    "raw": "ꮾ_tool"
+  },
+  {
+    "expected": "Ꮿ tool",
+    "raw": "ꮿ_tool"
+  },
+  {
+    "expected": "Ａ tool",
+    "raw": "ａ_tool"
+  },
+  {
+    "expected": "Ｂ tool",
+    "raw": "ｂ_tool"
+  },
+  {
+    "expected": "Ｃ tool",
+    "raw": "ｃ_tool"
+  },
+  {
+    "expected": "Ｄ tool",
+    "raw": "ｄ_tool"
+  },
+  {
+    "expected": "Ｅ tool",
+    "raw": "ｅ_tool"
+  },
+  {
+    "expected": "Ｆ tool",
+    "raw": "ｆ_tool"
+  },
+  {
+    "expected": "Ｇ tool",
+    "raw": "ｇ_tool"
+  },
+  {
+    "expected": "Ｈ tool",
+    "raw": "ｈ_tool"
+  },
+  {
+    "expected": "Ｉ tool",
+    "raw": "ｉ_tool"
+  },
+  {
+    "expected": "Ｊ tool",
+    "raw": "ｊ_tool"
+  },
+  {
+    "expected": "Ｋ tool",
+    "raw": "ｋ_tool"
+  },
+  {
+    "expected": "Ｌ tool",
+    "raw": "ｌ_tool"
+  },
+  {
+    "expected": "Ｍ tool",
+    "raw": "ｍ_tool"
+  },
+  {
+    "expected": "Ｎ tool",
+    "raw": "ｎ_tool"
+  },
+  {
+    "expected": "Ｏ tool",
+    "raw": "ｏ_tool"
+  },
+  {
+    "expected": "Ｐ tool",
+    "raw": "ｐ_tool"
+  },
+  {
+    "expected": "Ｑ tool",
+    "raw": "ｑ_tool"
+  },
+  {
+    "expected": "Ｒ tool",
+    "raw": "ｒ_tool"
+  },
+  {
+    "expected": "Ｓ tool",
+    "raw": "ｓ_tool"
+  },
+  {
+    "expected": "Ｔ tool",
+    "raw": "ｔ_tool"
+  },
+  {
+    "expected": "Ｕ tool",
+    "raw": "ｕ_tool"
+  },
+  {
+    "expected": "Ｖ tool",
+    "raw": "ｖ_tool"
+  },
+  {
+    "expected": "Ｗ tool",
+    "raw": "ｗ_tool"
+  },
+  {
+    "expected": "Ｘ tool",
+    "raw": "ｘ_tool"
+  },
+  {
+    "expected": "Ｙ tool",
+    "raw": "ｙ_tool"
+  },
+  {
+    "expected": "Ｚ tool",
+    "raw": "ｚ_tool"
+  },
+  {
+    "expected": "𐐀 tool",
+    "raw": "𐐨_tool"
+  },
+  {
+    "expected": "𐐁 tool",
+    "raw": "𐐩_tool"
+  },
+  {
+    "expected": "𐐂 tool",
+    "raw": "𐐪_tool"
+  },
+  {
+    "expected": "𐐃 tool",
+    "raw": "𐐫_tool"
+  },
+  {
+    "expected": "𐐄 tool",
+    "raw": "𐐬_tool"
+  },
+  {
+    "expected": "𐐅 tool",
+    "raw": "𐐭_tool"
+  },
+  {
+    "expected": "𐐆 tool",
+    "raw": "𐐮_tool"
+  },
+  {
+    "expected": "𐐇 tool",
+    "raw": "𐐯_tool"
+  },
+  {
+    "expected": "𐐈 tool",
+    "raw": "𐐰_tool"
+  },
+  {
+    "expected": "𐐉 tool",
+    "raw": "𐐱_tool"
+  },
+  {
+    "expected": "𐐊 tool",
+    "raw": "𐐲_tool"
+  },
+  {
+    "expected": "𐐋 tool",
+    "raw": "𐐳_tool"
+  },
+  {
+    "expected": "𐐌 tool",
+    "raw": "𐐴_tool"
+  },
+  {
+    "expected": "𐐍 tool",
+    "raw": "𐐵_tool"
+  },
+  {
+    "expected": "𐐎 tool",
+    "raw": "𐐶_tool"
+  },
+  {
+    "expected": "𐐏 tool",
+    "raw": "𐐷_tool"
+  },
+  {
+    "expected": "𐐐 tool",
+    "raw": "𐐸_tool"
+  },
+  {
+    "expected": "𐐑 tool",
+    "raw": "𐐹_tool"
+  },
+  {
+    "expected": "𐐒 tool",
+    "raw": "𐐺_tool"
+  },
+  {
+    "expected": "𐐓 tool",
+    "raw": "𐐻_tool"
+  },
+  {
+    "expected": "𐐔 tool",
+    "raw": "𐐼_tool"
+  },
+  {
+    "expected": "𐐕 tool",
+    "raw": "𐐽_tool"
+  },
+  {
+    "expected": "𐐖 tool",
+    "raw": "𐐾_tool"
+  },
+  {
+    "expected": "𐐗 tool",
+    "raw": "𐐿_tool"
+  },
+  {
+    "expected": "𐐘 tool",
+    "raw": "𐑀_tool"
+  },
+  {
+    "expected": "𐐙 tool",
+    "raw": "𐑁_tool"
+  },
+  {
+    "expected": "𐐚 tool",
+    "raw": "𐑂_tool"
+  },
+  {
+    "expected": "𐐛 tool",
+    "raw": "𐑃_tool"
+  },
+  {
+    "expected": "𐐜 tool",
+    "raw": "𐑄_tool"
+  },
+  {
+    "expected": "𐐝 tool",
+    "raw": "𐑅_tool"
+  },
+  {
+    "expected": "𐐞 tool",
+    "raw": "𐑆_tool"
+  },
+  {
+    "expected": "𐐟 tool",
+    "raw": "𐑇_tool"
+  },
+  {
+    "expected": "𐐠 tool",
+    "raw": "𐑈_tool"
+  },
+  {
+    "expected": "𐐡 tool",
+    "raw": "𐑉_tool"
+  },
+  {
+    "expected": "𐐢 tool",
+    "raw": "𐑊_tool"
+  },
+  {
+    "expected": "𐐣 tool",
+    "raw": "𐑋_tool"
+  },
+  {
+    "expected": "𐐤 tool",
+    "raw": "𐑌_tool"
+  },
+  {
+    "expected": "𐐥 tool",
+    "raw": "𐑍_tool"
+  },
+  {
+    "expected": "𐐦 tool",
+    "raw": "𐑎_tool"
+  },
+  {
+    "expected": "𐐧 tool",
+    "raw": "𐑏_tool"
+  },
+  {
+    "expected": "𐒰 tool",
+    "raw": "𐓘_tool"
+  },
+  {
+    "expected": "𐒱 tool",
+    "raw": "𐓙_tool"
+  },
+  {
+    "expected": "𐒲 tool",
+    "raw": "𐓚_tool"
+  },
+  {
+    "expected": "𐒳 tool",
+    "raw": "𐓛_tool"
+  },
+  {
+    "expected": "𐒴 tool",
+    "raw": "𐓜_tool"
+  },
+  {
+    "expected": "𐒵 tool",
+    "raw": "𐓝_tool"
+  },
+  {
+    "expected": "𐒶 tool",
+    "raw": "𐓞_tool"
+  },
+  {
+    "expected": "𐒷 tool",
+    "raw": "𐓟_tool"
+  },
+  {
+    "expected": "𐒸 tool",
+    "raw": "𐓠_tool"
+  },
+  {
+    "expected": "𐒹 tool",
+    "raw": "𐓡_tool"
+  },
+  {
+    "expected": "𐒺 tool",
+    "raw": "𐓢_tool"
+  },
+  {
+    "expected": "𐒻 tool",
+    "raw": "𐓣_tool"
+  },
+  {
+    "expected": "𐒼 tool",
+    "raw": "𐓤_tool"
+  },
+  {
+    "expected": "𐒽 tool",
+    "raw": "𐓥_tool"
+  },
+  {
+    "expected": "𐒾 tool",
+    "raw": "𐓦_tool"
+  },
+  {
+    "expected": "𐒿 tool",
+    "raw": "𐓧_tool"
+  },
+  {
+    "expected": "𐓀 tool",
+    "raw": "𐓨_tool"
+  },
+  {
+    "expected": "𐓁 tool",
+    "raw": "𐓩_tool"
+  },
+  {
+    "expected": "𐓂 tool",
+    "raw": "𐓪_tool"
+  },
+  {
+    "expected": "𐓃 tool",
+    "raw": "𐓫_tool"
+  },
+  {
+    "expected": "𐓄 tool",
+    "raw": "𐓬_tool"
+  },
+  {
+    "expected": "𐓅 tool",
+    "raw": "𐓭_tool"
+  },
+  {
+    "expected": "𐓆 tool",
+    "raw": "𐓮_tool"
+  },
+  {
+    "expected": "𐓇 tool",
+    "raw": "𐓯_tool"
+  },
+  {
+    "expected": "𐓈 tool",
+    "raw": "𐓰_tool"
+  },
+  {
+    "expected": "𐓉 tool",
+    "raw": "𐓱_tool"
+  },
+  {
+    "expected": "𐓊 tool",
+    "raw": "𐓲_tool"
+  },
+  {
+    "expected": "𐓋 tool",
+    "raw": "𐓳_tool"
+  },
+  {
+    "expected": "𐓌 tool",
+    "raw": "𐓴_tool"
+  },
+  {
+    "expected": "𐓍 tool",
+    "raw": "𐓵_tool"
+  },
+  {
+    "expected": "𐓎 tool",
+    "raw": "𐓶_tool"
+  },
+  {
+    "expected": "𐓏 tool",
+    "raw": "𐓷_tool"
+  },
+  {
+    "expected": "𐓐 tool",
+    "raw": "𐓸_tool"
+  },
+  {
+    "expected": "𐓑 tool",
+    "raw": "𐓹_tool"
+  },
+  {
+    "expected": "𐓒 tool",
+    "raw": "𐓺_tool"
+  },
+  {
+    "expected": "𐓓 tool",
+    "raw": "𐓻_tool"
+  },
+  {
+    "expected": "𐕰 tool",
+    "raw": "𐖗_tool"
+  },
+  {
+    "expected": "𐕱 tool",
+    "raw": "𐖘_tool"
+  },
+  {
+    "expected": "𐕲 tool",
+    "raw": "𐖙_tool"
+  },
+  {
+    "expected": "𐕳 tool",
+    "raw": "𐖚_tool"
+  },
+  {
+    "expected": "𐕴 tool",
+    "raw": "𐖛_tool"
+  },
+  {
+    "expected": "𐕵 tool",
+    "raw": "𐖜_tool"
+  },
+  {
+    "expected": "𐕶 tool",
+    "raw": "𐖝_tool"
+  },
+  {
+    "expected": "𐕷 tool",
+    "raw": "𐖞_tool"
+  },
+  {
+    "expected": "𐕸 tool",
+    "raw": "𐖟_tool"
+  },
+  {
+    "expected": "𐕹 tool",
+    "raw": "𐖠_tool"
+  },
+  {
+    "expected": "𐕺 tool",
+    "raw": "𐖡_tool"
+  },
+  {
+    "expected": "𐕼 tool",
+    "raw": "𐖣_tool"
+  },
+  {
+    "expected": "𐕽 tool",
+    "raw": "𐖤_tool"
+  },
+  {
+    "expected": "𐕾 tool",
+    "raw": "𐖥_tool"
+  },
+  {
+    "expected": "𐕿 tool",
+    "raw": "𐖦_tool"
+  },
+  {
+    "expected": "𐖀 tool",
+    "raw": "𐖧_tool"
+  },
+  {
+    "expected": "𐖁 tool",
+    "raw": "𐖨_tool"
+  },
+  {
+    "expected": "𐖂 tool",
+    "raw": "𐖩_tool"
+  },
+  {
+    "expected": "𐖃 tool",
+    "raw": "𐖪_tool"
+  },
+  {
+    "expected": "𐖄 tool",
+    "raw": "𐖫_tool"
+  },
+  {
+    "expected": "𐖅 tool",
+    "raw": "𐖬_tool"
+  },
+  {
+    "expected": "𐖆 tool",
+    "raw": "𐖭_tool"
+  },
+  {
+    "expected": "𐖇 tool",
+    "raw": "𐖮_tool"
+  },
+  {
+    "expected": "𐖈 tool",
+    "raw": "𐖯_tool"
+  },
+  {
+    "expected": "𐖉 tool",
+    "raw": "𐖰_tool"
+  },
+  {
+    "expected": "𐖊 tool",
+    "raw": "𐖱_tool"
+  },
+  {
+    "expected": "𐖌 tool",
+    "raw": "𐖳_tool"
+  },
+  {
+    "expected": "𐖍 tool",
+    "raw": "𐖴_tool"
+  },
+  {
+    "expected": "𐖎 tool",
+    "raw": "𐖵_tool"
+  },
+  {
+    "expected": "𐖏 tool",
+    "raw": "𐖶_tool"
+  },
+  {
+    "expected": "𐖐 tool",
+    "raw": "𐖷_tool"
+  },
+  {
+    "expected": "𐖑 tool",
+    "raw": "𐖸_tool"
+  },
+  {
+    "expected": "𐖒 tool",
+    "raw": "𐖹_tool"
+  },
+  {
+    "expected": "𐖔 tool",
+    "raw": "𐖻_tool"
+  },
+  {
+    "expected": "𐖕 tool",
+    "raw": "𐖼_tool"
+  },
+  {
+    "expected": "𐲀 tool",
+    "raw": "𐳀_tool"
+  },
+  {
+    "expected": "𐲁 tool",
+    "raw": "𐳁_tool"
+  },
+  {
+    "expected": "𐲂 tool",
+    "raw": "𐳂_tool"
+  },
+  {
+    "expected": "𐲃 tool",
+    "raw": "𐳃_tool"
+  },
+  {
+    "expected": "𐲄 tool",
+    "raw": "𐳄_tool"
+  },
+  {
+    "expected": "𐲅 tool",
+    "raw": "𐳅_tool"
+  },
+  {
+    "expected": "𐲆 tool",
+    "raw": "𐳆_tool"
+  },
+  {
+    "expected": "𐲇 tool",
+    "raw": "𐳇_tool"
+  },
+  {
+    "expected": "𐲈 tool",
+    "raw": "𐳈_tool"
+  },
+  {
+    "expected": "𐲉 tool",
+    "raw": "𐳉_tool"
+  },
+  {
+    "expected": "𐲊 tool",
+    "raw": "𐳊_tool"
+  },
+  {
+    "expected": "𐲋 tool",
+    "raw": "𐳋_tool"
+  },
+  {
+    "expected": "𐲌 tool",
+    "raw": "𐳌_tool"
+  },
+  {
+    "expected": "𐲍 tool",
+    "raw": "𐳍_tool"
+  },
+  {
+    "expected": "𐲎 tool",
+    "raw": "𐳎_tool"
+  },
+  {
+    "expected": "𐲏 tool",
+    "raw": "𐳏_tool"
+  },
+  {
+    "expected": "𐲐 tool",
+    "raw": "𐳐_tool"
+  },
+  {
+    "expected": "𐲑 tool",
+    "raw": "𐳑_tool"
+  },
+  {
+    "expected": "𐲒 tool",
+    "raw": "𐳒_tool"
+  },
+  {
+    "expected": "𐲓 tool",
+    "raw": "𐳓_tool"
+  },
+  {
+    "expected": "𐲔 tool",
+    "raw": "𐳔_tool"
+  },
+  {
+    "expected": "𐲕 tool",
+    "raw": "𐳕_tool"
+  },
+  {
+    "expected": "𐲖 tool",
+    "raw": "𐳖_tool"
+  },
+  {
+    "expected": "𐲗 tool",
+    "raw": "𐳗_tool"
+  },
+  {
+    "expected": "𐲘 tool",
+    "raw": "𐳘_tool"
+  },
+  {
+    "expected": "𐲙 tool",
+    "raw": "𐳙_tool"
+  },
+  {
+    "expected": "𐲚 tool",
+    "raw": "𐳚_tool"
+  },
+  {
+    "expected": "𐲛 tool",
+    "raw": "𐳛_tool"
+  },
+  {
+    "expected": "𐲜 tool",
+    "raw": "𐳜_tool"
+  },
+  {
+    "expected": "𐲝 tool",
+    "raw": "𐳝_tool"
+  },
+  {
+    "expected": "𐲞 tool",
+    "raw": "𐳞_tool"
+  },
+  {
+    "expected": "𐲟 tool",
+    "raw": "𐳟_tool"
+  },
+  {
+    "expected": "𐲠 tool",
+    "raw": "𐳠_tool"
+  },
+  {
+    "expected": "𐲡 tool",
+    "raw": "𐳡_tool"
+  },
+  {
+    "expected": "𐲢 tool",
+    "raw": "𐳢_tool"
+  },
+  {
+    "expected": "𐲣 tool",
+    "raw": "𐳣_tool"
+  },
+  {
+    "expected": "𐲤 tool",
+    "raw": "𐳤_tool"
+  },
+  {
+    "expected": "𐲥 tool",
+    "raw": "𐳥_tool"
+  },
+  {
+    "expected": "𐲦 tool",
+    "raw": "𐳦_tool"
+  },
+  {
+    "expected": "𐲧 tool",
+    "raw": "𐳧_tool"
+  },
+  {
+    "expected": "𐲨 tool",
+    "raw": "𐳨_tool"
+  },
+  {
+    "expected": "𐲩 tool",
+    "raw": "𐳩_tool"
+  },
+  {
+    "expected": "𐲪 tool",
+    "raw": "𐳪_tool"
+  },
+  {
+    "expected": "𐲫 tool",
+    "raw": "𐳫_tool"
+  },
+  {
+    "expected": "𐲬 tool",
+    "raw": "𐳬_tool"
+  },
+  {
+    "expected": "𐲭 tool",
+    "raw": "𐳭_tool"
+  },
+  {
+    "expected": "𐲮 tool",
+    "raw": "𐳮_tool"
+  },
+  {
+    "expected": "𐲯 tool",
+    "raw": "𐳯_tool"
+  },
+  {
+    "expected": "𐲰 tool",
+    "raw": "𐳰_tool"
+  },
+  {
+    "expected": "𐲱 tool",
+    "raw": "𐳱_tool"
+  },
+  {
+    "expected": "𐲲 tool",
+    "raw": "𐳲_tool"
+  },
+  {
+    "expected": "𐵐 tool",
+    "raw": "𐵰_tool"
+  },
+  {
+    "expected": "𐵑 tool",
+    "raw": "𐵱_tool"
+  },
+  {
+    "expected": "𐵒 tool",
+    "raw": "𐵲_tool"
+  },
+  {
+    "expected": "𐵓 tool",
+    "raw": "𐵳_tool"
+  },
+  {
+    "expected": "𐵔 tool",
+    "raw": "𐵴_tool"
+  },
+  {
+    "expected": "𐵕 tool",
+    "raw": "𐵵_tool"
+  },
+  {
+    "expected": "𐵖 tool",
+    "raw": "𐵶_tool"
+  },
+  {
+    "expected": "𐵗 tool",
+    "raw": "𐵷_tool"
+  },
+  {
+    "expected": "𐵘 tool",
+    "raw": "𐵸_tool"
+  },
+  {
+    "expected": "𐵙 tool",
+    "raw": "𐵹_tool"
+  },
+  {
+    "expected": "𐵚 tool",
+    "raw": "𐵺_tool"
+  },
+  {
+    "expected": "𐵛 tool",
+    "raw": "𐵻_tool"
+  },
+  {
+    "expected": "𐵜 tool",
+    "raw": "𐵼_tool"
+  },
+  {
+    "expected": "𐵝 tool",
+    "raw": "𐵽_tool"
+  },
+  {
+    "expected": "𐵞 tool",
+    "raw": "𐵾_tool"
+  },
+  {
+    "expected": "𐵟 tool",
+    "raw": "𐵿_tool"
+  },
+  {
+    "expected": "𐵠 tool",
+    "raw": "𐶀_tool"
+  },
+  {
+    "expected": "𐵡 tool",
+    "raw": "𐶁_tool"
+  },
+  {
+    "expected": "𐵢 tool",
+    "raw": "𐶂_tool"
+  },
+  {
+    "expected": "𐵣 tool",
+    "raw": "𐶃_tool"
+  },
+  {
+    "expected": "𐵤 tool",
+    "raw": "𐶄_tool"
+  },
+  {
+    "expected": "𐵥 tool",
+    "raw": "𐶅_tool"
+  },
+  {
+    "expected": "𑢠 tool",
+    "raw": "𑣀_tool"
+  },
+  {
+    "expected": "𑢡 tool",
+    "raw": "𑣁_tool"
+  },
+  {
+    "expected": "𑢢 tool",
+    "raw": "𑣂_tool"
+  },
+  {
+    "expected": "𑢣 tool",
+    "raw": "𑣃_tool"
+  },
+  {
+    "expected": "𑢤 tool",
+    "raw": "𑣄_tool"
+  },
+  {
+    "expected": "𑢥 tool",
+    "raw": "𑣅_tool"
+  },
+  {
+    "expected": "𑢦 tool",
+    "raw": "𑣆_tool"
+  },
+  {
+    "expected": "𑢧 tool",
+    "raw": "𑣇_tool"
+  },
+  {
+    "expected": "𑢨 tool",
+    "raw": "𑣈_tool"
+  },
+  {
+    "expected": "𑢩 tool",
+    "raw": "𑣉_tool"
+  },
+  {
+    "expected": "𑢪 tool",
+    "raw": "𑣊_tool"
+  },
+  {
+    "expected": "𑢫 tool",
+    "raw": "𑣋_tool"
+  },
+  {
+    "expected": "𑢬 tool",
+    "raw": "𑣌_tool"
+  },
+  {
+    "expected": "𑢭 tool",
+    "raw": "𑣍_tool"
+  },
+  {
+    "expected": "𑢮 tool",
+    "raw": "𑣎_tool"
+  },
+  {
+    "expected": "𑢯 tool",
+    "raw": "𑣏_tool"
+  },
+  {
+    "expected": "𑢰 tool",
+    "raw": "𑣐_tool"
+  },
+  {
+    "expected": "𑢱 tool",
+    "raw": "𑣑_tool"
+  },
+  {
+    "expected": "𑢲 tool",
+    "raw": "𑣒_tool"
+  },
+  {
+    "expected": "𑢳 tool",
+    "raw": "𑣓_tool"
+  },
+  {
+    "expected": "𑢴 tool",
+    "raw": "𑣔_tool"
+  },
+  {
+    "expected": "𑢵 tool",
+    "raw": "𑣕_tool"
+  },
+  {
+    "expected": "𑢶 tool",
+    "raw": "𑣖_tool"
+  },
+  {
+    "expected": "𑢷 tool",
+    "raw": "𑣗_tool"
+  },
+  {
+    "expected": "𑢸 tool",
+    "raw": "𑣘_tool"
+  },
+  {
+    "expected": "𑢹 tool",
+    "raw": "𑣙_tool"
+  },
+  {
+    "expected": "𑢺 tool",
+    "raw": "𑣚_tool"
+  },
+  {
+    "expected": "𑢻 tool",
+    "raw": "𑣛_tool"
+  },
+  {
+    "expected": "𑢼 tool",
+    "raw": "𑣜_tool"
+  },
+  {
+    "expected": "𑢽 tool",
+    "raw": "𑣝_tool"
+  },
+  {
+    "expected": "𑢾 tool",
+    "raw": "𑣞_tool"
+  },
+  {
+    "expected": "𑢿 tool",
+    "raw": "𑣟_tool"
+  },
+  {
+    "expected": "𖹀 tool",
+    "raw": "𖹠_tool"
+  },
+  {
+    "expected": "𖹁 tool",
+    "raw": "𖹡_tool"
+  },
+  {
+    "expected": "𖹂 tool",
+    "raw": "𖹢_tool"
+  },
+  {
+    "expected": "𖹃 tool",
+    "raw": "𖹣_tool"
+  },
+  {
+    "expected": "𖹄 tool",
+    "raw": "𖹤_tool"
+  },
+  {
+    "expected": "𖹅 tool",
+    "raw": "𖹥_tool"
+  },
+  {
+    "expected": "𖹆 tool",
+    "raw": "𖹦_tool"
+  },
+  {
+    "expected": "𖹇 tool",
+    "raw": "𖹧_tool"
+  },
+  {
+    "expected": "𖹈 tool",
+    "raw": "𖹨_tool"
+  },
+  {
+    "expected": "𖹉 tool",
+    "raw": "𖹩_tool"
+  },
+  {
+    "expected": "𖹊 tool",
+    "raw": "𖹪_tool"
+  },
+  {
+    "expected": "𖹋 tool",
+    "raw": "𖹫_tool"
+  },
+  {
+    "expected": "𖹌 tool",
+    "raw": "𖹬_tool"
+  },
+  {
+    "expected": "𖹍 tool",
+    "raw": "𖹭_tool"
+  },
+  {
+    "expected": "𖹎 tool",
+    "raw": "𖹮_tool"
+  },
+  {
+    "expected": "𖹏 tool",
+    "raw": "𖹯_tool"
+  },
+  {
+    "expected": "𖹐 tool",
+    "raw": "𖹰_tool"
+  },
+  {
+    "expected": "𖹑 tool",
+    "raw": "𖹱_tool"
+  },
+  {
+    "expected": "𖹒 tool",
+    "raw": "𖹲_tool"
+  },
+  {
+    "expected": "𖹓 tool",
+    "raw": "𖹳_tool"
+  },
+  {
+    "expected": "𖹔 tool",
+    "raw": "𖹴_tool"
+  },
+  {
+    "expected": "𖹕 tool",
+    "raw": "𖹵_tool"
+  },
+  {
+    "expected": "𖹖 tool",
+    "raw": "𖹶_tool"
+  },
+  {
+    "expected": "𖹗 tool",
+    "raw": "𖹷_tool"
+  },
+  {
+    "expected": "𖹘 tool",
+    "raw": "𖹸_tool"
+  },
+  {
+    "expected": "𖹙 tool",
+    "raw": "𖹹_tool"
+  },
+  {
+    "expected": "𖹚 tool",
+    "raw": "𖹺_tool"
+  },
+  {
+    "expected": "𖹛 tool",
+    "raw": "𖹻_tool"
+  },
+  {
+    "expected": "𖹜 tool",
+    "raw": "𖹼_tool"
+  },
+  {
+    "expected": "𖹝 tool",
+    "raw": "𖹽_tool"
+  },
+  {
+    "expected": "𖹞 tool",
+    "raw": "𖹾_tool"
+  },
+  {
+    "expected": "𖹟 tool",
+    "raw": "𖹿_tool"
+  },
+  {
+    "expected": "𖺠 tool",
+    "raw": "𖺻_tool"
+  },
+  {
+    "expected": "𖺡 tool",
+    "raw": "𖺼_tool"
+  },
+  {
+    "expected": "𖺢 tool",
+    "raw": "𖺽_tool"
+  },
+  {
+    "expected": "𖺣 tool",
+    "raw": "𖺾_tool"
+  },
+  {
+    "expected": "𖺤 tool",
+    "raw": "𖺿_tool"
+  },
+  {
+    "expected": "𖺥 tool",
+    "raw": "𖻀_tool"
+  },
+  {
+    "expected": "𖺦 tool",
+    "raw": "𖻁_tool"
+  },
+  {
+    "expected": "𖺧 tool",
+    "raw": "𖻂_tool"
+  },
+  {
+    "expected": "𖺨 tool",
+    "raw": "𖻃_tool"
+  },
+  {
+    "expected": "𖺩 tool",
+    "raw": "𖻄_tool"
+  },
+  {
+    "expected": "𖺪 tool",
+    "raw": "𖻅_tool"
+  },
+  {
+    "expected": "𖺫 tool",
+    "raw": "𖻆_tool"
+  },
+  {
+    "expected": "𖺬 tool",
+    "raw": "𖻇_tool"
+  },
+  {
+    "expected": "𖺭 tool",
+    "raw": "𖻈_tool"
+  },
+  {
+    "expected": "𖺮 tool",
+    "raw": "𖻉_tool"
+  },
+  {
+    "expected": "𖺯 tool",
+    "raw": "𖻊_tool"
+  },
+  {
+    "expected": "𖺰 tool",
+    "raw": "𖻋_tool"
+  },
+  {
+    "expected": "𖺱 tool",
+    "raw": "𖻌_tool"
+  },
+  {
+    "expected": "𖺲 tool",
+    "raw": "𖻍_tool"
+  },
+  {
+    "expected": "𖺳 tool",
+    "raw": "𖻎_tool"
+  },
+  {
+    "expected": "𖺴 tool",
+    "raw": "𖻏_tool"
+  },
+  {
+    "expected": "𖺵 tool",
+    "raw": "𖻐_tool"
+  },
+  {
+    "expected": "𖺶 tool",
+    "raw": "𖻑_tool"
+  },
+  {
+    "expected": "𖺷 tool",
+    "raw": "𖻒_tool"
+  },
+  {
+    "expected": "𖺸 tool",
+    "raw": "𖻓_tool"
+  },
+  {
+    "expected": "𞤀 tool",
+    "raw": "𞤢_tool"
+  },
+  {
+    "expected": "𞤁 tool",
+    "raw": "𞤣_tool"
+  },
+  {
+    "expected": "𞤂 tool",
+    "raw": "𞤤_tool"
+  },
+  {
+    "expected": "𞤃 tool",
+    "raw": "𞤥_tool"
+  },
+  {
+    "expected": "𞤄 tool",
+    "raw": "𞤦_tool"
+  },
+  {
+    "expected": "𞤅 tool",
+    "raw": "𞤧_tool"
+  },
+  {
+    "expected": "𞤆 tool",
+    "raw": "𞤨_tool"
+  },
+  {
+    "expected": "𞤇 tool",
+    "raw": "𞤩_tool"
+  },
+  {
+    "expected": "𞤈 tool",
+    "raw": "𞤪_tool"
+  },
+  {
+    "expected": "𞤉 tool",
+    "raw": "𞤫_tool"
+  },
+  {
+    "expected": "𞤊 tool",
+    "raw": "𞤬_tool"
+  },
+  {
+    "expected": "𞤋 tool",
+    "raw": "𞤭_tool"
+  },
+  {
+    "expected": "𞤌 tool",
+    "raw": "𞤮_tool"
+  },
+  {
+    "expected": "𞤍 tool",
+    "raw": "𞤯_tool"
+  },
+  {
+    "expected": "𞤎 tool",
+    "raw": "𞤰_tool"
+  },
+  {
+    "expected": "𞤏 tool",
+    "raw": "𞤱_tool"
+  },
+  {
+    "expected": "𞤐 tool",
+    "raw": "𞤲_tool"
+  },
+  {
+    "expected": "𞤑 tool",
+    "raw": "𞤳_tool"
+  },
+  {
+    "expected": "𞤒 tool",
+    "raw": "𞤴_tool"
+  },
+  {
+    "expected": "𞤓 tool",
+    "raw": "𞤵_tool"
+  },
+  {
+    "expected": "𞤔 tool",
+    "raw": "𞤶_tool"
+  },
+  {
+    "expected": "𞤕 tool",
+    "raw": "𞤷_tool"
+  },
+  {
+    "expected": "𞤖 tool",
+    "raw": "𞤸_tool"
+  },
+  {
+    "expected": "𞤗 tool",
+    "raw": "𞤹_tool"
+  },
+  {
+    "expected": "𞤘 tool",
+    "raw": "𞤺_tool"
+  },
+  {
+    "expected": "𞤙 tool",
+    "raw": "𞤻_tool"
+  },
+  {
+    "expected": "𞤚 tool",
+    "raw": "𞤼_tool"
+  },
+  {
+    "expected": "𞤛 tool",
+    "raw": "𞤽_tool"
+  },
+  {
+    "expected": "𞤜 tool",
+    "raw": "𞤾_tool"
+  },
+  {
+    "expected": "𞤝 tool",
+    "raw": "𞤿_tool"
+  },
+  {
+    "expected": "𞤞 tool",
+    "raw": "𞥀_tool"
+  },
+  {
+    "expected": "𞤟 tool",
+    "raw": "𞥁_tool"
+  },
+  {
+    "expected": "𞤠 tool",
+    "raw": "𞥂_tool"
+  },
+  {
+    "expected": "𞤡 tool",
+    "raw": "𞥃_tool"
+  },
+  {
+    "expected": "Tool",
+    "raw": ""
+  },
+  {
+    "expected": "Shell",
+    "raw": "shell"
+  },
+  {
+    "expected": "Foo bar",
+    "raw": " foo__ bar "
+  },
+  {
+    "expected": "ß tool",
+    "raw": "ß_tool"
+  },
+  {
+    "expected": "ﬁ tool",
+    "raw": "ﬁ_tool"
+  },
+  {
+    "expected": "ᾈ tool",
+    "raw": "ᾀ_tool"
+  },
+  {
+    "expected": "🙂tool",
+    "raw": "🙂tool"
+  }
+]
