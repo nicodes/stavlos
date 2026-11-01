@@ -145,7 +145,12 @@ impl Job {
             .stdin(Stdio::null())
             .stdout(Stdio::from(write.try_clone()?))
             .stderr(Stdio::from(write));
-        let child = command.spawn().context("start command")?;
+        let (child, ownership) = crate::ownedchild::spawn(|| {
+            let child = command.spawn()?;
+            let pid = child.id() as i32;
+            Ok((child, pid))
+        })
+        .context("start command")?;
         drop(command);
         let pid = child.id() as i32;
         let started = SystemTime::now();
@@ -171,9 +176,11 @@ impl Job {
         let child = Arc::new(Mutex::new(Some(child)));
         let child_worker = child.clone();
         let worker_state = state.clone();
+        let worker_ownership = ownership.clone();
         if let Err(error) = std::thread::Builder::new()
             .name(format!("stavlos-job-{pid}"))
             .spawn(move || {
+                let _ownership = worker_ownership;
                 let child = child_worker.lock().unwrap().take().unwrap();
                 let completion = supervise(child, File::from(read), &worker_state.tail);
                 *worker_state.completion.lock().unwrap() = Some(completion);

@@ -300,6 +300,15 @@ impl Log {
         }
         Ok(series)
     }
+    pub fn cache_totals(&self, from: DateTime<Utc>) -> Result<[i64; 2]> {
+        Ok(self.reader()?.query_row(
+            "SELECT COALESCE(SUM(fresh),0),COALESCE(SUM(cached),0) FROM usage WHERE time>=?1",
+            [from
+                .timestamp_nanos_opt()
+                .ok_or_else(|| anyhow::anyhow!("usage timestamp outside range"))?],
+            |row| Ok([row.get(0)?, row.get(1)?]),
+        )?)
+    }
     pub fn cache_usage(&self, from: DateTime<Utc>) -> Result<BTreeMap<String, [i64; 2]>> {
         let db = self.reader()?;
         let mut stmt=db.prepare("SELECT provider,sum(fresh),sum(cached) FROM usage WHERE time>=?1 AND provider<>'' GROUP BY provider")?;
