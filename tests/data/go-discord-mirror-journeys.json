@@ -1,0 +1,1618 @@
+[
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 100,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "old history"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 101,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:tui",
+          "text": "terminal task"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 102,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:discord",
+          "text": "loop"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 103,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "agent speech"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 104,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "child",
+          "parent": "root",
+          "role": "research",
+          "name": "scout",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 105,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "role": "reviewer",
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 106,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "grandchild",
+          "parent": "root",
+          "role": "review",
+          "name": "lint",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 107,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "fake/new",
+          "reason": "quota cooldown"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 108,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "noisy",
+          "variant": "noisy"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 109,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.killed",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {}
+      },
+      {
+        "global": 0,
+        "seq": 110,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 111,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "dir": "noisy"
+        }
+      }
+    ],
+    "expected": [
+      {
+        "agent": "Operator",
+        "body": "terminal task",
+        "terminal": "operator"
+      },
+      {
+        "agent": "main",
+        "body": "agent speech",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "scout joined (research).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "main updated · name → captain · role → reviewer",
+        "terminal": ""
+      },
+      {
+        "agent": "captain",
+        "body": "lint joined (review).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "captain updated · model → fake/new · quota cooldown",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "scout stopped.",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "Default directory changed to noisy. Mode is ask; remembered approvals cleared.",
+        "terminal": ""
+      }
+    ],
+    "name": "operators-1/variant-0",
+    "operators": 1
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 100,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "old history",
+          "to": [
+            "main"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 101,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:tui",
+          "text": "terminal task",
+          "to": [
+            "main"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 102,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:discord",
+          "text": "loop",
+          "to": [
+            "main"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 103,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "agent speech",
+          "to": [
+            "main"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 104,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "child",
+          "parent": "root",
+          "role": "research",
+          "name": "scout",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 105,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "role": "reviewer",
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 106,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "grandchild",
+          "parent": "root",
+          "role": "review",
+          "name": "lint",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 107,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "fake/new",
+          "reason": "quota cooldown"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 108,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "noisy",
+          "variant": "noisy"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 109,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.killed",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {}
+      },
+      {
+        "global": 0,
+        "seq": 110,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 111,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "dir": "noisy"
+        }
+      }
+    ],
+    "expected": [
+      {
+        "agent": "Operator",
+        "body": "terminal task",
+        "terminal": "operator"
+      },
+      {
+        "agent": "main",
+        "body": "@main agent speech",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "scout joined (research).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "main updated · name → captain · role → reviewer",
+        "terminal": ""
+      },
+      {
+        "agent": "captain",
+        "body": "lint joined (review).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "captain updated · model → fake/new · quota cooldown",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "scout stopped.",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "Default directory changed to noisy. Mode is ask; remembered approvals cleared.",
+        "terminal": ""
+      }
+    ],
+    "name": "operators-1/variant-1",
+    "operators": 1
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 100,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "old history",
+          "to": [
+            "user"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 101,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:tui",
+          "text": "terminal task",
+          "to": [
+            "user"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 102,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:discord",
+          "text": "loop",
+          "to": [
+            "user"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 103,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "agent speech",
+          "to": [
+            "user"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 104,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "child",
+          "parent": "root",
+          "role": "research",
+          "name": "scout",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 105,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "role": "reviewer",
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 106,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "grandchild",
+          "parent": "root",
+          "role": "review",
+          "name": "lint",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 107,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "fake/new",
+          "reason": "quota cooldown"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 108,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "noisy",
+          "variant": "noisy"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 109,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.killed",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {}
+      },
+      {
+        "global": 0,
+        "seq": 110,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 111,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "dir": "noisy"
+        }
+      }
+    ],
+    "expected": [
+      {
+        "agent": "Operator",
+        "body": "@user terminal task",
+        "terminal": "operator"
+      },
+      {
+        "agent": "main",
+        "body": "agent speech",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "scout joined (research).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "main updated · name → captain · role → reviewer",
+        "terminal": ""
+      },
+      {
+        "agent": "captain",
+        "body": "lint joined (review).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "captain updated · model → fake/new · quota cooldown",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "scout stopped.",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "Default directory changed to noisy. Mode is ask; remembered approvals cleared.",
+        "terminal": ""
+      }
+    ],
+    "name": "operators-1/variant-2",
+    "operators": 1
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 100,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "old history",
+          "to": [
+            "main",
+            "user",
+            "scout"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 101,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:tui",
+          "text": "terminal task",
+          "to": [
+            "main",
+            "user",
+            "scout"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 102,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:discord",
+          "text": "loop",
+          "to": [
+            "main",
+            "user",
+            "scout"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 103,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "agent speech",
+          "to": [
+            "main",
+            "user",
+            "scout"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 104,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "child",
+          "parent": "root",
+          "role": "research",
+          "name": "scout",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 105,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "role": "reviewer",
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 106,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "grandchild",
+          "parent": "root",
+          "role": "review",
+          "name": "lint",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 107,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "fake/new",
+          "reason": "quota cooldown"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 108,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "noisy",
+          "variant": "noisy"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 109,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.killed",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {}
+      },
+      {
+        "global": 0,
+        "seq": 110,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 111,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "dir": "noisy"
+        }
+      }
+    ],
+    "expected": [
+      {
+        "agent": "Operator",
+        "body": "@main @user @scout terminal task",
+        "terminal": "operator"
+      },
+      {
+        "agent": "main",
+        "body": "@main @scout agent speech",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "scout joined (research).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "main updated · name → captain · role → reviewer",
+        "terminal": ""
+      },
+      {
+        "agent": "captain",
+        "body": "lint joined (review).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "captain updated · model → fake/new · quota cooldown",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "scout stopped.",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "Default directory changed to noisy. Mode is ask; remembered approvals cleared.",
+        "terminal": ""
+      }
+    ],
+    "name": "operators-1/variant-3",
+    "operators": 1
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 100,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "old history"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 101,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:tui",
+          "text": "terminal task"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 102,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:discord",
+          "text": "loop"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 103,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "agent speech"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 104,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "child",
+          "parent": "root",
+          "role": "research",
+          "name": "scout",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 105,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "role": "reviewer",
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 106,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "grandchild",
+          "parent": "root",
+          "role": "review",
+          "name": "lint",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 107,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "fake/new",
+          "reason": "quota cooldown"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 108,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "noisy",
+          "variant": "noisy"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 109,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.killed",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {}
+      },
+      {
+        "global": 0,
+        "seq": 110,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 111,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "dir": "noisy"
+        }
+      }
+    ],
+    "expected": [
+      {
+        "agent": "",
+        "body": "**You (terminal)**\nterminal task",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "agent speech",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "scout joined (research).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "main updated · name → captain · role → reviewer",
+        "terminal": ""
+      },
+      {
+        "agent": "captain",
+        "body": "lint joined (review).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "captain updated · model → fake/new · quota cooldown",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "scout stopped.",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "Default directory changed to noisy. Mode is ask; remembered approvals cleared.",
+        "terminal": ""
+      }
+    ],
+    "name": "operators-2/variant-0",
+    "operators": 2
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 100,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "old history",
+          "to": [
+            "main"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 101,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:tui",
+          "text": "terminal task",
+          "to": [
+            "main"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 102,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:discord",
+          "text": "loop",
+          "to": [
+            "main"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 103,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "agent speech",
+          "to": [
+            "main"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 104,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "child",
+          "parent": "root",
+          "role": "research",
+          "name": "scout",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 105,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "role": "reviewer",
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 106,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "grandchild",
+          "parent": "root",
+          "role": "review",
+          "name": "lint",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 107,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "fake/new",
+          "reason": "quota cooldown"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 108,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "noisy",
+          "variant": "noisy"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 109,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.killed",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {}
+      },
+      {
+        "global": 0,
+        "seq": 110,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 111,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "dir": "noisy"
+        }
+      }
+    ],
+    "expected": [
+      {
+        "agent": "",
+        "body": "**You (terminal)**\nterminal task",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "@main agent speech",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "scout joined (research).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "main updated · name → captain · role → reviewer",
+        "terminal": ""
+      },
+      {
+        "agent": "captain",
+        "body": "lint joined (review).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "captain updated · model → fake/new · quota cooldown",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "scout stopped.",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "Default directory changed to noisy. Mode is ask; remembered approvals cleared.",
+        "terminal": ""
+      }
+    ],
+    "name": "operators-2/variant-1",
+    "operators": 2
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 100,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "old history",
+          "to": [
+            "user"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 101,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:tui",
+          "text": "terminal task",
+          "to": [
+            "user"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 102,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:discord",
+          "text": "loop",
+          "to": [
+            "user"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 103,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "agent speech",
+          "to": [
+            "user"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 104,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "child",
+          "parent": "root",
+          "role": "research",
+          "name": "scout",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 105,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "role": "reviewer",
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 106,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "grandchild",
+          "parent": "root",
+          "role": "review",
+          "name": "lint",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 107,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "fake/new",
+          "reason": "quota cooldown"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 108,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "noisy",
+          "variant": "noisy"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 109,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.killed",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {}
+      },
+      {
+        "global": 0,
+        "seq": 110,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 111,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "dir": "noisy"
+        }
+      }
+    ],
+    "expected": [
+      {
+        "agent": "",
+        "body": "**You (terminal)**\n@user terminal task",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "agent speech",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "scout joined (research).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "main updated · name → captain · role → reviewer",
+        "terminal": ""
+      },
+      {
+        "agent": "captain",
+        "body": "lint joined (review).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "captain updated · model → fake/new · quota cooldown",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "scout stopped.",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "Default directory changed to noisy. Mode is ask; remembered approvals cleared.",
+        "terminal": ""
+      }
+    ],
+    "name": "operators-2/variant-2",
+    "operators": 2
+  },
+  {
+    "events": [
+      {
+        "global": 0,
+        "seq": 100,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "old history",
+          "to": [
+            "main",
+            "user",
+            "scout"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 101,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:tui",
+          "text": "terminal task",
+          "to": [
+            "main",
+            "user",
+            "scout"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 102,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.posted",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "human:discord",
+          "text": "loop",
+          "to": [
+            "main",
+            "user",
+            "scout"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 103,
+        "channel": "channel",
+        "agent": "root",
+        "type": "chat.message",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "from": "main",
+          "text": "agent speech",
+          "to": [
+            "main",
+            "user",
+            "scout"
+          ]
+        }
+      },
+      {
+        "global": 0,
+        "seq": 104,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "child",
+          "parent": "root",
+          "role": "research",
+          "name": "scout",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 105,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "role": "reviewer",
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 106,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.spawned",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "id": "grandchild",
+          "parent": "root",
+          "role": "review",
+          "name": "lint",
+          "depth": 0
+        }
+      },
+      {
+        "global": 0,
+        "seq": 107,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "fake/new",
+          "reason": "quota cooldown"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 108,
+        "channel": "channel",
+        "agent": "root",
+        "type": "agent.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "model": "noisy",
+          "variant": "noisy"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 109,
+        "channel": "channel",
+        "agent": "child",
+        "type": "agent.killed",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {}
+      },
+      {
+        "global": 0,
+        "seq": 110,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "name": "captain"
+        }
+      },
+      {
+        "global": 0,
+        "seq": 111,
+        "channel": "channel",
+        "type": "channel.updated",
+        "time": "0001-01-01T00:00:00Z",
+        "payload": {
+          "dir": "noisy"
+        }
+      }
+    ],
+    "expected": [
+      {
+        "agent": "",
+        "body": "**You (terminal)**\n@main @user @scout terminal task",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "@main @scout agent speech",
+        "terminal": ""
+      },
+      {
+        "agent": "main",
+        "body": "scout joined (research).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "main updated · name → captain · role → reviewer",
+        "terminal": ""
+      },
+      {
+        "agent": "captain",
+        "body": "lint joined (review).",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "captain updated · model → fake/new · quota cooldown",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "scout stopped.",
+        "terminal": ""
+      },
+      {
+        "agent": "",
+        "body": "Default directory changed to noisy. Mode is ask; remembered approvals cleared.",
+        "terminal": ""
+      }
+    ],
+    "name": "operators-2/variant-3",
+    "operators": 2
+  }
+]
