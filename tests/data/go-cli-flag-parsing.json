@@ -1,0 +1,144 @@
+[
+  {
+    "args": [],
+    "dir": "",
+    "error": "",
+    "model": "",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "--model",
+      "fake/model",
+      "--root",
+      "general",
+      "--dir=/project",
+      "--no-tui"
+    ],
+    "dir": "/project",
+    "error": "",
+    "model": "fake/model",
+    "no_tui": true,
+    "root": "general"
+  },
+  {
+    "args": [
+      "-no-tui=false",
+      "--dir",
+      "/project"
+    ],
+    "dir": "/project",
+    "error": "",
+    "model": "",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "--no-tui=1"
+    ],
+    "dir": "",
+    "error": "",
+    "model": "",
+    "no_tui": true,
+    "root": ""
+  },
+  {
+    "args": [
+      "--no-tui=FALSE"
+    ],
+    "dir": "",
+    "error": "",
+    "model": "",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "--no-tui=bad"
+    ],
+    "dir": "",
+    "error": "invalid boolean value \"bad\" for -no-tui: parse error",
+    "model": "",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "--model"
+    ],
+    "dir": "",
+    "error": "flag needs an argument: -model",
+    "model": "",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "--unknown",
+      "value"
+    ],
+    "dir": "",
+    "error": "flag provided but not defined: -unknown",
+    "model": "",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "positional",
+      "--unknown"
+    ],
+    "dir": "",
+    "error": "",
+    "model": "",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "--",
+      "--unknown"
+    ],
+    "dir": "",
+    "error": "",
+    "model": "",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "---model",
+      "value"
+    ],
+    "dir": "",
+    "error": "bad flag syntax: ---model",
+    "model": "",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "--model=",
+      "--model=last"
+    ],
+    "dir": "",
+    "error": "",
+    "model": "last",
+    "no_tui": false,
+    "root": ""
+  },
+  {
+    "args": [
+      "--model",
+      "--root",
+      "--no-tui"
+    ],
+    "dir": "",
+    "error": "",
+    "model": "--root",
+    "no_tui": true,
+    "root": ""
+  }
+]

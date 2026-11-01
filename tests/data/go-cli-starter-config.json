@@ -1,0 +1,163 @@
+[
+  {
+    "expected": {
+      "rootAgent": "general",
+      "mode": "ask",
+      "limits": {
+        "maxDepth": 3,
+        "maxAgents": 6,
+        "maxCallsPerTurn": 200,
+        "maxChannelCalls": 400
+      },
+      "escalation": {
+        "claimTimeout": "30s",
+        "answerTimeout": "3m",
+        "default": "deny"
+      },
+      "compaction": {
+        "threshold": 0.9,
+        "maxTokens": 150000,
+        "clearTokens": 40000,
+        "keepTokens": 15000,
+        "maxToolOutput": "50kb"
+      },
+      "policy": {
+        "agent": "allow",
+        "ask": "allow",
+        "channel": "allow",
+        "fetch": "ask",
+        "glob": "allow",
+        "grep": "allow",
+        "message": "allow",
+        "operator": "ask",
+        "patch": "ask",
+        "read": "allow",
+        "search": "ask",
+        "sheet": "ask",
+        "shell": {
+          "*": "ask",
+          "git push*": "ask",
+          "rm -rf*": "deny"
+        },
+        "shell_kill": "allow",
+        "skill": "allow",
+        "todo": "allow"
+      },
+      "reminders": true,
+      "resumeAfterLimit": true,
+      "sandbox": {
+        "enabled": true,
+        "network": true
+      }
+    },
+    "model": ""
+  },
+  {
+    "expected": {
+      "model": "fake/model",
+      "rootAgent": "general",
+      "mode": "ask",
+      "limits": {
+        "maxDepth": 3,
+        "maxAgents": 6,
+        "maxCallsPerTurn": 200,
+        "maxChannelCalls": 400
+      },
+      "escalation": {
+        "claimTimeout": "30s",
+        "answerTimeout": "3m",
+        "default": "deny"
+      },
+      "compaction": {
+        "threshold": 0.9,
+        "maxTokens": 150000,
+        "clearTokens": 40000,
+        "keepTokens": 15000,
+        "maxToolOutput": "50kb"
+      },
+      "policy": {
+        "agent": "allow",
+        "ask": "allow",
+        "channel": "allow",
+        "fetch": "ask",
+        "glob": "allow",
+        "grep": "allow",
+        "message": "allow",
+        "operator": "ask",
+        "patch": "ask",
+        "read": "allow",
+        "search": "ask",
+        "sheet": "ask",
+        "shell": {
+          "*": "ask",
+          "git push*": "ask",
+          "rm -rf*": "deny"
+        },
+        "shell_kill": "allow",
+        "skill": "allow",
+        "todo": "allow"
+      },
+      "reminders": true,
+      "resumeAfterLimit": true,
+      "sandbox": {
+        "enabled": true,
+        "network": true
+      }
+    },
+    "model": "fake/model"
+  },
+  {
+    "expected": {
+      "model": "provider/id\u003c\u003e\u0026",
+      "rootAgent": "general",
+      "mode": "ask",
+      "limits": {
+        "maxDepth": 3,
+        "maxAgents": 6,
+        "maxCallsPerTurn": 200,
+        "maxChannelCalls": 400
+      },
+      "escalation": {
+        "claimTimeout": "30s",
+        "answerTimeout": "3m",
+        "default": "deny"
+      },
+      "compaction": {
+        "threshold": 0.9,
+        "maxTokens": 150000,
+        "clearTokens": 40000,
+        "keepTokens": 15000,
+        "maxToolOutput": "50kb"
+      },
+      "policy": {
+        "agent": "allow",
+        "ask": "allow",
+        "channel": "allow",
+        "fetch": "ask",
+        "glob": "allow",
+        "grep": "allow",
+        "message": "allow",
+        "operator": "ask",
+        "patch": "ask",
+        "read": "allow",
+        "search": "ask",
+        "sheet": "ask",
+        "shell": {
+          "*": "ask",
+          "git push*": "ask",
+          "rm -rf*": "deny"
+        },
+        "shell_kill": "allow",
+        "skill": "allow",
+        "todo": "allow"
+      },
+      "reminders": true,
+      "resumeAfterLimit": true,
+      "sandbox": {
+        "enabled": true,
+        "network": true
+      }
+    },
+    "model": "provider/id\u003c\u003e\u0026"
+  }
+]
