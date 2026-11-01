@@ -3,6 +3,9 @@ use chrono::{DateTime, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, value::RawValue};
 include!("event_types.rs");
+#[path = "event_payloads.rs"]
+mod payloads;
+pub use payloads::*;
 fn zero_time() -> DateTime<Utc> {
     DateTime::from_timestamp(-62135596800, 0).unwrap()
 }
@@ -49,6 +52,14 @@ pub struct Event {
     pub payload: Option<Box<RawValue>>,
 }
 impl Event {
+    pub fn decode<T: serde::de::DeserializeOwned + Default>(&self) -> serde_json::Result<T> {
+        let raw = self.payload.as_ref().map_or("", |payload| payload.get());
+        if raw.trim() == "null" {
+            Ok(T::default())
+        } else {
+            serde_json::from_str(raw)
+        }
+    }
     pub fn new(
         channel: impl Into<String>,
         agent: impl Into<String>,

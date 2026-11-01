@@ -1,37 +1,48 @@
-// Existing event vocabulary; names and payload contracts remain versioned by the log.
-pub const CHANNEL_CREATED: &str = "channel.created";
-pub const CHANNEL_UPDATED: &str = "channel.updated";
-pub const CHANNEL_ARCHIVED: &str = "channel.archived";
-pub const CHANNEL_DIR_ADDED: &str = "channel.dir_added";
-pub const CHANNEL_DIR_REMOVED: &str = "channel.dir_removed";
-pub const CHAT_POSTED: &str = "chat.posted";
-pub const CHAT_MESSAGE: &str = "chat.message";
-pub const AGENT_SPAWNED: &str = "agent.spawned";
-pub const AGENT_UPDATED: &str = "agent.updated";
-pub const AGENT_KILLED: &str = "agent.killed";
-pub const AGENT_CANCELLED: &str = "agent.cancelled";
-pub const INPUT_QUEUED: &str = "input.queued";
-pub const INPUT_TAKEN: &str = "input.taken";
-pub const MODEL_CALL_STARTED: &str = "model.call_started";
-pub const MODEL_CALL_COMPLETED: &str = "model.call_completed";
-pub const TURN_STARTED: &str = "turn.started";
-pub const ASSISTANT_MESSAGE: &str = "assistant.message";
-pub const TOOL_STARTED: &str = "tool.started";
-pub const TOOL_FINISHED: &str = "tool.finished";
-pub const TURN_ENDED: &str = "turn.ended";
-pub const TURN_ABORTED: &str = "turn.aborted";
-pub const ASK_REQUESTED: &str = "ask.requested";
-pub const ASK_RESOLVED: &str = "ask.resolved";
-pub const PERMIT_GRANTED: &str = "permit.granted";
-pub const JOB_STARTED: &str = "job.started";
-pub const JOB_FINISHED: &str = "job.finished";
-pub const JOB_STOPPED: &str = "job.stopped";
-pub const TODO_CHANGED: &str = "todo.changed";
-pub const SHEET_WRITTEN: &str = "sheet.written";
-pub const SHEET_DELETED: &str = "sheet.deleted";
-pub const MCPSTARTED: &str = "mcp.started";
-pub const MCPFAILED: &str = "mcp.failed";
-pub const MCPSTOPPED: &str = "mcp.stopped";
-pub const COMPACTION_STARTED: &str = "compaction.started";
-pub const COMPACTION_DONE: &str = "compaction.done";
-pub const COMPACTION_FAILED: &str = "compaction.failed";
+// The existing event vocabulary; new variants require every state/history match to be updated.
+macro_rules! event_vocabulary {
+    ($($constant:ident,$variant:ident=>$value:literal),*$(,)?) => {
+        $(pub const $constant:&str=$value;)*
+        #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
+        pub enum Kind {$($variant,)* #[default] Unknown}
+        impl Kind {pub fn parse(value:&str)->Self {match value {$($value=>Self::$variant,)*_=>Self::Unknown}}}
+        pub const ALL_TYPES:&[&str]=&[$($value),*];
+    };
+}
+event_vocabulary! {
+    CHANNEL_CREATED,ChannelCreated=>"channel.created",
+    CHANNEL_UPDATED,ChannelUpdated=>"channel.updated",
+    CHANNEL_ARCHIVED,ChannelArchived=>"channel.archived",
+    CHANNEL_DIR_ADDED,ChannelDirAdded=>"channel.dir_added",
+    CHANNEL_DIR_REMOVED,ChannelDirRemoved=>"channel.dir_removed",
+    CHAT_POSTED,ChatPosted=>"chat.posted",
+    CHAT_MESSAGE,ChatMessage=>"chat.message",
+    AGENT_SPAWNED,AgentSpawned=>"agent.spawned",
+    AGENT_UPDATED,AgentUpdated=>"agent.updated",
+    AGENT_KILLED,AgentKilled=>"agent.killed",
+    AGENT_CANCELLED,AgentCancelled=>"agent.cancelled",
+    INPUT_QUEUED,InputQueued=>"input.queued",
+    INPUT_TAKEN,InputTaken=>"input.taken",
+    MODEL_CALL_STARTED,ModelCallStarted=>"model.call_started",
+    MODEL_CALL_COMPLETED,ModelCallCompleted=>"model.call_completed",
+    TURN_STARTED,TurnStarted=>"turn.started",
+    ASSISTANT_MESSAGE,AssistantMessage=>"assistant.message",
+    TOOL_STARTED,ToolStarted=>"tool.started",
+    TOOL_FINISHED,ToolFinished=>"tool.finished",
+    TURN_ENDED,TurnEnded=>"turn.ended",
+    TURN_ABORTED,TurnAborted=>"turn.aborted",
+    ASK_REQUESTED,AskRequested=>"ask.requested",
+    ASK_RESOLVED,AskResolved=>"ask.resolved",
+    PERMIT_GRANTED,PermitGranted=>"permit.granted",
+    JOB_STARTED,JobStarted=>"job.started",
+    JOB_FINISHED,JobFinished=>"job.finished",
+    JOB_STOPPED,JobStopped=>"job.stopped",
+    TODO_CHANGED,TodoChanged=>"todo.changed",
+    SHEET_WRITTEN,SheetWritten=>"sheet.written",
+    SHEET_DELETED,SheetDeleted=>"sheet.deleted",
+    MCPSTARTED,McpStarted=>"mcp.started",
+    MCPFAILED,McpFailed=>"mcp.failed",
+    MCPSTOPPED,McpStopped=>"mcp.stopped",
+    COMPACTION_STARTED,CompactionStarted=>"compaction.started",
+    COMPACTION_DONE,CompactionDone=>"compaction.done",
+    COMPACTION_FAILED,CompactionFailed=>"compaction.failed",
+}
