@@ -6,7 +6,6 @@ from pathlib import Path
 import pty
 import select
 import signal
-import socket
 import sqlite3
 import struct
 import subprocess
@@ -52,8 +51,8 @@ with tempfile.TemporaryDirectory(prefix='stavlos-terminal-') as scratch:
         client = subprocess.Popen([binary, 'open', channel], env=env, stdin=slave, stdout=slave,
                                   stderr=slave, preexec_fn=controlling_terminal)
 
-        def wait_text(expected, seconds=8):
-            collected = bytearray()
+        def wait_text(expected, seconds=8, initial=b''):
+            collected = bytearray(initial)
             deadline = time.monotonic() + seconds
             while expected not in collected:
                 if client.poll() is not None:
@@ -68,9 +67,16 @@ with tempfile.TemporaryDirectory(prefix='stavlos-terminal-') as scratch:
         for command, expected in [(b'/help\r', b'Tab focus'), (b'/providers\r', b'Providers'),
                                   (b'/settings\r', b'project settings'), (b'/tokens system\r', b'tokens over time')]:
             os.write(master, command)
-            wait_text(expected)
+            drawn = wait_text(expected)
+            if command.startswith(b'/settings'):
+                # The title is drawn while config.list/read are still in flight.
+                # Its normal controls replace Working only after the document loads.
+                wait_text(b'Ctrl+L', initial=drawn)
+            if command.startswith(b'/help'):
+                continue
             os.write(master, b'\x1b')
-            time.sleep(0.1)
+            # Leave the escape prefix isolated from the next command's keys.
+            time.sleep(0.2)
         os.write(master, b'\x03')
         wait_text(b'press ctrl+c again')
         assert client.poll() is None, 'the first Ctrl+C must not quit'
