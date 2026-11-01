@@ -1,5 +1,6 @@
 //! CLI actions use the same owner socket as the terminal and browser clients.
 mod auth;
+pub use auth::open_browser;
 pub mod daemon;
 pub mod daemonctl;
 use crate::{

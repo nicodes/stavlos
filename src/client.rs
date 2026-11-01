@@ -148,6 +148,10 @@ impl Client {
     pub async fn notification(&self) -> Option<Response> {
         self.notifications.lock().await.recv().await
     }
+    /// Drain only immediately available frames after receiving the first notification.
+    pub fn try_notification(&self) -> Option<Response> {
+        self.notifications.try_lock().ok()?.try_recv().ok()
+    }
     pub async fn call_raw(
         &self,
         method: &str,
