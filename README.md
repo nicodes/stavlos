@@ -1,4 +1,4 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 0fd55f69482b21780befba478334b7383132bf4b70732e5e4a0cdb863f1f387d -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 538ed1acc9d78edad18e5a2eb6bafa50e857c05368ffa90fa77505c7b2ef79bb -->
 
 # stavlos
 
@@ -55,7 +55,7 @@ Tool versions and native tasks live in `mise.toml`. Prepare the pinned helper so
 
 ```sh
 git clone https://github.com/nicodes/tools.git .ci-tools
-git -C .ci-tools checkout --detach f412061a7a3f0914db9e09d1159e69504aee8706
+git -C .ci-tools checkout --detach a1c0321f3b4917a7e99eca42e241e46670f6e1e1
 mise install
 mise run check
 ```
