@@ -7,6 +7,7 @@ use crate::{
 use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 pub async fn run() -> Result<()> {
+    httpcontract::init_logging();
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.iter().any(|s| s == "--help" || s == "-h") {
         println!(

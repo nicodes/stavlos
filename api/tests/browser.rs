@@ -531,3 +531,29 @@ async fn input_operation_outlives_its_caller_and_restart_never_replays_uncertain
     assert!(receiver.try_recv().is_err());
     drop(restarted);
 }
+
+#[tokio::test]
+async fn public_health_and_readiness_follow_the_daemon_lifecycle() {
+    let fixture = Fixture::new().await;
+    for path in ["/healthz", "/readyz"] {
+        let response = fixture.request("GET", path, &[], "").await;
+        assert_eq!(response.status(), 200);
+        assert!(response.headers().contains_key("x-request-id"));
+        let value: Value =
+            serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap();
+        assert!(value["revision"].as_str().is_some_and(|v| !v.is_empty()));
+        let head = fixture.request("HEAD", path, &[], "").await;
+        assert_eq!(head.status(), 200);
+        assert!(to_bytes(head.into_body(), 65536).await.unwrap().is_empty());
+    }
+    fixture.stop.send_replace(true);
+    let response = fixture.request("GET", "/readyz", &[], "").await;
+    assert_eq!(response.status(), 503);
+    let id = response.headers()["x-request-id"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    let value: Value =
+        serde_json::from_slice(&to_bytes(response.into_body(), 65536).await.unwrap()).unwrap();
+    assert_eq!(value["error"]["request_id"], id);
+}
