@@ -94,8 +94,8 @@ fn current(path: &Path, reset: bool) -> Result<Connection> {
             std::fs::set_permissions(&backup, std::fs::Permissions::from_mode(0o600))?;
         }
         let tx = db.transaction()?;
-        tx.execute_batch(include_str!("data/usage-schema.sql"))?;
-        tx.execute_batch(include_str!("data/usage-backfill.sql"))?;
+        tx.execute_batch(include_str!("../db/migrations/usage-schema.sql"))?;
+        tx.execute_batch(include_str!("../db/migrations/usage-backfill.sql"))?;
         tx.pragma_update(None, "user_version", SCHEMA)?;
         tx.commit()?;
     } else {
@@ -103,7 +103,7 @@ fn current(path: &Path, reset: bool) -> Result<Connection> {
             tables == 0 || version == SCHEMA,
             "event log schema changed while opening"
         );
-        db.execute_batch(include_str!("data/log-schema.sql"))?;
+        db.execute_batch(include_str!("../db/migrations/log-schema.sql"))?;
     }
     Ok(db)
 }
