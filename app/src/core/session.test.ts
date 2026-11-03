@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { sheetToken } from "./session";
 
-// The daemon computes the same token (internal/web/sheet_test.go pins this
+// The daemon computes the same token (internal/app/sheet_test.go pins this
 // vector): HMAC-SHA256 over "channel\nid", keyed with SHA-256 of the page key.
 describe("sheetToken", () => {
   it("matches the daemon's vector", async () => {

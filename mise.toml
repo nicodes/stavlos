@@ -12,7 +12,7 @@ PYTHONDONTWRITEBYTECODE = "1"
 CARGO_TARGET_DIR = "{{ config_root }}/.artifacts/cargo-target"
 
 [tasks."install"]
-run = ["rustup component add --toolchain 1.94.0 rustfmt clippy", "python3 scripts/prepare-runtime.py", "npm --prefix web ci --no-audit --no-fund"]
+run = ["rustup component add --toolchain 1.94.0 rustfmt clippy", "python3 scripts/prepare-runtime.py", "npm --prefix app ci --no-audit --no-fund", "npm --prefix app run build --silent"]
 
 [tasks."lint"]
 run = "bash scripts/check.sh lint"
@@ -30,7 +30,7 @@ run = ["python3 -c 'from pathlib import Path; import os; p=Path('\"'\"'.artifact
 depends = ["build"]
 
 [tasks."clean"]
-run = "python3 \"$TOOLS_ROOT/helpers/clean.py\" --path dist --path target --path .artifacts/build --path .artifacts/rust-target --path .artifacts/advisory-db --path web/node_modules"
+run = "python3 \"$TOOLS_ROOT/helpers/clean.py\" --path dist --path target --path .artifacts/build --path .artifacts/rust-target --path .artifacts/advisory-db --path .artifacts/ui --path app/node_modules"
 
 [tasks."test-stability"]
 run = ["cargo test --locked", "cargo test --locked --manifest-path api/Cargo.toml"]

@@ -20,10 +20,10 @@ if [[ $group == all || $group == test ]]; then
   cargo test --locked --manifest-path api/Cargo.toml
   python3 scripts/installer_test.py
   python3 scripts/native_artifact_test.py
-  npm --prefix web test --silent
+  npm --prefix app test --silent
 fi
 if [[ $group == all || $group == build ]]; then
-  npm --prefix web run build --silent
-  git diff --exit-code -- api/assets
+  npm --prefix app run build --silent
+  python3 scripts/verify-ui-build.py
   bash scripts/build-cli.sh
 fi
