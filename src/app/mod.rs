@@ -1,5 +1,6 @@
 //! CLI actions use the same owner socket as the terminal and browser clients.
 mod auth;
+mod machine;
 pub use auth::open_browser;
 pub mod daemon;
 pub mod daemonctl;
@@ -44,7 +45,8 @@ pub const USAGE: &str = concat!(
     "  stavlos auth login [provider] | auth list | auth logout [provider]\n",
     "  stavlos trust [dir] | init [--model p/m] | daemon\n",
     "  stavlos operator                       send a finite operator grant from stdin\n",
-    "  stavlos version | --version | help\n"
+    "  stavlos version | --version | help\n",
+    "  stavlos --json <finite-command>                 one structured result; progress uses stderr\n"
 );
 pub fn command(args: &[String]) -> (&str, &[String]) {
     match args.split_first() {
@@ -301,6 +303,19 @@ impl App {
     }
     async fn start(&self, args: &[String], fresh: bool) -> Result<()> {
         let flags = flags(args, &["model", "root", "dir"], &["no-tui"])?;
+        let (client, channel) = self.prepare_start(args, fresh).await?;
+        if value(&flags, "no-tui") == "true" {
+            println!("{}", channel.id);
+            return Ok(());
+        }
+        self.terminal.run(client, channel.id).await
+    }
+    async fn prepare_start(
+        &self,
+        args: &[String],
+        fresh: bool,
+    ) -> Result<(Arc<Client>, protocol::ChannelInfo)> {
+        let flags = flags(args, &["model", "root", "dir"], &["no-tui"])?;
         let client = self.connect(true).await?;
         let current = std::env::current_dir()?;
         let dir = if value(&flags, "dir").is_empty() {
@@ -345,11 +360,7 @@ impl App {
                 )
                 .await?
         };
-        if value(&flags, "no-tui") == "true" {
-            println!("{}", channel.id);
-            return Ok(());
-        }
-        self.terminal.run(client, channel.id).await
+        Ok((client, channel))
     }
     async fn web(&self, args: &[String]) -> Result<()> {
         let mut action = "status";
@@ -420,7 +431,7 @@ impl App {
         }
         Ok(())
     }
-    fn init(&self, args: &[String]) -> Result<()> {
+    fn init_config(&self, args: &[String]) -> Result<PathBuf> {
         let flags = flags(args, &["model"], &[])?;
         let path = self.paths.config.join("stavlos.json");
         ensure!(!path.exists(), "{} already exists", path.display());
@@ -446,6 +457,10 @@ impl App {
             .open(&path)?;
         file.write_all(&raw)?;
         file.sync_all()?;
+        Ok(path)
+    }
+    fn init(&self, args: &[String]) -> Result<()> {
+        let path = self.init_config(args)?;
         println!("wrote {}", path.display());
         println!(
             "next:\n  - run stavlos in a project directory, then /providers to sign in and /models to pick a model (or run stavlos auth login now)\n  - add agent definitions as agents/<name>.md next to stavlos.json (see README.md)\n  - directories every channel may work in besides its own: \"dirs\": [\"~/Work/shared\"]\n  - for search on your own quota, add \"search\": {{\"provider\": \"brave\", \"apiKey\": \"${{env:BRAVE_API_KEY}}\"}}\n  - commands run without credential-looking variables; list what a build needs under \"env\": {{\"pass\": [\"GITHUB_TOKEN\"]}}"

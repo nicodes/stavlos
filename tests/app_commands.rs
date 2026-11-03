@@ -218,3 +218,65 @@ fn command_flags_and_resume_selection_match_frozen_go_cases() {
     }
     assert_eq!(config::effective::defaults().model, "");
 }
+
+#[tokio::test]
+async fn machine_commands_use_real_owner_results_and_refuse_interaction() {
+    let f = Fixture::new().await;
+    let args = |args: &[&str]| args.iter().map(|v| (*v).to_owned()).collect::<Vec<_>>();
+    for command in [
+        vec![],
+        vec!["new"],
+        vec!["open", "missing"],
+        vec!["trust"],
+        vec!["auth", "login"],
+        vec!["auth", "logout"],
+        vec!["web", "open"],
+        vec!["daemon"],
+    ] {
+        assert!(
+            f.app.run_json(&args(&command)).await.is_err(),
+            "{command:?}"
+        );
+    }
+    assert!(f.owner.channels().is_empty());
+    assert!(f.ui.0.lock().unwrap().is_empty());
+    let project = f.project("machine");
+    let channel = f
+        .app
+        .run_json(&args(&["new", "--dir", &project, "--no-tui"]))
+        .await
+        .unwrap();
+    let channels = f.app.run_json(&args(&["channels"])).await.unwrap();
+    assert_eq!(channels["channels"][0]["id"], channel["id"]);
+    let providers = f.app.run_json(&args(&["auth", "list"])).await.unwrap();
+    assert!(providers["providers"].is_array());
+    let initialized = f.app.run_json(&args(&["init"])).await.unwrap();
+    assert!(std::path::Path::new(initialized["path"].as_str().unwrap()).is_file());
+    assert!(f.ui.0.lock().unwrap().is_empty());
+    f.close().await;
+}
+
+#[test]
+fn machine_binary_errors_are_one_document_before_owner_start() {
+    let root = tempfile::tempdir().unwrap();
+    for args in [
+        vec!["--json", "version"],
+        vec!["--json", "help"],
+        vec!["--json", "auth", "login"],
+        vec!["--json"],
+    ] {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_stavlos"))
+            .args(&args)
+            .env("STAVLOS_CONFIG_DIR", root.path().join("config"))
+            .env("STAVLOS_DATA_DIR", root.path().join("data"))
+            .env("STAVLOS_CACHE_DIR", root.path().join("cache"))
+            .env("STAVLOS_SOCKET", root.path().join("owner.sock"))
+            .output()
+            .unwrap();
+        let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(value["v"], 1);
+        assert_eq!(value["ok"], output.status.success());
+        assert!(!root.path().join("owner.sock").exists());
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+    }
+}

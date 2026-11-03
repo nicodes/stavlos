@@ -49,7 +49,10 @@ impl Web {
         })
     }
     pub fn router(self: &Arc<Self>) -> Router {
-        Router::new().fallback(handle).with_state(self.clone())
+        Router::new()
+            .fallback(handle)
+            .layer(axum::middleware::from_fn(httpcontract::observe))
+            .with_state(self.clone())
     }
 }
 fn text(status: StatusCode, message: &str) -> Response {
@@ -143,11 +146,33 @@ async fn dispatch(web: Arc<Web>, request: Request, host: &str) -> Response {
     let path = request.uri().path().to_owned();
     let read = matches!(*request.method(), Method::GET | Method::HEAD);
     let is_head = *request.method() == Method::HEAD;
-    if read && path == "/healthz" {
-        return if is_head {
-            StatusCode::OK.into_response()
+    if read && matches!(path.as_str(), "/healthz" | "/readyz") {
+        let ready = path != "/readyz" || !*web.stopped.borrow();
+        let status = if ready {
+            StatusCode::OK
         } else {
-            text(StatusCode::OK, "ok\n")
+            StatusCode::SERVICE_UNAVAILABLE
+        };
+        return if is_head {
+            status.into_response()
+        } else {
+            let revision = option_env!("SOURCE_COMMIT")
+                .or(option_env!("COMMIT"))
+                .unwrap_or("development");
+            (
+                status,
+                httpcontract::health(
+                    if !ready {
+                        "unready"
+                    } else if path == "/healthz" {
+                        "ok"
+                    } else {
+                        "ready"
+                    },
+                    revision,
+                ),
+            )
+                .into_response()
         };
     }
     let cookie = cookie(request.headers()).to_owned();

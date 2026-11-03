@@ -1,4 +1,4 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: b82f7bfaa45eff9509a7a907d44531a1817cd2f887ff205aebcacd53b1e4f2f0 -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 0fd55f69482b21780befba478334b7383132bf4b70732e5e4a0cdb863f1f387d -->
 
 # stavlos
 
@@ -69,3 +69,13 @@ Published Linux x86_64 and arm64 CLIs are static Rust executables. The same exec
 For source development, `cargo build --locked` builds the complete CLI with the committed browser bundle. `cargo build --locked --manifest-path api/Cargo.toml` builds the standalone API. Set `STAVLOS_API_BINARY` to its absolute path to use it during development. Release builds use `scripts/build-cli.sh` and require the matching musl C toolchain on Linux.
 
 `mise run check` runs Rust formatting, strict Clippy, native tests, dependency scans, shell and workflow checks, browser tests, bundle verification, installer refusal checks and native artifact verification. Both build and test stages retain receipts under `.artifacts/verification`.
+
+## Contributor task interface
+
+Contributor tool versions and task entry points live in the native Mise configuration. Use `mise run lint` for source checks, `mise run test` for the applicable behavioral tests, and `mise run check` for the complete supported gate. `mise run clean` removes declared generated outputs while preserving source, credentials and retained data. This package has no separate Mise development service; use its native entry points directly.
+
+## Machine commands and configuration
+
+Prefix finite commands with `--json`, for example `stavlos --json channels`, `stavlos --json status`, `stavlos --json auth list` or `stavlos --json new --dir /absolute/project --no-tui`. Stdout is one versioned result or error document; failures exit nonzero. Human terminal commands and interactive trust/login flows use their normal interface. JSON `web status|on|off` never opens a browser or includes a one-time sign-in capability; use the explicit `web open --print` command for a sign-in link.
+
+`STAVLOS_CONFIG_DIR`, `STAVLOS_DATA_DIR`, `STAVLOS_CACHE_DIR` and `STAVLOS_SOCKET` override their corresponding XDG/native defaults. Shared skill lookup has its own `STAVLOS_SKILLS_DIR`. Changing checkout does not relocate existing installed state.

@@ -26,9 +26,20 @@ fn main() -> ExitCode {
     if basename == stavlos::nativeapi::HELPER_ARG0 {
         return api();
     }
-    match run(arguments) {
+    let mut arguments = arguments;
+    let machine = arguments.first().is_some_and(|arg| arg == "--json");
+    if machine {
+        arguments.remove(0);
+    }
+    match run(arguments, machine) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
+            if machine {
+                println!(
+                    "{}",
+                    serde_json::json!({"v":1,"ok":false,"error":{"code":"operation_failed","message":stavlos::textsafe::visible(&error.to_string())}})
+                );
+            }
             eprintln!("stavlos: {error:#}");
             ExitCode::FAILURE
         }
@@ -57,7 +68,7 @@ fn api() -> ExitCode {
         }
     }
 }
-fn run(arguments: Vec<OsString>) -> Result<()> {
+fn run(arguments: Vec<OsString>, machine: bool) -> Result<()> {
     let arguments = arguments
         .into_iter()
         .map(|value| {
@@ -79,7 +90,7 @@ fn run(arguments: Vec<OsString>) -> Result<()> {
         let signals=tokio::spawn(async move{tokio::select!{_=tokio::signal::ctrl_c()=>{},_=terminate.recv()=>{},_=stopping.cancelled()=>{}}stopping.cancel();});
         let paths=Paths::from_env();let home=std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
         let terminal=Arc::new(stavlos::tui::driver::Terminal{paths:paths.clone(),home:home.clone(),cancel:cancel.clone()});let app=app::App{paths,home,terminal,cancel:cancel.clone()};
-        let result=app.run(&arguments).await;cancel.cancel();let _=signals.await;result
+        let result=if machine {match app.run_json(&arguments).await {Ok(value)=>{println!("{}",serde_json::json!({"v":1,"ok":true,"result":value}));Ok(())},Err(error)=>Err(error)}}else{app.run(&arguments).await};cancel.cancel();let _=signals.await;result
     });
     runtime.shutdown_timeout(Duration::from_secs(1));
     result

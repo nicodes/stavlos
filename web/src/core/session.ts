@@ -41,7 +41,14 @@ export async function signedIn(): Promise<boolean> {
 
 export async function redeem(code: string): Promise<string | null> {
   const res = await fetch("/api/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
-  if (res.status !== 200) return (await res.text()).trim() || "sign-in failed";
+  if (res.status !== 200) {
+    try {
+      const text = await res.text();
+      const value = text.length <= 65536 ? JSON.parse(text) : undefined;
+      if (typeof value?.error?.message === "string") return value.error.message.slice(0,1024);
+    } catch { /* Preserve the sign-in screen when a gateway is unavailable. */ }
+    return "sign-in failed";
+  }
   keep(((await res.json()) as { key?: string }).key ?? "");
   return null;
 }
