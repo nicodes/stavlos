@@ -139,7 +139,7 @@ updates:
       - '*drizzle*'
       - '*migrate*'
 - package-ecosystem: npm
-  directory: /web
+  directory: /app
   schedule:
     interval: weekly
     day: monday
