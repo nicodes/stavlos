@@ -80,6 +80,29 @@ updates:
     routine-updates:
       patterns: ['*']
       update-types: [minor, patch]
+    security-fixes:
+      applies-to: security-updates
+      patterns:
+      - '*'
+      exclude-patterns:
+      - nicodes/tools/*
+      - nicodes/cicd/*
+      - nicodes/komizo-actions/*
+      - aviorstudio/gdam-actions/*
+      - '*clerk*'
+      - '*pocketbase*'
+      - '*crypto*'
+      - '*jsonwebtoken*'
+      - '*jose*'
+      - '*oauth*'
+      - '*openid*'
+      - '*passport*'
+      - '*bcrypt*'
+      - '*argon2*'
+      - '@noble/*'
+      - '*prisma*'
+      - '*drizzle*'
+      - '*migrate*'
 - package-ecosystem: cargo
   directory: /api
   schedule:
@@ -92,6 +115,29 @@ updates:
     routine-updates:
       patterns: ['*']
       update-types: [minor, patch]
+    security-fixes:
+      applies-to: security-updates
+      patterns:
+      - '*'
+      exclude-patterns:
+      - nicodes/tools/*
+      - nicodes/cicd/*
+      - nicodes/komizo-actions/*
+      - aviorstudio/gdam-actions/*
+      - '*clerk*'
+      - '*pocketbase*'
+      - '*crypto*'
+      - '*jsonwebtoken*'
+      - '*jose*'
+      - '*oauth*'
+      - '*openid*'
+      - '*passport*'
+      - '*bcrypt*'
+      - '*argon2*'
+      - '@noble/*'
+      - '*prisma*'
+      - '*drizzle*'
+      - '*migrate*'
 - package-ecosystem: npm
   directory: /web
   schedule:
@@ -104,3 +150,26 @@ updates:
     routine-updates:
       patterns: ['*']
       update-types: [minor, patch]
+    security-fixes:
+      applies-to: security-updates
+      patterns:
+      - '*'
+      exclude-patterns:
+      - nicodes/tools/*
+      - nicodes/cicd/*
+      - nicodes/komizo-actions/*
+      - aviorstudio/gdam-actions/*
+      - '*clerk*'
+      - '*pocketbase*'
+      - '*crypto*'
+      - '*jsonwebtoken*'
+      - '*jose*'
+      - '*oauth*'
+      - '*openid*'
+      - '*passport*'
+      - '*bcrypt*'
+      - '*argon2*'
+      - '@noble/*'
+      - '*prisma*'
+      - '*drizzle*'
+      - '*migrate*'
