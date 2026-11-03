@@ -42,6 +42,14 @@ with tempfile.TemporaryDirectory(prefix='stv-smoke-') as scratch:
         parsed = urllib.parse.urlsplit(opened)
         code = urllib.parse.parse_qs(parsed.fragment)['code'][0]
         base = f'http://127.0.0.1:{port}'
+        expected = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        for path in ('/healthz', '/readyz'):
+            with urllib.request.urlopen(base + path, timeout=5) as response:
+                assert response.status == 200
+                assert json.load(response)['revision'] == expected, 'bundled API lost the shipping source identity'
+            with urllib.request.urlopen(urllib.request.Request(base + path, method='HEAD'), timeout=5) as response:
+                assert response.status == 200 and response.read() == b''
+
         request = urllib.request.Request(base + '/api/session',
                                          data=json.dumps({'code': code}).encode(),
                                          headers={'Origin': base, 'Content-Type': 'application/json'})
