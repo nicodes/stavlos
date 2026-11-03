@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source scripts/rust-platform.sh
+npm ci --prefix app --no-audit --no-fund
+npm run build --prefix app
 SOURCE_COMMIT="$(git rev-parse HEAD)" cargo build --locked --manifest-path api/Cargo.toml --release --target "$rust_target"
 mkdir -p .artifacts/native-api
 name="stavlos-api_${os_label}_${arch_label}"
