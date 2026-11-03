@@ -132,7 +132,7 @@ jobs:
   publish:
     name: Publish release
     needs: release
-    uses: nicodes/tools/.github/workflows/cli-publish.yml@a1c0321f3b4917a7e99eca42e241e46670f6e1e1
+    uses: nicodes/tools/.github/workflows/cli-publish.yml@d851a76678345d418fe68297d30330887290fbfb
     permissions:
       contents: write
     with:
