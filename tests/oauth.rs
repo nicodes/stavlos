@@ -49,7 +49,7 @@ fn api() -> nativeapi::Program {
             .join("debug/stavlos-api"),
         );
     }
-    candidates.push(root.join("api/target/debug/stavlos-api"));
+    candidates.push(root.join("crates/api/target/debug/stavlos-api"));
     candidates.push(
         std::env::current_exe()
             .unwrap()
@@ -65,7 +65,7 @@ fn api() -> nativeapi::Program {
         }
     }
     panic!(
-        "build the independent API before the owner integration tests: cargo build --locked --manifest-path api/Cargo.toml --bin stavlos-api"
+        "build the independent API before the owner integration tests: cargo build --locked --manifest-path crates/api/Cargo.toml --bin stavlos-api"
     )
 }
 #[test]
