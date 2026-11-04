@@ -1,4 +1,4 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 538ed1acc9d78edad18e5a2eb6bafa50e857c05368ffa90fa77505c7b2ef79bb -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 2eff849cc04e9a4e3d5ee688d245dc099410454d5702b772f46bd4e50d230e2f -->
 
 # stavlos
 
@@ -62,11 +62,11 @@ mise run check
 
 The CLI, owner daemon, agent runtime and terminal interface are implemented in Rust. The Ratatui interface includes channel and agent navigation, command completion, question and permission cards, provider sign-in, configuration editing and usage views. Enter submits a message; Ctrl+J or Alt+Enter inserts a newline. Ctrl+C twice quits, and Escape twice on an empty input cancels a busy agent.
 
-The browser API and local OAuth callback stay in root `api/`. The API reads the owner's SQLite event history, owns browser sessions and scoped WebSocket requests, and communicates with the owner through bounded control messages. Disabling the browser UI clears its sessions and closes its sockets. Inspect channel history before resubmitting a message whose acknowledgement was lost.
+The browser API and local OAuth callback stay in `crates/api/`. The API reads the owner's SQLite event history, owns browser sessions and scoped WebSocket requests, and communicates with the owner through bounded control messages. Disabling the browser UI clears its sessions and closes its sockets. Inspect channel history before resubmitting a message whose acknowledgement was lost.
 
 Published Linux x86_64 and arm64 CLIs are static Rust executables. The same executable dispatches its API and sandbox helpers; installation requires no compiler. Native Actions builders verify each architecture and a packaged browser sign-in. Archive assembly checks each executable's exact source, version, platform and SHA-256 receipt.
 
-For source development, `cargo build --locked` builds the complete CLI with the committed browser bundle. `cargo build --locked --manifest-path api/Cargo.toml` builds the standalone API. Set `STAVLOS_API_BINARY` to its absolute path to use it during development. Release builds use `scripts/build-cli.sh` and require the matching musl C toolchain on Linux.
+For source development, build the UI with `npm ci --prefix app` and `npm run build --prefix app`. `cargo build --locked` builds the Rust CLI. `cargo build --locked --manifest-path crates/api/Cargo.toml` builds the standalone API. Set `STAVLOS_API_BINARY` to its absolute path to use it during development. Release builds use `scripts/build-cli.sh` and require the matching musl C toolchain on Linux.
 
 `mise run check` runs Rust formatting, strict Clippy, native tests, dependency scans, shell and workflow checks, browser tests, bundle verification, installer refusal checks and native artifact verification. Both build and test stages retain receipts under `.artifacts/verification`.
 

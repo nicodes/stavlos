@@ -17,7 +17,7 @@
 /.stavlos/commands/cmd.md
 /.ci-tools/
 
-/api/target/
+/crates/api/target/
 
 # Rust owner-runtime workspace.
 /target/

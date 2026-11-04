@@ -32,7 +32,7 @@ fn api() -> Program {
             .join("debug/stavlos-api"),
         );
     }
-    candidates.push(root.join("api/target/debug/stavlos-api"));
+    candidates.push(root.join("crates/api/target/debug/stavlos-api"));
     candidates.push(
         std::env::current_exe()
             .unwrap()
