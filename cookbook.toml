@@ -1,0 +1,130 @@
+version = 1
+recipe = "rust-cli"
+
+[[components.rust]]
+name = "api"
+manifest = "crates/api/Cargo.toml"
+binaries = ["stavlos-api"]
+profile = "release"
+[components.rust.test]
+enabled = false
+[components.rust.lint]
+native_host = true
+
+[[components.rust]]
+name = "cli"
+manifest = "Cargo.toml"
+binaries = ["stavlos"]
+profile = "release"
+[components.rust.test]
+native_host = true
+[components.rust.lint]
+native_host = true
+
+[[components.rust_tests]]
+name = "native-api-unit"
+component = "api"
+roles = ["api"]
+selectors = { enabled=true, native_host=true }
+
+[[components.native]]
+name = "api"
+role = "api"
+component = "api"
+binary = "stavlos-api"
+output = ".artifacts/native-api/stavlos-api_{platform}_{arch}"
+environment = {SOURCE_COMMIT="{commit}"}
+
+[[components.native]]
+name = "cli"
+role = "cli"
+component = "cli"
+binary = "stavlos"
+output = ".artifacts/native-cli/stavlos_{platform}_{arch}"
+checks = ["tests/api_smoke_test.py", "tests/terminal_smoke_test.py"]
+environment = {SOURCE_COMMIT="{commit}",STAVLOS_BUILD_VERSION="{version}",STAVLOS_BUILD_COMMIT="{commit}"}
+
+[[components.ui]]
+package = "app"
+output = ".artifacts/ui"
+required_files = ["index.html"]
+
+[components.runtime]
+manifest = ".github/runtime-sources.json"
+
+[[node.packages]]
+directory = "app"
+manager = "npm"
+build = "build"
+typecheck = "typecheck"
+test = "test"
+
+[package]
+binary = "stavlos"
+component = "cli"
+output = ".artifacts/build/stavlos"
+profile = "release"
+files = ["README.md", "LICENSE"]
+version_arguments = ["--json", "version"]
+version_fields = {"result.version"="{version}","result.commit"="{commit}"}
+
+[[package.native_targets]]
+runner = "ubuntu-24.04"
+timeout_minutes = 30
+target = "x86_64-unknown-linux-musl"
+platform = "Linux"
+arch = "x86_64"
+extension = "tar.gz"
+checks = ["tests/api_smoke_test.py", "tests/terminal_smoke_test.py"]
+
+[[package.native_targets]]
+runner = "ubuntu-24.04-arm"
+timeout_minutes = 30
+target = "aarch64-unknown-linux-musl"
+platform = "Linux"
+arch = "arm64"
+extension = "tar.gz"
+checks = ["tests/api_smoke_test.py", "tests/terminal_smoke_test.py"]
+
+[artifacts]
+paths = ["dist", ".artifacts/build", ".artifacts/native-package", ".artifacts/ui"]
+environment = ["VERSION", "COMMIT", "DATE", "RUST_TARGET", "STAVLOS_BUILD_VERSION", "STAVLOS_BUILD_COMMIT"]
+revision_environment = ["COMMIT", "STAVLOS_BUILD_COMMIT"]
+evidence_paths = [".artifacts/security/rust-source.json"]
+
+[artifacts.binary_environment]
+STAVLOS_API_BINARY = ".artifacts/native-api/stavlos-api_{platform}_{arch}"
+
+[lint]
+shell_paths = ["install.sh"]
+
+[security]
+rust_inventory_manifests = ["Cargo.toml", "crates/api/Cargo.toml"]
+
+[[tests.integration]]
+runner = "python"
+path = "tests/installer_test.py"
+
+[[tests.integration]]
+runner = "python"
+path = "tests/api_smoke_test.py"
+args = ["{binary}"]
+
+[[tests.integration]]
+runner = "python"
+path = "tests/terminal_smoke_test.py"
+args = ["{binary}"]
+
+[ci]
+runner = "ubuntu-24.04"
+timeout_minutes = 45
+
+[publication]
+tag_prefix = "v"
+initial = "first"
+version_identity = "tag"
+validation_timeout = 45
+acceptance_timeout = 30
+
+[clean]
+paths = ["dist", "target", ".artifacts/build", ".artifacts/rust-target", ".artifacts/cargo-target", ".artifacts/native-package", ".artifacts/native-api", ".artifacts/native-cli", ".artifacts/native-archives", ".artifacts/advisory-db", ".artifacts/security", ".artifacts/ui", "app/node_modules"]

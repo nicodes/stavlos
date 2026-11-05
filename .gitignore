@@ -21,3 +21,5 @@
 
 # Rust owner-runtime workspace.
 /target/
+
+/dist/
