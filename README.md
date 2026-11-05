@@ -1,4 +1,4 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 2eff849cc04e9a4e3d5ee688d245dc099410454d5702b772f46bd4e50d230e2f -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: e5e5fc59ea4b0ad39555308c8334c297981d71652f6b00ec20c07f5ada171ab6 -->
 
 # stavlos
 
@@ -41,38 +41,32 @@ Shared project skills and resources are trust-gated together with native configu
 
 ## Prepare runtime files
 
-After cloning this repository, run the following with Python 3 before loading its skills, agents, or plugins:
+After cloning this repository, install Mise and run setup before loading its skills, agents, or plugins:
 
 ```sh
-python3 scripts/prepare-runtime.py
+make setup
 ```
 
 This creates the native discovery files from the tracked functional inputs. Run it again after pulling an update; if a generated file has local edits, preserve those edits before replacing it.
 
 ## Contributor verification
 
-Tool versions and native tasks live in `mise.toml`. Prepare the pinned helper source and run the complete gate:
+`mise.toml` pins contributor SDKs. The generated root Makefile selects an immutable shared cookbook revision and binds it to `cookbook.toml`.
 
 ```sh
-git clone https://github.com/nicodes/tools.git .ci-tools
-git -C .ci-tools checkout --detach a1c0321f3b4917a7e99eca42e241e46670f6e1e1
-mise install
-mise run check
+make help
+make setup
+make build
+make test
 ```
 
-The CLI, owner daemon, agent runtime and terminal interface are implemented in Rust. The Ratatui interface includes channel and agent navigation, command completion, question and permission cards, provider sign-in, configuration editing and usage views. Enter submits a message; Ctrl+J or Alt+Enter inserts a newline. Ctrl+C twice quits, and Escape twice on an empty input cancels a busy agent.
+`make help` works offline before setup. `make setup` explicitly prepares pinned SDKs, locked dependencies and declared fixtures. `make build` compiles and packages the native outputs, then validates their source and artifact identity. `make test` runs the implemented checks against those current-source outputs. Run build again after changing source; tests do not install tools or build missing shipping artifacts.
 
-The browser API and local OAuth callback stay in `crates/api/`. The API reads the owner's SQLite event history, owns browser sessions and scoped WebSocket requests, and communicates with the owner through bounded control messages. Disabling the browser UI clears its sessions and closes its sockets. Inspect channel history before resubmitting a message whose acknowledgement was lost.
+Use `make fmt` to apply formatting, `make test:lint`, `make test:unit`, `make test:security` or `make test:integration` to select a group. This recipe has no separate development service; run the verified native CLI directly. `make clean` removes declared generated outputs. Build and test evidence stays in `.artifacts/verification`.
 
-Published Linux x86_64 and arm64 CLIs are static Rust executables. The same executable dispatches its API and sandbox helpers; installation requires no compiler. Native Actions builders verify each architecture and a packaged browser sign-in. Archive assembly checks each executable's exact source, version, platform and SHA-256 receipt.
+Build prepares the SolidJS export, Rust API, runtime discovery files and embedded CLI. The verified executable is `.artifacts/build/stavlos`. The CLI, owner daemon, agent runtime and Ratatui terminal interface remain in Rust; the browser API and OAuth callback remain under `crates/api/`. Linux x86_64 and arm64 archives retain static linking, exact source/version/platform checks and packaged browser sign-in and PTY assertions. The existing `.stavlos/` discovery and trust boundaries remain unchanged.
 
-For source development, build the UI with `npm ci --prefix app` and `npm run build --prefix app`. `cargo build --locked` builds the Rust CLI. `cargo build --locked --manifest-path crates/api/Cargo.toml` builds the standalone API. Set `STAVLOS_API_BINARY` to its absolute path to use it during development. Release builds use `scripts/build-cli.sh` and require the matching musl C toolchain on Linux.
-
-`mise run check` runs Rust formatting, strict Clippy, native tests, dependency scans, shell and workflow checks, browser tests, bundle verification, installer refusal checks and native artifact verification. Both build and test stages retain receipts under `.artifacts/verification`.
-
-## Contributor task interface
-
-Contributor tool versions and task entry points live in the native Mise configuration. Use `mise run lint` for source checks, `mise run test` for the applicable behavioral tests, and `mise run check` for the complete supported gate. `mise run clean` removes declared generated outputs while preserving source, credentials and retained data. This package has no separate Mise development service; use its native entry points directly.
+The gate retains strict compiler/build validation, native unit tests, shell/workflow checks, UI tests, installer refusal checks, terminal restoration, browser-session boundaries, bundle verification and dependency scans. Both build and test retain their own source and output evidence. Provider calls remain explicitly selected product operations.
 
 ## Machine commands and configuration
 
