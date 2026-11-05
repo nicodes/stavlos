@@ -13,3 +13,5 @@ PYTHONDONTWRITEBYTECODE = "1"
 CARGO_TARGET_DIR = "{{ get_env(name='CARGO_TARGET_DIR', default=config_root ~ '/.artifacts/rust-target') }}"
 
 CARGO_INCREMENTAL = "0"
+CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER = "musl-gcc"
+CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER = "musl-gcc"
