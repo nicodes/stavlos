@@ -103,20 +103,13 @@ rust_inventory_manifests = ["Cargo.toml", "crates/api/Cargo.toml"]
 
 [[tests.integration]]
 runner = "python"
-path = "tests/installer_test.py"
-
-[[tests.integration]]
-runner = "python"
-path = "tests/api_smoke_test.py"
-args = ["{binary}"]
-
-[[tests.integration]]
-runner = "python"
-path = "tests/terminal_smoke_test.py"
-args = ["{binary}"]
+cases = [
+  {path="tests/installer_test.py"},
+  {path="tests/api_smoke_test.py", args=["{binary}"]},
+  {path="tests/terminal_smoke_test.py", args=["{binary}"]},
+]
 
 [ci]
-runner = "ubuntu-24.04"
 timeout_minutes = 45
 
 [publication]
