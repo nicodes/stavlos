@@ -18,7 +18,7 @@ type Socket = WebSocketStream<MaybeTlsStream<tokio::net::TcpStream>>;
 fn api() -> Program {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut candidates = Vec::new();
-    if let Some(path) = std::env::var_os("STAVLOS_API_BINARY") {
+    if let Some(path) = std::env::var_os("COOKBOOK_NATIVE_API_BINARY") {
         candidates.push(PathBuf::from(path));
     }
     if let Some(path) = std::env::var_os("CARGO_TARGET_DIR") {
