@@ -45,8 +45,6 @@ checks = ["tests/api_smoke_test.py", "tests/terminal_smoke_test.py"]
 environment = {SOURCE_COMMIT="{commit}",STAVLOS_BUILD_VERSION="{version}",STAVLOS_BUILD_COMMIT="{commit}"}
 
 [[components.ui]]
-package = "app"
-output = ".artifacts/ui"
 required_files = ["index.html"]
 
 [components.runtime]
@@ -61,9 +59,6 @@ test = "test"
 
 [package]
 binary = "stavlos"
-component = "cli"
-output = ".artifacts/build/stavlos"
-profile = "release"
 files = ["README.md", "LICENSE"]
 version_arguments = ["--json", "version"]
 version_fields = {"result.version"="{version}","result.commit"="{commit}"}
@@ -87,13 +82,7 @@ extension = "tar.gz"
 checks = ["tests/api_smoke_test.py", "tests/terminal_smoke_test.py"]
 
 [artifacts]
-paths = ["dist", ".artifacts/build", ".artifacts/native-package", ".artifacts/ui"]
-environment = ["VERSION", "COMMIT", "DATE", "RUST_TARGET", "STAVLOS_BUILD_VERSION", "STAVLOS_BUILD_COMMIT"]
-revision_environment = ["COMMIT", "STAVLOS_BUILD_COMMIT"]
 evidence_paths = [".artifacts/security/rust-source.json"]
-
-[artifacts.binary_environment]
-STAVLOS_API_BINARY = ".artifacts/native-api/stavlos-api_{platform}_{arch}"
 
 [lint]
 shell_paths = ["install.sh"]
