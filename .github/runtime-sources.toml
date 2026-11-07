@@ -1,0 +1,7 @@
+[[sources]]
+source = ".stavlos/agents/coder.prompt"
+target = ".stavlos/agents/coder.md"
+
+[[sources]]
+source = ".stavlos/commands/cmd.prompt"
+target = ".stavlos/commands/cmd.md"

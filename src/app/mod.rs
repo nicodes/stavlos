@@ -433,8 +433,16 @@ impl App {
     }
     fn init_config(&self, args: &[String]) -> Result<PathBuf> {
         let flags = flags(args, &["model"], &[])?;
-        let path = self.paths.config.join("stavlos.json");
+        let path = self.paths.config.join("stavlos.toml");
         ensure!(!path.exists(), "{} already exists", path.display());
+        ensure!(
+            self.paths
+                .config
+                .join("stavlos.json")
+                .symlink_metadata()
+                .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound),
+            "legacy stavlos.json requires explicit conversion before init; legacy JSONC v1 must be converted manually; no automatic import"
+        );
         for sub in ["agents", "skills"] {
             std::fs::DirBuilder::new()
                 .recursive(true)
@@ -447,8 +455,7 @@ impl App {
             "shell".into(),
             json!({"*":"ask","git push*":"ask","rm -rf*":"deny"}),
         );
-        let mut raw = serde_json::to_vec_pretty(&starter)?;
-        raw.push(b'\n');
+        let raw = toml::to_string_pretty(&starter)?.into_bytes();
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -463,7 +470,7 @@ impl App {
         let path = self.init_config(args)?;
         println!("wrote {}", path.display());
         println!(
-            "next:\n  - run stavlos in a project directory, then /providers to sign in and /models to pick a model (or run stavlos auth login now)\n  - add agent definitions as agents/<name>.md next to stavlos.json (see README.md)\n  - directories every channel may work in besides its own: \"dirs\": [\"~/Work/shared\"]\n  - for search on your own quota, add \"search\": {{\"provider\": \"brave\", \"apiKey\": \"${{env:BRAVE_API_KEY}}\"}}\n  - commands run without credential-looking variables; list what a build needs under \"env\": {{\"pass\": [\"GITHUB_TOKEN\"]}}"
+            "next:\n  - run stavlos in a project directory, then /providers to sign in and /models to pick a model (or run stavlos auth login now)\n  - add agent definitions as agents/<name>.md next to stavlos.toml (see README.md)\n  - directories every channel may work in besides its own: dirs = [\"~/Work/shared\"]\n  - for search on your own quota, add search = {{ provider = \"brave\", apiKey = \"${{env:BRAVE_API_KEY}}\" }}\n  - commands run without credential-looking variables; list what a build needs under env = {{ pass = [\"GITHUB_TOKEN\"] }}"
         );
         Ok(())
     }

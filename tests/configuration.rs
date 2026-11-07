@@ -83,7 +83,7 @@ fn all_original_go_configuration_acceptance_defaults_and_effective_values_match(
     for case in fixture["config"].as_array().unwrap() {
         let content = case["content"].as_str().unwrap();
         fs::write(paths.config.join("stavlos.json"), content).unwrap();
-        let actual = loader.global();
+        let actual = loader.global_legacy_jsonc_v1(content.as_bytes());
         assert_eq!(
             actual.is_ok(),
             case["accepted"].as_bool().unwrap(),
@@ -163,7 +163,7 @@ fn original_go_jsonc_edits_and_schema_field_views_match_exactly() {
             case["fields"].clone()
         };
         equivalent(
-            &serde_json::to_value(editor::fields(path, content)).unwrap(),
+            &serde_json::to_value(editor::legacy_jsonc_fields_v1(path, content)).unwrap(),
             &expected,
             &format!("fields {path} {content}"),
         );
@@ -187,6 +187,14 @@ fn go_nanosecond_duration_boundaries_and_fractional_units_match() {
 fn write(root: &Path, path: &str, text: &str) {
     let path = root.join(path);
     fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let text = if path.extension().is_some_and(|ext| ext == "toml")
+        && text.trim_start().starts_with('{')
+    {
+        let file = config::effective::decode_legacy_jsonc_v1(text.as_bytes()).unwrap();
+        toml::to_string(&file).unwrap()
+    } else {
+        text.to_owned()
+    };
     fs::write(path, text).unwrap();
 }
 #[test]
@@ -196,17 +204,17 @@ fn project_trust_native_skill_precedence_and_local_layer_merge_remain_explicit()
     let project = owned.path().join("project");
     write(
         &paths.config,
-        "stavlos.json",
+        "stavlos.toml",
         r#"{"model":"fake/base","policy":{"shell":{"*":"allow","git push*":"ask"}},"hosts":["GitHub.com"]}"#,
     );
     write(
         &project,
-        ".stavlos/stavlos.json",
+        ".stavlos/stavlos.toml",
         r#"{"policy":{"shell":{"git push*":"allow","curl*":"deny"}},"hosts":["*"]}"#,
     );
     write(
         &project,
-        ".stavlos/stavlos.local.json",
+        ".stavlos/stavlos.local.toml",
         r#"{"model":"fake/local","limits":{"maxAgents":2}}"#,
     );
     write(&project, "AGENTS.md", "project instructions");
@@ -266,7 +274,7 @@ fn project_trust_native_skill_precedence_and_local_layer_merge_remain_explicit()
     );
     write(
         &project,
-        ".stavlos/stavlos.local.json",
+        ".stavlos/stavlos.local.toml",
         r#"{"discord":{"enabled":true}}"#,
     );
     assert!(loader.load(&project, Some(&|_, _| true)).is_err());
@@ -276,9 +284,9 @@ fn atomic_editor_refuses_stale_invalid_escaping_and_aliased_changes() {
     let owned = tempfile::tempdir().unwrap();
     let paths = owned_paths(owned.path());
     let root = &paths.config;
-    let original = "{\n  // keep this comment\n  \"limits\": {\"maxDepth\": 3},\n  \"model\": \"fake/model\",\n}\n";
-    write(root, "stavlos.json", original);
-    fs::set_permissions(root.join("stavlos.json"), fs::Permissions::from_mode(0o640)).unwrap();
+    let original = "# keep this comment\nmodel = \"fake/model\"\n[limits]\nmaxDepth = 3\n";
+    write(root, "stavlos.toml", original);
+    fs::set_permissions(root.join("stavlos.toml"), fs::Permissions::from_mode(0o640)).unwrap();
     let lookup = |_: &str| None;
     let loader = config::Loader {
         paths: &paths,
@@ -286,7 +294,7 @@ fn atomic_editor_refuses_stale_invalid_escaping_and_aliased_changes() {
         lookup: &lookup,
     };
     let mut edit = editor::ConfigEdit {
-        path: "stavlos.json".into(),
+        path: "stavlos.toml".into(),
         action: "write".into(),
         revision: editor::tree(root).unwrap().revision,
         field_path: vec!["limits".into(), "maxDepth".into()],
@@ -294,13 +302,13 @@ fn atomic_editor_refuses_stale_invalid_escaping_and_aliased_changes() {
         ..Default::default()
     };
     let after = editor::apply(root, true, &edit, &loader).unwrap();
-    let expected = original.replace("\"maxDepth\": 3", "\"maxDepth\": 4");
+    let expected = original.replace("maxDepth = 3", "maxDepth = 4");
     assert_eq!(
-        fs::read_to_string(root.join("stavlos.json")).unwrap(),
+        fs::read_to_string(root.join("stavlos.toml")).unwrap(),
         expected
     );
     assert_eq!(
-        fs::metadata(root.join("stavlos.json"))
+        fs::metadata(root.join("stavlos.toml"))
             .unwrap()
             .permissions()
             .mode()
@@ -312,7 +320,7 @@ fn atomic_editor_refuses_stale_invalid_escaping_and_aliased_changes() {
     edit.field_value = Some(serde_json::value::RawValue::from_string("-1".into()).unwrap());
     assert!(editor::apply(root, true, &edit, &loader).is_err());
     assert_eq!(
-        fs::read_to_string(root.join("stavlos.json")).unwrap(),
+        fs::read_to_string(root.join("stavlos.toml")).unwrap(),
         expected
     );
     for path in ["../escape", "/absolute", ".", ""] {
@@ -326,22 +334,25 @@ fn global_field_writes_preserve_links_comments_and_private_modes() {
     let owned = tempfile::tempdir().unwrap();
     let root = owned.path().join("config");
     fs::create_dir_all(&root).unwrap();
-    let target = owned.path().join("settings.json");
-    fs::write(&target,"{\n // keep\n \"rootAgent\": \"general\", \"discord\": {\"token\": \"fixture-token\"},\n}\n").unwrap();
-    symlink(&target, root.join("stavlos.json")).unwrap();
+    let target = owned.path().join("settings.toml");
+    fs::write(
+        &target,
+        "# keep\nrootAgent = \"general\"\n[discord]\ntoken = \"fixture-token\"\n",
+    )
+    .unwrap();
+    symlink(&target, root.join("stavlos.toml")).unwrap();
     editor::set_global_field(&root, &["model".into()], br#""fake/$1""#).unwrap();
     editor::set_discord_enabled(&root, true).unwrap();
     editor::set_global_field(&root, &["sandbox".into(), "enabled".into()], b"false").unwrap();
-    assert_eq!(fs::read_link(root.join("stavlos.json")).unwrap(), target);
+    assert_eq!(fs::read_link(root.join("stavlos.toml")).unwrap(), target);
     assert_eq!(
         fs::metadata(&target).unwrap().permissions().mode() & 0o777,
         0o600
     );
     let text = fs::read_to_string(target).unwrap();
-    assert!(text.contains("// keep"));
+    assert!(text.contains("# keep"));
     assert!(text.contains("fixture-token"));
-    let parsed: Value =
-        serde_json::from_slice(&config::jsonc::mask(text.as_bytes()).unwrap()).unwrap();
+    let parsed: Value = stavlos::source_toml::parse(&text).unwrap();
     assert_eq!(parsed["model"], "fake/$1");
     assert_eq!(parsed["discord"]["enabled"], true);
 }
@@ -441,4 +452,197 @@ fn editor_creates_edits_renames_and_deletes_prompt_files_after_validation() {
         .name,
         "role.md"
     );
+}
+
+#[test]
+fn toml_layers_preserve_absence_empty_false_zero_and_require_new_trust_hashes() {
+    let owned = tempfile::tempdir().unwrap();
+    let paths = owned_paths(owned.path());
+    let project = owned.path().join("project");
+    write(
+        &paths.config,
+        "stavlos.toml",
+        "models = ['fake/one']\nreminders = true",
+    );
+    write(
+        &project,
+        ".stavlos/stavlos.toml",
+        "models = []\nreminders = false\n[limits]\nmaxDepth = 0",
+    );
+    let lookup = |_: &str| None;
+    let loader = config::Loader {
+        paths: &paths,
+        home: owned.path(),
+        lookup: &lookup,
+    };
+    let pending = loader.load(&project, None).unwrap();
+    assert!(pending.trust_pending);
+    let accepted = loader.load(&project, Some(&|_, _| true)).unwrap();
+    assert!(accepted.models.is_empty());
+    assert!(!accepted.reminders);
+    let hash = pending.trust_hash.clone();
+    write(
+        &project,
+        ".stavlos/stavlos.toml",
+        "# source bytes changed\nmodels = []\nreminders = false",
+    );
+    let changed = loader
+        .load(&project, Some(&|_, current| current == hash))
+        .unwrap();
+    assert!(changed.trust_pending);
+    assert_ne!(changed.trust_hash, hash);
+    write(
+        &paths.config,
+        "stavlos.toml",
+        "model = 'fake/a'\nModel = 'fake/b'",
+    );
+    assert!(loader.global().is_err());
+    write(
+        &paths.config,
+        "stavlos.toml",
+        "[mcp.fixture]\ncommand = 'fixture'\n[mcp.fixture.env]\nTOKEN = 'one'\nToken = 'two'",
+    );
+    let map = loader.global().unwrap();
+    assert_eq!(map.mcp["fixture"].env["TOKEN"], "one");
+    assert_eq!(map.mcp["fixture"].env["Token"], "two");
+}
+
+#[test]
+fn legacy_global_and_local_only_project_sources_are_refused_before_trust() {
+    let owned = tempfile::tempdir().unwrap();
+    let paths = owned_paths(owned.path());
+    let project = owned.path().join("project");
+    write(
+        &project,
+        ".stavlos/stavlos.local.json",
+        r#"{"mode":"auto"}"#,
+    );
+    let lookup = |_: &str| None;
+    let loader = config::Loader {
+        paths: &paths,
+        home: owned.path(),
+        lookup: &lookup,
+    };
+    let checked = std::cell::Cell::new(false);
+    let approval = |_: &Path, _: &str| {
+        checked.set(true);
+        true
+    };
+    let error = loader
+        .load(&project, Some(&approval))
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("JSONC v1"));
+    assert!(!checked.get());
+    assert!(!project.join(".stavlos/stavlos.local.toml").exists());
+    write(&paths.config, "stavlos.json", r#"{"reminders":false}"#);
+    assert!(
+        loader
+            .global()
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("JSONC v1")
+    );
+    assert!(!paths.config.join("stavlos.toml").exists());
+}
+
+#[test]
+fn toml_editor_null_requests_keep_native_defaults_and_policy_refusals() {
+    let original = "# retain\nmodels = ['fake/one']\n[mcp.fixture]\ncommand = 'fixture'\n[mcp.fixture.env]\nTOKEN = 'old'\n[policy.shell]\n'*' = 'deny'\n";
+    let env = editor::edit_field(
+        "stavlos.toml",
+        original,
+        &["mcp".into(), "fixture".into(), "env".into(), "TOKEN".into()],
+        b"null",
+    )
+    .unwrap();
+    let parsed = stavlos::source_toml::parse(&env).unwrap();
+    assert_eq!(parsed["mcp"]["fixture"]["env"]["TOKEN"], "");
+    assert!(env.contains("# retain"));
+    let inherited =
+        editor::edit_field("stavlos.toml", original, &["models".into()], b"null").unwrap();
+    assert!(
+        stavlos::source_toml::parse(&inherited)
+            .unwrap()
+            .get("models")
+            .is_none()
+    );
+    for field in [
+        vec!["unknown".into()],
+        vec!["policy".into(), "shell".into(), "*".into()],
+    ] {
+        assert!(editor::edit_field("stavlos.toml", original, &field, b"null").is_err());
+    }
+    let reset = editor::edit_field(
+        "stavlos.toml",
+        original,
+        &["mcp".into(), "fixture".into()],
+        b"null",
+    )
+    .unwrap();
+    assert_eq!(
+        stavlos::source_toml::parse(&reset).unwrap()["mcp"]["fixture"],
+        json!({})
+    );
+}
+
+#[test]
+fn toml_editor_nested_null_values_preserve_typed_maps_arrays_and_explicit_defaults() {
+    let original = "# retain\nmodels = ['fake/one']\n[mcp.fixture]\ncommand = 'fixture'\n[mcp.fixture.env]\nTOKEN = 'old'\n[policy.shell]\n'*' = 'deny'\n";
+    let edited = editor::edit_field(
+        "stavlos.toml",
+        original,
+        &["mcp".into(), "fixture".into()],
+        br#"{"command":"fixture","args":[null,"--flag"],"env":{"TOKEN":null,"KEEP":"kept"}}"#,
+    )
+    .unwrap();
+    let value = stavlos::source_toml::parse(&edited).unwrap();
+    assert_eq!(value["mcp"]["fixture"]["args"], json!(["", "--flag"]));
+    assert_eq!(
+        value["mcp"]["fixture"]["env"],
+        json!({"TOKEN":"","KEEP":"kept"})
+    );
+    assert_eq!(value["models"], json!(["fake/one"]));
+    assert!(edited.contains("# retain"));
+    let limits = editor::edit_field(
+        "stavlos.toml",
+        original,
+        &["limits".into()],
+        br#"{"maxAgents":0,"maxDepth":null,"maxChannelCostUSD":0.0}"#,
+    )
+    .unwrap();
+    let value = stavlos::source_toml::parse(&limits).unwrap();
+    assert_eq!(value["limits"]["maxAgents"].as_i64(), Some(0));
+    assert_eq!(value["limits"]["maxChannelCostUSD"].as_f64(), Some(0.0));
+    assert!(value["limits"].get("maxDepth").is_none());
+    let sandbox = editor::edit_field(
+        "stavlos.toml",
+        original,
+        &["sandbox".into()],
+        br#"{"enabled":false,"network":null,"writable":[]}"#,
+    )
+    .unwrap();
+    let value = stavlos::source_toml::parse(&sandbox).unwrap();
+    assert_eq!(value["sandbox"]["enabled"], false);
+    assert_eq!(value["sandbox"]["writable"], json!([]));
+    assert!(value["sandbox"].get("network").is_none());
+    let cleared = editor::edit_field("stavlos.toml", original, &["models".into()], b"[]").unwrap();
+    assert_eq!(
+        stavlos::source_toml::parse(&cleared).unwrap()["models"],
+        json!([])
+    );
+    for (field, value) in [
+        (
+            vec!["mcp".into(), "fixture".into()],
+            br#"{"unknown":{"inner":null}}"#.as_slice(),
+        ),
+        (
+            vec!["policy".into(), "shell".into()],
+            br#"{"*":null}"#.as_slice(),
+        ),
+    ] {
+        assert!(editor::edit_field("stavlos.toml", original, &field, value).is_err());
+    }
 }

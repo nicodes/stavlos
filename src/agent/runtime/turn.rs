@@ -729,7 +729,7 @@ impl Turn {
 fn resume_hint(error: &anyhow::Error, at: Time) -> String {
     match error.downcast_ref::<model::CallError>() {
         Some(model::CallError::Limit { .. }) => format!(
-            "{error} (this model's plan is at its limit, and no other model this agent's role may use is available: list more under models in the role or in stavlos.json, or pick one with /models{})",
+            "{error} (this model's plan is at its limit, and no other model this agent's role may use is available: list more under models in the role or in stavlos.toml, or pick one with /models{})",
             if at.is_zero() {
                 String::new()
             } else {

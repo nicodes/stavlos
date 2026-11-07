@@ -368,7 +368,7 @@ fn configuration_edits_carry_server_root_revision_and_scope_and_keep_stale_reads
         None,
         Tag::ConfigRead(epoch),
         to_value(protocol::ConfigDocument {
-            path: "stavlos.json".into(),
+            path: "stavlos.toml".into(),
             content: "{}".into(),
             exists: true,
             ..Default::default()
@@ -399,7 +399,7 @@ fn configuration_edits_carry_server_root_revision_and_scope_and_keep_stale_reads
     );
     assert_eq!(
         ui.config.as_ref().unwrap().document.as_ref().unwrap().path,
-        "stavlos.json"
+        "stavlos.toml"
     );
 }
 #[test]

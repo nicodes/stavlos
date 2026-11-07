@@ -30,6 +30,7 @@ pub mod project;
 pub mod protocol;
 pub mod sandbox;
 pub mod shellcmd;
+pub mod source_toml;
 pub mod statefile;
 pub mod textsafe;
 pub mod toolfs;

@@ -158,10 +158,10 @@ async fn initialization_uses_current_go_defaults_and_never_overwrites_an_existin
         f.run(&["init", "--model", case["model"].as_str().unwrap()])
             .await
             .unwrap();
-        let path = f.app.paths.config.join("stavlos.json");
+        let path = f.app.paths.config.join("stavlos.toml");
         let raw = std::fs::read(&path).unwrap();
         assert_eq!(
-            serde_json::from_slice::<Value>(&raw).unwrap(),
+            stavlos::source_toml::parse(std::str::from_utf8(&raw).unwrap()).unwrap(),
             case["expected"]
         );
         assert!(f.run(&["init"]).await.is_err());

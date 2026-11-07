@@ -4,7 +4,7 @@ use super::{
     snapshot::Disk,
     types::*,
 };
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -190,8 +190,8 @@ pub fn tree(root: &Path) -> Result<ConfigTree> {
     })
 }
 pub fn template(path: &str) -> String {
-    if matches!(path, "stavlos.json" | "stavlos.local.json") {
-        "{\n}\n".into()
+    if matches!(path, "stavlos.toml" | "stavlos.local.toml") {
+        "# Stavlos configuration\n".into()
     } else if path.starts_with("commands/") && path.ends_with(".md") {
         "---\ndescription: Describe this command\n---\n\nWrite the prompt here.\n".into()
     } else if path.starts_with("agents/") && path.ends_with(".md") {
@@ -311,9 +311,9 @@ fn json_fields(name: &str, content: &[u8], prefix: &[String]) -> Vec<ConfigField
     out
 }
 pub fn fields(path: &str, content: &str) -> Vec<ConfigField> {
-    if matches!(path, "stavlos.json" | "stavlos.local.json") {
-        return match super::jsonc::mask(content.as_bytes()) {
-            Ok(clean) => json_fields("File", &clean, &[]),
+    if matches!(path, "stavlos.toml" | "stavlos.local.toml") {
+        return match crate::source_toml::parse(content) {
+            Ok(value) => json_fields("File", &serde_json::to_vec(&value).unwrap_or_default(), &[]),
             Err(_) => Vec::new(),
         };
     }
@@ -375,12 +375,8 @@ pub fn fields(path: &str, content: &str) -> Vec<ConfigField> {
     out
 }
 pub fn edit_field(path: &str, content: &str, field: &[String], value: &[u8]) -> Result<String> {
-    if matches!(path, "stavlos.json" | "stavlos.local.json") {
-        return Ok(String::from_utf8(super::jsonc::edit_field(
-            content.as_bytes(),
-            field,
-            value,
-        )?)?);
+    if matches!(path, "stavlos.toml" | "stavlos.local.toml") {
+        return super::toml_source::edit(content, field, value);
     }
     if field.len() != 1 {
         bail!("select a frontmatter field or the prompt body");
@@ -438,13 +434,22 @@ pub fn set_global_field(root: &Path, path: &[String], value: &[u8]) -> Result<()
     let _guard = WRITE_LOCK
         .lock()
         .map_err(|_| anyhow::anyhow!("configuration write lock failed"))?;
-    let file = root.join("stavlos.json");
+    let file = root.join("stavlos.toml");
     let content = match crate::instructions::read_regular(&file, 16 << 20) {
         Ok(b) => b,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => b"{}\n".to_vec(),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            ensure!(
+                root.join("stavlos.json")
+                    .symlink_metadata()
+                    .is_err_and(|e| e.kind() == io::ErrorKind::NotFound),
+                "legacy stavlos.json requires explicit conversion before writing TOML; legacy JSONC v1 must be converted manually; no automatic import"
+            );
+            Vec::new()
+        }
         Err(e) => return Err(e.into()),
     };
-    let edited = super::jsonc::edit_field(&content, path, value)?;
+    let edited =
+        super::toml_source::edit(std::str::from_utf8(&content)?, path, value)?.into_bytes();
     if content != edited {
         write_config_file(&file, &edited, false)?;
     }
@@ -454,13 +459,30 @@ pub fn set_discord_enabled(root: &Path, enabled: bool) -> Result<()> {
     let _guard = WRITE_LOCK
         .lock()
         .map_err(|_| anyhow::anyhow!("configuration write lock failed"))?;
-    let file = root.join("stavlos.json");
+    let file = root.join("stavlos.toml");
     let content = match crate::instructions::read_regular(&file, 16 << 20) {
         Ok(b) => b,
         Err(e) if e.kind() == io::ErrorKind::NotFound && !enabled => return Ok(()),
         Err(e) => return Err(e.into()),
     };
-    let edited = super::jsonc::edit_discord_enabled(&content, enabled)?;
+    let source = std::str::from_utf8(&content)?;
+    let current = crate::source_toml::parse(source).map_err(anyhow::Error::msg)?;
+    if !current
+        .get("discord")
+        .is_some_and(serde_json::Value::is_object)
+    {
+        ensure!(
+            !enabled,
+            "add a discord block to the global stavlos.toml first"
+        );
+        return Ok(());
+    }
+    let edited = super::toml_source::edit(
+        source,
+        &["discord".into(), "enabled".into()],
+        if enabled { b"true" } else { b"false" },
+    )?
+    .into_bytes();
     if content != edited {
         write_config_file(&file, &edited, false)?;
     }
@@ -517,10 +539,11 @@ fn preview_mutation(root: &Path, edit: &ConfigEdit) -> Result<()> {
     Ok(())
 }
 fn validate(root: &Path, system: bool, loader: &Loader<'_>) -> Result<()> {
-    for name in ["stavlos.json", "stavlos.local.json"] {
+    for name in ["stavlos.toml", "stavlos.local.toml"] {
         match fs::read(root.join(name)) {
             Ok(bytes) => {
-                super::jsonc::mask(&bytes)?;
+                crate::source_toml::parse(std::str::from_utf8(&bytes)?)
+                    .map_err(anyhow::Error::msg)?;
             }
             Err(e) if e.kind() == io::ErrorKind::NotFound => {}
             Err(e) => return Err(e.into()),
@@ -537,7 +560,7 @@ fn validate(root: &Path, system: bool, loader: &Loader<'_>) -> Result<()> {
         .global()?;
     } else {
         let mut effective = loader.global()?;
-        for name in ["stavlos.json", "stavlos.local.json"] {
+        for name in ["stavlos.toml", "stavlos.local.toml"] {
             effective.apply(&read_file(&Disk, &root.join(name))?, "project", loader)?;
         }
         effective.allow_search();
@@ -689,4 +712,15 @@ pub fn apply(
     }
     commit_mutation(root, &edit)?;
     tree(root)
+}
+
+/// Legacy-v1 schema view for explicit imports and the immutable native parity inventory.
+pub fn legacy_jsonc_fields_v1(path: &str, content: &str) -> Vec<ConfigField> {
+    if matches!(path, "stavlos.json" | "stavlos.local.json") {
+        return match super::jsonc::mask(content.as_bytes()) {
+            Ok(clean) => json_fields("File", &clean, &[]),
+            Err(_) => Vec::new(),
+        };
+    }
+    fields(path, content)
 }

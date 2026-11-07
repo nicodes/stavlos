@@ -1,4 +1,4 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: e5e5fc59ea4b0ad39555308c8334c297981d71652f6b00ec20c07f5ada171ab6 -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 8014a08261261191a56fdaf4b7bc6a4f066fd877706957714ded2d1e3af91fb7 -->
 
 # stavlos
 
@@ -35,9 +35,15 @@ A message beginning with `@name` addresses that agent; an unaddressed message go
 
 ## Project configuration
 
-Project configuration lives in `.stavlos/stavlos.json`. Agent definitions are Markdown files with YAML frontmatter in the adjacent `agents/` directory. The trust prompt controls whether project-defined configuration is used. Shared skills live in `.agents/skills/<name>/SKILL.md` in the project or `~/.agents/skills/<name>/SKILL.md` for the user. The skill body uses Markdown with `name` and `description` YAML frontmatter; supporting scripts and resources stay in the package directory.
+Project configuration lives in `.stavlos/stavlos.toml`. Global configuration uses `stavlos.toml` in the Stavlos configuration directory; `.stavlos/stavlos.local.toml` applies the local project layer. Current-source builds and the configuration editor use TOML, preserving comments when editing fields. Legacy JSONC requires explicit conversion. Omitted optional overrides inherit, while `models = []` clears the inherited list and explicit `false` remains false. Renaming or converting project configuration changes its raw trust hash and requires fresh approval; prior trust is never transferred. Installed releases retain their released interfaces. Agent definitions are Markdown files with YAML frontmatter in the adjacent `agents/` directory. The trust prompt controls whether project-defined configuration is used. Shared skills live in `.agents/skills/<name>/SKILL.md` in the project or `~/.agents/skills/<name>/SKILL.md` for the user. The skill body uses Markdown with `name` and `description` YAML frontmatter; supporting scripts and resources stay in the package directory.
 
 Shared project skills and resources are trust-gated together with native configuration. Project definitions override user definitions; native `skills/` definitions override shared definitions within the same scope. `STAVLOS_SKILLS_DIR` can select a different user-level shared library. Updating project skills requires renewed project trust.
+
+Current-source migration is manual: create the named TOML source with the same effective settings and archive the legacy JSONC v1 source outside the active configuration directory. No automatic import command is provided. Preserve explicit `false`, zero and empty arrays; omit null overrides only where they meant inheritance or defaults. Do not copy credentials into tracked source files. Existing installed settings are not migrated by a source update.
+
+Converting project settings changes the trust snapshot. Review and approve the new snapshot explicitly; previous approvals are not reused.
+
+For JSONC v1 conversion, `models: null` inherits and therefore omits the TOML key; `models: []` becomes `models = []` and clears the inherited list. Preserve explicit false and zero overrides. A null MCP environment value becomes an empty string; a null MCP server entry becomes an empty table, preserving the entry rather than deleting it.
 
 ## Prepare runtime files
 
