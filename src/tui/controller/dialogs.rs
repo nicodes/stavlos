@@ -374,7 +374,7 @@ impl Controller {
                             .iter()
                             .any(|dir| dir.path == id && dir.source == "config")
                         {
-                            self.status("set by dirs in stavlos.json: remove it there", true);
+                            self.status("set by dirs in stavlos.toml: remove it there", true);
                             return vec![];
                         }
                         vec![self.scoped(
@@ -646,7 +646,7 @@ impl Controller {
                     .iter()
                     .any(|dir| dir.path == choice && dir.source == "config")
                 {
-                    self.status("set by dirs in stavlos.json: change it there", true);
+                    self.status("set by dirs in stavlos.toml: change it there", true);
                 } else if !choice.is_empty() {
                     let popup = self.popup(Dialog::EditDirectory, "Replace directory");
                     popup.context = choice.clone();

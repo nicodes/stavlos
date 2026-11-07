@@ -48,7 +48,7 @@ environment = {SOURCE_COMMIT="{commit}",STAVLOS_BUILD_VERSION="{version}",STAVLO
 required_files = ["index.html"]
 
 [components.runtime]
-manifest = ".github/runtime-sources.json"
+manifest = ".github/runtime-sources.toml"
 
 [[node.packages]]
 directory = "app"

@@ -43,17 +43,17 @@ impl Fixture {
         f
     }
     fn write(&self, enabled: bool) {
-        let raw=serde_json::json!({"discord":{"enabled":enabled,"token":"offline-fixture-token","guild":"123","category":"fixture","approvers":["456"],"dirs":[self.project]}}).to_string();
+        let raw=toml::to_string(&serde_json::json!({"discord":{"enabled":enabled,"token":"offline-fixture-token","guild":"123","category":"fixture","approvers":["456"],"dirs":[self.project]}})).unwrap();
         std::fs::write(
-            self.paths.config.join("stavlos.json"),
-            format!("// preserve this comment\n{raw}\n"),
+            self.paths.config.join("stavlos.toml"),
+            format!("# preserve this comment\n{raw}\n"),
         )
         .unwrap();
     }
     fn enabled(&self) -> bool {
         config::effective::read_file(
             &config::snapshot::Disk,
-            &self.paths.config.join("stavlos.json"),
+            &self.paths.config.join("stavlos.toml"),
         )
         .unwrap()
         .discord
@@ -169,9 +169,9 @@ async fn connect_disconnect_restart_and_close_keep_one_run_and_saved_intent() {
     assert!(f.enabled());
     assert_eq!(running.peak.load(Ordering::SeqCst), 1);
     assert!(
-        std::fs::read_to_string(f.paths.config.join("stavlos.json"))
+        std::fs::read_to_string(f.paths.config.join("stavlos.toml"))
             .unwrap()
-            .contains("// preserve this comment")
+            .contains("# preserve this comment")
     );
     let next = f.service(&running);
     next.start();
@@ -184,7 +184,7 @@ async fn connect_disconnect_restart_and_close_keep_one_run_and_saved_intent() {
 async fn configuration_errors_stay_in_service_status_and_can_be_corrected_without_daemon_restart() {
     let f = Fixture::new(false);
     let running = Arc::new(Runs::default());
-    std::fs::write(f.paths.config.join("stavlos.json"), "{broken}").unwrap();
+    std::fs::write(f.paths.config.join("stavlos.toml"), "{broken}").unwrap();
     let service = f.service(&running);
     service.start();
     assert_eq!(service.status().state, "error");
@@ -206,7 +206,7 @@ async fn invalid_scope_configuration_is_not_enabled_and_disconnect_before_start_
     service.disconnect().unwrap();
     assert_eq!(running.total.load(Ordering::SeqCst), 0);
     service.close().await.unwrap();
-    std::fs::write(f.paths.config.join("stavlos.json"),r#"{"discord":{"enabled":false,"token":"offline-fixture-token","guild":"123","category":"fixture","approvers":["456"],"dirs":[]}}"#).unwrap();
+    std::fs::write(f.paths.config.join("stavlos.toml"),"[discord]\nenabled = false\ntoken = \"offline-fixture-token\"\nguild = \"123\"\ncategory = \"fixture\"\napprovers = [\"456\"]\ndirs = []\n").unwrap();
     let service = f.service(&running);
     service.start();
     assert!(service.connect().is_err());

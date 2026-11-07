@@ -495,7 +495,7 @@ impl Manager {
         let launch = async {
             let definition = definitions.get(name).with_context(|| {
                 format!(
-                    "server {} is not defined under mcp in stavlos.json",
+                    "server {} is not defined under mcp in stavlos.toml",
                     serde_json::to_string(name).unwrap()
                 )
             })?;

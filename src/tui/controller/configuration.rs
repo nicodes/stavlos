@@ -4,12 +4,12 @@ impl Configuration {
     pub fn entries(&self) -> Vec<protocol::ConfigEntry> {
         if self.section == 0 {
             let mut out = vec![protocol::ConfigEntry {
-                path: "stavlos.json".into(),
+                path: "stavlos.toml".into(),
                 directory: false,
             }];
             if self.scope.scope == "project" {
                 out.push(protocol::ConfigEntry {
-                    path: "stavlos.local.json".into(),
+                    path: "stavlos.local.toml".into(),
                     directory: false,
                 });
             }
@@ -84,7 +84,7 @@ impl Controller {
         let path = files
             .get(config.file_cursor)
             .map(|file| file.path.clone())
-            .unwrap_or_else(|| "stavlos.json".into());
+            .unwrap_or_else(|| "stavlos.toml".into());
         self.read_config(path)
     }
     pub fn read_config(&mut self, path: String) -> Vec<Effect> {
@@ -311,7 +311,7 @@ impl Controller {
                     config.action = "new".into();
                     config.input.set(
                         [
-                            "stavlos.local.json",
+                            "stavlos.local.toml",
                             "agents/new-agent.md",
                             "commands/new-command.md",
                             "skills/new-skill/SKILL.md",

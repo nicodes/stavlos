@@ -106,7 +106,7 @@ async fn handle(State(web): State<Arc<Web>>, request: Request) -> Response {
     if !web.config.host_allowed(&host) {
         return text(
             StatusCode::MISDIRECTED_REQUEST,
-            "this name is not one the stavlos web UI answers to; list it under web.hosts in stavlos.json",
+            "this name is not one the stavlos web UI answers to; list it under web.hosts in stavlos.toml",
         );
     }
     let mut response = dispatch(web, request, &host).await;

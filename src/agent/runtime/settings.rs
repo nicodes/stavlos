@@ -307,7 +307,7 @@ impl Channel {
                 Path::new(&state.channel.dir),
                 &dir.to_string_lossy()
             ) == directory),
-            "{} comes from stavlos.json's dirs: change it there",
+            "{} comes from stavlos.toml's dirs: change it there",
             directory.display()
         );
         ensure!(

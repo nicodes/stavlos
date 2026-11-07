@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix='stavlos-terminal-') as scratch:
     root = Path(scratch)
     for name in ('config', 'data', 'cache', 'project'):
         (root / name).mkdir(mode=0o700)
-    (root / 'config/stavlos.json').write_text(json.dumps({'reminders': False}))
+    (root / 'config/stavlos.toml').write_text('reminders = false\n')
     (root / 'cache/modelsdev.json').write_bytes((ROOT / 'src/modelsdev-fallback.json').read_bytes())
     env = dict(PATH='/usr/bin:/bin', HOME=scratch, LANG='C.UTF-8', TERM='xterm-256color',
                STAVLOS_CONFIG_DIR=str(root / 'config'), STAVLOS_DATA_DIR=str(root / 'data'),

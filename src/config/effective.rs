@@ -277,12 +277,73 @@ pub fn read_file(source: &dyn Source, path: &Path) -> Result<File> {
         }
         Err(e) => return Err(e),
     };
-    let stripped = super::jsonc::strip(&bytes);
+    let value =
+        crate::source_toml::parse(std::str::from_utf8(&bytes)?).map_err(anyhow::Error::msg)?;
+    decode_source(value).with_context(|| path.display().to_string())
+}
+pub(super) fn decode_source(value: serde_json::Value) -> Result<File> {
+    // TOML rejects exact duplicates; reject case aliases rather than create a new ordering rule.
+    fn aliases(value: &serde_json::Value, schema: &str) -> Result<()> {
+        let Some(object) = value.as_object() else {
+            return Ok(());
+        };
+        let fields = match schema {
+            "file" => super::types::File::FIELDS,
+            "web" => super::types::Web::FIELDS,
+            "sandbox" => super::types::SandboxConfig::FIELDS,
+            "limits" => super::types::Limits::FIELDS,
+            "escalation" => super::types::Escalation::FIELDS,
+            "compaction" => super::types::Compaction::FIELDS,
+            "env" => super::types::EnvConfig::FIELDS,
+            "search" => super::types::Search::FIELDS,
+            "mcp" => super::types::Mcp::FIELDS,
+            "discord" => super::types::Discord::FIELDS,
+            _ => &[],
+        };
+        let mut seen = std::collections::BTreeSet::new();
+        for (key, value) in object {
+            let canonical = fields
+                .iter()
+                .find(|field| field.eq_ignore_ascii_case(key))
+                .copied()
+                .unwrap_or(key);
+            anyhow::ensure!(seen.insert(canonical), "ambiguous configuration field case");
+            if schema == "file" && canonical == "mcp" {
+                if let Some(servers) = value.as_object() {
+                    for server in servers.values() {
+                        aliases(server, "mcp")?;
+                    }
+                }
+            } else if schema == "file"
+                && matches!(
+                    canonical,
+                    "web"
+                        | "sandbox"
+                        | "limits"
+                        | "escalation"
+                        | "compaction"
+                        | "env"
+                        | "search"
+                        | "discord"
+                )
+            {
+                aliases(value, canonical)?;
+            }
+        }
+        Ok(())
+    }
+    aliases(&value, "file")?;
+    super::types::decode(&serde_json::to_vec(&value)?)
+}
+/// Explicit legacy-v1 JSONC import/parity decoder; canonical discovery never calls this.
+pub fn decode_legacy_jsonc_v1(bytes: &[u8]) -> Result<File> {
+    let stripped = super::jsonc::strip(bytes);
     let mut decoder = serde_json::Deserializer::from_slice(&stripped)
         .into_iter::<Box<serde_json::value::RawValue>>();
     let value = decoder.next().context("configuration is empty")??;
-    super::types::decode(value.get().as_bytes()).with_context(|| path.display().to_string())
+    super::types::decode(value.get().as_bytes())
 }
+
 pub struct Loader<'a> {
     pub paths: &'a Paths,
     pub home: &'a Path,
@@ -290,16 +351,30 @@ pub struct Loader<'a> {
 }
 impl Loader<'_> {
     pub fn global(&self) -> Result<Effective> {
+        let path = self.paths.config.join("stavlos.toml");
+        anyhow::ensure!(
+            path.exists()
+                || self
+                    .paths
+                    .config
+                    .join("stavlos.json")
+                    .symlink_metadata()
+                    .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound),
+            "legacy stavlos.json requires explicit conversion to stavlos.toml; project trust must be approved again; legacy JSONC v1 must be converted manually; no automatic import"
+        );
+        self.global_from_file(&read_file(&Disk, &path)?)
+    }
+    /// Validate an explicitly supplied legacy-v1 import against current effective policy.
+    pub fn global_legacy_jsonc_v1(&self, bytes: &[u8]) -> Result<Effective> {
+        self.global_from_file(&decode_legacy_jsonc_v1(bytes)?)
+    }
+    fn global_from_file(&self, file: &File) -> Result<Effective> {
         let mut effective = Effective::default();
         effective.apply(&defaults(), "defaults", self)?;
         let general = super::frontmatter::builtin_general();
         effective.roles.insert(general.name.clone(), general);
         effective
-            .apply(
-                &read_file(&Disk, &self.paths.config.join("stavlos.json"))?,
-                "global",
-                self,
-            )
+            .apply(file, "global", self)
             .context("global config")?;
         effective.allow_search();
         effective.instructions = instructions::global(&self.paths.config);
@@ -314,6 +389,15 @@ impl Loader<'_> {
         let mut effective = self.global()?;
         effective.dir = dir.clone();
         let snapshot = Snapshot::take(&dir, self.home)?;
+        for legacy in ["stavlos.json", "stavlos.local.json"] {
+            anyhow::ensure!(
+                !snapshot
+                    .files
+                    .iter()
+                    .any(|name| name == &format!(".stavlos/{legacy}")),
+                "legacy project JSON requires explicit conversion to TOML and fresh trust approval; legacy JSONC v1 must be converted manually; no automatic import"
+            );
+        }
         if snapshot.files.is_empty() {
             return Ok(effective);
         }
@@ -332,7 +416,7 @@ impl Loader<'_> {
             .collect();
         if trust.is_some_and(|trust| trust(&dir, &snapshot.hash)) {
             let project = Paths::project(&dir);
-            for (name, layer) in [("stavlos.json", "project"), ("stavlos.local.json", "local")] {
+            for (name, layer) in [("stavlos.toml", "project"), ("stavlos.local.toml", "local")] {
                 effective
                     .apply(&read_file(&snapshot, &project.join(name))?, layer, self)
                     .with_context(|| format!("{layer} config"))?;

@@ -234,7 +234,7 @@ async fn owner_configuration_edits_bind_the_opened_root_and_revision_and_reload(
         .call("config.list", json!({"scope":"system"}))
         .await
         .unwrap();
-    let edit = json!({"scope":"system","root":tree["root"],"revision":tree["revision"],"path":"stavlos.json","action":"write","content":"{\"mode\":\"auto\",\"reminders\":false}"});
+    let edit = json!({"scope":"system","root":tree["root"],"revision":tree["revision"],"path":"stavlos.toml","action":"write","content":"mode = \"auto\"\nreminders = false\n"});
     let saved = f.call("config.edit", edit.clone()).await.unwrap();
     assert!(
         saved["notice"]
@@ -251,7 +251,7 @@ async fn owner_configuration_edits_bind_the_opened_root_and_revision_and_reload(
     let read = f
         .call(
             "config.read",
-            json!({"scope":"system","root":tree["root"],"path":"stavlos.json"}),
+            json!({"scope":"system","root":tree["root"],"path":"stavlos.toml"}),
         )
         .await
         .unwrap();

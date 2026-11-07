@@ -53,7 +53,7 @@ impl Shared {
     fn configuration(&self) -> Result<Option<config::Discord>> {
         Ok(config::effective::read_file(
             &config::snapshot::Disk,
-            &self.paths.config.join("stavlos.json"),
+            &self.paths.config.join("stavlos.toml"),
         )?
         .discord)
     }
@@ -93,7 +93,7 @@ impl Service {
             state: "disconnected".into(),
             config_path: paths
                 .config
-                .join("stavlos.json")
+                .join("stavlos.toml")
                 .to_string_lossy()
                 .into_owned(),
             ..Default::default()
@@ -179,7 +179,7 @@ impl Service {
             "daemon is stopping"
         );
         let config = (|| -> Result<config::Discord> {
-            let config=self.shared.configuration()?.ok_or_else(||anyhow::anyhow!("add a discord block to the global stavlos.json first (see docs/discord-setup.md)"))?;
+            let config=self.shared.configuration()?.ok_or_else(||anyhow::anyhow!("add a discord block to the global stavlos.toml first (see docs/discord-setup.md)"))?;
             config.resolve(&self.shared.home, &lookup)?;
             config::editor::set_discord_enabled(&self.shared.paths.config, true)?;
             Ok(config)
