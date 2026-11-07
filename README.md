@@ -1,4 +1,4 @@
-<!-- Generated from private documentation source. Do not edit directly. Source SHA256: 8014a08261261191a56fdaf4b7bc6a4f066fd877706957714ded2d1e3af91fb7 -->
+<!-- Generated from private documentation source. Do not edit directly. Source SHA256: fc7e46f38896d12042e8bd502eeab9e77444c292c0efbba91ccad3715f31ac07 -->
 
 # stavlos
 
@@ -50,25 +50,25 @@ For JSONC v1 conversion, `models: null` inherits and therefore omits the TOML ke
 After cloning this repository, install Mise and run setup before loading its skills, agents, or plugins:
 
 ```sh
-make setup
+mise run setup
 ```
 
 This creates the native discovery files from the tracked functional inputs. Run it again after pulling an update; if a generated file has local edits, preserve those edits before replacing it.
 
 ## Contributor verification
 
-`mise.toml` pins contributor SDKs. The generated root Makefile selects an immutable shared cookbook revision and binds it to `cookbook.toml`.
+`mise.toml` pins contributor SDKs. The canonical generated task block in root `mise.toml` selects an immutable shared cookbook revision and binds it to `cookbook.toml`.
 
 ```sh
-make help
-make setup
-make build
-make test
+mise run help
+mise run setup
+mise run build
+mise run test
 ```
 
-`make help` works offline before setup. `make setup` explicitly prepares pinned SDKs, locked dependencies and declared fixtures. `make build` compiles and packages the native outputs, then validates their source and artifact identity. `make test` runs the implemented checks against those current-source outputs. Run build again after changing source; tests do not install tools or build missing shipping artifacts.
+`mise run help` works offline before setup. `mise run setup` explicitly prepares pinned SDKs, locked dependencies and declared fixtures. `mise run build` compiles and packages the native outputs, then validates their source and artifact identity. `mise run test` runs the implemented checks against those current-source outputs. Run build again after changing source; tests do not install tools or build missing shipping artifacts.
 
-Use `make fmt` to apply formatting, `make test:lint`, `make test:unit`, `make test:security` or `make test:integration` to select a group. This recipe has no separate development service; run the verified native CLI directly. `make clean` removes declared generated outputs. Build and test evidence stays in `.artifacts/verification`.
+Use `mise run fmt` to apply formatting, `mise run test:lint`, `mise run test:unit`, `mise run test:security` or `mise run test:integration` to select a group. This recipe has no separate development service; run the verified native CLI directly. `mise run clean` removes declared generated outputs. Build and test evidence stays in `.artifacts/verification`.
 
 Build prepares the SolidJS export, Rust API, runtime discovery files and embedded CLI. The verified executable is `.artifacts/build/stavlos`. The CLI, owner daemon, agent runtime and Ratatui terminal interface remain in Rust; the browser API and OAuth callback remain under `crates/api/`. Linux x86_64 and arm64 archives retain static linking, exact source/version/platform checks and packaged browser sign-in and PTY assertions. The existing `.stavlos/` discovery and trust boundaries remain unchanged.
 
