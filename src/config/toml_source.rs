@@ -108,10 +108,10 @@ pub fn edit(content: &str, path: &[String], value: &[u8]) -> Result<String> {
     fn set(table: &mut dyn TableLike, path: &[String], item: Option<Item>) -> Result<()> {
         if path.len() == 1 {
             if let Some(mut item) = item {
-                if let (Some(previous), Item::Value(value)) = (table.get(&path[0]), &mut item) {
-                    if let Some(previous) = previous.as_value() {
-                        *value.decor_mut() = previous.decor().clone();
-                    }
+                if let (Some(previous), Item::Value(value)) = (table.get(&path[0]), &mut item)
+                    && let Some(previous) = previous.as_value()
+                {
+                    *value.decor_mut() = previous.decor().clone();
                 }
                 table.insert(&path[0], item);
             } else {
